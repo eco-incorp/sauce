@@ -3,31 +3,39 @@
 [Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
 
 An Eco intent is an offer: _run this program on that chain, and the reward escrowed on this one is
-yours_. `Base.Portal.send(reward).receive(delivery).then(body)` builds one, in TypeScript or inside a
-program. The chain whose Portal you name is the **destination** — where the body runs, and therefore
-which compiler target, token addresses and protocol deployments apply. `.send(...)` names the
-reward, escrowed on the **source** until someone earns it; `.receive(...)` names what a solver
-delivers on the destination for the body to use.
+yours_. A program opens one by hopping to that chain:
 
-Every chain is a named export; import the ones you use.
+```js
+await Base.hop({
+  reward: { token: USDC, amount: 1010000 },
+  receive: { token: USDC, amount: 1000000 },
+  refundee: refundTo,
+});
+USDC.transfer(recipient, 1000000); // runs on Base
+```
+
+The chain you hop to is the **destination**, where the body runs: the code after the `await`, and
+therefore which compiler target, token addresses and protocol deployments apply. `reward` is
+escrowed on the **source**, the chain the program runs on, until someone earns it; `receive` names
+what a solver delivers on the destination for the body to use. As in JavaScript, `await x; rest` is
+`x.then(() => { rest })`, so `Base.hop({ … }).then(() => { … })` is the same intent with its body
+written out.
+
+TypeScript builds one with the same object, naming the source as well. Every chain is a named
+export; import the ones you use.
 
 ```ts
 import { Base, Ethereum } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 export function buildApprovalIntent(
-  reward: routes.PortalReward,
-  refundee: routes.PortalAddress,
+  reward: routes.HopReward,
+  refundee: routes.HopAddress,
   executionFee: bigint,
 ) {
-  return Base.Portal.send(reward)
-    .source(Ethereum)
-    .refundee(refundee)
-    .receive()
-    .fee(executionFee)
-    .then(() => {
-      USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-    });
+  return Base.hop({ source: Ethereum, reward, refundee, fee: executionFee }).then(() => {
+    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  });
 }
 ```
 
@@ -52,28 +60,29 @@ one is at your own risk.
 
 ## Source, destination, and funding
 
-An intent has two sides, and each step or modifier sets one part of it. Within the reward's steps
-and within the route's, modifiers come in any order, each at most once; `.then(...)` ends the intent.
+A hop's one object sets both sides of the intent, each field at most once and in any order:
 
-| Step or modifier                    | Sets                                                                           | When you omit it                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| `Base.Portal`                       | Destination chain, where the body runs                                         | Required                                                   |
-| `.send(...items)`                   | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; it must offer something                          |
-| `.source(chain)`, after `.send`     | Chain where the reward is escrowed and the intent published                    | Required in TypeScript; in a program, the chain it runs on |
-| `.refundee(address)`, after `.send` | The refund address: who may reclaim an unearned reward                         | Required; see [the refundee](#where-each-value-comes-from) |
-| `.deadline(t)`, after `.send`       | From when an unproven reward may be refunded                                   | The fill deadline plus seven days                          |
-| `.prover(address)`, after `.send`   | The source chain's prover, which accepts the proof of the fill                 | The registry's prover for the pair                         |
-| `.receive(...items)`                | Destination tokens the solver delivers to the Portal's Executor                | Required; `.receive()` names none                          |
-| `.fee(wei)`, after `.receive`       | The destination Kitchen's fee the body's cook pays                             | See [the fee](#where-each-value-comes-from)                |
-| `.deadline(t)`, after `.receive`    | The last second the intent may be filled                                       | Five minutes after the intent opens                        |
-| `.salt(s)`, after `.receive`        | The route's salt                                                               | 32 random bytes, picked per compile                        |
-| `.then(body)`                       | The body: a closure, or the statements of one                                  | Required                                                   |
+| Field or step    | Sets                                                                           | When you omit it                                           |
+| ---------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `Base.hop`       | Destination chain, where the body runs                                         | Required                                                   |
+| `reward`         | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; it must offer something                          |
+| `source`         | Chain where the reward is escrowed and the intent published                    | Required in TypeScript; in a program, the chain it runs on |
+| `refundee`       | The refund address: who may reclaim an unearned reward                         | Required; see [the refundee](#where-each-value-comes-from) |
+| `rewardDeadline` | From when an unproven reward may be refunded                                   | The fill deadline plus seven days                          |
+| `prover`         | The source chain's prover, which accepts the proof of the fill                 | The registry's prover for the pair                         |
+| `receive`        | Destination tokens the solver delivers to the Portal's Executor                | Nothing delivered                                          |
+| `fee`            | The destination Kitchen's fee the body's cook pays                             | See [the fee](#where-each-value-comes-from)                |
+| `deadline`       | The last second the intent may be filled                                       | Five minutes after the intent opens                        |
+| `salt`           | The route's salt                                                               | 32 random bytes, picked per compile                        |
+| `.then(body)`    | The body: a closure, or the statements of one                                  | In a program, what follows `await`                         |
+
+`reward` and `receive` each take one item or a list of them.
 
 [Intent defaults](../reference/intent-defaults.md) gives each default and why it is Eco's.
 TypeScript builds the intent where no chain is read, so the source has no default there; the
 refundee has none anywhere. Overriding what the registry derives — the source and destination
 Portals, the destination Pot and engine — is the compile's `intents` options (`sourcePortal`,
-`destinationPortal`, `pot`, `engine`), which TypeScript passes as `.source(chain, options)`
+`destinationPortal`, `pot`, `engine`), which TypeScript passes in the hop's `compile`
 ([Routes API](../api/routes.md)).
 
 The prover is the one `ecoRoutesProver(source, destination)` names: the first of eco-routes'
@@ -82,9 +91,9 @@ provers, the HyperProver first, that the registry records on both chains, in the
 one. A pair the registry has no prover for is refused with the reason, until you pass one. Override
 the Portals and the prover together, and only for a deployment the registry does not carry.
 
-Destination route assets initially arrive in the **Executor**. The Sauce program executes in the **Pot**. The Portal form moves each token `.receive(...)` names from the Executor into the Pot before the cook, so the body spends what was delivered.
+Destination route assets initially arrive in the **Executor**. The Sauce program executes in the **Pot**. A hop moves each token its `receive` names from the Executor into the Pot before the cook, so the body spends what was delivered.
 
-Every EVM `cook` must receive the Kitchen's current `executionFee()` in native wei, including ERC-20-only programs: `.fee(wei)` is that value. The Pot remits the fee before executing; its existing balance cannot replace this payment. Nested programs add another cook and fee. Read the fee before building; an increase before fulfillment can make the route revert.
+Every EVM `cook` must receive the Kitchen's current `executionFee()` in native wei, including ERC-20-only programs: a hop's `fee` is that value. The Pot remits the fee before executing; its existing balance cannot replace this payment. Nested programs add another cook and fee. Read the fee before building; an increase before fulfillment can make the route revert.
 
 The Portal hands the Executor the route's `nativeAmount`, and the Executor pays each call its `value` from it, so `nativeAmount` is the sum of the calls' values: the cook's fee, and each nested child's fee and forwarded native reward. For one cook that is the fee you read; the solver sends it with the fill.
 
@@ -175,14 +184,15 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
   // into its text.
   const body = `Token(${config.baseUsdc}).transfer(${config.recipient}, ${amount});`;
 
-  return Base.Portal.send({ token: config.rewardToken, amount: config.rewardAmount })
-    .source(config.source)
-    .refundee(config.refundee)
-    .deadline(config.rewardDeadline)
-    .receive({ token: config.baseUsdc, amount })
-    .fee(config.executionFee)
-    .deadline(config.routeDeadline)
-    .then(body);
+  return Base.hop({
+    source: config.source,
+    reward: { token: config.rewardToken, amount: config.rewardAmount },
+    receive: { token: config.baseUsdc, amount },
+    refundee: config.refundee,
+    deadline: config.routeDeadline,
+    rewardDeadline: config.rewardDeadline,
+    fee: config.executionFee,
+  }).then(body);
 }
 ```
 
@@ -201,21 +211,39 @@ _while_ it is running, which is what you want when the amount is the output of t
 ```js
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount })
-    .then(() => {
-      USDC.transfer(recipient, amount);
-    });
+  await Arbitrum.hop({
+    reward: { token: USDC, amount },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  });
+  USDC.transfer(recipient, amount);
 }
 ```
 
-Same shape as the TypeScript builder, written in the program, where the chain it runs on is the
-source. No Portal, prover, selector, encoding or approval appears, because none of them is a
-decision you are making. The modifiers are the same, and so are their
-[defaults](../reference/intent-defaults.md); a modifier's value may be one the program computes, such
-as `.deadline(ctx.timestamp() + 3600)`. This is how intents are
-nested: the [nested intents](nested-intents.md) guide opens one inside another's body.
+The same object as the TypeScript builder, written in the program, where the chain it runs on is
+the source. No Portal, prover, selector, encoding or approval appears, because none of them is a
+decision you are making. The fields are the same, and so are their
+[defaults](../reference/intent-defaults.md); a field's value may be one the program computes, such
+as `deadline: ctx.timestamp() + 3600`.
+
+Everything after the `await` is the body, compiled for Arbitrum. Written without `await`, the body
+is the argument of `.then(...)`, and this is the same program:
+
+```js
+function main(recipient: Address, refundTo: Address) {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum.hop({
+    reward: { token: USDC, amount },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  }).then(() => {
+    USDC.transfer(recipient, amount);
+  });
+}
+```
+
+A hop in a body is the next hop, from that body's chain: that is how intents are nested, and a
+cascade reads as one `await` after another ([nested intents](nested-intents.md)).
 
 ### The body is a Sauce program
 
@@ -227,31 +255,32 @@ destination's shared Pot, a token transfer alone included:
 | ------------- | ------------------------------------------------------ | ----------------------- |
 | any statement | a program compiled for the destination, run on its Pot | a Pot and a Kitchen fee |
 
-The route the Portal's Executor runs is two kinds of call: a transfer of each token `.receive(...)`
-names from the Executor into the Pot, then the cook. The cook pays the destination Kitchen's fee,
+The route the Portal's Executor runs is two kinds of call: a transfer of each token `receive` names
+from the Executor into the Pot, then the cook. The cook pays the destination Kitchen's fee,
 which becomes the route's native amount the solver sends, and which the reward covers. The program's token writes are
 [`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20): USDT works, and a token that
 returns `false` reverts the fulfilment.
 
-**`.receive(...)` names what the solver delivers** so the body has something to work with, and the
+**`receive` names what the solver delivers** so the body has something to work with, and the
 route moves it from the Executor into the Pot. It is never inferred from the body, and that is a
 judgement rather than an omission: a program's `balanceOf` reads what is _there_, which may be
 what an earlier call in the same route produced rather than what a solver must bring. Inferring an
 obligation from it would silently under- or over-state what the intent asks for, and an intent that
-asks for the wrong delivery is unfulfillable or overfunded. `.receive()` delivers nothing.
+asks for the wrong delivery is unfulfillable or overfunded. A hop with no `receive` delivers
+nothing.
 
 ### Captured variables
 
 `amount` is a local of the enclosing program, so its value does not exist until the program runs.
 The intent is built while the file compiles, as one value with a place for each such variable, and
 the program encodes it as it runs, with the variable's value written in. Any scalar works — an
-amount, an address, a deadline, anything one 256-bit word wide. A computed amount or modifier,
+amount, an address, a deadline, anything one 256-bit word wide. A computed amount or field,
 `amount * 99 / 100`, is folded when every operand is known and otherwise computed where the intent
 opens.
 
 A variable can arrive two ways, and the same variable can do both:
 
-- **Into the encoded intent** — a reward amount, a delivery amount, a modifier: written where the
+- **Into the encoded intent** — a reward amount, a delivery amount, a field: written where the
   intent puts it.
 - **Into the body's program** — it becomes one of that program's arguments, appended to the
   program in the cook's calldata, which the route records.
@@ -274,13 +303,13 @@ function fee(amount: Uint256): Uint256 {
 
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount })
-    .then(() => {
-      USDC.transfer(recipient, amount - fee(amount));
-      transfer(USDC, refundTo, fee(amount));
-    });
+  await Arbitrum.hop({
+    reward: { token: USDC, amount },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  });
+  USDC.transfer(recipient, amount - fee(amount));
+  transfer(USDC, refundTo, fee(amount));
 }
 ```
 
@@ -295,21 +324,21 @@ function that opens it, since that function's program would contain the intent i
 
 ### Nesting
 
-An intent inside an intent is lowered recursively — the child is compiled by re-entering the same
+A hop inside a body is lowered recursively — the child is compiled by re-entering the same
 pipeline, so it gets its own chain's names and this same lowering, at any depth. That is how a chain
 of hops, each paying the next what it was delivered, is written; see
 [nested intents](nested-intents.md#three-levels).
 
 ### Names resolve per chain
 
-Two chains meet in `Arbitrum.Portal.send(...).receive(...).then(() => { ... })`, and each part
-belongs to one of them. A token symbol resolves on the chain where its part runs:
+Two chains meet in `await Arbitrum.hop({ reward, receive, refundee })`, and each part belongs to
+one of them. A token symbol resolves on the chain where its part runs:
 
-| Part                               | Computed on                   | `USDC` is                              |
-| ---------------------------------- | ----------------------------- | -------------------------------------- |
-| The body, `.then(() => { ... })`   | Arbitrum, the destination     | Arbitrum's                             |
-| `.receive(...)`, what is delivered | The chain the program runs on | Arbitrum's: a token is looked up again |
-| `.send(...)` and every modifier    | The chain the program runs on | That chain's                           |
+| Part                                                     | Computed on                   | `USDC` is                              |
+| -------------------------------------------------------- | ----------------------------- | -------------------------------------- |
+| The body, what follows `await` or `.then(() => { ... })` | Arbitrum, the destination     | Arbitrum's                             |
+| `receive`, what is delivered                             | The chain the program runs on | Arbitrum's: a token is looked up again |
+| `reward` and every other field                           | The chain the program runs on | That chain's                           |
 
 The reward belongs to the enclosing chain because the program escrows it there: it pays the reward
 token into the intent's vault on that chain's Portal and publishes the intent in the same
@@ -322,7 +351,7 @@ its reward resolves there and its own body on its own destination. The same hold
 values that belong to a chain, `chainId` and protocol addresses such as `UniswapV4_UniversalRouter`:
 a body on another chain sees that chain's own.
 
-In `.receive(...)` only the tokens are the destination's, each symbol looked up again there by its
+In `receive` only the tokens are the destination's, each symbol looked up again there by its
 name; every other value in it, an amount included, is computed on the chain the program runs on,
 where the intent opens. So `USDC` delivers Arbitrum's USDC, and `chainId` in an amount is the
 enclosing chain's. A token the enclosing chain has no symbol for is written
@@ -342,45 +371,34 @@ therefore leaves nothing behind, and a measurement below its floor cannot strand
 
 ### A handler for the body
 
-On an EVM destination, `.catch(...)` after `.then(...)` handles the body. When the body reverts,
-everything it did is undone, the handler runs in its place, and the fill still succeeds. Here a
-supply that fails hands the delivered USDC to the beneficiary instead:
+On an EVM destination, a `try` around the hop handles its body. When the body reverts, everything
+it did is undone, the handler runs in its place, and the fill still succeeds. Here a supply that
+fails hands the delivered USDC to the beneficiary instead:
 
 ```js
 function main(beneficiary: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  Ethereum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount })
-    .then(() => {
-      USDC.approve(AaveV3.Pool, amount);
-      AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
-    })
-    .catch((e) => {
-      USDC.transfer(beneficiary, amount);
+  try {
+    await Ethereum.hop({
+      reward: { token: USDC, amount },
+      receive: { token: USDC, amount },
+      refundee: refundTo,
     });
+    USDC.approve(AaveV3.Pool, amount);
+    AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+  } catch (e) {
+    USDC.transfer(beneficiary, amount);
+  }
 }
 ```
 
-`e` is what the body reverted with, as `bytes`: at most its first 256 bytes, the error's selector
-first. Write `.catch(() => { ... })` when the handler does not read it. A handled body is always a
-program, so its cook pays the destination's Kitchen fee.
+Without `await`, the handler is `.catch(...)` after `.then(...)`:
+`Ethereum.hop({ … }).then(() => { … }).catch((e) => { … })`. `e` is what the body reverted with, as
+`bytes`: at most its first 256 bytes, the error's selector first. Write `.catch(() => { ... })` when
+the handler does not read it. A handled body is always a program, so its cook pays the
+destination's Kitchen fee.
 
-### Awaiting the intent
-
-`await` of an intent calls its `then`, as JavaScript's `await` does: `await x; rest` is
-`x.then(() => { rest })`, so the statements after it are the body. This compiles to exactly the
-first program in this section:
-
-```js
-function main(recipient: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
-  await Arbitrum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount });
-  USDC.transfer(recipient, amount);
-}
-```
+### Where an `await` stands
 
 No `async` is needed: the `await` is a statement of `main`'s body, and everything after it is the
 body of the intent, compiled for the destination. Names after it resolve on the destination. Values
@@ -388,22 +406,24 @@ from before it are captured, and the body cannot assign them, nor declare a name
 still one scope. A `return` after it is the body's. An `await` in the body opens the next hop from
 the destination, so a cascade reads top to bottom.
 
-An `await` stands directly in `main`'s body, a script's top level, a body, or a `try` block there
-(below). It cannot be inside an `if`, a loop or another block, in another function, or used as a
-value; each of these is a compile error that names it. Start the intent on the `await`'s line: in
-`main` or a body, as in JavaScript outside an `async` function, `await` followed by `(`, `[` or a
-line break reads as a name, and is refused.
+An `await` stands directly in `main`'s body, a script's top level, a body, or a `try` block there.
+It cannot be inside an `if`, a loop or another block, in another function, or used as a value; each
+of these is a compile error that names it. Start the hop on the `await`'s line: in `main` or a body,
+as in JavaScript outside an `async` function, `await` followed by `(`, `[` or a line break reads as
+a name, and is refused.
 
-A `try` around awaited intents handles each of their bodies, and what runs before them:
+A `try` around awaited hops handles each of their bodies, and what runs before them:
 
 ```js
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   const delivered = amount - amount / 1000;
   try {
-    await Ethereum.Portal.send({ token: USDC, amount })
-      .refundee(refundTo)
-      .receive({ token: USDC, amount: delivered });
+    await Ethereum.hop({
+      reward: { token: USDC, amount },
+      receive: { token: USDC, amount: delivered },
+      refundee: refundTo,
+    });
     USDC.approve(AaveV3.Pool, delivered);
     AaveV3.Pool.supply(USDC, delivered, recipient, 0);
   } catch (e) {
@@ -431,18 +451,18 @@ SauceScript plugin that `sauce init` configures, which accepts it where the comp
 
 ### Where each value comes from
 
-| Value              | Comes from                                                                               |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| Portal, both sides | The eco-routes deployment tables, by chain                                               |
-| Prover             | The tables, by source/destination pair                                                   |
-| Destination Pot    | Derived — see below                                                                      |
-| Engine             | The released engine address                                                              |
-| Destination        | The chain you named                                                                      |
-| Source             | The chain the program runs on                                                            |
-| Deadlines          | `.deadline(t)`, else the [defaults](../reference/intent-defaults.md), from when it opens |
-| Salt               | `.salt(s)`, else 32 random bytes                                                         |
-| Refundee           | `.refundee(address)`, required. See below                                                |
-| Execution fee      | `.fee(wei)`, else the compile's, for a program body. See below                           |
+| Value              | Comes from                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| Portal, both sides | The eco-routes deployment tables, by chain                                                             |
+| Prover             | The tables, by source/destination pair                                                                 |
+| Destination Pot    | Derived — see below                                                                                    |
+| Engine             | The released engine address                                                                            |
+| Destination        | The chain you named                                                                                    |
+| Source             | The chain the program runs on                                                                          |
+| Deadlines          | `deadline`, `rewardDeadline`, else the [defaults](../reference/intent-defaults.md), from when it opens |
+| Salt               | `salt`, else 32 random bytes                                                                           |
+| Refundee           | `refundee`, required. See below                                                                        |
+| Execution fee      | `fee`, else the compile's, for a program body. See below                                               |
 
 An intent **opens** when the program opening it runs, so a default deadline is `ctx.timestamp()`
 plus its window, computed there. A compile given `compile.intents.openedAt` (Unix seconds) counts
@@ -453,22 +473,22 @@ when that body runs.
 The **refundee** is the refund address: who may reclaim the reward if nobody earns it. The
 executing Pot is the obvious default and the wrong one: it is owned by the Portal's Executor, which
 every solver can drive, so a refund landing there is a refund anyone can take, and a Pot an owner
-runs may be shared too. So every intent, at any depth, gives `.refundee(address)`, usually from one
-of `main`'s parameters (`.refundee(refundTo)`), and nothing is taken from the level above, the Pot
-or the wallet that sends the cook.
+runs may be shared too. So every hop, at any depth, gives its `refundee`, usually one of `main`'s
+parameters (`refundee: refundTo`), and nothing is taken from the level above, the Pot or the wallet
+that sends the cook.
 
-`.refundee(a)` sets the reward's `creator`: after the deadline a refund goes to `a`, and only `a`
+`refundee: a` sets the reward's `creator`: after the deadline a refund goes to `a`, and only `a`
 may send the Portal's `refundTo` to redirect it.
 
 The **salt** makes two otherwise identical intents two hashes. Left out, it is 32 random bytes picked
 when the program compiles (`compile.intents.salt` fixes them, and the `sauce` command picks them
 once per run, `--intent-salt` to choose), mixed as the intent opens with how many intents the
 transaction has opened, kept in transient storage: two intents built alike in one program, or in a
-loop, are two intents. A salt an intent gives, `.salt(s)`, is used as written.
+loop, are two intents. A salt a hop gives, `salt: s`, is used as written.
 
 The **execution fee** is the one value that cannot be derived. It is mutable on-chain, and it lives
 on the destination, which the source chain cannot read while it executes. Read it at build time and
-give it as `.fee(wei)`, or as `compile.intents.executionFee`: one fee, or a function from the
+give it as the hop's `fee`, or as `compile.intents.executionFee`: one fee, or a function from the
 destination chain to its fee, for a program whose intents reach several chains. The `sauce` command
 reads each destination's Kitchen when given neither:
 
@@ -509,7 +529,7 @@ returns, or a balance's change across one step — never the Pot's whole balance
 ### Overrides
 
 Everything derived can be overridden through `compile.intents`, for every intent the program opens
-that does not set it with a modifier:
+whose hop does not give it:
 
 | Field                        | Overrides                                                            |
 | ---------------------------- | -------------------------------------------------------------------- |
@@ -548,14 +568,17 @@ rather than the vault's balance. `allowPartial` applies only here.
 Each of these is a compile error naming the construct, never a silently different intent:
 
 - An identifier that is neither a compile-time value nor a variable of the enclosing program.
-- A `<Chain>.Portal` that does not open an intent: with steps out of order, a modifier given twice
-  or after the wrong step, no `.receive(...)`, or no `.then(() => { ... })`.
-- In `.send(...)` or `.receive(...)`, a token entry missing `token` or `amount`; a `{ native }`
-  item in `.receive(...)`; an empty `.send([])`.
+- A hop with no body (no `.then(() => { ... })` and nothing after an `await`), or a step after the
+  wrong one, such as `.catch(...)` before `.then(...)`.
+- A hop with no `reward`, an empty `reward: []`, an item missing `token` or `amount`, or a
+  `{ native }` item in `receive`.
 - A missing refundee: every intent names its own. A missing fee for a program body that nothing
   supplies.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
+
+A field a hop does not take is not refused by the compile: it is ignored, as TypeScript's editor
+declarations flag it, and the TypeScript builder refuses it.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.
@@ -564,15 +587,15 @@ reads the same way: it names the variable that is not declared.
 
 A callback is read with `Function.prototype.toString()`, parsed, and compiled as SauceScript. It is never invoked as a JavaScript callback and captures no outer variables. An `amount` in surrounding JavaScript does not become a value inside the program.
 
-Use literals in a callback. A value of your application goes into the program's text: write the body as a source string with the value in it, as [above](#build-a-base-usdc-transfer-intent), pass it as a define (`.source(chain, { defines: { AMOUNT: amount } })`, read as `AMOUNT` in the body), or write the intent as a file whose `main` takes the value as an argument. Local declarations in the program take precedence over ambient names.
+Use literals in a callback. A value of your application goes into the program's text: write the body as a source string with the value in it, as [above](#build-a-base-usdc-transfer-intent), pass it as a define (`compile: { defines: { AMOUNT: amount } }`, read as `AMOUNT` in the body), or write the intent as a file whose `main` takes the value as an argument. Local declarations in the program take precedence over ambient names.
 
-A chain the callback opens an intent on, `Ethereum.Portal.send(…).receive(…).then(() => { … })`, is the imported chain export, whose `Portal` carries that SauceScript form as well as the host one; import it as you import `Base` ([nested intents](nested-intents.md)). The package declares SauceScript's builtins for TypeScript — `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(condition, message)`, `abi`, `evm`, `svm`, `.toBytesBe(...)` and the rest of the [reference](../reference/saucescript.md) — as it declares token symbols and protocols, so a typed callback that uses them typechecks. The declarations install nothing at run time, and a builtin's comment says which targets have it: TypeScript does not know which chain the callback compiles for.
+A chain the callback hops to, `Ethereum.hop({ … }).then(() => { … })`, is the imported chain export, whose `hop` takes SauceScript values as well as the host's; import it as you import `Base` ([nested intents](nested-intents.md)). The package declares SauceScript's builtins for TypeScript — `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(condition, message)`, `abi`, `evm`, `svm`, `.toBytesBe(...)` and the rest of the [reference](../reference/saucescript.md) — as it declares token symbols and protocols, so a typed callback that uses them typechecks. The declarations install nothing at run time, and a builtin's comment says which targets have it: TypeScript does not know which chain the callback compiles for.
 
 Callbacks must be synchronous and take no parameters. Bound/native functions, generators, and async functions are rejected. If a bundler transforms function source, ship an explicit SauceScript string or source asset. A TypeScript type declaration does not create a captured value.
 
 A function the callback declares in its own body is a helper of the program: SauceScript has no nested functions, so it is declared beside `main`, and an intent opened inside the callback can call it like any other function of the file. Its annotations are whatever the host's TypeScript compilation left in the callback's text, which is usually none, so a helper that takes or returns an array or a record belongs in a source string.
 
-A program compile (`compileSauceProgram`, and so the Portal form and every body) adds the SDK's default ambient token module, enabling function forms such as `approve(tokenAddress, spender, amount)`. Direct `compileSauceRoute(...)` does not automatically add that ambient module. The token and protocol member syntax described in [protocols and tokens](protocols-and-tokens.md) works on both paths; its writes are the same module's functions, so they have the same `SafeERC20` semantics either way.
+A program compile (`compileSauceProgram`, and so every hop and every body) adds the SDK's default ambient token module, enabling function forms such as `approve(tokenAddress, spender, amount)`. Direct `compileSauceRoute(...)` does not automatically add that ambient module. The token and protocol member syntax described in [protocols and tokens](protocols-and-tokens.md) works on both paths; its writes are the same module's functions, so they have the same `SafeERC20` semantics either way.
 
 ## Publish it: the cook
 

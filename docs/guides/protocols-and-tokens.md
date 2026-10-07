@@ -48,7 +48,7 @@ export function compileApproval(pot: routes.AddressInput, engine: routes.Address
 }
 ```
 
-The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The same body can be an intent's, `Base.Portal.send(...).receive(...).then(() => { ... })`; see [creating intents](intents.md).
+The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The same body can be an intent's, `Base.hop({ … }).then(() => { ... })`; see [creating intents](intents.md).
 
 The supported Universal Router spelling is `UniswapV4.UniversalRouter`, or the unambiguous family alias `Uniswap.UniversalRouter`. `UniswapV3.UniversalRouter` is not registered. The router's `execute` method takes the arguments declared by its ABI; the namespace does not construct swap commands or select a route for you.
 
@@ -137,8 +137,8 @@ compiles it for both.
   still resolve.
 - A name the registry does not know on any chain is the compiler's unknown name, not zero, so a typo
   cannot quietly drop a branch. A program that declares the name owns it.
-- Inside an intent to another chain, `Arbitrum.Portal.send(...).receive().then(() => { ... })`, it
-  is decided for that chain.
+- Inside an intent to another chain, after `await Arbitrum.hop({ … })`, it is decided for that
+  chain.
 
 In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
 token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is a type error.
@@ -184,7 +184,7 @@ The raw ABI call is **not** SafeERC20: `Erc20.ERC20.at(address).transfer(...)`, 
 reverts on a token that returns nothing and accepts one that returns `false`. Use it only when that
 is the behavior you want; otherwise use one of the spellings above.
 
-Use `tokens` in the compile options — `compileSauceProgram`'s, `compileSauceRoute`'s, or `.source(chain, options)` for a TypeScript intent — to add or override symbols. Overrides merge per symbol with the registry. These maps contain **addresses**; an intent's `.receive(...)`, or a route's `tokens` option, instead declares the **token amounts** a solver must deliver for the route.
+Use `tokens` in the compile options — `compileSauceProgram`'s, `compileSauceRoute`'s, or a TypeScript hop's `compile` — to add or override symbols. Overrides merge per symbol with the registry. These maps contain **addresses**; a hop's `receive`, or a route's `tokens` option, instead declares the **token amounts** a solver must deliver for the route.
 
 ```ts
 import { routes } from "@eco-incorp/sauce";

@@ -98,13 +98,13 @@ larger program through the Kitchen before executing it. See the [Solana guide](.
 
 ## Intents connect executions across chains
 
-`Base.Portal.send(reward).receive(delivery).then(body)` builds an Eco intent whose route executes on
-Base. The SDK compiles the destination program, assembles the route, and hands back hashes and Portal
-calldata.
+`Base.hop({ source, reward, receive, refundee }).then(body)` builds an Eco intent whose route
+executes on Base. The SDK compiles the program that opens it, with the destination program inside,
+and hands back that program and the cook that publishes it.
 
-A program can also create an intent itself, with the same
-`Chain.Portal.send(...).receive(...).then(() => { ... })` written in its body — which is how a hop
-whose amount is only known on arrival gets built at all. See [create an intent from inside a
+A program can also create an intent itself, with `await Chain.hop({ reward, receive, refundee })`
+written in its body, the code after it running on that chain — which is how a hop whose amount is
+only known on arrival gets built at all. See [create an intent from inside a
 program](../guides/intents.md#create-an-intent-from-inside-a-program).
 
 Building an intent publishes nothing. Your application submits the source-chain transactions, and a

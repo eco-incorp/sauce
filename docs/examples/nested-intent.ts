@@ -29,28 +29,30 @@ const creator = "0x4444444444444444444444444444444444444444";
 const openedAt = 2_000_000_000n;
 const salt = `0x${"5a".repeat(32)}` as const;
 
-const built = Base.Portal.send({ token: usdcOn(Ethereum.chain), amount: REWARD })
-  .source("ethereum")
-  .refundee(creator)
-  .receive({ token: baseUsdc, amount: AMOUNT })
-  .fee(executionFee)
-  .deadline(openedAt + routes.DEFAULT_FILL_WINDOW)
-  .salt(salt)
-  .then(() => {
-    // Runs on Base, in the fill of this intent, on a Pot every intent to Base shares: it moves what
-    // this intent delivered, never the Pot's whole balance.
-    const payout = 1_000_000n - 1_000_000n / 1000n;
-    // Opened, funded in Base's USDC and published on Base, in that same fill: its deadlines count
-    // from then. Every intent a program opens names its refundee.
-    Ethereum.Portal.send({ token: USDC, amount: 1_000_000n })
-      .refundee(0x4444444444444444444444444444444444444444n)
-      .receive({ token: USDC, amount: payout })
-      .fee(1_000n) // Fixture: Ethereum's Kitchen fee, which this body's cook pays.
-      .salt(0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5an)
-      .then(() => {
-        USDC.transfer(0x6666666666666666666666666666666666666666n, payout);
-      });
+const built = Base.hop({
+  source: "ethereum",
+  reward: { token: usdcOn(Ethereum.chain), amount: REWARD },
+  receive: { token: baseUsdc, amount: AMOUNT },
+  refundee: creator,
+  deadline: openedAt + routes.DEFAULT_FILL_WINDOW,
+  salt,
+  fee: executionFee,
+}).then(() => {
+  // Runs on Base, in the fill of this intent, on a Pot every intent to Base shares: it moves what
+  // this intent delivered, never the Pot's whole balance.
+  const payout = 1_000_000n - 1_000_000n / 1000n;
+  // Opened, funded in Base's USDC and published on Base, in that same fill: its deadlines count
+  // from then. Every intent a program opens names its refundee.
+  Ethereum.hop({
+    reward: { token: USDC, amount: 1_000_000n },
+    receive: { token: USDC, amount: payout },
+    refundee: 0x4444444444444444444444444444444444444444n,
+    salt: 0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5an,
+    fee: 1_000n, // Fixture: Ethereum's Kitchen fee, which this body's cook pays.
+  }).then(() => {
+    USDC.transfer(0x6666666666666666666666666666666666666666n, payout);
   });
+});
 // The program that opens it on Ethereum, and the bodies it compiled: Base's, and the one Base's
 // opens back on Ethereum. A cook on your Pot there publishes it (`built.cook(...)`), and its hash is
 // read from the Portal's `IntentPublished` in the cook's logs (`built.intents(logs)`).

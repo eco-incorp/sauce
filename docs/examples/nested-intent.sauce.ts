@@ -16,16 +16,18 @@
 // Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
-  Base.Portal.send({ token: USDC, amount: reward })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount: delivered })
-    .then(() => {
-      const payout = delivered - delivered / 1000;
-      Ethereum.Portal.send({ token: USDC, amount: delivered })
-        .refundee(refundTo) // every intent a program opens names its refundee
-        .receive({ token: USDC, amount: payout })
-        .then(() => {
-          USDC.transfer(recipient, payout);
-        });
+  Base.hop({
+    reward: { token: USDC, amount: reward },
+    receive: { token: USDC, amount: delivered },
+    refundee: refundTo,
+  }).then(() => {
+    const payout = delivered - delivered / 1000;
+    Ethereum.hop({
+      reward: { token: USDC, amount: delivered },
+      receive: { token: USDC, amount: payout },
+      refundee: refundTo, // every intent a program opens names its refundee
+    }).then(() => {
+      USDC.transfer(recipient, payout);
     });
+  });
 }

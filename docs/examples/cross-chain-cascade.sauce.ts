@@ -15,7 +15,7 @@
 // it, at that level's own execution time.
 //
 // Each body compiles to a program and runs on its chain's Pot, paying that chain's Kitchen fee,
-// read for it; the `.receive(...)` of each names what a solver must deliver to it. Each level's
+// read for it; the `receive` of each hop names what a solver must deliver to it. Each level's
 // deadlines count from when it opens, and each names its refundee, `refundTo`: no intent has a
 // default one.
 //
@@ -23,22 +23,25 @@
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
 // Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
-  Base.Portal.send({ token: USDC, amount: reward })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount: delivered })
-    .then(() => {
-      const second = delivered - delivered / 1000;
-      Ethereum.Portal.send({ token: USDC, amount: delivered })
-        .refundee(refundTo)
-        .receive({ token: USDC, amount: second })
-        .then(() => {
-          const third = second - second / 1000;
-          Base.Portal.send({ token: USDC, amount: second })
-            .refundee(refundTo)
-            .receive({ token: USDC, amount: third })
-            .then(() => {
-              USDC.transfer(recipient, third);
-            });
-        });
+  Base.hop({
+    reward: { token: USDC, amount: reward },
+    receive: { token: USDC, amount: delivered },
+    refundee: refundTo,
+  }).then(() => {
+    const second = delivered - delivered / 1000;
+    Ethereum.hop({
+      reward: { token: USDC, amount: delivered },
+      receive: { token: USDC, amount: second },
+      refundee: refundTo,
+    }).then(() => {
+      const third = second - second / 1000;
+      Base.hop({
+        reward: { token: USDC, amount: second },
+        receive: { token: USDC, amount: third },
+        refundee: refundTo,
+      }).then(() => {
+        USDC.transfer(recipient, third);
+      });
     });
+  });
 }

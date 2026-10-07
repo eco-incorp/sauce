@@ -22,24 +22,24 @@ import { Base, Ethereum } from "@eco-incorp/sauce";
 const owner = "0x4444444444444444444444444444444444444444";
 const kitchenFee = 1_000n; // Fixture: read each Kitchen's fee with destinationExecutionFee().
 
-const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 10_000n })
-  .source(Ethereum)
-  .refundee(owner)
-  .receive()
-  .fee(kitchenFee)
-  .then(() => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  });
+const built = Base.hop({
+  source: Ethereum,
+  reward: { token: Ethereum.USDC.address, amount: 10_000n },
+  refundee: owner,
+  fee: kitchenFee,
+}).then(() => {
+  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+});
 
 const cook = built.cook({ owner }, kitchenFee); // { to, data, value }, from your Pot on Ethereum
 console.log(`${built.program.bytecode.length} bytes, cooked on ${cook.to}`);
 ```
 
-`Base.Portal` names the **destination**, the chain the body runs on; `.send(...)` names the reward
-and `.source(...)` the **source**, where it is escrowed and the intent is published. `.receive(...)`
-names what a solver delivers on Base for the body to use: nothing, here. `.then(...)` writes the
-statement a Sauce program opens that intent with and compiles it for Ethereum: the intent is the
-same one a program in a file opens. That one expression does what an intent otherwise takes by
+`Base.hop` names the **destination**, the chain the body runs on; `reward` is what the solver earns
+and `source` the **source**, where it is escrowed and the intent is published. `receive` would name
+what a solver delivers on Base for the body to use: nothing, here. `.then(...)` writes the statement
+a Sauce program opens that intent with, `Base.hop({ … }).then(() => { … })`, and compiles it for
+Ethereum: the intent is the same one a program in a file opens. That one expression does what an intent otherwise takes by
 hand:
 
 - looks up USDC and the Universal Router on Base, and binds the ERC-20 ABI;
@@ -56,7 +56,7 @@ hand:
 
 What stays yours: the refundee, the Kitchen fees, and a reward that pays a solver to fill the
 intent, which your Pot must hold when the cook runs. The fees are on-chain state, so the SDK builds
-their read, `destinationExecutionFee()`, and does not guess them. A modifier sets anything else
+their read, `destinationExecutionFee()`, and does not guess them. A field of the hop sets anything else
 ([Intent defaults](../reference/intent-defaults.md)). The SDK sends nothing, and it does not price
 the reward. The intent's hash is the Portal's: send the cook, or rehearse it with
 `eth_simulateV1`, and `built.intents(logs)` reads each intent it published, with its hash, from the
@@ -72,7 +72,7 @@ other chain in the registry is a preview chain: the SDK builds for it at your ow
 **The callback is source, not a function.** It is read with `Function.prototype.toString()`, parsed
 and compiled. It never runs as JavaScript, so it captures nothing: a surrounding `const amount` is
 invisible inside it. Write application values into the body as literals, pass them as defines
-(`.source(Ethereum, { defines: { AMOUNT: amount } })`), or write the body as a string with them in
+(`compile: { defines: { AMOUNT: amount } }`), or write the body as a string with them in
 it. If your bundler rewrites function bodies, use a string or a source file.
 
 **`USDC` and `Uniswap` are not imports.** They are program syntax the compiler resolves against the
@@ -89,9 +89,9 @@ take the remainder out inside the same fulfillment. Every cook also pays the Kit
 
 ## Deliver assets and fund the reward
 
-The destination assets and the source reward are separate things. What `.receive(...)` names
-arrives at the Portal's Executor, and the intent moves it into the Pot before the body runs. What
-`.send(...)` names is paid into the intent's vault on the source chain, which escrows it.
+The destination assets and the source reward are separate things. What `receive` names arrives at
+the Portal's Executor, and the intent moves it into the Pot before the body runs. What `reward`
+names is paid into the intent's vault on the source chain, which escrows it.
 
 [first-intent.ts](../examples/first-intent.ts) builds both sides and the cook that publishes them.
 Read [create an intent](intents.md) before sending it, and

@@ -717,14 +717,14 @@ sauce run swap.json --chain base --keystore ~/.keys/me.json \
 ## Intents: `sauce run` or `sauce intent`
 
 A program can open an intent on another chain —
-`Base.Portal.send(…).refundee(refundTo).receive(…).then(() => { … })`. Every intent names its
-refundee, the refund address, with `.refundee(...)`: it is published by a program a Pot runs, and
+`await Base.hop({ reward, receive, refundee: refundTo })`, the code after it running on Base. Every
+hop names its refundee, the refund address: it is published by a program a Pot runs, and
 the Pot may be shared, so nothing defaults it, not even the wallet that sends the cook. The
 command supplies the rest the file leaves out ([Intent defaults](../reference/intent-defaults.md)):
 the deadlines count from when it builds the intents, the fill five minutes later and the reward's
 seven days after that; the salt is random, picked once per run; and the fee the body's cook pays is
 read from the destination Kitchen, a separate read for each destination, which the command
-reports. A modifier in the file sets any of them for its
+reports. A field of the hop in the file sets any of them for its
 intent. A flag sets one for every intent that does not set its own: `--intent-deadline <unix
 seconds>`, `--intent-reward-deadline <unix seconds>`, `--intent-salt <bytes32>`,
 `--intent-prover <address>` (instead of the prover the registry records for the pair), and

@@ -49,7 +49,7 @@ The SDK provides a second authoring form: a route body passed to a chain helper.
 };
 ```
 
-Pass this body to an intent's `.then(body)`, `Base.Portal.send(...).receive(...).then(body)`, as
+Pass this body to an intent's `.then(body)`, `Base.hop({ … }).then(body)`, as
 shown in the [intent guide](../guides/intents.md). The SDK extracts its text, wraps it in
 `main`, resolves SDK global names, and compiles it. For a body that falls through,
 the compilation adapter adds a `void` entry annotation.

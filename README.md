@@ -64,7 +64,7 @@ an intent carrying it onward.
 // it is whatever the swap, bridge or transfer just before it produced — which is the reason to
 // build the intent here rather than off-chain.
 //
-// `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })` is the whole of it: the
+// `Ethereum.hop({ reward, receive, refundee }).then(() => { ... })` is the whole of it: the
 // reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the program encodes the intent as it runs, with their values, and the SDK fills
@@ -74,9 +74,9 @@ an intent carrying it onward.
 // Kitchen fee, which the command reads there. The deadlines and the salt take their defaults.
 //
 // `USDC` is a registered symbol. In the body it means Ethereum's USDC, the chain the body runs on,
-// and so it does in `.receive(...)`, whose tokens are looked up again on Ethereum by symbol (its
-// amounts are computed here). In `.send(...)` it means the USDC of the chain this program runs on,
-// which escrows the reward.
+// and so it does in `receive`, whose tokens are looked up again on Ethereum by symbol (its amounts
+// are computed here). In `reward` it means the USDC of the chain this program runs on, which
+// escrows the reward.
 //
 //   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
 //     --args <recipient> <minAmount> <refundTo>
@@ -89,12 +89,13 @@ function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= minAmount, "nothing to forward");
 
-  Ethereum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount })
-    .then(() => {
-      USDC.transfer(recipient, amount);
-    });
+  Ethereum.hop({
+    reward: { token: USDC, amount },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  }).then(() => {
+    USDC.transfer(recipient, amount);
+  });
 }
 ```
 
@@ -113,19 +114,23 @@ Without Sauce, this step is either a contract you write and deploy (read the bal
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
 a second transaction you build yourself after reading what the first produced.
 
+`Ethereum.hop({ … })` opens the intent, and its `.then(...)` is the body that runs there. As in
+JavaScript, `await` is the same: `await Ethereum.hop({ … });` followed by the body's statements,
+which then run on Ethereum, so a hop to one chain and on to the next reads top to bottom.
+
 `USDC` is a registered token symbol. In the body it means **Ethereum's** USDC, because that is where
-the body runs, and in `.receive(...)` only the tokens are Ethereum's, looked up again there by
-symbol, while every other value, an amount included, is computed where the intent opens. In
-`.send(...)` it means the USDC of the chain the program runs on — Base, in the line above — because
-the program escrows the reward there. `recipient`,
+the body runs, and in `receive` only the tokens are Ethereum's, looked up again there by symbol,
+while every other value, an amount included, is computed where the intent opens. In `reward` it
+means the USDC of the chain the program runs on — Base, in the line above — because the program
+escrows the reward there. `recipient`,
 `minAmount` and `refundTo` are `main`'s parameters: they arrive with the transaction (`--args`), so
 one compiled program serves every call.
 
-`.refundee(refundTo)` is the refund address: who reclaims the reward if nobody earns it. A program
+`refundee: refundTo` is the refund address: who reclaims the reward if nobody earns it. A program
 names it for every intent it opens, since the Pot it runs on may be shared. Everything else has a
 default: the deadlines count from when the intent opens, the salt is random, and Ethereum's
-Kitchen fee, which a body that is a program pays, is read from Ethereum. Each has a modifier to set
-it ([Intent defaults](docs/reference/intent-defaults.md)). The intent is an offer; a solver still
+Kitchen fee, which a body that is a program pays, is read from Ethereum. Each has a field of its
+own ([Intent defaults](docs/reference/intent-defaults.md)). The intent is an offer; a solver still
 decides to fill it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
 builds the same transaction from TypeScript, and runs on every release;
 [nested intents](docs/guides/nested-intents.md) opens one intent inside another's body, and covers
@@ -144,14 +149,14 @@ import { Base, Ethereum } from "@eco-incorp/sauce";
 const owner = "0x4444444444444444444444444444444444444444";
 const kitchenFee = 1_000n; // Fixture: read each Kitchen's fee with destinationExecutionFee().
 
-const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 10_000n })
-  .source(Ethereum)
-  .refundee(owner)
-  .receive()
-  .fee(kitchenFee)
-  .then(() => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  });
+const built = Base.hop({
+  source: Ethereum,
+  reward: { token: Ethereum.USDC.address, amount: 10_000n },
+  refundee: owner,
+  fee: kitchenFee,
+}).then(() => {
+  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+});
 
 // The cook that publishes it from your Pot on Ethereum: { to, data, value }.
 const cook = built.cook({ owner }, kitchenFee);
@@ -173,7 +178,7 @@ importing the package puts nothing on `globalThis`. `USDC` and `Uniswap` in the 
 syntax**: the SDK resolves them to Base's addresses and binds the ABI, so there is no address to
 look up and no JavaScript object to import. The callback is read as source text and never invoked,
 so it captures nothing; an application value is written into it as a literal, or passed as a define
-(`.source(Ethereum, { defines })`). [Quick start](docs/guides/quick-start.md) walks through it, and
+(`compile: { defines }`). [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
 ## Agent wallets

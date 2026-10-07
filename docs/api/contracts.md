@@ -30,12 +30,13 @@ chain export's own `route`, `chain`, or a function property: composing the expor
 
 `import { Base } from "@eco-incorp/sauce"` — one export per canonical chain — carries:
 
-| Property               | What it is                                                                                                                                                                                            |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Base.Portal`          | Opens an intent on Base, `Base.Portal.send(...).receive(...).then(body)`; see [routes](routes.md#the-portal-form)                                                                                     |
-| `Base.chain`, `.route` | The chain record, and the lower-level route builder; see [routes](routes.md#chain-entry-points)                                                                                                       |
-| `Base.<Symbol>`        | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |
-| `Base.<Namespace>`     | A protocol or family namespace, typed by the generated `contracts.ChainContracts`                                                                                                                     |
+| Property           | What it is                                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Base.hop`         | Opens an intent on Base, `Base.hop({ source, reward, receive, refundee }).then(body)`; see [routes](routes.md#a-hop)                                                                                  |
+| `Base.Portal`      | Base's eco-routes Portal contract, `Base.EcoRoutes.Portal`                                                                                                                                            |
+| `Base.chain`       | The chain record; see [routes](routes.md#chain-entry-points)                                                                                                                                          |
+| `Base.<Symbol>`    | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |
+| `Base.<Namespace>` | A protocol or family namespace, typed by the generated `contracts.ChainContracts`                                                                                                                     |
 
 A chain's token properties are exactly its registry rows, and the type names only those: `Base.USDT`
 is a type error and `undefined`. `routes.registryTokens(chain)` returns the same objects for a

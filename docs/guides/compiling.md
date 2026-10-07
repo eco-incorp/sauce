@@ -13,7 +13,7 @@ execution time, a Solana account manifest, or full control over module resolutio
 
 | Entry point                                                         | You supply                                                  | The SDK supplies                                                                              |
 | ------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `Base.Portal…then(body)` / `routes.compileSauceProgram(...)`        | Body and the intent's steps, or a program file              | The chain's names, the ambient token module, the EVM Pot and engine, the program and its cook |
+| `Base.hop(…).then(body)` / `routes.compileSauceProgram(...)`        | Body and the hop's fields, or a program file                | The chain's names, the ambient token module, the EVM Pot and engine, the program and its cook |
 | `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | The chain's names, one encoded route call                                                     |
 | `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                                   |
 

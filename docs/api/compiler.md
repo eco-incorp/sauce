@@ -289,7 +289,7 @@ See [routes](routes.md) for the route-specific API.
 ## In a browser
 
 The SDK compiles in a browser exactly as it does in Node: raw `compile()`, route
-compilation (`Base.Portal…then(...)`, `compileSauceRoute`), the builders, the
+compilation (`Base.hop(…).then(...)`, `compileSauceRoute`), the builders, the
 recipes and `/actions` produce the same bytes in both. The difference is start-up.
 Node instantiates the compiler's WebAssembly as the package loads; a browser has to
 fetch it, which cannot happen synchronously. Call `ready()` once, before the first
@@ -299,7 +299,7 @@ compile:
 import { ready } from "@eco-incorp/sauce/compiler"; // also exported by "@eco-incorp/sauce"
 
 await ready();
-// compile(), compileSauceRoute(), Base.Portal…then(...) and compileProgram() are now
+// compile(), compileSauceRoute(), Base.hop(…).then(...) and compileProgram() are now
 // synchronous, as in Node.
 ```
 

@@ -5,7 +5,7 @@
 // it is whatever the swap, bridge or transfer just before it produced — which is the reason to
 // build the intent here rather than off-chain.
 //
-// `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })` is the whole of it: the
+// `Ethereum.hop({ reward, receive, refundee }).then(() => { ... })` is the whole of it: the
 // reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the program encodes the intent as it runs, with their values, and the SDK fills
@@ -15,9 +15,9 @@
 // Kitchen fee, which the command reads there. The deadlines and the salt take their defaults.
 //
 // `USDC` is a registered symbol. In the body it means Ethereum's USDC, the chain the body runs on,
-// and so it does in `.receive(...)`, whose tokens are looked up again on Ethereum by symbol (its
-// amounts are computed here). In `.send(...)` it means the USDC of the chain this program runs on,
-// which escrows the reward.
+// and so it does in `receive`, whose tokens are looked up again on Ethereum by symbol (its amounts
+// are computed here). In `reward` it means the USDC of the chain this program runs on, which
+// escrows the reward.
 //
 //   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
 //     --args <recipient> <minAmount> <refundTo>
@@ -30,10 +30,11 @@ function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= minAmount, "nothing to forward");
 
-  Ethereum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount })
-    .then(() => {
-      USDC.transfer(recipient, amount);
-    });
+  Ethereum.hop({
+    reward: { token: USDC, amount },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  }).then(() => {
+    USDC.transfer(recipient, amount);
+  });
 }

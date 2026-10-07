@@ -6,16 +6,16 @@ import { Base, Ethereum } from "@eco-incorp/sauce";
 // a protocol contract, `Uniswap.UniversalRouter`, resolved on Base, where it runs.
 const executionFee = 1_000n;
 
-const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 10_000n })
-  .source(Ethereum)
-  .refundee("0x4444444444444444444444444444444444444444")
-  .receive()
-  .fee(executionFee)
-  .then(() => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  });
+const built = Base.hop({
+  source: Ethereum,
+  reward: { token: Ethereum.USDC.address, amount: 10_000n },
+  refundee: "0x4444444444444444444444444444444444444444",
+  fee: executionFee,
+}).then(() => {
+  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+});
 
-if (built.program.bodies.length !== 1 || !built.source.includes(".fee(1000)")) {
+if (built.program.bodies.length !== 1 || !built.source.includes("fee: 1000,")) {
   throw new Error("Expected one body, cooked on Base with its fee");
 }
 console.log(`Base approval intent: a program of ${built.program.bytecode.length} bytes`);

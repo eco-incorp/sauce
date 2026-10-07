@@ -20,14 +20,15 @@ const usdcOn = (chain: typeof Base.chain) => {
 // SauceScript knows: Ethereum's `USDC` and literals. The delivered USDC arrives at Ethereum's
 // Portal Executor, and the intent moves it into the Pot the body cooks on: the shared one that
 // Executor owns.
-export const built = Ethereum.Portal.send({ token: usdcOn(Base.chain), amount: 1_010_000n })
-  .source(Base)
-  .refundee(owner)
-  .receive({ token: usdcOn(Ethereum.chain), amount: 1_000_000n })
-  .fee(ethereumFee)
-  .then(() => {
-    USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
-  });
+export const built = Ethereum.hop({
+  source: Base,
+  reward: { token: usdcOn(Base.chain), amount: 1_010_000n },
+  receive: { token: usdcOn(Ethereum.chain), amount: 1_000_000n },
+  refundee: owner,
+  fee: ethereumFee,
+}).then(() => {
+  USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
+});
 
 // The cook, from the owner's Pot on Base, with Base's Kitchen fee as its value (a fixture here).
 // The Pot pays the reward into the intent's vault, so it holds the reward first. Send it, or

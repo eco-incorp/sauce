@@ -12,50 +12,48 @@ const destination = routes.chain("base");
 ```
 
 There is no `/routes` subpath. The public types are members of the namespace: `routes.HostIntent`,
-`routes.PortalReward`, and so on.
+`routes.HopConfig`, and so on.
 
 ## Chain entry points
 
-| Entry point                                             | Result                                                                               |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `Base.Portal.send(reward)…receive(delivery)…then(body)` | The program that opens the intent, and its cook: [the Portal form](#the-portal-form) |
-| `routes.chainPortal(ref)`                               | The same `Portal` for a chain reference                                              |
-| `routes.chain(ref)`                                     | The chain accessor (`.chain`, `.Portal`) for a chain reference                       |
-| `routes.chainAccessors.Base`                            | Explicit access to the bare chain accessor                                           |
+| Entry point                                                  | Result                                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `Base.hop({ source, reward, receive, refundee }).then(body)` | The program that opens the intent, and its cook: [a hop](#a-hop) |
+| `routes.chainHop(ref)`                                       | The same `hop` for a chain reference                             |
+| `routes.chain(ref)`                                          | The chain accessor (`.chain`, `.hop`) for a chain reference      |
+| `routes.chainAccessors.Base`                                 | Explicit access to the bare chain accessor                       |
 
 Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record.
 
-`Base` and every other chain are **named exports of the package root**: a namespace, not a function; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`) and the chain's registry tokens (`Base.USDC`), described in the [contracts reference](contracts.md); `routes.chainAccessors.Base` is the bare accessor without them. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
+`Base` and every other chain are **named exports of the package root**: a namespace, not a function; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`), its eco-routes Portal contract as `Base.Portal`, and the chain's registry tokens (`Base.USDC`), described in the [contracts reference](contracts.md); `routes.chainAccessors.Base` is the bare accessor without them. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
 
-`body` (the Portal form's `.then(body)`) accepts a synchronous zero-argument arrow function, or the statements of one as a string. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
+`body` (a hop's `.then(body)`) accepts a synchronous zero-argument arrow function, or the statements of one as a string. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
 
-## The Portal form
+## A hop
 
-`Base.Portal` opens an intent whose body runs on Base. Its steps come in order — `send`, the
-reward's modifiers, `receive`, the route's modifiers, `then` — and the modifiers of a stage in any
-order, each at most once; the types (`routes.PortalSent`, `routes.PortalReceived`) drop a modifier
-once it is given, and the builder refuses a repeat at run time too.
+`Base.hop(config)` opens an intent whose body runs on Base: `config` is one object, each field at
+most once, and `.then(body)` gives the body. The type (`routes.HopConfig`) flags a field it does not
+know, and the builder refuses one at run time.
 
-| Step                       | Takes                                                                     | Omitted                                                                    |
-| -------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `send(...reward)`          | Each `{ token, amount }` or `{ native: amount }` an argument, or one list | Required; it must offer something                                          |
-| `.source(chain, options?)` | The source chain, a reference or a chain export; its compile's options    | Required                                                                   |
-| `.refundee(address)`       | The refund address: who may reclaim an unearned reward                    | Required                                                                   |
-| `.deadline(seconds)`       | The reward's deadline                                                     | The route's deadline plus `routes.DEFAULT_REFUND_WINDOW`                   |
-| `.prover(address)`         | The reward's prover                                                       | `ecoRoutesProver(source, destination)`                                     |
-| `receive(...delivery)`     | Each `{ token, amount }` an argument, or one list                         | Required; `.receive()` delivers nothing                                    |
-| `.fee(wei)`                | The destination Kitchen's fee the body's cook pays                        | `intents.executionFee` in `.source`'s options; else refused                |
-| `.deadline(seconds)`       | The route's deadline                                                      | When the cook runs, plus `routes.DEFAULT_FILL_WINDOW`                      |
-| `.salt(salt)`              | The route's salt                                                          | 32 random bytes per compile, mixed with the transaction's count of intents |
-| `then(body)`               | The body; returns the `routes.HostIntent`                                 | Required                                                                   |
+| Field            | Takes                                                              | Omitted                                                                    |
+| ---------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `source`         | The source chain, a reference or a chain export                    | Required                                                                   |
+| `compile`        | The source compile's options                                       | None                                                                       |
+| `reward`         | One `{ token, amount }` or `{ native: amount }`, or a list of them | Required; it must offer something                                          |
+| `receive`        | One `{ token, amount }`, or a list of them                         | Nothing delivered                                                          |
+| `refundee`       | The refund address: who may reclaim an unearned reward             | Required                                                                   |
+| `deadline`       | The route's deadline                                               | When the cook runs, plus `routes.DEFAULT_FILL_WINDOW`                      |
+| `rewardDeadline` | The reward's deadline                                              | The route's deadline plus `routes.DEFAULT_REFUND_WINDOW`                   |
+| `prover`         | The reward's prover                                                | `ecoRoutesProver(source, destination)`                                     |
+| `salt`           | The route's salt                                                   | 32 random bytes per compile, mixed with the transaction's count of intents |
+| `fee`            | The destination Kitchen's fee the body's cook pays                 | `intents.executionFee` in `compile`; else refused                          |
 
-`REWARD_MODIFIERS` and `ROUTE_MODIFIERS` list each stage's modifiers, and
-[Intent defaults](../reference/intent-defaults.md) gives each default's reason. `.then(body)` writes
-the statement a program opens the intent with, `routes.HostIntent.source`, and compiles it for the
-source chain with `.source`'s options (`SauceProgramOptions`: `defines` the body reads, `intents`
-defaults such as `executionFee`, `sourcePortal` and `destinationPortal`, `tokens`). The intent is
-`@sauce/intents`' class, the one every program's intents are, so the program is the same one the
-statement compiles to in a file.
+`.then(body)` returns the `routes.HostIntent`. [Intent defaults](../reference/intent-defaults.md)
+gives each default's reason. `.then(body)` writes the statement a program opens the intent with,
+`routes.HostIntent.source`, and compiles it for the source chain with `compile`
+(`SauceProgramOptions`: `defines` the body reads, `intents` defaults such as `executionFee`,
+`sourcePortal` and `destinationPortal`, `tokens`). The intent is `@sauce/intents`' class, the one
+every program's intents are, so the program is the same one the statement compiles to in a file.
 
 | Member                | Behavior                                                                                                        |
 | --------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -70,9 +68,10 @@ reward when the cook runs, and must be deployed (`sauceEvmDeployPotCall`). There
 hash: the default deadlines count from when the cook runs and the salt is picked per compile, so
 the intent's hash is the one the Portal announces, read from its `IntentPublished` with
 `intents(logs)` once the cook is sent or rehearsed (`eth_simulateV1`). An intent the body opens
-names its own refundee, and takes its own default deadlines, from when it opens. `INTENT_STAGES`
-(`routes/intent-syntax.ts`) is the syntax as data — each stage, its methods, what each takes and the
-option a modifier sets — which the declarations a typed closure checks against are generated from.
+names its own refundee, and takes its own default deadlines, from when it opens. `HOP_FIELDS` and
+`HOP_STAGES` (`routes/intent-syntax.ts`) are the syntax as data — each field, what it takes and the
+option it overrides, and the steps after it — which the declarations a typed closure checks against
+are generated from.
 
 On an EVM destination the body's Pot and engine are derived: the Pot owned by the `executor()` of
 the destination Portal, under salt zero (`SAUCE_INTENT_POT_SALT`) — the one Pot per Portal the
@@ -153,11 +152,11 @@ After the fill, the same module builds the rest of an intent's life, each as a r
 
 ## Nested intents
 
-A nested intent is written in the program: `Chain.Portal.send(...).receive(...).then(() => { ... })`
-in a body opens an intent when that body runs, at any depth. In a typed closure the chain is the
-imported export, whose `Portal` carries those SauceScript steps (`SaucePortal`) beside its host ones —
-see [nested intents](../guides/nested-intents.md) and
-[create an intent](../guides/intents.md#create-an-intent-from-inside-a-program). Its modifiers set
+A nested intent is written in the program: `await Chain.hop({ … })`, or
+`Chain.hop({ … }).then(() => { ... })`, in a body opens an intent when that body runs, at any depth.
+In a typed closure the chain is the imported export, whose `hop` takes SauceScript values beside the
+host's (`SauceHopConfig`) — see [nested intents](../guides/nested-intents.md) and
+[create an intent](../guides/intents.md#create-an-intent-from-inside-a-program). Its fields set
 each intent's own values. `SauceCompileOptions.intents` carries what that lowering cannot look up
 (the fee of a program body's cook: one `bigint`, or a function from the destination chain to its
 fee) and what overrides it: `deadline`, `rewardDeadline`, `openedAt` (when the first level opens,
@@ -166,9 +165,9 @@ which its default deadlines count from), `sourcePortal`, `destinationPortal`, `p
 intent the program opens that does not set its own, at every depth, but for `openedAt`: an intent a
 body opens opens when that body runs. `fund: false` publishes each top-level intent without paying
 its reward, for a rehearsal that reads the intents from the Portal's log: the intents are the same,
-and no level below takes it. The refundee is never among them: every intent names its own
-`.refundee(...)`, since the Pot it is published from may be shared. `fundVia` and the eco-routes
-selection are inherited from the enclosing intent.
+and no level below takes it. The refundee is never among them: every hop names its own `refundee`,
+since the Pot it is published from may be shared. `fundVia` and the eco-routes selection are
+inherited from the enclosing intent.
 
 `compileSauceProgram(chain, source, options).bodies` lists the program each intent's body compiles
 to (`CompiledBody`: its destination, its bytecode, and the values the enclosing program gives it as
