@@ -38,7 +38,7 @@ describeEvm("a caller's chain-scoped defines are its chain's, and nowhere else's
     const program = compileSauceProgram(
       "base",
       `function main() {
-  Arbitrum.Portal.send([{ token: USDC, amount: 5 }]).refundee(0x3333333333333333333333333333333333333333).receive([{ token: USDC, amount: chainId }]).then(() => {
+  Arbitrum.hop({ reward: [{ token: USDC, amount: 5 }], receive: [{ token: USDC, amount: chainId }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     USDC.transfer(ctx.self(), chainId);
   });
 }`,

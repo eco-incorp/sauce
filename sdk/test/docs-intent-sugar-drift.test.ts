@@ -1,5 +1,5 @@
 /**
- * The manual's "What is refused" list, pinned to what compiling an intent in the Portal form
+ * The manual's "What is refused" list, pinned to what compiling a hop
  * refuses: the compiler's own errors, and `@sauce/intents`' (`src/std/intents/intents.evm.js`).
  * And its account of which chain each name resolves on, and of the destination Pot, held to what the
  * compile builds: the program, and the body it compiles for each destination, carry the addresses.
@@ -51,9 +51,9 @@ const wrap = (
   body: string,
   reward = "{ token: USDC, amount }",
   chain = "Arbitrum",
-  steps = `.refundee(${CREATOR}).receive({ token: USDC, amount })`,
+  fields = `, receive: { token: USDC, amount }, refundee: ${CREATOR}`,
 ) =>
-  `function main() {\n  const amount = 5;\n  ${chain}.Portal.send(${reward})${steps}.then(() => {\n    ${body}\n  });\n}`;
+  `function main() {\n  const amount = 5;\n  ${chain}.hop({ reward: ${reward}${fields} }).then(() => {\n    ${body}\n  });\n}`;
 
 /** Documented sentence -> the program that must produce it. */
 const REFUSALS: readonly {
@@ -67,66 +67,51 @@ const REFUSALS: readonly {
     message: /`mystery` is not a declared variable/,
   },
   {
-    documented: "a token entry missing `token` or `amount`",
-    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "{ token: USDC }")),
-    message: /each item `\.send\(\.\.\.\)` takes is `\{ token, amount \}`/,
-  },
-  {
-    documented: "a `{ native }` item in `.receive(...)`",
+    documented: "A hop with no body",
     trigger: () =>
       lower(
-        wrap(
-          "USDC.transfer(RECIPIENT, amount);",
-          undefined,
-          "Arbitrum",
-          `.refundee(${CREATOR}).receive({ native: 1 })`,
-        ),
-      ),
-    message: /`\.receive\(\.\.\.\)` names tokens: the native coin is paid with `\.send\(\.\.\.\)`/,
-  },
-  {
-    documented: "an empty `.send([])`",
-    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "[]")),
-    message: /`\.send\(\.\.\.\)` must offer something/,
-  },
-  {
-    documented: "with steps out of order",
-    trigger: () =>
-      lower(
-        wrap(
-          "USDC.transfer(RECIPIENT, amount);",
-          undefined,
-          "Arbitrum",
-          `.refundee(${CREATOR}).salt(1).receive({ token: USDC, amount })`,
-        ),
-      ),
-    message: /`\.salt\(\.\.\.\)` is not a step after `\.send\(\.\.\.\)`/,
-  },
-  {
-    documented: "a modifier given twice or after the wrong step",
-    trigger: () =>
-      lower(
-        wrap(
-          "USDC.transfer(RECIPIENT, amount);",
-          undefined,
-          "Arbitrum",
-          ".receive({ token: USDC, amount }).deadline(1).deadline(2)",
-        ),
-      ),
-    message: /`\.deadline\(\.\.\.\)` is given twice after `\.receive\(\.\.\.\)`/,
-  },
-  {
-    documented: "no `.receive(...)`",
-    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Arbitrum", "")),
-    message: /stops before `\.receive\(\.\.\.\)`, which every intent has/,
-  },
-  {
-    documented: "or no `.then(() => { ... })`",
-    trigger: () =>
-      lower(
-        `function main() {\n  Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 });\n}`,
+        `function main() {\n  Arbitrum.hop({ reward: { token: USDC, amount: 1 }, receive: { token: USDC, amount: 1 }, refundee: ${CREATOR} });\n}`,
       ),
     message: /has no body\. Finish it with `\.then/,
+  },
+  {
+    documented: "a step after the wrong one",
+    trigger: () =>
+      lower(
+        `function main() {\n  Arbitrum.hop({ reward: { token: USDC, amount: 1 }, refundee: ${CREATOR} }).catch((e) => {});\n}`,
+      ),
+    message: /`\.catch\(\.\.\.\)` follows `\.then\(\.\.\.\)`/,
+  },
+  {
+    documented: "A hop with no `reward`",
+    trigger: () =>
+      lower(
+        `function main() {\n  Arbitrum.hop({ refundee: ${CREATOR} }).then(() => {\n    USDC.transfer(RECIPIENT, 1);\n  });\n}`,
+      ),
+    message: /a hop needs a `reward`/,
+  },
+  {
+    documented: "an empty `reward: []`",
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "[]")),
+    message: /a hop's `reward` must offer something/,
+  },
+  {
+    documented: "an item missing `token` or `amount`",
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "{ token: USDC }")),
+    message: /each item of a hop's `reward` is `\{ token, amount \}`/,
+  },
+  {
+    documented: "a `{ native }` item in `receive`",
+    trigger: () =>
+      lower(
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          `, receive: { native: 1 }, refundee: ${CREATOR}`,
+        ),
+      ),
+    message: /a hop's `receive` names tokens: the native coin is paid in its `reward`/,
   },
   {
     documented: "A missing refundee",
@@ -136,10 +121,10 @@ const REFUSALS: readonly {
           "USDC.transfer(RECIPIENT, amount);",
           undefined,
           "Arbitrum",
-          ".receive({ token: USDC, amount }).fee(1)",
+          ", receive: { token: USDC, amount }, fee: 1",
         ),
       ),
-    message: /needs `\.refundee\(<address>\)`.*may be shared/,
+    message: /a hop needs a `refundee`.*may be shared/,
   },
   {
     documented: "missing fee for a program body",
@@ -153,7 +138,7 @@ const REFUSALS: readonly {
     documented: "A chain with no eco-routes deployment",
     trigger: () =>
       lower(
-        `function main() {\n  Zora.Portal.send({ token: USDC, amount: 5 }).receive().then(() => {\n    Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, 5);\n  });\n}`,
+        `function main() {\n  Zora.hop({ reward: { token: USDC, amount: 5 } }).then(() => {\n    Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, 5);\n  });\n}`,
       ),
     message: /eco-routes v3 is not deployed on zora/,
   },
@@ -162,7 +147,7 @@ const REFUSALS: readonly {
     trigger: () =>
       lower(
         `function payout(amount: Uint256) {
-  Arbitrum.Portal.send({ token: USDC, amount }).refundee(${CREATOR}).receive({ token: USDC, amount }).then(() => {
+  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} }).then(() => {
     if (amount > 0) { payout(amount); }
   });
 }
@@ -198,7 +183,7 @@ describe("the guide's refusal list is the lowering's", () => {
       "there is no child program",
       "An intent opened inside another intent",
       "A statement that is not a call",
-      // Deadlines have defaults since the Portal form.
+      // Deadlines have defaults since the chained intent form.
       "A missing `deadline`",
       // The compiler reads a module variable where it lives, however a local of the function
       // opening the intent is named.
@@ -241,9 +226,7 @@ describe("the guide's account of which chain a name resolves on is the lowering'
   // it names. Executed across three chains in `routes-intent-chains.e2e.test.ts`.
   const PROGRAM = `function main() {
   const amount = 5;
-  Arbitrum.Portal.send({ token: USDC, amount })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount })
+  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
     });
@@ -258,7 +241,8 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      documented: "| The body, `.then(() => { ... })` | Arbitrum, the destination | Arbitrum's |",
+      documented:
+        "| The body, what follows `await` or `.then(() => { ... })` | Arbitrum, the destination | Arbitrum's |",
       holds: () => {
         const [body] = lowered().bodies;
         return (
@@ -271,12 +255,12 @@ describe("the guide's account of which chain a name resolves on is the lowering'
     {
       // The route delivers Arbitrum's USDC: the program encodes it, and moves it into the Pot.
       documented:
-        "| `.receive(...)`, what is delivered | The chain the program runs on | Arbitrum's: a token is looked up again |",
+        "| `receive`, what is delivered | The chain the program runs on | Arbitrum's: a token is looked up again |",
       holds: () => carries(lowered().bytecode, usdc(ARBITRUM)),
     },
     {
       documented:
-        "| `.send(...)` and every modifier | The chain the program runs on | That chain's |",
+        "| `reward` and every other field | The chain the program runs on | That chain's |",
       holds: () => carries(lowered().bytecode, usdc(BASE)),
     },
     {
@@ -323,9 +307,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       lower(
         `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send({ token: USDC, amount })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount })
+  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       if (amount > 0) { USDC.transfer(RECIPIENT, amount); }
     });

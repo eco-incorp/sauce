@@ -1,8 +1,7 @@
 /**
- * `Chain.Portal.send(reward)[modifiers].receive(delivery)[modifiers].then(body)`: each modifier is
- * the compile option it names, for its intent alone, and each default is the value it stands for,
- * byte for byte — the program's bytecode, which carries every level's intent, and each intent it
- * publishes.
+ * `Chain.hop({ reward, receive, refundee, … }).then(body)`: each field is the compile option it
+ * names, for its intent alone, and each default is the value it stands for, byte for byte — the
+ * program's bytecode, which carries every level's intent, and each intent it publishes.
  *
  * An intent a program opens is `@sauce/intents`' classes, which the compiler runs while it compiles:
  * the program encodes the intent as it runs. So what the program publishes is read where it runs —
@@ -12,17 +11,20 @@
  * The defaults: the route's deadline `DEFAULT_FILL_WINDOW` past when the intent opens — when the
  * compile says, else as the program runs, from the block's time — the reward's
  * `DEFAULT_REFUND_WINDOW` past that, the compile's salt, each destination's own Kitchen fee. The
- * creator has none: every intent names its own, `.refundee(...)`.
+ * refundee has none: every hop names its own, `refundee`.
  *
- * On the host: `Base.Portal.send(...).source(chain)...then(body)` writes the statement a program
+ * On the host: `Base.hop({ source, reward, … }).then(body)` writes the statement a program
  * opens that intent with and compiles it for the source chain — the same program as the statement
  * written in a file — and its cook publishes the same intent from a Pot there; its `then` refuses to
  * be a promise's.
  *
- * And what the lowering refuses, by name: an expression that stops before its body, steps or
- * modifiers out of place or repeated, native coin delivered, a creator nobody named, a token the
- * destination lacks; and an amount's arithmetic that would revert.
+ * And what the lowering refuses, by name: a hop with no body, a step out of place or repeated, an
+ * item that is neither, native coin delivered, a refundee nobody named, a token the destination
+ * lacks; and an amount's arithmetic that would revert.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import {
   bytesToHex,
   decodeFunctionData,
@@ -42,6 +44,8 @@ import {
 } from "../src/protocols/eco-routes/lookup.js";
 import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW } from "../src/routes/intent-defaults.js";
 import type { IntentDefaults } from "../src/routes/intent-defaults.js";
+import type { HopConfig } from "../src/routes/host-intent.js";
+import { HOP_FIELDS, HOP_STAGES } from "../src/routes/intent-syntax.js";
 import { hashIntent } from "../src/routes/encode.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { predictIntentVault } from "../src/routes/portal.js";
@@ -56,7 +60,7 @@ import { freePort } from "./pools-anvil.js";
 const CREATOR = "0x4444444444444444444444444444444444444444" as const;
 const RECIPIENT = 0x6666666666666666666666666666666666666666n;
 const DEADLINE = 2_000_000_000n;
-/** The reward's deadline the Portal form defaults to, given the route's. */
+/** The reward's deadline a hop defaults to, given the route's. */
 const REWARD_DEADLINE = DEADLINE + DEFAULT_REFUND_WINDOW;
 const SALT = `0x${"5a".repeat(32)}` as const;
 /** A top-level intent's creator is the wallet publishing it; one salt, since the default is
@@ -91,79 +95,64 @@ function expectSame(a: CompiledSauceProgram, b: CompiledSauceProgram): void {
 
 /** Base opens Arbitrum, whose body measures what arrived and opens Optimism with it. */
 const NESTED = `function main(amount: Uint256, recipient: Address) {
-  Arbitrum.Portal
-    .send([{ token: USDC, amount }])
-    .refundee(${CREATOR})
-    .receive([{ token: USDC, amount: amount * 99 / 100 }])
+  Arbitrum.hop({ reward: [{ token: USDC, amount }], receive: [{ token: USDC, amount: amount * 99 / 100 }], refundee: ${CREATOR} })
     .then(() => {
       USDC.transfer(recipient, amount * 99 / 100 / 2);
-      Optimism.Portal.send({ token: USDC, amount: amount * 99 / 100 / 2 })
-        .refundee(${CREATOR})
-        .receive({ token: USDT0, amount: amount * 98 / 100 / 2 })
+      Optimism.hop({ reward: { token: USDC, amount: amount * 99 / 100 / 2 }, receive: { token: USDT0, amount: amount * 98 / 100 / 2 }, refundee: ${CREATOR} })
         .then(() => { USDT0.transfer(recipient, amount * 98 / 100 / 2); });
     });
 }`;
 
 describe("the intents a program opens, as compiled", () => {
-  it("a modifier builds the same program as its option", () => {
-    const program = (modifiers: string) => `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })${modifiers}
-    .fee(1000)
+  it("a field builds the same program as its option", () => {
+    const program = (fields: string) => `function main() {
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}, fee: 1000${fields} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     // The salt is not among them: an option's is a default, which each intent mixes with how many
-    // the transaction has opened, while a modifier's is used as written.
+    // the transaction has opened, while a field's is used as written.
     expectSame(
-      compile(program(`\n    .deadline(${DEADLINE})`), { salt: SALT }),
+      compile(program(`, deadline: ${DEADLINE}`), { salt: SALT }),
       compile(program(""), { deadline: DEADLINE, salt: SALT }),
     );
   });
 
   it("defaults the deadlines from when the intent opens, as the compile says", () => {
     const openedAt = 1_900_000_000n;
-    const program = (modifiers: [string, string]) => `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})${modifiers[0]}
-    .receive({ token: USDC, amount: 1000000 })${modifiers[1]}
+    const program = (fields: string) => `function main() {
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}${fields} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     expectSame(
-      compile(program(["", ""]), { ...INTENTS, deadline: undefined, openedAt }),
+      compile(program(""), { ...INTENTS, deadline: undefined, openedAt }),
       compile(
-        program([
-          `.deadline(${openedAt + DEFAULT_FILL_WINDOW + DEFAULT_REFUND_WINDOW})`,
-          `.deadline(${openedAt + DEFAULT_FILL_WINDOW})`,
-        ]),
+        program(
+          `, deadline: ${openedAt + DEFAULT_FILL_WINDOW}, ` +
+            `rewardDeadline: ${openedAt + DEFAULT_FILL_WINDOW + DEFAULT_REFUND_WINDOW}`,
+        ),
         { ...INTENTS, deadline: undefined },
       ),
     );
   });
 
-  it("every intent a program opens names its creator: none comes from above or the options", () => {
+  it("every hop a program opens names its refundee: none comes from above or the options", () => {
     const opens = (inner: string) => `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(0x7777777777777777777777777777777777777777)
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777 })
     .then(() => {
       const held = USDC.balanceOf(ctx.self());
-      Optimism.Portal.send({ token: USDC, amount: held })${inner}
-        .receive({ token: USDT0, amount: held })
+      Optimism.hop({ reward: { token: USDC, amount: held }, receive: { token: USDT0, amount: held }${inner} })
         .then(() => { const left = USDT0.balanceOf(ctx.self()); USDT0.transfer(RECIPIENT, left); });
     });
 }`;
     // The level above names one: the nested one is refused all the same.
     expect(() => compile(opens(""), { ...INTENTS, openedAt: 1_900_000_000n })).toThrow(
-      /an intent needs `\.refundee\(<address>\)` after `\.send\(\.\.\.\)`.*may be shared, so a refund there is one anyone can take/s,
+      /a hop needs a `refundee`.*may be shared, so a refund there is one anyone can take/s,
     );
   });
 
   it("picks a random salt for each compile, unless one is given", () => {
     const program = `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     const bytes = (intents: IntentDefaults) => bytesToHex(compile(program, intents).bytecode);
@@ -177,10 +166,7 @@ describe("the intents a program opens, as compiled", () => {
   it.failing("a delivery token only the destination has, by its bare symbol", () => {
     const usdt0 = hex(registryTokenAddress(requireChain("arbitrum"), "USDT0")!);
     const program = (token: string) => `function main(amount: Uint256) {
-  Arbitrum.Portal.send({ token: USDC, amount })
-    .refundee(${CREATOR})
-    .receive({ token: ${token}, amount })
-    .fee(0)
+  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: ${token}, amount }, refundee: ${CREATOR}, fee: 0 })
     .then(() => { USDT0.transfer(RECIPIENT, amount); });
 }`;
     expectSame(compile(program("USDT0"), INTENTS), compile(program(`Token(${usdt0})`), INTENTS));
@@ -214,9 +200,7 @@ describe("the intents a program opens, as compiled", () => {
   it.failing(
     "an `await` of the intent makes the statements after it its body, byte for byte",
     () => {
-      const opened = `Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })`;
+      const opened = `Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
       const body = "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);";
       expectSame(
         compile(`function main() {\n  await ${opened};\n  ${body}\n}`, INTENTS),
@@ -229,9 +213,7 @@ describe("the intents a program opens, as compiled", () => {
   it.failing("`.then(...).catch((e) => { … })` handles the body on its destination", () => {
     compile(
       `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); })
     .catch((e) => { USDC.transfer(${CREATOR}, 1000000); });
 }`,
@@ -252,28 +234,19 @@ describeEvm("the intents a program publishes", () => {
   const published = async (program: CompiledSauceProgram, args: Hex = "0x"): Promise<Intent[]> =>
     (await base.publish(program, args)).map(({ intent }) => intent);
 
-  it("a modifier is the option it names, for its intent alone", async () => {
+  it("a field is the option it names, for its intent alone", async () => {
     const body = `{
       const held = USDC.balanceOf(ctx.self());
       USDC.transfer(RECIPIENT, held);
     }`;
     // The second names only its refundee, so it takes the options either way.
     const second = `
-  Ethereum.Portal.send({ token: USDC, amount: 2020000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 2000000 })
+  Ethereum.hop({ reward: { token: USDC, amount: 2020000 }, receive: { token: USDC, amount: 2000000 }, refundee: ${CREATOR} })
     .then(() => ${body});`;
     const [first, rest] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 }, { native: 5 })
-    .prover(0x8888888888888888888888888888888888888888)
-    .deadline(2000700000)
-    .refundee(0x7777777777777777777777777777777777777777)
-    .receive({ token: USDC, amount: 1000000 })
-    .salt(0x1234)
-    .fee(7)
-    .deadline(2000000600)
+  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777, deadline: 2000000600, rewardDeadline: 2000700000, prover: 0x8888888888888888888888888888888888888888, salt: 0x1234, fee: 7 })
     .then(() => ${body});${second}
 }`,
         INTENTS,
@@ -282,10 +255,7 @@ describeEvm("the intents a program publishes", () => {
     const [optioned] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 }, { native: 5 })
-    .refundee(0x7777777777777777777777777777777777777777)
-    .receive({ token: USDC, amount: 1000000 })
-    .salt(0x1234)
+  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777, salt: 0x1234 })
     .then(() => ${body});
 }`,
         {
@@ -312,9 +282,7 @@ describeEvm("the intents a program publishes", () => {
   it("defaults the deadlines from when the program opening it runs, with no time given", async () => {
     const program = compile(
       `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
       { salt: SALT, executionFee: 1_000n },
@@ -331,10 +299,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
-    .deadline(ctx.timestamp() + 3600)
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}, deadline: ctx.timestamp() + 3600 })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         { executionFee: 1_000n },
@@ -351,14 +316,10 @@ describeEvm("the intents a program publishes", () => {
     const [outer] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(0x7777777777777777777777777777777777777777)
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777 })
     .then(() => {
       const held = USDC.balanceOf(ctx.self());
-      Optimism.Portal.send({ token: USDC, amount: held })
-        .refundee(${hex(inner)})
-        .receive({ token: USDT0, amount: held })
+      Optimism.hop({ reward: { token: USDC, amount: held }, receive: { token: USDT0, amount: held }, refundee: ${hex(inner)} })
         .then(() => { const left = USDT0.balanceOf(ctx.self()); USDT0.transfer(RECIPIENT, left); });
     });
 }`,
@@ -380,26 +341,19 @@ describeEvm("the intents a program publishes", () => {
     expect(() =>
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 } })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         INTENTS,
       ),
-    ).toThrow(
-      /an intent needs `\.refundee\(<address>\)` after `\.send\(\.\.\.\)`: the address an unfilled intent's reward is refunded to/,
-    );
+    ).toThrow(/a hop needs a `refundee`: the address an unfilled intent's reward is refunded to/);
   });
 
   it("`fund: false` publishes the same intent, paying nothing into its vault", async () => {
     const program = `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 }, { native: 5 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => {
-      Optimism.Portal.send({ token: USDC, amount: 7 })
-        .refundee(${CREATOR})
-        .receive({ token: USDC, amount: 6 })
+      Optimism.hop({ reward: { token: USDC, amount: 7 }, receive: { token: USDC, amount: 6 }, refundee: ${CREATOR} })
         .then(() => { USDC.transfer(RECIPIENT, 6); });
     });
 }`;
@@ -425,25 +379,24 @@ describeEvm("the intents a program publishes", () => {
     expect(unfunded).toEqual(funded);
   }, 120_000);
 
-  it("mixes the compile's salt with the intents the transaction opened; a `.salt(...)` is as written", async () => {
+  it("mixes the compile's salt with the intents the transaction opened; a `salt` is as written", async () => {
     const program = `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     const [given] = await published(compile(program, INTENTS));
     expect(given!.route.salt).toBe(defaultSalt(SALT, 1n));
     const [salted] = await published(
-      compile(program.replace(".then(", ".salt(0x1234)\n    .then("), INTENTS),
+      compile(
+        program.replace(`refundee: ${CREATOR} }`, `refundee: ${CREATOR}, salt: 0x1234 }`),
+        INTENTS,
+      ),
     );
     expect(salted!.route.salt).toBe(`0x${"1234".padStart(64, "0")}`);
   }, 120_000);
 
   it("two intents built alike are two intents, in sequence or in a loop", async () => {
-    const intent = `Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+    const intent = `Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });`;
     const twice = await published(
       compile(`function main() {\n  ${intent}\n  ${intent}\n}`, INTENTS),
@@ -463,42 +416,41 @@ describeEvm("the intents a program publishes", () => {
     }
   }, 120_000);
 
-  it("takes each item as an argument, as one list", async () => {
-    const opened = async (send: string, receive: string) =>
+  it("takes one item, or a list of them", async () => {
+    const opened = async (reward: string, receive: string) =>
       (
         await published(
           compile(
             `function main() {
-  Arbitrum.Portal.send(${send})
-    .refundee(${CREATOR})
-    .receive(${receive})
-    .then(() => { USDC.transfer(RECIPIENT, 1000000); WETH.transfer(RECIPIENT, 5); });
+  Arbitrum.hop({ reward: ${reward}, receive: ${receive}, refundee: ${CREATOR} })
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
             INTENTS,
           ),
         )
       )[0]!;
-    const paid = "{ token: USDC, amount: 1010000 }, { token: WETH, amount: 5 }";
-    const delivered = "{ token: USDC, amount: 1000000 }, { token: WETH, amount: 5 }";
-    const asArguments = await opened(`${paid}, { native: 5 }`, delivered);
-    expect(asArguments).toEqual(await opened(`[${paid}], { native: 5 }`, `[${delivered}]`));
-    expect(asArguments).toEqual(await opened(`[${paid}, { native: 5 }]`, `[${delivered}]`));
-    expect(asArguments.reward.nativeAmount).toBe(5n);
-    expect(asArguments.reward.tokens).toHaveLength(2);
-    expect(asArguments.route.tokens).toHaveLength(2);
+    const paid = "{ token: USDC, amount: 1010000 }";
+    const delivered = "{ token: USDC, amount: 1000000 }";
+    const one = await opened(paid, delivered);
+    expect(one).toEqual(await opened(`[${paid}]`, `[${delivered}]`));
+    expect(one.reward.tokens).toHaveLength(1);
+    const many = await opened(
+      `[${paid}, { token: WETH, amount: 5 }, { native: 5 }]`,
+      `[${delivered}, { token: WETH, amount: 5 }]`,
+    );
+    expect(many.reward.nativeAmount).toBe(5n);
+    expect(many.reward.tokens).toHaveLength(2);
+    expect(many.route.tokens).toHaveLength(2);
     // The delivery is the destination's token of each symbol.
-    expect(BigInt(asArguments.route.tokens[0]!.token)).toBe(usdcOf("arbitrum"));
-    expect(BigInt(asArguments.reward.tokens[0]!.token)).toBe(usdcOf("base"));
+    expect(BigInt(many.route.tokens[0]!.token)).toBe(usdcOf("arbitrum"));
+    expect(BigInt(many.reward.tokens[0]!.token)).toBe(usdcOf("base"));
   }, 120_000);
 
-  it(".receive() with no items: nothing is delivered, and the body's cook is the route's one call", async () => {
+  it("no `receive`: nothing is delivered, and the body's cook is the route's one call", async () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive()
-    .fee(7)
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, refundee: ${CREATOR}, fee: 7 })
     .then(() => { const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held); });
 }`,
         { ...INTENTS, openedAt: DEADLINE },
@@ -513,9 +465,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         INTENTS,
@@ -537,9 +487,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         INTENTS,
@@ -556,9 +504,7 @@ describeEvm("the intents a program publishes", () => {
 
   it("cooks on the Pot of an overriding destination Portal's Executor, or the one named", async () => {
     const program = `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     const portal = "0x6666666666666666666666666666666666666666" as Hex;
@@ -578,9 +524,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 7 }, { token: USDC, amount: 9 }, { token: USDC, amount: 4 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1 })
+  Arbitrum.hop({ reward: [{ token: USDC, amount: 7 }, { token: USDC, amount: 9 }, { token: USDC, amount: 4 }], receive: { token: USDC, amount: 1 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1); });
 }`,
         INTENTS,
@@ -591,17 +535,11 @@ describeEvm("the intents a program publishes", () => {
     expect(await base.local.balanceOf(base.token("USDC"), vault)).toBe(9n);
   }, 120_000);
 
-  it("reads a plain literal past 2^53 exactly, in an item and a modifier", async () => {
+  it("reads a plain literal past 2^53 exactly, in an item and a field", async () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: WETH, amount: 1000000000000000001 }, { native: 10 ** 18 })
-    .refundee(0x1234567890abcdef1234567890abcdef12345678)
-    .deadline(9007199254740993)
-    .receive({ token: WETH, amount: 10 ** 18 + 1 })
-    .deadline(9007199254740995)
-    .salt(0xffffffffffffffffffff)
-    .fee(1000)
+  Arbitrum.hop({ reward: [{ token: WETH, amount: 1000000000000000001 }, { native: 10 ** 18 }], receive: { token: WETH, amount: 10 ** 18 + 1 }, refundee: 0x1234567890abcdef1234567890abcdef12345678, deadline: 9007199254740995, rewardDeadline: 9007199254740993, salt: 0xffffffffffffffffffff, fee: 1000 })
     .then(() => { WETH.transfer(RECIPIENT, 1000000000000000001); });
 }`,
         {},
@@ -640,9 +578,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 }, { token: USDC, amount: 7 })
-    .refundee(${CREATOR})
-    .receive({ token: USDC, amount: 1000000 })
+  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { token: USDC, amount: 7 }], receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         { ...INTENTS, fundVia: "publishAndFund" },
@@ -652,22 +588,22 @@ describeEvm("the intents a program publishes", () => {
   }, 120_000);
 
   it("a TypeScript intent's cook publishes what the same statement in a file publishes", async () => {
-    const built = Arbitrum.Portal.send({ token: base.token("USDC"), amount: 1_010_000n })
-      .source(Base, { defines: { RECIPIENT }, intents: INTENTS })
-      .refundee(CREATOR)
-      .receive({ token: hex(usdcOf("arbitrum")), amount: 1_000_000n })
-      .then(() => {
-        USDC.transfer(RECIPIENT, 1_000_000n);
-      });
+    const built = Arbitrum.hop({
+      source: Base,
+      reward: { token: base.token("USDC"), amount: 1_010_000n },
+      receive: { token: hex(usdcOf("arbitrum")), amount: 1_000_000n },
+      refundee: CREATOR,
+      compile: { defines: { RECIPIENT }, intents: INTENTS },
+    }).then(() => {
+      USDC.transfer(RECIPIENT, 1_000_000n);
+    });
     const cook = built.cook(base.pot, KITCHEN_FEE);
     const hash = await base.local.send(base.local.deployer, cook.to, cook.data, cook.value);
     const { logs } = await base.local.publicClient.getTransactionReceipt({ hash });
     const [sent] = built.intents(logs);
     const [written] = await published(
       compile(
-        `Arbitrum.Portal.send({ token: ${base.token("USDC")}, amount: 1010000 })
-  .refundee(${CREATOR})
-  .receive({ token: ${hex(usdcOf("arbitrum"))}, amount: 1000000 })
+        `Arbitrum.hop({ reward: { token: ${base.token("USDC")}, amount: 1010000 }, receive: { token: ${hex(usdcOf("arbitrum"))}, amount: 1000000 }, refundee: ${CREATOR} })
   .then(() => { USDC.transfer(RECIPIENT, 1000000); });`,
         INTENTS,
       ),
@@ -678,53 +614,65 @@ describeEvm("the intents a program publishes", () => {
 });
 
 describe("on the host", () => {
-  const delivered = [{ token: hex(usdcOf("base")), amount: 1_000_000n }];
+  const delivered = { token: hex(usdcOf("base")), amount: 1_000_000n };
   const paid = { token: hex(usdcOf("ethereum")), amount: 1_010_000n };
   const FEE = 1_000n;
   const body = "USDC.transfer(0x6666666666666666666666666666666666666666, 1000000);";
   const options = { intents: { salt: SALT } } as const;
 
   it("writes the statement a program opens it with, and compiles it for the source chain", () => {
-    const built = Base.Portal.send(paid)
-      .source(Ethereum, options)
-      .refundee(CREATOR)
-      .deadline(REWARD_DEADLINE + 1n)
-      .receive(delivered)
-      .fee(FEE)
-      .deadline(DEADLINE)
-      .then(body);
-    const written = `Base.Portal.send({ token: ${paid.token}, amount: 1010000 })
-  .refundee(${CREATOR})
-  .deadline(${REWARD_DEADLINE + 1n})
-  .receive({ token: ${delivered[0]!.token}, amount: 1000000 })
-  .deadline(${DEADLINE})
-  .fee(1000)
-  .then(() => { ${body} });`;
+    const built = Base.hop({
+      source: Ethereum,
+      reward: paid,
+      receive: delivered,
+      refundee: CREATOR,
+      deadline: DEADLINE,
+      rewardDeadline: REWARD_DEADLINE + 1n,
+      fee: FEE,
+      compile: options,
+    }).then(body);
+    const written = `Base.hop({
+  reward: { token: ${paid.token}, amount: 1010000 },
+  receive: { token: ${delivered.token}, amount: 1000000 },
+  refundee: ${CREATOR.toLowerCase()},
+  deadline: ${DEADLINE},
+  rewardDeadline: ${REWARD_DEADLINE + 1n},
+  fee: 1000,
+}).then(() => {
+${body}
+});
+`;
     expect(built.program.chain.slug).toBe("ethereum");
     expect(built.program.bodies.map((each) => each.destination.slug)).toEqual(["base"]);
+    expect(built.source).toBe(written);
     expectSame(built.program, compileSauceProgram("ethereum", written, options));
-    expect(built.source).toContain(`.refundee(${CREATOR})`);
   });
 
-  it("takes a closure as the body, and items as arguments or one list", () => {
-    const sentOf = () => Base.Portal.send([paid]).source(Ethereum, options).refundee(CREATOR);
-    const one = sentOf()
-      .receive(delivered[0]!)
-      .fee(FEE)
-      .then(() => {
-        USDC.transfer(0x6666666666666666666666666666666666666666n, 1_000_000n);
+  it("takes a closure as the body, and an item or a list of them", () => {
+    const hopOf = (receive: typeof delivered | readonly (typeof delivered)[]) =>
+      Base.hop({
+        source: Ethereum,
+        reward: [paid],
+        receive,
+        refundee: CREATOR,
+        fee: FEE,
+        compile: options,
       });
-    const many = sentOf().receive(delivered).fee(FEE).then(body);
+    const one = hopOf(delivered).then(() => {
+      USDC.transfer(0x6666666666666666666666666666666666666666n, 1_000_000n);
+    });
+    const many = hopOf([delivered]).then(body);
     expectSame(one.program, many.program);
   });
 
   it("cooks on a Pot, named or by its owner, with the source Kitchen's fee as its value", () => {
-    const built = Base.Portal.send(paid)
-      .source("ethereum", options)
-      .refundee(CREATOR)
-      .receive()
-      .fee(FEE)
-      .then(body);
+    const built = Base.hop({
+      source: "ethereum",
+      reward: paid,
+      refundee: CREATOR,
+      fee: FEE,
+      compile: options,
+    }).then(body);
     const byOwner = built.cook({ owner: CREATOR }, 9n);
     expect(byOwner.to).toBe(v12PredictPot(CREATOR));
     expect(byOwner.value).toBe(9n);
@@ -736,28 +684,42 @@ describe("on the host", () => {
     expect(built.cook(byOwner.to, 9n)).toEqual(byOwner);
   });
 
-  it("refuses an intent with no source chain, a modifier given twice, and a handler", () => {
+  it("refuses a hop with no source chain, no refundee, a field it does not take, and a handler", () => {
     expect(() =>
-      Base.Portal.send(paid).refundee(CREATOR).receive(delivered).fee(FEE).then(body),
-    ).toThrow(/give `\.source\(\.\.\.\)` after `\.send\(\.\.\.\)`/);
+      Base.hop({ reward: paid, receive: delivered, refundee: CREATOR, fee: FEE }).then(body),
+    ).toThrow(/needs a `source`: the chain the reward is escrowed on/);
     expect(() =>
-      Base.Portal.send(paid).source("ethereum", options).receive(delivered).fee(FEE).then(body),
-    ).toThrow(/an intent needs `\.refundee\(<address>\)`/);
-    const sent = Base.Portal.send(paid).refundee(CREATOR) as unknown as {
-      refundee(address: string): unknown;
-    };
-    expect(() => sent.refundee(CREATOR)).toThrow(/`\.refundee\(\.\.\.\)` is given twice/);
-    const built = Base.Portal.send(paid)
-      .source("ethereum", options)
-      .refundee(CREATOR)
-      .receive(delivered)
-      .fee(FEE)
-      .then(body);
+      Base.hop({
+        source: "ethereum",
+        reward: paid,
+        receive: delivered,
+        fee: FEE,
+        compile: options,
+      } as unknown as HopConfig).then(body),
+    ).toThrow(/a hop needs a `refundee`/);
+    expect(() =>
+      Base.hop({
+        source: "ethereum",
+        reward: paid,
+        refundee: CREATOR,
+        recieve: delivered,
+      } as unknown as HopConfig),
+    ).toThrow(
+      /Base\.hop\(\.\.\.\) takes no `recieve`: its fields are `source`, `compile`, `reward`/,
+    );
+    const built = Base.hop({
+      source: "ethereum",
+      reward: paid,
+      receive: delivered,
+      refundee: CREATOR,
+      fee: FEE,
+      compile: options,
+    }).then(body);
     expect(() => built.catch(() => {})).toThrow(TypeError);
   });
 
   const pending = () =>
-    Base.Portal.send(paid).source("ethereum").refundee(CREATOR).receive(delivered).fee(FEE);
+    Base.hop({ source: "ethereum", reward: paid, receive: delivered, refundee: CREATOR, fee: FEE });
 
   it("refuses to be awaited: its then is the intent's", async () => {
     // TypeScript refuses the `await` itself (`routes-intent-portal-types.test.ts`); JavaScript, or
@@ -778,41 +740,51 @@ describe("on the host", () => {
   });
 });
 
+describe("the syntax as data", () => {
+  it("names exactly the fields and the steps `@sauce/intents` reads", () => {
+    const source = readFileSync(resolve("src/std/intents/intents.evm.js"), "utf8");
+    const read = new Set([...source.matchAll(/\bconfig\.(\w+)/g)].map((match) => match[1]!));
+    read.delete("length");
+    expect([...read].sort()).toEqual(Object.keys(HOP_FIELDS).sort());
+    for (const stage of Object.values(HOP_STAGES)) {
+      for (const step of Object.keys(stage.steps)) {
+        expect(source).toMatch(new RegExp(`^  ${step}\\(`, "m"));
+      }
+    }
+  });
+});
+
 describe("what the lowering refuses", () => {
   const refused = (body: string) => () => compile(`function main() {\n${body}\n}`, INTENTS);
   const item = "{ token: USDC, amount: 1 }";
   const then = ".then(() => { USDC.transfer(RECIPIENT, 1); })";
+  const hop = (fields: string) => `Arbitrum.hop({ ${fields} })`;
+  const whole = `reward: ${item}, receive: ${item}, refundee: ${CREATOR}`;
 
-  it("refuses the refund address's old name, naming the steps there: it is `.refundee(...)`", () => {
-    const old = "creator"; // the step `.refundee(...)` replaced
-    expect(
-      refused(`Arbitrum.Portal.send(${item}).${old}(${CREATOR}).receive(${item})${then};`),
-    ).toThrow(
-      `\`${old}\` is not a member of an instance of \`Intent\`: after ` +
-        "`.send(...)` its steps are `.refundee(...)`, `.deadline(...)`, `.prover(...)` and " +
-        "`.receive(...)`",
+  it("refuses the refund address under its old name: the field is `refundee`", () => {
+    expect(refused(`${hop(`reward: ${item}, creator: ${CREATOR}`)}${then};`)).toThrow(
+      /a hop needs a `refundee`/,
     );
-    // At the Portal, before the reward, and after the body.
-    expect(refused(`Arbitrum.Portal.${old}(${CREATOR});`)).toThrow(
-      "a chain's `Portal` takes one step, `.send(...)`",
-    );
-    expect(
-      refused(
-        `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item})${then}.${old}(1);`,
-      ),
-    ).toThrow("after `.then(...)` its one step is `.catch(...)`");
   });
 
-  it("refuses a second `.catch(...)`", () => {
-    expect(
-      refused(
-        `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item})${then}.catch((e) => {}).catch((e) => {});`,
-      ),
-    ).toThrow(/`\.catch\(\.\.\.\)` is not a step after `\.catch\(\.\.\.\)`/);
+  it("refuses the chained form it replaced: a chain's `Portal` is the contract", () => {
+    expect(refused(`Arbitrum.Portal.send(${item}).receive(${item})${then};`)).toThrow(/`send`/);
+  });
+
+  it("refuses a step out of place, and a second `.catch(...)`", () => {
+    expect(refused(`${hop(whole)}.memo(1)${then};`)).toThrow(
+      /`memo` is not a member of .*after `hop\(\{ … \}\)` its one step is `\.then\(\(\) => \{ … \}\)`/,
+    );
+    expect(refused(`${hop(whole)}${then}.memo(1);`)).toThrow(
+      "after `.then(...)` its one step is `.catch(...)`",
+    );
+    expect(refused(`${hop(whole)}${then}.catch((e) => {}).catch((e) => {});`)).toThrow(
+      /`\.catch\(\.\.\.\)` is not a step after `\.catch\(\.\.\.\)`/,
+    );
   });
 
   it("refuses allowPartial, which only publishAndFund takes, and a fundVia it does not know", () => {
-    const opens = `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item})${then};`;
+    const opens = `${hop(whole)}${then};`;
     expect(() =>
       compile(`function main() {\n${opens}\n}`, { ...INTENTS, allowPartial: true }),
     ).toThrow(/`intents.allowPartial` goes with `fundVia: "publishAndFund"`/);
@@ -826,89 +798,53 @@ describe("what the lowering refuses", () => {
 
   it("a `const` holding the intent opens it where its block ends", () => {
     expectSame(
-      compile(
-        `function main() {\n  const opened = Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item})${then};\n}`,
-        INTENTS,
-      ),
-      compile(
-        `function main() {\n  Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item})${then};\n}`,
-        INTENTS,
-      ),
+      compile(`function main() {\n  const opened = ${hop(whole)}${then};\n}`, INTENTS),
+      compile(`function main() {\n  ${hop(whole)}${then};\n}`, INTENTS),
     );
   });
 
   it.each([
+    [`${hop(whole)};`, /has no body\. Finish it with `\.then\(\(\) => \{ … \}\)`, or `await` it/],
+    [`Arbitrum.hop()${then};`, /`hop\(\.\.\.\)` takes one object/],
+    [`Arbitrum.hop([${item}])${then};`, /`hop\(\.\.\.\)` takes one object/],
+    [`${hop(`receive: ${item}, refundee: ${CREATOR}`)}${then};`, /a hop needs a `reward`/],
+    [`${hop(whole)}${then}${then};`, /`\.then\(\.\.\.\)` is not a step after `\.then\(\.\.\.\)`/],
+    [`${hop(whole)}.then();`, /`\.then\(\.\.\.\)` takes the body/],
+    [`${hop(whole)}.catch((e) => {});`, /`\.catch\(\.\.\.\)` follows `\.then\(\.\.\.\)`/],
     [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item});`,
-      /has no body\. Finish it with `\.then/,
-    ],
-    [`Arbitrum.Portal.send(${item}).refundee(1);`, /stops before `\.receive\(\.\.\.\)`/],
-    [
-      `Arbitrum.Portal.send(${item})${then};`,
-      /stops before `\.receive\(\.\.\.\)`, which every intent has.*`\.receive\(\)` for nothing/,
-    ],
-    [
-      `Arbitrum.Portal.receive(${item}).send(${item})${then};`,
-      /`receive` is not a member of `Arbitrum\.Portal`: a chain's `Portal` takes one step/,
+      `${hop(`reward: [], receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      /a hop's `reward` must offer something: a token amount, or `\{ native: amount \}`/,
     ],
     [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).deadline(1).deadline(2).receive(${item})${then};`,
-      /`\.deadline\(\.\.\.\)` is given twice after `\.send\(\.\.\.\)`/,
+      `${hop(`reward: ${item}, receive: { native: 1 }, refundee: ${CREATOR}`)}${then};`,
+      /a hop's `receive` names tokens: the native coin is paid in its `reward`/,
     ],
     [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item}).salt(1).salt(2)${then};`,
-      /`\.salt\(\.\.\.\)` is given twice after `\.receive\(\.\.\.\)`/,
+      `${hop(`reward: [{ native: 1 }, { native: 2 }], receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      /a hop's `reward` names its native amount once/,
     ],
     [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).salt(1).receive(${item})${then};`,
-      /`\.salt\(\.\.\.\)` is not a step after `\.send\(\.\.\.\)`: its steps are `\.refundee/,
+      `${hop(`reward: { token: USDC }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      /each item of a hop's `reward` is `\{ token, amount \}` or `\{ native: amount \}`/,
     ],
     [
-      `Arbitrum.Portal.send(${item}).receive(${item}).refundee(1)${then};`,
-      /`\.refundee\(\.\.\.\)` is not a step after `\.receive\(\.\.\.\)`: its steps are `\.deadline/,
+      `${hop(`reward: ${item}, receive: { token: USDC }, refundee: ${CREATOR}`)}${then};`,
+      /each item of a hop's `receive` is `\{ token, amount \}`/,
     ],
     [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item}).memo(1)${then};`,
-      /`memo` is not a member of .*after `\.receive\(\.\.\.\)` its steps are/,
-    ],
-    [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive(${item})${then}.salt(1);`,
-      /`\.salt\(\.\.\.\)` is not a step after `\.then\(\.\.\.\)`: its one step is `\.catch/,
-    ],
-    [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).deadline().receive(${item})${then};`,
-      /`\.deadline\(\.\.\.\)` takes the deadline, in Unix seconds/,
-    ],
-    [
-      `Arbitrum.Portal.send().refundee(${CREATOR}).receive(${item})${then};`,
-      /`\.send\(\.\.\.\)` must offer something: a token amount, or `\{ native: amount \}`/,
-    ],
-    [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive({ native: 1 })${then};`,
-      /`\.receive\(\.\.\.\)` names tokens: the native coin is paid with `\.send\(\.\.\.\)`/,
-    ],
-    [
-      `Arbitrum.Portal.send([{ native: 1 }, { native: 2 }]).refundee(${CREATOR}).receive(${item})${then};`,
-      /`\.send\(\.\.\.\)` names its native amount once/,
-    ],
-    [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive({ token: USDC })${then};`,
-      /each item `\.receive\(\.\.\.\)` takes is `\{ token, amount \}`/,
-    ],
-    [
-      `Arbitrum.Portal.send(${item}).refundee(${CREATOR}).receive({ token: USDT, amount: 1 })${then};`,
+      `${hop(`reward: ${item}, receive: { token: USDT, amount: 1 }, refundee: ${CREATOR}`)}${then};`,
       /`USDT` is not a token or protocol on arbitrum\. Did you mean `USDC` or `USDT0`\?/,
     ],
     [
-      `Arbitrum.Portal.send({ token: USDC, amount: 1 - 2 }).refundee(${CREATOR}).receive(${item})${then};`,
+      `${hop(`reward: { token: USDC, amount: 1 - 2 }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
       /constant `-` expression overflows 256 bits/,
     ],
     [
-      `Arbitrum.Portal.send({ token: USDC, amount: 1 / 0 }).refundee(${CREATOR}).receive(${item})${then};`,
+      `${hop(`reward: { token: USDC, amount: 1 / 0 }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
       /constant `\/` expression divides by zero/,
     ],
     [
-      `Solana.Portal.send(${item}).refundee(${CREATOR}).receive(${item})${then};`,
+      `Solana.hop({ ${whole} })${then};`,
       /an intent a program opens runs its body on an EVM chain: solana/,
     ],
   ])("%s", (body, message) => {

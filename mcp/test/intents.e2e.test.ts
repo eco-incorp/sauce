@@ -59,9 +59,7 @@ const HYPERLANE_FEE = 7_777n;
 /** Base USDC to `recipient`, for Ethereum USDC, refunded to `refundTo` unfilled. */
 const INTENT = [
   "function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {",
-  "  Base.Portal.send({ token: USDC, amount: reward })",
-  "    .refundee(refundTo)",
-  "    .receive({ token: USDC, amount })",
+  "  Base.hop({ reward: { token: USDC, amount: reward }, receive: { token: USDC, amount }, refundee: refundTo })",
   "    .then(() => {",
   "      USDC.transfer(recipient, amount);",
   "    });",

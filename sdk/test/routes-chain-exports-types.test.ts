@@ -90,11 +90,7 @@ describe("chain accessors: the names resolve through an import, and only through
   it("`import { Base }` typechecks: Base.Portal builds an intent whose program and cook are typed, not `any`", () => {
     const diagnostics = typecheckProbe(`
       import { Base, Ethereum } from ${ROOT};
-      const intent = Base.Portal.send({ token: "0x1111111111111111111111111111111111111111", amount: 2n })
-        .source(Ethereum)
-        .refundee("0x3333333333333333333333333333333333333333")
-        .receive()
-        .fee(0n)
+      const intent = Base.hop({ source: Ethereum, reward: { token: "0x1111111111111111111111111111111111111111", amount: 2n }, refundee: "0x3333333333333333333333333333333333333333", fee: 0n })
         .then(() => {});
       const bytecode: Uint8Array = intent.program.bytecode;
       const cook: { to: string; data: string; value: bigint } = intent.cook({ owner: "0x3333333333333333333333333333333333333333" }, 0n);

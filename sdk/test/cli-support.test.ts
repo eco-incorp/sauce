@@ -152,19 +152,17 @@ function expectRefused(
 
 const PAY = "function main() {\n  USDC.transfer(RECIPIENT, 1000n);\n}\n";
 /** Base to Arbitrum, its body a program on the destination's shared Pot. */
-const TO_ARBITRUM = `Arbitrum.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
+const TO_ARBITRUM = `Arbitrum.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
 /** Base to Arbitrum, the body a program on the destination's Pot: it pays the Kitchen's fee. */
 const TO_ARBITRUM_PROGRAM = [
-  "Arbitrum.Portal.send({ token: USDC, amount: 7 })",
-  `  .refundee(${CREATOR})`,
-  "  .receive({ token: USDC, amount: 5 })",
+  `Arbitrum.hop({ reward: { token: USDC, amount: 7 }, receive: { token: USDC, amount: 5 }, refundee: ${CREATOR} })`,
   "  .then(() => {",
   "    USDC.transfer(RECIPIENT, USDC.balanceOf(ctx.self()));",
   "  });",
   "",
 ].join("\n");
 /** Arbitrum to Base: Arbitrum is its source. */
-const TO_BASE = `Base.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
+const TO_BASE = `Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
 
 describe("the gate", () => {
   it("refuses only a preview chain, naming each one once with its request", () => {

@@ -55,9 +55,7 @@ const DEADLINE = "2000000000";
 
 /** The intent: Base USDC delivered to the shared Pot, a floor checked, all of it sent on. */
 const COOKED = [
-  "Base.Portal.send({ token: USDC, amount: 6000000 })",
-  `  .refundee(${CREATOR})`,
-  "  .receive({ token: USDC, amount: AMOUNT_IN })",
+  `Base.hop({ reward: { token: USDC, amount: 6000000 }, receive: { token: USDC, amount: AMOUNT_IN }, refundee: ${CREATOR} })`,
   "  .then(() => {",
   "    const got = USDC.balanceOf(ctx.self());",
   '    require(got >= MIN_OUT, "output below MIN_OUT");',
@@ -71,8 +69,7 @@ const COOKED = [
 
 /** An intent whose body is one plain token transfer, cooked on the shared Pot all the same. */
 const DIRECT = [
-  `Base.Portal.send([{ token: USDC, amount: 6000000 }]).refundee(${CREATOR})`,
-  "  .receive({ token: USDC, amount: AMOUNT_IN })",
+  `Base.hop({ reward: [{ token: USDC, amount: 6000000 }], receive: { token: USDC, amount: AMOUNT_IN }, refundee: ${CREATOR} })`,
   "  .then(() => {",
   "    USDC.transfer(RECIPIENT, AMOUNT_IN);",
   "  });",
@@ -83,8 +80,7 @@ const DIRECT = [
 const MEASURED = [
   "function main() {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  `  Base.Portal.send([{ token: USDC, amount }]).refundee(${CREATOR})`,
-  "    .receive({ token: USDC, amount: AMOUNT_IN })",
+  `  Base.hop({ reward: [{ token: USDC, amount }], receive: { token: USDC, amount: AMOUNT_IN }, refundee: ${CREATOR} })`,
   "    .then(() => {",
   "      USDC.transfer(RECIPIENT, AMOUNT_IN);",
   "    });",
@@ -407,7 +403,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     const run = await fill(
       file(
         "computed.sauce.ts",
-        `Base.Portal.send([{ token: USDC, amount: 6000000 }]).refundee(${CREATOR}).receive({ token: Token(${computed.toLowerCase()}), amount: AMOUNT_IN }).then(() => {\n  Token(${computed.toLowerCase()}).transfer(RECIPIENT, AMOUNT_IN);\n});\n`,
+        `Base.hop({ reward: [{ token: USDC, amount: 6000000 }], receive: { token: Token(${computed.toLowerCase()}), amount: AMOUNT_IN }, refundee: ${CREATOR} }).then(() => {\n  Token(${computed.toLowerCase()}).transfer(RECIPIENT, AMOUNT_IN);\n});\n`,
       ),
       ...defines(),
       ...["--intent-execution-fee", String(FEE)],

@@ -165,7 +165,7 @@ describe("SauceScript in an editor", () => {
   it("takes an `await` in main's body, a body a call takes or a `try` there, and nowhere else", () => {
     const file = join(work, "awaited.sauce.ts");
     const opened =
-      "Arbitrum.Portal.send({ token: USDC, amount: 2 }).refundee(0x44).receive({ token: USDC, amount: 1 })";
+      "Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x44 })";
     const codes = (body: string, withPlugin = true) =>
       service({ [file]: body }, withPlugin)
         .getSemanticDiagnostics(file)
@@ -342,8 +342,12 @@ describe("SauceScript in an editor", () => {
         'import { uniswapV9 } from "@sauce/router";\nfunction main() { uniswapV9(); }\n',
         [2305, 2724],
       ],
-      ["send", "Base.Portal.sends({ token: USDC, amount: 1n }).then(() => {});\n", missing],
-      ["then", "Base.Portal.send({ token: USDC, amount: 1n }).than(() => {});\n", missing],
+      ["hop", "Base.hops({ reward: { token: USDC, amount: 1n } }).then(() => {});\n", missing],
+      [
+        "then",
+        "Base.hop({ reward: { token: USDC, amount: 1n }, refundee: 1n }).than(() => {});\n",
+        missing,
+      ],
     ];
     for (const [name, body, codes] of cases) {
       const files = program(name, body);

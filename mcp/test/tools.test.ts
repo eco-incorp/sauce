@@ -59,7 +59,7 @@ const SVM_PAY = [
 const INTENT = [
   "// @chain ethereum",
   "function main(recipient: Address) {",
-  `  Base.Portal.send({ token: USDC, amount: 7 }).refundee(${CREATOR}).receive().then(() => {`,
+  `  Base.hop({ reward: { token: USDC, amount: 7 }, refundee: ${CREATOR} }).then(() => {`,
   "    USDC.transfer(recipient, 5);",
   "  });",
   "}",

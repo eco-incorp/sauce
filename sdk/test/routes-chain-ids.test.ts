@@ -51,9 +51,7 @@ describe("a chain's name is its chain id", () => {
     const opened = compileSauceProgram(
       "base",
       `function main() {
-  Ethereum.Portal.send({ token: USDC, amount: 2 })
-    .refundee(${RECIPIENT})
-    .receive({ token: USDC, amount: 1 })
+  Ethereum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: ${RECIPIENT} })
     .then(() => { USDC.transfer(${RECIPIENT}, 1); });
 }`,
       { intents: { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}`, executionFee: 1n } },
@@ -61,7 +59,7 @@ describe("a chain's name is its chain id", () => {
     expect(opened.map((body) => body.destination.slug)).toEqual(["ethereum"]);
   });
 
-  it("refuses the old intent form, a chain's name called, naming the Portal form", () => {
+  it("refuses the old intent form, a chain's name called, naming the hop", () => {
     expect(() =>
       compileSauceProgram(
         "base",
@@ -72,7 +70,7 @@ describe("a chain's name is its chain id", () => {
       ),
     ).toThrow(
       "`Arbitrum` is a chain id, not a function: an intent opens with " +
-        "`Arbitrum.Portal.send(reward).receive(delivery).then(() => { ... })`",
+        "`await Arbitrum.hop({ reward, receive, refundee })`",
     );
   });
 });

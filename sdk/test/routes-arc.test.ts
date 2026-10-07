@@ -98,15 +98,16 @@ describe("Arc: intents", () => {
     Buffer.from(bytes).toString("hex").includes(word.slice(2).toLowerCase());
 
   it("Base -> Arc: the body compiles for Arc and cooks on the shared Pot through its Portal", () => {
-    const intent = Arc.Portal.send({ token: BASE_USDC, amount })
-      .source(Base)
-      .refundee(CREATOR)
-      .prover(ecoRoutesProver("base", "arc"))
-      .receive({ token: ARC_USDC, amount })
-      .fee(ARC_EXECUTION_FEE)
-      .then(() => {
-        USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
-      });
+    const intent = Arc.hop({
+      source: Base,
+      reward: { token: BASE_USDC, amount },
+      receive: { token: ARC_USDC, amount },
+      refundee: CREATOR,
+      prover: ecoRoutesProver("base", "arc"),
+      fee: ARC_EXECUTION_FEE,
+    }).then(() => {
+      USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
+    });
 
     expect(intent.program.chain).toBe(requireChain("base"));
     const [body] = intent.program.bodies;
@@ -127,13 +128,8 @@ describe("Arc: intents", () => {
   });
 
   it("Arc -> Base: a native reward, or Arc's USDC as a token, opens from Arc", () => {
-    const open = (reward: routes.PortalReward) =>
-      Base.Portal.send(reward)
-        .source(Arc)
-        .refundee(CREATOR)
-        .receive()
-        .fee(1n)
-        .then(() => {});
+    const open = (reward: routes.HopReward) =>
+      Base.hop({ source: Arc, reward, refundee: CREATOR, fee: 1n }).then(() => {});
     expect(open({ native: 10n ** 18n }).program.chain).toBe(requireChain("arc"));
     expect(open({ token: ARC_USDC, amount }).program.chain).toBe(requireChain("arc"));
   });
@@ -150,22 +146,24 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
     /arc \(chain 5042\) offers both a nativeAmount and a USDC token leg \(0x3600000000000000000000000000000000000000\)[\s\S]*RewardTokensNotUnique[\s\S]*Fold them into one leg/;
   /** Both: native value and `token`, from `source` to `destination`. */
   const both = (
-    source: routes.PortalChain,
-    destination: { readonly Portal: routes.ChainPortal },
+    source: routes.HopChain,
+    destination: { readonly hop: routes.ChainHop },
     token: Hex,
   ) =>
-    destination.Portal.send({ native: oneUsdcNative }, { token, amount })
-      .source(source)
-      .refundee(CREATOR)
-      .receive()
-      .fee(1n)
+    destination
+      .hop({
+        source,
+        reward: [{ native: oneUsdcNative }, { token, amount }],
+        refundee: CREATOR,
+        fee: 1n,
+      })
       .then(() => {});
   /** A program that opens an intent to `destination`, rewarded in native value AND its own chain's
    *  USDC. */
   const program = (destination: string) => `
     function main() {
       const amount = USDC.balanceOf(ctx.self());
-      ${destination}.Portal.send({ token: USDC, amount }, { native: 1n }).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
+      ${destination}.hop({ reward: [{ token: USDC, amount }, { native: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
         USDC.transfer(RECIPIENT, amount);
       });
     }

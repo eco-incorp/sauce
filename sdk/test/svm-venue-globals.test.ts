@@ -56,17 +56,17 @@ describe("svm venue accessors: on the imported Solana accessor", () => {
 describe("svm venue accessors: coexistence with .Portal", () => {
   it("the SAME Solana object carries its Portal AND .RaydiumCpSwap", () => {
     const solana = Solana as unknown as {
-      Portal: { send: unknown };
+      hop: unknown;
       RaydiumCpSwap: unknown;
       chain: { slug: string };
     };
     expect(solana.chain.slug).toBe("solana");
     expect(solana.RaydiumCpSwap).toBeDefined();
-    expect(typeof solana.Portal.send).toBe("function");
+    expect(typeof solana.hop).toBe("function");
   });
 
   it("composition never mutates the imported chainAccessors.Solana object", () => {
-    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["Portal", "chain"]);
+    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["chain", "hop"]);
   });
 });
 

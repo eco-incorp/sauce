@@ -109,9 +109,7 @@ const APPROVE = parseAbi(["function approve(address, uint256)"]);
  *  Base's shared Pot, paying the Kitchen's fee. */
 const INTENT = [
   "function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {",
-  "  Base.Portal.send({ token: USDC, amount: reward })",
-  "    .refundee(refundTo)",
-  "    .receive({ token: USDC, amount })",
+  "  Base.hop({ reward: { token: USDC, amount: reward }, receive: { token: USDC, amount }, refundee: refundTo })",
   "    .then(() => {",
   "      USDC.transfer(recipient, amount);",
   "    });",
@@ -128,9 +126,7 @@ const PERMIT2 = JSON.parse(
 const PORTAL_PROGRAM = [
   "function main(recipient: Address, refundTo: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base.Portal.send({ token: USDC, amount })",
-  "    .refundee(refundTo)",
-  "    .receive({ token: USDC, amount: amount * 99 / 100 })",
+  "  Base.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount: amount * 99 / 100 }, refundee: refundTo })",
   "    .then(() => {",
   "      USDC.transfer(recipient, amount * 99 / 100);",
   "    });",
@@ -349,15 +345,17 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
     const start = [await now(base), await now(ethereum)].reduce((a, b) => (a > b ? a : b));
     // A program, not a transfer alone: it cooks on the Pot and pays the Kitchen's fee.
-    const built = Base.Portal.send({ token: ethereumUsdc, amount: REWARD })
-      .source(Ethereum, {
+    const built = Base.hop({
+      source: Ethereum,
+      reward: { token: ethereumUsdc, amount: REWARD },
+      receive: { token: baseUsdc, amount: AMOUNT },
+      refundee: OWNER.address,
+      fee: fee,
+      compile: {
         defines: { RECIPIENT: BigInt(RECIPIENT) },
         intents: { deadline: start + 3600n, rewardDeadline: start + 7200n },
-      })
-      .refundee(OWNER.address)
-      .receive({ token: baseUsdc, amount: AMOUNT })
-      .fee(fee)
-      .then("const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);");
+      },
+    }).then("const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);");
 
     // ---- Ethereum: the creator's Pot pays the reward into the vault and publishes -------------
     const zero = `0x${"00".repeat(32)}` as Hex;
@@ -604,7 +602,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(await base.balanceOf(baseUsdc, RECIPIENT)).toBe(paid + AMOUNT);
   }, 240_000);
 
-  it("the Portal form in a program `sauce run` cooks: the Pot opens the intent it measures", async () => {
+  it("a hop in a program `sauce run` cooks: the Pot opens the intent it measures", async () => {
     const program = join(work, "portal-program.sauce.ts");
     writeFileSync(program, PORTAL_PROGRAM);
     const pot = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
@@ -614,7 +612,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     // An intent names its creator: the Pot may be shared, so nothing defaults it, the signer
     // included.
     const unnamed = join(work, "portal-program-unnamed.sauce.ts");
-    writeFileSync(unnamed, PORTAL_PROGRAM.replace("    .refundee(refundTo)\n", ""));
+    writeFileSync(unnamed, PORTAL_PROGRAM.replace(", refundee: refundTo", ""));
     const refused = await sauce(
       ...["run", unnamed, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
       ...["--intent-execution-fee", String(FEE)],
@@ -622,7 +620,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       ...["--args", RECIPIENT, OWNER.address],
     );
     expect(refused.code).not.toBe(0);
-    expect(refused.stderr).toMatch(/needs `\.refundee\(<address>\)`.*may be shared/);
+    expect(refused.stderr).toMatch(/a hop needs a `refundee`.*may be shared/);
 
     // No deadline: the intent opens now. Its creator is `refundTo`, from main's arguments.
     const before = BigInt(Math.floor(Date.now() / 1000));
@@ -1002,8 +1000,8 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     writeFileSync(
       usdtFile,
       INTENT.replace(
-        ".receive({ token: USDC,",
-        `.receive({ token: Token(${usdt.toLowerCase()}),`,
+        "receive: { token: USDC,",
+        `receive: { token: Token(${usdt.toLowerCase()}),`,
       ).replace("USDC.transfer(", `Token(${usdt.toLowerCase()}).transfer(`),
     );
     const start = await now(base);
@@ -1061,7 +1059,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       `USDC.transfer(${RECIPIENT.toLowerCase()}, 1250000);`,
     );
     // Its refundee is the signer, written in the file; the reward came in through --fund.
-    expect(readFileSync(out, "utf8")).toContain(`.refundee(${OWNER.address.toLowerCase()})`);
+    expect(readFileSync(out, "utf8")).toContain(`  refundee: ${OWNER.address.toLowerCase()},`);
     expect(run.stderr).toContain("auto-approved: approve Permit2 for USDC");
     const published = JSON.parse(run.stdout) as { intents: Array<{ intentHash: Hex }> };
     const hash = published.intents[0]!.intentHash;

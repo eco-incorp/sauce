@@ -16,7 +16,7 @@
 //     --intent-execution-fee <Base Kitchen fee in wei> \
 //     --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>
 //
-// `--chain arbitrum` is the source: `USDC` in `.send(...)` is Arbitrum's USDC. Inside `.then(...)`
+// `--chain arbitrum` is the source: `USDC` in `reward` is Arbitrum's USDC. Inside `.then(...)`
 // the body runs on Base: `UniswapV3.Factory` and `UniswapV4.PoolManager` are Base's, and every other
 // Base address is a literal from the package's registry (tokens, pancakeswap-v3,
 // aerodrome-slipstream).
@@ -42,8 +42,11 @@ function main(
   recipient: Address,
   refundTo: Address,
 ) {
-  Base.Portal.send({ token: USDC, amount: reward })
-    .receive({ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: amountIn })
+  Base.hop({
+    reward: { token: USDC, amount: reward },
+    receive: { token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: amountIn },
+    refundee: refundTo,
+  })
     .then(() => {
       require(sqrtPriceLimitX96 != 0n &&
         minOut != 0n &&

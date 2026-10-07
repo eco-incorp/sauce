@@ -450,7 +450,7 @@ describe("sauce compile", () => {
     // An intent's limit, named before it is published, whichever way its reward is paid.
     const intent = file(
       "limit-intent.sauce.ts",
-      `// @chain ethereum\nBase.Portal.send({ token: USDC, amount: 7 }).refundee(${CREATOR}).receive().then(() => {\n` +
+      `// @chain ethereum\nBase.hop({ reward: { token: USDC, amount: 7 }, refundee: ${CREATOR} }).then(() => {\n` +
         "  require(SQRT_PRICE_LIMIT_X96 > 0);\n  USDC.transfer(RECIPIENT, 5);\n});\n",
     );
     const published = await sauce(
@@ -503,35 +503,31 @@ describe("sauce compile", () => {
     }
   });
 
-  // Pending the compiler: `await` (#554), which makes the statements after it the body.
-  it.failing(
-    "reads an awaited intent's body on its destination, as its `.then(...)` form",
-    async () => {
-      const { appliedDefines } = await import("../src/cli/report.js");
-      const opened =
-        "Arbitrum.Portal.send([{ token: USDC, amount: 1 }]).refundee(0x3333333333333333333333333333333333333333).receive()";
-      const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
-      const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
-      // Where each part runs is the compile's to say.
-      const report = (text: string) =>
-        appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"]));
-      const awaited = report([`await ${opened};`, ...body, ""].join("\n"));
-      expect(awaited.defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
-        "RECIPIENT@arbitrum",
-        "USDC@arbitrum",
-        "USDC@base",
-        "WETH@arbitrum",
-        "chainId@arbitrum",
-      ]);
-      expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
-    },
-  );
+  it("reads an awaited intent's body on its destination, as its `.then(...)` form", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const opened =
+      "Arbitrum.hop({ reward: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
+    const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
+    const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    // Where each part runs is the compile's to say.
+    const report = (text: string) =>
+      appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"]));
+    const awaited = report([`await ${opened};`, ...body, ""].join("\n"));
+    expect(awaited.defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
+      "RECIPIENT@arbitrum",
+      "USDC@arbitrum",
+      "USDC@base",
+      "WETH@arbitrum",
+      "chainId@arbitrum",
+    ]);
+    expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
+  });
 
   // Pending the compiler: `.catch(...)` and `try` (#552), whose handlers run where they say.
   it.failing("reads a handler on every chain it runs on, as the compile reports it", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
-      "Arbitrum.Portal.send([{ token: USDC, amount: 1 }]).refundee(0x3333333333333333333333333333333333333333).receive()";
+      "Arbitrum.hop({ reward: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
     const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
     const read = (text: string) =>
       appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"])).defines.map(
@@ -572,7 +568,7 @@ describe("sauce compile", () => {
     const recipient = "0x6666666666666666666666666666666666666666";
     const mine = "0x7777777777777777777777777777777777777777";
     const text = [
-      "Arbitrum.Portal.send([{ token: USDC, amount: 1n }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {",
+      "Arbitrum.hop({ reward: [{ token: USDC, amount: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
       "  USDC.transfer(RECIPIENT, 1n);",
       "  require(chainId == 42161n && WETH != 0n);",
       "});",
@@ -650,7 +646,7 @@ describe("sauce compile", () => {
         "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
         "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
         "  require(pool != 0n);",
-        "  Arbitrum.Portal.send([{ token: USDC, amount: amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {",
+        "  Arbitrum.hop({ reward: [{ token: USDC, amount: amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
         "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
         "    require(there != 0n);",
         "  });",
@@ -965,7 +961,7 @@ describe("sauce compile", () => {
     // nothing to read the fee from, it is asked for.
     const bridge = file(
       "bridge.sauce.ts",
-      `Base.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
+      `Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
     );
     const unpriced = await sauce(
       ...["compile", bridge, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
@@ -977,11 +973,11 @@ describe("sauce compile", () => {
     );
   });
 
-  it("builds an intent the program opens, naming the creator it lacks", async () => {
-    const body = (creator: string) =>
+  it("builds an intent the program opens, naming the refundee it lacks", async () => {
+    const body = (refundee: string) =>
       [
         "const amount = USDC.balanceOf(ctx.self());",
-        `Arbitrum.Portal.send([{ token: USDC, amount }])${creator}.receive().then(() => {`,
+        `Arbitrum.hop({ reward: [{ token: USDC, amount }]${refundee} }).then(() => {`,
         "  USDC.transfer(RECIPIENT, amount);",
         "});",
         "",
@@ -993,9 +989,9 @@ describe("sauce compile", () => {
     );
     expect(unnamed.code).toBe(1);
     expect(unnamed.stderr).toMatch(
-      /needs `\.refundee\(<address>\)`[^]*hint: write `\.refundee\(<address>\)` in the file/,
+      /a hop needs a `refundee`[^]*hint: write `refundee: <address>` in the hop's config/,
     );
-    const named = body(`.refundee(${CREATOR})`);
+    const named = body(`, refundee: ${CREATOR}`);
     const salt = `0x${"00".repeat(32)}` as const;
     const built = await sauce(
       ...["compile", file("intent.sauce.ts", named), "--chain", "base", ...recipient],
@@ -1438,9 +1434,7 @@ describe("sauce tx", () => {
 describe("sauce intent publish, offline", () => {
   const INTENT = [
     "// @chain ethereum",
-    "Base.Portal.send([{ token: USDC, amount: 7 }])",
-    `  .refundee(${CREATOR})`,
-    "  .receive()",
+    `Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} })`,
     "  .then(() => {",
     "    USDC.transfer(RECIPIENT, 5);",
     "  });",
@@ -1515,7 +1509,7 @@ describe("sauce intent publish, offline", () => {
           "}",
           "",
         ].join("\n");
-      const intent = `Base.Portal.send({ token: USDC, amount }).refundee(${CREATOR}).receive({ token: USDC, amount })`;
+      const intent = `Base.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })`;
       const cook = async (text: string): Promise<string> => {
         const run = await sauce(
           ...["intent", "publish", file("awaited.sauce.ts", text), "--chain", "ethereum"],
@@ -1545,7 +1539,7 @@ describe("sauce intent publish, offline", () => {
       "publish",
       file(
         "typed.sauce.ts",
-        `function main(recipient: Address) {\n  Base.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {\n    USDC.transfer(recipient, 5);\n  });\n}\n`,
+        `function main(recipient: Address) {\n  Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n    USDC.transfer(recipient, 5);\n  });\n}\n`,
       ),
       "--chain",
       "ethereum",
@@ -1580,7 +1574,7 @@ describe("sauce intent publish, offline", () => {
 describe("sauce intent fill, offline", () => {
   const INTENT = [
     "// @chain arbitrum",
-    `Base.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {`,
+    `Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {`,
     "  USDC.transfer(RECIPIENT, 5);",
     "});",
     "",
@@ -1632,7 +1626,7 @@ describe("sauce intent fill, offline", () => {
       "fill",
       file(
         "two.sauce.ts",
-        `${INTENT}Optimism.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
+        `${INTENT}Optimism.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
       ),
       ...FLAGS,
       ...NOWHERE,
@@ -1972,7 +1966,7 @@ describe("flags in any order", () => {
       const run = await sauce("compile", program, "--chain", "base", ...flag);
       expect(run.code).toBe(2);
       expect(run.stderr).toMatch(
-        /`--intent-(creator|refundee)` is gone: an intent names its refundee in the file: `\.refundee\(<address>\)`/,
+        /`--intent-(creator|refundee)` is gone: an intent names its refundee in the file: `hop\(\{ reward, refundee: refundTo \}\)`/,
       );
     }
   });

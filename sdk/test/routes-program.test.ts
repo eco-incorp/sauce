@@ -80,7 +80,7 @@ describe("compileSauceProgram", () => {
     const body = [
       "function main(recipient: Address) {",
       "  const amount = USDC.balanceOf(ctx.self());",
-      "  Arbitrum.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {",
+      "  Arbitrum.hop({ reward: [{ token: USDC, amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
       "    USDC.transfer(recipient, amount);",
       "  });",
       "}",
@@ -94,7 +94,7 @@ describe("compileSauceProgram", () => {
 
   it("compiles the body of an intent every value of which is known now, with nothing to carry", () => {
     const body = [
-      "Base.Portal.send([{ token: USDC, amount: 7n }]).refundee(0x3333333333333333333333333333333333333333).receive({ token: USDC, amount: 5n }).then(() => {",
+      "Base.hop({ reward: [{ token: USDC, amount: 7n }], receive: { token: USDC, amount: 5n }, refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
       "  USDC.transfer(RECIPIENT, 5n);",
       "});",
     ].join("\n");

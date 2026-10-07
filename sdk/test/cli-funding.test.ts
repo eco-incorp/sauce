@@ -239,7 +239,7 @@ describe("the funding wrapper", () => {
 
   it("refuses a program that awaits an intent: its sweep would run in the body, on the destination", () => {
     const opened =
-      "Arbitrum.Portal.send({ token: USDC, amount: 2 }).refundee(0x66).receive({ token: USDC, amount: 1 })";
+      "Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66 })";
     for (const source of [
       `await ${opened};\nUSDC.transfer(0x66, 1);\n`,
       `function main(to: Address) {\n  await ${opened};\n  USDC.transfer(to, 1);\n}\n`,

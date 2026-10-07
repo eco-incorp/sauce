@@ -1,9 +1,10 @@
 /**
  * A typed closure's chains are the imported chain exports, and the host calls keep resolving to the
- * host signature: `Portal`'s steps and the `HostIntent` they return. Nothing is declared globally: a chain
- * named in a closure comes from the same import as the host calls (`routes-chain-exports-types.
- * test.ts` pins that a bare one is an error). An intent a closure opens, `Ethereum.Portal.send(...)
- * ...then(...)`, typechecks through the export's `Portal`: `routes-intent-portal-types.test.ts`.
+ * host signature: `hop` and the `HostIntent` its `then` returns. Nothing is declared globally: a
+ * chain named in a closure comes from the same import as the host calls
+ * (`routes-chain-exports-types.test.ts` pins that a bare one is an error). An intent a closure
+ * opens, `Ethereum.hop({ reward, refundee }).then(...)`, typechecks through the export's `hop`:
+ * `routes-intent-portal-types.test.ts`.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,32 +20,22 @@ import { Base, Ethereum, type routes } from ${ROOT};
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-const portal: Equal<typeof Base.Portal, routes.ChainPortal> = true;
+const hop: Equal<typeof Base.hop, routes.ChainHop> = true;
 
-const received = Base.Portal.send({ token: "0x4444444444444444444444444444444444444444", amount: 1n })
-  .source(Ethereum, { defines: { RECIPIENT: 1n } })
-  .refundee("0x4444444444444444444444444444444444444444")
-  .receive();
+const received = Base.hop({ source: Ethereum, reward: { token: "0x4444444444444444444444444444444444444444", amount: 1n }, refundee: "0x4444444444444444444444444444444444444444", compile: { defines: { RECIPIENT: 1n } } });
 const fromSource: routes.HostIntent = received.then("USDC.transfer(RECIPIENT, 1);");
-const fromClosure: routes.HostIntent = Base.Portal.send([])
-  .source("ethereum")
-  .refundee("0x4444444444444444444444444444444444444444")
-  .receive({ token: "0x4444444444444444444444444444444444444444", amount: 1n })
-  .fee(0n)
+const fromClosure: routes.HostIntent = Base.hop({ source: "ethereum", reward: [], receive: { token: "0x4444444444444444444444444444444444444444", amount: 1n }, refundee: "0x4444444444444444444444444444444444444444", fee: 0n })
   .then(() => {});
-export const all = [fromSource, fromClosure, portal];
+export const all = [fromSource, fromClosure, hop];
 `;
 
 /** A chain the closure does not import is not declared: the host surface is imports. */
 const NOT_IMPORTED = `
 import { Base } from ${ROOT};
 
-Base.Portal.send([])
-  .source("base")
-  .refundee("0x4444444444444444444444444444444444444444")
-  .receive()
+Base.hop({ source: "base", reward: [], refundee: "0x4444444444444444444444444444444444444444" })
   .then(() => {
-    Ethereum.Portal.send({ token: USDC, amount: 1n }).refundee(0x44n).receive().then(() => {});
+    Ethereum.hop({ reward: { token: USDC, amount: 1n }, refundee: 0x44n }).then(() => {});
   });
 `;
 
@@ -84,7 +75,7 @@ describe("a typed closure's chains", () => {
     program = undefined;
   });
 
-  it("leaves every host call on the host signature: the Portal's steps and the intent they build", () => {
+  it("leaves every host call on the host signature: the hop and the intent it builds", () => {
     expect(messages("HOST")).toEqual([]);
   });
 

@@ -29,7 +29,7 @@ const PAY = [
   "",
 ].join("\n");
 const intentTo = (chain: string): string =>
-  `${chain}.Portal.send({ token: USDC, amount: 7 }).refundee(${OWNER}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
+  `${chain}.hop({ reward: { token: USDC, amount: 7 }, refundee: ${OWNER} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
 const INTENT = { defines: { RECIPIENT }, intentDeadline: 2_000_000_000, intentExecutionFee: 0 };
 
 /** The record of an intent from `source` to `destination`, as sauce_intent_publish returns one. */
