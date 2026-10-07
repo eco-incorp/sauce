@@ -141,8 +141,9 @@ check(
 check(errors.includes("InputExceedsAuthorized"), "a callback takes at most the exact input");
 console.log(`@sauce/router: ${Object.keys(LIBRARY).join(", ")}`);
 
-// On Solana: the SVM arm exports a `try` form and a plain form for each venue the skill names, and
-// `trySwap`/`swap`, all taking the arguments the skill gives.
+// On Solana: the SVM arm exports, for each venue the skill names, a `try` form and a plain form at a
+// price and at its own limit, and its instruction alone; and `trySwap`/`swap`. Each family takes the
+// arguments the skill gives.
 const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
 const solana = skill.slice(skill.indexOf("## On Solana"), skill.indexOf("## Example"));
 const svmArm = resolveSdkModule(entry.replace(/\.js$/, ".svm.js"));
@@ -150,26 +151,47 @@ if (svmArm === undefined) throw new Error("@sauce/router has an SVM arm");
 const svmText = new TextDecoder().decode(svmArm);
 const svmExports = [...svmText.matchAll(/^export function (\w+)\(([^)]*)\)/gm)];
 const named = [...new Set([...solana.matchAll(/`(try[A-Z]\w+)`/g)].map((m) => m[1]!))];
-check(named.length === 10, "the skill names nine venues' try forms and trySwap");
-const plain = named.map((name) => name.charAt(3).toLowerCase() + name.slice(4));
+const priced = named.filter((name) => !name.endsWith("AtLimit") && name !== "tryManifest");
+check(priced.length === 10, "the skill names nine venues' try forms and trySwap");
+const atLimit = [
+  ...priced.filter((name) => name !== "trySwap").map((name) => `${name}AtLimit`),
+  "tryInvariantAtLimit",
+  "tryOpenbookV2AtLimit",
+  "tryManifest",
+];
+for (const name of ["tryInvariantAtLimit", "tryOpenbookV2AtLimit", "tryManifest"])
+  check(named.includes(name), `the skill names ${name}`);
+const plainOf = (name: string) => name.charAt(3).toLowerCase() + name.slice(4);
+const cpi = atLimit.map((name) => `${plainOf(name).replace(/AtLimit$/, "")}Cpi`);
 check(
   svmExports
     .map((m) => m[1])
     .sort()
-    .join() === [...named, ...plain].sort().join(),
-  "the SVM arm exports those and their plain forms, and nothing else",
+    .join() ===
+    [...priced, ...priced.map(plainOf), ...atLimit, ...atLimit.map(plainOf), ...cpi].sort().join(),
+  "the SVM arm exports those, their plain forms and each venue's instruction alone, and nothing else",
 );
 const signature = "slot, trader, amountIn, maxPrice, minOut, recipient";
 check(solana.includes(`trySwap(${signature}): Uint256`), "the skill gives trySwap's arguments");
-for (const [, name, args] of svmExports)
-  check(
-    args!
-      .split(",")
-      .map((p) => p.trim().split(":")[0]!.trim())
-      .filter(Boolean)
-      .join(", ") === signature,
-    `${name}(${signature})`,
-  );
+check(
+  solana.replace(/\s+/g, " ").includes("(slot, trader, amountIn, limit, minOut, recipient)") &&
+    solana.includes("`<venue>Cpi(program, accounts, source, amountIn, …)`"),
+  "the skill gives the other two forms' arguments",
+);
+const argsOf = (args: string) =>
+  args
+    .split(",")
+    .map((p) => p.trim().split(":")[0]!.trim())
+    .filter(Boolean)
+    .join(", ");
+for (const [, name, args] of svmExports) {
+  const want = name!.endsWith("Cpi")
+    ? /^program, accounts, source, amountIn\b/
+    : name!.endsWith("AtLimit") || name === "tryManifest" || name === "manifest"
+      ? /^slot, trader, amountIn, (limit|ticks|priceLots, orders), minOut, recipient$|^slot, trader, amountIn, minOut, recipient$/
+      : new RegExp(`^${signature}$`);
+  check(want.test(argsOf(args!)), `${name}(${argsOf(args!)})`);
+}
 // What a program carries: one venue's function, or all nine through trySwap.
 const block = /```sauce chain=solana\n([\s\S]*?)```/.exec(solana)![1]!;
 const one = routes.compileSauceProgram("solana", block).bytecode.length;
