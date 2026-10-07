@@ -1,7 +1,7 @@
 # The venues, their pools and their slots
 
-Every venue the distributed swap trades on, with where its pool keeps what the program reads, the
-nine accounts its slot takes, and how to find a pair's pools. Offsets are bytes from the start of
+Every venue the distributed swap trades on, with its function in `@sauce/router`, where its pool
+keeps what that function reads, the nine accounts its slot takes, and how to find a pair's pools. Offsets are bytes from the start of
 the account; integers are little-endian, keys 32 bytes. A slot's accounts are, in order:
 
 | #   | Slot account | What it is                                                              |
@@ -21,7 +21,8 @@ paying the other pushes it up, and the tick arrays the swap walks depend on whic
 
 ## Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble CLMM
 
-One pool layout (1,544 bytes) and one swap, `swap_v2`, on four programs:
+One pool layout (1,544 bytes) and one swap, `swap_v2`, on four programs: `tryRaydiumClmm`,
+`tryPancakeswapClmm`, `tryByreal` and `tryStabbleClmm`.
 
 | Read                                    | Where                                                                             |
 | --------------------------------------- | --------------------------------------------------------------------------------- |
@@ -48,7 +49,8 @@ whose price is far from 1 may also need its bitmap extension, the program addres
 
 ## Orca Whirlpools and Cropper
 
-One pool layout (653 bytes): Orca's `swap_v2`, and Cropper's `swap`, the same without Token-2022.
+One pool layout (653 bytes): Orca's `swap_v2` (`tryOrcaWhirlpool`), and Cropper's `swap`, the
+same without Token-2022 (`tryCropper`).
 
 | Read                                 | Where                                            |
 | ------------------------------------ | ------------------------------------------------ |
@@ -66,7 +68,7 @@ arrays that do not exist yet as empty; Cropper needs every array its walk reache
 
 ## DefiTuna
 
-A pool of 423 bytes, a whirlpool's fields in another order, and its `swap`:
+A pool of 423 bytes, a whirlpool's fields in another order, and its `swap` (`tryDefituna`):
 
 | Read                                 | Where                             |
 | ------------------------------------ | --------------------------------- |
@@ -81,7 +83,7 @@ swap fills at their tick's price: within the limit, like the rest.
 
 ## Crema
 
-A pool of 748 bytes and its `swap`:
+A pool of 748 bytes and its `swap` (`tryCrema`):
 
 | Read                                 | Where                             |
 | ------------------------------------ | --------------------------------- |
@@ -100,7 +102,8 @@ as the map's bitmap marks them (array 0 starts at tick `−443636 + (443636 mod 
 
 ## Phoenix
 
-An order book: a market account (its size varies with the book's) whose header holds:
+An order book (`tryPhoenix`): a market account (its size varies with the book's) whose header
+holds:
 
 | Read                                                           | Where         |
 | -------------------------------------------------------------- | ------------- |

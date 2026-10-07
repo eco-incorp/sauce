@@ -34,7 +34,8 @@ compiles this one.
 
 It is the one implementation of a swap at these venues: an action such as `uniswapV2Swap` is a
 call into it, so a JSON action program and a hand-written program trade a venue through the same
-code. It runs on EVM chains only.
+code. On Solana the library is a different set of functions, one per venue whose swap stops at a
+price limit; see [On Solana](#on-solana).
 
 ## Functions
 
@@ -263,5 +264,107 @@ export function compileWithRouter(source: string) {
 ```
 
 The package also ships the library's files under `sdk/dist/std/router/`, beside `@sauce/token`'s,
-for a toolchain that resolves packages off disk. There is no SVM arm: importing `@sauce/router` for
-the SVM fails at the import.
+for a toolchain that resolves packages off disk: `router.evm.js` and `router.svm.js`, which the
+compiler picks by target. No function is in both, so one the target's arm lacks fails at its
+import, naming it: "`woofi` is not exported by module …" on Solana, "`trySwap` …" on an EVM chain.
+
+## On Solana
+
+On Solana `@sauce/router` swaps at the venues whose swap takes a price limit that stops it and
+leaves the rest of the input, the venues of [the distributed swap on Solana](../guides/solana-distributed-swap.md):
+
+| Function             | Venue            | Program                                        |
+| -------------------- | ---------------- | ---------------------------------------------- |
+| `tryRaydiumClmm`     | Raydium CLMM     | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
+| `tryPancakeswapClmm` | PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` |
+| `tryByreal`          | Byreal           | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2`  |
+| `tryStabbleClmm`     | Stabble CLMM     | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` |
+| `tryOrcaWhirlpool`   | Orca Whirlpools  | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`  |
+| `tryCropper`         | Cropper          | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` |
+| `tryDefituna`        | DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  |
+| `tryCrema`           | Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
+| `tryPhoenix`         | Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  |
+
+and `trySwap`, which takes a pool at any of the nine and reads its venue from the program that owns
+it. Each has a plain form, `raydiumClmm` to `phoenix` and `swap`, which reverts where the `try` form
+returns `0`. They all take one set of arguments and return what the recipient received:
+
+```text
+trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: Account): Uint256
+```
+
+- **`slot`** is the pool's nine accounts, the System program for any the venue does not take:
+  `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`.
+  [`sauce pools`](../guides/cli.md#sauce-pools) prints each pool's slot for the direction paid.
+- **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
+  authority that signs (the Pot, through the Kitchen), the token account paid from, the two mints,
+  the SPL Token and Token-2022 programs and the memo program. Both are arrays because a function
+  other than `main` keeps at most about sixteen values in use at once.
+- **`amountIn`** is the most the pool may take. **`maxPrice`** is the most one unit bought may
+  cost, fee included: payToken base units per buyToken base unit, times 1e18. The function reads the
+  pool's fee and gives the pool its own limit, so its last unit, fee paid, costs `maxPrice`: a
+  concentrated-liquidity pool's sqrt price limit moved by `√(1 − fee)`, a Phoenix order's price
+  `maxPrice ÷ (1 + fee)` in ticks. The rest of `amountIn` stays in `source`.
+- **`minOut`** is the least a swap that ran may deliver; below it the whole program reverts.
+- **`recipient`** is the token account the output lands in; Crema and Phoenix pay only into the
+  authority's own.
+
+Each venue's function requires the slot's program to be its venue's and the pool's owner before it
+reads the pool, because the authority signs the swap; `trySwap` requires the slot's program to own
+the pool and that owner to be one of the nine. These are the caller's accounts, so each reverts
+rather than skips: a slot naming another program, a pool of another venue (`not a Crema pool`, …)
+or of none (`not a supported venue's pool`), and a pool that is not the pair. Only the System
+program itself as the pool is a missing slot, which a `try` form skips.
+
+A failed call into another program fails the whole Solana transaction and cannot be caught, so a
+`try` form checks before anything moves and returns `0`, having moved nothing, for a missing slot
+(the System program as its pool), no input, a pool whose swaps are off, a paused pool or a market
+not open for taking, a fee that is more than one rate (a dynamic or adaptive fee, or a Byreal
+pool's own), a pool with no liquidity at its price, a pool already past its own limit, an input too
+small to buy one unit at the pool's price after its fee, an input smaller than one of a market's
+lots, and a market limit too large for an order's 64-bit price. The price only worsens as a pool
+sells, so the estimate is the most the input could buy: dust an earlier pool left (an atom, which
+the fee takes whole) is skipped, never handed to a venue that would keep it or refuse it. A Phoenix
+order whose book has no offer within the limit is placed and fills nothing, so it returns `0` too,
+nothing having moved. A swap that ran returns at least 1, held to `minOut` and at least 1, and
+reverts below it. A failure the checks do not foresee, such as a tick array missing from the slot,
+fails the transaction.
+
+```js
+import { trySwap } from "@sauce/router";
+
+// One pool, any of the nine venues: up to amountIn of payMint for buyMint, never more than maxPrice
+// a unit with the fee, and at least minOut, else the whole transaction reverts.
+function main(
+  program: Account,
+  pool: Account<Writable>,
+  config: Account,
+  vaultA: Account<Writable>,
+  vaultB: Account<Writable>,
+  extra: Account<Writable>,
+  ticks0: Account<Writable>,
+  ticks1: Account<Writable>,
+  ticks2: Account<Writable>,
+  authority: Account<Signer>,
+  source: Account<Writable>,
+  payMint: Account,
+  buyMint: Account,
+  tokenProgram: Account,
+  token2022: Account,
+  memo: Account,
+  output: Account<Writable>,
+  amountIn: Uint256,
+  maxPrice: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const slot = [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2];
+  const trader = [authority, source, payMint, buyMint, tokenProgram, token2022, memo];
+  return trySwap(slot, trader, amountIn, maxPrice, minOut, output);
+}
+```
+
+A program carries the venues it calls and no other: one venue's function is about 1.7 KB of
+program, `trySwap` all nine about 4.4 KB. A program that knows its venue calls that venue's
+function, and keeps `trySwap` for slots whose venue it learns as it runs. Either is past one
+transaction, so the program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
+is one `trySwap` call per pool.

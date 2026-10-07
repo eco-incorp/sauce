@@ -1,7 +1,8 @@
 // Compiles swap-leg.sauce.ts for Base and Arbitrum the way `sauce compile` does, and pins the facts
 // the sauce-swaps skill states: the functions `@sauce/router` exports and their argument order, the
-// Router entry points that take a sqrt-price limit, which pool callbacks the Router services, and
-// what a callback is held to. Offline: nothing is sent.
+// Router entry points that take a sqrt-price limit, which pool callbacks the Router services, what a
+// callback is held to, and, on Solana, the library's functions, their arguments and what a program
+// calling one or all of them weighs. Offline: nothing is sent.
 //
 //   node swaps.mts
 import { readFileSync } from "node:fs";
@@ -139,3 +140,45 @@ check(
 );
 check(errors.includes("InputExceedsAuthorized"), "a callback takes at most the exact input");
 console.log(`@sauce/router: ${Object.keys(LIBRARY).join(", ")}`);
+
+// On Solana: the SVM arm exports a `try` form and a plain form for each venue the skill names, and
+// `trySwap`/`swap`, all taking the arguments the skill gives.
+const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
+const solana = skill.slice(skill.indexOf("## On Solana"), skill.indexOf("## Example"));
+const svmArm = resolveSdkModule(entry.replace(/\.js$/, ".svm.js"));
+if (svmArm === undefined) throw new Error("@sauce/router has an SVM arm");
+const svmText = new TextDecoder().decode(svmArm);
+const svmExports = [...svmText.matchAll(/^export function (\w+)\(([^)]*)\)/gm)];
+const named = [...new Set([...solana.matchAll(/`(try[A-Z]\w+)`/g)].map((m) => m[1]!))];
+check(named.length === 10, "the skill names nine venues' try forms and trySwap");
+const plain = named.map((name) => name.charAt(3).toLowerCase() + name.slice(4));
+check(
+  svmExports
+    .map((m) => m[1])
+    .sort()
+    .join() === [...named, ...plain].sort().join(),
+  "the SVM arm exports those and their plain forms, and nothing else",
+);
+const signature = "slot, trader, amountIn, maxPrice, minOut, recipient";
+check(solana.includes(`trySwap(${signature}): Uint256`), "the skill gives trySwap's arguments");
+for (const [, name, args] of svmExports)
+  check(
+    args!
+      .split(",")
+      .map((p) => p.trim().split(":")[0]!.trim())
+      .filter(Boolean)
+      .join(", ") === signature,
+    `${name}(${signature})`,
+  );
+// What a program carries: one venue's function, or all nine through trySwap.
+const block = /```sauce chain=solana\n([\s\S]*?)```/.exec(solana)![1]!;
+const one = routes.compileSauceProgram("solana", block).bytecode.length;
+const all = routes.compileSauceProgram("solana", block.replaceAll("orcaWhirlpool", "trySwap"))
+  .bytecode.length;
+const kb = (bytes: number) => (bytes / 1000).toFixed(1);
+check(
+  solana.includes(`about ${kb(one)} KB of program`) &&
+    solana.replace(/\s+/g, " ").includes(`all nine, about ${kb(all)} KB`),
+  `one venue's function is ${one} bytes of program, trySwap ${all}`,
+);
+console.log(`@sauce/router on Solana: ${named.join(", ")}; ${one} and ${all} bytes`);
