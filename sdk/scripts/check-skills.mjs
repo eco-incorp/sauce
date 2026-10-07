@@ -66,7 +66,9 @@
 //      ```sauce block and reference program, the protocol documents' templates included
 //      (INTEGER_EXCEPTIONS); TypeScript host code keeps the `n` tsc needs;
 //  14. no skill file names `--define` or `--defines`, the command's low-level flags, or compiles a
-//      ```sauce fence with `define=`.
+//      ```sauce fence with `define=`;
+//  15. until the compiler compiles `await`, every program a suite executes that opens a hop with
+//      `.then` is listed (THEN_UNTIL_AWAIT), to be written with `await` once it does.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -1877,6 +1879,59 @@ const INTEGER_EXCEPTIONS = {};
 // argument (`docs/scripts/example-programs.mjs`, shared with `docs:check`).
 for (const file of walk(SKILLS_DIR, (path) => /\.(?:md|ts|mts|json)$/.test(path))) {
   failures.push(...defineFlagProblems({ where: rel(file), text: read(file) }));
+}
+
+// ---- 15. Written with `.then` until the compiler compiles `await` -------------------------------------------
+// The skills and the manual lead with `await X.hop({ … })`, which waits on the compiler's await
+// (v12 #554). Until it lands, the programs the suites EXECUTE and the file `sauce intent publish`
+// writes open their hops with `.then(() => { … })`, the same program. Every one is listed here, and
+// every example program that opens a hop with `.then` must be: so the switch is mechanical and
+// none is forgotten. Once the compiler compiles `await`, this check fails naming each file: write
+// it with `await`, then delete the list and this check (and the `await` entry of PENDING below).
+const THEN_UNTIL_AWAIT = [
+  "docs/examples/cross-chain-cascade.sauce.ts",
+  "docs/examples/cross-chain-intent.sauce.ts",
+  "docs/examples/nested-intent.sauce.ts",
+  "docs/examples/nested-swap.sauce.ts",
+  "sdk/src/cli/create.ts",
+  "skills/sauce-examples/examples/repay-on-base.sauce.ts",
+  "skills/sauce-intents/examples/cross-chain.sauce.ts",
+  "skills/sauce-intents/examples/swap-on-base.sauce.ts",
+];
+if (skillsFlag < 0) {
+  const opensWithThen = (text) => /\.hop\s*\(/.test(text) && /\}\)\.then\(/.test(text);
+  for (const file of THEN_UNTIL_AWAIT) {
+    const path = join(REPOSITORY, file);
+    if (!existsSync(path) || !opensWithThen(read(path)))
+      fail(file, "listed in THEN_UNTIL_AWAIT, but it opens no hop with `.then`: remove the entry");
+  }
+  const examples = [
+    ...readdirSync(join(REPOSITORY, "docs", "examples")).map((name) => `docs/examples/${name}`),
+    ...examplePrograms.map((program) => `skills/${program}`),
+  ].filter((file) => file.endsWith(".sauce.ts"));
+  for (const file of examples) {
+    if (opensWithThen(read(join(REPOSITORY, file))) && !THEN_UNTIL_AWAIT.includes(file))
+      fail(file, "opens a hop with `.then`: list it in THEN_UNTIL_AWAIT, to switch with the rest");
+  }
+  let awaited;
+  try {
+    sdk.routes.compileSauceProgram(
+      "base",
+      "function main(to: Address) {\n  await Arbitrum.hop({ reward: { token: USDC, amount: 2 }, " +
+        "receive: { token: USDC, amount: 1 }, refundee: to, fee: 0 });\n  USDC.transfer(to, 1);\n}\n",
+    );
+    awaited = true;
+  } catch (error) {
+    if (!/`await` is only allowed within async functions/.test(String(error?.message ?? error)))
+      fail("check-skills.mjs THEN_UNTIL_AWAIT", `the await probe fails otherwise: ${error}`);
+    awaited = false;
+  }
+  if (awaited)
+    fail(
+      "check-skills.mjs THEN_UNTIL_AWAIT",
+      `the compiler compiles \`await\` now: write each of ${THEN_UNTIL_AWAIT.join(", ")} with ` +
+        "`await X.hop({ … }); rest`, then delete the list and this check",
+    );
 }
 
 // ---- Report ----------------------------------------------------------------------------------------------

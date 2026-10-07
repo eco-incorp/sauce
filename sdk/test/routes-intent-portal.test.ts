@@ -767,6 +767,12 @@ describe("what the lowering refuses", () => {
     );
   });
 
+  // Pending the compiler's `Object.keys` of a static object (v12 #557): until then a field the hop
+  // does not take is ignored here, and refused by the editor's declarations and the host builder.
+  it.failing("refuses a field the hop does not take, naming it", () => {
+    expect(refused(`${hop(`${whole}, recieve: ${item}`)}${then};`)).toThrow(/`recieve`/);
+  });
+
   it("refuses the chained form it replaced: a chain's `Portal` is the contract", () => {
     expect(refused(`Arbitrum.Portal.send(${item}).receive(${item})${then};`)).toThrow(/`send`/);
   });

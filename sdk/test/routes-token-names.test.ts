@@ -70,6 +70,15 @@ describe("a token symbol's writes are @sauce/token's, the token first", () => {
     expect(() => bytesOf("base", `function main() { USDC.transfer(${TO}); }`)).toThrow(/transfer/);
   });
 
+  // Pending the compiler (v12 #555): `undefined` passed to an annotated run-time parameter is
+  // refused at the argument, `Unset`, rather than reaching the library function's body while it
+  // compiles ("`toBytesBe` is not a member of `amount`").
+  it.failing("a missing argument is refused at the argument, as unset", () => {
+    const missing = () => bytesOf("base", `function main() { USDC.transfer(${TO}); }`);
+    expect(missing).toThrow(/Unset/);
+    expect(missing).not.toThrow(/`toBytesBe` is not a member of `amount`/);
+  });
+
   it("a method the type does not have is refused", () => {
     expect(() => bytesOf("base", `function main() { USDC.aproove(${TO}, 5n); }`)).toThrow(
       /aproove/,

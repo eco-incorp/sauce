@@ -664,8 +664,10 @@ the destination has is written `Token(0x…)` until the compiler can hand a call
 bare name. `.catch((e) => { … })` makes the body and its handler one destination program,
 `try { … } catch (e) { … }` (EVM only; it compiles once the compiler's try/catch lands), and
 `await x; rest` is the compiler's `x.then(() => { rest })` (once its `await` lands). Until then the
-example files the suites EXECUTE are written with `.then(...)`, while prose and skill blocks lead
-with `await` (the checker's `PENDING` list names what waits on the compiler).
+example files the suites EXECUTE (and the file `sauce intent publish` writes) are written with
+`.then(...)`, while prose and skill blocks lead with `await`: `check-skills.mjs#THEN_UNTIL_AWAIT`
+lists every such file, requires every example that opens a hop with `.then` to be listed, and fails
+naming them all once the compiler compiles `await`; its `PENDING` list names the blocks that wait.
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
