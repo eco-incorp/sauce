@@ -10,7 +10,7 @@ import { getAddress, toFunctionSelector } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { UsageError } from "../src/cli/args.js";
-import { baseUnits, parseFund, wrapProgram } from "../src/cli/funding.js";
+import { baseUnits, parseFund, thenForm, wrapProgram } from "../src/cli/funding.js";
 import { assumedBalances } from "../src/cli/inputs.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { Permit2ABI } from "../src/protocols/permit2/abis.js";
@@ -237,15 +237,34 @@ describe("the funding wrapper", () => {
     expect(compileSauceProgram(base, text, { defines: {} }).bytecode.length).toBeGreaterThan(0);
   };
 
-  it("refuses a program that awaits an intent: its sweep would run in the body, on the destination", () => {
+  it("wraps a program that awaits an intent in its `.then` form: the sweep runs where it opens", () => {
     const opened =
-      "Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66 })";
+      "Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66, fee: 0 })";
+    const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
     for (const source of [
       `await ${opened};\nUSDC.transfer(0x66, 1);\n`,
-      `function main(to: Address) {\n  await ${opened};\n  USDC.transfer(to, 1);\n}\n`,
+      `async function main(to: Address) {\n  await ${opened};\n  USDC.transfer(to, 1);\n}\n`,
     ]) {
-      expect(() => wrapProgram(source, IMPORTS, [PULL], ["// sweep"])).toThrow(
-        /after an `await` every statement is the intent's body, run on its destination/,
+      const wrapped = wrapProgram(source, IMPORTS, [PULL], ["// sweep"]);
+      expect(wrapped).not.toMatch(/\bawait\b/);
+      // The sweep follows the statement that opens the intent, not the body.
+      expect(wrapped.indexOf("// sweep")).toBeGreaterThan(wrapped.indexOf("}).then"));
+      expect(compileSauceProgram(base, wrapped, { defines: {}, intents }).bodies).toHaveLength(1);
+    }
+  });
+
+  it("an `await` is its `.then` form, byte for byte, in a `try` and nested in another", () => {
+    const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
+    const hop = (chain: string) =>
+      `await ${chain}.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to, fee: 0 });`;
+    for (const source of [
+      `function main(to: Address, amount: Uint256) {\n  ${hop("Arbitrum")}\n  USDC.transfer(to, amount);\n  ${hop("Optimism")}\n  USDC.transfer(to, 1);\n}\n`,
+      `function main(to: Address, amount: Uint256) {\n  try {\n    ${hop("Arbitrum")}\n    USDC.transfer(to, amount);\n    ${hop("Optimism")}\n    USDC.transfer(to, 1);\n  } catch (e) {\n    USDC.transfer(to, e.length);\n  }\n}\n`,
+    ]) {
+      const written = thenForm(source);
+      expect(written).not.toMatch(/\bawait\b/);
+      expect(compileSauceProgram(base, written, { defines: {}, intents }).bytecode).toEqual(
+        compileSauceProgram(base, source, { defines: {}, intents }).bytecode,
       );
     }
   });

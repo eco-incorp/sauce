@@ -42,7 +42,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { mainSignature } from "../routes/entry.js";
-import { walk, type AstNode } from "../routes/ast-walk.js";
+import type { AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
@@ -762,6 +762,83 @@ function sweepLines(
   return sweeps;
 }
 
+/** A statement list of a program, with the `try` whose block it is, if any. */
+interface StatementList {
+  readonly statements: readonly AstNode[];
+  readonly tried?: AstNode;
+}
+
+/**
+ * `text` with every `await` written as the `.then` it is: `await x; rest` is
+ * `x.then(() => { rest });`, and inside a `try`, `.catch(...)` of its handler follows it — the
+ * compiler's own reading, so the program is the same, byte for byte. The last `await` is written
+ * first, so one in the rest of another is already a `.then` when the outer one takes it in, and one
+ * in a `try` takes that `try`'s handler before the `try` it is in moves into a body.
+ */
+export function thenForm(text: string): string {
+  for (;;) {
+    let program: AstNode;
+    try {
+      program = parseSauce(text);
+    } catch {
+      return text;
+    }
+    const lists: StatementList[] = [];
+    const visit = (node: unknown): void => {
+      if (node === null || typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        for (const each of node) visit(each);
+        return;
+      }
+      const at = node as AstNode;
+      if (at.type === "Program" || at.type === "BlockStatement") {
+        lists.push({ statements: at.body as AstNode[] });
+      }
+      if (at.type === "TryStatement") {
+        const block = at.block as AstNode;
+        lists.push({ statements: block.body as AstNode[], tried: at });
+        visit(block.body);
+        visit(at.handler);
+        visit(at.finalizer);
+        return;
+      }
+      for (const [key, value] of Object.entries(at)) {
+        if (key !== "type" && key !== "start" && key !== "end" && key !== "loc") visit(value);
+      }
+    };
+    visit(program);
+    let last: { list: StatementList; index: number } | undefined;
+    for (const list of lists) {
+      list.statements.forEach((statement, index) => {
+        const awaited =
+          statement.type === "ExpressionStatement" &&
+          (statement.expression as AstNode).type === "AwaitExpression";
+        if (
+          awaited &&
+          (last === undefined || statement.start > last.list.statements[last.index]!.start)
+        ) {
+          last = { list, index };
+        }
+      });
+    }
+    if (last === undefined) return text.replace(/\basync(\s+function\s+main\b)/, "$1");
+    const { list, index } = last;
+    const statement = list.statements[index]!;
+    const opened = (statement.expression as AstNode).argument as AstNode;
+    const rest = list.statements.slice(index + 1);
+    const body = rest.length === 0 ? "" : text.slice(rest[0]!.start, rest[rest.length - 1]!.end);
+    const handler = list.tried?.handler as AstNode | undefined;
+    const caught =
+      handler === undefined
+        ? ""
+        : `.catch((${handler.param === null || handler.param === undefined ? "" : text.slice((handler.param as AstNode).start, (handler.param as AstNode).end)}) => ${text.slice((handler.body as AstNode).start, (handler.body as AstNode).end)})`;
+    const end = rest.length === 0 ? statement.end : rest[rest.length - 1]!.end;
+    text =
+      `${text.slice(0, statement.start)}${text.slice(opened.start, opened.end)}` +
+      `.then(() => {\n${body}\n})${caught};${text.slice(end)}`;
+  }
+}
+
 /**
  * The file's program inside the funding wrapper. A module's `main` is renamed `__sauce_program`
  * and called, with `main`'s own parameters, from a new `main` that pulls before it and sweeps
@@ -771,24 +848,15 @@ function sweepLines(
  * are rewritten in the source compiled, and an imported module would get none of that.
  */
 export function wrapProgram(
-  text: string,
+  given: string,
   imports: ReadonlySet<string>,
   pulls: readonly string[],
   sweeps: readonly string[],
 ): string {
   // After an `await` every statement is an intent's body, which runs on its destination: a sweep
-  // appended there would move the destination's shared Pot, and a renamed `main` cannot await.
-  let awaits = false;
-  walk(parseSauce(text), (node) => {
-    awaits ||= node.type === "AwaitExpression";
-  });
-  if (awaits) {
-    throw new UsageError(
-      "--fund wraps the program, pulling before it and sweeping after its last statement, and " +
-        "after an `await` every statement is the intent's body, run on its destination: fund the " +
-        "Pot before running a program that awaits an intent, or open the intent with `.then(...)`",
-    );
-  }
+  // appended there would move the destination's shared Pot, and a renamed `main` cannot await. So
+  // the program is wrapped in its `.then` form, the same program, and the sweeps follow it here.
+  const text = thenForm(given);
   const head =
     imports.size === 0 ? [] : [`import { ${[...imports].join(", ")} } from "@sauce/token";`];
   const signature = mainSignature(text);

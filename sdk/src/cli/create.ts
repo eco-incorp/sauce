@@ -7,8 +7,8 @@
  * `--reward-deadline`, `--out`); at a terminal what no flag gave is asked, and with no terminal a
  * missing one is an error naming every flag still needed (`prompt.ts#missingFlags`).
  *
- * The file is an ordinary intent file — `Dest.hop({ reward: { token, amount }, receive: { token,
- * amount }, refundee: you }).then(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })`, whose body the
+ * The file is an ordinary intent file — `await Dest.hop({ reward: { token, amount }, receive: {
+ * token, amount }, refundee: you }); TOKEN.transfer(RECIPIENT, AMOUNT);`, whose body the
  * destination's shared Pot cooks, paying its Kitchen's fee — and `run.ts` then publishes it exactly as
  * `sauce intent publish <file> --fund <reward>` would: cooked on your Pot, which pulls the reward
  * from you and pays it into the intent's vault; rehearsed on the source (`--dry-run`) and on the
@@ -373,13 +373,13 @@ function intentText(options: {
 
   return [
     ...options.header.map((line) => `// ${line}`),
-    `${accessor}.hop({`,
+    `await ${accessor}.hop({`,
     `  reward: { token: ${options.rewardToken.spelled}, amount: ${options.reward} },`,
     `  receive: { token: ${received}, amount: ${options.amount} },`,
     `  refundee: ${options.refundee.toLowerCase()},`,
-    "}).then(() => {",
-    `  ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
     "});",
+    `// On ${options.destination.name}, in the fill.`,
+    `${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
     "",
   ].join("\n");
 }
