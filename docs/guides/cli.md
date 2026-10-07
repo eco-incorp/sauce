@@ -1276,11 +1276,21 @@ Token-2022, in whole units by its mint's decimals, a mint the registry records b
 each account's lamports are listed, named
 by their `--account` names, as the owner, the Pot and the Kitchen's fee config; the owner's
 lamports include the transaction's fee. `--json` lists them as `tokenChanges` and
-`lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so there
-is no `--assume-balance`: the rehearsal runs on the accounts as they are, and the owner must hold
-the Pot's rent and the fees (a shortfall is named). A cook too large for one transaction is refused
-with the bytes to shrink the payload (the program and its arguments) by, since staging it writes a
-code buffer on chain, which only `run` does. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
+`lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so the
+rehearsal runs on the accounts as they are, and the owner must hold the Pot's rent and the fees (a
+shortfall is named). A cook too large for one transaction, or one given `--assume-balance`, is
+rehearsed in a local copy instead: LiteSVM (`npm install litesvm` in the project) with every
+account the cook names read from the cluster and the released engine and Kitchen, the Pot created
+where missing, the program staged into a code buffer as `run` stages it, then the cook, its
+accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
+spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
+`pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note
+to create it before sending. `tx` refuses a cook too large for one transaction, with the bytes to
+shrink the payload (the program and its arguments) by. Each account a transaction lists costs 32
+bytes, and one taken through an address lookup table one byte: `--lookup-table <address>` takes a
+cook's accounts through a table that holds them, on `run`, `simulate` and `tx`, and `run` creates
+one for a staged cook whose accounts do not fit, paid by the signer, and prints its address for the
+next cook to reuse. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
 configure), and prints the signature, status and compute units — and the logs when it fails. A
 program too large for one transaction is staged in a Kitchen code buffer first and the buffer is
 closed again after the cook — or when staging or the cook's rehearsal fails; if closing it fails,
