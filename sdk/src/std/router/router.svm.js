@@ -24,7 +24,9 @@
 // (`orcaWhirlpoolData`) and `swap_v2`'s (`orcaWhirlpoolV2Data`), and OpenBook a second that takes
 // the order in lots, divided already (`openbookV2LotsData`). The `try` forms return what the
 // recipient received; `…Cpi` what the paying account paid; `…Data` the bytes. Every form sends the
-// same instruction for the same amount, limit and floor: they all build it with `…Data`.
+// same instruction for the same amount, limit and floor. The `try` forms build it with `…Data`;
+// `…Cpi` writes the same bytes itself, because a call into `…Data` would cost it about 2k compute
+// units (Phoenix's excepted, which is cheaper through `phoenixData`).
 //
 // `slot` is the pool's accounts, in this order (an account a venue does not take is the System
 // program, `11111111111111111111111111111111`):
@@ -219,7 +221,7 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
 // Each venue's instruction data
 // ---------------------------------------------------------------------------------------------
 //
-// `<venue>Data` is a swap's instruction data alone, the one encoding every form here sends: a caller
+// `<venue>Data` is a swap's instruction data alone, the encoding the `try` forms send: a caller
 // that keeps the venue's accounts and program itself (`@eco-incorp/sauce/svm`'s
 // `routerSvmAccountOrder` names them in order) calls `svm.call(program, [accounts…], <venue>Data(…))`,
 // the cheapest way to send it. The data is a few fixed bytes around little-endian integers, packed
@@ -1478,7 +1480,9 @@ export function phoenix(
 // the one a caller would build by hand for that limit, `minOut` in the venue's own floor where its
 // instruction has one. `…Cpi` is that instruction alone, on the accounts the caller lists in the
 // venue's own order: it checks nothing but the program, reads nothing but the paying account, and
-// returns what that account paid. Each builds its data with the venue's `…Data`.
+// returns what that account paid. `try…AtLimit` builds its data with the venue's `…Data`; `…Cpi`
+// writes the same bytes itself, which costs it about 2k compute units less than calling `…Data`
+// (Phoenix's excepted).
 
 // The checks a Raydium-layout pool's `try…AtLimit` makes past its program and owner: swaps on, and
 // the pool able to trade toward the limit, dust judged at its config's rate (fees a Byreal pool adds
@@ -1585,7 +1589,10 @@ export function raydiumClmmCpi(
 ): Uint256 {
   require(program.address ==
     0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e, "not a Raydium CLMM pool");
-  const data = raydiumClmmData(amountIn, limit, minOut);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1647,7 +1654,10 @@ export function pancakeswapClmmCpi(
 ): Uint256 {
   require(program.address ==
     0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8, "not a PancakeSwap CLMM pool");
-  const data = pancakeswapClmmData(amountIn, limit, minOut);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1710,7 +1720,10 @@ export function byrealCpi(
 ): Uint256 {
   require(program.address ==
     0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb, "not a Byreal pool");
-  const data = byrealData(amountIn, limit, minOut);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1772,7 +1785,10 @@ export function stabbleClmmCpi(
 ): Uint256 {
   require(program.address ==
     0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3, "not a Stabble CLMM pool");
-  const data = stabbleClmmData(amountIn, limit, minOut);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1841,11 +1857,17 @@ export function orcaWhirlpoolCpi(
 ): Uint256 {
   require(program.address ==
     0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9, "not an Orca whirlpool");
-  // Eleven accounts are the classic `swap`'s; `swap_v2` takes fifteen.
-  const data =
-    accounts.length == 11
-      ? orcaWhirlpoolData(amountIn, limit, minOut, aToB)
-      : orcaWhirlpoolV2Data(amountIn, limit, minOut, aToB);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  // Eleven accounts are the classic `swap`'s; `swap_v2` takes fifteen, and says it passes no
+  // remaining-accounts info.
+  let swap = hex`2b04ed0b1ac91e62`;
+  let flags = aToB ? hex`010100` : hex`010000`;
+  if (accounts.length == 11) {
+    swap = hex`f8c69e91e17587c8`;
+    flags = aToB ? hex`0101` : hex`0100`;
+  }
+  const data = swap.concat(word.toBytesLe(32), flags);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1909,7 +1931,10 @@ export function cropperCpi(
 ): Uint256 {
   require(program.address ==
     0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f, "not a Cropper pool");
-  const data = cropperData(amountIn, limit, minOut, aToB);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(32), aToB ? hex`0101` : hex`0100`);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1986,7 +2011,10 @@ export function defitunaCpi(
 ): Uint256 {
   require(program.address ==
     0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6, "not a DefiTuna pool");
-  const data = defitunaData(amountIn, limit, minOut, aToB);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(32), aToB ? hex`010100` : hex`010000`);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2066,7 +2094,10 @@ export function cremaCpi(
 ): Uint256 {
   require(program.address ==
     0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6, "not a Crema pool");
-  const data = cremaData(amountIn, limit, minOut, aToB);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swap = aToB ? hex`f8c69e91e17587c80101` : hex`f8c69e91e17587c80001`;
+  const data = swap.concat(word.toBytesLe(32));
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2228,7 +2259,9 @@ export function invariantCpi(
 ): Uint256 {
   require(program.address ==
     0xfc39066f804ec84d465acc0cafceb1debdfb9e4751e3c99ecb5463ac63cd89c9, "not an Invariant pool");
-  const data = invariantData(amountIn, limit, xToY);
+  const swap = xToY ? hex`f8c69e91e17587c801` : hex`f8c69e91e17587c800`;
+  const word = (amountIn & 0xffffffffffffffff) | (1 << 64) | (limit << 72);
+  const data = swap.concat(word.toBytesLe(25));
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2292,7 +2325,11 @@ export function manifestCpi(
 ): Uint256 {
   require(program.address ==
     0x0537a47738da25a988f964d99ba43a88cf1187395b6acf1483f570228d8002b2, "not a Manifest market");
-  const data = manifestData(amountIn, minOut, paysBase);
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const swap = hex`04`;
+  const word =
+    (amountIn & 0xffffffffffffffff) | (minOut << 64) | ((paysBase ? 1 : 0) << 128) | (1 << 136);
+  const data = swap.concat(word.toBytesLe(18));
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2374,16 +2411,24 @@ export function openbookV2Cpi(
 ): Uint256 {
   require(program.address ==
     0x0bfebfbdfbabfad0b46571bf958c1eb824787bb0994bb1846b2978071e1799be, "not an OpenBook v2 market");
-  // The market's lot sizes: the market is the instruction's third account.
+  require(priceLots <= 0x7fffffffffffffff && orders <= 255, "limit past its field");
+  // The market is the instruction's third account: its lot sizes size the order, and the side not
+  // paid is unbounded.
   const market = accounts[2];
-  const data = openbookV2Data(
-    amountIn,
-    svm.sload(market, 456, 8).toLe(),
-    svm.sload(market, 448, 8).toLe(),
-    priceLots,
-    orders,
-    paysBase,
-  );
+  const quoteLot = svm.sload(market, 448, 8).toLe();
+  const baseLot = svm.sload(market, 456, 8).toLe();
+  const most = 0x7fffffffffffffff;
+  const baseLots = paysBase ? amountIn / baseLot : most / baseLot;
+  const quoteLots = paysBase ? most / quoteLot : amountIn / quoteLot;
+  const take = hex`032c47031ac7cb55`;
+  const word =
+    (paysBase ? 1 : 0) |
+    ((priceLots == 0 ? 1 : priceLots) << 8) |
+    ((baseLots & 0xffffffffffffffff) << 72) |
+    ((quoteLots & 0xffffffffffffffff) << 136) |
+    ((priceLots == 0 ? 3 : 1) << 200) |
+    (orders << 208);
+  const data = take.concat(word.toBytesLe(27));
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();

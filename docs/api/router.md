@@ -282,8 +282,10 @@ and at Manifest's book. Each venue's swap comes in four forms:
 | the instruction's data: `<venue>Data`        | `(amountIn, limit, …)`                                  | the data, to send yourself   |
 
 with a plain form of each `try` form (`raydiumClmm`, `raydiumClmmAtLimit`, …) that reverts where
-it returns `0`. Every form sends the same instruction for the same amount, limit and floor: each
-builds it with the venue's `…Data`.
+it returns `0`. Every form sends the same instruction for the same amount, limit and floor. The
+`try` forms build it with the venue's `…Data`; `…Cpi` writes the same bytes itself, because a call
+into `…Data` would cost it about 2k compute units (Phoenix's excepted, which is cheaper through
+`phoenixData`).
 
 | Venue            | Program                                        | At a price           | At its own limit            | Its instruction      | Its data                                   |
 | ---------------- | ---------------------------------------------- | -------------------- | --------------------------- | -------------------- | ------------------------------------------ |
@@ -578,18 +580,18 @@ measured on the same accounts, does not.
 
 | Venue (pool, way)                     | Venue CU | Hand-built CPI | `…Data` |  `…Cpi` | `try…AtLimit` | `try…` at a price |
 | ------------------------------------- | -------: | -------------: | ------: | ------: | ------------: | ----------------: |
-| Raydium CLMM (SOL/USDC, 0→1)          |   48,305 |        114,693 |  +2,585 |  +7,508 |       +96,071 |          +110,433 |
-| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        136,486 |  +2,585 |  +7,508 |       +96,071 |          +111,595 |
-| Byreal (USDC pool, 0→1)               |   72,927 |        139,281 |  +2,585 |  +7,508 |       +95,110 |          +112,088 |
-| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         87,749 |  +3,193 | +10,339 |       +82,752 |          +108,898 |
-| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |        100,130 |  +3,353 | +10,499 |       +84,450 |           skipped |
-| Cropper (SOL/USDC, B→A)               |   51,207 |        108,790 |  +3,353 |  +8,884 |       +80,955 |           +93,451 |
-| DefiTuna (SOL/USDC, A→B)              |   50,589 |        112,128 |  +3,176 |  +8,707 |       +79,515 |           +91,206 |
-| Crema (SOL/USDC, B→A)                 |   75,506 |        137,178 |  +2,975 |  +8,506 |       +82,758 |          +109,190 |
-| Phoenix (SOL/USDC, selling base)      |   22,662 |         91,230 |  +6,437 | +14,318 |       +61,360 |                   |
-| Invariant (USDC/USDT, X→Y)            |   62,133 |        122,300 |  +2,898 |  +7,821 |       +75,021 |                   |
-| Manifest (SOL/USDC, selling base)     |   13,158 |         71,730 |  +4,762 |  +9,685 |       +57,206 |                   |
-| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         95,145 | +14,965 | +24,344 |       +85,105 |                   |
+| Raydium CLMM (SOL/USDC, 0→1)          |   48,274 |        111,662 |  +2,585 |  +6,182 |       +96,071 |          +110,433 |
+| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        133,486 |  +2,585 |  +6,182 |       +96,071 |          +111,595 |
+| Byreal (USDC pool, 0→1)               |   72,927 |        136,281 |  +2,585 |  +6,182 |       +95,110 |          +112,088 |
+| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         84,749 |  +3,193 |  +8,980 |       +82,752 |          +108,898 |
+| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |         97,130 |  +3,353 |  +9,332 |       +84,450 |           skipped |
+| Cropper (SOL/USDC, B→A)               |   51,207 |        105,790 |  +3,353 |  +6,834 |       +80,955 |           +93,451 |
+| DefiTuna (SOL/USDC, A→B)              |   50,589 |        109,128 |  +3,176 |  +6,657 |       +79,515 |           +91,206 |
+| Crema (SOL/USDC, B→A)                 |   75,506 |        134,178 |  +2,975 |  +6,456 |       +82,758 |          +109,190 |
+| Phoenix (SOL/USDC, selling base)      |   22,557 |         88,125 |  +6,437 | +14,318 |       +61,360 |                   |
+| Invariant (USDC/USDT, X→Y)            |   62,133 |        119,300 |  +2,898 |  +6,379 |       +75,021 |                   |
+| Manifest (SOL/USDC, selling base)     |   13,208 |         68,780 |  +4,762 |  +8,127 |       +57,206 |                   |
+| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         92,145 | +14,965 | +21,219 |       +85,105 |                   |
 
 `…Data`'s few thousand units are its fields' packing and checks: the floor's 64-bit check, the
 direction, one `toBytesLe`. `…Cpi` adds the program's check, building its account list into an

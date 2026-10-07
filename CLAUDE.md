@@ -610,9 +610,13 @@ paysBase])` takes the CPI's accounts in the venue's own order, checks the progra
 `<venue>Data(amountIn, …)` (Orca: `orcaWhirlpoolData` for the classic `swap`, `orcaWhirlpoolV2Data`;
 Phoenix/OpenBook take the market's lot sizes) returns the instruction's bytes, checking only that a
 field can carry its value (`minOut past 64 bits`, Phoenix's `limit past 64 bits`, OpenBook's `limit
-past its field`); EVERY form builds its data with it, so the four send one encoding. `…Data` is the
+past its field`); the at-price and at-limit forms build their data with it, but `…Cpi` writes the
+same bytes INLINE (measured: calling `…Data` from `…Cpi` cost it ~2k CU — +8.7k vs +6.7k on DefiTuna
+— so b1aeaf48's routing was reverted for `…Cpi` in a later commit; Phoenix's alone stays on
+`phoenixData`, which measured 1.6k cheaper than its inline copy). Every form is held byte for byte
+to the recipes' templates by the at-limit e2e, so the two copies cannot drift unseen. `…Data` is the
 CU-minimal form (eco-incorp/sauce-recipes' served swaps: `svm.call(program, [accounts…],
-<venue>Data(…))`): +2.6–3.4k CU over the recipes' hand-built CPI on the CLMMs, `…Cpi` +7.5–10.5k,
+<venue>Data(…))`): +2.6–3.4k CU over the recipes' hand-built CPI on the CLMMs, `…Cpi` +6.2–9.3k,
 `try…AtLimit` ~+80–96k (measured in `svm-at-limit.e2e.test.ts`). The gap between `…Data` and `…Cpi`
 is MOSTLY THE ACCOUNT ARRAY (measured, DefiTuna's 14 accounts): a literal list written into
 `svm.call` costs ~100 CU, the same list passed to a function ~4.4k (~300 an account, built as an

@@ -491,7 +491,7 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
   });
 
   // At a limit: its data refuses a floor or a limit its instruction cannot carry (Orca's data is two
-  // swaps', each with its floor); `…Cpi` adds only the program and the debit; `try…AtLimit` the
+  // swaps', each with its floor); `…Cpi` the same, and the program and the debit; `try…AtLimit` the
   // venue's own pool and pair, as above, the floor afterwards, and, first, a limit its order cannot
   // carry, whatever the market's state.
   it.each(VENUE_REASONS)("%s at a limit refuses another venue's pool as %j", (venue, reason) => {
@@ -525,7 +525,13 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       ...(limit === undefined ? {} : { [limit]: 2 }),
     });
     const cpi = `${lower}Cpi`;
-    expect(reasons(cpi)).toEqual({ ...none, ...data, debit: 1 });
+    // `…Cpi` writes its data itself (Orca's two swaps' under one floor check), Phoenix's excepted.
+    expect(reasons(cpi)).toEqual({
+      ...none,
+      ...data,
+      ...(venue === "OrcaWhirlpool" ? { "minOut past 64 bits": 1 } : {}),
+      debit: 1,
+    });
     for (const name of [tryForm, cpi]) {
       const code = hex(
         compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm").bytecode,
