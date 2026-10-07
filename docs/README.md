@@ -63,8 +63,10 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 
 ## Reference
 
-- [Chains](reference/chains.md): every chain, whether the release supports it, its ids, the Sauce
-  and intent deployments, its tokens and every protocol on it.
+- [Chains](reference/chains.md): every chain, whether the release supports it, its ids, its intent
+  deployment, its tokens and every protocol on it.
+- [Deployments](reference/deployments.md): the Sauce release, its versions and the addresses of its
+  contracts and programs, the same on every chain.
 - [Protocols](reference/protocols.md): every protocol by category, how to choose between them, and
   each one's deployments, names in a program and ABI.
 - [Tokens](reference/tokens.md): every chain's tokens and tokenized stocks, and the token functions.

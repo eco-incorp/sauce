@@ -82,9 +82,10 @@ The Pot is an account the program is given: declare it as `pot: Account<Signer>`
 is the Kitchen's program address for the seeds `"pot"`, its owner and the 32-byte salt (zero unless
 `--salt` names another), and only a Kitchen cook can make that address sign, so a signing slot at
 that address is the Pot. Take the owner as a signer slot of its own (`--account wallet=owner`). The
-Kitchen program is `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`, passed as an argument, and the
-salt is the Pot's (zero unless `--salt` names another). Bind an account's key to a local before
-calling a method on it.
+Kitchen program is passed as an argument: its id is `svm.kitchen.programId` in
+[../sauce-chains/references/deployments.json](../sauce-chains/references/deployments.json), the
+same on every cluster. The salt is the Pot's (zero unless `--salt` names another). Bind an
+account's key to a local before calling a method on it.
 
 ```sauce chain=solana
 function main(pot: Account<Signer>, wallet: Account<Signer>, kitchen: Address, salt: Uint256) {
@@ -96,11 +97,11 @@ function main(pot: Account<Signer>, wallet: Account<Signer>, kitchen: Address, s
 
 ```sh
 sauce run pot.sauce.ts --chain solana --keypair <keypair> \
-  --account pot=pot --account wallet=owner --args SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot 0
+  --account pot=pot --account wallet=owner --args <the Kitchen program id> 0
 ```
 
 A Pot under another salt passes that salt, as a 32-byte number, in place of `0`. The Kitchen's key as
-32-byte hex is `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`.
+32-byte hex, the value a program holds, is `svm.kitchen.key` in the same file.
 This binding is a Kitchen cook's. A direct cook (`--via engine`) runs as no Pot: nothing signs for
 one, so a slot that must sign cannot be `pot` there.
 
@@ -153,7 +154,7 @@ function main(
 ```
 
 run with `--account pot=pot --account wallet=owner`, the Pot's USDC account in the third slot and
-the Kitchen and salt as above (`--args SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot 0`):
+the Kitchen and salt as above (`--args <the Kitchen program id> 0`):
 `--account potUsdc=pot:USDC` passes it, the Pot's associated token
 account for the mint (`pot:<mint>` for any mint, `owner:USDC` for the owner's). The first check
 binds `pot` to the wallet's Pot; the second binds the token account to `pot`. Passing the Pot for
@@ -318,9 +319,10 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   table holding a staged cook's accounts when they do not fit, from the signer, which pays its
   rent, and prints its address; `--lookup-table <address>` takes the accounts through a table that
   holds them, on `run`, `simulate` and `tx`, so a later cook naming the same accounts reuses it.
-- The engine program is `2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT` and the Kitchen
-  `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` ([../sauce-chains/references/solana.md](../sauce-chains/references/solana.md));
-  confirm both are deployed on the cluster (`getAccountInfo` returns an executable account).
+- The engine and Kitchen program ids are `svm.engine` and `svm.kitchen` in
+  [../sauce-chains/references/deployments.json](../sauce-chains/references/deployments.json), the
+  same on every cluster; confirm both are deployed on the cluster (`getAccountInfo` returns an
+  executable account).
 - `sauce intent publish` does not work from Solana; open an intent from Ethereum or Base. Its
   destination may be Solana: `sauce intent fill`, `prove` and `cancel` act on it there with
   `--keypair` (`sauce-intents`), and take no `--via`: an intent's program on Solana runs

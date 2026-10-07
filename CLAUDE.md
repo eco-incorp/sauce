@@ -164,7 +164,11 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
   Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
   run the sync, paste the digests and engine ids it reports — a row with a `null` digest or engine id
-  is a release not out yet, and the sync refuses it and writes nothing.
+  is a release not out yet, and the sync refuses it and writes nothing. Then `pnpm build`: the
+  release's addresses are written in docs and skills ONLY in the generated
+  `docs/reference/deployments.md` and `skills/sauce-chains/references/deployments.json` (see "One
+  place per release" under "Agent skills"), so those two files are the bump's whole docs/skills
+  diff.
   **Fetching needs no PAT.** Each release publishes its assets as a PRIVATE npm package on GitHub
   Packages (`@eco-incorp/<package>` at `npm.pkg.github.com`, one per independently-released
   component). Read access is granted per package to the CONSUMING REPOSITORY (package settings ->
@@ -933,9 +937,9 @@ them, `references/`.
   from `routes.sourceGlobals`, the function `sauce globals` prints, leaving out the `EcoRoutes`
   namespace: a program opens an intent with the chain syntax, never by calling the Portal or its
   provers, and the skills keep the Portal to `sauce-intents`); `sauce-chains/references/`
-  (an index and one file per chain: ids, native coin, the Sauce release, eco-routes and the shared
-  intent Pot, CCTP domain, tokens with addresses, and every protocol deployment with how a program
-  names it); and `sauce-protocols/references/index.md` (every protocol by category, with the
+  (an index and one file per chain: ids, native coin, eco-routes, CCTP domain, tokens with
+  addresses, and every protocol deployment with how a program names it; and `deployments.json`, the
+  Sauce release's addresses, which no chain file repeats); and `sauce-protocols/references/index.md` (every protocol by category, with the
   hand-written "Choosing between them" prose that lives in the generator) plus
   `sauce-protocols/references/registry/<slug>.md` (deployments per chain, namespace or ABI-import
   spelling, ABI functions). A deployment role's ABI export comes from the registry's own evidence
@@ -946,7 +950,8 @@ them, `references/`.
   (`pnpm --filter './sdk' gen-skills-references`). Change their prose in the generator.
 - **The manual renders the same facts, and never links the skills.** The same generator, from the
   same data, writes `docs/reference/` for a human reader: `chains.md` (the release's support and
-  every chain) and `chains/<chain>.md`/`<chain>-stocks.md`, `protocols.md` (by category, the family
+  every chain) and `chains/<chain>.md`/`<chain>-stocks.md`, `deployments.md` (the release: its
+  versions and addresses, listed in the index), `protocols.md` (by category, the family
   aliases, the interfaces) and `protocols/<slug>.md` (the registry facts with the protocol's
   hand-written document folded in, its `Category` and `Deployments and ABI` sections left out),
   `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
@@ -965,6 +970,18 @@ them, `references/`.
   exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
   manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
   operation) is written once, in the manual.
+- **One place per release.** The release's addresses (EVM engine, Routers, Kitchen and its
+  implementation, the Pot init-code hash, the shared intent Pot, the Solana programs in base58 and
+  as keys, and every engine `V12_RELEASE_SETS` names) are the same on every chain, so each audience
+  writes them in one generated file: `docs/reference/deployments.md` and
+  `skills/sauce-chains/references/deployments.json` (prettier-ignored; the MCP server serves it like
+  any skill file, and `mcp/test/deployments.test.ts` reads it through the server). A chain's file
+  points at it; a hand-written page, skill, example or runner points at it or reads the SDK's
+  `/deployments` helpers. `docs/scripts/release-addresses.mjs` is the rule, applied by `docs:check`
+  (README and every file under `docs/`) and `skills:check` (every file under `skills/`), comments
+  included; it takes the addresses from the SDK, so there is no second list. A skill sends its
+  reader to a key of the file (`svm.kitchen.programId`), and a usage line passes a
+  `<placeholder>` for it.
 - **The actions reference is generated too.** `sdk/scripts/gen-skills-actions.mjs` renders
   `skills/sauce-actions/references/actions.md` (every action and field) from the committed
   `actions/action-program.schema.json`, in the same `build` step; regenerate the schema after a

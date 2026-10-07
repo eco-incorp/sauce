@@ -118,7 +118,8 @@ fulfillment: anything left behind is anyone's.
 
 The three roles are the same; Solana's account model changes the details.
 
-- The **Kitchen** is a program, `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`.
+- The **Kitchen** is a program, with the same id on every cluster:
+  [Deployments](../reference/deployments.md#solana) lists it with the engine's.
 - A **Pot** is an account at the Kitchen's program address for the seeds `"pot"`, the owner and the
   salt. The engine owns its data, which is where a program keeps storage, and the Pot holds tokens
   in token accounts whose owner it is. The owner creates it with the Kitchen's `create_pot`, paying

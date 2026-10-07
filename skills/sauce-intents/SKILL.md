@@ -406,16 +406,18 @@ level, and by default funds a child by a transfer into its vault with no publica
 
 The Portal, the prover, the destination Pot and the encoding are looked up from the eco-routes
 registry, which records each chain's Portal and a prover deployed on both sides. Each chain's file in
-`sauce-chains` says whether it takes intents and gives its Portal, Executor and shared intent Pot
-([../sauce-chains/references/index.md](../sauce-chains/references/index.md)). Three values are the
-developer's:
+`sauce-chains` says whether it takes intents and gives its Portal and Executor
+([../sauce-chains/references/index.md](../sauce-chains/references/index.md)); the shared intent Pot,
+the same on every chain, is `evm.intentPot` in
+[../sauce-chains/references/deployments.json](../sauce-chains/references/deployments.json). Three
+values are the developer's:
 
 - **`--intent-deadline <unix seconds>`**: when the intent must be filled by.
 - **`--intent-creator <address>`**: who may reclaim an unearned reward. Never a Pot.
 - **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
   mutable on chain and lives on the destination, so read it there just before sending: an
-  `eth_call` of `executionFee()` on the destination's Kitchen (its address is in the chain's file in
-  `sauce-chains`), or pass `--intent-execution-fee auto`, which reads it there. An
+  `eth_call` of `executionFee()` on the destination's Kitchen (`evm.kitchen` in the deployments
+  file above), or pass `--intent-execution-fee auto`, which reads it there. An
   increase before the fill makes the cook, and the fulfilment, revert.
 
 **Units and arguments.** Amounts are base units (`1000000` is 1 USDC); only `--assume-balance`
@@ -429,9 +431,9 @@ prover deployed on both sides.
 ## The destination side
 
 - **The shared Pot.** A program body cooks on the destination Portal Executor's **shared Pot** (its
-  owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the Pot and
-  the Executor. **The Pot must exist before any fill**: until it does, every fulfilment of a program
-  body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
+  owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the
+  Executor, and the deployments file above the Pot. **The Pot must exist before any fill**: until it
+  does, every fulfilment of a program body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
   address and deploy transaction; with `--deploy --keystore <keystore>`
   any signer deploys it (the Pot is the Executor's either way), and an existing one is reported, not
   redeployed; `sauce intent fill` says whether it is deployed on the destination, and deploys it in its

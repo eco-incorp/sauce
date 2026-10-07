@@ -2,7 +2,8 @@
 // sauce-solana skill says about it: the manifest lists the Account parameters in order with their
 // roles, the mint and the amount are main's arguments after the accounts, only the scalar
 // parameters are arguments, execution needs an rpcUrl the caller supplies, the USDC mint's hex is the skill's, the
-// Pot is the Kitchen's address for its seeds, and a cook's size is what the skill budgets. Then
+// Pot is the Kitchen's address for its seeds, the skill sends the reader to sauce-chains' deployments
+// file for the Kitchen and engine, and a cook's size is what the skill budgets. Then
 // token-2022.sauce.ts: its accounts, PYUSD's token program, the two programs the skill names, and
 // that moving a Token-2022 token and measuring what arrived is past one transaction. Offline:
 // nothing is sent.
@@ -94,10 +95,15 @@ const [byHand] = await getProgramDerivedAddress({
   seeds: ["pot", getAddressEncoder().encode(owner.address), salt],
 });
 check(POT_SEED === "pot" && pot.address === byHand, "the Pot's seeds are pot, owner, salt");
-// The skill gives the Kitchen and engine program ids, and the Kitchen's 32-byte hex.
-const kitchenHex = `0x${Buffer.from(getAddressEncoder().encode(kitchen)).toString("hex")}`;
-for (const value of [v12SvmKitchenProgramId(), v12SvmEngineProgramId(), kitchenHex])
-  check(skill.includes(value), `the skill quotes ${value}`);
+// The skill sends the reader to sauce-chains' deployments file for the Kitchen and engine program
+// ids and the Kitchen's 32-byte hex, under these keys (sauce-chains' runner holds the file to the
+// released programs).
+check(
+  skill.includes("(../sauce-chains/references/deployments.json)"),
+  "the skill links the deployments file",
+);
+for (const key of ["svm.kitchen.programId", "svm.kitchen.key", "svm.engine", "svm.kitchen"])
+  check(skill.includes(`\`${key}\``), `the skill names ${key} in the deployments file`);
 
 // A cook as `sauce run` builds it: the heap frame, a compute-unit limit, the Kitchen's cook.
 async function cookSize(accounts: number): Promise<number> {

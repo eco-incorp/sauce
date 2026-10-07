@@ -6,11 +6,14 @@
 //   skills/sauce-globals/references/{tokens,stocks,protocols,chains}.md   the NAMES a program uses
 //                                                                  with no import (no addresses)
 //   skills/sauce-chains/references/index.md, <chain>.md            per chain: whether the release
-//                                                                  supports it, ids, native coin, the
-//                                                                  Sauce release, intents, tokens and
-//                                                                  every protocol with its addresses
+//                                                                  supports it, ids, native coin,
+//                                                                  intents, tokens and every protocol
+//                                                                  with its addresses
 //   skills/sauce-chains/references/<chain>-stocks.md               a chain's tokenized stocks, with
 //                                                                  their addresses
+//   skills/sauce-chains/references/deployments.json                the Sauce release's addresses, the
+//                                                                  same on every chain: the skills'
+//                                                                  one copy of them
 //   skills/sauce-protocols/references/index.md                     every protocol by category, with
 //                                                                  how to choose between them
 //   skills/sauce-protocols/references/registry/<slug>.md           per protocol: its deployments per
@@ -20,6 +23,8 @@
 // and the same chains and protocols for a human reader, under `docs/reference/`:
 //
 //   chains.md, chains/<chain>.md, chains/<chain>-stocks.md         the chain files, linked as pages
+//   deployments.md                                                 the Sauce release: its versions and
+//                                                                  addresses, the manual's one copy
 //   protocols.md, protocols/<slug>.md                              the protocol index, and one page per
 //                                                                  protocol: its registry facts with
 //                                                                  its document folded in
@@ -57,7 +62,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { getAddressDecoder } from "@solana/kit";
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The repository's skills directory. */
@@ -415,28 +420,54 @@ export async function skillsReferences(api, documented) {
       devnet: tokens?.devnet ?? [],
       intents,
       cctp: cctp.CCTP_DOMAIN?.[chain.slug],
-      sauce:
-        chain.kind === "evm"
-          ? {
-              engine: deployments.v12EngineAddress(),
-              kitchen: deployments.v12KitchenAddress(),
-              router: deployments.v12QuoteRouterAddress(),
-            }
-          : {
-              engine: deployments.v12SvmEngineProgramId(),
-              kitchen: deployments.v12SvmKitchenProgramId(),
-            },
       protocols: protocols
         .filter((p) => p.chains.includes(chain.slug))
         .map((p) => ({ ...p, deployed: p.deployed.filter((d) => d.chain === chain.slug) })),
     };
   });
 
+  // The Sauce release: one address per contract on every EVM chain and one id per program on every
+  // Solana cluster, so it is rendered once (deployments.json, deployments.md) and never per chain.
+  // The shared intent Pot is the Kitchen's Pot for the eco-routes Executor under salt zero: one
+  // Executor serves every chain that takes intents, so one Pot does, and a chain's file names its
+  // Executor.
+  const release = deployments.v12DeployedAddresses();
+  const intentPots = new Map(
+    chains.filter((c) => c.intents?.executor).map((c) => [c.intents.pot, c.intents.executor]),
+  );
+  if (intentPots.size !== 1) {
+    throw new Error(
+      `eco-routes records ${intentPots.size} shared intent Pots (${[...intentPots.keys()].join(", ")}): ` +
+        "the deployments file gives one, so give it one per Executor and say so in each chain's file",
+    );
+  }
+  const [[intentPot, intentPotOwner]] = intentPots;
+  const { contracts } = release.evm;
+
   return {
     globals,
     chains,
     protocols,
     familyMembers,
+    deployments: {
+      compiler: release.compiler,
+      releases: release.releases,
+      evm: {
+        engine: contracts.engine.address,
+        kitchen: contracts.kitchen.address,
+        kitchenImplementation: contracts.kitchenImplementation.address,
+        router: contracts.router.address,
+        routerGeneration: contracts.router.generation,
+        quoteRouter: contracts.quoteRouter.address,
+        quoteRouterGeneration: contracts.quoteRouter.generation,
+        potInitCodeHash: release.evm.pot.initCodeHash,
+        intentPot: { address: intentPot, owner: intentPotOwner, salt: sdk.SAUCE_INTENT_POT_SALT },
+      },
+      svm: {
+        engine: release.svm.programs.engine.programId,
+        kitchen: release.svm.programs.kitchen.programId,
+      },
+    },
     support: {
       supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
       newIssue: support.CHAIN_SUPPORT_NEW_ISSUE_URL,
@@ -659,6 +690,8 @@ const SKILLS_SITE = {
   chainStocks: (slug) => `sauce-chains/references/${slug}-stocks.md`,
   protocolIndex: "sauce-protocols/references/index.md",
   protocol: (slug) => `sauce-protocols/references/registry/${slug}.md`,
+  /** The Sauce release, the same on every chain: the one file with its addresses. */
+  deployments: "sauce-chains/references/deployments.json",
   /** A protocol's hand-written document, a file of its own beside its registry file. */
   document: (slug) => `sauce-protocols/references/${slug}.md`,
   /** A skill names another skill as it is. */
@@ -725,6 +758,7 @@ const DOCS_SITE = {
   chainStocks: (slug) => `chains/${slug}-stocks.md`,
   protocolIndex: "protocols.md",
   protocol: (slug) => `protocols/${slug}.md`,
+  deployments: "deployments.md",
   /** A protocol's document is folded into its page. */
   document: undefined,
   prose: docsProse,
@@ -1059,25 +1093,22 @@ function renderChain(chain, supported, site) {
         : ""
     } |`,
   );
-  if (chain.kind === "evm") {
-    lines.push(
-      `| Sauce engine | \`${chain.sauce.engine}\` |`,
-      `| Sauce Kitchen | \`${chain.sauce.kitchen}\` |`,
-      `| Sauce Router | \`${chain.sauce.router}\` |`,
-    );
-  } else {
-    lines.push(
-      `| Sauce engine program | ${addressCode(chain.kind, chain.sauce.engine)} |`,
-      `| Sauce Kitchen program | ${addressCode(chain.kind, chain.sauce.kitchen)} |`,
-    );
-  }
+  // The release is the same on every chain, so a chain's file points at the one place it is listed.
+  const deployments = `[${site.label(site.deployments, "Deployments")}](${href(path, site.deployments)})`;
   lines.push(
+    chain.kind === "evm"
+      ? `| Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: ${deployments}${site === SKILLS_SITE ? " (`evm`)" : ""} |`
+      : `| Sauce | the engine and Kitchen programs, the same ids on every cluster: ${deployments}${site === SKILLS_SITE ? " (`svm`)" : ""} |`,
     `| Intents (eco-routes) | ${chain.intents ? `takes intents; Portal ${addressCode(chain.kind, chain.intents.portal)}` : "none recorded"} |`,
   );
   if (chain.intents?.executor) {
+    const intentPot =
+      site === SKILLS_SITE
+        ? `${deployments} (\`evm.intentPot\`)`
+        : `[Deployments](${href(path, site.deployments)}#the-shared-intent-pot)`;
     lines.push(
       `| Intent Executor | ${addressCode(chain.kind, chain.intents.executor)} |`,
-      `| Shared intent Pot | ${addressCode(chain.kind, chain.intents.pot)}: the Kitchen's \`deployPot(<Executor>, 0x0)\` creates it, from any account |`,
+      `| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: ${intentPot}; the Kitchen's \`deployPot(<Executor>, 0x0)\` creates it, from any account |`,
     );
   }
   if (chain.cctp !== undefined) lines.push(`| CCTP domain | ${chain.cctp} |`);
@@ -1209,6 +1240,163 @@ function renderChainStocks(chain, site) {
   return site.prose(lines, path).join("\n");
 }
 
+/** A Solana program id as the 32-byte hex key a program holds. */
+const svmKey = (programId) =>
+  `0x${[...getAddressEncoder().encode(programId)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+
+const CONFIRM_CODE =
+  "An address is where the contract is deployed, not proof that it is there: before relying on one, " +
+  "confirm it has code on the chain (eth_getCode returns more than 0x; on Solana, getAccountInfo " +
+  "returns an executable account).";
+
+/**
+ * The Sauce release's addresses as the skills' one file of them, `deployments.json`: data an agent
+ * reads (over MCP too), each entry with what it is. No version: the skills state no release.
+ */
+function renderDeploymentsJson(data) {
+  const { evm, svm } = data.deployments;
+  const document = {
+    about: `The Sauce deployment, the same on every chain: one address per contract on every EVM chain, and one id per program on every Solana cluster. ${CONFIRM_CODE}`,
+    evm: {
+      engine: {
+        address: evm.engine,
+        about:
+          "The engine, the interpreter that runs a program. A cook is the Pot's cook(engine, program), sent by the Pot's owner.",
+      },
+      kitchen: {
+        address: evm.kitchen,
+        about:
+          "The Kitchen: deployPot(owner, salt) creates a Pot, and executionFee() is the fee every cook pays, in the chain's native coin.",
+      },
+      kitchenImplementation: {
+        address: evm.kitchenImplementation,
+        about:
+          "The implementation behind the Kitchen, an upgradeable proxy. Call the Kitchen, never this.",
+      },
+      router: {
+        address: evm.router,
+        about:
+          "The Router a new Pot starts on. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2) run through the Pot's Router.",
+      },
+      quoteRouter: {
+        address: evm.quoteRouter,
+        about:
+          "A quote service for Uniswap V3 and V4 swaps, called with eth_call, holding no tokens. No Pot's Router.",
+      },
+      pot: {
+        address: "CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)",
+        initCodeHash: evm.potInitCodeHash,
+        about:
+          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen.",
+      },
+      intentPot: {
+        address: evm.intentPot.address,
+        owner: evm.intentPot.owner,
+        salt: evm.intentPot.salt,
+        about:
+          "The shared Pot an intent's program body cooks on, on every EVM chain that takes intents: the Pot of the eco-routes Executor (owner) under salt zero. The Kitchen's deployPot(owner, salt) creates it, from any account.",
+      },
+    },
+    svm: {
+      engine: {
+        programId: svm.engine,
+        key: svmKey(svm.engine),
+        about:
+          "The engine program, which owns every Pot: ctx.self() in a program on Solana. key is the 32-byte value a program holds.",
+      },
+      kitchen: {
+        programId: svm.kitchen,
+        key: svmKey(svm.kitchen),
+        about:
+          'The Kitchen program: create_pot creates a Pot, and cook runs a program on it. A Pot is the Kitchen\'s program address for the seeds "pot", the owner and the 32-byte salt. key is the 32-byte value a program holds.',
+      },
+    },
+  };
+
+  return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+/** The same release for a reader of the manual: the one page that lists its addresses, and its
+ *  versions. */
+function renderDeploymentsPage(data) {
+  const { compiler, releases, evm, svm } = data.deployments;
+  const lines = [
+    HEADER,
+    "",
+    "# Deployments",
+    "",
+    "The Sauce contracts have the same address on every EVM chain, and its programs the same id on",
+    "every Solana cluster, so this page is the one place the manual lists them: each chain's page",
+    "points here. An address is where the contract is deployed, not proof that it is there: before",
+    "relying on one, confirm it has code on the chain (`eth_getCode` returns more than `0x`; on",
+    "Solana, `getAccountInfo` returns an executable account). In TypeScript each value comes from",
+    "`@eco-incorp/sauce/deployments`, by the function its table names.",
+    "",
+    "## The release",
+    "",
+    "The compiler this package pins, and the four components its programs run on. They pair by exact",
+    "version, in both directions:",
+    "[which engine runs a program](../api/compiler.md#which-engine-runs-a-program).",
+    "",
+    "| Component | Version |",
+    "| --- | --- |",
+    `| Compiler, \`@eco-incorp/sauce-compiler\` | ${compiler} |`,
+    `| EVM engine, \`v12-evm\` | ${releases["v12-evm"].version} |`,
+    `| EVM Kitchen, \`kitchen-evm\` | ${releases["kitchen-evm"].version} |`,
+    `| Solana engine, \`v12-svm\` | ${releases["v12-svm"].version} |`,
+    `| Solana Kitchen, \`kitchen-svm\` | ${releases["kitchen-svm"].version} |`,
+    "",
+    "## EVM chains",
+    "",
+    "| Contract | Address | What it is | In TypeScript |",
+    "| --- | --- | --- | --- |",
+    `| Engine | \`${evm.engine}\` | the interpreter that runs a program: a cook is the Pot's \`cook(engine, program)\` | \`v12EngineAddress()\` |`,
+    `| Kitchen | \`${evm.kitchen}\` | creates Pots (\`deployPot(owner, salt)\`) and sets the fee every cook pays (\`executionFee()\`) | \`v12KitchenAddress()\` |`,
+    `| Kitchen implementation | \`${evm.kitchenImplementation}\` | behind the Kitchen, an upgradeable proxy: call the Kitchen | \`v12KitchenImplementationAddress()\` |`,
+    `| Router | \`${evm.router}\` | generation ${evm.routerGeneration}: the Router a new Pot starts on, through which the swaps a pool calls back for run | \`v12RouterAddress()\` |`,
+    `| Quote Router | \`${evm.quoteRouter}\` | generation ${evm.quoteRouterGeneration}: quotes Uniswap V3 and V4 swaps through \`eth_call\`, holding no tokens; no Pot's Router | \`v12QuoteRouterAddress()\` |`,
+    "",
+    "### Pots",
+    "",
+    "The Kitchen deploys an owner's Pot under a 32-byte salt, zero unless another is chosen, at",
+    "`CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)`, with the Pot init-code",
+    "hash:",
+    "",
+    `\`${evm.potInitCodeHash}\``,
+    "",
+    "`v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula",
+    "and the hash, and `sauce pot --owner <address>` prints an owner's Pot.",
+    "",
+    "### The shared intent Pot",
+    "",
+    "An intent's program body cooks on the Pot of the destination's eco-routes Executor under salt",
+    "zero. One Executor serves every EVM chain that takes intents, so one Pot does:",
+    "",
+    "| Fact | Value |",
+    "| --- | --- |",
+    `| Address | \`${evm.intentPot.address}\`: \`destinationPot(chain)\` |`,
+    `| Owner, the eco-routes Executor | \`${evm.intentPot.owner}\` |`,
+    `| Salt | \`${evm.intentPot.salt}\`: \`SAUCE_INTENT_POT_SALT\` |`,
+    "",
+    "The Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account.",
+    "[The destination Pot](../guides/intents.md#the-destination-pot) says who deploys it and what a",
+    "body may leave in it.",
+    "",
+    "## Solana",
+    "",
+    "| Program | Program id | Key, the value a program holds | In TypeScript |",
+    "| --- | --- | --- | --- |",
+    `| Engine | \`${svm.engine}\` | \`${svmKey(svm.engine)}\` | \`v12SvmEngineProgramId()\` |`,
+    `| Kitchen | \`${svm.kitchen}\` | \`${svmKey(svm.kitchen)}\` | \`v12SvmKitchenProgramId()\` |`,
+    "",
+    "The engine owns every Pot, and a program on Solana reads it as `ctx.self()`. A Pot is the",
+    'Kitchen\'s program address for the seeds `"pot"`, the owner and the 32-byte salt.',
+    "",
+  ];
+
+  return lines.join("\n");
+}
+
 function renderChainIndex(data, site) {
   const path = site.chainIndex;
   const lines = [
@@ -1217,7 +1405,9 @@ function renderChainIndex(data, site) {
     "# Chains",
     "",
     `Every chain the SDK knows, with a ${site.noun} each: whether the initial release supports it, ids, native`,
-    "coin, the Sauce release, intents, its tokens and every protocol recorded there with its addresses.",
+    "coin, intents, its tokens and every protocol recorded there with its addresses. The Sauce",
+    "contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:",
+    `[${site.label(site.deployments, "Deployments")}](${href(path, site.deployments)}) lists them once, with the shared intent Pot.`,
     "",
     `For the initial release, Sauce supports transactions on ${andList(data.support.supported.map((c) => c.name))}`,
     `(${data.support.supported.map((c) => code(c.slug)).join(", ")}). Every other chain is a preview chain: a program`,
@@ -1504,6 +1694,7 @@ export function renderSkillsReferences(data) {
     ...renderGlobals(data),
     [site.chainIndex]: renderChainIndex(data, site),
     [site.protocolIndex]: renderProtocolIndex(data, site),
+    [site.deployments]: renderDeploymentsJson(data),
   };
   for (const chain of data.chains) {
     files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
@@ -1743,6 +1934,7 @@ export function renderDocsReference(data, skillFiles) {
   const files = {
     [site.chainIndex]: renderChainIndex(data, site),
     [site.protocolIndex]: renderProtocolIndex(data, site),
+    [site.deployments]: renderDeploymentsPage(data),
     "tokens.md": renderTokens(data, skillFiles.globals),
     // Byte for byte below its note: its anchors are the skill's, and it links nothing outside itself.
     "saucescript.md": `${copiedFrom(BUILTINS)}\n\n${skillFiles.builtins}`,
