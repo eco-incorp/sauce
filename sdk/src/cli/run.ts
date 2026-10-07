@@ -469,6 +469,13 @@ const COOK: FlagSpecs = {
     help: "Refuse a cook whose execution fee is above this",
     only: "svm",
   },
+  "lookup-table": {
+    type: "string",
+    multiple: true,
+    value: "<address>",
+    help: "An address lookup table holding the cook's accounts (sauce run creates one when they do not fit)",
+    only: "svm",
+  },
 };
 
 const ENDPOINT: FlagSpecs = {
@@ -839,6 +846,12 @@ function cookInput(
   if (repeatedFlag(args, "account").length > 0) {
     throw new UsageError(
       `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
+    );
+  }
+  if (repeatedFlag(args, "lookup-table").length > 0) {
+    throw new UsageError(
+      `--lookup-table takes a Solana cook's accounts through a lookup table; a cook on ` +
+        `${program.chain.slug} has none`,
     );
   }
   for (const flag of ["via", "max-execution-fee"]) {
@@ -1486,6 +1499,9 @@ function svmCookInput(
 
   const via = stringFlag(args, "via");
   const maxFee = stringFlag(args, "max-execution-fee");
+  const lookupTables = repeatedFlag(args, "lookup-table").map((table) =>
+    parsePubkey("lookup-table", table),
+  );
 
   return {
     ...program,
@@ -1498,6 +1514,7 @@ function svmCookInput(
     ...(maxFee === undefined
       ? {}
       : { maxExecutionFee: parseLamports("max-execution-fee", maxFee) }),
+    ...(lookupTables.length === 0 ? {} : { lookupTables }),
   };
 }
 

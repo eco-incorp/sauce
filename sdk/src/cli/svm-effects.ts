@@ -11,6 +11,7 @@ import {
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   type Address,
+  type AddressesByLookupTableAddress,
   type createSolanaRpc,
   type Transaction,
 } from "@solana/kit";
@@ -59,8 +60,15 @@ export interface SvmMoved {
   readonly payer: Address;
 }
 
-/** The writable accounts of `transaction`'s message, in its order: everything a cook can change. */
-export function writableAccounts(transaction: Transaction): Address[] {
+/**
+ * The writable accounts of `transaction`'s message, in its order: everything a cook can change —
+ * its own, then those it loads writable from `lookupTables` (each table's addresses, as the
+ * message was compressed against).
+ */
+export function writableAccounts(
+  transaction: Transaction,
+  lookupTables: AddressesByLookupTableAddress = {},
+): Address[] {
   const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
     header?: {
       numSignerAccounts: number;
@@ -68,16 +76,27 @@ export function writableAccounts(transaction: Transaction): Address[] {
       numReadonlyNonSignerAccounts: number;
     };
     staticAccounts?: readonly Address[];
+    addressTableLookups?: readonly {
+      lookupTableAddress: Address;
+      writableIndexes: readonly number[];
+    }[];
   };
   const { header, staticAccounts } = message;
   if (header === undefined || staticAccounts === undefined) return [];
   const signers = header.numSignerAccounts;
-
-  return staticAccounts.filter((_, index) =>
-    index < signers
-      ? index < signers - header.numReadonlySignerAccounts
-      : index < staticAccounts.length - header.numReadonlyNonSignerAccounts,
+  const loaded = (message.addressTableLookups ?? []).flatMap(
+    ({ lookupTableAddress, writableIndexes }) =>
+      writableIndexes.flatMap((index) => lookupTables[lookupTableAddress]?.[index] ?? []),
   );
+
+  return [
+    ...staticAccounts.filter((_, index) =>
+      index < signers
+        ? index < signers - header.numReadonlySignerAccounts
+        : index < staticAccounts.length - header.numReadonlyNonSignerAccounts,
+    ),
+    ...loaded,
+  ];
 }
 
 const bytesOf = (base64: string): Uint8Array => new Uint8Array(getBase64Encoder().encode(base64));

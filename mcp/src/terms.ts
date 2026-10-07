@@ -48,6 +48,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["intent-prover"], input: "intentProver" },
   { flags: ["no-prove"], input: "prove: false" },
   { flags: ["max-execution-fee"], input: "maxExecutionFee" },
+  { flags: ["lookup-table"], input: "lookupTables" },
   { flags: ["via"], input: "via" },
   { flags: ["compact-args"], input: "compactArgs" },
   { flags: ["define", "defines"], input: "defines", lowLevel: true },

@@ -32,6 +32,7 @@ import {
   signTransaction,
   TRANSACTION_SIZE_LIMIT,
   type Address,
+  type AddressesByLookupTableAddress,
   type Blockhash,
   type Instruction,
   type KeyPairSigner,
@@ -75,7 +76,9 @@ import {
   deriveExecutionFeeConfigPda,
   derivePotPda,
   engineFaultName,
+  fetchAlt,
   GROWTH_STEP,
+  lookupTableBatches,
   MAX_POT_LEN,
   resolveAccounts,
   resolveTokenProgramByOwner,
@@ -983,6 +986,13 @@ export interface SvmCookInput extends ProgramInput, SvmTarget {
    * fee it read as its `max_execution_fee`, so it pays that or, if the fee rises first, fails.
    */
   readonly maxExecutionFee?: bigint;
+  /**
+   * Address lookup tables the cook's accounts are taken through (`--lookup-table`), each read from
+   * the cluster: through one, an account costs the transaction one byte instead of 32, so a cook
+   * naming more accounts than a transaction lists fits. `sauce run` creates one when none is given
+   * and the accounts do not fit.
+   */
+  readonly lookupTables?: readonly Address[];
 }
 
 interface Prepared {
@@ -997,7 +1007,36 @@ interface Prepared {
   readonly manifest: AccountManifest;
   /** `--account`'s values with every `pot:<token>` resolved to its account. */
   readonly given: Awaited<ReturnType<typeof resolveTokenAccounts>>;
+  /** `--lookup-table`'s tables, each with the addresses it holds now. */
+  readonly lookupTables: AddressesByLookupTableAddress;
 }
+
+/** Each of `tables`, read from the cluster: the addresses it holds. */
+async function lookupTablesOf(
+  rpc: Rpc,
+  url: string,
+  tables: readonly Address[],
+): Promise<AddressesByLookupTableAddress> {
+  const read: AddressesByLookupTableAddress = {};
+  for (const table of tables) {
+    try {
+      Object.assign(read, await fetchAlt(rpc, table));
+    } catch (error) {
+      const message = ((error as Error).message ?? String(error)).split(url).join("<RPC_URL>");
+      throw new CliError(
+        `--lookup-table ${table} is not an address lookup table on solana: ${message.split("\n")[0]}`,
+      );
+    }
+  }
+
+  return read;
+}
+
+/** The lookup tables a cook is compressed against, or none: the option the client's builders take. */
+const tablesOption = (
+  tables: AddressesByLookupTableAddress,
+): { lookupTables?: AddressesByLookupTableAddress } =>
+  Object.keys(tables).length === 0 ? {} : { lookupTables: tables };
 
 /** Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. */
 async function prepare(
@@ -1038,8 +1077,9 @@ async function prepare(
     maxExecutionFee: fee,
     via,
   });
+  const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, input.lookupTables ?? []);
 
-  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest, given };
+  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest, given, lookupTables };
 }
 
 /** A staged cook's options: directly to the engine it is pinned to the staged bytes' digest. */
@@ -1064,7 +1104,7 @@ async function fits(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { computeUnitLimit: 1_400_000, prepends },
+    { computeUnitLimit: 1_400_000, prepends, ...tablesOption(prepared.lookupTables) },
   );
   const size = getTransactionSize(transaction);
 
@@ -1190,12 +1230,19 @@ const payloadSize = (prepared: Prepared): string => {
 const tooLarge = (prepared: Prepared, size: number, what: string): CliError => {
   const over = size - TRANSACTION_SIZE_LIMIT;
 
+  const tables = Object.keys(prepared.lookupTables).length > 0;
+
   return new CliError(
     `${payloadSize(prepared)}, so its cook is a ${size}-byte transaction, ${over} past Solana's ` +
       `${TRANSACTION_SIZE_LIMIT}. A cook that large runs from a code buffer the program is staged ` +
       `into first, in transactions the owner signs and sends, which ${what} cannot do. Shrink the ` +
       `payload by at least ${over} bytes to fit, or let \`sauce run\` stage it (with the owner's ` +
-      "--keypair; it rehearses the staged cook before sending it).",
+      "--keypair; it rehearses the staged cook before sending it)." +
+      (tables
+        ? ""
+        : " Its accounts cost 32 bytes each listed in the transaction and one through an address " +
+          "lookup table: --lookup-table <address> takes them through one, which `sauce run` " +
+          "creates when they do not fit."),
   );
 };
 
@@ -1261,7 +1308,7 @@ export async function svmSimulateCommand(
     }
   }
   // What the cook moved: every account it may write, read now and as the simulation leaves it.
-  const tracked = writableAccounts(built);
+  const tracked = writableAccounts(built, prepared.lookupTables);
   const before = await ask(input.rpcUrl, "the accounts the cook writes", () =>
     accountsNow(prepared.rpc, tracked),
   );
@@ -1269,7 +1316,7 @@ export async function svmSimulateCommand(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { prepends, accounts: tracked },
+    { prepends, accounts: tracked, ...tablesOption(prepared.lookupTables) },
   );
   const moved =
     result.ok && result.accounts !== undefined
@@ -1383,7 +1430,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    {},
+    tablesOption(prepared.lookupTables),
   );
   const json = {
     chain: "solana",
@@ -1529,6 +1576,81 @@ async function stage(
   return { codeBuffer, code, sha256, sent };
 }
 
+/** A lookup table a run created for its cook's accounts. */
+interface CreatedTable {
+  readonly address: Address;
+  readonly count: number;
+  readonly sent: readonly SvmSent[];
+  readonly tables: AddressesByLookupTableAddress;
+}
+
+/**
+ * The accounts of `transaction` a lookup table may hold: every account its message lists, less the
+ * signers and the programs its instructions call, which a transaction must list itself.
+ */
+function tableAddresses(transaction: Transaction): Address[] {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+    header: { numSignerAccounts: number };
+    staticAccounts: readonly Address[];
+    instructions: readonly { programAddressIndex: number }[];
+  };
+  const called = new Set(
+    message.instructions.map((instruction) => instruction.programAddressIndex),
+  );
+
+  return message.staticAccounts.filter(
+    (_, index) => index >= message.header.numSignerAccounts && !called.has(index),
+  );
+}
+
+/**
+ * Creates an address lookup table holding the accounts of `transaction` (a cook built without
+ * one), from `signer`, which pays its rent and is its authority, and waits until it can be used: the
+ * slot after its last extend. What it holds stays on the cluster, for the next cook naming them.
+ */
+async function createLookupTable(
+  rpc: Rpc,
+  url: string,
+  signer: TransactionSigner,
+  transaction: Transaction,
+): Promise<CreatedTable> {
+  const addresses = tableAddresses(transaction);
+  const recentSlot = await ask(url, "the finalized slot", () =>
+    rpc.getSlot({ commitment: "finalized" }).send(),
+  );
+  const { lookupTableAddress, batches } = await lookupTableBatches({
+    payer: signer,
+    authority: signer,
+    recentSlot,
+    addresses,
+  });
+  const sent: SvmSent[] = [];
+  for (const [index, batch] of batches.entries()) {
+    const what = index === 0 ? "creating the lookup table" : "extending the lookup table";
+    const result = await sendInstructions(rpc, url, signer, batch, what);
+    sent.push(result);
+    if (!result.ok) throw new CliError(`${what} failed in ${result.signature}: ${result.reason}`);
+  }
+  // Addresses a table takes in slot N are usable from slot N + 1.
+  const tip = () => ask(url, "the slot", () => rpc.getSlot({ commitment: "confirmed" }).send());
+  const extended = sent.at(-1)?.slot ?? (await tip());
+  const deadline = Date.now() + 30_000;
+  while ((await tip()) <= extended) {
+    if (Date.now() > deadline) {
+      throw new CliError(
+        `lookup table ${lookupTableAddress} is not usable 30 seconds after its last extend, in ` +
+          `slot ${extended}: the cluster has not moved past it`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  const tables = await ask(url, `lookup table ${lookupTableAddress}`, () =>
+    fetchAlt(rpc, lookupTableAddress),
+  );
+
+  return { address: lookupTableAddress, count: addresses.length, sent, tables };
+}
+
 export interface SvmRunInput extends SvmCookInput {
   readonly signer: KeyPairSigner;
   readonly approver: Approver;
@@ -1589,8 +1711,12 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const size = await fits(prepared);
   // The cook's rehearsal failing: `computeUnitLimit: "auto"` simulates first, and its failure
   // carries the reason — read again, with the logs, to report it.
-  const wouldFail = async (error: unknown, staged?: Staged): Promise<never> => {
-    const logs = await rehearsalLogs(prepared, staged);
+  const wouldFail = async (
+    error: unknown,
+    staged?: Staged,
+    tables: AddressesByLookupTableAddress = prepared.lookupTables,
+  ): Promise<never> => {
+    const logs = await rehearsalLogs(prepared, staged, tables);
     const closed =
       staged === undefined
         ? undefined
@@ -1606,6 +1732,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     );
   };
   let staged: Staged | undefined;
+  let table: CreatedTable | undefined;
   let transaction: Transaction;
   if (size.fits) {
     try {
@@ -1613,22 +1740,52 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         prepared.bytecode,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto" },
+        { computeUnitLimit: "auto", ...tablesOption(prepared.lookupTables) },
       );
     } catch (error) {
       return wouldFail(error);
     }
   } else {
     staged = await stage(prepared.rpc, input.rpcUrl, input.signer, prepared.bytecode);
+    // The staged cook carries no program, only its accounts: past one transaction still, they go
+    // through a lookup table, which the run creates when none was given.
+    const unsized = await prepared.client.stagedCookTransaction(
+      staged.codeBuffer,
+      prepared.manifest,
+      prepared.accounts,
+      {
+        computeUnitLimit: 1_400_000,
+        ...stagedPin(prepared, staged),
+        ...tablesOption(prepared.lookupTables),
+      },
+    );
+    if (getTransactionSize(unsized) > TRANSACTION_SIZE_LIMIT) {
+      try {
+        if ((input.lookupTables ?? []).length > 0) {
+          throw new CliError(
+            `the staged cook is a ${getTransactionSize(unsized)}-byte transaction even through ` +
+              `the lookup tables given, past Solana's ${TRANSACTION_SIZE_LIMIT}: give a table ` +
+              "holding every account the cook names, or none and the run creates one",
+          );
+        }
+        table = await createLookupTable(prepared.rpc, input.rpcUrl, input.signer, unsized);
+      } catch (error) {
+        const closed = await closeBuffer(prepared.rpc, input.rpcUrl, input.signer, staged);
+        throw new CliError(
+          `${(error as Error).message}\n${closed.open ?? `The code buffer ${staged.codeBuffer} was closed again.`}`,
+        );
+      }
+    }
+    const tables = table?.tables ?? prepared.lookupTables;
     try {
       transaction = await prepared.client.stagedCookTransaction(
         staged.codeBuffer,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto", ...stagedPin(prepared, staged) },
+        { computeUnitLimit: "auto", ...stagedPin(prepared, staged), ...tablesOption(tables) },
       );
     } catch (error) {
-      return wouldFail(error, staged);
+      return wouldFail(error, staged, tables);
     }
   }
   const cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
@@ -1645,6 +1802,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         ? []
         : [
             `staged the ${prepared.bytecode.length}-byte program in ${staged.sent.length} transactions`,
+          ]),
+      ...(table === undefined
+        ? []
+        : [
+            `created lookup table ${table.address} holding the cook's ${table.count} accounts in ` +
+              `${table.sent.length} transactions; a later cook naming them reuses it with ` +
+              `--lookup-table ${table.address}`,
           ]),
       sentLine(direct ? "cook (direct to the engine)" : "cook", cook),
       ...(cook.ok ? [`execution fee: ${prepared.fee} lamports`] : []),
@@ -1671,6 +1835,15 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
               transactions: staged.sent.map((step) => step.signature),
             },
           }),
+      ...(table === undefined
+        ? {}
+        : {
+            lookupTable: {
+              address: table.address,
+              accounts: table.count,
+              transactions: table.sent.map((step) => step.signature),
+            },
+          }),
       cook: sentJson(cook),
       ...(closed?.sent === undefined ? {} : { closeCodeBuffer: sentJson(closed.sent) }),
       ...(closed?.open === undefined ? {} : { warning: closed.open }),
@@ -1683,16 +1856,19 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
 async function rehearsalLogs(
   prepared: Prepared,
   staged: { readonly codeBuffer: Address; readonly sha256: Uint8Array } | undefined,
+  tables: AddressesByLookupTableAddress = prepared.lookupTables,
 ): Promise<{ reason?: string; lines: readonly string[] }> {
   try {
     const result =
       staged === undefined
-        ? await prepared.client.simulate(prepared.bytecode, prepared.manifest, prepared.accounts)
+        ? await prepared.client.simulate(prepared.bytecode, prepared.manifest, prepared.accounts, {
+            ...tablesOption(tables),
+          })
         : await prepared.client.simulateStaged(
             staged.codeBuffer,
             prepared.manifest,
             prepared.accounts,
-            stagedPin(prepared, staged),
+            { ...stagedPin(prepared, staged), ...tablesOption(tables) },
           );
 
     return result.ok ? { lines: result.logs } : { reason: simulated(result), lines: result.logs };

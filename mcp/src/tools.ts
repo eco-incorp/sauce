@@ -359,6 +359,15 @@ const COOK = {
         "the cluster and returned as `fee`; above this the call refuses before building anything. " +
         "Either way the cook signs the fee it read as its max_execution_fee.",
     ),
+  lookupTables: z
+    .array(z.string())
+    .max(LIMITS.entries)
+    .optional()
+    .describe(
+      "Solana only: address lookup tables (base58) holding the cook's accounts, each read from " +
+        "the cluster. An account listed in the transaction costs 32 bytes and one through a table " +
+        "one byte, so a cook naming more accounts than one transaction lists fits through one.",
+    ),
   rpcUrl: RPC_URL,
 };
 
@@ -643,6 +652,7 @@ function evmCook(args: CookArgs, program: Program): CookInput {
   for (const [name, given] of [
     ["via", args.via],
     ["maxExecutionFee", args.maxExecutionFee],
+    ["lookupTables", args.lookupTables],
   ] as const) {
     if (given !== undefined) {
       throw new UsageError(
@@ -707,6 +717,11 @@ function svmCook(args: CookArgs, program: Program, rpcUrl: string): SvmCookInput
             "maxExecutionFee",
             integerText(args.maxExecutionFee, "maxExecutionFee"),
           ),
+        }),
+    ...(args.lookupTables === undefined
+      ? {}
+      : {
+          lookupTables: args.lookupTables.map((table) => parsePubkey("lookupTables", table)),
         }),
   };
 }

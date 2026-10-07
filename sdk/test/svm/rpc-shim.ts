@@ -4,7 +4,8 @@
  * every other request on, so an anvil beside it is reached as usual. It answers what the CLI's
  * Solana steps ask — the blockhash, the clock and accounts, balances, simulation (with the
  * accounts it is asked to report), sending, statuses with their slot, the landed transaction and
- * the finalized slot — and refuses anything else by name. `sendTransaction` checks every signature
+ * the finalized slot (one behind the tip, held in SlotHashes as a cluster's is) — and refuses
+ * anything else by name. `sendTransaction` checks every signature
  * against the message first, so a test proves the CLI signed what it sent.
  */
 import {
@@ -104,8 +105,21 @@ export function solanaShim(svm: LiteSVM, url: string): SolanaShim {
           context: context(),
           value: { blockhash: svm.latestBlockhash(), lastValidBlockHeight: 1_000_000 },
         });
-      case "getSlot":
-        return answer(id, Number(slot()));
+      case "getSlot": {
+        // No commitment is the server's default, finalized (which a client leaves out).
+        const commitment = (params[0] as { commitment?: string } | undefined)?.commitment;
+        if (commitment !== undefined && commitment !== "finalized")
+          return answer(id, Number(slot()));
+        // A cluster's finalized slot trails its tip, and its SlotHashes holds it: the recent slot
+        // a lookup table's creation names, which the bank refuses unless SlotHashes has it.
+        const finalized = slot() - 1n;
+        const hashes = svm.getSlotHashes();
+        if (!hashes.some((entry) => entry.slot === finalized) && hashes.length > 0) {
+          hashes[0]!.slot = finalized;
+          svm.setSlotHashes(hashes);
+        }
+        return answer(id, Number(finalized));
+      }
       case "getBalance":
         return answer(id, {
           context: context(),
