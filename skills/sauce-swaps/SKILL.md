@@ -320,9 +320,9 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
 `orcaV1`, `penguin`, `stepn`, `saros`, `fluxbeam`, `dexlab`, `meteoraDammV2`, `meteoraDammV1`,
 `aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
 `mercurial`, `perena`, `metadaoFutarchy`, `solfiV2`, `hadron`, `taurusfi`, `riptide`, `denali`,
-`gavel`, `tesserav`, `flint` and `deriverse`.
+`gavel`, `tesserav`, `flint`, `deriverse` and `goonfiV2`.
 
-The last nine are market makers pricing off their own oracle, quote or book, and refuse a swap on
+The last ten are market makers pricing off their own oracle, quote or book, and refuse a swap on
 a quote gone stale, which a `try` form can't see.
 
 - **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:

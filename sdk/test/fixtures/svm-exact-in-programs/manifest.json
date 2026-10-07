@@ -240,6 +240,12 @@
       "programId": "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
       "file": "deriverse.so.gz",
       "sha256": "13a87c3105475aeeb1fb7ddf3e89499d4dfbc79f3f5585703e4feceb55d84820"
+    },
+    {
+      "name": "goonfi-v2",
+      "programId": "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
+      "file": "goonfi-v2.so.gz",
+      "sha256": "a24aa13a0a9a4d7d1c8752cc9d9a566a5fae3bc20ba0ca3ba11368abd613e43c"
     }
   ]
 }

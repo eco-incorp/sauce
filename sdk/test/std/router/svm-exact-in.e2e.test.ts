@@ -1319,6 +1319,56 @@ const VENUES: Venue[] = [
       },
     ],
   },
+  {
+    name: "GoonfiV2",
+    programs: ["goonfi-v2"],
+    // A live capture, every account at one slot (454,368,771): the recipes' fixture lacks the global
+    // config and the validator, and its pool's quote has long gone stale.
+    dirs: ["goonfi-v2-live"],
+    clock: 1_791_415_383n,
+    atSlot: 454_368_771n,
+    slot: () => {
+      const c = cfg("goonfi-v2:TcMg:xToY");
+      const a = VECTORS["goonfi-v2:TcMg:xToY"]!.accounts;
+      return [
+        r("goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE"),
+        w(c.pool!),
+        w(c.vaultA!),
+        w(c.vaultB!),
+        r(c.oracle!),
+        r(a[9]!.address!),
+        r(INSTRUCTIONS),
+        r(a[13]!.address!),
+      ];
+    },
+    cases: () => {
+      const c = cfg("goonfi-v2:TcMg:xToY");
+      return [
+        {
+          vector: "goonfi-v2:TcMg:xToY",
+          pay: c.mintA as Address,
+          buy: USDC,
+          amountIn: 1_000_000_000n,
+          authorityWritable: true,
+        },
+        {
+          vector: "goonfi-v2:TcMg:yToX",
+          pay: USDC,
+          buy: c.mintA as Address,
+          amountIn: 1_000_000_000n,
+          authorityWritable: true,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
 ];
 
 let stabbleBeneficiaryA: Address;

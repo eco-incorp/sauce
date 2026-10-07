@@ -316,6 +316,7 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   tesserav: 8,
   flint: 6,
   deriverse: 11,
+  goonfiV2: 8,
 };
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form

@@ -725,6 +725,7 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `tesserav`             | Tessera V             | `TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH`  | `authority, vaultA, vaultB, instructionsSysvar, config, oracle`                                                                      |
 | `flint`                | Flint                 | `FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z`  | `marketB, vaultA, vaultB, instructionsSysvar` (market A as the pool)                                                                 |
 | `deriverse`            | Deriverse             | `DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD` | `assetVault, crncyVault, bidsTree, bidOrders, asksTree, askOrders, lines, maps, clientInfos` (the instrument as the pool)            |
+| `goonfiV2`             | GoonFi v2             | `goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE`  | `vaultA, vaultB, oracle, globalConfig, instructionsSysvar, validator`                                                                |
 
 Each row names four functions: the one listed, its `try` form, its `Cpi` form and its `Data`
 form. Raydium CP-Swap
@@ -734,13 +735,14 @@ vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direct
 and receiving accounts themselves. Perena finds each mint's index among the pool's ten tokens, and
 writes both mints, so they are attached writable.
 
-SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint and Deriverse are proprietary
-market makers: each prices off its own oracle, quote or book, which a keeper keeps fresh, and
-refuses a swap on a quote gone stale. A `try` form can't see that, so a stale quote fails the
-transaction. `instructionsSysvar` is the Instructions sysvar, `clock` the Clock sysvar, and
-Riptide's `dontFront` is `jitodontfront111111111111111111111111111111`. A Hadron fee vault is the
-fee treasury's token account for that token. A Flint market and its vault are one per token.
-Tessera V sells only its token A. SolFi v2, TaurusFi and Deriverse write the authority, so it is
+SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2 are
+proprietary market makers: each prices off its own oracle, quote or book, which a keeper keeps
+fresh, and refuses a swap on a quote gone stale. A `try` form can't see that, so a stale quote fails
+the transaction. `instructionsSysvar` is the Instructions sysvar and `clock` the Clock sysvar.
+Riptide's `dontFront` is `jitodontfront111111111111111111111111111111`, and GoonFi v2's `validator`
+is the vote account `J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv`. A Hadron fee vault is the fee
+treasury's token account for that token. A Flint market and its vault are one per token. Tessera V
+sells only its token A. SolFi v2, TaurusFi, Deriverse and GoonFi v2 write the authority, so it is
 attached writable, and Deriverse requires the authority's associated token accounts. Hadron and
 TaurusFi pay wrapped SOL into, and take it out of, native wrapped-SOL accounts.
 
@@ -793,8 +795,8 @@ no floor of their own; for these, a `Data` or `Cpi` caller enforces the floor it
 - the Perena form skips a paused pool and an empty side;
 - the MetaDAO futarchy form skips a DAO not in its spot state, and an empty side;
 - the Saber decimal wrapper form skips a withdrawal the vault cannot pay;
-- the SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint and Deriverse forms skip
-  an empty side.
+- the SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2
+  forms skip an empty side.
 
 "Dust" is an input too small to buy one unit at the pool's price after its fee. It is estimated from
 the vaults' balances. A venue's own refusal that the checks don't foresee still fails the

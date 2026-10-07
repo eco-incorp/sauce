@@ -5990,3 +5990,118 @@ export function deriverseCpi(
   require(held - left <= amountIn, "debit");
   return held - left;
 }
+
+// GoonFi v2, goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE: `swap`, priced off its oracle. The slot is
+// `[program, pool, vaultA, vaultB, oracle, globalConfig, instructionsSysvar, validator]`, `validator`
+// being the vote account `J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv`, which the swap requires. The
+// swap writes the authority, so it has to be attached writable.
+function swapGoonfiV2(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x0a32937c463db0442e65a3b05e55b302ca5dc743f2c8df5673fd43ef744cf0af, "not a GoonFi v2 pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const paysA = svm.sload(slot[2], 0, 32).toBe() == payMint.address;
+  const mintA = paysA ? payMint : buyMint;
+  const mintB = paysA ? buyMint : payMint;
+  // The instruction, the direction (1 pays token B), the amount, the floor, then a zero byte.
+  const word = 1 | ((paysA ? 0 : 1) << 8) | (amountIn << 16) | ((minOut == 0 ? 1 : minOut) << 80);
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[1],
+      paysA ? trader[1] : recipient,
+      paysA ? recipient : trader[1],
+      slot[2],
+      slot[3],
+      mintA,
+      mintB,
+      slot[4],
+      slot[5],
+      slot[6],
+      mintA.owner == token2022.address ? token2022 : tokenProgram,
+      mintB.owner == token2022.address ? token2022 : tokenProgram,
+      slot[7],
+    ],
+    word.toBytesLe(19),
+  );
+}
+
+export function goonfiV2(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapGoonfiV2(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryGoonfiV2(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0x0a32937c463db0442e65a3b05e55b302ca5dc743f2c8df5673fd43ef744cf0af, "not a GoonFi v2 pool");
+  const paysA = svm.sload(slot[2], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(paysA ? slot[3] : slot[2], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapGoonfiV2(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority (writable), the pool, the authority's A and B token accounts (the paying
+// one among them), the pool's A and B vaults, mints A and B, the oracle, the global config, the
+// Instructions sysvar, A's and B's token programs, and the validator vote account. It pays A when
+// `source` is the A account.
+export function goonfiV2Cpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x0a32937c463db0442e65a3b05e55b302ca5dc743f2c8df5673fd43ef744cf0af, "not a GoonFi v2 pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word =
+    1 |
+    ((accounts[2] == source ? 0 : 1) << 8) |
+    (amountIn << 16) |
+    ((minOut == 0 ? 1 : minOut) << 80);
+  const data = word.toBytesLe(19);
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}

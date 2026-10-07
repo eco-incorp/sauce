@@ -78,6 +78,7 @@ import {
   DERIVERSE_PROGRAM_ID,
   FLINT_PROGRAM_ID,
   GAVEL_PROGRAM_ID,
+  GOONFI_V2_PROGRAM_ID,
   HADRON_PROGRAM_ID,
   RIPTIDE_PROGRAM_ID,
   SOLFI_V2_PROGRAM_ID,
@@ -595,6 +596,7 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
     tesserav: TESSERAV_PROGRAM_ID,
     flint: FLINT_PROGRAM_ID,
     deriverse: DERIVERSE_PROGRAM_ID,
+    goonfiV2: GOONFI_V2_PROGRAM_ID,
   };
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
   const carries = (code: string) =>
