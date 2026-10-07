@@ -3,7 +3,9 @@
 # Chains
 
 Every chain the SDK knows, with a file each: whether the initial release supports it, ids, native
-coin, the Sauce release, intents, its tokens and every protocol recorded there with its addresses.
+coin, intents, its tokens and every protocol recorded there with its addresses. The Sauce
+contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:
+[deployments.json](deployments.json) lists them once, with the shared intent Pot.
 
 For the initial release, Sauce supports transactions on Ethereum, Base and Solana
 (`ethereum`, `base`, `solana`). Every other chain is a preview chain: a program

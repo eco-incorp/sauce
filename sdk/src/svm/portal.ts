@@ -25,7 +25,6 @@ import {
   getArrayEncoder,
   fixEncoderSize,
   getBytesEncoder,
-  getProgramDerivedAddress,
   getStructEncoder,
   getU32Encoder,
   getU64Encoder,
@@ -55,6 +54,7 @@ import {
   MAX_POT_LEN,
 } from "./kitchen.js";
 import { resolveAccounts, type AccountResolution } from "./resolve.js";
+import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
 
 // ---------------------------------------------------------------------------------------------
 // Programs and accounts
@@ -100,8 +100,8 @@ export const SVM_CANCELLED_CLAIMANT: Hex =
 
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
 const keyBytes = (value: Address): Uint8Array => new Uint8Array(getAddressEncoder().encode(value));
-const pda = async (program: Address, seeds: Uint8Array[]): Promise<Address> =>
-  (await getProgramDerivedAddress({ programAddress: program, seeds }))[0];
+const pda = (program: Address, seeds: Uint8Array[]): Promise<Address> =>
+  memoizedGetProgramDerivedAddress(program, seeds);
 
 /** A 32-byte universal address as the base58 key it is on Solana. */
 export function svmKeyOf(value: UniversalAddress | Hex): Address {

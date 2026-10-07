@@ -1,6 +1,6 @@
 ---
 name: sauce-chains
-description: How a Sauce program's names resolve per chain, and each chain's facts from the SDK's registries. One file compiled for Ethereum and for Base gets each chain's own USDC, WETH, tokenized stocks, protocol contracts (UniswapV3.Factory) and chainId; a name the chain lacks is refused at compile; Base.UniswapV3.Factory is only Base's address, to pass across chains and never to call, and tokens are never qualified. Writing for an EVM chain versus Solana (Account parameters, token accounts, SPL Token transfer and Token-2022 transferChecked for stock mints, --account). Which chains take transactions (Ethereum, Base, Solana; the rest are preview chains) and how to request one. Per chain, its id, slug, native coin, Sauce engine and Kitchen, intents, CCTP domain, tokens and every protocol with its address. Use when the user asks what is on a chain, needs an address, picks a chain, writes one program for several chains or for Solana, a name fails to compile on one chain, or a transaction is refused on a preview chain.
+description: How a Sauce program's names resolve per chain, and each chain's facts from the registries. One file compiled for Ethereum and for Base gets each chain's own USDC, WETH, tokenized stocks, protocol contracts (UniswapV3.Factory) and chainId; a name the chain lacks is refused at compile; Base.UniswapV3.Factory is only Base's address, to pass across chains, never to call; tokens are never qualified. Writing for an EVM chain versus Solana (Account parameters, token accounts, transferChecked for Token-2022, --account). Which chains take transactions (Ethereum, Base, Solana; the rest are preview chains) and how to request one. Per chain, its id, slug, native coin, intents, CCTP domain, tokens and every protocol with its address; the Sauce engine, Kitchen and intent Pot, the same everywhere, in one file. Use when the user asks what is on a chain, needs an address, picks a chain, writes one program for several chains or for Solana, a name fails to compile on one chain, or a transaction is refused on a preview chain.
 ---
 
 # Chains
@@ -9,9 +9,10 @@ A program names no chain and no address. It names tokens and contracts (`USDC`, 
 `UniswapV3.Factory`), and the chain it is compiled for decides what each one is: compiled with
 `--chain base`, every name is Base's. Every chain the SDK knows has a file in
 [references/](references/index.md), generated from the SDK's registries: its tokens, its protocols
-with how a program names each contract, its Sauce deployment, whether it takes intents, and whether
-the release sends transactions there ([references/base.md](references/base.md),
-[references/solana.md](references/solana.md), …).
+with how a program names each contract, whether it takes intents, and whether the release sends
+transactions there ([references/base.md](references/base.md),
+[references/solana.md](references/solana.md), …). The Sauce deployment is the same on every chain,
+so one file gives it: [references/deployments.json](references/deployments.json).
 
 ## Names resolve per chain
 
@@ -215,17 +216,37 @@ function main(recipient: Address, amount: Uint256) {
 }
 ```
 
+## The Sauce deployment
+
+The Sauce contracts have the same address on every EVM chain, and the Sauce programs the same id on
+every Solana cluster, so one file lists them, each entry with what it is:
+[references/deployments.json](references/deployments.json). No chain's file repeats them.
+
+| Key                         | What it is                                                                   |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `evm.engine`                | the engine a cook names: the Pot's `cook(engine, program)`                   |
+| `evm.kitchen`               | creates Pots (`deployPot(owner, salt)`) and sets the fee every cook pays     |
+| `evm.router`                | the Router a new Pot starts on, through which swaps with a callback run      |
+| `evm.quoteRouter`           | quotes Uniswap V3 and V4 swaps through `eth_call`; no Pot's Router           |
+| `evm.pot`                   | how a Pot's address follows from its owner and salt                          |
+| `evm.intentPot`             | the shared Pot an intent's program body cooks on, with its owner and salt    |
+| `svm.engine`, `svm.kitchen` | the Solana engine and Kitchen programs, each as its id and its 32-byte `key` |
+
+A program names none of them: the `sauce` command puts the engine and the Kitchen into every cook it
+builds, and finds the Pot. Read the file to check a cook's `to` and `data`, to deploy a Pot, or to
+confirm the deployment on a chain.
+
 ## A chain's file
 
-| In a chain's file | What it gives                                                                                 |
-| ----------------- | --------------------------------------------------------------------------------------------- |
-| The top           | supported, or a preview chain with the link to request it                                     |
-| The facts table   | slug and aliases for `--chain`, chain id, kind, the name a program uses, native coin          |
-| Sauce             | the engine, Kitchen and Router a cook uses (EVM), or the engine and Kitchen programs (Solana) |
-| Intents           | whether it takes intents, its eco-routes contracts and shared intent Pot (`sauce-intents`)    |
-| In a program      | a compiled example of the chain's names                                                       |
-| Tokens            | every token symbol a program can name there, with its address and decimals                    |
-| Protocols         | every recorded deployment, each with how a program names it                                   |
+| In a chain's file | What it gives                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| The top           | supported, or a preview chain with the link to request it                            |
+| The facts table   | slug and aliases for `--chain`, chain id, kind, the name a program uses, native coin |
+| Sauce             | a pointer to `references/deployments.json`, the same deployment on every chain       |
+| Intents           | whether it takes intents and its eco-routes contracts (`sauce-intents`)              |
+| In a program      | a compiled example of the chain's names                                              |
+| Tokens            | every token symbol a program can name there, with its address and decimals           |
+| Protocols         | every recorded deployment, each with how a program names it                          |
 
 | When                        | Look at                                                                                 |
 | --------------------------- | --------------------------------------------------------------------------------------- |
@@ -254,8 +275,8 @@ function main(recipient: Address, amount: Uint256) {
 
 - **Recorded is not live.** Every address here is as the registry records it; that is not proof of
   code on the chain. Before relying on one, confirm it has code: `eth_getCode` on the chain returns
-  more than `0x`, or on Solana `getAccountInfo` returns an executable account. The Sauce release
-  addresses are the same on every EVM chain, and deployed only where the release has been.
+  more than `0x`, or on Solana `getAccountInfo` returns an executable account. The Sauce deployment
+  is the same on every chain, and there only where it has been deployed.
 - **An address in the source is one chain's.** Write the name; an address pasted from one chain's
   file compiles for every chain and is wrong on the others.
 - **The same symbol can have other decimals, or another address, per chain.** Take amounts from the

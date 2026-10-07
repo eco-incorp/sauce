@@ -31,6 +31,7 @@ import {
   configurePdaMemo,
   DEFAULT_PDA_MEMO_MAX_ENTRIES,
   getPdaMemoMaxEntries,
+  memoizedCreateProgramAddress,
   memoizedGetProgramDerivedAddress,
 } from "../../src/svm/venues/pda-memo.js";
 import {
@@ -374,6 +375,30 @@ describe("PDA-derivation memo", () => {
       expect(() => configurePdaMemo({ maxEntries: 1.5 })).toThrow(/positive integer/);
       expect(() => configurePdaMemo({ maxEntries: Number.NaN })).toThrow(/positive integer/);
       expect(getPdaMemoMaxEntries()).toBe(DEFAULT_PDA_MEMO_MAX_ENTRIES); // unchanged after a rejected call
+    });
+  });
+
+  describe("memoizedCreateProgramAddress: the known-bump map", () => {
+    const PROGRAM = RAYDIUM_CLMM_PROGRAM_ID;
+    const seedFor = (i: number): readonly Uint8Array[] => [new Uint8Array([i])];
+
+    it("keeps its own entries: a find under the same key is not a hit for it", async () => {
+      const found = await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(1));
+      const created = memoizedCreateProgramAddress(PROGRAM, seedFor(1));
+      expect(created.address).not.toBe(found);
+      expect(__pdaMemoStats()).toEqual({ hits: 0, misses: 2 });
+    });
+
+    it("evicts at the same cap, and a lowered cap trims it eagerly", () => {
+      configurePdaMemo({ maxEntries: 3 });
+      for (let i = 0; i < 4; i++) memoizedCreateProgramAddress(PROGRAM, seedFor(i)); // evicts 0 -> [1,2,3]
+      configurePdaMemo({ maxEntries: 1 }); // eager shrink -> [3]
+
+      const before = __pdaMemoStats();
+      memoizedCreateProgramAddress(PROGRAM, seedFor(3)); // survivor -> HIT
+      memoizedCreateProgramAddress(PROGRAM, seedFor(2)); // trimmed -> MISS
+      memoizedCreateProgramAddress(PROGRAM, seedFor(0)); // evicted -> MISS
+      expect(__pdaMemoStats()).toEqual({ hits: before.hits + 1, misses: before.misses + 2 });
     });
   });
 });

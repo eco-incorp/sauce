@@ -314,7 +314,7 @@ const SPECS: readonly ActionSpec[] = [
   swap(
     "maverickV2Swap",
     "Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for.",
-    "@sauce/router maverickV2: Router.swap",
+    "@sauce/router maverickV2: Router.swapMaverickV2",
     {
       pool: f(contract, "the pool"),
       tokenIn: f(token, "the token sold"),

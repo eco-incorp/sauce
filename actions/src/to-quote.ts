@@ -36,6 +36,7 @@ import {
 } from "./emit.js";
 
 import { resolveChain, type ChainRef } from "../../sdk/dist/chains/canonical.js";
+import { v12RouterAddress } from "../../sdk/dist/deployments/index.js";
 import { resolveNames, usesNames } from "./names.js";
 import { parseActions } from "./program.js";
 import { ProgramError } from "./semantics.js";
@@ -95,10 +96,9 @@ export interface QuoteOptions {
    */
   readonly chain?: ChainRef;
   /**
-   * The Sauce Router, for `uniswapV3Swap` and `uniswapV4Swap`: the contract that swaps them prices
-   * them, with its own `quote`, which needs no tokens. A Pot's Router is the Kitchen's Router until
-   * the Pot's owner moves it; `v12RouterAddress()` from `@eco-incorp/sauce/deployments` is the
-   * release's.
+   * The generation-3 quote service for `uniswapV3Swap` and `uniswapV4Swap`, which needs no tokens.
+   * Use `v12QuoteRouterAddress()` from `@eco-incorp/sauce/deployments`.
+   * The generation-4 execution Router (`v12RouterAddress()`) has no `quote` method.
    */
   readonly router?: Address;
   /** The MaverickV2Quoter, for `maverickV2Swap`. */
@@ -876,6 +876,9 @@ function quoteThroughRouter(
   amountIn: bigint,
   router: Address,
 ): QuoteCall {
+  if (router.toLowerCase() === v12RouterAddress().toLowerCase()) {
+    throw new Error("Router generation 4 has no quote method; use v12QuoteRouterAddress()");
+  }
   const v4 = action.type === "uniswapV4Swap";
   const [c0, c1] =
     BigInt(at(action.tokenIn)) < BigInt(at(action.tokenOut))

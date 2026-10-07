@@ -9,7 +9,7 @@ import {
   type ActionProgram,
   type UniswapV4SwapAction,
 } from "@eco-incorp/sauce/actions";
-import { v12RouterAddress } from "@eco-incorp/sauce/deployments";
+import { v12QuoteRouterAddress } from "@eco-incorp/sauce/deployments";
 import { toHex } from "viem";
 
 function check(condition: unknown, message: string): asserts condition {
@@ -18,7 +18,7 @@ function check(condition: unknown, message: string): asserts condition {
 
 // The Sauce Router of the release, which quotes Uniswap V3 and V4 swap actions with the code that
 // swaps them. A Pot swaps through its own Router, the Kitchen's when it was minted.
-const ROUTER = toHex(BigInt(v12RouterAddress()), { size: 20 });
+const ROUTER = toHex(BigInt(v12QuoteRouterAddress()), { size: 20 });
 
 // 1. Strict validation: every problem at once, each with a path. Amounts are base-10 STRINGS.
 try {

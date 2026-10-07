@@ -5,6 +5,12 @@ engine executes atomically inside one transaction — every step lands or none d
 is the package you build those programs with. One install carries the compiler and the chains,
 tokens and protocols a program calls by name; you write the program, not a contract of your own.
 
+A program runs on a **Pot**: an account on chain, a contract whose owner alone runs programs on it,
+which holds what those programs spend and makes every call they make. A **cook** is the transaction
+that runs one program on a Pot, every step or none. The **Kitchen** is the contract that creates
+Pots and sets the fee each cook pays. Read [Kitchen, Pot and cook](concepts/kitchen-pot-cook.md)
+first: every page below uses the three words.
+
 **Routes** are the layer above: a route packages a program as an Eco intent, so it can be executed
 on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
 
@@ -18,6 +24,8 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 
 ## Start
 
+- [Kitchen, Pot and cook](concepts/kitchen-pot-cook.md): the account a program runs as, the
+  transaction that runs it, and the contract that creates the account.
 - [Quick start](guides/quick-start.md): install the package and build a first intent, offline.
 - [Examples](examples/README.md): complete programs, typechecked and run on every release.
 
@@ -52,8 +60,10 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 
 ## Reference
 
-- [Chains](reference/chains.md): every chain, whether the release supports it, its ids, the Sauce
-  and intent deployments, its tokens and every protocol on it.
+- [Chains](reference/chains.md): every chain, whether the release supports it, its ids, its intent
+  deployment, its tokens and every protocol on it.
+- [Deployments](reference/deployments.md): the Sauce release, its versions and the addresses of its
+  contracts and programs, the same on every chain.
 - [Protocols](reference/protocols.md): every protocol by category, how to choose between them, and
   each one's deployments, names in a program and ABI.
 - [Tokens](reference/tokens.md): every chain's tokens and tokenized stocks, and the token functions.

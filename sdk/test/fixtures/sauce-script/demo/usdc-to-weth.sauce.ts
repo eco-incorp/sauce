@@ -77,11 +77,11 @@ function v4Price(fee: Uint256, tickSpacing: Uint256): Uint256 {
 function swapOnPool(pool: Address, amount: Uint256, limit: Uint256): Uint256 {
   const self = ctx.self();
   const before = USDC.balanceOf(self);
-  ISauceRouter.at(self).swapV3(pool, USDC, WETH, amount, limit, self, self);
+  ISauceRouter.at(self).swapV3(pool, USDC, USDC < WETH, amount, limit, self);
   return before - USDC.balanceOf(self);
 }
 
-// One exact-input swap (a negative amount) on a hookless V4 pool. Returns the USDC it took.
+// One exact-input swap on a hookless V4 pool. Returns the USDC it took.
 function swapOnV4(fee: Uint256, tickSpacing: Uint256, amount: Uint256, limit: Uint256): Uint256 {
   const self = ctx.self();
   const key = {
@@ -92,7 +92,7 @@ function swapOnV4(fee: Uint256, tickSpacing: Uint256, amount: Uint256, limit: Ui
     hooks: 0n,
   };
   const before = USDC.balanceOf(self);
-  ISauceRouter.at(self).swapV4(UniswapV4_PoolManager, key, USDC < WETH, -amount, limit, self, self);
+  ISauceRouter.at(self).swapV4(UniswapV4_PoolManager, key, USDC, USDC < WETH, amount, limit, self);
   return before - USDC.balanceOf(self);
 }
 

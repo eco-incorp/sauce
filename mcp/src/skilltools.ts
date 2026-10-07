@@ -289,14 +289,18 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
             path: file.path.slice(skill.dir.length + 1),
             bytes: bytes(file.path),
           }));
-          const references = files.filter((file) => file.path.startsWith("references/"));
+          // The documents a summary stands for; any other reference (a JSON file of data, say)
+          // is always listed, since `rest` names only documents.
+          const document = (file: { path: string }) =>
+            file.path.startsWith("references/") && file.path.endsWith(".md");
+          const references = files.filter(document);
           const many = references.length > LISTED_REFERENCES;
 
           return {
             name: skill.name,
             description: skill.description,
             uri: skill.uri,
-            files: many ? files.filter((file) => !file.path.startsWith("references/")) : files,
+            files: many ? files.filter((file) => !document(file)) : files,
             ...(many
               ? {
                   references: {

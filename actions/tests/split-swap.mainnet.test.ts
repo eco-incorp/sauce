@@ -79,7 +79,7 @@ describe("split swap, on mainnet state", { skip: skipReason(), timeout: 600_000 
 
   before(async () => {
     env = await startAnvil({ mainnet: "split-swap" });
-    quoters = { router: env.router };
+    quoters = { router: env.quoteRouter };
   });
   after(async () => {
     await env?.stop();

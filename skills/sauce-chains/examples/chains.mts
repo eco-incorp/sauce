@@ -5,12 +5,25 @@
 // the words the skill quotes; a chain-qualified contract is that chain's address, called or not,
 // and a chain-qualified token is refused. Then payout-solana.sauce.ts: its accounts in order with their
 // roles, its arguments, USDC an SPL Token mint and TSLAx a Token-2022 mint whose decimals the program
-// passes. Offline: nothing is sent.
+// passes. Last, the Sauce deployment: references/deployments.json holds the addresses the SDK builds
+// every cook with, under the keys the skill's table names, and each chain's file points at it.
+// Offline: nothing is sent.
 //
 //   node chains.mts
 import { readFileSync } from "node:fs";
 
-import { routes } from "@eco-incorp/sauce";
+import { SAUCE_INTENT_POT_SALT, destinationPot, routes } from "@eco-incorp/sauce";
+import {
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12KitchenImplementationAddress,
+  v12PotDerivation,
+  v12QuoteRouterAddress,
+  v12RouterAddress,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "@eco-incorp/sauce/deployments";
+import { address, getAddressEncoder } from "@eco-incorp/sauce/svm";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -174,3 +187,47 @@ for (const mint of [usdc, tslax]) {
   );
 }
 console.log(`payout-solana.sauce.ts: ${payout.bytecode.length} bytes, accounts ${slots}`);
+
+// The Sauce deployment, the same on every chain: one file, the addresses every cook is built with.
+const deployments = JSON.parse(read("../references/deployments.json"));
+const { evm, svm } = deployments;
+check(
+  evm.engine.address === v12EngineAddress() &&
+    evm.kitchen.address === v12KitchenAddress() &&
+    evm.kitchenImplementation.address === v12KitchenImplementationAddress() &&
+    evm.router.address === v12RouterAddress() &&
+    evm.quoteRouter.address === v12QuoteRouterAddress() &&
+    evm.pot.initCodeHash === v12PotDerivation().initCodeHash,
+  "deployments.json gives the EVM contracts the SDK builds cooks with",
+);
+check(
+  evm.intentPot.salt === SAUCE_INTENT_POT_SALT &&
+    CHAINS.every((chain) => destinationPot(chain) === evm.intentPot.address),
+  "deployments.json gives the shared intent Pot of every chain",
+);
+const svmKey = (programId: string) =>
+  `0x${Buffer.from(getAddressEncoder().encode(address(programId))).toString("hex")}`;
+check(
+  svm.engine.programId === v12SvmEngineProgramId() &&
+    svm.kitchen.programId === v12SvmKitchenProgramId() &&
+    svm.engine.key === svmKey(svm.engine.programId) &&
+    svm.kitchen.key === svmKey(svm.kitchen.programId),
+  "deployments.json gives the Solana programs, each with its 32-byte key",
+);
+const deployment = skill.slice(skill.indexOf("## The Sauce deployment"));
+const keys = [
+  ...deployment.slice(0, deployment.indexOf("\n## ")).matchAll(/`((?:evm|svm)\.\w+)`/g),
+];
+check(keys.length >= 7, "the skill's table names the file's keys");
+for (const [, key] of keys) {
+  const value = key!.split(".").reduce((node, part) => node?.[part], deployments);
+  check(value !== undefined, `deployments.json has ${key}`);
+}
+for (const chain of [...CHAINS, "solana"])
+  check(
+    read(`../references/${chain}.md`).includes("deployments.json"),
+    `${chain}'s file points at deployments.json`,
+  );
+console.log(
+  `deployments.json: the engine ${evm.engine.address}, the Kitchen ${evm.kitchen.address}`,
+);

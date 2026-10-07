@@ -193,23 +193,22 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    roles:
 
    ```text
-   The cook succeeds from <owner>: gas used 275993 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
-   main returns { pool: Address, spent: Uint256, bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
+   The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
+   main returns { pool: Address; spent: Uint256; bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
    Rehearsed with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
-     1. Kitchen.deployPot(<owner>, …), gas used 455479: Pot <Pot> is not deployed on base yet. …
-     2. the cook, from the owner <owner>, gas used 275993
+     1. Kitchen.deployPot(<owner>, …), gas used 535944: Pot <Pot> is not deployed on base yet. …
+     2. the cook, from the owner <owner>, gas used 273670
    Assumed for this rehearsal only, by state override:
      the Pot holds 100 USDC: --assume-balance (…)
    …
    Token transfers:
-     0.037716248833222607 WETH: <pool> -> <Pot> (the Pot)
+     0.037716248833222607 WETH: <pool> -> <recipient>
      100 USDC: <Pot> (the Pot) -> <pool>
-     0.037716248833222607 WETH: <Pot> (the Pot) -> <recipient>
    …
    Net balance changes:
      <pool>: -0.037716248833222607 WETH, +100 USDC
-     <Pot> (the Pot): -100 USDC
      <recipient>: +0.037716248833222607 WETH
+     <Pot> (the Pot): -100 USDC
    …
    ```
 
@@ -292,16 +291,15 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    moved:
 
    ```text
-   cook <tx hash>: success, gas used 275993, block <block>
+   cook <tx hash>: success, gas used 273670, block <block>
    cost …
    Token transfers:
-     0.037716248833222607 WETH: <pool> -> <Pot> (the Pot)
+     0.037716248833222607 WETH: <pool> -> <recipient>
      100 USDC: <Pot> (the Pot) -> <pool>
-     0.037716248833222607 WETH: <Pot> (the Pot) -> <recipient>
    Net balance changes:
      <pool>: -0.037716248833222607 WETH, +100 USDC
-     <Pot> (the Pot): -100 USDC
      <recipient>: +0.037716248833222607 WETH
+     <Pot> (the Pot): -100 USDC
    …
    ```
 
@@ -316,11 +314,11 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    every intent it opens:
 
    ```text
-   transaction <tx hash> on base: success, block <block>, gas used 275993
+   transaction <tx hash> on base: success, block <block>, gas used 273670
      from <owner> to <Pot>, value …
    …
-       program: 992 bytes, keccak256 …
-         buy.sauce.ts's program, 832 bytes, then 160 of arguments
+       program: 1067 bytes, keccak256 …
+         buy.sauce.ts's program, 907 bytes, then 160 of arguments
            token: Address = 0x4200000000000000000000000000000000000006
            budget: Uint256 = 100000000
            sqrtPriceLimitX96: Uint256 = 4116816085950893928074568

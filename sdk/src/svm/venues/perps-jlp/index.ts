@@ -98,13 +98,7 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
  */
-import {
-  address,
-  getAddressCodec,
-  getProgramDerivedAddress,
-  getUtf8Encoder,
-  getAddressEncoder,
-} from "@solana/kit";
+import { address, getAddressCodec, getUtf8Encoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -258,41 +252,25 @@ export async function custodyPda(pool: Address, mint: Address): Promise<Address>
   ]);
 }
 
-let cachedTransferAuthority: Address | undefined;
-let cachedPerpetuals: Address | undefined;
-let cachedEventAuthority: Address | undefined;
-
-/** `findProgramAddress(["transfer_authority"], PERPS_JLP_PROGRAM_ID)` — cached (program-wide constant). */
+/** `findProgramAddress(["transfer_authority"], PERPS_JLP_PROGRAM_ID)` — a program-wide constant. */
 export async function transferAuthorityPda(): Promise<Address> {
-  if (cachedTransferAuthority !== undefined) return cachedTransferAuthority;
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: PERPS_JLP_PROGRAM_ID,
-    seeds: [utf8.encode("transfer_authority")],
-  });
-  cachedTransferAuthority = pda;
-  return pda;
+  return memoizedGetProgramDerivedAddress(PERPS_JLP_PROGRAM_ID, [
+    utf8.encode("transfer_authority") as Uint8Array,
+  ]);
 }
 
-/** `findProgramAddress(["perpetuals"], PERPS_JLP_PROGRAM_ID)` — cached (program-wide constant). */
+/** `findProgramAddress(["perpetuals"], PERPS_JLP_PROGRAM_ID)` — a program-wide constant. */
 export async function perpetualsPda(): Promise<Address> {
-  if (cachedPerpetuals !== undefined) return cachedPerpetuals;
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: PERPS_JLP_PROGRAM_ID,
-    seeds: [utf8.encode("perpetuals")],
-  });
-  cachedPerpetuals = pda;
-  return pda;
+  return memoizedGetProgramDerivedAddress(PERPS_JLP_PROGRAM_ID, [
+    utf8.encode("perpetuals") as Uint8Array,
+  ]);
 }
 
 /** `findProgramAddress(["__event_authority"], PERPS_JLP_PROGRAM_ID)` — matches the published constant. */
 export async function eventAuthorityPda(): Promise<Address> {
-  if (cachedEventAuthority !== undefined) return cachedEventAuthority;
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: PERPS_JLP_PROGRAM_ID,
-    seeds: [utf8.encode("__event_authority")],
-  });
-  cachedEventAuthority = pda;
-  return pda;
+  return memoizedGetProgramDerivedAddress(PERPS_JLP_PROGRAM_ID, [
+    utf8.encode("__event_authority") as Uint8Array,
+  ]);
 }
 
 interface DecodedCustody {

@@ -61,11 +61,11 @@ const CALLS: Record<
   ],
   uniswapV3Swap: [
     [TARGET, TOKEN, TOKEN_OUT],
-    ["swapV3(address,address,address,int256,uint160,address,address)"],
+    ["swapV3(address,address,bool,uint256,uint160,address)"],
   ],
   uniswapV4Swap: [
     [TARGET, TOKEN, TOKEN_OUT],
-    [`swapV4(address,${POOL_KEY},bool,int256,uint160,address,address)`],
+    [`swapV4(address,${POOL_KEY},address,bool,uint256,uint160,address)`],
   ],
   curveSwap: [
     [TARGET, TOKEN, TOKEN_OUT],
@@ -99,7 +99,7 @@ const CALLS: Record<
   ],
   maverickV2Swap: [
     [TARGET, TOKEN, TOKEN_OUT],
-    [`swap((uint8,address,${POOL_KEY},address,address,int256,uint160,address,address,bytes))`],
+    [`swapMaverickV2(address,address,bool,uint256,int32,address)`],
   ],
   // The other venues: their own bindings.
   curveRouterNGSwap: [

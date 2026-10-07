@@ -348,7 +348,7 @@ import { ISauceRouter } from "./artifacts/ISauceRouter.json";
 function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256) {
   let filled = true;
   ISauceRouter.at(ctx.self())
-    .swapV3(pool, WETH, USDC, amount, sqrtPriceLimitX96, ctx.self(), ctx.self())
+    .swapV3(pool, WETH, WETH < USDC, amount, sqrtPriceLimitX96, ctx.self())
     .catch(() => {
       filled = false;
     });

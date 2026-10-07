@@ -71,6 +71,45 @@
           "kitchen-idl.json": "17d07f64d849ec67a40c5633f58530d84af33e8918300b196b8148728517aab5"
         }
       }
+    },
+    {
+      "compiler": "2.5.0",
+      "v12-evm": {
+        "version": "1.2.0",
+        "engine": "0xcF7A92abCC7Ede43277AcCBAfda910b8829bF9AD",
+        "assets": {
+          "runtime.creation.hex": "0xc30098c5b4e2fb1dff752250806443f6d4f50bf5c3248eb42034bf288dbfa7e4"
+        }
+      },
+      "kitchen-evm": {
+        "version": "1.2.0",
+        "assets": {
+          "abis.json": "dce996640a90420ae21fcf8b6447cc856af1bde4d5587ed29a149a18779510cd"
+        }
+      },
+      "v12-svm": {
+        "version": "1.3.0",
+        "engine": "2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT",
+        "assets": {
+          "engine-devnet.so": "728cbfff88b01dc80cd9f4b422b6f29037689ec20e09887121b5bdebf2bee0a7",
+          "engine-mainnet.so": "78b3f0d231e0303464df87699cce68027ac07cac9cfa0a5843cc5a7f4fdc323b",
+          "engine-wire-devnet.json": "316b7ea4e63d030396a475f55f76a2b46aceaac82186def44d80b6752b6fcdad",
+          "engine-wire-mainnet.json": "f9e47b4329c2cd7bae6a5624a60c48d5fe13404c03fea925048fa0ae7c76168d"
+        }
+      },
+      "kitchen-svm": {
+        "version": "1.0.0",
+        "assets": {
+          "kitchen.so": "7b6af3c5b52a56567c2617d634b7403566b4aa5d6fb5dacd958430d84a15466f",
+          "kitchen-idl.json": "17d07f64d849ec67a40c5633f58530d84af33e8918300b196b8148728517aab5"
+        }
+      }
     }
-  ]
+  ],
+  "quoteRouter": {
+    "version": "1.1.0",
+    "assets": {
+      "abis.json": "0cf29af5c11222f2842f0425895f905ea8c7b4338171c8a046aff5cc13fa9b19"
+    }
+  }
 }

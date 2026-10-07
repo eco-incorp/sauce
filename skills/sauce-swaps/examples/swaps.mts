@@ -84,12 +84,11 @@ check(inputs("swapV3").includes("sqrtPriceLimitX96"), "swapV3 takes a limit");
 check(inputs("swapV4").includes("sqrtPriceLimitX96"), "swapV4 takes a limit");
 check(
   inputs("swapInfinityCL").join() ===
-    "vault,key,zeroForOne,amountSpecified,sqrtPriceLimitX96,payer,recipient,callback",
+    "vault,key,tokenIn,zeroForOne,amountIn,sqrtPriceLimitX96,recipient",
   "PancakeSwap Infinity CL takes a limit",
 );
 check(
-  inputs("swapInfinityBin").join() ===
-    "vault,key,swapForY,amountSpecified,payer,recipient,callback",
+  inputs("swapInfinityBin").join() === "vault,key,tokenIn,swapForY,amountIn,recipient",
   "PancakeSwap Infinity Bin has no limit",
 );
 
@@ -105,7 +104,7 @@ for (const callback of [
   check(has(callback), `the Router implements ${callback}`);
 }
 
-// What a callback is held to: the pool must be the requested pair, and it is paid at most the
+// What a callback is held to: the input token must match the pool key, and it is paid at most the
 // exact input. The deployed Router's full ABI ships beside the package's other artifacts.
 const routerAbi = (
   JSON.parse(
@@ -119,6 +118,9 @@ const routerAbi = (
   ) as { abi: { type: string; name?: string }[] }
 ).abi;
 const errors = routerAbi.filter((entry) => entry.type === "error").map((entry) => entry.name);
-check(errors.includes("InvalidPool"), "a pool that is not the requested pair is refused");
+check(
+  errors.includes("InputTokenMismatch"),
+  "an input token inconsistent with the pool key is refused",
+);
 check(errors.includes("InputExceedsAuthorized"), "a callback takes at most the exact input");
 console.log(`@sauce/router: ${Object.keys(LIBRARY).join(", ")}`);

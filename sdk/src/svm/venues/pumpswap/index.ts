@@ -55,6 +55,8 @@ const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 /** Pubkey::default — a pool with this coin_creator pays no creator fee. */
 const DEFAULT_PUBKEY = address("11111111111111111111111111111111");
+const TOKEN_PROGRAM_BYTES = new Uint8Array(getAddressEncoder().encode(TOKEN_PROGRAM));
+const TOKEN_2022_PROGRAM_BYTES = new Uint8Array(getAddressEncoder().encode(TOKEN_2022_PROGRAM));
 
 const POOL_DISCRIMINATOR = [241, 154, 109, 4, 17, 177, 109, 188];
 const GLOBAL_CONFIG_DISCRIMINATOR = [149, 8, 156, 202, 160, 252, 176, 217];
@@ -127,16 +129,12 @@ async function pda(seeds: (string | Uint8Array)[], programAddress: Address): Pro
   return memoizedGetProgramDerivedAddress(programAddress, bytes);
 }
 
-async function ata(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
-  const encoder = getAddressEncoder();
-  return pda(
-    [
-      new Uint8Array(encoder.encode(owner)),
-      new Uint8Array(encoder.encode(tokenProgram)),
-      new Uint8Array(encoder.encode(mint)),
-    ],
-    ASSOCIATED_TOKEN_PROGRAM,
-  );
+async function ata(
+  owner: Uint8Array,
+  mint: Uint8Array,
+  tokenProgram: Uint8Array,
+): Promise<Address> {
+  return pda([owner, tokenProgram, mint], ASSOCIATED_TOKEN_PROGRAM);
 }
 
 /**
@@ -271,6 +269,15 @@ function checkAmountIn(amountIn: bigint): void {
 const readonly = (addr: Address): VenueAccount => ({ ref: addr, address: addr });
 const writable = (addr: Address): VenueAccount => ({ ref: addr, address: addr, writable: true });
 
+/** Fetch from a 32-byte pool key. The loader and returned config retain their string-address API. */
+export async function fetchPumpswapConfigBytes(
+  load: AccountLoader,
+  pool: Uint8Array,
+): Promise<PumpswapPoolConfig> {
+  if (pool.length !== 32) throw new Error(`pumpswap pool key must be 32 bytes, got ${pool.length}`);
+  return pumpswapAdapter.fetchPoolConfig(load, getAddressDecoder().decode(pool));
+}
+
 export const pumpswapAdapter = {
   slug: "pumpswap",
   kind: "constant-product",
@@ -290,11 +297,14 @@ export const pumpswapAdapter = {
       );
     }
     const creator = pubkeyAt(poolData, 11);
-    const baseMint = pubkeyAt(poolData, 43);
-    const quoteMint = pubkeyAt(poolData, 75);
+    const baseMintBytes = poolData.slice(43, 75);
+    const baseMint = getAddressDecoder().decode(baseMintBytes);
+    const quoteMintBytes = poolData.slice(75, 107);
+    const quoteMint = getAddressDecoder().decode(quoteMintBytes);
     const baseVault = pubkeyAt(poolData, 139);
     const quoteVault = pubkeyAt(poolData, 171);
-    const coinCreator = poolData.length >= 243 ? pubkeyAt(poolData, 211) : DEFAULT_PUBKEY;
+    const coinCreatorBytes = poolData.length >= 243 ? poolData.slice(211, 243) : new Uint8Array(32);
+    const coinCreator = getAddressDecoder().decode(coinCreatorBytes);
     const isMayhemMode = poolData.length >= 244 && poolData[243] !== 0;
     const isCashbackCoin = poolData.length >= 245 && poolData[244] !== 0;
     if (isMayhemMode) {
@@ -344,10 +354,7 @@ export const pumpswapAdapter = {
     // for the base mint) pay the market-cap fee tier; everything else pays
     // flat_fees (fee selection in the historical venue investigation).
     const encoder = getAddressEncoder();
-    const poolAuthority = await pda(
-      ["pool-authority", new Uint8Array(encoder.encode(baseMint))],
-      PUMP_BONDING_PROGRAM,
-    );
+    const poolAuthority = await pda(["pool-authority", baseMintBytes], PUMP_BONDING_PROGRAM);
     const canonical = creator === poolAuthority;
 
     let lpFeeBps: bigint;
@@ -376,24 +383,34 @@ export const pumpswapAdapter = {
     }
     if (coinCreator === DEFAULT_PUBKEY) creatorFeeBps = 0n;
 
-    const protocolFeeRecipient = pubkeyAt(globalConfigData, 57);
-    const buybackFeeRecipient = pubkeyAt(globalConfigData, 643);
+    const protocolFeeRecipientBytes = globalConfigData.slice(57, 89);
+    const buybackFeeRecipientBytes = globalConfigData.slice(643, 675);
+    // Decode the exact seed buffers: the decoder rejects truncated keys, and
+    // later awaits cannot make the validated strings disagree with their seeds.
+    const protocolFeeRecipient = getAddressDecoder().decode(protocolFeeRecipientBytes);
+    const buybackFeeRecipient = getAddressDecoder().decode(buybackFeeRecipientBytes);
     const coinCreatorVaultAuthority = await pda(
-      ["creator_vault", new Uint8Array(encoder.encode(coinCreator))],
+      ["creator_vault", coinCreatorBytes],
       PUMPSWAP_PROGRAM_ID,
     );
+    const quoteTokenProgramBytes =
+      quoteTokenProgram === TOKEN_PROGRAM ? TOKEN_PROGRAM_BYTES : TOKEN_2022_PROGRAM_BYTES;
     const [
       protocolFeeRecipientTokenAccount,
       coinCreatorVaultAta,
       buybackFeeRecipientTokenAccount,
       poolV2,
     ] = await Promise.all([
-      ata(protocolFeeRecipient, quoteMint, quoteTokenProgram),
-      ata(coinCreatorVaultAuthority, quoteMint, quoteTokenProgram),
-      ata(buybackFeeRecipient, quoteMint, quoteTokenProgram),
+      ata(protocolFeeRecipientBytes, quoteMintBytes, quoteTokenProgramBytes),
+      ata(
+        new Uint8Array(encoder.encode(coinCreatorVaultAuthority)),
+        quoteMintBytes,
+        quoteTokenProgramBytes,
+      ),
+      ata(buybackFeeRecipientBytes, quoteMintBytes, quoteTokenProgramBytes),
       coinCreator === DEFAULT_PUBKEY
         ? Promise.resolve(undefined)
-        : pda(["pool-v2", new Uint8Array(encoder.encode(baseMint))], PUMPSWAP_PROGRAM_ID),
+        : pda(["pool-v2", baseMintBytes], PUMPSWAP_PROGRAM_ID),
     ]);
 
     return {

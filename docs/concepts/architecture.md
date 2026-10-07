@@ -50,6 +50,9 @@ value.
 
 ## From bytecode to execution
 
+[Kitchen, Pot and cook](kitchen-pot-cook.md) introduces the contracts a program runs through: what
+a Pot is, what a cook does, and who may do what. This section adds what an integrator needs on top.
+
 ### EVM
 
 A program runs through `Pot.cook(engine, program)`. A Pot has an owner; the engine is named on each

@@ -20,6 +20,11 @@ import {
   registryNames,
 } from "./example-programs.mjs";
 import { bigintLiteralProblems } from "./integer-literals.mjs";
+import {
+  DEPLOYMENTS_PAGE,
+  releaseAddresses,
+  releaseAddressProblems,
+} from "./release-addresses.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const packageArgument = process.argv.indexOf("--package-root");
@@ -198,6 +203,36 @@ console.log(`Manual links: ${manual.length} files checked`);
   if (shape.length) throw new Error(`The manual's shape:\n${shape.join("\n")}`);
   console.log(
     `The manual's shape: ${readerPages.length} pages, none into skills/, each in the index once`,
+  );
+}
+
+// The release's addresses are the same on every chain, so the manual writes them on one generated
+// page and points there everywhere else, examples and their comments included
+// (`release-addresses.mjs`). The skills are skills:check's.
+{
+  const files = (path) =>
+    readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
+      const child = join(path, entry.name);
+      return entry.isDirectory() ? files(child) : [child];
+    });
+  const addresses = releaseAddresses({
+    sdk: await import(pathToFileURL(join(root, "sdk/dist/index.js")).href),
+    deployments: await import(pathToFileURL(join(root, "sdk/dist/deployments/index.js")).href),
+  });
+  const pages = [join(root, "README.md"), ...files(join(root, "docs"))]
+    .map((file) => relative(root, file).split("\\").join("/"))
+    .filter((path) => path !== DEPLOYMENTS_PAGE);
+  const problems = pages.flatMap((path) =>
+    releaseAddressProblems({
+      where: path,
+      text: readFileSync(join(root, path), "utf8"),
+      addresses,
+      home: DEPLOYMENTS_PAGE,
+    }),
+  );
+  if (problems.length) throw new Error(`Release addresses:\n${problems.join("\n")}`);
+  console.log(
+    `Release addresses: ${addresses.size} written only in ${DEPLOYMENTS_PAGE}, ${pages.length} files checked`,
   );
 }
 

@@ -124,12 +124,14 @@ describe("evm/engine load-bearing shapes", () => {
     expect(deployPot.inputs.map((i) => i.type)).toEqual(["address", "bytes32"]);
   });
 
-  it("the vendored V12Kitchen.json deployPot is also (address, bytes32) — no salt-only variant", () => {
-    const jsonDeployPot = getAbiItem({
-      abi: loadArtifactAbi("V12Kitchen"),
-      name: "deployPot",
-    }) as AbiFunction;
-    expect(jsonDeployPot.inputs.map((i) => i.type)).toEqual(["address", "bytes32"]);
+  it("the released Kitchen supports private Pots with optional fixed Router, never salt-only", () => {
+    const variants = loadArtifactAbi("V12Kitchen").filter(
+      (item): item is AbiFunction => item.type === "function" && item.name === "deployPot",
+    );
+    expect(variants.map((item) => item.inputs.map((input) => input.type)).sort()).toEqual([
+      ["address", "bytes32"],
+      ["address", "bytes32", "bool"],
+    ]);
   });
 
   // `cook` names the engine per call since v12 #432 — it was `cook(bytes[] ingredients)`, whose

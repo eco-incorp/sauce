@@ -26,7 +26,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
 
 /**
- * V12Pot — `cook()` is onlyOwner.
+ * V12Pot — private Pots restrict `cook()` to their owner; Shared Pots allow any caller.
  *
  * **The engine is named per cook.** A Pot holds no engine: `cook(address engine, bytes program)`
  * takes the interpreter as an argument, and `inFlightEngine()` reports the engine of the cook
@@ -36,14 +36,15 @@ import { assertEngineRunsCompiler } from "../deployments/releases.js";
  * A cook runs exactly ONE program.
  *
  * **The Router is the Pot's own.** Its fallback delegatecalls `router()`: the Router the Kitchen had
- * when the Pot was minted, until the Pot's OWNER names another with `setRouter`. Neither the Kitchen
- * nor its owner can move a deployed Pot. See {@link potRouterUpdate}.
+ * when the Pot was minted. A private Pot's owner can change it unless minted with a fixed Router;
+ * Shared Pots always fix it. Neither the Kitchen nor its owner can move a deployed Pot.
  */
 export const v12PotAbi = parseAbi([
   "constructor()",
   "fallback() external payable",
   "receive() external payable",
   "function cook(address engine, bytes program) payable returns (bytes)",
+  "function eval(bytes program) returns (bytes)",
   "function gateSalt() view returns (bytes32)",
   "function inFlightEngine() view returns (address armed)",
   "function kitchen() view returns (address)",
@@ -57,6 +58,9 @@ export const v12PotAbi = parseAbi([
   "error FeeNotPaid(uint256 required, uint256 provided)",
   "error FeeTransferFailed()",
   "error NotOwner()",
+  "error NotInFlightEngine()",
+  "error RouterFixed()",
+  "error SharedRouterNotFixed()",
   "error RouterHasNoCode()",
   "error RouterUnset()",
 ]);
@@ -76,13 +80,17 @@ export const v12KitchenAbi = parseAbi([
   "function UPGRADE_INTERFACE_VERSION() view returns (string)",
   "function acceptOwnership()",
   "function deployPot(address owner, bytes32 salt) returns (address pot)",
+  "function deployPot(address owner, bytes32 salt, bool routerFixed) returns (address pot)",
+  "function deploySharedPot(bytes32 salt) returns (address pot)",
   "function executionFee() view returns (uint256)",
   "function initialize(address initialOwner, uint256 initialExecutionFee)",
   "function owner() view returns (address)",
   "function pendingOwner() view returns (address)",
   "function potInitCodeHash() view returns (bytes32)",
-  "function potParameters() view returns (address owner, bytes32 salt)",
+  "function potParameters() view returns (address owner, bytes32 salt, bool routerFixed)",
   "function predictPot(address owner, bytes32 salt) view returns (address)",
+  "function predictPot(address owner, bytes32 salt, bool routerFixed) view returns (address)",
+  "function predictSharedPot(bytes32 salt) view returns (address)",
   "function proxiableUUID() view returns (bytes32)",
   "function renounceOwnership() pure",
   "function router() view returns (address)",

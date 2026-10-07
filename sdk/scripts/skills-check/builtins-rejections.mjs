@@ -278,7 +278,7 @@ export const rejections = [
     src: "function f(): void { } function main(): Uint256 { let x = f(); return 0n; }",
   },
   {
-    quotes: ["f keeps too many values in use at once …"],
+    quotes: ["f keeps too many values in use at once — …"],
     targets: ["evm"],
     src: `function f(${Array.from({ length: 17 }, (_, i) => `p${i}: Uint256`).join(", ")}): Uint256 { return ${Array.from({ length: 17 }, (_, i) => `p${i}`).join(" + ")} + p0; } function main(a: Uint256): Uint256 { return f(${Array.from({ length: 17 }, (_, i) => `a + ${i}n`).join(", ")}); }`,
   },
@@ -608,7 +608,7 @@ export const rejections = [
     src: "function main(): bytes { return abi.encode(); }",
   },
   {
-    quotes: ["abi.encode takes at most 255 arguments, got N"],
+    quotes: ["abi.encode takes at most 255 arguments, got 256"],
     targets: ["evm"],
     src: `function main(): bytes { return abi.encode(${many(256, "1n")}); }`,
   },
@@ -667,6 +667,11 @@ export const rejections = [
     quotes: ["`evm.nope` is not an evm builtin; `evm` is a reserved namespace root"],
     targets: ["evm"],
     src: "function main(): Uint256 { return evm.nope(1n); }",
+  },
+  {
+    quotes: ["evm.create's init code requires a bytes value"],
+    targets: ["evm"],
+    src: "function main(): Uint256 { return evm.create(1n); }",
   },
 
   // svm
@@ -860,7 +865,7 @@ export const rejections = [
     src: "function main(t: Address, d: bytes): bytes { const r = evm.static(t, d).catch(() => { return 0n; }); return r; }",
   },
   {
-    quotes: ["a .catch() handler compiles to N bytes, over the 254-byte limit …"],
+    quotes: ["a .catch() handler compiles to N bytes, over the 254-byte limit — shorten the handler"],
     targets: ["evm"],
     contracts,
     src: `function main(t: Uint256, s: Uint256): Uint256 { let v = 0n; ERC20.at(t).approve(s, 1n).catch(() => { ${long} }); return v; }`,

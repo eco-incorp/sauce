@@ -16,7 +16,7 @@
  * contract at its own nonce 1. This installs that proxy child (`363d3d37363d34f0`, CreateX's code,
  * not the stack's) at the address the release's guarded salt derives, and sends it each contract's
  * creation code, so every contract lands where `V12Deployments.json` says and runs its real
- * constructor — the engine appends its OWN address (which `EVAL` staticcalls), the Kitchen proxy is
+ * constructor — the engine binds its own identity for the Pot's `EVAL` relay, the Kitchen proxy is
  * initialized with an owner. No runtime is copied anywhere.
  *
  * The Kitchen is left with its owner (the harness account) and a zero execution fee, so no cook
@@ -83,7 +83,7 @@ const PROXY_CHILD_RUNTIME = "0x363d3d37363d34f0" as Hex;
 
 export interface GatedEngine {
   /** The engine, at its release address (`v12EngineAddress()`), deployed from creation code: its
-   *  constructor appended that address as the trailing code word `EVAL` reads back. */
+   *  constructor bound that identity for the Pot's `EVAL` relay. */
   engine: Address;
   /** The Router the Kitchen hands every new Pot, at its release address. */
   router: Address;

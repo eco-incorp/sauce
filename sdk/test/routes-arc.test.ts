@@ -20,7 +20,7 @@ import { v12EngineAddress } from "../src/deployments/index.js";
 import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
 
 const PORTAL = "0xEC000769A73b70e16f361a442292500b3BCf4A85";
-const SHARED_POT = "0xDd330394620fBFF4D0AdcfA33B0D7b3622Db15B0";
+const SHARED_POT = "0x6340080a1967a03cAAD490a170828d4C59EE5983";
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
 const ARC_SWAP_ROUTER02 = "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77";
 const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";

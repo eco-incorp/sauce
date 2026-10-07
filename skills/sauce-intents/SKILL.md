@@ -600,18 +600,20 @@ like any other.
 
 The Portal, the prover, the destination Pot and the encoding are looked up from the eco-routes
 registry, which records each chain's Portal and a prover deployed on both sides. Each chain's file in
-`sauce-chains` says whether it takes intents and gives its Portal, Executor and shared intent Pot
-([../sauce-chains/references/index.md](../sauce-chains/references/index.md)). Every other value has
-a default ([references/defaults.md](references/defaults.md)); two deserve a thought:
+`sauce-chains` says whether it takes intents and gives its Portal and Executor
+([../sauce-chains/references/index.md](../sauce-chains/references/index.md)); the shared intent Pot,
+the same on every chain, is `evm.intentPot` in
+[../sauce-chains/references/deployments.json](../sauce-chains/references/deployments.json). Every
+other value has a default ([references/defaults.md](references/defaults.md)); two deserve a thought:
 
 - **The fill deadline**, 5 minutes after the intent opens unless the hop's `deadline` says
   otherwise: long enough for a solver that quoted it, short for one that must find and rehearse
   it first.
 - **The fee** of a program body: the destination Kitchen's fee is mutable on chain and lives on the
   destination, so the command reads it there when it builds the intent (an `eth_call` of
-  `executionFee()` on the destination's Kitchen, whose address is in the chain's file in
-  `sauce-chains`). An increase before the fill makes the cook, and the fulfilment, revert: build
-  close to sending. With `--offline`, give it as the hop's `fee` or `--intent-execution-fee <wei>`.
+  `executionFee()` on the destination's Kitchen, `evm.kitchen` in the deployments file above). An
+  increase before the fill makes the cook, and the fulfilment, revert: build close to sending. With
+  `--offline`, give it as the hop's `fee` or `--intent-execution-fee <wei>`.
 
 **Units and arguments.** Amounts are base units (`1000000` is 1 USDC); only `--assume-balance`
 and `--fund` take whole tokens. In `--args-json`, write an address or any value past 2^53 as a JSON
@@ -625,9 +627,9 @@ no eco-routes deployment, a pair with no prover deployed on both sides.
 ## The destination side
 
 - **The shared Pot.** A program body cooks on the destination Portal Executor's **shared Pot** (its
-  owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the Pot and
-  the Executor. **The Pot must exist before any fill**: until it does, every fulfilment of a program
-  body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
+  owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the
+  Executor, and the deployments file above the Pot. **The Pot must exist before any fill**: until it
+  does, every fulfilment of a program body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
   address and deploy transaction; with `--deploy --keystore <keystore>`
   any signer deploys it (the Pot is the Executor's either way), and an existing one is reported, not
   redeployed; `sauce intent fill` says whether it is deployed on the destination, and deploys it in its

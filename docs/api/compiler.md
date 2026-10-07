@@ -6,6 +6,10 @@
 argument format. Both ship with the SDK; there is nothing extra to install. It runs in
 Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
 
+This SDK pins compiler **2.5.0**, EVM engine/Kitchen **1.2.0**, SVM engine **1.3.0**, and SVM Kitchen
+**1.0.0**. Deploy the matching stack before using the release defaults on-chain. Existing EVM Pots
+from Kitchen 1.1.0 retain their old bytecode and require their previous engine and SDK pairing.
+
 ```ts
 import {
   compile,

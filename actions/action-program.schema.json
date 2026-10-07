@@ -609,7 +609,7 @@
     },
     "action_maverickV2Swap": {
       "title": "maverickV2Swap",
-      "description": "Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for. Calls @sauce/router maverickV2: Router.swap.",
+      "description": "Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for. Calls @sauce/router maverickV2: Router.swapMaverickV2.",
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "pool", "tokenIn", "tokenOut", "amountOutMin", "recipient"],

@@ -19,9 +19,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Kind | EVM |
 | Name in a program | `Evmos` |
 | Native coin | EVMOS (EVMOS), 18 decimals |
-| Sauce engine | `0x6785455AA479AA99D59357d7c9Fe14cba626F175` |
-| Sauce Kitchen | `0x19845b22989150E6B09dE55a661295Dd9188506b` |
-| Sauce Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` |
+| Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
 | Intents (eco-routes) | none recorded |
 
 ## Tokens

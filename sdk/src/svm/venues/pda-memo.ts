@@ -25,11 +25,12 @@
  * sustains before the event loop saturates; it does not shorten one isolated
  * quote's own wall-clock time (which is network-bound on RPC round-trips).
  *
- * SCOPE — derivation memoized, addresses ONLY, across every CLMM/DLMM family
- * that routes its tick-array/bin-array/per-tick PDA derivation through
- * {@link memoizedGetProgramDerivedAddress} below (raydium-clmm, orca-whirlpool,
- * pancakeswap-clmm, stabble-clmm, cropper, byreal, defituna, crema, invariant,
- * meteora-dlmm, saros-dlmm). The memo key is derived INTERNALLY from
+ * SCOPE — derivation memoized, addresses ONLY, for EVERY program-derived
+ * address the SDK computes: the venues' tick-array/bin-array/per-tick, ATA and
+ * known-bump authority PDAs, the Kitchen's PDAs, the ATA prepend, the lookup
+ * table `createAltWithAddresses` creates and the Portal's PDAs. Nothing outside
+ * this module derives one (test/svm/no-raw-pda-derive.test.ts fails a raw
+ * derivation anywhere else in `src`). The memo key is derived INTERNALLY from
  * `(programAddress, seeds)` — never supplied by the caller — so two families
  * that happen to share an identical seed SHAPE (e.g. pancakeswap-clmm/
  * stabble-clmm/byreal reuse raydium-clmm's `['tick_array', pool, startTick
@@ -37,9 +38,15 @@
  * shape) under DISTINCT program ids can never collide: the program id is
  * part of the key by construction, not by caller discipline.
  */
-import { getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
-import type { Address } from "@solana/kit";
+import {
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+  isOffCurveAddress,
+} from "@solana/kit";
+import type { Address, ProgramDerivedAddress, ReadonlyUint8Array } from "@solana/kit";
 import { ASSOCIATED_TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
+import { sha256 } from "../../bytes.js";
 
 export interface PdaMemoStats {
   hits: number;
@@ -59,12 +66,41 @@ export const DEFAULT_PDA_MEMO_MAX_ENTRIES = 100_000;
 let maxEntries = DEFAULT_PDA_MEMO_MAX_ENTRIES;
 
 const memo = new Map<string, Address>();
+/** `[address, bump]` tuples for callers that need the bump too (the Kitchen PDAs). Same key. */
+const bumpMemo = new Map<string, ProgramDerivedAddress>();
+/**
+ * {@link memoizedCreateProgramAddress}'s results. Its own map: there the bump is one of the seeds
+ * and nothing is searched, so the same key means a different derivation than in the two maps above.
+ */
+const createMemo = new Map<string, CreatedProgramAddress>();
+const MEMOS: readonly Map<string, unknown>[] = [memo, bumpMemo, createMemo];
 let hits = 0;
 let misses = 0;
 
+/** A cached value, counted as a hit and moved to the end of `map` (most recently used), or undefined. */
+function recall<T>(map: Map<string, T>, key: string): T | undefined {
+  const cached = map.get(key);
+  if (cached === undefined) return undefined;
+  hits += 1;
+  // Refresh recency: delete + re-set moves this key to the END of the Map's iteration order, so
+  // eviction below always removes the entry that has gone longest without a hit.
+  map.delete(key);
+  map.set(key, cached);
+  return cached;
+}
+
+/** Stores a freshly derived value, evicting `map`'s least-recently-used entry at the cap. */
+function remember<T>(map: Map<string, T>, key: string, value: T): void {
+  if (map.size >= maxEntries) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, value);
+}
+
 const HEX_TABLE = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
 
-function toHex(bytes: Uint8Array): string {
+function toHex(bytes: ReadonlyUint8Array): string {
   let out = "";
   for (let i = 0; i < bytes.length; i++) out += HEX_TABLE[bytes[i]];
   return out;
@@ -81,7 +117,7 @@ function toHex(bytes: Uint8Array): string {
  * occur). No caller ever supplies or influences the key, so no venue can
  * accidentally alias another venue's cached address.
  */
-function memoKey(programAddress: Address, seeds: readonly Uint8Array[]): string {
+function memoKey(programAddress: Address, seeds: readonly ReadonlyUint8Array[]): string {
   let key = programAddress as string;
   for (const seed of seeds) {
     key += "|";
@@ -107,26 +143,14 @@ export async function memoizedGetProgramDerivedAddress(
   seeds: readonly Uint8Array[],
 ): Promise<Address> {
   const key = memoKey(programAddress, seeds);
-  const cached = memo.get(key);
-  if (cached !== undefined) {
-    hits += 1;
-    // Refresh recency: delete + re-set moves this key to the END of the
-    // Map's iteration order, so eviction below always removes the entry that
-    // has gone longest without a hit.
-    memo.delete(key);
-    memo.set(key, cached);
-    return cached;
-  }
+  const cached = recall(memo, key);
+  if (cached !== undefined) return cached;
   misses += 1;
   const [derived] = await getProgramDerivedAddress({
     programAddress,
     seeds: seeds as Uint8Array[],
   });
-  if (memo.size >= maxEntries) {
-    const oldest = memo.keys().next().value;
-    if (oldest !== undefined) memo.delete(oldest);
-  }
-  memo.set(key, derived);
+  remember(memo, key, derived);
   return derived;
 }
 
@@ -135,6 +159,65 @@ export interface AssociatedTokenSeeds {
   owner: Address;
   mint: Address;
   tokenProgram: Address;
+}
+
+/**
+ * {@link memoizedGetProgramDerivedAddress} for callers that also need the bump (the Kitchen PDA
+ * helpers return it). The bump is a pure function of the same `(programAddress, seeds)` key as the
+ * address, so the full `[address, bump]` tuple is cached under that key; same LRU cap and counters.
+ */
+export async function memoizedGetProgramDerivedAddressWithBump(
+  programAddress: Address,
+  seeds: readonly ReadonlyUint8Array[],
+): Promise<ProgramDerivedAddress> {
+  const key = memoKey(programAddress, seeds);
+  const cached = recall(bumpMemo, key);
+  if (cached !== undefined) return cached;
+  misses += 1;
+  const derived = await getProgramDerivedAddress({
+    programAddress,
+    seeds: seeds as ReadonlyUint8Array[],
+  });
+  remember(bumpMemo, key, derived);
+  return derived;
+}
+
+/** What {@link memoizedCreateProgramAddress} returns: the address, and whether it is off the curve. */
+export interface CreatedProgramAddress {
+  address: Address;
+  /** False when the address is a point on ed25519, which the runtime's `create_program_address` refuses. */
+  offCurve: boolean;
+}
+
+/**
+ * Memoized `create_program_address` for a KNOWN bump: `sha256(seeds || programAddress ||
+ * "ProgramDerivedAddress")`, with the bump the caller read off an account passed as the last seed
+ * and nothing searched (a stored bump need not be the canonical one, so a find would be wrong).
+ * Synchronous, like the hashing it replaces. Same key scheme, LRU cap and counters as the finds,
+ * in a map of its own.
+ *
+ * The on-curve check is computed once per key and RETURNED rather than thrown, because its callers
+ * differ and each keeps its own behaviour: some refuse an on-curve result with their own error, and
+ * some take the address as is because the pool already exists on chain with that bump.
+ */
+export function memoizedCreateProgramAddress(
+  programAddress: Address,
+  seeds: readonly ReadonlyUint8Array[],
+): CreatedProgramAddress {
+  const key = memoKey(programAddress, seeds);
+  const cached = recall(createMemo, key);
+  if (cached !== undefined) return cached;
+  misses += 1;
+  const address = getAddressDecoder().decode(
+    sha256(
+      ...(seeds as readonly Uint8Array[]),
+      getAddressEncoder().encode(programAddress) as Uint8Array,
+      "ProgramDerivedAddress",
+    ),
+  );
+  const created = { address, offCurve: isOffCurveAddress(address) };
+  remember(createMemo, key, created);
+  return created;
 }
 
 /**
@@ -204,10 +287,12 @@ export function configurePdaMemo(config: PdaMemoConfig): void {
   maxEntries = next;
   // Honor a lowered cap immediately rather than waiting for the next miss to
   // drain one entry at a time. Map iteration is least-recently-used-first.
-  while (memo.size > maxEntries) {
-    const oldest = memo.keys().next().value;
-    if (oldest === undefined) break;
-    memo.delete(oldest);
+  for (const map of MEMOS) {
+    while (map.size > maxEntries) {
+      const oldest = map.keys().next().value;
+      if (oldest === undefined) break;
+      map.delete(oldest);
+    }
   }
 }
 
@@ -218,7 +303,7 @@ export function getPdaMemoMaxEntries(): number {
 
 /** TEST SEAM: drop the memo, zero the counters, and restore the default cap. */
 export function __resetPdaMemoForTest(): void {
-  memo.clear();
+  for (const map of MEMOS) map.clear();
   hits = 0;
   misses = 0;
   maxEntries = DEFAULT_PDA_MEMO_MAX_ENTRIES;

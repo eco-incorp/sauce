@@ -17,10 +17,10 @@
  * Quote/swap direction is token A -> token B (the adapter interface carries
  * no direction; B -> A is the same math with the roles swapped).
  */
-import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
 import { readUintLE } from "../math.js";
+import { memoizedCreateProgramAddress } from "../pda-memo.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -90,14 +90,11 @@ function assertU64AmountIn(amountIn: bigint): void {
  */
 function deriveSwapAuthority(pool: Address, nonce: number): Address {
   const encoder = getAddressEncoder();
-  const digest = sha256(
-    encoder.encode(pool) as Uint8Array,
-    Uint8Array.of(nonce),
-    encoder.encode(SABER_STABLESWAP_PROGRAM_ID) as Uint8Array,
-    "ProgramDerivedAddress",
+  const { address: authority, offCurve } = memoizedCreateProgramAddress(
+    SABER_STABLESWAP_PROGRAM_ID,
+    [encoder.encode(pool), Uint8Array.of(nonce)],
   );
-  const authority = getAddressDecoder().decode(digest);
-  if (!isOffCurveAddress(authority)) {
+  if (!offCurve) {
     throw new Error(
       `saber-stableswap pool ${pool} nonce ${nonce} derives an on-curve swap authority`,
     );

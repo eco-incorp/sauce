@@ -32,6 +32,7 @@ pnpm-lock.yaml
 # from the SDK's registries on every SDK build and CI holds to the committed copies byte for byte.
 skills/sauce-globals/references/*.md
 skills/sauce-chains/references/*.md
+skills/sauce-chains/references/deployments.json
 skills/sauce-protocols/references/index.md
 skills/sauce-protocols/references/registry/*.md
 skills/sauce-intents/references/defaults.md

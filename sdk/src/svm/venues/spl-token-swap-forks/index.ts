@@ -52,7 +52,7 @@
  */
 import { getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
+import { memoizedCreateProgramAddress } from "../pda-memo.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -143,15 +143,10 @@ function netAmountIn(slug: string, cfg: SplTokenSwapForkPoolConfig, amountIn: bi
  * the derivation is already known to be off-curve.
  */
 function deriveSwapAuthority(programId: Address, pool: Address, bumpSeed: number): Address {
-  const codec = getAddressCodec();
-  return codec.decode(
-    sha256(
-      new Uint8Array(codec.encode(pool)),
-      Uint8Array.of(bumpSeed),
-      new Uint8Array(codec.encode(programId)),
-      "ProgramDerivedAddress",
-    ),
-  );
+  return memoizedCreateProgramAddress(programId, [
+    getAddressCodec().encode(pool),
+    Uint8Array.of(bumpSeed),
+  ]).address;
 }
 
 const poolRef = (slug: string, cfg: SplTokenSwapForkPoolConfig, role: string): string =>
