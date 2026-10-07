@@ -591,7 +591,8 @@ it. A missing pool is never read at all.
 ## Inputs and units
 
 `main(… accounts …, budget, maxPrice, minTokens, maxAvgPrice)`, every amount in a token's base
-units: on Solana USDC has 6 decimals and SOL 9, so `1000000000` is 1,000 USDC and `1000000000` is
+units. Selling one token for another is buying the other with it: selling USDC for SOL pays USDC
+and buys SOL. On Solana USDC has 6 decimals and SOL 9, so `1000000000` is 1,000 USDC and `1000000000` is
 also 1 SOL. A pool holds SOL wrapped, the mint the registry names `WSOL` (`sauce pools` takes `SOL`
 for it too).
 
@@ -657,14 +658,27 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
 Four steps, each a `sauce` command: find the pools, rehearse with no key, then send. Every
 amount is base units; the command's token amounts (`--assume-balance`) are whole tokens.
 
-1. **Find the pools and their slots.** `sauce pools --chain solana USDC WSOL --json` reads every
-   pool of the pair at the venues above, deepest first, each with its fee, its price both ways
-   with the fee (`sides[].taker`, and as `maxPrice`), and `slots`: by the token paid, the nine
-   accounts its slot takes. A pool the program skips is under `skipped`, with why, and so is an
-   order book whose offers are all far from the pair's price. Take the four deepest whose taker
-   price is within your `maxPrice`; the deepest and cheapest goes first. A pool deep enough may
-   take the whole order, and the slots after it then trade nothing: that is the program spending
-   at the best prices, not a slot wasted.
+1. **Find the pools and choose the slots.** `sauce pools --chain solana USDC WSOL --json` reads
+   every pool of the pair at the venues above, by liquidity at its price, deepest first, each with
+   its `venue`, `pool`, `fee`, `liquidity`, its price both ways with the fee (`sides[].taker`, and
+   as `maxPrice`), and `slots`: by the token paid, the nine accounts its slot takes. A pool the
+   program skips is under `skipped`, with `why`, and so is an order book whose offers are all far
+   from the pair's price; `checked` names each venue read. A venue that could not be read (an
+   endpoint refusing the scan) leaves the listing partial, said in a note, and the command exits
+   1: run it again, or give an endpoint that answers `getProgramAccounts`. `--pay` chooses the
+   slots, the deepest pools whose price with the fee is within `--max-price`, one a venue with
+   `--per-venue` (to cover every venue that has a pool within the limit), as many as `--slots`
+   (4, the program's; 5 with a fifth slot), and prints `chosen` and `accounts`, the slots'
+   accounts ready for step 2:
+
+   ```sh
+   sauce pools --chain solana USDC WSOL --pay USDC --max-price 119047619047619047 --per-venue --json
+   ```
+
+   A pool deep enough may take the whole order, and the slots after it then trade nothing: that is
+   the program spending within the limit, not a slot wasted. A rehearsal whose slots are all the
+   System program trades nothing and returns the whole budget, so check what `bought` says.
+
 2. **Write the accounts** as one JSON object, which `--accounts` takes (each is also
    `--account NAME=<value>`). `pot:USDC` is the Pot's own USDC account, `mint:USDC` the mint:
 
@@ -692,27 +706,21 @@ amount is base units; the command's token amounts (`--assume-balance`) are whole
    }
    ```
 
-   and the same nine for slots 1 to 3 (`program1` … `ticks32`), each from its pool, or all nine
-   the System program, `11111111111111111111111111111111`, for a slot with no pool. Slot `k` is
-   the pool's `slots.<token paid>`: `program<k>` its `program`, then `pool`, `config`, `vaultA`,
-   `vaultB` and `extra`, and `ticks<k>0` to `ticks<k>2` its `ticks`. With `jq`, the four deepest
-   within `maxPrice`, paying USDC:
-
-   ```sh
-   sauce pools --chain solana USDC WSOL --json > pools.json
-   jq --arg pay USDC --arg max 119047619047619047 '[.pools[] | select(any(.sides[]; .pay == $pay and (.maxPrice | tonumber) <= ($max | tonumber)))][:4] | to_entries | map(.key as $k | .value.slots[$pay] | {"program\($k)": .program, "pool\($k)": .pool, "config\($k)": .config, "vaultA\($k)": .vaultA, "vaultB\($k)": .vaultB, "extra\($k)": .extra, "ticks\($k)0": .ticks[0], "ticks\($k)1": .ticks[1], "ticks\($k)2": .ticks[2]}) | add' pools.json
-   ```
-
-   then add the shared accounts above to that object. `refund` as
+   and the same nine for slots 1 to 3 (`program1` … `ticks32`): the `accounts` step 1 printed, or,
+   by hand, slot `k` from a pool's `slots.<token paid>` (`program<k>` its `program`, then `pool`,
+   `config`, `vaultA`, `vaultB` and `extra`, and `ticks<k>0` to `ticks<k>2` its `ticks`), all nine
+   the System program, `11111111111111111111111111111111`, for a slot with no pool. `refund` as
    `pot:USDC` keeps what is left in the Pot (the program then moves nothing back); `recipient` as
    `pot:WSOL` keeps what is bought there.
 
 3. **Rehearse**, with no key and nothing sent. The cook is past one transaction, so `sauce simulate`
    runs it in a local copy of every account it names, read from the cluster, with the released
    engine and Kitchen: the program staged as `sauce run` stages it, the Pot created there if it is
-   missing, and the owner given the lamports the staging and the fees take, so any address can be
-   `--owner`. `--assume-balance` gives the Pot's USDC account the budget in that copy (token
-   balances only):
+   missing, and the owner given the lamports the staging and the fees take: `--owner` is any wallet's
+   address, or any address with no account at all, never a program's account such as a pool or a
+   mint (the owner signs and pays). `--assume-balance` gives the Pot's USDC account the budget in
+   that copy (token balances only). The program file is the example's, copied into the project
+   (or run where the skill is installed):
 
    ```sh
    sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
@@ -724,10 +732,12 @@ amount is base units; the command's token amounts (`--assume-balance`) are whole
    `minTokens` above what filled (it reverts `bought below minTokens`), once with `maxAvgPrice`
    below the average (it reverts `average too high`); then set them by the rules above. A token
    account the cluster does not have yet, such as a new Pot's WSOL account, the copy makes empty and
-   a note names: create it (its associated token account, idempotently) before sending.
+   a note names; `sauce run` creates it before the cook.
 
 4. **Send** with `sauce run`, signed by the owner's `--keypair` (or `--wallet`). The budget must be
-   in the Pot's USDC account first: a transfer into it from any wallet. `sauce run` stages the
+   in the Pot's USDC account first: a transfer into it from any wallet. `sauce run` creates the Pot
+   and the Pot's or owner's token accounts the cook names that do not exist yet (asking first, or
+   with `--auto-approve`; the owner pays their rent), stages the
    program in a code buffer, creates an address lookup table holding the cook's accounts (it prints
    its address; a later cook naming the same accounts reuses it with `--lookup-table <address>`),
    rehearses the staged cook, sends it, and closes the buffer again:

@@ -178,7 +178,7 @@ check(
   "and the header's example line",
 );
 
-check(prose.includes(`--arg max ${floorSol}`), "the skill's jq selects pools within that floor");
+check(prose.includes(`--max-price ${floorSol}`), "the skill chooses pools within that floor");
 
 // The rehearsal the skill reads: 2,000 USDC for 16.983900131 SOL, and its average.
 const spent = 2000n * 10n ** BigInt(usdc);
