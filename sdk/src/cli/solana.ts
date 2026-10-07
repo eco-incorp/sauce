@@ -199,6 +199,12 @@ async function ask<T>(url: string, what: string, request: () => Promise<T>): Pro
   }
 }
 
+/** Requests to `url`, each failing with what it read and never the URL: for a command's reads. */
+export const svmReader =
+  (url: string) =>
+  <T>(what: string, request: () => Promise<T>): Promise<T> =>
+    ask(url, what, request);
+
 /**
  * The execution fee in lamports, from the Kitchen's fee config account: what a cook pays, through
  * the Kitchen or direct to the engine, which reads the same account.

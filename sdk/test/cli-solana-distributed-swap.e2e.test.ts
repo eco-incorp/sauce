@@ -141,7 +141,8 @@ describeSvm(
       owner = await keypairFile(work);
       harness.svm.airdrop(owner.signer.address, lamports(10_000_000_000n));
       pot = (await derivePotPda(KITCHEN, owner.signer.address, new Uint8Array(32))).address;
-      shim = solanaShim(harness.svm, SOLANA_URL);
+      // `sauce pools` scans the venues' accounts: the bank's are the fixture's.
+      shim = solanaShim(harness.svm, SOLANA_URL, () => [...BYTES.keys()]);
       shim.install();
     }, 120_000);
 
@@ -252,6 +253,68 @@ describeSvm(
       expect(tx.code).toBe(1);
       expect(tx.stderr).toContain("sauce run");
       expect(tx.stderr).toContain("--lookup-table");
+    }, 300_000);
+
+    it("finds the pair's pools and fills each slot with sauce pools, which the rehearsal takes", async () => {
+      restoreVenues(harness.svm);
+      const listed = await sauce(
+        "pools",
+        "--chain",
+        "solana",
+        "USDC",
+        "WSOL",
+        "--rpc-url",
+        SOLANA_URL,
+        "--json",
+      );
+      if (listed.code !== 0)
+        throw new Error(`exit ${listed.code}\n${listed.stderr}\n${listed.stdout}`);
+      const out = JSON.parse(listed.stdout) as {
+        pools: {
+          venue: string;
+          pool: Address;
+          slots: Record<
+            string,
+            {
+              program: Address;
+              pool: Address;
+              config: Address;
+              vaultA: Address;
+              vaultB: Address;
+              extra: Address;
+              ticks: Address[];
+            }
+          >;
+        }[];
+        skipped: { venue: string; pool: Address; why: string }[];
+      };
+      // Every SOL/USDC pool of the fixture, its slot paying USDC the one the suite cooks with.
+      for (const name of [
+        "raydium-clmm-sol-usdc",
+        "pancakeswap-clmm-sol-usdc",
+        "orca-whirlpool-sol-usdc",
+        "cropper-sol-usdc",
+        "defituna-sol-usdc",
+        "crema-sol-usdc",
+        "phoenix-sol-usdc",
+      ]) {
+        const p = pool(name);
+        const found = out.pools.find((one) => one.pool === p.pool);
+        if (found === undefined) throw new Error(`sauce pools does not list ${name}`);
+        expect(found.slots.USDC).toEqual({
+          program: p.program,
+          pool: p.pool,
+          config: p.config,
+          vaultA: p.vaultA,
+          vaultB: p.vaultB,
+          extra: p.extra,
+          ticks: p.payB,
+        });
+      }
+      // Byreal's SOL/USDC pool adds fees past its rate: skipped, as the program skips it.
+      expect(out.skipped.find((one) => one.pool === pool("byreal-sol-usdc").pool)?.why).toMatch(
+        /more than one rate/,
+      );
     }, 300_000);
 
     it("rehearses for an owner with no Pot, no lamports and no USDC, given --assume-balance", async () => {

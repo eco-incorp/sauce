@@ -11,6 +11,7 @@
 import {
   address,
   getBase58Decoder,
+  getBase58Encoder,
   getBase64Decoder,
   getBase64Encoder,
   getPublicKeyFromAddress,
@@ -73,8 +74,15 @@ export interface SolanaShim {
   restore(): void;
 }
 
-/** A Solana endpoint at `url`, answered from `svm`. */
-export function solanaShim(svm: LiteSVM, url: string): SolanaShim {
+/**
+ * A Solana endpoint at `url`, answered from `svm`. `known` names the accounts `getProgramAccounts`
+ * scans, the bank having no way to list its own: without it the call is refused.
+ */
+export function solanaShim(
+  svm: LiteSVM,
+  url: string,
+  known?: () => readonly Address[],
+): SolanaShim {
   const original = globalThis.fetch;
   const landed = new Map<string, Landed>();
   const sent: Transaction[] = [];
@@ -138,6 +146,38 @@ export function solanaShim(svm: LiteSVM, url: string): SolanaShim {
         const versioned = (message[0]! & 0x80) !== 0;
 
         return answer(id, { context: context(), value: 5000 * message[versioned ? 1 : 0]! });
+      }
+      case "getProgramAccounts": {
+        if (known === undefined) break;
+        const [program, config] = params as [
+          string,
+          {
+            dataSlice?: { offset: number; length: number };
+            filters?: ({ dataSize: number } | { memcmp: { offset: number; bytes: string } })[];
+          },
+        ];
+        const matches = known().flatMap((key) => {
+          const found = svm.getAccount(key);
+          if (!found.exists || found.programAddress !== program) return [];
+          const data = found.data;
+          const kept = (config.filters ?? []).every((filter) =>
+            "dataSize" in filter
+              ? data.length === Number(filter.dataSize)
+              : (() => {
+                  const want = getBase58Encoder().encode(filter.memcmp.bytes);
+                  const at = Number(filter.memcmp.offset);
+                  return want.every((byte, i) => data[at + i] === byte);
+                })(),
+          );
+          if (!kept) return [];
+          const slice = config.dataSlice;
+          const shown =
+            slice === undefined
+              ? data
+              : data.subarray(Number(slice.offset), Number(slice.offset) + Number(slice.length));
+          return [{ pubkey: key, account: rpcAccount({ ...found, data: shown }) }];
+        });
+        return answer(id, matches);
       }
       case "getMinimumBalanceForRentExemption":
         return answer(id, Number(svm.minimumBalanceForRentExemption(BigInt(params[0] as number))));

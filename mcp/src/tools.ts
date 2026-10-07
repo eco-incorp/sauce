@@ -82,6 +82,7 @@ import {
   svmPotCommand,
   svmPotExists,
   svmAssumedBalances,
+  svmPoolsCommand,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
@@ -1445,7 +1446,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "move the price 1% against the taker, through its ticks). `empty` lists the pools with " +
         "no liquidity at their price, which a swap skips; `checked`, what was looked at. Every " +
         "read is at one block, `block` (the latest, or the one given): pass it to " +
-        "sauce_simulate's block to rehearse on the prices a maxPrice was taken from.",
+        "sauce_simulate's block to rehearse on the prices a maxPrice was taken from. On Solana " +
+        "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
+        "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix, each with its fee, liquidity, " +
+        "sides as above and `slots`: by the token paid, the nine accounts the distributed swap " +
+        "takes for the pool (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
+        "System program; `skipped` lists the pools the distributed swap skips, with why.",
       input: {
         chain: chainRef,
         tokenA: z
@@ -1505,8 +1511,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     async (args, reach) => {
       const chain = parseChain(String(args.chain), "chain");
       if (chain.kind !== "evm") {
-        throw new UsageError(
-          `sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
+        if (args.v4Pools !== undefined || args.block !== undefined)
+          throw new UsageError("v4Pools and block are for an EVM chain's pools");
+        const url = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
+
+        return fromCommand(
+          await svmPoolsCommand({ chain, rpcUrl: url, tokens: [args.tokenA, args.tokenB] }),
         );
       }
       const v4Keys = (args.v4Pools ?? []).map((raw) => parseV4Key(raw, "v4Pools"));

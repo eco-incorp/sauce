@@ -110,6 +110,7 @@ import {
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
 import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
+import { svmPoolsCommand } from "./pools-svm.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import {
@@ -3185,8 +3186,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   pools: {
-    usage:
+    usage: [
       "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… [--block <number|tag>] [--json]",
+      "sauce pools --chain solana <pay token> <buy token> [--json]",
+    ],
     summary: "List a pair's price-limit pools on a chain, deepest first, with their prices",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pools are on" },
@@ -3195,11 +3198,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<fee:spacing>",
         help: "Also try this hookless Uniswap V4 pool key (3000:60)",
+        only: "evm",
       },
       block: {
         type: "string",
         value: "<number|tag>",
         help: "Read the pools at this block: a number, or latest, safe, finalized (default: latest)",
+        only: "evm",
       },
       ...ENDPOINT,
       ...JSON_FLAG,
@@ -3228,10 +3233,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "block, which it names: --block, or the latest when it starts. Pass that block to sauce",
       "simulate --block to rehearse on the prices maxPrice was taken from.",
       "",
+      "On Solana: every pool of the pair at each venue whose swap takes a price limit that stops",
+      "it (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper,",
+      "DefiTuna, Crema, and Phoenix's markets), found with getProgramAccounts on each venue's",
+      "program. For each: its fee, liquidity and price both ways with the fee and as maxPrice, and",
+      "its slot paying each token: the nine accounts the distributed swap takes for it (program,",
+      "pool, config, the two vaults, one more account its swap takes, three tick arrays), each",
+      "unused one the System program. A pool the distributed swap skips is listed as skipped with",
+      "why. A token is a symbol the chain registers, or a base58 mint.",
+      "",
       "Examples:",
       "  sauce pools --chain base USDC WETH",
       "  sauce pools --chain base USDC 0x… --json",
       "  sauce pools --chain base WETH USDC --v4-key 50:1",
+      "  sauce pools --chain solana USDC WSOL --json",
     ].join("\n"),
     run: async (args, io) => {
       const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
@@ -3241,9 +3256,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
       if (chain.kind !== "evm") {
-        throw new UsageError(
-          `sauce pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
-        );
+        for (const flag of ["v4-key", "block"])
+          if (repeatedFlag(args, flag).length > 0 || stringFlag(args, flag) !== undefined)
+            throw new UsageError(`--${flag} is for an EVM chain's pools`);
+        const url = requiredEndpoint(args, io, chain);
+
+        return svmPoolsCommand({ chain, rpcUrl: url, tokens: [first, second] });
       }
       const v4Keys = repeatedFlag(args, "v4-key").map((raw) => parseV4Key(raw));
       // Every read at one block, which the report names.
