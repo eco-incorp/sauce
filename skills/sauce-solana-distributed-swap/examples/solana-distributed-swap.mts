@@ -1,15 +1,17 @@
 // Compiles solana-distributed-swap.sauce.ts for Solana the way `sauce compile` does, and checks
-// that the SKILL.md shows the program's own code; that each venue the program names is the program
-// id the SDK records for it, written beside its key, and listed in the skill's table; that the
-// pool offsets it reads are the SDK's own for each venue; that its accounts are the ones its header
-// and the skill name, in order; and that `maxPrice`, `minTokens`, `maxAvgPrice` and the rehearsal's
-// average the skill and the header give are what the arithmetic gives. Asserts what can be checked
-// offline; sends nothing.
+// that the SKILL.md shows the program's own code; that each venue `@sauce/router` swaps at is the
+// program id the SDK records for it, written beside its key, and listed in the skill's table with
+// its function, which takes the arguments the skill gives; that the pool offsets the library reads
+// are the SDK's own for each venue; that the program's accounts are the ones its header and the
+// skill name, in order; and that `maxPrice`, `minTokens`, `maxAvgPrice` and the rehearsal's average
+// the skill and the header give are what the arithmetic gives. Asserts what can be checked offline;
+// sends nothing.
 //
 //   node solana-distributed-swap.mts
 import { readFileSync } from "node:fs";
 
 import { routes } from "@eco-incorp/sauce";
+import { resolveSdkModule, resolveSdkPackage } from "@eco-incorp/sauce/compiler";
 import {
   BYREAL_PROGRAM_ID,
   CREMA_OFF_FEE_RATE,
@@ -42,38 +44,75 @@ const venues = readFileSync(new URL("../references/venues.md", import.meta.url),
 const prose = skill.replace(/\s+/g, " ");
 
 // The SKILL.md shows the program's code exactly: the file less its header comment.
-const code = source.slice(source.indexOf("// The venues."));
+const code = source.slice(source.indexOf("// The swaps are"));
 const shown = /```sauce chain=solana\n([\s\S]*?)```/.exec(skill);
 check(shown !== null && shown[1] === code, "the SKILL.md's program is the example file's code");
 
-// Each venue the program names is the SDK's program id: its 32-byte key, the base58 id written
-// beside it, and a row of the skill's table.
+// The program swaps through `@sauce/router`'s `trySwap`, and the library the package serves for it
+// on Solana is its SVM arm.
+check(/^import \{ trySwap \} from "@sauce\/router";$/m.test(code), "the program imports trySwap");
+const entry = resolveSdkPackage("@sauce/router");
+if (entry === undefined) throw new Error("the SDK serves @sauce/router");
+const served = resolveSdkModule(entry.replace(/\.js$/, ".svm.js"));
+if (served === undefined) throw new Error("@sauce/router has an SVM arm");
+const library = new TextDecoder().decode(served);
+const body = (name: string): string => {
+  const at = library.indexOf(`export function ${name}(`);
+  check(at >= 0, `@sauce/router exports ${name}`);
+  return library.slice(at, library.indexOf("\n}\n", at));
+};
+const params = (name: string) =>
+  /\(([^)]*)\)/
+    .exec(body(name))![1]!
+    .split(",")
+    .map((p) => p.trim().split(":")[0]!.trim())
+    .filter(Boolean)
+    .join(", ");
+
+// Each venue the library swaps at is the SDK's program id: its 32-byte key, the base58 id written
+// beside it in `trySwap` and above its own function, and a row of the skill's table naming that
+// function, which takes `trySwap`'s arguments, as the skill says.
 const key = (id: string) =>
   `0x${Buffer.from(getAddressEncoder().encode(id as never)).toString("hex")}`;
 const VENUES: [string, string, string][] = [
-  ["RAYDIUM_CLMM", RAYDIUM_CLMM_PROGRAM_ID, "Raydium CLMM"],
-  ["PANCAKESWAP_CLMM", PANCAKESWAP_CLMM_PROGRAM_ID, "PancakeSwap CLMM"],
-  ["BYREAL", BYREAL_PROGRAM_ID, "Byreal"],
-  ["STABBLE_CLMM", STABBLE_CLMM_PROGRAM_ID, "Stabble CLMM"],
-  ["ORCA_WHIRLPOOL", ORCA_WHIRLPOOL_PROGRAM_ID, "Orca Whirlpools"],
-  ["CROPPER", CROPPER_PROGRAM_ID, "Cropper"],
-  ["DEFITUNA", DEFITUNA_PROGRAM_ID, "DefiTuna"],
-  ["CREMA", CREMA_PROGRAM_ID, "Crema"],
-  ["PHOENIX", PHOENIX_PROGRAM_ID, "Phoenix"],
+  ["tryRaydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, "Raydium CLMM"],
+  ["tryPancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, "PancakeSwap CLMM"],
+  ["tryByreal", BYREAL_PROGRAM_ID, "Byreal"],
+  ["tryStabbleClmm", STABBLE_CLMM_PROGRAM_ID, "Stabble CLMM"],
+  ["tryOrcaWhirlpool", ORCA_WHIRLPOOL_PROGRAM_ID, "Orca Whirlpools"],
+  ["tryCropper", CROPPER_PROGRAM_ID, "Cropper"],
+  ["tryDefituna", DEFITUNA_PROGRAM_ID, "DefiTuna"],
+  ["tryCrema", CREMA_PROGRAM_ID, "Crema"],
+  ["tryPhoenix", PHOENIX_PROGRAM_ID, "Phoenix"],
 ];
-for (const [name, id, venue] of VENUES) {
+const ARGS = "slot, trader, amountIn, maxPrice, minOut, recipient";
+check(
+  params("trySwap") === ARGS && prose.includes(`\`(${ARGS})\``),
+  `trySwap takes (${ARGS}), as the skill gives them`,
+);
+check(params("swap") === ARGS, "and so does swap");
+const dispatch = body("trySwap");
+for (const [fn, id, venue] of VENUES) {
   check(
-    code.includes(`const ${name} = ${key(id)}; // ${id}`),
-    `the program names ${venue} as ${id}`,
+    dispatch.includes(`${key(id)}`) && dispatch.includes(`// ${venue}, ${id}`),
+    `trySwap takes ${venue}'s pools, ${id}`,
   );
   check(
-    new RegExp(`\\| ${venue} +\\| \`${id}\``).test(skill),
-    `the skill's table lists ${venue}, ${id}`,
+    new RegExp(`// ${venue}, ${id}[^\\n]*\\n(?://[^\\n]*\\n)*export function ${fn}\\(`).test(
+      library,
+    ) && body(fn).includes(key(id)),
+    `${fn} takes ${venue}'s pools, ${id}`,
+  );
+  const plain = fn.charAt(3).toLowerCase() + fn.slice(4);
+  check(params(fn) === ARGS && params(plain) === ARGS, `${fn} and ${plain} take (${ARGS})`);
+  check(
+    new RegExp(`\\| ${venue} +\\| \`${id}\` +\\|[^\\n]*\\| \`${fn}\` +\\|`).test(skill),
+    `the skill's table lists ${venue}, ${id}, ${fn}`,
   );
 }
 check(
-  (code.match(/^const [A-Z_]+ = 0x[0-9a-f]{64};/gm) ?? []).length === VENUES.length,
-  "the program names those venues and no other",
+  (dispatch.match(/0x[0-9a-f]{64}/g) ?? []).length === VENUES.length,
+  "trySwap takes those venues and no other",
 );
 for (const left of ["Invariant", "Meteora DLMM", "Bonkswap", "Saros DLMM", "Manifest"])
   check(
@@ -83,7 +122,7 @@ for (const left of ["Invariant", "Meteora DLMM", "Bonkswap", "Saros DLMM", "Mani
 for (const error of ["PriceLimitReached", "ExceededAmountSlippageTolerance", "PriceLimitExceeded"])
   check(prose.includes(`\`${error}\``), `the skill quotes ${error}`);
 
-// The offsets the program reads are the SDK's own, for the venues whose decoders export them; the
+// The offsets the library reads are the SDK's own, for the venues whose decoders export them; the
 // references give the same.
 for (const [offset, what] of [
   [OFF_TICK_SPACING, "a whirlpool's tick spacing"],
@@ -92,14 +131,14 @@ for (const [offset, what] of [
   [OFF_LIQUIDITY, "its liquidity"],
   [OFF_SQRT_PRICE, "its sqrt price"],
 ] as const)
-  check(code.includes(`svm.sload(pool, ${offset}, `), `the program reads ${what} at ${offset}`);
+  check(library.includes(`svm.sload(pool, ${offset}, `), `the library reads ${what} at ${offset}`);
 for (const [offset, what] of [
   [CREMA_OFF_FEE_RATE, "Crema's fee rate"],
   [CREMA_OFF_LIQUIDITY, "its liquidity"],
   [CREMA_OFF_SQRT_PRICE, "its sqrt price"],
   [OFF_TAKER_FEE_BPS, "Phoenix's taker fee"],
 ] as const)
-  check(code.includes(`svm.sload(pool, ${offset}, `), `the program reads ${what} at ${offset}`);
+  check(library.includes(`svm.sload(pool, ${offset}, `), `the library reads ${what} at ${offset}`);
 for (const row of [
   "| fee rate, in millionths | 45 (u16) |",
   "| liquidity, sqrt price (Q64.64), tick | 237 (u128), 253 (u128), 269 (i32) |",
@@ -123,7 +162,7 @@ check(
   prose.includes(`slots and the shared accounts are ${expected.length} accounts`),
   "the skill counts them",
 );
-const header = source.slice(0, source.indexOf("// The venues."));
+const header = source.slice(0, source.indexOf("// The swaps are"));
 for (const name of [...shared, "tokenProgram", "token2022", "memo"])
   check(new RegExp(`\\b${name}\\b`).test(header), `the header names the account ${name}`);
 check(
@@ -138,12 +177,18 @@ check(
   "the skill gives the program's size",
 );
 
-// The five-slot program is this one with a fifth slot: the same venue code, word for word, and
-// main the same but for slot 4's nine accounts and its trade call.
+// The five-slot program is this one with a fifth slot: main the same but for slot 4's nine accounts
+// and its trySwap call.
 const five = readFileSync(new URL("./solana-distributed-swap-5.sauce.ts", import.meta.url), "utf8");
-const venueCode = (text: string) =>
-  text.slice(text.indexOf("// The venues."), text.indexOf("function main("));
-check(venueCode(five) === venueCode(source), "the five-slot program's venue code is this one's");
+const slot4 =
+  /\n {2}program4: Account,\n(?: {2}\w+4\d?: Account(?:<Writable>)?,\n){8}/.exec(five)?.[0] ?? "";
+const call4 = /\n {2}trySwap\(\n {4}\[program4,[^;]*;/.exec(five)?.[0] ?? "";
+check(
+  slot4 !== "" &&
+    call4 !== "" &&
+    five.slice(five.indexOf("// The swaps are")).replace(slot4, "\n").replace(call4, "") === code,
+  "the five-slot program is this one with slot 4's accounts and call",
+);
 const program5 = routes.compileSauceProgram("solana", five);
 const names5 = (program5.manifest?.accounts ?? []).map((entry) =>
   entry.kind === "slot" ? entry.name : "…",
@@ -154,7 +199,7 @@ check(
   `the five-slot program takes ${expected5.length} accounts`,
 );
 check(
-  (five.match(/^ {2}trade\(/gm) ?? []).length === 5,
+  (five.match(/^ {2}trySwap\(/gm) ?? []).length === 5,
   "and trades each of its five slots in turn",
 );
 check(
@@ -229,8 +274,8 @@ check(
   "the skill gives the rule",
 );
 check(
-  code.includes(
+  library.includes(
     "const own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);",
   ),
-  "the program applies it",
+  "the library applies it",
 );

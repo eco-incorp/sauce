@@ -52,7 +52,7 @@ language, the names each chain offers and the patterns; their example programs s
 rules a correct program follows. They are not templates to copy, adapt or choose between: never
 ask the user which example or existing file to start from. The one exception is a complete
 implementation a skill says to use whole: the Solana distributed swap (`sauce-solana-distributed-swap`),
-whose venue code is each venue's byte layout and instruction format. Take its code as given, and
+whose pool slots are the accounts `sauce pools` fills by name. Take its code as given, and
 write the header, the slots and the inputs for the task. Ask only for the facts the request
 leaves open (an amount, a price limit, a recipient, the chain); decide the rest, write the
 program, and rehearse it with `sauce simulate`.
@@ -286,13 +286,13 @@ venues.
 The same limit order on Solana: one exact-input order spread over the pools of every Solana venue
 whose swap stops at a price limit (Raydium CLMM and the programs built on it, Orca Whirlpools and
 Cropper, DefiTuna, Crema, Phoenix's order book), each pool a slot of accounts found before the
-cook with `sauce pools --chain solana`, its venue read from the pool's owner, a fee-adjusted limit
-per pool, the minimum and average-price checks, and what fits in one cook (about five pools: a
-staged program and a lookup table).
+cook with `sauce pools --chain solana`, swapped by `@sauce/router`'s `trySwap`, which reads its
+venue from the pool's owner and gives each pool a fee-adjusted limit, the minimum and average-price
+checks, and what fits in one cook (about five pools: a staged program and a lookup table).
 
-- **Holds** one complete program over four slots, a reference of each venue's pool layout and the
-  nine accounts its slot takes, and a runner that holds the skill's venues, offsets and arithmetic
-  to it.
+- **Holds** one complete program over four slots, a reference of each venue's pool layout, its
+  `@sauce/router` function and the nine accounts its slot takes, and a runner that holds the
+  skill's venues, offsets and arithmetic to the program and the library.
 - **Load it** for a split or limit order on Solana, with `sauce-solana` for the accounts.
 - **Asked as:** "Buy SOL with up to 1,000 USDC across Raydium and Orca, never above 120 USDC."
 
