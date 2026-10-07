@@ -8,6 +8,9 @@
  *      `synthraV3SwapCallback` is paid by the generation-4 Router, a callback name the Router does
  *      not answer reverts (what a pre-generation-4 Router does with Synthra's), and a pool asking
  *      for more than the exact input is refused with `InputExceedsAuthorized`.
+ *   3. The same pools through `tryUniswapV3`: the paid swap delivers exactly what `uniswapV3` does,
+ *      and each refusal above — an unanswered callback, `InputExceedsAuthorized`, a codeless pool, a
+ *      pool for another pair — returns 0 with the Pot and the pool untouched and the cook landed.
  *
  * The pool is v12's own `test/mocks/MockV3Pool.sol` (copied into `fixtures/`, built by forge from
  * the same tree as the Router): Uniswap V3's `swap` selector, a settable callback selector, and a
@@ -368,6 +371,87 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       expect(getAddress(to)).toBe(sauce.pot);
       expect(await sendAs(OWNER, to, data)).toBe("reverted");
       expect(await balance(token0, at)).toBe(0n);
+    });
+
+    /**
+     * The route call a program calling `@sauce/router`'s `tryUniswapV3` compiles to: it requires
+     * the function to return `expected`, so a cook that lands proves the skip-or-swap verdict too.
+     */
+    const trySwapCall = (
+      at: Address,
+      expected: bigint,
+      tokenOut: Address = token1,
+    ): { to: Address; data: Hex } => {
+      const source = [
+        'import { tryUniswapV3 } from "@sauce/router";',
+        "function main() {",
+        `  const got = tryUniswapV3(${BigInt(at)}n, ${BigInt(token0)}n, ${BigInt(tokenOut)}n, ${AMOUNT_IN}n, 0n, 0n, ctx.self());`,
+        `  require(got == ${expected}n);`,
+        "}",
+      ].join("\n");
+      const { calls } = compileSauceRoute("base", source, { engine: sauce.engine, pot: sauce.pot });
+
+      return { data: calls[0]!.data, to: sauce.pot };
+    };
+
+    describe("tryUniswapV3: the same swap, or nothing", () => {
+      it("swaps exactly as uniswapV3 does when the pool is paid, returning what it delivered", async () => {
+        const at = await pool("synthraV3SwapCallback(int256,int256,bytes)");
+        const out = (AMOUNT_IN * RATE) / 10n ** 18n;
+        const { to, data } = trySwapCall(at, out);
+        const [potIn, potOut] = [
+          await balance(token0, sauce.pot),
+          await balance(token1, sauce.pot),
+        ];
+
+        expect(await sendAs(OWNER, to, data)).toBe("success");
+        expect(await balance(token0, at)).toBe(AMOUNT_IN);
+        expect(await balance(token0, sauce.pot)).toBe(potIn - AMOUNT_IN);
+        expect(await balance(token1, sauce.pot)).toBe(potOut + out);
+      });
+
+      it("returns 0 having moved nothing when the pool calls back under a name the Router does not answer", async () => {
+        const at = await pool("someOtherV3SwapCallback(int256,int256,bytes)");
+        const { to, data } = trySwapCall(at, 0n);
+        const [potIn, potOut] = [
+          await balance(token0, sauce.pot),
+          await balance(token1, sauce.pot),
+        ];
+
+        // `uniswapV3` reverts the whole program here (above); the try form lands it.
+        expect(await sendAs(OWNER, to, data)).toBe("success");
+        expect(await balance(token0, at)).toBe(0n);
+        expect(await balance(token0, sauce.pot)).toBe(potIn);
+        expect(await balance(token1, sauce.pot)).toBe(potOut);
+      });
+
+      it("returns 0 having moved nothing when the Router refuses the pool's ask (InputExceedsAuthorized)", async () => {
+        const at = await pool("synthraV3SwapCallback(int256,int256,bytes)", 1n);
+        const { to, data } = trySwapCall(at, 0n);
+        const potIn = await balance(token0, sauce.pot);
+
+        expect(await sendAs(OWNER, to, data)).toBe("success");
+        expect(await balance(token0, at)).toBe(0n);
+        expect(await balance(token0, sauce.pot)).toBe(potIn);
+      });
+
+      it("returns 0 for an address with no code and for a pool that is not this pair's", async () => {
+        const codeless = trySwapCall("0x000000000000000000000000000000000000dEaD", 0n);
+        expect(await sendAs(OWNER, codeless.to, codeless.data)).toBe("success");
+
+        const at = await pool("synthraV3SwapCallback(int256,int256,bytes)");
+        const potIn = await balance(token0, sauce.pot);
+        const elsewhere = trySwapCall(at, 0n, "0x000000000000000000000000000000000000bEEF");
+        expect(await sendAs(OWNER, elsewhere.to, elsewhere.data)).toBe("success");
+        expect(await balance(token0, at)).toBe(0n);
+        expect(await balance(token0, sauce.pot)).toBe(potIn);
+      });
+
+      it("PLANTED: requiring a different return makes the same cook revert, so each cell's verdict is real", async () => {
+        const at = await pool("someOtherV3SwapCallback(int256,int256,bytes)");
+        const { to, data } = trySwapCall(at, 1n);
+        expect(await sendAs(OWNER, to, data)).toBe("reverted");
+      });
     });
   });
 });

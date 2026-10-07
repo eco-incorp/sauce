@@ -558,11 +558,14 @@ same two ways (embedded, and `dist/std/router` via `copy-verify-assets.mjs`); `r
 maps it like `@sauce/token`, so every SDK compile — route bodies, `openRoute`, actions — resolves it
 with no option. It is THE one implementation of a swap at its nine venues: one exported function
 per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2`, `traderJoeLB`,
-`woofi`, `maverickV2`), every argument a RUN-TIME value, in one order —
+`woofi`, `maverickV2`, `infinityCL`, `infinityBin`), every argument a RUN-TIME value, in one order —
 `venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
-the recipient received; plus `try` forms (`tryUniswapV2`, `tryTraderJoeLB`: a capacity check before
-anything moves; `tryCurve`, `tryBalancerV2`: catch and reset the approval) that return `0n` having
-moved nothing, and NONE for DODO V2 or WOOFi, which can do neither. The pay-first venues call the
+the recipient received; plus a `try` form of each that returns `0n` having moved nothing: a check
+before anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
+`querySellBase`/`querySellQuote`, `tryWoofi` `tryQuery`), a caught pool call that resets its
+approval (`tryCurve`, `tryBalancerV2`), or a caught Router call (`tryUniswapV3`, `tryUniswapV4`,
+`tryMaverickV2`, `tryInfinityCL`, `tryInfinityBin` — held to `minOut` after the swap, since the
+generation-4 Router takes no floor). The pay-first venues call the
 pool directly; V3/V4/Maverick call the Pot's Router (`ctx.self()`). Token writes are `@sauce/token`'s
 (it imports the package). Orientation is checked from the arguments at run time (V2/V4 sort order,
 DODO base/quote, LB X/Y); `minOut` is uniform (`0n` none; WOOFi requires it). The pool and Router

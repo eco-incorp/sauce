@@ -1,5 +1,5 @@
 {
-  "$comment": "WOOFi WooPPV2.swap, copied from the verified WooPPV2 on Arbitrum, 0xEd9e3f98bBed560e66B89AaC922E29D4596A9642 (solc 0.8.14). The Base deployment's implementation is not verified on any explorer; its dispatch table carries the same selector, 0x7dc20382.",
+  "$comment": "WOOFi WooPPV2.swap, copied from the verified WooPPV2 on Arbitrum, 0xEd9e3f98bBed560e66B89AaC922E29D4596A9642 (solc 0.8.14). The Base deployment's implementation is not verified on any explorer; its dispatch table carries the same selector, 0x7dc20382. tryQuery(fromToken, toToken, fromAmount) is the same contract's quote that returns 0 instead of reverting when the reserve, the notional cap or the oracle refuses the trade.",
   "abi": [
     {
       "name": "swap",
@@ -34,6 +34,31 @@
       "outputs": [
         {
           "name": "realToAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tryQuery",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "fromToken",
+          "type": "address"
+        },
+        {
+          "name": "toToken",
+          "type": "address"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "toAmount",
           "type": "uint256"
         }
       ]

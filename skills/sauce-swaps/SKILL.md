@@ -1,6 +1,6 @@
 ---
 name: sauce-swaps
-description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, and the try forms), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, the PancakeSwap Infinity entry points on the Router itself, and the guard that stops a leg from stranding input. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
+description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin, and a try form of each), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, PancakeSwap Infinity CL and bin pools, and the guard that stops a leg from stranding input. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
 ---
 
 # Swaps with `@sauce/router`
@@ -52,9 +52,12 @@ received:
   builds the key from `tokenIn` and `tokenOut` in sort order. `uint256Indices` picks a Curve
   CryptoSwap pool's `uint256` coin indices over a StableSwap pool's `int128` ones.
 
-`tryUniswapV2`, `tryCurve`, `tryBalancerV2` and `tryTraderJoeLB` take the same arguments as the
-function they name and return `0`, having moved nothing, instead of reverting when the swap cannot
-be made. DODO V2 and WOOFi have no `try` form.
+Each venue has a `try` form — `tryUniswapV2`, `tryCurve`, `tryBalancerV2`, `tryDodoV2`,
+`tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
+`tryInfinityBin` — that takes the same arguments as the function it names and returns `0`, having
+moved nothing, instead of reverting when the swap cannot be made. The forms that call the Router
+(V3, V4, Maverick, Infinity) catch the Router's call and hold a swap that ran to `minOut` after it;
+with a `minOut` of `0` they also return `0` for a swap that ran and delivered nothing.
 
 ## How each venue is reached
 
@@ -158,11 +161,13 @@ cook reverts as a whole either way.
 
 ## PancakeSwap Infinity
 
-PancakeSwap Infinity pools are not in the library: the Router's own entry points swap them, called
-through the Pot with the Router ABI the package serves (`import { ISauceRouter } from
-"./artifacts/ISauceRouter.json"`, then `ISauceRouter.at(ctx.self())`). Their exact input is a
-positive unsigned amount, and they return `(amountInUsed, amountOut)`. Check the output against
-your floor. These signatures require generation 4.
+`infinityCL` and `infinityBin` swap PancakeSwap Infinity pools through the Router's own entry points,
+the same way `uniswapV4` does a V4 pool: the key is built from `tokenIn` and `tokenOut` in sort order
+with the pool's `poolManager`, `fee`, `parameters` and `hooks`, and `vault` is the Infinity Vault.
+The entry points themselves, which a program can also call with the Router ABI the package serves
+(`import { ISauceRouter } from "./artifacts/ISauceRouter.json"`, then `ISauceRouter.at(ctx.self())`),
+take a positive unsigned exact input and return `(amountInUsed, amountOut)`. These signatures
+require generation 4.
 
 | Entry point                                                                               | Price bound         |
 | ----------------------------------------------------------------------------------------- | ------------------- |
