@@ -225,7 +225,7 @@ export function returning(name: string, args: readonly Arg[], expected: bigint):
 
 /**
  * A `try` form skipping: `name(args)` returns 0, the cook lands, and every balance in `watch` — the
- * Pot's and the pool's — is what it was.
+ * Pot's and the pool's — is what it was. Returns the cook's receipt.
  */
 export async function assertSkips(
   env: Anvil,
@@ -233,11 +233,13 @@ export async function assertSkips(
   name: string,
   args: readonly Arg[],
   watch: ReadonlyArray<readonly [string, string]>,
-): Promise<void> {
+): Promise<TransactionReceipt> {
   const before = await balances(env, watch);
   const receipt = await env.cook(compileSource(env, chain, returning(name, args, 0n)));
   assert.equal(receipt.status, "success", `${name} did not land returning 0`);
   assert.deepEqual(await balances(env, watch), before, `${name} moved something`);
+
+  return receipt;
 }
 
 /** `name(args)` reverts the whole cook, and every balance in `watch` is what it was. */

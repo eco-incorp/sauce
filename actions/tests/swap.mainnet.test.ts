@@ -23,6 +23,7 @@ import assert from "node:assert/strict";
 import {
   concat,
   encodeAbiParameters,
+  keccak256,
   parseAbi,
   toBytes,
   toHex,
@@ -99,6 +100,7 @@ const MAX_UINT112 = (1n << 112n) - 1n;
 const SELF = "self";
 
 const pair = parseAbi(["function getReserves() view returns (uint112, uint112, uint32)"]);
+const poolManager = parseAbi(["function extsload(bytes32 slot) view returns (bytes32)"]);
 const dodo = parseAbi([
   "function getVaultReserve() view returns (uint256 baseReserve, uint256 quoteReserve)",
   "function querySellBase(address trader, uint256 payBaseAmount) view returns (uint256 receiveQuoteAmount, uint256 mtFee)",
@@ -179,7 +181,7 @@ const v4 = (
   tokenIn: string,
   tokenOut: string,
   amount: bigint,
-  { minOut = 0n, fee = 10n, poolManager = POOL_MANAGER } = {},
+  { minOut = 0n, fee = 10n, poolManager = POOL_MANAGER, limit = 0n } = {},
 ) => [
   addr(poolManager),
   addr(tokenIn),
@@ -188,7 +190,7 @@ const v4 = (
   uint(fee),
   uint(1n),
   addr(NATIVE),
-  uint(0n),
+  uint(limit),
   uint(minOut),
   self,
 ];
@@ -912,6 +914,54 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 1_800
       const nowhere = values(v4(USDC, USDT, USDC_100, { fee: 13n }));
       await assertSkips(env, CHAIN, "tryUniswapV4", nowhere, watch);
       await assertReverts(env, CHAIN, "uniswapV4", nowhere, watch);
+    });
+
+    it("tryUniswapV4 skips a pool with no liquidity at its price: the swap runs to a limit inside the gap and moves nothing", async () => {
+      // USDC/USDT at fee 11, tick spacing 1: initialized, with no liquidity in range. The pool's
+      // state is `_pools[id]` (slot 6 of the PoolManager): slot0 first, the liquidity three slots on.
+      const id = keccak256(
+        encodeAbiParameters(
+          [
+            { type: "address" },
+            { type: "address" },
+            { type: "uint24" },
+            { type: "int24" },
+            { type: "address" },
+          ],
+          [USDC, USDT, 11, 1, NATIVE as Address],
+        ),
+      );
+      const state = BigInt(
+        keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [id, 6n])),
+      );
+      const word = async (offset: bigint) =>
+        BigInt(
+          await env.publicClient.readContract({
+            address: POOL_MANAGER,
+            abi: poolManager,
+            functionName: "extsload",
+            args: [toHex(state + offset, { size: 32 })],
+          }),
+        );
+      const sqrtPriceX96 = (await word(0n)) & ((1n << 160n) - 1n);
+      assert.ok(sqrtPriceX96 > 0n, "the pool is initialized");
+      assert.equal(await word(3n), 0n, "and has no liquidity in range");
+      // USDC is currency0: selling it lowers the price, so a limit just below it stays in the gap.
+      const limit = sqrtPriceX96 - sqrtPriceX96 / 2000n;
+      await fund(USDC, USDC_100);
+      const key = `{ currency0: ${BigInt(USDC)}n, currency1: ${BigInt(USDT)}n, fee: 11n, tickSpacing: 1n, hooks: 0n }`;
+      const swap = `swapV4(${BigInt(POOL_MANAGER)}n, ${key}, ${BigInt(USDC)}n, true, ${USDC_100}n, ${limit}n, ctx.self())`;
+      assert.equal(await routerReturns(swap, 0n, 0n), "success", "the swap ran and moved nothing");
+      await fresh();
+      await fund(USDC, USDC_100);
+      const receipt = await assertSkips(
+        env,
+        CHAIN,
+        "tryUniswapV4",
+        values(v4(USDC, USDT, USDC_100, { fee: 11n, limit, minOut: 1n })),
+        watching(POOL_MANAGER, USDC, USDT),
+      );
+      assert.ok(receipt.gasUsed < 500_000n, `${receipt.gasUsed}`);
     });
 
     it("a swap that ran and took one unit of USDC for nothing reverts tryUniswapV4", async () => {

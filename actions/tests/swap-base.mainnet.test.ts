@@ -15,7 +15,7 @@
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseAbi, type Address, type Hex } from "viem";
+import { encodeAbiParameters, keccak256, pad, parseAbi, toHex, type Address, type Hex } from "viem";
 
 import { quoteAction } from "../src/index.js";
 import type { WoofiSwapAction } from "../src/types.js";
@@ -80,6 +80,10 @@ const USDC_IN = 1_000_000_000n;
 const USDC_1 = 1_000_000n;
 const SELF = "self";
 
+const clManager = parseAbi([
+  "function getSlot0(bytes32 id) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
+  "function getLiquidity(bytes32 id) view returns (uint128)",
+]);
 const wooPP = parseAbi([
   "function query(address fromToken, address toToken, uint256 fromAmount) view returns (uint256)",
   "function tryQuery(address fromToken, address toToken, uint256 fromAmount) view returns (uint256)",
@@ -126,7 +130,7 @@ const infinityCL = (
   tokenIn: string,
   tokenOut: string,
   amount: bigint,
-  { minOut = 0n, vault = INFINITY_VAULT } = {},
+  { minOut = 0n, vault = INFINITY_VAULT, limit = 0n } = {},
 ) => [
   addr(vault),
   addr(tokenIn),
@@ -136,10 +140,32 @@ const infinityCL = (
   uint(key.fee),
   uint(key.parameters),
   addr(NATIVE),
-  uint(0n),
+  uint(limit),
   uint(minOut),
   self,
 ];
+/** An Infinity pool's id: the hash of its key, the currencies sorted. */
+const infinityPoolId = (key: InfinityKey, currency0: string, currency1: string) =>
+  keccak256(
+    encodeAbiParameters(
+      [
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint24" },
+        { type: "bytes32" },
+      ],
+      [
+        currency0 as Address,
+        currency1 as Address,
+        NATIVE as Address,
+        key.manager as Address,
+        Number(key.fee),
+        pad(toHex(key.parameters)),
+      ],
+    ),
+  );
 const infinityBin = (
   key: InfinityKey,
   tokenIn: string,
@@ -569,15 +595,30 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 1_800_000
       await assertReverts(env, CHAIN, "infinityBin", bin({ ...BIN_USDC_USDT, fee: 8n }), watch);
     });
 
-    it("a swap that ran in a pool with no liquidity moved nothing either way: tryInfinityCL skips it", async () => {
+    it("a swap that ran in a pool with no liquidity moved nothing either way: tryInfinityCL skips it, after a tick walk a price limit bounds", async () => {
       const watch = watching(USDC, USDT);
       const pool = CL_USDC_USDT_EMPTY;
+      const id = infinityPoolId(pool, USDC, USDT);
+      const read = <T>(functionName: "getSlot0" | "getLiquidity") =>
+        env.publicClient.readContract({
+          address: CL_MANAGER,
+          abi: clManager,
+          functionName,
+          args: [id],
+        }) as Promise<T>;
+      const [sqrtPriceX96] = await read<readonly [bigint, number, number, number]>("getSlot0");
+      assert.ok(sqrtPriceX96 > 0n, "the pool is initialized");
+      assert.equal(await read<bigint>("getLiquidity"), 0n, "and holds no liquidity");
+      // USDC is currency0, so selling it lowers the price: 2^96, a price of 1 (tick 0), is a limit just
+      // past the pool's, inside the empty range.
+      const limit = 2n ** 96n;
+      assert.ok(limit < sqrtPriceX96, "the limit is past the pool's price, inside the empty range");
       await fund(USDC, USDC_IN);
       // The Router's own entry point lands the swap, having paid and received nothing: the manager
-      // walks the empty pool to the price limit.
+      // walks the empty range to the limit.
       const direct = [
         "function main() {",
-        `  const [paid, out] = SauceRouter.at(ctx.self()).swapInfinityCL(${BigInt(INFINITY_VAULT)}n, { currency0: ${BigInt(USDC)}n, currency1: ${BigInt(USDT)}n, hooks: 0n, poolManager: ${BigInt(CL_MANAGER)}n, fee: ${pool.fee}n, parameters: ${pool.parameters}n }, ${BigInt(USDC)}n, true, ${USDC_IN}n, 0n, ctx.self());`,
+        `  const [paid, out] = SauceRouter.at(ctx.self()).swapInfinityCL(${BigInt(INFINITY_VAULT)}n, { currency0: ${BigInt(USDC)}n, currency1: ${BigInt(USDT)}n, hooks: 0n, poolManager: ${BigInt(CL_MANAGER)}n, fee: ${pool.fee}n, parameters: ${pool.parameters}n }, ${BigInt(USDC)}n, true, ${USDC_IN}n, ${limit}n, ctx.self());`,
         "  require(paid == 0n);",
         "  require(out == 0n);",
         "}",
@@ -586,15 +627,33 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 1_800_000
         compileSource(env, CHAIN, direct, { SauceRouter: libraryAbi("sauce-router.abi.json") }),
       );
       assert.equal(receipt.status, "success", "the swap ran and moved nothing");
+
+      // So the try form skips it, at the cost of the few ticks to the limit...
       await fresh();
       await fund(USDC, USDC_IN);
-      await assertSkips(
+      const bounded = await assertSkips(
+        env,
+        CHAIN,
+        "tryInfinityCL",
+        values(infinityCL(pool, USDC, USDT, USDC_IN, { minOut: 1n, limit })),
+        watch,
+      );
+      // ...and with no limit, at the cost of the walk to the end of the tick range.
+      await fresh();
+      await fund(USDC, USDC_IN);
+      const walked = await assertSkips(
         env,
         CHAIN,
         "tryInfinityCL",
         values(infinityCL(pool, USDC, USDT, USDC_IN, { minOut: 1n })),
         watch,
       );
+      console.log(
+        `tryInfinityCL skipping an empty pool: ${walked.gasUsed} gas with no price limit, ` +
+          `${bounded.gasUsed} with one`,
+      );
+      assert.ok(walked.gasUsed > 5_000_000n, `${walked.gasUsed}`);
+      assert.ok(bounded.gasUsed < 500_000n, `${bounded.gasUsed}`);
     });
 
     it("a CL swap that ran and delivered nothing reverts tryInfinityCL: it took one unit of USDC, so 0 would lie", async () => {
