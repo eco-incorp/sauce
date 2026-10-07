@@ -285,9 +285,11 @@ Pots and intent steps are built and sent there.
   transaction for the owner's wallet.
 - **A rehearsal in a local copy.** A cook too large for one transaction, or one given
   `--assume-balance`, `sauce simulate` runs in a local copy of every account the cook names, read
-  from the cluster as it is, with the released engine and Kitchen (the copy is LiteSVM, which the
-  project needs: `npm install litesvm`): the Pot created where it is missing, the program staged
-  as `sauce run` stages it, then the cook. Nothing is signed or sent. There
+  from the cluster as it is, with the cluster's rent and the released engine and Kitchen (the copy
+  is LiteSVM, which the package brings): the Pot created where it is missing, the owner given the
+  lamports the staging and the fees take (so any address can rehearse), the program staged as
+  `sauce run` stages it, then the cook. Nothing is signed or sent. A failure names the account an
+  error gives only by its index, and what `main` returned when the program finished first. There
   `--assume-balance USDC:1000` gives the account the cook spends USDC from (the Pot's, or the
   owner's with `--via engine`) that balance, whole tokens as `--fund` takes them, and a
   `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a

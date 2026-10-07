@@ -1291,8 +1291,9 @@ lamports include the transaction's fee. `--json` lists them as `tokenChanges` an
 `lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so the
 rehearsal runs on the accounts as they are, and the owner must hold the Pot's rent and the fees (a
 shortfall is named). A cook too large for one transaction, or one given `--assume-balance`, is
-rehearsed in a local copy instead: LiteSVM (`npm install litesvm` in the project) with every
-account the cook names read from the cluster and the released engine and Kitchen, the Pot created
+rehearsed in a local copy instead: LiteSVM, which the package brings, with every account the
+cook names read from the cluster, the cluster's rent, and the released engine and Kitchen, the
+owner given the lamports the staging and the fees take (any address can rehearse), the Pot created
 where missing, the program staged into a code buffer as `run` stages it, then the cook, its
 accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
 spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a

@@ -6,8 +6,9 @@
  * cook names read from the cluster as it is now (a program's code from its program data), and the
  * clock set to the cluster's. Nothing is signed: the copy checks no signature.
  *
- * LiteSVM is not a dependency of the package: it is imported here, when a rehearsal needs it, from
- * the project the command runs in, and a missing one is named with how to add it.
+ * LiteSVM is a dependency of the package, imported here only when a rehearsal needs it, so no other
+ * command loads it and nothing outside the CLI reaches it. It is native code: on a platform it ships
+ * no binary for, the import fails, and the error says so.
  */
 import {
   getAddressDecoder,
