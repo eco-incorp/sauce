@@ -41,6 +41,9 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
   arguments.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several
   price-limited pools.
+- [A distributed swap on Solana](guides/solana-distributed-swap.md): the same limit order over
+  the pools of every Solana venue whose swap stops at a price limit, each pool's accounts from
+  `sauce pools`.
 - [Actions](guides/actions.md): write protocol actions as JSON, then run them or make an intent.
 - [Builders](guides/builders-and-actions.md): generate programs from structured data.
 - [Solana](guides/solana.md): plan accounts, stage code and execute on Solana.

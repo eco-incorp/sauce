@@ -96,6 +96,46 @@ export interface CommandOutput {
   readonly exitCode?: number;
 }
 
+/**
+ * A rehearsal's output with a failure that cannot be missed: `reverted: true` and `error`, the
+ * reason, first in its JSON (an MCP client gets it as an error result), and the exit code 1. A
+ * rehearsal that succeeded is returned as it is.
+ */
+export function revertedFirst(output: CommandOutput): CommandOutput {
+  if (output.json.ok !== false) return output;
+  const error =
+    typeof output.json.reason === "string" ? output.json.reason : "the rehearsal failed";
+
+  return {
+    ...output,
+    json: { reverted: true, error, ...output.json },
+    exitCode: output.exitCode ?? 1,
+  };
+}
+
+/**
+ * `output`, a rehearsal's, held to an expected revert: one whose reason contains `expected` is the
+ * result asked for (`ok` and `asExpected`, exit 0), still `reverted`; a success, or a revert for
+ * another reason, is not (exit 1). The first line says which.
+ */
+export function expectingRevert(output: CommandOutput, expected: string): CommandOutput {
+  const reverted = output.json.reverted === true;
+  const error = String(output.json.error ?? "");
+  const asExpected = reverted && error.includes(expected);
+  const first = asExpected
+    ? `As expected, the cook reverts: ${error}`
+    : reverted
+      ? `Expected a revert with "${expected}", but the cook reverts: ${error}`
+      : `Expected a revert with "${expected}", but the cook succeeds`;
+
+  return {
+    ...output,
+    text: `${first}\n${output.text}`,
+    json: { ...output.json, ok: asExpected, expectRevert: expected, asExpected },
+    exitCode: asExpected ? 0 : 1,
+  };
+}
+
 /** What every compiling command takes. */
 export interface ProgramInput {
   /** The program's file, or `<stdin>` for a program read from stdin. */

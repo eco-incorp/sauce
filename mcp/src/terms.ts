@@ -39,7 +39,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["owner"], input: "owner" },
   { flags: ["pot"], input: "pot" },
   { flags: ["value"], input: "value" },
-  { flags: ["account"], input: "accounts" },
+  { flags: ["account", "accounts"], input: "accounts" },
   { flags: ["intent-deadline"], input: "intentDeadline" },
   { flags: ["intent-creator"], input: "intentCreator" },
   { flags: ["intent-execution-fee"], input: "intentExecutionFee" },
@@ -48,6 +48,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["intent-prover"], input: "intentProver" },
   { flags: ["no-prove"], input: "prove: false" },
   { flags: ["max-execution-fee"], input: "maxExecutionFee" },
+  { flags: ["lookup-table"], input: "lookupTables" },
   { flags: ["via"], input: "via" },
   { flags: ["compact-args"], input: "compactArgs" },
   { flags: ["define", "defines"], input: "defines", lowLevel: true },
@@ -69,6 +70,11 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["sqrt-price-x96"], input: "sqrtPriceX96" },
   { flags: ["pool"], input: "pool" },
   { flags: ["v4-key"], input: "v4Pools" },
+  { flags: ["pay"], input: "pay" },
+  { flags: ["max-price"], input: "maxPrice" },
+  { flags: ["per-venue"], input: "perVenue" },
+  { flags: ["slots"], input: "slots" },
+  { flags: ["expect-revert"], input: "expectRevert" },
 ];
 
 /** What the mapping does not show flag by flag: a command is its tool, and a file its text. */

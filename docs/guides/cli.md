@@ -1168,6 +1168,21 @@ USDC/SPCXc on base at block 36120411: 3 pools with liquidity, deepest first (by 
 …
 ```
 
+On Solana, `sauce pools --chain solana USDC WSOL` finds the pair's pools with
+`getProgramAccounts` on the program of each venue whose swap stops at a price limit: Raydium CLMM,
+PancakeSwap CLMM, Byreal and Stabble CLMM, Orca Whirlpools and Cropper, DefiTuna, Crema, and
+Phoenix's markets. A Solana program takes its pools as accounts, so beside each pool's fee,
+liquidity and price both ways (`sides`, as above) it gives `slots`: by the token paid, the nine
+accounts [the distributed swap on Solana](solana-distributed-swap.md) takes for the pool — its
+program, the pool, its config, its two vaults, one more account its swap takes, and the three tick
+arrays its walk crosses that way, each unused one the System program. A pool the distributed swap
+skips (no liquidity, swaps switched off, a fee that is more than one rate, paused, a market not open
+for taking) is listed under `skipped` with why. `--pay <token>` chooses a distributed swap's slots:
+the deepest pools whose price with the fee is within `--max-price`, one a venue with
+`--per-venue`, as many as `--slots` (4), printed as `chosen` and as `accounts`, the slots'
+accounts as `--accounts` takes them. A venue that could not be read leaves the listing partial: a
+note says which, and the command exits 1. `--block` and `--v4-key` are EVM's.
+
 ### `sauce inspect`
 
 ```sh
@@ -1229,9 +1244,10 @@ the owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account); `
 mint and `program:USDC` its token program, SPL Token or Token-2022, the accounts
 `transferChecked` takes. A registered symbol's program is the registry's; any other mint's is read
 from the cluster. A tokenized stock is named the same way, by its symbol in any case
-(`pot:TSLAx`, `mint:NVDA_US`). A slot with no `--account` is named with the role it needs, and `simulate` notes each
-account it was given that the cluster does not have (a guard on it fails with no message of its
-own).
+(`pot:TSLAx`, `mint:NVDA_US`). `--accounts <json | file>` gives them all at once, one JSON object
+of each name to its value, as `--account` takes it; an `--account` beside it adds one more. A slot
+with no `--account` is named with the role it needs, and `simulate` notes each account it was given
+that the cluster does not have (a guard on it fails with no message of its own).
 
 ```js
 // @chain solana
@@ -1276,11 +1292,23 @@ Token-2022, in whole units by its mint's decimals, a mint the registry records b
 each account's lamports are listed, named
 by their `--account` names, as the owner, the Pot and the Kitchen's fee config; the owner's
 lamports include the transaction's fee. `--json` lists them as `tokenChanges` and
-`lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so there
-is no `--assume-balance`: the rehearsal runs on the accounts as they are, and the owner must hold
-the Pot's rent and the fees (a shortfall is named). A cook too large for one transaction is refused
-with the bytes to shrink the payload (the program and its arguments) by, since staging it writes a
-code buffer on chain, which only `run` does. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
+`lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so the
+rehearsal runs on the accounts as they are, and the owner must hold the Pot's rent and the fees (a
+shortfall is named). A cook too large for one transaction, or one given `--assume-balance`, is
+rehearsed in a local copy instead: LiteSVM, which the package brings, with every account the
+cook names read from the cluster, the cluster's rent, and the released engine and Kitchen, the
+owner given the lamports the staging and the fees take (any address can rehearse), the Pot created
+where missing, the program staged into a code buffer as `run` stages it, then the cook, its
+accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
+spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
+`pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note:
+`run` creates it before the cook (asking first, or with `--auto-approve`). An `--owner` that is
+not a wallet (a program's account, or one holding data) is refused, as it cannot pay. `tx` refuses a cook too large for one transaction, with the bytes to
+shrink the payload (the program and its arguments) by. Each account a transaction lists costs 32
+bytes, and one taken through an address lookup table one byte: `--lookup-table <address>` takes a
+cook's accounts through a table that holds them, on `run`, `simulate` and `tx`, and `run` creates
+one for a staged cook whose accounts do not fit, paid by the signer, and prints its address for the
+next cook to reuse. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
 configure), and prints the signature, status and compute units — and the logs when it fails. A
 program too large for one transaction is staged in a Kitchen code buffer first and the buffer is
 closed again after the cook — or when staging or the cook's rehearsal fails; if closing it fails,

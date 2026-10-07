@@ -6,8 +6,9 @@
 // Each mint's own token program moves it: USDC is an SPL Token mint, moved with `transfer`; TSLAx is
 // a Token-2022 mint, moved with `transferChecked`, which takes the mint's account and its decimals.
 //
-// It is past one Solana transaction, so `sauce run` stages it before the cook; `sauce simulate`
-// and `sauce tx` refuse it, naming how far over it is.
+// It is past one Solana transaction, so `sauce run` stages it before the cook, and
+// `sauce simulate` rehearses it staged, in a local copy of its accounts; `sauce tx` refuses it,
+// naming how far over it is.
 //
 //   sauce run payout-solana.sauce.ts --chain <chain> --keypair <keypair> \
 //     --account pot=pot --account usdcProgram=program:USDC --account potUsdc=pot:USDC \

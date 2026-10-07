@@ -4,12 +4,14 @@
  * every other request on, so an anvil beside it is reached as usual. It answers what the CLI's
  * Solana steps ask — the blockhash, the clock and accounts, balances, simulation (with the
  * accounts it is asked to report), sending, statuses with their slot, the landed transaction and
- * the finalized slot — and refuses anything else by name. `sendTransaction` checks every signature
+ * the finalized slot (one behind the tip, held in SlotHashes as a cluster's is) — and refuses
+ * anything else by name. `sendTransaction` checks every signature
  * against the message first, so a test proves the CLI signed what it sent.
  */
 import {
   address,
   getBase58Decoder,
+  getBase58Encoder,
   getBase64Decoder,
   getBase64Encoder,
   getPublicKeyFromAddress,
@@ -72,8 +74,15 @@ export interface SolanaShim {
   restore(): void;
 }
 
-/** A Solana endpoint at `url`, answered from `svm`. */
-export function solanaShim(svm: LiteSVM, url: string): SolanaShim {
+/**
+ * A Solana endpoint at `url`, answered from `svm`. `known` names the accounts `getProgramAccounts`
+ * scans, the bank having no way to list its own: without it the call is refused.
+ */
+export function solanaShim(
+  svm: LiteSVM,
+  url: string,
+  known?: () => readonly Address[],
+): SolanaShim {
   const original = globalThis.fetch;
   const landed = new Map<string, Landed>();
   const sent: Transaction[] = [];
@@ -104,8 +113,21 @@ export function solanaShim(svm: LiteSVM, url: string): SolanaShim {
           context: context(),
           value: { blockhash: svm.latestBlockhash(), lastValidBlockHeight: 1_000_000 },
         });
-      case "getSlot":
-        return answer(id, Number(slot()));
+      case "getSlot": {
+        // No commitment is the server's default, finalized (which a client leaves out).
+        const commitment = (params[0] as { commitment?: string } | undefined)?.commitment;
+        if (commitment !== undefined && commitment !== "finalized")
+          return answer(id, Number(slot()));
+        // A cluster's finalized slot trails its tip, and its SlotHashes holds it: the recent slot
+        // a lookup table's creation names, which the bank refuses unless SlotHashes has it.
+        const finalized = slot() - 1n;
+        const hashes = svm.getSlotHashes();
+        if (!hashes.some((entry) => entry.slot === finalized) && hashes.length > 0) {
+          hashes[0]!.slot = finalized;
+          svm.setSlotHashes(hashes);
+        }
+        return answer(id, Number(finalized));
+      }
       case "getBalance":
         return answer(id, {
           context: context(),
@@ -124,6 +146,38 @@ export function solanaShim(svm: LiteSVM, url: string): SolanaShim {
         const versioned = (message[0]! & 0x80) !== 0;
 
         return answer(id, { context: context(), value: 5000 * message[versioned ? 1 : 0]! });
+      }
+      case "getProgramAccounts": {
+        if (known === undefined) break;
+        const [program, config] = params as [
+          string,
+          {
+            dataSlice?: { offset: number; length: number };
+            filters?: ({ dataSize: number } | { memcmp: { offset: number; bytes: string } })[];
+          },
+        ];
+        const matches = known().flatMap((key) => {
+          const found = svm.getAccount(key);
+          if (!found.exists || found.programAddress !== program) return [];
+          const data = found.data;
+          const kept = (config.filters ?? []).every((filter) =>
+            "dataSize" in filter
+              ? data.length === Number(filter.dataSize)
+              : (() => {
+                  const want = getBase58Encoder().encode(filter.memcmp.bytes);
+                  const at = Number(filter.memcmp.offset);
+                  return want.every((byte, i) => data[at + i] === byte);
+                })(),
+          );
+          if (!kept) return [];
+          const slice = config.dataSlice;
+          const shown =
+            slice === undefined
+              ? data
+              : data.subarray(Number(slice.offset), Number(slice.offset) + Number(slice.length));
+          return [{ pubkey: key, account: rpcAccount({ ...found, data: shown }) }];
+        });
+        return answer(id, matches);
       }
       case "getMinimumBalanceForRentExemption":
         return answer(id, Number(svm.minimumBalanceForRentExemption(BigInt(params[0] as number))));
