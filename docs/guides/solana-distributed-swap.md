@@ -89,7 +89,10 @@ Each venue's pool layout, the nine accounts its slot takes and how to find its p
 
 `solana-distributed-swap.sauce.ts` is one
 complete implementation of those rules, over four slots, any venue in each; its header gives every
-input with its units and how to run it. Its code:
+input with its units and how to run it. **Use its code whole**: the venue code is each venue's byte
+layout, instruction format and account order, which nothing else gives and no program can do
+without. Write the file's header for the task, fill the slots and pass the inputs; change the code
+only to add or drop a slot (below). Its code:
 
 ```ts
 // A limit buy over Solana's price-limited pools: up to `budget` of one token for another, never
@@ -567,6 +570,20 @@ Step by step:
   returns `{ spent, bought, unspent }`: the cook returns it as three words, and `sauce simulate`
   prints it by name.
 
+**A fifth slot, or fewer.** A slot is nine `main` parameters and one `trade` call. To add one,
+declare after `ticks32`, as slot 3's are:
+
+```text
+program4: Account, pool4: Account<Writable>, config4: Account, vaultA4: Account<Writable>,
+vaultB4: Account<Writable>, extra4: Account<Writable>, ticks40: Account<Writable>,
+ticks41: Account<Writable>, ticks42: Account<Writable>,
+```
+
+and call `trade([program4, pool4, config4, vaultA4, vaultB4, extra4, ticks40, ticks41, ticks42],
+shared, kept, limit, maxPrice)` after the fourth call. Five fit one cook ("What fits in one cook").
+To drop one, remove its parameters and its call; an unused slot can also stay, all nine the System
+program.
+
 **The skips are reads, never failures.** A venue fails the whole cook on a limit on the wrong side
 of its price, on a paused pool and on a closed market, so the program checks each before calling
 it. A missing pool is never read at all.
@@ -574,22 +591,27 @@ it. A missing pool is never read at all.
 ## Inputs and units
 
 `main(… accounts …, budget, maxPrice, minTokens, maxAvgPrice)`, every amount in a token's base
-units: on Solana USDC has 6 decimals and SOL (WSOL) 9, so `1000000000` is 1,000 USDC and
-`1000000000` is also 1 SOL.
+units: on Solana USDC has 6 decimals and SOL 9, so `1000000000` is 1,000 USDC and `1000000000` is
+also 1 SOL. A pool holds SOL wrapped, the mint the registry names `WSOL` (`sauce pools` takes `SOL`
+for it too).
 
 **`maxPrice`** is payToken base units per buyToken base unit, times 1e18:
 
 `maxPrice = price × 10^(18 + payDecimals − buyDecimals)`, with `price` in whole payToken per whole
 buyToken. Paying USDC (6) for SOL (9), that is the price × 10^15.
 
-| Trade                                   | Price             | `maxPrice`              |
-| --------------------------------------- | ----------------- | ----------------------- |
-| Buy SOL with USDC                       | at most 120 USDC  | **120000000000000000**  |
-| Buy USDC with SOL (sell SOL at a floor) | at least 118 USDC | **8474576271186440677** |
+| Trade                                   | Price                    | `maxPrice`              |
+| --------------------------------------- | ------------------------ | ----------------------- |
+| Buy SOL with USDC                       | at most 120 USDC         | **120000000000000000**  |
+| Buy SOL with USDC, at a floor           | at least 0.0084 SOL each | **119047619047619047**  |
+| Buy USDC with SOL (sell SOL at a floor) | at least 118 USDC        | **8474576271186440677** |
 
-The second is the same order seen from the other side: 1 SOL for at least 118 USDC is at most
-`1 ÷ 118` SOL per USDC, so `10^9 × 1e18 ÷ (118 × 10^6)`, rounded down. `maxAvgPrice` is in the same
-units; `0` turns it off.
+**A floor is a ceiling turned over.** `maxPrice` is always what one unit bought may cost, in the
+token paid. A limit given the other way, as the least bought per unit paid ("never below 0.0084 SOL
+per USDC"), is its inverse: `maxPrice = 10^(18 + payDecimals − buyDecimals) ÷ floor`, rounded down
+so no unit fills below the floor. Paying USDC for SOL at 0.0084: `10^15 ÷ 0.0084`, 119.047619 USDC
+per SOL. The third row is the same: 1 SOL for at least 118 USDC is at most `1 ÷ 118` SOL per USDC,
+so `10^9 × 1e18 ÷ (118 × 10^6)`, rounded down. `maxAvgPrice` is in the same units; `0` turns it off.
 
 **`minTokens`, consistent with `maxPrice`.** Every unit costs `maxPrice` or less, so spending the
 whole budget buys at least `budget × 1e18 ÷ maxPrice`:
@@ -638,8 +660,11 @@ amount is base units; the command's token amounts (`--assume-balance`) are whole
 1. **Find the pools and their slots.** `sauce pools --chain solana USDC WSOL --json` reads every
    pool of the pair at the venues above, deepest first, each with its fee, its price both ways
    with the fee (`sides[].taker`, and as `maxPrice`), and `slots`: by the token paid, the nine
-   accounts its slot takes. A pool the program skips is under `skipped`, with why. Take the four
-   deepest whose taker price is within your `maxPrice`; the deepest and cheapest goes first.
+   accounts its slot takes. A pool the program skips is under `skipped`, with why, and so is an
+   order book whose offers are all far from the pair's price. Take the four deepest whose taker
+   price is within your `maxPrice`; the deepest and cheapest goes first. A pool deep enough may
+   take the whole order, and the slots after it then trade nothing: that is the program spending
+   at the best prices, not a slot wasted.
 2. **Write the accounts** as one JSON object, which `--accounts` takes (each is also
    `--account NAME=<value>`). `pot:USDC` is the Pot's own USDC account, `mint:USDC` the mint:
 
@@ -668,15 +693,26 @@ amount is base units; the command's token amounts (`--assume-balance`) are whole
    ```
 
    and the same nine for slots 1 to 3 (`program1` … `ticks32`), each from its pool, or all nine
-   the System program, `11111111111111111111111111111111`, for a slot with no pool. `refund` as
+   the System program, `11111111111111111111111111111111`, for a slot with no pool. Slot `k` is
+   the pool's `slots.<token paid>`: `program<k>` its `program`, then `pool`, `config`, `vaultA`,
+   `vaultB` and `extra`, and `ticks<k>0` to `ticks<k>2` its `ticks`. With `jq`, the four deepest
+   within `maxPrice`, paying USDC:
+
+   ```sh
+   sauce pools --chain solana USDC WSOL --json > pools.json
+   jq --arg pay USDC --arg max 119047619047619047 '[.pools[] | select(any(.sides[]; .pay == $pay and (.maxPrice | tonumber) <= ($max | tonumber)))][:4] | to_entries | map(.key as $k | .value.slots[$pay] | {"program\($k)": .program, "pool\($k)": .pool, "config\($k)": .config, "vaultA\($k)": .vaultA, "vaultB\($k)": .vaultB, "extra\($k)": .extra, "ticks\($k)0": .ticks[0], "ticks\($k)1": .ticks[1], "ticks\($k)2": .ticks[2]}) | add' pools.json
+   ```
+
+   then add the shared accounts above to that object. `refund` as
    `pot:USDC` keeps what is left in the Pot (the program then moves nothing back); `recipient` as
    `pot:WSOL` keeps what is bought there.
 
 3. **Rehearse**, with no key and nothing sent. The cook is past one transaction, so `sauce simulate`
    runs it in a local copy of every account it names, read from the cluster, with the released
    engine and Kitchen: the program staged as `sauce run` stages it, the Pot created there if it is
-   missing (the project needs LiteSVM for this: `npm install litesvm`). `--assume-balance` gives
-   the Pot's USDC account the budget in that copy, so any owner can rehearse:
+   missing, and the owner given the lamports the staging and the fees take, so any address can be
+   `--owner`. `--assume-balance` gives the Pot's USDC account the budget in that copy (token
+   balances only):
 
    ```sh
    sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \

@@ -154,11 +154,17 @@ const budget = 1000n * 10n ** BigInt(usdc);
 const ceil = (a: bigint, b: bigint) => (a + b - 1n) / b;
 const minTokens = ceil(budget * E18, buySol);
 const maxAvg = ceil((1195n * 10n ** BigInt(18 + usdc - sol)) / 10n + buySol, 2n); // halfway, 119.5 to 120
+// A floor in SOL per USDC turned over, rounded down: 10^15 ÷ 0.0084.
+const floorSol = (10n ** BigInt(18 + usdc - sol) * 10_000n) / 84n;
+check(
+  floorSol === 119_047_619_047_619_047n,
+  "maxPrice buying SOL at a floor of 0.0084 SOL per USDC",
+);
 check(buySol === 120_000_000_000_000_000n, "maxPrice buying SOL at most 120 USDC");
 check(sellSol === 8_474_576_271_186_440_677n, "maxPrice selling SOL at least 118 USDC");
 check(minTokens === 8_333_333_334n, "minTokens for all of 1,000 USDC at 120");
 check(maxAvg === 119_750_000_000_000_000n, "maxAvgPrice halfway between 119.5 and 120");
-for (const value of [buySol, sellSol, maxAvg])
+for (const value of [buySol, floorSol, sellSol, maxAvg])
   check(skill.includes(`**${value}**`), `the skill quotes ${value}`);
 check(skill.includes(`\`${minTokens}\``), `the skill quotes minTokens ${minTokens}`);
 // The commands pass them: the rehearsal, and the run with its checks set.
@@ -171,6 +177,8 @@ check(
   source.includes(`--args ${budget} ${buySol} ${minTokens} 0`),
   "and the header's example line",
 );
+
+check(prose.includes(`--arg max ${floorSol}`), "the skill's jq selects pools within that floor");
 
 // The rehearsal the skill reads: 2,000 USDC for 16.983900131 SOL, and its average.
 const spent = 2000n * 10n ** BigInt(usdc);

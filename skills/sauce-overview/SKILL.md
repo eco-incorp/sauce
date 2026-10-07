@@ -50,7 +50,10 @@ is given as an account, and a cook is the Kitchen's `cook` instruction, signed b
 Write each program yourself, in SauceScript, for the task as it is asked. These skills teach the
 language, the names each chain offers and the patterns; their example programs show idioms and the
 rules a correct program follows. They are not templates to copy, adapt or choose between: never
-ask the user which example or existing file to start from. Ask only for the facts the request
+ask the user which example or existing file to start from. The one exception is a complete
+implementation a skill says to use whole: the Solana distributed swap (`sauce-solana-distributed-swap`),
+whose venue code is each venue's byte layout and instruction format. Take its code as given, and
+write the header, the slots and the inputs for the task. Ask only for the facts the request
 leaves open (an amount, a price limit, a recipient, the chain); decide the rest, write the
 program, and rehearse it with `sauce simulate`.
 
