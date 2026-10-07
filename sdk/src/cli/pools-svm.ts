@@ -105,7 +105,12 @@ export interface SvmPoolsInput {
     readonly perVenue?: boolean;
     readonly slots?: number;
   };
+  /** How long to wait before each retry of a venue's refused scan (default 1, 2 and 4 seconds). */
+  readonly retryMs?: readonly number[];
 }
+
+/** The waits before each retry of a refused scan: an endpoint's rate limit lifts in seconds. */
+const SCAN_RETRY_MS = [1_000, 2_000, 4_000];
 
 /** Makes each request, naming what it reads when it fails (the endpoint never named). */
 type Ask = <T>(what: string, request: () => Promise<T>) => Promise<T>;
@@ -216,6 +221,7 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
         higher.mint,
         first.mint,
         second.mint,
+        input.retryMs ?? SCAN_RETRY_MS,
       );
     } catch (error) {
       checked.push({
@@ -344,8 +350,9 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
           notes: [
             `${unread.length} of ${checked.length} venues could not be read (${unread
               .map((one) => one.venue)
-              .join(", ")}), so the listing is partial: run it again, or give an endpoint that ` +
-              "answers getProgramAccounts",
+              .join(", ")}), even asked again, so the listing is partial: the endpoint refused ` +
+              "their scans (getProgramAccounts). Give your own endpoint, with --rpc-url <url> or " +
+              "--config <file>, and run it again",
           ],
           exitCode: 1,
         }),
@@ -439,13 +446,25 @@ async function programAccounts(
   higher: Address,
   first: Address,
   second: Address,
+  retryMs: readonly number[],
 ): Promise<{ pubkey: Address; data: Uint8Array }[]> {
+  // A scan an endpoint refuses (a rate limit, most often) is asked again after a wait, one venue at
+  // a time: a public endpoint answers each venue's scan when they are not sent together.
   const query = async (filters: readonly unknown[]) => {
-    const found = await ask(`${venue.name}'s pools`, () =>
-      rpc
-        .getProgramAccounts(venue.program, { encoding: "base64", filters: filters as never })
-        .send(),
-    );
+    let found: unknown;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        found = await ask(`${venue.name}'s pools`, () =>
+          rpc
+            .getProgramAccounts(venue.program, { encoding: "base64", filters: filters as never })
+            .send(),
+        );
+        break;
+      } catch (error) {
+        if (attempt >= retryMs.length) throw error;
+        await new Promise((resolve) => setTimeout(resolve, retryMs[attempt]));
+      }
+    }
     return (found as unknown as { pubkey: Address; account: { data: [string, string] } }[]).map(
       (item) => ({
         pubkey: item.pubkey,

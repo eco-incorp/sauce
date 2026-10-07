@@ -491,7 +491,23 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
     }
   });
 
-  it("says a listing is partial when a venue cannot be read, and exits 1", async () => {
+  it("asks a refused scan again, so a rate limit that lifts reads every venue", async () => {
+    const stub = await solanaRpcStub({ rateLimitScans: 2 });
+    try {
+      const run = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", stub.url, "--json"],
+      );
+      expect(run.code).toBe(0);
+      const out = JSON.parse(run.stdout) as { checked: { venue: string; error?: string }[] };
+      expect(out.checked).toHaveLength(9);
+      expect(out.checked.filter((one) => one.error !== undefined)).toEqual([]);
+      expect(stub.methods.get("getProgramAccounts")).toBe(12); // 10 scans, 2 of them twice
+    } finally {
+      await stub.close();
+    }
+  }, 30_000);
+
+  it("says a listing is partial when a venue cannot be read even asked again, and exits 1", async () => {
     const stub = await solanaRpcStub({
       refuseScans: ["whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"],
     });
@@ -501,6 +517,8 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
       );
       expect(run.code).toBe(1);
       expect(run.stderr).toMatch(/1 of 9 venues could not be read \(Orca Whirlpools\)/);
+      expect(run.stderr).toMatch(/with --rpc-url <url> or --config <file>/);
+      expect(stub.methods.get("getProgramAccounts")).toBe(13); // Orca's, asked 4 times
       const out = JSON.parse(run.stdout) as { checked: { venue: string; error?: string }[] };
       expect(out.checked.filter((one) => one.error !== undefined).map((one) => one.venue)).toEqual([
         "Orca Whirlpools",
@@ -508,7 +526,7 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
     } finally {
       await stub.close();
     }
-  });
+  }, 30_000);
 
   it("takes --max-price, --per-venue and --slots only with --pay", async () => {
     for (const extra of [["--per-venue"], ["--slots", "5"], ["--max-price", "1"]]) {

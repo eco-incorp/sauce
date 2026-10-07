@@ -10,4 +10,5 @@ export declare function solanaRpcStub(options?: {
   accounts?: Record<string, { owner: string; data: Uint8Array }>;
   slot?: bigint;
   refuseScans?: string[];
+  rateLimitScans?: number;
 }): Promise<SolanaRpcStub>;

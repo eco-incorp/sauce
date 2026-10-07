@@ -2,7 +2,8 @@
  * The built-in public endpoints, with nothing reached: each endpoint is a fake `fetch` answering
  * JSON-RPC, behind the real loopback forwarder (`public-endpoints.ts`), so what is tested is the
  * forwarding itself — falling back from one endpoint to the next, keeping to the one that
- * answered, sending `eth_simulateV1` only where it runs — and the `sauce` command's precedence:
+ * answered, sending `eth_simulateV1` only where it runs and a Solana program's scan only where it
+ * is answered — and the `sauce` command's precedence:
  * `--rpc-url`, then the `--config` file's entry, then the public list, and none with `--offline`.
  */
 import { createServer, type Server } from "node:http";
@@ -215,6 +216,27 @@ describe("the forwarder", () => {
     expect(fake.calls).toEqual([
       { url: A, method: "eth_chainId" },
       { url: C, method: "eth_simulateV1" },
+    ]);
+  });
+
+  it("sends a Solana program's scan only to an endpoint that answers one, as publicnode does not", async () => {
+    // A rate-limits; B answers but, like publicnode, refuses every scan.
+    const fake = fakeFetch({ [A]: { status: 429 }, [B]: { result: () => 1 } });
+    const solana = requireChain("solana");
+    const rpcs = {
+      [solana.id]: [
+        { url: A, programAccounts: true },
+        { url: B, programAccounts: false },
+      ],
+    };
+    const url = (await forwarder(rpcs, fake.send)).url(solana)!;
+    // B answers what A refused, and the next request starts at B; but a scan goes to A alone.
+    expect((await call(url, "getSlot")).status).toBe(200);
+    expect((await call(url, "getProgramAccounts")).status).toBe(429);
+    expect(fake.calls).toEqual([
+      { url: A, method: "getSlot" },
+      { url: B, method: "getSlot" },
+      { url: A, method: "getProgramAccounts" },
     ]);
   });
 
