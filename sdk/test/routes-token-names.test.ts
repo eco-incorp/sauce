@@ -2,10 +2,14 @@
  * Token names in a program: a registered symbol (`USDC`) and `Token(address)` are values of the
  * `Token` type the chain's host declares (`src/routes/host.ts`). Its writes are `@sauce/token`'s
  * SafeERC20 functions with the token first — `USDC.transfer(to, amount)` is `transfer(USDC, to,
- * amount)` — its `balanceOf` is the library's read, and `holder.USDC` is the holder's balance. The
- * program's text is never rewritten: each case is held to the program the same calls written by
- * hand compile to.
+ * amount)` — its `balanceOf` is the typed ERC-20 read, inline, and `self.USDC` the running
+ * contract's balance. The program's text is never rewritten: each case is held to the program the
+ * same calls written by hand compile to.
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { requireChain } from "../src/chains/canonical.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { registryTokenAddress, SVM_TOKEN_REGISTRY } from "../src/routes/token-registry.js";
@@ -117,14 +121,22 @@ describe("a token symbol's writes are @sauce/token's, the token first", () => {
     ).toEqual(bytesOf("base", "function main(): Uint256 { let x = 1n; return x + 1n; }"));
   });
 
-  it("balanceOf is the library's read", () => {
+  it("balanceOf is the typed ERC-20 read, inline", () => {
     expect(
       bytesOf("base", `function main(): Uint256 { return USDC.balanceOf(${HOLDER}); }`),
     ).toEqual(
       bytesOf(
         "base",
-        `import { balanceOf } from "@sauce/token";\nfunction main(): Uint256 { return balanceOf(${USDC}, ${HOLDER}); }`,
+        `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main(): Uint256 { return IERC20.at(${USDC}).balanceOf(${HOLDER}); }`,
       ),
+    );
+  });
+
+  it("reads through @sauce/token's ERC-20 ABI", () => {
+    // `@sauce/names` keeps its own copy beside the class; it is the library's, byte for byte.
+    const std = join(dirname(fileURLToPath(import.meta.url)), "../src/std");
+    expect(readFileSync(join(std, "names/erc20.abi.json"), "utf8")).toBe(
+      readFileSync(join(std, "token/erc20.abi.json"), "utf8"),
     );
   });
 });
@@ -188,11 +200,11 @@ describe("USDT0: Tether's token on the chains whose USDT is USDT0", () => {
 });
 
 describe("self.USDC is the running contract's balance", () => {
-  it("self.USDC is balanceOf(USDC, ctx.self())", () => {
+  it("self.USDC is USDC's balanceOf(ctx.self()), inline", () => {
     expect(bytesOf("base", "function main(): Uint256 { return self.USDC; }")).toEqual(
       bytesOf(
         "base",
-        `import { balanceOf } from "@sauce/token";\nfunction main(): Uint256 { return balanceOf(${USDC}, ctx.self()); }`,
+        `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main(): Uint256 { return IERC20.at(${USDC}).balanceOf(ctx.self()); }`,
       ),
     );
   });

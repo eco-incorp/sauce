@@ -29,26 +29,27 @@ describe("stock tokens in a program", () => {
       [
         "function main(amount: Uint256): Uint256 {",
         `  require(SPCXc == ${SPCXC}n);`,
-        "  require(Token(SPCXc).balanceOf(ctx.self()) >= 0n);",
+        "  require(Token(SPCXc).balanceOf(self) >= 0n);",
         `  SPCXc.transfer(${RECIPIENT}n, amount);`,
         "  SPCXc.approve(ctx.self(), amount);",
-        "  return SPCXc.balanceOf(ctx.self());",
+        "  return SPCXc.balanceOf(self);",
         "}",
       ].join("\n"),
     );
     expect(program.bytecode.length).toBeGreaterThan(0);
-    // A write is the library's SafeERC20 one, as for any registry token: the same bytes as the
-    // library's functions called with the token's address.
+    // A write is the library's SafeERC20 one and a read the typed call, as for any registry token:
+    // the same bytes as those written by hand with the token's address.
     const byHand = compileSauceProgram(
       "base",
       [
-        'import { approve, balanceOf, transfer } from "@sauce/token";',
+        'import { approve, transfer } from "@sauce/token";',
+        'import { IERC20 } from "./artifacts/IERC20.json";',
         "function main(amount: Uint256): Uint256 {",
         `  require(${SPCXC}n == ${SPCXC}n);`,
-        `  require(balanceOf(${SPCXC}n, ctx.self()) >= 0n);`,
+        `  require(IERC20.at(${SPCXC}n).balanceOf(ctx.self()) >= 0n);`,
         `  transfer(${SPCXC}n, ${RECIPIENT}n, amount);`,
         `  approve(${SPCXC}n, ctx.self(), amount);`,
-        `  return balanceOf(${SPCXC}n, ctx.self());`,
+        `  return IERC20.at(${SPCXC}n).balanceOf(ctx.self());`,
         "}",
       ].join("\n"),
     );

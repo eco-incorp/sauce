@@ -753,8 +753,11 @@ diagnostics and the defines report.
 
 **`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
 (`transfer`/`approve`/`transferFrom`) is the `@sauce/token` function of the same name with the token
-first, and a READ (`balanceOf`, `holder.USDC`) the library's `balanceOf`. So a write has ONE
-implementation however it is spelled, the library's SafeERC20 one, and returns nothing. `Token` is
+first, and a READ (`USDC.balanceOf(holder)`, `self.USDC`) the typed `ERC20.at(token).balanceOf(holder)`
+written where it is used (through `@sauce/names`' copy of the library's ERC-20 ABI), as a program
+written by hand compiles it, not a call into the library's `balanceOf`, which adds a frame. So a
+write has ONE implementation however it is spelled, the library's SafeERC20 one, and returns
+nothing. `Token` is
 EVM-only: on Solana a symbol is the mint's key, a plain word for the `@sauce/token` SVM functions,
 whose writes need accounts a symbol does not carry. A body's writes are SafeERC20 too, since every
 body is a program; `routes-intent-bodies.e2e.test.ts` runs bodies through a real Portal and Executor,

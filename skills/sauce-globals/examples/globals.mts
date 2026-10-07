@@ -26,16 +26,17 @@ const addressOf = (symbol: string) =>
   `0x${routes.registryTokenAddress(ethereum, symbol)!.toString(16).padStart(40, "0")}`;
 const named = routes.compileSauceProgram(
   "ethereum",
-  "function main(to: Address, token: Address, amount: Uint256) { USDT.transfer(to, amount); USDT.approve(to, amount); const t = Token(token); t.transferFrom(to, ctx.self(), amount); require(USDC.balanceOf(ctx.self()) > 0n); }",
+  "function main(to: Address, token: Address, amount: Uint256) { USDT.transfer(to, amount); USDT.approve(to, amount); const t = Token(token); t.transferFrom(to, ctx.self(), amount); require(USDC.balanceOf(to) > 0n); }",
 );
 const byHand = routes.compileSauceProgram(
   "ethereum",
-  `import { approve, balanceOf, transfer, transferFrom } from "@sauce/token";
-function main(to: Address, token: Address, amount: Uint256) { transfer(${addressOf("USDT")}, to, amount); approve(${addressOf("USDT")}, to, amount); transferFrom(token, to, ctx.self(), amount); require(balanceOf(${addressOf("USDC")}, ctx.self()) > 0n); }`,
+  `import { approve, transfer, transferFrom } from "@sauce/token";
+import { IERC20 } from "./artifacts/IERC20.json";
+function main(to: Address, token: Address, amount: Uint256) { transfer(${addressOf("USDT")}, to, amount); approve(${addressOf("USDT")}, to, amount); transferFrom(token, to, ctx.self(), amount); require(IERC20.at(${addressOf("USDC")}).balanceOf(to) > 0n); }`,
 );
 check(
   Buffer.from(named.bytecode).equals(Buffer.from(byHand.bytecode)),
-  "USDT.transfer, USDT.approve (forceApprove) and a bound Token's transferFrom are SafeERC20, and USDC.balanceOf the library's read",
+  "USDT.transfer, USDT.approve (forceApprove) and a bound Token's transferFrom are SafeERC20, and USDC.balanceOf the typed read",
 );
 
 const rejects = (slug: string, body: string) => {
@@ -54,8 +55,7 @@ check(
   ),
   "no bool to read",
 );
-// IERC20 is imported, never ambient, and under its own name it collides with the binding a token
-// read brings in; an alias does not.
+// IERC20 is imported, never ambient, and a token read beside it binds no name of its own.
 check(
   rejects("base", "function main(t: Address) { require(IERC20.at(t).balanceOf(ctx.self()) > 0); }"),
   "IERC20 needs an import",
@@ -63,9 +63,9 @@ check(
 check(
   !rejects(
     "base",
-    'import { IERC20 as Erc20 } from "./artifacts/IERC20.json";\nfunction main(t: Address) { require(Erc20.at(t).balanceOf(ctx.self()) > USDC.balanceOf(ctx.self())); }',
+    'import { IERC20 } from "./artifacts/IERC20.json";\nfunction main(t: Address) { require(IERC20.at(t).balanceOf(ctx.self()) > USDC.balanceOf(ctx.self())); }',
   ),
-  "IERC20 imported under another name, beside a token read",
+  "IERC20 imported beside a token read",
 );
 // A family alias resolves only where one member owns the name.
 check(

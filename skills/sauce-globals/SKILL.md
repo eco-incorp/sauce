@@ -64,11 +64,10 @@ function main(payee: Address, amount: Uint256) {
 }
 ```
 
-**`IERC20` is low level, and only imported.** `import { IERC20 as Erc20 } from
-"./artifacts/IERC20.json"` binds the raw ERC-20 ABI for a call the token syntax does not offer. Its
-writes decode the declared `bool`, so they are not SafeERC20 (USDT's `transfer` reverts there, and
-a `false` return passes): never write a token transfer or approval through it. Import it under a
-name of its own, as here, in a file that also uses the token syntax, which binds `IERC20` itself.
+**`IERC20` is low level, and only imported.** `import { IERC20 } from "./artifacts/IERC20.json"`
+binds the raw ERC-20 ABI for a call the token syntax does not offer. Its writes decode the declared
+`bool`, so they are not SafeERC20 (USDT's `transfer` reverts there, and a `false` return passes):
+never write a token transfer or approval through it.
 
 ## Tokenized stocks
 
