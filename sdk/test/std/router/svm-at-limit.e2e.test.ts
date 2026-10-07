@@ -635,7 +635,13 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           ? [amountIn, 0n, orders, floor]
           : [amountIn, limit, floor];
     const viaTry = (
-      overrides: { name?: string; slot?: Address[]; args?: bigint[]; edit?: Edit } = {},
+      overrides: {
+        name?: string;
+        slot?: Address[];
+        args?: bigint[];
+        edit?: Edit;
+        buyMint?: Address;
+      } = {},
     ) => {
       const s = overrides.slot ?? slot;
       const metaOf = (address: Address): Meta => ({
@@ -652,7 +658,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           ),
           authority: metaOf(owner),
           payMint: { address: pay, role: AccountRole.READONLY },
-          buyMint: { address: buy, role: AccountRole.READONLY },
+          buyMint: { address: overrides.buyMint ?? buy, role: AccountRole.READONLY },
           tokenProgram: { address: TOKEN, role: AccountRole.READONLY },
           token2022: { address: TOKEN_2022, role: AccountRole.READONLY },
           memo: { address: MEMO, role: AccountRole.READONLY },
@@ -893,6 +899,17 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       });
     }
 
+    for (const name of ["manifest-sol-usdc", "openbook-v2-bonk-usdc"])
+      for (const direction of ["baseIn", "quoteIn"]) {
+        skips.push({
+          why: "a missing slot",
+          pool: name,
+          direction,
+          slot: (s) => [SYSTEM, SYSTEM, ...s.slice(2)],
+        });
+        skips.push({ why: "no input", pool: name, direction, amountIn: 0n });
+      }
+
     it.each(skips.map((c) => [`${c.pool} ${c.direction}: ${c.why}`, c] as const))(
       "%s",
       async (_, c) => {
@@ -993,6 +1010,16 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
   // Invariant's program does not stop at its limit: a swap that reaches it with input left is
   // refused, so an input past the window aborts the transaction rather than filling to its edge.
   describe("Invariant takes no input past its limit", () => {
+    // Nor a 0 limit selling Y: its program takes none only selling X, and refuses it (`WrongLimit`)
+    // before anything moves, which aborts the transaction like any failed call.
+    it("Y→X at a 0 limit: its program refuses it (0x1773)", async () => {
+      const t = served("invariant-usdc-usdt", "yToX");
+      const w = ways(t, amountOf(pairOf(pool(t.pool), t.direction)[0]));
+      expect(
+        venueFailure(failed(await w.viaTry({ args: [w.tryArgs[0]!, 0n, 0n] })), t.programId),
+      ).toEqual([`Program ${t.programId} failed: custom program error: 0x1773`]);
+    }, 120_000);
+
     it.each([
       ["xToY", 10n ** 9n],
       ["yToX", 10n ** 10n],
@@ -1026,6 +1053,20 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     };
     // The authority signs the swap, so the program it calls must be the venue's own: `…Cpi` checks
     // the program it is given, `try…AtLimit` the slot's against the pool's owner.
+    // The trader's mints are the caller's too: a pool or market that is not the pair reverts.
+    it.each(Object.keys(REASONS))(
+      "%s: a pool or market not the pair reverts through try…AtLimit",
+      async (venue) => {
+        const t = TEMPLATES.find((x) => x.venue === venue)!;
+        const w = ways(t, amountOf(pairOf(pool(t.pool), t.direction)[0]));
+        const book = ["phoenix", "manifest", "openbook-v2"].includes(venue);
+        expect(failed(await w.viaTry({ buyMint: randomAddress() })).reason).toBe(
+          book ? "market is not the pair" : "pool is not the pair",
+        );
+      },
+      120_000,
+    );
+
     it.each(Object.entries(REASONS))(
       "%s: another venue's program or pool reverts, through …Cpi and through try…AtLimit",
       async (venue, reason) => {
