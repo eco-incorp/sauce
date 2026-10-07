@@ -315,7 +315,8 @@ export class Intent {
   }
 
   // What the destination runs: the body, or with a handler the body in a `try`, the handler in its
-  // place when the body reverts, everything the body did undone.
+  // place when the body reverts, everything the body did undone, handed what the body reverted
+  // with (a handler that names no parameter drops it, as JavaScript does).
   _run() {
     const body = this._body;
     const handler = this._handler;
@@ -323,8 +324,8 @@ export class Intent {
     return () => {
       try {
         body();
-      } catch {
-        handler();
+      } catch (e) {
+        handler(e);
       }
     };
   }
