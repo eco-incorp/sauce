@@ -54,16 +54,29 @@ const LIBRARY = {
   traderJoeLB: "pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient",
   woofi: "pool, tokenIn, tokenOut, amountIn, minOut, recipient",
   maverickV2: "pool, tokenIn, tokenOut, amountIn, minOut, recipient",
+  infinityCL:
+    "vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient",
+  infinityBin:
+    "vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient",
 };
 for (const [name, args] of Object.entries(LIBRARY)) {
   check(params(name) === args, `@sauce/router's ${name}(${args})`);
 }
-for (const name of ["UniswapV2", "Curve", "BalancerV2", "TraderJoeLB"]) {
+for (const name of [
+  "UniswapV2",
+  "Curve",
+  "BalancerV2",
+  "DodoV2",
+  "TraderJoeLB",
+  "Woofi",
+  "UniswapV3",
+  "UniswapV4",
+  "MaverickV2",
+  "InfinityCL",
+  "InfinityBin",
+]) {
   const base = name.charAt(0).toLowerCase() + name.slice(1);
   check(params(`try${name}`) === params(base), `try${name} takes ${base}'s arguments`);
-}
-for (const name of ["DodoV2", "Woofi"]) {
-  check(params(`try${name}`) === undefined, `${name} has no try form`);
 }
 
 // The Router ABI the package serves, which `@sauce/router` calls for the venues that call back.
@@ -92,7 +105,7 @@ check(
   "PancakeSwap Infinity Bin has no limit",
 );
 
-// The pool callbacks the Router services: which pool families `uniswapV3`/`uniswapV4` can drive.
+// The pool callbacks the Router services: which pool families the Router-routed functions drive.
 for (const callback of [
   "uniswapV3SwapCallback",
   "pancakeV3SwapCallback",
@@ -100,6 +113,8 @@ for (const callback of [
   "synthraV3SwapCallback",
   "unitFlowV3SwapCallback",
   "unlockCallback",
+  "maverickV2SwapCallback",
+  "lockAcquired",
 ]) {
   check(has(callback), `the Router implements ${callback}`);
 }

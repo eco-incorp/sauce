@@ -112,10 +112,11 @@ independent viem encoding. `actions.mainnet` (every action type, and it fails if
 LOCAL anvil booted from mainnet state captured at a pinned block — no RPC, no secret, and they run
 in CI. See "Mainnet state" below. An action type that cannot execute there does not ship. The
 `swap*.mainnet` suites (also `test:mainnet`) execute `@sauce/router` on Ethereum, Base and
-Avalanche state — each venue called with literal arguments, with run-time `main` arguments, through
-its action, and beside the Router's unified `swap` where the Router runs the venue
-(`tests/swap-venues.ts`) — and `traderJoeLBSwap`/`woofiSwap`, whose venues Ethereum lacks, run
-there; `actions.mainnet` counts them as executed elsewhere. `quote.mainnet` deploys the stack too:
+Avalanche state — each venue called with literal arguments, with run-time `main` arguments and
+through its action, and each `try` form beside its plain function, with every skip path held to
+the Pot's and the pool's balances (`tests/swap-venues.ts`; PancakeSwap Infinity's CL and bin pools
+on Base) — and `traderJoeLBSwap`/`woofiSwap`, whose venues Ethereum lacks, run there;
+`actions.mainnet` counts them as executed elsewhere. `quote.mainnet` deploys the stack too:
 the Router quotes `uniswapV3Swap`/`uniswapV4Swap`, and is held to Uniswap's own quoters.
 `names.unit` compiles documents by token symbol, namespace and pool key for two chains through the
 real compiler, and every refusal of a name a chain lacks; `cli.unit` drives `sauce actions` and an
@@ -208,7 +209,7 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
-  venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
+  venue suites `swap` (Ethereum) ~135 KB, `swap-base` ~165 KB, `swap-avalanche` ~30 KB, and the names
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
   `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
   `-base`, `-optimism`) ~80, ~35 and ~25 KB, and the cookbook's two
@@ -556,14 +557,27 @@ resolves it off disk.
 `src/std/router/` is **`@sauce/router`**, the SauceScript swap library, SDK-owned and shipped the
 same two ways (embedded, and `dist/std/router` via `copy-verify-assets.mjs`); `resolveSdkPackage`
 maps it like `@sauce/token`, so every SDK compile — route bodies, `openRoute`, actions — resolves it
-with no option. It is THE one implementation of a swap at its nine venues: one exported function
+with no option. It is THE one implementation of a swap at its eleven venues: one exported function
 per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2`, `traderJoeLB`,
-`woofi`, `maverickV2`), every argument a RUN-TIME value, in one order —
+`woofi`, `maverickV2`, `infinityCL`, `infinityBin`), every argument a RUN-TIME value, in one order —
 `venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
-the recipient received; plus `try` forms (`tryUniswapV2`, `tryTraderJoeLB`: a capacity check before
-anything moves; `tryCurve`, `tryBalancerV2`: catch and reset the approval) that return `0n` having
-moved nothing, and NONE for DODO V2 or WOOFi, which can do neither. The pay-first venues call the
-pool directly; V3/V4/Maverick call the Pot's Router (`ctx.self()`). Token writes are `@sauce/token`'s
+the recipient received; plus a `try` form of each that returns `0n` having moved nothing, while a
+swap that ran returns at least 1, so a `0n` ALWAYS means nothing moved (sauce-recipes' EcoSwap
+executor drops a venue that returns 0 and re-offers its input). Three mechanisms: a check before
+anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
+`querySellBase`/`querySellQuote`, `tryWoofi` WooPPV2's `query` — never its `tryQuery`, which prices
+past the reserve), a caught pool call that resets its approval (`tryCurve`, `tryBalancerV2`), or a
+caught Router call (`tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
+`tryInfinityBin`). The generation-4 Router takes no floor, so a caught Router call that ran is held
+afterwards to `minOut` and at least 1 and reverts below it (an input the pool keeps as its fee
+cannot be undone), except that one that moved nothing either way — the Router's `amountInUsed` and
+the recipient's `tokenOut` gain both 0, a pool with no liquidity in range — returns `0n`. The
+compiler carries only a scalar through `.catch()`, so the try forms call the Router through
+`sauce-router-paid.abi.json`, its methods declaring `amountInUsed` alone. An empty pool with no
+price limit costs a full tick walk (~10M gas measured) before it is skipped.
+The `swap*.mainnet` suites execute every function and its `try` form on real pools (Infinity on
+Base), each skip path with the Pot's and the pool's balances held unchanged. The pay-first venues
+call the pool directly; V3/V4/Maverick/Infinity call the Pot's Router (`ctx.self()`). Token writes are `@sauce/token`'s
 (it imports the package). Orientation is checked from the arguments at run time (V2/V4 sort order,
 DODO base/quote, LB X/Y); `minOut` is uniform (`0n` none; WOOFi requires it). The pool and Router
 ABI fragments live beside it (`*.abi.json`, each `$comment` naming its verified source), pinned by
@@ -1118,9 +1132,10 @@ publishes it, which is what blocks `dev-tools/scripts/deploy.ts` and `dev-tools/
 unified `swap`, exact-output mode, or quote method. `flash(callback, swap)` wraps the calldata of
 one of those five methods to execute a program during its authenticated callback.
 
-`@sauce/router` keeps its source-level API; its V3/V4/Maverick functions call the new signatures.
-The library checks V3 and Maverick token pairs before the swap. V4 builds the sorted pool key and
-passes the input token explicitly. V2, Curve, Balancer V2, DODO V2, Trader Joe LB and WOOFi are
+`@sauce/router` keeps its source-level API; its V3/V4/Maverick functions call the new signatures,
+and `infinityCL`/`infinityBin` call the two Infinity methods. The library checks V3 and Maverick
+token pairs before the swap. V4 and Infinity build the sorted pool key and pass the input token
+explicitly. V2, Curve, Balancer V2, DODO V2, Trader Joe LB and WOOFi are
 paid first and called directly by the program; their paths do not call the Router.
 
 **Quoting remains on generation 3**, pinned separately as `quoteRouter` in `releases.json` and

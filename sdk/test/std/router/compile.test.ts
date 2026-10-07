@@ -71,7 +71,7 @@ describe("@sauce/router: every function compiles from run-time arguments", () =>
 });
 
 describe("@sauce/router: the exports are the documented API", () => {
-  it("exports exactly the nine venues and the four `try` forms", () => {
+  it("exports exactly the eleven venues and their eleven `try` forms", () => {
     const exported = [...routerSource().matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
     expect(exported.sort()).toEqual(Object.keys(FUNCTIONS).sort());
     expect(Object.keys(FUNCTIONS).sort()).toEqual(
@@ -79,12 +79,21 @@ describe("@sauce/router: the exports are the documented API", () => {
         "balancerV2",
         "curve",
         "dodoV2",
+        "infinityBin",
+        "infinityCL",
         "maverickV2",
         "traderJoeLB",
         "tryBalancerV2",
         "tryCurve",
+        "tryDodoV2",
+        "tryInfinityBin",
+        "tryInfinityCL",
+        "tryMaverickV2",
         "tryTraderJoeLB",
         "tryUniswapV2",
+        "tryUniswapV3",
+        "tryUniswapV4",
+        "tryWoofi",
         "uniswapV2",
         "uniswapV3",
         "uniswapV4",
@@ -119,9 +128,11 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
       "curve-stableswap": ["0x3df02124"], // exchange(int128,int128,uint256,uint256)
       "curve-cryptoswap": ["0x5b41b908"], // exchange(uint256,uint256,uint256,uint256)
       "balancer-v2-vault": ["0x52bbbe29"], // swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)
-      "dodo-v2-pool": ["0xbd6015b4", "0xdd93f59a"], // sellBase(address), sellQuote(address)
+      // sellBase(address), sellQuote(address), querySellBase(address,uint256), querySellQuote(address,uint256)
+      "dodo-v2-pool": ["0xbd6015b4", "0xdd93f59a", "0x79a04876", "0x66410a21"],
       "lb-pair": ["0x53c059a0", "0xe77366f8"], // swap(bool,address), getSwapOut(uint128,bool)
-      "woo-pp-v2": ["0x7dc20382"], // swap(address,address,uint256,uint256,address,address)
+      // swap(address,address,uint256,uint256,address,address), query(address,address,uint256)
+      "woo-pp-v2": ["0x7dc20382", "0xf58a435f"],
     });
   });
 
@@ -140,11 +151,36 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
       }
     ).abi.filter((item) => item.type === "function");
     const ours = fragments("sauce-router.abi.json");
-    expect(ours.map((f) => f.name)).toEqual(["swapV3", "swapV4", "swapMaverickV2"]);
+    expect(ours.map((f) => f.name)).toEqual([
+      "swapV3",
+      "swapV4",
+      "swapMaverickV2",
+      "swapInfinityBin",
+      "swapInfinityCL",
+    ]);
     for (const fn of ours) {
       const theirs = released.find((item) => item.name === fn.name);
       expect(theirs).toBeDefined();
       expect(plain(fn)).toEqual(plain(theirs!));
+    }
+  });
+
+  // The try forms catch the Router's call with a value, which the compiler carries only as a scalar:
+  // the same methods, declaring `amountInUsed` alone. Its selector and its first word are the
+  // release's, so the Router answers it and the value decoded is what it paid.
+  it("holds the one-output Router fragments to the release's, less their second output", () => {
+    const released = (
+      JSON.parse(readFileSync(join(SRC, "artifacts", "ISauceRouter.json"), "utf8")) as {
+        abi: AbiFunction[];
+      }
+    ).abi.filter((item) => item.type === "function");
+    const paid = fragments("sauce-router-paid.abi.json");
+    expect(paid.map((f) => f.name)).toEqual(fragments("sauce-router.abi.json").map((f) => f.name));
+    for (const fn of paid) {
+      const theirs = released.find((item) => item.name === fn.name)!;
+      expect(plain(fn)).toEqual(plain({ ...theirs, outputs: theirs.outputs.slice(0, 1) }));
+      expect(fn.outputs.map((o) => o.name)).toEqual(["amountInUsed"]);
+      expect(toFunctionSelector(fn)).toBe(toFunctionSelector(theirs));
     }
   });
 

@@ -45,20 +45,24 @@ venue's own facts, then the floor and the recipient — and returns the amount r
 venue(pool, tokenIn, tokenOut, amountIn, ...facts, minOut, recipient): Uint256
 ```
 
-| Function      | Arguments                                                                                                 | Reached through  |
-| ------------- | --------------------------------------------------------------------------------------------------------- | ---------------- |
-| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                            | the pair         |
-| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                 | the Pot's Router |
-| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
-| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                              | the pool         |
-| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                           | the Vault        |
-| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                             | the pool         |
-| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                    | the pair         |
-| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                    | the WooPPV2      |
-| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                    | the Pot's Router |
+| Function      | Arguments                                                                                                       | Reached through  |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                                  | the pair         |
+| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                       | the Pot's Router |
+| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient`       | the Pot's Router |
+| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                                    | the pool         |
+| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                                 | the Vault        |
+| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                                   | the pool         |
+| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                          | the pair         |
+| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the WooPPV2      |
+| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the Pot's Router |
+| `infinityCL`  | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
+| `infinityBin` | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient`                    | the Pot's Router |
 
-and four `try` forms with the same arguments as the function they name: `tryUniswapV2`, `tryCurve`,
-`tryBalancerV2` and `tryTraderJoeLB` — see [what a swap may not do](#what-a-swap-may-not-do).
+and a `try` form of each, with the same arguments as the function it names: `tryUniswapV2`,
+`tryCurve`, `tryBalancerV2`, `tryDodoV2`, `tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`,
+`tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` — see
+[what a swap may not do](#what-a-swap-may-not-do).
 
 Addresses are `Address`, amounts and the other numbers `Uint256`, and `uint256Indices` a `bool`.
 
@@ -79,8 +83,8 @@ each function pays the pool and calls it directly, so it runs in any Pot. It eit
 first (V2, DODO, LB, WOOFi) or approves exactly the input for the pool to pull (Curve, the Vault),
 which leaves a zero allowance.
 
-Uniswap V3 and its forks, Uniswap V4 and Maverick V2 pools re-enter their caller mid-swap to be
-paid, which a program cannot answer. Those functions call the Pot's Router — `ctx.self()`, whose
+Uniswap V3 and its forks, Uniswap V4, Maverick V2 and PancakeSwap Infinity pools re-enter their
+caller mid-swap to be paid, which a program cannot answer. Those functions call the Pot's Router — `ctx.self()`, whose
 fallback delegatecalls it — and the Router answers the callback, paying from the Pot exactly what
 the pool asks for, up to `amountIn`. The library checks V3 and Maverick token pairs. These functions
 require generation 4, whose unsigned exact-input methods return `(amountInUsed, amountOut)`.
@@ -118,15 +122,31 @@ it stays in the Pot.)
 
 The `try` forms are the one way to get a swap that may fail without reverting the program, and they
 lose nothing either: a `try` that cannot swap returns `0` having moved nothing, and the program
-goes on. Each exists only where that can be guaranteed:
+goes on. A swap that ran returns at least 1, so `0` always means nothing moved. That holds three
+ways:
 
-- `tryUniswapV2` and `tryTraderJoeLB` check, before anything moves, that the pool fills the whole
-  input at the floor — the V2 reserves, LB's `getSwapOut` — and otherwise run uncaught, so a failure
-  the check did not foresee still reverts;
-- `tryCurve` and `tryBalancerV2` catch the pool's failure and reset the approval to zero.
+- `tryUniswapV2`, `tryTraderJoeLB`, `tryDodoV2` and `tryWoofi` check, before anything moves, that
+  the pool takes the whole input at the floor — `minOut`, and at least 1 — from the V2 reserves,
+  LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote` or WooPPV2's `query`. A pool with
+  no code, or whose view reverts, is skipped. Otherwise the swap runs uncaught, so a failure the
+  check did not foresee still reverts;
+- `tryCurve` and `tryBalancerV2` catch the pool's failure and reset the approval to zero: the pool
+  pulls the input and enforces the floor, at least 1, inside the call that is caught;
+- `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` catch the
+  Router's call, inside which the Router pays the pool. A pool that has no code, is not the named
+  pair's (V3, Maverick), or whose swap the pool or the Router refuses (a key no pool has, a price
+  limit behind the pool's price) is skipped. The generation-4 Router takes no floor, so a swap that
+  ran is held to one afterwards: what the recipient's `tokenOut` balance gained (its native balance
+  for the zero address) must reach `minOut`, and at least 1, or the program reverts, because a swap
+  that took input and delivered nothing (an input the pool keeps as its fee) cannot be undone. A
+  swap that ran and moved nothing either way, in a pool with no liquidity in range, is skipped: the
+  Router's own `amountInUsed`, what it paid out of the Pot, tells the two apart. With no price
+  limit, an empty pool costs a full tick walk before it is skipped (about 10 million gas for an
+  Infinity CL pool of tick spacing 2); pass a `sqrtPriceLimitX96` to bound it.
 
-DODO V2 and WOOFi offer neither, so they have no `try` form. A swap that ran returns at least 1, so
-`0` always means skipped.
+DODO V2 charges its fee by the transaction's origin, which a program cannot read, so `tryDodoV2`
+asks the view for the Pot's fee. Where a pool's fee model tells the two apart, the swap can deliver
+other than the quote, and below the floor it reverts.
 
 ## Venues
 
@@ -151,6 +171,11 @@ DODO V2 and WOOFi offer neither, so they have no `try` form. A swap that ran ret
 - **WOOFi** is the WooPPV2 itself, not its WooRouterV2. It prices from an oracle, so `minOut` is
   required, and it reverts when its reserve, notional cap or oracle refuses the trade.
 - **Maverick V2** swaps over the pool's full tick range.
+- **PancakeSwap Infinity**'s pool key is `tokenIn` and `tokenOut` in sort order — native is the zero
+  address, which sorts first and which the Pot pays from its own balance — with the pool's
+  `poolManager` (the CL or bin pool manager), `fee`, `parameters` (its packed tick spacing or bin
+  step and hook permissions) and `hooks`; `vault` is the Infinity Vault the Router locks. A CL swap
+  takes a price limit; a bin swap has none, and its input is an `int128` to the pool.
 
 ## Choose the venue at run time
 
