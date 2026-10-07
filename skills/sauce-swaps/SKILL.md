@@ -230,8 +230,8 @@ its venue from the pool's owner. Each `try` form has a plain one (`raydiumClmm`,
 trySwap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
 ```
 
-- **`slot`** is the pool's nine accounts, `[program, pool, config, vaultA, vaultB, extra, ticks0,
-ticks1, ticks2]`, the System program for any the venue does not take;
+- **`slot`** is the pool's nine accounts, the System program for any the venue does not take:
+  `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`.
   `sauce pools --chain solana` prints each pool's slot for the direction paid, and
   `sauce-solana-distributed-swap` says what each account is per venue.
 - **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the

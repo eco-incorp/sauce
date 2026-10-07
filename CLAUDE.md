@@ -557,7 +557,9 @@ resolves it off disk.
 `src/std/router/` is **`@sauce/router`**, the SauceScript swap library, SDK-owned and shipped the
 same two ways (embedded, and `dist/std/router` via `copy-verify-assets.mjs`); `resolveSdkPackage`
 maps it like `@sauce/token`, so every SDK compile — route bodies, `openRoute`, actions — resolves it
-with no option. It is THE one implementation of a swap at its eleven venues: one exported function
+with no option. It has two arms and, like `@sauce/token`, no neutral `router.js`: no venue is on
+both targets, so a function one arm lacks fails at its import, naming it ("`woofi` is not exported
+by module" on Solana). The EVM arm (`router.evm.js`) is THE one implementation of a swap at its eleven venues: one exported function
 per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2`, `traderJoeLB`,
 `woofi`, `maverickV2`, `infinityCL`, `infinityBin`), every argument a RUN-TIME value, in one order —
 `venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
@@ -584,8 +586,27 @@ ABI fragments live beside it (`*.abi.json`, each `$comment` naming its verified 
 `test/std/router/compile.test.ts` (deployed selectors, the released `ISauceRouter`, the registry
 twins), which also holds the export list to the documented API and refuses a module-level `const` —
 a program-wide define would replace it. Keep its functions FLAT: an internal helper call costs a
-frame (measured ~1–4k gas each on the engine), so each exported function is self-contained. EVM only:
-there is no `router.js` and no SVM arm, so an SVM import fails at the import.
+frame (measured ~1–4k gas each on the engine), so each exported function is self-contained.
+
+The SVM arm (`router.svm.js`) is the Solana distributed swap's per-pool code, extracted: a `try` and
+a plain function per Solana venue whose swap stops at a price limit (`tryRaydiumClmm`,
+`tryPancakeswapClmm`, `tryByreal`, `tryStabbleClmm`, `tryOrcaWhirlpool`, `tryCropper`,
+`tryDefituna`, `tryCrema`, `tryPhoenix`, and `raydiumClmm` … `phoenix`), plus `trySwap`/`swap`,
+which read the venue from `pool.owner`. One order: `(slot: Account[], trader: Account[], amountIn,
+maxPrice, minOut, recipient: Account)` — arrays because a non-`main` function keeps ~16 values —
+`maxPrice` fee-inclusive in the skill's units, each function working out the pool's own sqrt limit
+(or Phoenix ticks). A `try` form can only CHECK before the swap (a failed CPI aborts the whole
+transaction): `0` having moved nothing for a missing slot, no input, swaps off, paused/closed, a fee
+that is not one rate, empty, past the limit, under one lot, and a Phoenix IOC that filled nothing
+(told by the paying account's balance, `settled`); a swap that paid returns at least 1, held to
+`minOut`. A wrong pair or a slot whose program is not its venue's and the pool's owner reverts.
+Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions (each
+venue's `swap<Venue>` body, `clmmOrder`, `settled`): a program carries only the venues it calls,
+and the distributed swap (all nine through `trySwap`) is smaller than the inline helper it replaced
+(6,454 → 6,386 bytes). `compile.test.ts` pins its exports, argument order, each venue's program id
+(from the SDK's base58 ids) and instruction discriminator counted per function, and its revert
+reasons; `svm.e2e.test.ts` executes every function on the venues' own programs in LiteSVM against
+`fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from the same state.
 
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
@@ -758,7 +779,8 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
-`cli-solana-distributed-swap.e2e.test.ts`) run nine venues' mainnet programs the same way: the
+`cli-solana-distributed-swap.e2e.test.ts`) and `@sauce/router`'s SVM arm's
+(`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way: the
 programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
 take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
 lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
