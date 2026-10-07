@@ -131,8 +131,8 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
       // sellBase(address), sellQuote(address), querySellBase(address,uint256), querySellQuote(address,uint256)
       "dodo-v2-pool": ["0xbd6015b4", "0xdd93f59a", "0x79a04876", "0x66410a21"],
       "lb-pair": ["0x53c059a0", "0xe77366f8"], // swap(bool,address), getSwapOut(uint128,bool)
-      // swap(address,address,uint256,uint256,address,address), tryQuery(address,address,uint256)
-      "woo-pp-v2": ["0x7dc20382", "0xce824f19"],
+      // swap(address,address,uint256,uint256,address,address), query(address,address,uint256)
+      "woo-pp-v2": ["0x7dc20382", "0xf58a435f"],
     });
   });
 
