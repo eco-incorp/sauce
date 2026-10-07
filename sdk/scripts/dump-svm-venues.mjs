@@ -95,17 +95,55 @@ const USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
  * swaps, and a Meteora DLMM pool, a venue the program refuses. `only`: the pool account alone.
  */
 const POOLS = [
-  { name: "raydium-clmm-sol-usdc", venue: "raydium-clmm", pool: "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv" },
-  { name: "pancakeswap-clmm-sol-usdc", venue: "pancakeswap-clmm", pool: "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ" },
-  { name: "byreal-sol-usdc", venue: "byreal", pool: "9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq", only: true },
-  { name: "orca-whirlpool-sol-usdc", venue: "orca-whirlpool", pool: "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE" },
-  { name: "cropper-sol-usdc", venue: "cropper", pool: "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ" },
-  { name: "defituna-sol-usdc", venue: "defituna", pool: "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65" },
+  {
+    name: "raydium-clmm-sol-usdc",
+    venue: "raydium-clmm",
+    pool: "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+  },
+  {
+    name: "pancakeswap-clmm-sol-usdc",
+    venue: "pancakeswap-clmm",
+    pool: "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+  },
+  {
+    name: "byreal-sol-usdc",
+    venue: "byreal",
+    pool: "9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq",
+    only: true,
+  },
+  {
+    name: "orca-whirlpool-sol-usdc",
+    venue: "orca-whirlpool",
+    pool: "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+  },
+  {
+    name: "cropper-sol-usdc",
+    venue: "cropper",
+    pool: "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+  },
+  {
+    name: "defituna-sol-usdc",
+    venue: "defituna",
+    pool: "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+  },
   { name: "crema-sol-usdc", venue: "crema", pool: "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm" },
-  { name: "phoenix-sol-usdc", venue: "phoenix", pool: "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg" },
+  {
+    name: "phoenix-sol-usdc",
+    venue: "phoenix",
+    pool: "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+  },
   { name: "byreal-usdc", venue: "byreal", pool: "8HPQzqMDoDcRDMh3Si75EGWh276QbcVrfHvrNFVPnW8s" },
-  { name: "stabble-clmm-usdc-usdt", venue: "stabble-clmm", pool: "9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x" },
-  { name: "meteora-dlmm-sol-usdc", venue: "meteora-dlmm", pool: "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6", only: true },
+  {
+    name: "stabble-clmm-usdc-usdt",
+    venue: "stabble-clmm",
+    pool: "9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x",
+  },
+  {
+    name: "meteora-dlmm-sol-usdc",
+    venue: "meteora-dlmm",
+    pool: "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+    only: true,
+  },
 ];
 
 async function rpc(method, params) {
@@ -244,11 +282,16 @@ async function raydiumTickArrays(programId, pool, tick, spacing) {
     const bit = start / span + 512;
     return bit >= 0 && bit < 1024 && (bitmap[bit >> 3] >> (bit & 7)) & 1;
   };
-  const down = starts.filter((a) => live(a) && a.start <= current).sort((a, b) => b.start - a.start);
+  const down = starts
+    .filter((a) => live(a) && a.start <= current)
+    .sort((a, b) => b.start - a.start);
   const up = starts.filter((a) => live(a) && a.start >= current).sort((a, b) => a.start - b.start);
   // A pool with fewer than three arrays holding liquidity: any other of its arrays fills the slot.
-  const empty = starts.filter((a) => !live(a)).sort((a, b) => Math.abs(a.start - current) - Math.abs(b.start - current));
-  const three = (near, far) => [...new Set([...near, ...far, ...empty])].slice(0, 3).map((a) => a.address);
+  const empty = starts
+    .filter((a) => !live(a))
+    .sort((a, b) => Math.abs(a.start - current) - Math.abs(b.start - current));
+  const three = (near, far) =>
+    [...new Set([...near, ...far, ...empty])].slice(0, 3).map((a) => a.address);
 
   return { payA: three(down, up), payB: three(up, down) };
 }
@@ -256,7 +299,17 @@ async function raydiumTickArrays(programId, pool, tick, spacing) {
 /** A pool's slot, the nine accounts the program takes for it, and the tick arrays each way. */
 async function slotOf({ venue, pool, only }) {
   const programId = PROGRAMS[venue] ?? (await loader(pool), read.get(pool).owner);
-  if (only) return { program: programId, pool, config: SYSTEM, vaultA: SYSTEM, vaultB: SYSTEM, extra: SYSTEM, payA: [SYSTEM, SYSTEM, SYSTEM], payB: [SYSTEM, SYSTEM, SYSTEM] };
+  if (only)
+    return {
+      program: programId,
+      pool,
+      config: SYSTEM,
+      vaultA: SYSTEM,
+      vaultB: SYSTEM,
+      extra: SYSTEM,
+      payA: [SYSTEM, SYSTEM, SYSTEM],
+      payB: [SYSTEM, SYSTEM, SYSTEM],
+    };
   const at = address(pool);
   switch (venue) {
     case "raydium-clmm":
@@ -270,28 +323,79 @@ async function slotOf({ venue, pool, only }) {
         "stabble-clmm": venues.fetchStabbleClmmConfig,
       }[venue];
       const cfg = await fetchConfig(loader, at);
-      const { payA, payB } = await raydiumTickArrays(programId, pool, cfg.tickCurrentIndex, cfg.tickSpacing);
-      return { program: programId, pool, config: cfg.ammConfig, vaultA: cfg.tokenVault0, vaultB: cfg.tokenVault1, extra: cfg.observation, payA, payB };
+      const { payA, payB } = await raydiumTickArrays(
+        programId,
+        pool,
+        cfg.tickCurrentIndex,
+        cfg.tickSpacing,
+      );
+      return {
+        program: programId,
+        pool,
+        config: cfg.ammConfig,
+        vaultA: cfg.tokenVault0,
+        vaultB: cfg.tokenVault1,
+        extra: cfg.observation,
+        payA,
+        payB,
+      };
     }
     case "orca-whirlpool":
     case "cropper": {
-      const fetchConfig = venue === "cropper" ? venues.fetchCropperConfig : venues.fetchOrcaWhirlpoolConfig;
+      const fetchConfig =
+        venue === "cropper" ? venues.fetchCropperConfig : venues.fetchOrcaWhirlpoolConfig;
       const cfg = await fetchConfig(loader, at);
-      return { program: programId, pool, config: SYSTEM, vaultA: cfg.tokenVaultA, vaultB: cfg.tokenVaultB, extra: cfg.oracle, payA: cfg.windows.aToB.tickArrays, payB: cfg.windows.bToA.tickArrays };
+      return {
+        program: programId,
+        pool,
+        config: SYSTEM,
+        vaultA: cfg.tokenVaultA,
+        vaultB: cfg.tokenVaultB,
+        extra: cfg.oracle,
+        payA: cfg.windows.aToB.tickArrays,
+        payB: cfg.windows.bToA.tickArrays,
+      };
     }
     case "defituna": {
       const cfg = await venues.fetchDefiTunaPoolConfig(loader, at);
-      return { program: programId, pool, config: SYSTEM, vaultA: cfg.tokenVaultA, vaultB: cfg.tokenVaultB, extra: SYSTEM, payA: cfg.windows.aToB.tickArrays, payB: cfg.windows.bToA.tickArrays };
+      return {
+        program: programId,
+        pool,
+        config: SYSTEM,
+        vaultA: cfg.tokenVaultA,
+        vaultB: cfg.tokenVaultB,
+        extra: SYSTEM,
+        payA: cfg.windows.aToB.tickArrays,
+        payB: cfg.windows.bToA.tickArrays,
+      };
     }
     case "crema": {
       const cfg = await venues.fetchCremaPoolConfig(loader, at);
-      return { program: programId, pool, config: cfg.clmmConfig, vaultA: cfg.tokenVaultA, vaultB: cfg.tokenVaultB, extra: cfg.tickArrayMap, payA: cfg.windows.aToB.tickArrays, payB: cfg.windows.bToA.tickArrays };
+      return {
+        program: programId,
+        pool,
+        config: cfg.clmmConfig,
+        vaultA: cfg.tokenVaultA,
+        vaultB: cfg.tokenVaultB,
+        extra: cfg.tickArrayMap,
+        payA: cfg.windows.aToB.tickArrays,
+        payB: cfg.windows.bToA.tickArrays,
+      };
     }
     case "phoenix": {
       const cfg = await venues.fetchPhoenixConfig(loader, at);
       const log = await pda(programId, [new TextEncoder().encode("log")]);
       const none = [SYSTEM, SYSTEM, SYSTEM];
-      return { program: programId, pool, config: log, vaultA: cfg.baseVault, vaultB: cfg.quoteVault, extra: SYSTEM, payA: none, payB: none };
+      return {
+        program: programId,
+        pool,
+        config: log,
+        vaultA: cfg.baseVault,
+        vaultB: cfg.quoteVault,
+        extra: SYSTEM,
+        payA: none,
+        payB: none,
+      };
     }
     default:
       return fail(`no slot for venue ${venue}`);
@@ -299,11 +403,27 @@ async function slotOf({ venue, pool, only }) {
 }
 
 const pools = [];
-for (const spec of POOLS) pools.push({ name: spec.name, venue: spec.venue, ...(await slotOf(spec)) });
+for (const spec of POOLS)
+  pools.push({ name: spec.name, venue: spec.venue, ...(await slotOf(spec)) });
 // The mints of every pool, from the pools themselves: SOL, USDC, USDT and Byreal's token.
-const wanted = new Set([WSOL, USDC, USDT, getAddressDecoder().decode(read.get(POOLS.find((p) => p.name === "byreal-usdc").pool).data.subarray(73, 105))]);
+const wanted = new Set([
+  WSOL,
+  USDC,
+  USDT,
+  getAddressDecoder().decode(
+    read.get(POOLS.find((p) => p.name === "byreal-usdc").pool).data.subarray(73, 105),
+  ),
+]);
 for (const pool of pools)
-  for (const at of [pool.pool, pool.config, pool.vaultA, pool.vaultB, pool.extra, ...pool.payA, ...pool.payB])
+  for (const at of [
+    pool.pool,
+    pool.config,
+    pool.vaultA,
+    pool.vaultB,
+    pool.extra,
+    ...pool.payA,
+    ...pool.payB,
+  ])
     if (at !== SYSTEM && !Object.values(PROGRAMS).includes(at)) wanted.add(at);
 // Read them all again at one slot at least as late as the last decoder read, so the pools, their
 // vaults and their tick arrays are one consistent snapshot.
@@ -330,8 +450,10 @@ for (const at of [...wanted].sort()) {
 
 rmSync(DIR, { recursive: true, force: true });
 mkdirSync(join(DIR, "accounts"), { recursive: true });
-for (const { entry, elf } of programs) writeFileSync(join(DIR, entry.file), gzipSync(elf, { level: 9 }));
-for (const { entry, data } of accounts) writeFileSync(join(DIR, entry.file), gzipSync(data, { level: 9 }));
+for (const { entry, elf } of programs)
+  writeFileSync(join(DIR, entry.file), gzipSync(elf, { level: 9 }));
+for (const { entry, data } of accounts)
+  writeFileSync(join(DIR, entry.file), gzipSync(data, { level: 9 }));
 writeFileSync(
   MANIFEST,
   JSON.stringify(

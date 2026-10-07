@@ -41,7 +41,13 @@ const PHOENIX = 0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bb
 // One pool: skipped when missing, empty or already past its own limit, else offered all of the
 // budget still unspent, up to its own limit. `slot`: the pool's nine accounts. `shared`: authority,
 // source, output, payMint, buyMint, the two token programs and the memo program.
-function trade(slot: Account[], shared: Account[], kept: Uint256, limit: Uint256, maxPrice: Uint256): void {
+function trade(
+  slot: Account[],
+  shared: Account[],
+  kept: Uint256,
+  limit: Uint256,
+  maxPrice: Uint256,
+): void {
   const pool = slot[1];
   if (pool.address == 0) {
     return;
@@ -69,7 +75,11 @@ function trade(slot: Account[], shared: Account[], kept: Uint256, limit: Uint256
     const baseLot = svm.sload(pool, 112, 8).toLe();
     const quoteLot = svm.sload(pool, 192, 8).toLe();
     // One tick, in maxPrice's units: quote atoms per base atom, times 10^18.
-    const tick = Math.mulDiv(svm.sload(pool, 840, 8).toLe() * quoteLot, 10 ** 18, svm.sload(pool, 832, 8).toLe() * baseLot);
+    const tick = Math.mulDiv(
+      svm.sload(pool, 840, 8).toLe() * quoteLot,
+      10 ** 18,
+      svm.sload(pool, 832, 8).toLe() * baseLot,
+    );
     // Buying base: the most a base atom may cost before the fee. Selling it: the least it must
     // fetch before the fee is taken, rounded up.
     let ticks = Math.mulDiv(maxPrice, 10000, (10000 + fee) * tick);
@@ -89,11 +99,20 @@ function trade(slot: Account[], shared: Account[], kept: Uint256, limit: Uint256
     // No minimum fill, a crossing order cancels its resting side, no match limit, client id 0,
     // no deposited funds, no expiry.
     const none = zero.toBytesLe(16);
-    const order = side.concat(hex`01`, ticks.toBytesLe(8), baseLots.toBytesLe(8), quoteLots.toBytesLe(8));
+    const order = side.concat(
+      hex`01`,
+      ticks.toBytesLe(8),
+      baseLots.toBytesLe(8),
+      quoteLots.toBytesLe(8),
+    );
     const rest = none.concat(hex`0100`, none, hex`000000`);
     const baseAccount = paysBase ? source : output;
     const quoteAccount = paysBase ? output : source;
-    svm.call(slot[0], [slot[0], slot[2], pool, shared[0], baseAccount, quoteAccount, slot[3], slot[4], shared[5]], order.concat(rest));
+    svm.call(
+      slot[0],
+      [slot[0], slot[2], pool, shared[0], baseAccount, quoteAccount, slot[3], slot[4], shared[5]],
+      order.concat(rest),
+    );
     return;
   }
 
@@ -105,11 +124,20 @@ function trade(slot: Account[], shared: Account[], kept: Uint256, limit: Uint256
   let liquidity = 0;
   let price = 0;
   let fee = 0;
-  if (venue == RAYDIUM_CLMM || venue == PANCAKESWAP_CLMM || venue == BYREAL || venue == STABBLE_CLMM) {
+  if (
+    venue == RAYDIUM_CLMM ||
+    venue == PANCAKESWAP_CLMM ||
+    venue == BYREAL ||
+    venue == STABBLE_CLMM
+  ) {
     // Swaps off (status bit 4), or fees on top of the config's rate, which Byreal's pools may set
     // (a pool rate at 393, decay, imbalance and dynamic fees from 1096): not one rate to adjust for.
     const status = svm.sload(pool, 389, 1).toLe();
-    if ((status & 16) != 0 || svm.sload(pool, 393, 4).toLe() != 0 || svm.sload(pool, 1096, 16).toLe() != 0) {
+    if (
+      (status & 16) != 0 ||
+      svm.sload(pool, 393, 4).toLe() != 0 ||
+      svm.sload(pool, 1096, 16).toLe() != 0
+    ) {
       return;
     }
     mintA = svm.sload(pool, 73, 32).toBe();
@@ -171,19 +199,93 @@ function trade(slot: Account[], shared: Account[], kept: Uint256, limit: Uint256
   if (venue == ORCA_WHIRLPOOL) {
     const swapV2 = hex`2b04ed0b1ac91e62`;
     const data = swapV2.concat(amount, none, bound, hex`01`, aToB, hex`00`);
-    svm.call(slot[0], [programA, programB, shared[7], shared[0], pool, mintAccountA, mintAccountB, ownerA, slot[3], ownerB, slot[4], slot[6], slot[7], slot[8], slot[5]], data);
+    svm.call(
+      slot[0],
+      [
+        programA,
+        programB,
+        shared[7],
+        shared[0],
+        pool,
+        mintAccountA,
+        mintAccountB,
+        ownerA,
+        slot[3],
+        ownerB,
+        slot[4],
+        slot[6],
+        slot[7],
+        slot[8],
+        slot[5],
+      ],
+      data,
+    );
   } else if (venue == CROPPER) {
     const swap = hex`f8c69e91e17587c8`;
     const data = swap.concat(amount, none, bound, hex`01`, aToB);
-    svm.call(slot[0], [shared[5], shared[0], pool, ownerA, slot[3], ownerB, slot[4], slot[6], slot[7], slot[8], slot[5]], data);
+    svm.call(
+      slot[0],
+      [
+        shared[5],
+        shared[0],
+        pool,
+        ownerA,
+        slot[3],
+        ownerB,
+        slot[4],
+        slot[6],
+        slot[7],
+        slot[8],
+        slot[5],
+      ],
+      data,
+    );
   } else if (venue == DEFITUNA) {
     const swap = hex`f8c69e91e17587c8`;
     const data = swap.concat(amount, none, bound, hex`01`, aToB, hex`00`);
-    svm.call(slot[0], [programA, programB, shared[7], shared[0], pool, mintAccountA, mintAccountB, ownerA, ownerB, slot[3], slot[4], slot[6], slot[7], slot[8]], data);
+    svm.call(
+      slot[0],
+      [
+        programA,
+        programB,
+        shared[7],
+        shared[0],
+        pool,
+        mintAccountA,
+        mintAccountB,
+        ownerA,
+        ownerB,
+        slot[3],
+        slot[4],
+        slot[6],
+        slot[7],
+        slot[8],
+      ],
+      data,
+    );
   } else if (venue == CREMA) {
     const swap = hex`f8c69e91e17587c8`;
     const data = swap.concat(aToB, hex`01`, amount, none, bound);
-    svm.call(slot[0], [slot[2], pool, mintAccountA, mintAccountB, ownerA, ownerB, slot[3], slot[4], slot[5], shared[0], shared[5], slot[6], slot[7], slot[8]], data);
+    svm.call(
+      slot[0],
+      [
+        slot[2],
+        pool,
+        mintAccountA,
+        mintAccountB,
+        ownerA,
+        ownerB,
+        slot[3],
+        slot[4],
+        slot[5],
+        shared[0],
+        shared[5],
+        slot[6],
+        slot[7],
+        slot[8],
+      ],
+      data,
+    );
   } else {
     // Raydium's layout: the input and output vault, token program, Token-2022 and the memo
     // program, both mints, then the tick arrays.
@@ -191,7 +293,28 @@ function trade(slot: Account[], shared: Account[], kept: Uint256, limit: Uint256
     const data = swapV2.concat(amount, none, bound, hex`01`);
     const vaultIn = paysA ? slot[3] : slot[4];
     const vaultOut = paysA ? slot[4] : slot[3];
-    svm.call(slot[0], [shared[0], slot[2], pool, source, output, vaultIn, vaultOut, slot[5], shared[5], shared[6], shared[7], payMint, buyMint, slot[6], slot[7], slot[8]], data);
+    svm.call(
+      slot[0],
+      [
+        shared[0],
+        slot[2],
+        pool,
+        source,
+        output,
+        vaultIn,
+        vaultOut,
+        slot[5],
+        shared[5],
+        shared[6],
+        shared[7],
+        payMint,
+        buyMint,
+        slot[6],
+        slot[7],
+        slot[8],
+      ],
+      data,
+    );
   }
 }
 
@@ -264,10 +387,34 @@ function main(
 
   // Each slot in turn; trade() decides and swaps.
   const shared = [authority, source, output, payMint, buyMint, tokenProgram, token2022, memo];
-  trade([program0, pool0, config0, vaultA0, vaultB0, extra0, ticks00, ticks01, ticks02], shared, kept, limit, maxPrice);
-  trade([program1, pool1, config1, vaultA1, vaultB1, extra1, ticks10, ticks11, ticks12], shared, kept, limit, maxPrice);
-  trade([program2, pool2, config2, vaultA2, vaultB2, extra2, ticks20, ticks21, ticks22], shared, kept, limit, maxPrice);
-  trade([program3, pool3, config3, vaultA3, vaultB3, extra3, ticks30, ticks31, ticks32], shared, kept, limit, maxPrice);
+  trade(
+    [program0, pool0, config0, vaultA0, vaultB0, extra0, ticks00, ticks01, ticks02],
+    shared,
+    kept,
+    limit,
+    maxPrice,
+  );
+  trade(
+    [program1, pool1, config1, vaultA1, vaultB1, extra1, ticks10, ticks11, ticks12],
+    shared,
+    kept,
+    limit,
+    maxPrice,
+  );
+  trade(
+    [program2, pool2, config2, vaultA2, vaultB2, extra2, ticks20, ticks21, ticks22],
+    shared,
+    kept,
+    limit,
+    maxPrice,
+  );
+  trade(
+    [program3, pool3, config3, vaultA3, vaultB3, extra3, ticks30, ticks31, ticks32],
+    shared,
+    kept,
+    limit,
+    maxPrice,
+  );
 
   // Settle: what was bought goes to the recipient, what is left of the budget back.
   const unspent = balanceOf(pay, source) - kept;
