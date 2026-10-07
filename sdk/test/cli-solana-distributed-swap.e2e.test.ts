@@ -217,9 +217,15 @@ describeSvm(
       return le(account.data, LAYOUT[p.venue]!.price, 16);
     };
 
-    it("stages the program, creates a lookup table for its accounts, and cooks", async () => {
+    it("creates the Pot's missing token account, stages the program, creates a lookup table for its accounts, and cooks", async () => {
       const source = await potAccount(USDC, budget + 3n);
-      await potAccount(WSOL, 0n);
+      // The Pot's WSOL account, which the cook buys into, does not exist yet: the run creates it.
+      const [output] = await findAssociatedTokenPda({
+        owner: pot,
+        mint: WSOL,
+        tokenProgram: TOKEN,
+      });
+      expect(harness.svm.getAccount(output).exists).toBe(false);
       const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
       const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
       const run = await sauce(
@@ -229,10 +235,12 @@ describeSvm(
       );
       if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}\n${run.stdout}`);
       const out = JSON.parse(run.stdout) as {
+        createTokenAccounts?: { accounts: string[] };
         staged?: { transactions: string[] };
         lookupTable?: { address: Address; accounts: number; transactions: string[] };
         cook: { status: string };
       };
+      expect(out.createTokenAccounts?.accounts).toEqual([`the Pot's WSOL account, ${output}`]);
       expect(out.cook.status).toBe("success");
       expect(out.staged?.transactions.length).toBeGreaterThan(1);
       expect(out.lookupTable?.accounts).toBeGreaterThan(40);
@@ -258,11 +266,13 @@ describeSvm(
       );
       if (again.code !== 0) throw new Error(`exit ${again.code}\n${again.stderr}\n${again.stdout}`);
       const second = JSON.parse(again.stdout) as {
+        createTokenAccounts?: unknown;
         lookupTable?: unknown;
         cook: { status: string };
       };
       expect(second.cook.status).toBe("success");
       expect(second.lookupTable).toBeUndefined();
+      expect(second.createTokenAccounts).toBeUndefined();
     }, 300_000);
 
     it("simulates it in a local copy of its accounts, and refuses to print it as one transaction", async () => {

@@ -1301,8 +1301,9 @@ owner given the lamports the staging and the fees take (any address can rehearse
 where missing, the program staged into a code buffer as `run` stages it, then the cook, its
 accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
 spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
-`pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note
-to create it before sending. `tx` refuses a cook too large for one transaction, with the bytes to
+`pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note:
+`run` creates it before the cook (asking first, or with `--auto-approve`). An `--owner` that is
+not a wallet (a program's account, or one holding data) is refused, as it cannot pay. `tx` refuses a cook too large for one transaction, with the bytes to
 shrink the payload (the program and its arguments) by. Each account a transaction lists costs 32
 bytes, and one taken through an address lookup table one byte: `--lookup-table <address>` takes a
 cook's accounts through a table that holds them, on `run`, `simulate` and `tx`, and `run` creates

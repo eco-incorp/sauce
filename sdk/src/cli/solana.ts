@@ -60,6 +60,8 @@ import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
+  type AccountResolution,
+  buildAtaPrepend,
   buildCloseCodeBufferInstruction,
   buildComputeBudgetPrepend,
   buildCookAndPayFromAccountPinnedInstruction,
@@ -73,12 +75,14 @@ import {
   buildGrowCodeBufferInstruction,
   buildHeapFramePrepend,
   buildWriteCodeBufferInstruction,
+  type CookVia,
   createSauceSvmClient,
   decodeExecutionFeeConfig,
   deriveCodeBufferPda,
   deriveCodePda,
   deriveExecutionFeeConfigPda,
   derivePotPda,
+  type EngineFault,
   engineFaultName,
   fetchAlt,
   GROWTH_STEP,
@@ -86,14 +90,11 @@ import {
   MAX_POT_LEN,
   resolveAccounts,
   resolveTokenProgramByOwner,
+  type SauceSvmClient,
+  type SimulateExecuteResult,
   svmTokenAccount,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
-  type AccountResolution,
-  type CookVia,
-  type EngineFault,
-  type SauceSvmClient,
-  type SimulateExecuteResult,
 } from "../svm/index.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
@@ -594,6 +595,8 @@ async function sendInstructions(
  * can carry a "_": `NVDA_US`) or a mint's base58 address.
  */
 const TOKEN_NAMED = /^(pot|owner|mint|program):([A-Za-z0-9_]+)$/;
+/** The System program, which owns every wallet. */
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 
 /** `--account name=<pubkey | pot | owner | pot:<token> | owner:<token> | mint:<token> | program:<token>>`, parsed. */
 export function parseAccounts(raws: readonly string[]): Record<string, string> {
@@ -1599,6 +1602,16 @@ async function stagedRehearsal(
     engine(),
     kitchen(),
   );
+  // The owner signs and pays every transaction of the rehearsal: an account a program owns, or one
+  // holding data, cannot pay a fee, so it is refused here, by name, before anything runs.
+  const payer = fork.account(owner);
+  if (payer !== null && (payer.owner !== SYSTEM_PROGRAM || payer.data.length > 0)) {
+    throw new CliError(
+      `--owner ${owner} is an account of ${payer.owner}${payer.data.length > 0 ? `, holding ${payer.data.length} bytes` : ""}, ` +
+        "not a wallet: the owner signs and pays the cook, so give a wallet's address, or any " +
+        "address with no account at all, which the copy funds",
+    );
+  }
   const notes: string[] = [];
   // A Pot's or owner's token account the cluster does not have yet is made, empty, in the copy:
   // `sauce run` does not make it, so the note says to.
@@ -1613,7 +1626,7 @@ async function stagedRehearsal(
     );
     notes.push(
       `--account ${name}: ${token.label}, ${token.address}, does not exist on solana; the copy made ` +
-        "it empty. Create it before sending the cook (its associated token account, idempotently)",
+        "it empty, and `sauce run` creates it before the cook (asking first, or with --auto-approve)",
     );
   }
   const holder = direct ? owner : prepared.pot;
@@ -2072,6 +2085,64 @@ async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<Sv
   return created;
 }
 
+/**
+ * The Pot's and the owner's token accounts the cook names (`pot:USDC`, `owner:WSOL`) that solana
+ * does not have yet, created by the owner before the cook, idempotently, as the rehearsal's copy
+ * made them empty: a program paying into an account that does not exist fails. Asked for as the
+ * Pot's creation is: their rent comes from the owner.
+ */
+async function ensureTokenAccounts(
+  input: SvmRunInput,
+  prepared: Prepared,
+): Promise<{ sent: SvmSent; made: string[] } | undefined> {
+  const missing: TokenAccountNamed[] = [];
+  for (const token of prepared.given.named.values()) {
+    if (token.account === undefined || missing.some((one) => one.address === token.address))
+      continue;
+    if (!(await exists(prepared.rpc, input.rpcUrl, token.address, token.label)))
+      missing.push(token);
+  }
+  if (missing.length === 0) return undefined;
+  const made = missing.map((token) => `${token.label}, ${token.address}`);
+  const actions = made.map((one) => `create ${one}`);
+  if (!input.approver.auto && !input.approver.canAsk) throw unapproved(actions);
+  const agreed = await input.approver.approve(
+    actions.join("; "),
+    `${made.join("; ")}: not on solana yet, and the cook names ${missing.length === 1 ? "it" : "them"}. ` +
+      "Create now, the owner paying the rent? [y/N] ",
+  );
+  if (agreed !== true) {
+    throw new CliError(
+      `${made.join("; ")} ${missing.length === 1 ? "does" : "do"} not exist on solana, so nothing ` +
+        "was sent: create each (its associated token account, idempotently), or pass " +
+        "--auto-approve to create them before the cook",
+    );
+  }
+  const instructions = await Promise.all(
+    missing.map(
+      async (token) =>
+        (
+          await buildAtaPrepend({
+            payer: input.signer,
+            owner: token.account!.holder,
+            mint: token.account!.mint,
+            tokenProgram: token.account!.program,
+          })
+        ).instruction,
+    ),
+  );
+  const sent = await sendInstructions(
+    prepared.rpc,
+    input.rpcUrl,
+    input.signer,
+    instructions,
+    "creating the token accounts",
+  );
+  if (!sent.ok) throw new CliError(sentLine("creating the token accounts", sent));
+
+  return { sent, made };
+}
+
 /** `sauce run` on Solana: compile, create the Pot if agreed, stage if needed, cook, confirm. */
 export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promise<CommandOutput> {
   requireSupported("sending the cook", [input.chain]);
@@ -2079,6 +2150,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const direct = prepared.via === "engine";
   // Directly to the engine the program runs as no Pot: there is none to create.
   const created = direct ? undefined : await ensurePot(input, prepared.rpc, prepared.pot);
+  const accountsMade = await ensureTokenAccounts(input, prepared);
   const size = await fits(prepared);
   // The cook's rehearsal failing: `computeUnitLimit: "auto"` simulates first, and its failure
   // carries the reason — read again, with the logs, to report it.
@@ -2169,6 +2241,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   return {
     text: [
       ...(created === undefined ? [] : [sentLine(`created Pot ${prepared.pot} in`, created)]),
+      ...(accountsMade === undefined
+        ? []
+        : [sentLine(`created ${accountsMade.made.join("; ")} in`, accountsMade.sent)]),
       ...(staged === undefined
         ? []
         : [
@@ -2197,6 +2272,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       fee: prepared.fee.toString(),
       maxExecutionFee: prepared.fee.toString(),
       ...(created === undefined ? {} : { createPot: sentJson(created) }),
+      ...(accountsMade === undefined
+        ? {}
+        : { createTokenAccounts: { ...sentJson(accountsMade.sent), accounts: accountsMade.made } }),
       ...(staged === undefined
         ? {}
         : {

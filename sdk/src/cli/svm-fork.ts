@@ -87,6 +87,48 @@ export interface Fork {
  * A runtime error as the JSON-RPC API reports it, so the command reads the copy's failures as it
  * reads a cluster's: `{ InstructionError: [index, { Custom: code }] }`, or the error's text.
  */
+/**
+ * LiteSVM's fieldless transaction errors in their order (its `TransactionErrorFieldless`, a const
+ * enum the package does not export at run time), so a failure says its name and not its number.
+ */
+const FIELDLESS = [
+  "AccountInUse",
+  "AccountLoadedTwice",
+  "AccountNotFound",
+  "ProgramAccountNotFound",
+  "InsufficientFundsForFee",
+  "InvalidAccountForFee",
+  "AlreadyProcessed",
+  "BlockhashNotFound",
+  "CallChainTooDeep",
+  "MissingSignatureForFee",
+  "InvalidAccountIndex",
+  "SignatureFailure",
+  "InvalidProgramForExecution",
+  "SanitizeFailure",
+  "ClusterMaintenance",
+  "AccountBorrowOutstanding",
+  "WouldExceedMaxBlockCostLimit",
+  "UnsupportedVersion",
+  "InvalidWritableAccount",
+  "WouldExceedMaxAccountCostLimit",
+  "WouldExceedAccountDataBlockLimit",
+  "TooManyAccountLocks",
+  "AddressLookupTableNotFound",
+  "InvalidAddressLookupTableOwner",
+  "InvalidAddressLookupTableData",
+  "InvalidAddressLookupTableIndex",
+  "InvalidRentPayingAccount",
+  "WouldExceedMaxVoteCostLimit",
+  "WouldExceedAccountDataTotalLimit",
+  "MaxLoadedAccountsDataSizeExceeded",
+  "ResanitizationNeeded",
+  "InvalidLoadedAccountsDataSizeLimit",
+  "UnbalancedTransaction",
+  "ProgramCacheHitMaxLimit",
+  "CommitCancelled",
+];
+
 function rpcError(err: unknown): unknown {
   const detail = err as { index?: number; err?: () => unknown };
   if (typeof detail.index === "number" && typeof detail.err === "function") {
@@ -102,7 +144,7 @@ function rpcError(err: unknown): unknown {
     };
   }
 
-  return String(err);
+  return typeof err === "number" ? (FIELDLESS[err] ?? String(err)) : String(err);
 }
 
 /** The cluster's accounts at `keys`, `null` where one does not exist, read 100 at a time. */

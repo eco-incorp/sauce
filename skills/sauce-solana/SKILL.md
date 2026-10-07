@@ -293,7 +293,8 @@ Pots and intent steps are built and sent there.
   `--assume-balance USDC:1000` gives the account the cook spends USDC from (the Pot's, or the
   owner's with `--via engine`) that balance, whole tokens as `--fund` takes them, and a
   `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a
-  note: create it before sending, as `sauce run` does not.
+  note; `sauce run` creates it before the cook (asking first, or with `--auto-approve`). The
+  owner must be a wallet, or an address with no account: it signs and pays.
 - **Through the Kitchen or directly.** `--via kitchen`, the default, is the Kitchen's cook on the
   owner's Pot: the program holds and spends what the Pot owns and can write the Pot's storage.
   `--via engine` calls the engine itself, with no Kitchen and no Pot: nothing is created, and the
