@@ -346,10 +346,11 @@ Measured on the released engine, a venue's `Data` form costs about 3,300 compute
 its data written by hand, its `Cpi` form about 7,500 more, and the slot forms about 1,400 more for
 each account they read out of `slot` or `trader`.
 
-A function cannot list more than sixteen accounts. `scaleAmm`, `pumpswap`, `bonkswap` and
-`guacswap` swap with more, so they have only their `Cpi` and `Data` forms: `scaleAmmCpi`,
-`pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `scaleAmmData`, `pumpswapData`, `bonkswapData` and
-`guacswapData`.
+A function cannot list more than sixteen accounts. `scaleAmm`, `pumpswap`, `bonkswap`,
+`guacswap`, `meteoraDlmm` and `sarosDlmm` swap with more, so they have only their `Cpi` and `Data`
+forms: `scaleAmmCpi`, `pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `meteoraDlmmCpi`,
+`sarosDlmmCpi`, `scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `meteoraDlmmData`
+and `sarosDlmmData`.
 
 ## Example
 

@@ -311,7 +311,14 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form
  *  alone. */
-export const SVM_CPI_ONLY = ["scaleAmm", "pumpswap", "bonkswap", "guacswap"] as const;
+export const SVM_CPI_ONLY = [
+  "scaleAmm",
+  "pumpswap",
+  "bonkswap",
+  "guacswap",
+  "meteoraDlmm",
+  "sarosDlmm",
+] as const;
 
 const capitalized = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 
@@ -364,6 +371,7 @@ export const SVM_EXACT_IN_ARGUMENTS: Readonly<Record<string, readonly string[]>>
   pumpswap: ["minOut", "paysBase"],
   bonkswap: ["xToY"],
   guacswap: ["xToY"],
+  sarosDlmm: ["minOut", "xToY"],
 };
 
 /** An exact-input venue's `…Cpi` or `…Data` arguments, `amountIn` first; undefined for any other

@@ -14,8 +14,8 @@
  *     comment names, and its plain form reverts there;
  *   - a swap below its floor reverts, every form, and a slot or list naming another program reverts
  *     before the authority signs into it;
- *   - PumpSwap, Bonkswap and Guacswap, whose swaps take more accounts than a function can list, the
- *     same through their `Cpi` forms.
+ *   - Scale AMM, PumpSwap, Bonkswap, Guacswap, Meteora DLMM and Saros DLMM, whose swaps take more
+ *     accounts than a function can list, the same through their `Cpi` forms.
  *
  * It logs each function's compute units: the engine's own (the venue's call excluded, an empty
  * program's with the same accounts subtracted) and the venue's.
@@ -1427,6 +1427,51 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         },
       ],
     },
+    {
+      name: "meteoraDlmm",
+      programs: ["meteora-dlmm"],
+      dirs: ["meteora-dlmm"],
+      clock: 1_783_355_400n,
+      cases: [
+        {
+          vector: "meteora-dlmm:5rCf:xToY",
+          pay: WSOL,
+          buy: USDC,
+          amountIn: 5_000_000_000n,
+          received: 408_662_622n,
+        },
+        {
+          vector: "meteora-dlmm:5rCf:yToX",
+          pay: USDC,
+          buy: WSOL,
+          amountIn: 408_662_622n,
+        },
+      ],
+    },
+    {
+      name: "sarosDlmm",
+      programs: ["saros-dlmm"],
+      dirs: ["saros-dlmm"],
+      clock: 1_785_540_000n,
+      cases: [
+        {
+          vector: "saros-dlmm:DHXK:xToY",
+          dir: true,
+          pay: cfg("saros-dlmm:DHXK:xToY").tokenXMint as Address,
+          buy: USDC,
+          amountIn: 300_000_000n,
+          received: 299_969_399n,
+        },
+        {
+          vector: "saros-dlmm:DHXK:yToX",
+          dir: false,
+          pay: USDC,
+          buy: cfg("saros-dlmm:DHXK:xToY").tokenXMint as Address,
+          amountIn: 500_000_000n,
+          received: 499_879_537n,
+        },
+      ],
+    },
   ];
 
   describe.each(CPI_VENUES)("$name", (venue) => {
@@ -1506,6 +1551,20 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           });
         }
       }
+    }, 300_000);
+
+    it("refuses a list naming another program, before the authority signs into it", async () => {
+      const other = "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ" as Address;
+      const list = [{ address: "source" as const, writable: true }];
+      const first = venue.cases[0]!;
+      const trade = { ...first, minOut: 1n, slot: [], cpi: { program: other, accounts: list } };
+      const program = instruction(
+        "Cpi",
+        venue.name,
+        1,
+        bakedFor(venue.name, first, VECTORS[first.vector]),
+      );
+      expect(refused(await cook(harness, program, trade, other))).toMatch(/^not an? /);
     }, 300_000);
   });
 });

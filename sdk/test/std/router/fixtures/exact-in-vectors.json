@@ -4105,6 +4105,910 @@
           "writable": true
         }
       ]
+    },
+    "meteora-dlmm:5rCf:xToY": {
+      "venue": "meteora-dlmm",
+      "pool": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+      "direction": "xToY",
+      "cfg": {
+        "venue": "meteora-dlmm",
+        "pool": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+        "direction": "xToY",
+        "tokenXMint": "So11111111111111111111111111111111111111112",
+        "tokenYMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "reserveX": "EYj9xKw6ZszwpyNibHY7JD5o3QgTVrSdcBp1fMJhrR9o",
+        "reserveY": "CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz",
+        "oracle": "59YuGWPunbchD2mbi9U7qvjWQKQReGeepn4ZSr9zz9Li",
+        "bitmapExtension": "DArpuuqJxNLRGQ8xq5ebZbobyjxSWWsPq8MqSZ2fUZLE",
+        "bitmapExtensionExists": true,
+        "binStep": 4,
+        "activeId": -6260,
+        "baseFactor": 10000,
+        "baseFeePowerFactor": 0,
+        "variableFeeControl": 120000,
+        "maxVolatilityAccumulator": 300000,
+        "reductionFactor": 5000,
+        "filterPeriod": 30,
+        "decayPeriod": 600,
+        "collectFeeMode": 0,
+        "windows": {
+          "xToY": {
+            "binArrays": [
+              "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+              "BQfCpu2aNw3CXe4SQbDHY6goR6kZgSGakDs9yMqh6Bhv",
+              "CqpVWqcMyDGaoH8HWXhEfVo9Xd2i6Ljspvja3Fy6Ye7j"
+            ],
+            "arrayIndexes": [-90, -91, -92],
+            "bins": [
+              {
+                "arrayIndex": 0,
+                "offset": 40,
+                "binId": -6260,
+                "price": "1508911527888532005"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 39,
+                "binId": -6261,
+                "price": "1508308204606689329"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 38,
+                "binId": -6262,
+                "price": "1507705122557666263"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 37,
+                "binId": -6263,
+                "price": "1507102281645008259"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 36,
+                "binId": -6264,
+                "price": "1506499681772299340"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 35,
+                "binId": -6265,
+                "price": "1505897322843162075"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 34,
+                "binId": -6266,
+                "price": "1505295204761257572"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 33,
+                "binId": -6267,
+                "price": "1504693327430285457"
+              }
+            ],
+            "readable": 3
+          },
+          "yToX": {
+            "binArrays": [
+              "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+              "8CRkBdY5RkDRDBAZFKwRBpfe2JSWoPqM8jfr14KUXMpF",
+              "88CrJuawxX8QQETR5U8gMrjP6fftzUYwSYJyeXBXmU2g"
+            ],
+            "arrayIndexes": [-90, -89, -88],
+            "bins": [
+              {
+                "arrayIndex": 0,
+                "offset": 40,
+                "binId": -6260,
+                "price": "1508911527888532005"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 41,
+                "binId": -6259,
+                "price": "1509515092499687418"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 42,
+                "binId": -6258,
+                "price": "1510118898536687293"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 43,
+                "binId": -6257,
+                "price": "1510722946096101968"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 44,
+                "binId": -6256,
+                "price": "1511327235274540409"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 45,
+                "binId": -6255,
+                "price": "1511931766168650225"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 46,
+                "binId": -6254,
+                "price": "1512536538875117685"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 47,
+                "binId": -6253,
+                "price": "1513141553490667732"
+              }
+            ],
+            "readable": 3
+          }
+        }
+      },
+      "pay": "So11111111111111111111111111111111111111112",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+          "role": "s0:pair",
+          "writable": true
+        },
+        {
+          "address": "DArpuuqJxNLRGQ8xq5ebZbobyjxSWWsPq8MqSZ2fUZLE",
+          "role": "s0:bmx",
+          "writable": true
+        },
+        {
+          "address": "EYj9xKw6ZszwpyNibHY7JD5o3QgTVrSdcBp1fMJhrR9o",
+          "role": "s0:rx",
+          "writable": true
+        },
+        {
+          "address": "CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz",
+          "role": "s0:ry",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:mx"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:my"
+        },
+        {
+          "address": "59YuGWPunbchD2mbi9U7qvjWQKQReGeepn4ZSr9zz9Li",
+          "role": "s0:orc",
+          "writable": true
+        },
+        {
+          "address": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "role": "s0:prog"
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpx"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpy"
+        },
+        {
+          "address": "D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6",
+          "role": "s0:evt"
+        },
+        {
+          "address": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "role": "s0:prog"
+        },
+        {
+          "address": "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+          "role": "s0:ba0",
+          "writable": true
+        },
+        {
+          "address": "BQfCpu2aNw3CXe4SQbDHY6goR6kZgSGakDs9yMqh6Bhv",
+          "role": "s0:ba1",
+          "writable": true
+        },
+        {
+          "address": "CqpVWqcMyDGaoH8HWXhEfVo9Xd2i6Ljspvja3Fy6Ye7j",
+          "role": "s0:ba2",
+          "writable": true
+        }
+      ]
+    },
+    "meteora-dlmm:5rCf:yToX": {
+      "venue": "meteora-dlmm",
+      "pool": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+      "direction": "yToX",
+      "cfg": {
+        "venue": "meteora-dlmm",
+        "pool": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+        "direction": "yToX",
+        "tokenXMint": "So11111111111111111111111111111111111111112",
+        "tokenYMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "reserveX": "EYj9xKw6ZszwpyNibHY7JD5o3QgTVrSdcBp1fMJhrR9o",
+        "reserveY": "CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz",
+        "oracle": "59YuGWPunbchD2mbi9U7qvjWQKQReGeepn4ZSr9zz9Li",
+        "bitmapExtension": "DArpuuqJxNLRGQ8xq5ebZbobyjxSWWsPq8MqSZ2fUZLE",
+        "bitmapExtensionExists": true,
+        "binStep": 4,
+        "activeId": -6260,
+        "baseFactor": 10000,
+        "baseFeePowerFactor": 0,
+        "variableFeeControl": 120000,
+        "maxVolatilityAccumulator": 300000,
+        "reductionFactor": 5000,
+        "filterPeriod": 30,
+        "decayPeriod": 600,
+        "collectFeeMode": 0,
+        "windows": {
+          "xToY": {
+            "binArrays": [
+              "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+              "BQfCpu2aNw3CXe4SQbDHY6goR6kZgSGakDs9yMqh6Bhv",
+              "CqpVWqcMyDGaoH8HWXhEfVo9Xd2i6Ljspvja3Fy6Ye7j"
+            ],
+            "arrayIndexes": [-90, -91, -92],
+            "bins": [
+              {
+                "arrayIndex": 0,
+                "offset": 40,
+                "binId": -6260,
+                "price": "1508911527888532005"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 39,
+                "binId": -6261,
+                "price": "1508308204606689329"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 38,
+                "binId": -6262,
+                "price": "1507705122557666263"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 37,
+                "binId": -6263,
+                "price": "1507102281645008259"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 36,
+                "binId": -6264,
+                "price": "1506499681772299340"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 35,
+                "binId": -6265,
+                "price": "1505897322843162075"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 34,
+                "binId": -6266,
+                "price": "1505295204761257572"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 33,
+                "binId": -6267,
+                "price": "1504693327430285457"
+              }
+            ],
+            "readable": 3
+          },
+          "yToX": {
+            "binArrays": [
+              "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+              "8CRkBdY5RkDRDBAZFKwRBpfe2JSWoPqM8jfr14KUXMpF",
+              "88CrJuawxX8QQETR5U8gMrjP6fftzUYwSYJyeXBXmU2g"
+            ],
+            "arrayIndexes": [-90, -89, -88],
+            "bins": [
+              {
+                "arrayIndex": 0,
+                "offset": 40,
+                "binId": -6260,
+                "price": "1508911527888532005"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 41,
+                "binId": -6259,
+                "price": "1509515092499687418"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 42,
+                "binId": -6258,
+                "price": "1510118898536687293"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 43,
+                "binId": -6257,
+                "price": "1510722946096101968"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 44,
+                "binId": -6256,
+                "price": "1511327235274540409"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 45,
+                "binId": -6255,
+                "price": "1511931766168650225"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 46,
+                "binId": -6254,
+                "price": "1512536538875117685"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 47,
+                "binId": -6253,
+                "price": "1513141553490667732"
+              }
+            ],
+            "readable": 3
+          }
+        }
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "So11111111111111111111111111111111111111112",
+      "program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+          "role": "s0:pair",
+          "writable": true
+        },
+        {
+          "address": "DArpuuqJxNLRGQ8xq5ebZbobyjxSWWsPq8MqSZ2fUZLE",
+          "role": "s0:bmx",
+          "writable": true
+        },
+        {
+          "address": "EYj9xKw6ZszwpyNibHY7JD5o3QgTVrSdcBp1fMJhrR9o",
+          "role": "s0:rx",
+          "writable": true
+        },
+        {
+          "address": "CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz",
+          "role": "s0:ry",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:mx"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:my"
+        },
+        {
+          "address": "59YuGWPunbchD2mbi9U7qvjWQKQReGeepn4ZSr9zz9Li",
+          "role": "s0:orc",
+          "writable": true
+        },
+        {
+          "address": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "role": "s0:prog"
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpx"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpy"
+        },
+        {
+          "address": "D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6",
+          "role": "s0:evt"
+        },
+        {
+          "address": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "role": "s0:prog"
+        },
+        {
+          "address": "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+          "role": "s0:ba0",
+          "writable": true
+        },
+        {
+          "address": "8CRkBdY5RkDRDBAZFKwRBpfe2JSWoPqM8jfr14KUXMpF",
+          "role": "s0:ba1",
+          "writable": true
+        },
+        {
+          "address": "88CrJuawxX8QQETR5U8gMrjP6fftzUYwSYJyeXBXmU2g",
+          "role": "s0:ba2",
+          "writable": true
+        }
+      ]
+    },
+    "saros-dlmm:DHXK:xToY": {
+      "venue": "saros-dlmm",
+      "pool": "DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87",
+      "direction": "xToY",
+      "cfg": {
+        "venue": "saros-dlmm",
+        "pool": "DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87",
+        "direction": "xToY",
+        "tokenXMint": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+        "tokenYMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultX": "EXJCsQUxHC6P4A557fh7sodqHGGVXZJqtbzrmm99autg",
+        "vaultY": "DXBw8nEnnyS4x8gkxSNEwFiexomvTJsyHx2Sys2btDwd",
+        "binStep": 1,
+        "activeId": 8388609,
+        "baseFactor": 10000,
+        "variableFeeControl": 2000000,
+        "maxVolatilityAccumulator": 100000,
+        "reductionFactor": 5000,
+        "filterPeriod": 10,
+        "decayPeriod": 120,
+        "windows": {
+          "xToY": {
+            "binArrayLower": "4SrkLsQThjeVvCFnxSAKiF3Xdric42QJKME7xRYMfxDb",
+            "binArrayUpper": "2g2x4bVJNXqPH82J8wveuubW35gM8eD9yGN8wss9AYd4",
+            "lowerIndex": 32767,
+            "upperIndex": 32768,
+            "bins": [
+              {
+                "arrayIndex": 1,
+                "offset": 1,
+                "binId": 8388609,
+                "price": "18448588748116922571"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 0,
+                "binId": 8388608,
+                "price": "18446744073709551616"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 255,
+                "binId": 8388607,
+                "price": "18444899583751176498"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 254,
+                "binId": 8388606,
+                "price": "18443055278223354162"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 253,
+                "binId": 8388605,
+                "price": "18441211157107643397"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 252,
+                "binId": 8388604,
+                "price": "18439367220385604836"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 251,
+                "binId": 8388603,
+                "price": "18437523468038800955"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 250,
+                "binId": 8388602,
+                "price": "18435679900048796075"
+              }
+            ]
+          },
+          "yToX": {
+            "binArrayLower": "4SrkLsQThjeVvCFnxSAKiF3Xdric42QJKME7xRYMfxDb",
+            "binArrayUpper": "2g2x4bVJNXqPH82J8wveuubW35gM8eD9yGN8wss9AYd4",
+            "lowerIndex": 32767,
+            "upperIndex": 32768,
+            "bins": [
+              {
+                "arrayIndex": 1,
+                "offset": 1,
+                "binId": 8388609,
+                "price": "18448588748116922571"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 2,
+                "binId": 8388610,
+                "price": "18450433606991734264"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 3,
+                "binId": 8388611,
+                "price": "18452278650352433438"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 4,
+                "binId": 8388612,
+                "price": "18454123878217468682"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 5,
+                "binId": 8388613,
+                "price": "18455969290605290430"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 6,
+                "binId": 8388614,
+                "price": "18457814887534350959"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 7,
+                "binId": 8388615,
+                "price": "18459660669023104394"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 8,
+                "binId": 8388616,
+                "price": "18461506635090006706"
+              }
+            ]
+          }
+        }
+      },
+      "pay": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "01000000000000000100",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87",
+          "role": "s0:pair",
+          "writable": true
+        },
+        {
+          "address": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+          "role": "s0:mx"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:my"
+        },
+        {
+          "address": "4SrkLsQThjeVvCFnxSAKiF3Xdric42QJKME7xRYMfxDb",
+          "role": "s0:ba0",
+          "writable": true
+        },
+        {
+          "address": "2g2x4bVJNXqPH82J8wveuubW35gM8eD9yGN8wss9AYd4",
+          "role": "s0:ba1",
+          "writable": true
+        },
+        {
+          "address": "EXJCsQUxHC6P4A557fh7sodqHGGVXZJqtbzrmm99autg",
+          "role": "s0:vx",
+          "writable": true
+        },
+        {
+          "address": "DXBw8nEnnyS4x8gkxSNEwFiexomvTJsyHx2Sys2btDwd",
+          "role": "s0:vy",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpx"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpy"
+        },
+        {
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "role": "s0:memo"
+        },
+        {
+          "address": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+          "role": "s0:hook"
+        },
+        {
+          "address": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+          "role": "s0:hookprog"
+        },
+        {
+          "address": "AQjz6RZK93SLjxfDGKL9nCYQNSjEbQSdETxwR63jXV8m",
+          "role": "s0:evt"
+        },
+        {
+          "address": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+          "role": "s0:prog"
+        }
+      ]
+    },
+    "saros-dlmm:DHXK:yToX": {
+      "venue": "saros-dlmm",
+      "pool": "DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87",
+      "direction": "yToX",
+      "cfg": {
+        "venue": "saros-dlmm",
+        "pool": "DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87",
+        "direction": "yToX",
+        "tokenXMint": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+        "tokenYMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultX": "EXJCsQUxHC6P4A557fh7sodqHGGVXZJqtbzrmm99autg",
+        "vaultY": "DXBw8nEnnyS4x8gkxSNEwFiexomvTJsyHx2Sys2btDwd",
+        "binStep": 1,
+        "activeId": 8388609,
+        "baseFactor": 10000,
+        "variableFeeControl": 2000000,
+        "maxVolatilityAccumulator": 100000,
+        "reductionFactor": 5000,
+        "filterPeriod": 10,
+        "decayPeriod": 120,
+        "windows": {
+          "xToY": {
+            "binArrayLower": "4SrkLsQThjeVvCFnxSAKiF3Xdric42QJKME7xRYMfxDb",
+            "binArrayUpper": "2g2x4bVJNXqPH82J8wveuubW35gM8eD9yGN8wss9AYd4",
+            "lowerIndex": 32767,
+            "upperIndex": 32768,
+            "bins": [
+              {
+                "arrayIndex": 1,
+                "offset": 1,
+                "binId": 8388609,
+                "price": "18448588748116922571"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 0,
+                "binId": 8388608,
+                "price": "18446744073709551616"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 255,
+                "binId": 8388607,
+                "price": "18444899583751176498"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 254,
+                "binId": 8388606,
+                "price": "18443055278223354162"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 253,
+                "binId": 8388605,
+                "price": "18441211157107643397"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 252,
+                "binId": 8388604,
+                "price": "18439367220385604836"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 251,
+                "binId": 8388603,
+                "price": "18437523468038800955"
+              },
+              {
+                "arrayIndex": 0,
+                "offset": 250,
+                "binId": 8388602,
+                "price": "18435679900048796075"
+              }
+            ]
+          },
+          "yToX": {
+            "binArrayLower": "4SrkLsQThjeVvCFnxSAKiF3Xdric42QJKME7xRYMfxDb",
+            "binArrayUpper": "2g2x4bVJNXqPH82J8wveuubW35gM8eD9yGN8wss9AYd4",
+            "lowerIndex": 32767,
+            "upperIndex": 32768,
+            "bins": [
+              {
+                "arrayIndex": 1,
+                "offset": 1,
+                "binId": 8388609,
+                "price": "18448588748116922571"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 2,
+                "binId": 8388610,
+                "price": "18450433606991734264"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 3,
+                "binId": 8388611,
+                "price": "18452278650352433438"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 4,
+                "binId": 8388612,
+                "price": "18454123878217468682"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 5,
+                "binId": 8388613,
+                "price": "18455969290605290430"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 6,
+                "binId": 8388614,
+                "price": "18457814887534350959"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 7,
+                "binId": 8388615,
+                "price": "18459660669023104394"
+              },
+              {
+                "arrayIndex": 1,
+                "offset": 8,
+                "binId": 8388616,
+                "price": "18461506635090006706"
+              }
+            ]
+          }
+        }
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+      "program": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "01000000000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87",
+          "role": "s0:pair",
+          "writable": true
+        },
+        {
+          "address": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+          "role": "s0:mx"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:my"
+        },
+        {
+          "address": "4SrkLsQThjeVvCFnxSAKiF3Xdric42QJKME7xRYMfxDb",
+          "role": "s0:ba0",
+          "writable": true
+        },
+        {
+          "address": "2g2x4bVJNXqPH82J8wveuubW35gM8eD9yGN8wss9AYd4",
+          "role": "s0:ba1",
+          "writable": true
+        },
+        {
+          "address": "EXJCsQUxHC6P4A557fh7sodqHGGVXZJqtbzrmm99autg",
+          "role": "s0:vx",
+          "writable": true
+        },
+        {
+          "address": "DXBw8nEnnyS4x8gkxSNEwFiexomvTJsyHx2Sys2btDwd",
+          "role": "s0:vy",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpx"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpy"
+        },
+        {
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "role": "s0:memo"
+        },
+        {
+          "address": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+          "role": "s0:hook"
+        },
+        {
+          "address": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+          "role": "s0:hookprog"
+        },
+        {
+          "address": "AQjz6RZK93SLjxfDGKL9nCYQNSjEbQSdETxwR63jXV8m",
+          "role": "s0:evt"
+        },
+        {
+          "address": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+          "role": "s0:prog"
+        }
+      ]
     }
   }
 }

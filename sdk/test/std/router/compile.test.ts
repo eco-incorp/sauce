@@ -54,6 +54,7 @@ import {
   guacswap,
   mercurial,
   METADAO_FUTARCHY_PROGRAM_ID,
+  METEORA_DLMM_PROGRAM_ID,
   meteoraDammV1Stable,
   meteoraDammV2,
   omnipair,
@@ -67,6 +68,7 @@ import {
   saberDecimalsWrapper,
   saberStableswap,
   saros,
+  SAROS_DLMM_PROGRAM_ID,
   SCALE_AMM_PROGRAM_ID,
   stabbleStableSwap,
   stabbleWeightedSwap,
@@ -541,8 +543,11 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
 });
 
 describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
+  // The program carries a constant without its leading zero bytes, and Saros DLMM's id has one.
   const key = (base58: string): string =>
-    Buffer.from(getAddressCodec().encode(address(base58))).toString("hex");
+    Buffer.from(getAddressCodec().encode(address(base58)))
+      .toString("hex")
+      .replace(/^(00)+/, "");
   const IDS: Record<string, string> = {
     raydiumCpSwap: raydiumCpSwap.programId,
     gamma: gamma.programId,
@@ -570,6 +575,8 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
     pumpswap: pumpswapAdapter.programId,
     bonkswap: bonkswap.programId,
     guacswap: guacswap.programId,
+    meteoraDlmm: METEORA_DLMM_PROGRAM_ID,
+    sarosDlmm: SAROS_DLMM_PROGRAM_ID,
   };
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
   const carries = (code: string) =>

@@ -4905,3 +4905,84 @@ export function guacswapCpi(
   require(held - left <= amountIn, "debit");
   return held - left;
 }
+
+// Meteora DLMM's `swap`: exact input of `amountIn`, `minOut` its least out. The direction is the
+// accounts'.
+export function meteoraDlmmData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  return swap.concat(word.toBytesLe(16));
+}
+
+// Meteora DLMM, LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo: `swap`, exact input held to the
+// venue's own floor, with no price limit: the swap crosses the bins it needs, up to the end of the
+// bin arrays it is given. It takes more accounts than a function can list, so it has only its `Cpi`
+// form. `accounts`: the pool, its bin-array bitmap extension (the program itself when the pool has
+// none), its X and Y reserves, the authority's paying and receiving token accounts, mints X and Y,
+// the oracle, the host fee account (the program itself for none), the authority, X's and Y's token
+// programs, the event authority, the program, then the bin arrays the swap crosses, from the active
+// bin onwards in the trade's direction. The venue reads the direction from the paying account's mint.
+export function meteoraDlmmCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x04e9e12fbc84e826c932cce9e2640cce15590c1c6273b0925708ba3b8520b0bc, "not a Meteora DLMM pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Saros DLMM's `swap`: exact input of `amountIn`, `minOut` its least out, selling X when `xToY`.
+export function sarosDlmmData(amountIn: Uint256, minOut: Uint256, xToY: bool): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // The amount, the floor, then `swap_for_y` and the swap type, 0 for exact input.
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | ((xToY ? 1 : 0) << 128);
+  const swap = hex`f8c69e91e17587c8`;
+  return swap.concat(word.toBytesLe(18));
+}
+
+// Saros DLMM, 1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE: `swap`, exact input held to the venue's own
+// floor, with no price limit: the swap crosses the bins its two bin arrays hold. It takes more
+// accounts than a function can list, so it has only its `Cpi` form. `accounts`: the pair, mints X
+// and Y, the lower and upper bin arrays around the active bin, the pair's X and Y vaults, the
+// authority's X and Y token accounts (the paying one among them), the authority, X's and Y's token
+// programs, the Memo program, the pair's hook and the hook's program (the program itself, twice, for
+// a pair with no hook), the event authority, and the program. It sells X when `xToY`.
+export function sarosDlmmCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+  xToY: bool,
+): Uint256 {
+  require(program.address ==
+    0x0036f3862b0757e15b27242268fadf5d7523728765d25547944ad67e56555b51, "not a Saros DLMM pair");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // The amount, the floor, then `swap_for_y` and the swap type, 0 for exact input.
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | ((xToY ? 1 : 0) << 128);
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(18));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}

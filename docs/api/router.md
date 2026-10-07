@@ -725,23 +725,27 @@ vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direct
 and receiving accounts themselves. Perena finds each mint's index among the pool's ten tokens, and
 writes both mints, so they are attached writable.
 
-Four venues take more accounts in their swap than a function can list. A function other than
+Six venues take more accounts in their swap than a function can list. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
 forms, on the list the caller's `main` builds:
 
-| Functions  | Venue     | Program                                        |
-| ---------- | --------- | ---------------------------------------------- |
-| `scaleAmm` | Scale AMM | `SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA`  |
-| `pumpswap` | PumpSwap  | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
-| `bonkswap` | Bonkswap  | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
-| `guacswap` | Guacswap  | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
+| Functions     | Venue        | Program                                        |
+| ------------- | ------------ | ---------------------------------------------- |
+| `scaleAmm`    | Scale AMM    | `SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA`  |
+| `pumpswap`    | PumpSwap     | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
+| `bonkswap`    | Bonkswap     | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
+| `guacswap`    | Guacswap     | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
+| `meteoraDlmm` | Meteora DLMM | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  |
+| `sarosDlmm`   | Saros DLMM   | `1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE`  |
 
 A PumpSwap buy takes the authority's volume accumulator, and it has to exist already. A Pot can't
 pay to create it, because the System program won't move lamports out of an account that holds data.
 PumpSwap's `init_user_volume_accumulator` takes any payer. Bonkswap and Guacswap require the paying
 and receiving accounts to be the authority's associated token accounts. PumpSwap, Bonkswap,
 Guacswap and Scale AMM write the authority, so it is attached writable. Scale AMM takes one account
-per fee beneficiary.
+per fee beneficiary. A Meteora DLMM swap crosses bins only as far as the bin arrays its list ends
+with, from the active bin onwards in the trade's direction, and a Saros DLMM swap only within the
+two bin arrays around its active bin; a trade too large for them fails.
 
 **A swap spends exactly `amountIn`**, with three exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference
@@ -811,6 +815,8 @@ because an account list passed to a function is built as an array first, where o
 | PumpSwap                          |  17,945 |        22,800 |       28,688 |           |              |        73,361 |
 | Bonkswap                          |  16,985 |        20,173 |       24,813 |           |              | 56,094–68,094 |
 | Guacswap                          |  16,985 |        19,981 |       24,621 |           |              | 64,613–70,631 |
+| Meteora DLMM                      |  15,518 |        18,798 |       22,946 |           |              |        40,225 |
+| Saros DLMM                        |   9,529 |        14,187 |       18,241 |           |              |        53,053 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own
