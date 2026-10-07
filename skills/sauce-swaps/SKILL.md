@@ -1,6 +1,6 @@
 ---
 name: sauce-swaps
-description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, and the try forms), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, the PancakeSwap Infinity entry points on the Router itself, and the guard that stops a leg from stranding input. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
+description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin, and a try form of each), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, PancakeSwap Infinity CL and bin pools, the guard that stops a leg from stranding input, and on Solana a function per price-limited venue (Raydium CLMM, Orca, Phoenix and six more) and trySwap for any. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
 ---
 
 # Swaps with `@sauce/router`
@@ -31,17 +31,19 @@ Every function takes its arguments in one order — the pool, the two tokens, th
 own facts, then the floor and the recipient — and returns the amount of `tokenOut` the recipient
 received:
 
-| Function      | Arguments                                                                                                 | Reached through  |
-| ------------- | --------------------------------------------------------------------------------------------------------- | ---------------- |
-| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                            | the pair         |
-| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                 | the Pot's Router |
-| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
-| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                              | the pool         |
-| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                           | the Vault        |
-| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                             | the pool         |
-| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                    | the pair         |
-| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                    | the WooPPV2      |
-| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                    | the Pot's Router |
+| Function      | Arguments                                                                                                       | Reached through  |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                                  | the pair         |
+| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                       | the Pot's Router |
+| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient`       | the Pot's Router |
+| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                                    | the pool         |
+| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                                 | the Vault        |
+| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                                   | the pool         |
+| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                          | the pair         |
+| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the WooPPV2      |
+| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the Pot's Router |
+| `infinityCL`  | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
+| `infinityBin` | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient`                    | the Pot's Router |
 
 - **`amountIn`** is what the Pot pays. **Every swap is exact input.**
 - **`minOut`** is the least the swap may deliver; below it the whole program reverts. `0` sets no
@@ -52,9 +54,23 @@ received:
   builds the key from `tokenIn` and `tokenOut` in sort order. `uint256Indices` picks a Curve
   CryptoSwap pool's `uint256` coin indices over a StableSwap pool's `int128` ones.
 
-`tryUniswapV2`, `tryCurve`, `tryBalancerV2` and `tryTraderJoeLB` take the same arguments as the
-function they name and return `0`, having moved nothing, instead of reverting when the swap cannot
-be made. DODO V2 and WOOFi have no `try` form.
+Each venue has a `try` form — `tryUniswapV2`, `tryCurve`, `tryBalancerV2`, `tryDodoV2`,
+`tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
+`tryInfinityBin` — that takes the same arguments as the function it names and returns `0`, having
+moved nothing, instead of reverting when the swap cannot be made. A swap that ran returns at least
+1, so `0` always means nothing moved:
+
+- the forms of the venues paid first check the pool's own view before anything moves (the V2
+  reserves, LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote`, WooPPV2's `query`), or
+  catch the pool's failure and reset the approval (`tryCurve`, `tryBalancerV2`); a pool with no code
+  is skipped;
+- the forms that call the Router (V3, V4, Maverick, Infinity) catch the Router's call, so a pool with
+  no code, a pool for another pair, a key no pool has and a swap the pool or the Router refuses are
+  skipped. A swap that ran must then deliver `minOut`, and at least 1, or the whole program reverts:
+  an input the pool kept (a dust amount it takes as its fee) cannot be given back. A swap that ran in
+  a pool with no liquidity in range moved nothing either way, and returns `0`. With no price limit,
+  an empty pool costs a full tick walk before it is skipped, millions of gas; pass a
+  `sqrtPriceLimitX96` to bound it.
 
 ## How each venue is reached
 
@@ -62,10 +78,11 @@ be made. DODO V2 and WOOFi have no `try` form.
 call back: the function pushes the input to the pool, or approves exactly the input for the pool to
 pull, and calls it. Such a swap **consumes its whole input or reverts**; nothing is refunded.
 
-**Called back.** Uniswap V3 and its forks, Uniswap V4 and Maverick V2 pools re-enter their caller
-mid-swap to be paid, which a program cannot answer. Those functions call the **Pot's Router**,
-`ctx.self()`: the Pot's fallback delegatecalls the Router it is configured with (`router()` on the
-Pot), so the Router runs in the Pot's context, holds the Pot's balances, and answers the callback.
+**Called back.** Uniswap V3 and its forks, Uniswap V4, Maverick V2 and PancakeSwap Infinity pools
+re-enter their caller mid-swap to be paid, which a program cannot answer. Those functions call the
+**Pot's Router**, `ctx.self()`: the Pot's fallback delegatecalls the Router it is configured with
+(`router()` on the Pot), so the Router runs in the Pot's context, holds the Pot's balances, and
+answers the callback.
 It services these callbacks:
 
 - `uniswapV3SwapCallback`: Uniswap V3 and forks that keep the name, including Aerodrome Slipstream;
@@ -73,7 +90,9 @@ It services these callbacks:
 - `algebraSwapCallback`: Algebra pools (Camelot V3, QuickSwap V3), whose `swap` has the same
   selector as Uniswap V3's;
 - `synthraV3SwapCallback`, `unitFlowV3SwapCallback`: Synthra V3 and UnitFlow V3;
-- `unlockCallback`: Uniswap V4.
+- `unlockCallback`: Uniswap V4;
+- `maverickV2SwapCallback`: Maverick V2;
+- `lockAcquired`: PancakeSwap Infinity, CL and bin pools alike.
 
 So `uniswapV3` drives every one of those V3-style pools. Each callback is authenticated to the pool
 being swapped, pays **once**, and pays only
@@ -158,11 +177,13 @@ cook reverts as a whole either way.
 
 ## PancakeSwap Infinity
 
-PancakeSwap Infinity pools are not in the library: the Router's own entry points swap them, called
-through the Pot with the Router ABI the package serves (`import { ISauceRouter } from
-"./artifacts/ISauceRouter.json"`, then `ISauceRouter.at(ctx.self())`). Their exact input is a
-positive unsigned amount, and they return `(amountInUsed, amountOut)`. Check the output against
-your floor. These signatures require generation 4.
+`infinityCL` and `infinityBin` swap PancakeSwap Infinity pools through the Router's own entry points,
+the same way `uniswapV4` does a V4 pool: the key is built from `tokenIn` and `tokenOut` in sort order
+with the pool's `poolManager`, `fee`, `parameters` and `hooks`, and `vault` is the Infinity Vault.
+The entry points themselves, which a program can also call with the Router ABI the package serves
+(`import { ISauceRouter } from "./artifacts/ISauceRouter.json"`, then `ISauceRouter.at(ctx.self())`),
+take a positive unsigned exact input and return `(amountInUsed, amountOut)`. These signatures
+require generation 4.
 
 | Entry point                                                                               | Price bound         |
 | ----------------------------------------------------------------------------------------- | ------------------- |
@@ -195,6 +216,79 @@ the leg compiles and simulates, and `sauce tx` and `sauce run` refuse it with th
 request for that chain (`sauce-chains`).
 
 For several venues under one price limit, use `sauce-distributed-swap`.
+
+## On Solana
+
+On Solana `@sauce/router` is one function per venue whose swap stops at a price limit and leaves
+the rest of the input: `tryRaydiumClmm`, `tryPancakeswapClmm`, `tryByreal`, `tryStabbleClmm`,
+`tryOrcaWhirlpool`, `tryCropper`, `tryDefituna`, `tryCrema` and `tryPhoenix` (an
+immediate-or-cancel order on its book), and `trySwap`, which takes a pool at any of them and reads
+its venue from the pool's owner. Each `try` form has a plain one (`raydiumClmm`, …, `phoenix`, and
+`swap`) that reverts where it returns `0`. Every one takes the same arguments:
+
+```text
+trySwap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
+```
+
+- **`slot`** is the pool's nine accounts, the System program for any the venue does not take:
+  `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`.
+  `sauce pools --chain solana` prints each pool's slot for the direction paid, and
+  `sauce-solana-distributed-swap` says what each account is per venue.
+- **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
+  authority that signs (the Pot), the token account paid from, the two mints, the two token
+  programs and the memo program.
+- **`maxPrice`** is the most one unit bought may cost, fee included: payToken base units per
+  buyToken base unit, times 1e18. The function reads the pool's fee and stops the pool where its
+  last unit, fee paid, costs `maxPrice`; the rest of `amountIn` stays in `source`.
+- **`recipient`** is the token account the output lands in; Crema and Phoenix pay only into the
+  authority's own. The function returns what it gained.
+
+A `try` form returns `0` having moved nothing for a missing slot (the System program as its pool),
+no input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than one
+rate, an empty pool, a pool already past its limit, an input too small to buy one unit at the pool's
+price after its fee (dust), and a book with no offer within it. A swap that
+ran returns at least 1, and below `minOut` the cook reverts. A failed call into another program
+fails the whole Solana transaction and cannot be caught, so these are checks made before the swap,
+not a catch. The accounts are the caller's, so a pool that is not the pair, a slot whose program is
+not the pool's owner, and a pool of another venue or of none revert; only the System program itself
+as the pool is a missing slot.
+
+```sauce chain=solana
+import { orcaWhirlpool } from "@sauce/router";
+
+function main(
+  program: Account,
+  pool: Account<Writable>,
+  config: Account,
+  vaultA: Account<Writable>,
+  vaultB: Account<Writable>,
+  extra: Account<Writable>,
+  ticks0: Account<Writable>,
+  ticks1: Account<Writable>,
+  ticks2: Account<Writable>,
+  authority: Account<Signer>,
+  source: Account<Writable>,
+  payMint: Account,
+  buyMint: Account,
+  tokenProgram: Account,
+  token2022: Account,
+  memo: Account,
+  output: Account<Writable>,
+  amountIn: Uint256,
+  maxPrice: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const slot = [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2];
+  const trader = [authority, source, payMint, buyMint, tokenProgram, token2022, memo];
+  return orcaWhirlpool(slot, trader, amountIn, maxPrice, minOut, output);
+}
+```
+
+A program carries only the venues it calls: one venue's function is about 1.7 KB of program, and
+`trySwap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
+keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
+program is staged (`sauce-solana`). For one order over several pools under one price, use
+`sauce-solana-distributed-swap`.
 
 ## Example
 

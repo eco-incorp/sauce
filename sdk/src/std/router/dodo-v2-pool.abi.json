@@ -1,5 +1,5 @@
 {
-  "$comment": "DODO V2 sellBase(to) and sellQuote(to), copied from the verified DVM implementation on Ethereum, 0x7cA7B5EAAf526d93705d28c1b47E9739595C90E7 (solc 0.6.9), which the WETH/USDC DVM 0x8B2F062d112aE1ac6Ccc6C358cc40C9518c847Dc clones. DPP and DSP pools declare the same two functions.",
+  "$comment": "DODO V2 sellBase(to) and sellQuote(to), copied from the verified DVM implementation on Ethereum, 0x7cA7B5EAAf526d93705d28c1b47E9739595C90E7 (solc 0.6.9), which the WETH/USDC DVM 0x8B2F062d112aE1ac6Ccc6C358cc40C9518c847Dc clones. DPP and DSP pools declare the same two functions. querySellBase(trader, payBaseAmount) and querySellQuote(trader, payQuoteAmount) are the same contract's views; they return more than the amount received (mtFee on a DVM, and the new R state and target on a DPP or DSP), and only the first word, the amount received, is declared here, so tryDodoV2 can catch the read with a value.",
   "abi": [
     {
       "name": "sellBase",
@@ -26,6 +26,48 @@
         {
           "name": "to",
           "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "receiveBaseAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "querySellBase",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "trader",
+          "type": "address"
+        },
+        {
+          "name": "payBaseAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "receiveQuoteAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "querySellQuote",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "trader",
+          "type": "address"
+        },
+        {
+          "name": "payQuoteAmount",
+          "type": "uint256"
         }
       ],
       "outputs": [

@@ -9,7 +9,8 @@
  * It keeps to the endpoint that last answered, so one command's requests go to one node and see one
  * chain until that node fails, and moves past one that failed, so a client that gave up waiting and
  * asks again starts at the next; and it sends `eth_simulateV1` only to an endpoint that runs it
- * (`simulateV1`), where the chain has one. One endpoint gets 8 seconds, less than viem's own
+ * (`simulateV1`), and a Solana program's scan (`getProgramAccounts`) only to one that answers it
+ * (`programAccounts`), where the chain has one. One endpoint gets 8 seconds, less than viem's own
  * timeout, so a client still waiting is answered by the next.
  *
  * NODE-ONLY: the `sauce` command and its MCP server use it; nothing browser-facing imports it.
@@ -87,11 +88,16 @@ async function relay(
   timeoutMs: number,
 ): Promise<Reply> {
   const { rpcs } = route;
+  const methods = methodsOf(body);
   const simulating =
-    methodsOf(body).includes("eth_simulateV1") && rpcs.some((rpc) => rpc.simulateV1 === true);
+    methods.includes("eth_simulateV1") && rpcs.some((rpc) => rpc.simulateV1 === true);
+  // A program's scan, only where scans are answered (one endpoint refuses every one with a 403).
+  const scanning =
+    methods.includes("getProgramAccounts") && rpcs.some((rpc) => rpc.programAccounts === true);
   const order = rpcs
     .map((_, offset) => (route.current + offset) % rpcs.length)
-    .filter((index) => !simulating || rpcs[index]!.simulateV1 === true);
+    .filter((index) => !simulating || rpcs[index]!.simulateV1 === true)
+    .filter((index) => !scanning || rpcs[index]!.programAccounts === true);
   let passed: Reply | undefined;
   for (const index of order) {
     try {

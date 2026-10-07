@@ -10,7 +10,9 @@
 //     whether `eth_simulateV1` runs that call with `validation: false` and `traceTransfers`, as the
 //     command sends it: an endpoint flagged `simulateV1` must run it (one flagged false that runs it
 //     is noted, not failed: false only keeps the command from sending it there).
-//   - Solana: `getGenesisHash` is mainnet's, `getSlot` answers a slot, and the USDC mint reads.
+//   - Solana: `getGenesisHash` is mainnet's, `getSlot` answers a slot, and the USDC mint reads;
+//     and whether a filtered `getProgramAccounts` answers: an endpoint flagged `programAccounts`
+//     must answer it.
 // It prints a line per endpoint and exits 1 when any fails or its flag is wrong. The endpoints are
 // read from the module itself (`lib/load-ts.mjs`), so the check needs no build, and holds no URL.
 import { dirname, join } from "node:path";
@@ -89,8 +91,17 @@ async function checkSolana(url) {
   if (typeof (await rpc(url, "getSlot", [])) !== "number") return { problem: "answered no slot" };
   const mint = await rpc(url, "getAccountInfo", [USDC_MINT, { encoding: "base64" }]);
   if (mint?.value === null || mint?.value === undefined) return { problem: "read no USDC mint" };
+  // A filtered scan, as `sauce pools` sends one: Raydium CLMM's 1,544-byte pools holding USDC.
+  const scan = await rpc(url, "getProgramAccounts", [
+    "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+    {
+      encoding: "base64",
+      dataSlice: { offset: 0, length: 0 },
+      filters: [{ dataSize: 1544 }, { memcmp: { offset: 105, bytes: USDC_MINT } }],
+    },
+  ]).catch(() => undefined);
 
-  return {};
+  return { programAccounts: Array.isArray(scan) };
 }
 
 console.log(`public endpoints, last verified ${PUBLIC_RPCS_VERIFIED}:`);
@@ -99,7 +110,7 @@ for (const [key, list] of Object.entries(PUBLIC_RPCS)) {
   const chainId = Number(key);
   if (only !== undefined && !only.includes(chainId)) continue;
   const slug = CANONICAL_CHAINS.find((chain) => chain.id === chainId)?.slug ?? `chain ${chainId}`;
-  for (const { url, simulateV1 } of list) {
+  for (const { url, simulateV1, programAccounts } of list) {
     let found;
     try {
       found = chainId === SOLANA ? await checkSolana(url) : await checkEvm(chainId, url);
@@ -110,7 +121,9 @@ for (const [key, list] of Object.entries(PUBLIC_RPCS)) {
       found.problem ??
       (simulateV1 === true && found.simulateV1 === false
         ? "flagged simulateV1, and eth_simulateV1 did not run"
-        : undefined);
+        : programAccounts === true && found.programAccounts === false
+          ? "flagged programAccounts, and getProgramAccounts was refused"
+          : undefined);
     if (problem !== undefined) failures++;
     const note =
       problem === undefined && simulateV1 === false && found.simulateV1 === true
@@ -118,7 +131,9 @@ for (const [key, list] of Object.entries(PUBLIC_RPCS)) {
         : "";
     console.log(
       `  ${problem === undefined ? "ok  " : "FAIL"} ${slug.padEnd(10)} ${url}` +
-        (chainId === SOLANA ? "" : `  simulateV1=${found.simulateV1 ?? "?"}`) +
+        (chainId === SOLANA
+          ? `  programAccounts=${found.programAccounts ?? "?"}`
+          : `  simulateV1=${found.simulateV1 ?? "?"}`) +
         (problem === undefined ? note : `  -- ${problem}`),
     );
   }

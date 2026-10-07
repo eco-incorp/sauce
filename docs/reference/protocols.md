@@ -26,7 +26,7 @@ forks: PancakeSwap V3, Aerodrome Slipstream, Algebra pools, Synthra, UnitFlow), 
   `minOut`.
 - **Stable pools** (Curve through `curve`, Solidly-style stable pools): built for assets meant to
   trade near 1:1, with less price impact there than a constant-product pair.
-- **One trade across several pools** under one limit: the `sauce-distributed-swap` agent skill.
+- **One trade across several pools** under one limit: [the distributed swap](../guides/distributed-swap.md).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |

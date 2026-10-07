@@ -64,9 +64,9 @@ const resolvePackage = (specifier: string): string | undefined => {
 export const compileStdRouter = (entry: string, target: SauceTarget = "evm"): CompileResult =>
   compile({ target, entry: ENTRY, resolve: resolveModule(entry), resolvePackage });
 
-/** The library's source, for reading what it exports. */
-export const routerSource = (): string =>
-  readFileSync(join(STD, "router", "router.evm.js"), "utf8");
+/** An arm's source, for reading what it exports. */
+export const routerSource = (target: SauceTarget = "evm"): string =>
+  readFileSync(join(STD, "router", `router.${target}.js`), "utf8");
 
 /** A pool-ABI file of the library, parsed. */
 export const routerAbi = (file: string): { $comment: string; abi: readonly unknown[] } =>
@@ -79,6 +79,9 @@ const A = "0x1111111111111111111111111111111111111111n";
 const B = "0x2222222222222222222222222222222222222222n";
 const POOL = "0x3333333333333333333333333333333333333333n";
 const POOL_ID = "0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019n";
+const VAULT = "0x238a358808379702088667322f80aC48bAd5e6c4n";
+/** An Infinity CL pool's `parameters`: tick spacing 10 in bits 16..39, no hook permissions. */
+const PARAMETERS = "0xa0000n";
 
 /** Every exported function, called with run-time arguments from `main`'s own parameters. */
 export const FUNCTIONS: Readonly<Record<string, string>> = {
@@ -95,9 +98,90 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   uniswapV3: `uniswapV3(${POOL}, ${A}, ${B}, amount, 0n, minOut, ctx.self())`,
   uniswapV4: `uniswapV4(${POOL}, ${A}, ${B}, amount, 500n, 10n, 0n, 0n, minOut, ctx.self())`,
   maverickV2: `maverickV2(${POOL}, ${A}, ${B}, amount, minOut, ctx.self())`,
+  tryDodoV2: `tryDodoV2(${POOL}, ${A}, ${B}, amount, ${B}, ${A}, minOut, ctx.self())`,
+  tryWoofi: `tryWoofi(${POOL}, ${A}, ${B}, amount, minOut, ctx.self())`,
+  tryUniswapV3: `tryUniswapV3(${POOL}, ${A}, ${B}, amount, 0n, minOut, ctx.self())`,
+  tryUniswapV4: `tryUniswapV4(${POOL}, 0n, ${B}, amount, 500n, 10n, 0n, 0n, minOut, ctx.self())`,
+  tryMaverickV2: `tryMaverickV2(${POOL}, ${A}, ${B}, amount, minOut, ctx.self())`,
+  infinityCL: `infinityCL(${VAULT}, ${A}, ${B}, amount, ${POOL}, 500n, ${PARAMETERS}, 0n, 0n, minOut, ctx.self())`,
+  tryInfinityCL: `tryInfinityCL(${VAULT}, ${B}, 0n, amount, ${POOL}, 500n, ${PARAMETERS}, 0n, 0n, minOut, ctx.self())`,
+  infinityBin: `infinityBin(${VAULT}, ${A}, ${B}, amount, ${POOL}, 500n, ${PARAMETERS}, 0n, minOut, ctx.self())`,
+  tryInfinityBin: `tryInfinityBin(${VAULT}, ${A}, ${B}, amount, ${POOL}, 500n, ${PARAMETERS}, 0n, minOut, ctx.self())`,
 };
 
 /** A program that calls `name` once and returns what it received. */
 export const programCalling = (name: string): string =>
   `import { ${name} } from "@sauce/router";\n` +
   `function main(amount: Uint256, minOut: Uint256): Uint256 {\n  return ${FUNCTIONS[name]};\n}\n`;
+
+/** The nine accounts of a Solana pool's slot, then the trader's seven, as the SVM arm takes them. */
+export const SVM_SLOT = [
+  "program",
+  "pool",
+  "config",
+  "vaultA",
+  "vaultB",
+  "extra",
+  "ticks0",
+  "ticks1",
+  "ticks2",
+] as const;
+export const SVM_TRADER = [
+  "authority",
+  "source",
+  "payMint",
+  "buyMint",
+  "tokenProgram",
+  "token2022",
+  "memo",
+] as const;
+
+/** Every function of the SVM arm: the nine venues, `trySwap` and `swap`, each with its `try` form. */
+export const SVM_FUNCTIONS = [
+  "trySwap",
+  "swap",
+  "tryRaydiumClmm",
+  "raydiumClmm",
+  "tryPancakeswapClmm",
+  "pancakeswapClmm",
+  "tryByreal",
+  "byreal",
+  "tryStabbleClmm",
+  "stabbleClmm",
+  "tryOrcaWhirlpool",
+  "orcaWhirlpool",
+  "tryCropper",
+  "cropper",
+  "tryDefituna",
+  "defituna",
+  "tryCrema",
+  "crema",
+  "tryPhoenix",
+  "phoenix",
+] as const;
+
+/** The role `main` declares each account with: what a swap signs with, and what it writes. */
+const svmRole = (name: string): string =>
+  name === "authority"
+    ? "Account<Signer>"
+    : ["program", "config", "payMint", "buyMint", "tokenProgram", "token2022", "memo"].includes(
+          name,
+        )
+      ? "Account"
+      : "Account<Writable>";
+
+/**
+ * A Solana program that calls `name` once on a slot and returns what it received: the slot's nine
+ * accounts, the trader's seven and the recipient as `main`'s accounts, the amount, the price and the
+ * floor as its arguments.
+ */
+export const svmProgramCalling = (name: string): string => {
+  const accounts = [...SVM_SLOT, ...SVM_TRADER, "recipient"]
+    .map((account) => `  ${account}: ${svmRole(account)},`)
+    .join("\n");
+  return (
+    `import { ${name} } from "@sauce/router";\n` +
+    `function main(\n${accounts}\n  amountIn: Uint256,\n  maxPrice: Uint256,\n  minOut: Uint256,\n): Uint256 {\n` +
+    `  return ${name}([${SVM_SLOT.join(", ")}], [${SVM_TRADER.join(", ")}], amountIn, maxPrice, minOut, recipient);\n}\n`
+  );
+};

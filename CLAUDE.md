@@ -112,10 +112,11 @@ independent viem encoding. `actions.mainnet` (every action type, and it fails if
 LOCAL anvil booted from mainnet state captured at a pinned block — no RPC, no secret, and they run
 in CI. See "Mainnet state" below. An action type that cannot execute there does not ship. The
 `swap*.mainnet` suites (also `test:mainnet`) execute `@sauce/router` on Ethereum, Base and
-Avalanche state — each venue called with literal arguments, with run-time `main` arguments, through
-its action, and beside the Router's unified `swap` where the Router runs the venue
-(`tests/swap-venues.ts`) — and `traderJoeLBSwap`/`woofiSwap`, whose venues Ethereum lacks, run
-there; `actions.mainnet` counts them as executed elsewhere. `quote.mainnet` deploys the stack too:
+Avalanche state — each venue called with literal arguments, with run-time `main` arguments and
+through its action, and each `try` form beside its plain function, with every skip path held to
+the Pot's and the pool's balances (`tests/swap-venues.ts`; PancakeSwap Infinity's CL and bin pools
+on Base) — and `traderJoeLBSwap`/`woofiSwap`, whose venues Ethereum lacks, run there;
+`actions.mainnet` counts them as executed elsewhere. `quote.mainnet` deploys the stack too:
 the Router quotes `uniswapV3Swap`/`uniswapV4Swap`, and is held to Uniswap's own quoters.
 `names.unit` compiles documents by token symbol, namespace and pool key for two chains through the
 real compiler, and every refusal of a name a chain lacks; `cli.unit` drives `sauce actions` and an
@@ -208,7 +209,7 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
-  venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
+  venue suites `swap` (Ethereum) ~135 KB, `swap-base` ~165 KB, `swap-avalanche` ~30 KB, and the names
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
   `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
   `-base`, `-optimism`) ~80, ~35 and ~25 KB, and the cookbook's two
@@ -591,22 +592,61 @@ resolves it off disk.
 `src/std/router/` is **`@sauce/router`**, the SauceScript swap library, SDK-owned and shipped the
 same two ways (embedded, and `dist/std/router` via `copy-verify-assets.mjs`); `resolveSdkPackage`
 maps it like `@sauce/token`, so every SDK compile — programs, intent bodies, actions — resolves it
-with no option. It is THE one implementation of a swap at its nine venues: one exported function
+with no option. It has two arms and, like `@sauce/token`, no neutral `router.js`: no venue is on
+both targets, so a function one arm lacks fails at its import, naming it ("`woofi` is not exported
+by module" on Solana). The EVM arm (`router.evm.js`) is THE one implementation of a swap at its eleven venues: one exported function
 per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2`, `traderJoeLB`,
-`woofi`, `maverickV2`), every argument a RUN-TIME value, in one order —
+`woofi`, `maverickV2`, `infinityCL`, `infinityBin`), every argument a RUN-TIME value, in one order —
 `venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
-the recipient received; plus `try` forms (`tryUniswapV2`, `tryTraderJoeLB`: a capacity check before
-anything moves; `tryCurve`, `tryBalancerV2`: catch and reset the approval) that return `0n` having
-moved nothing, and NONE for DODO V2 or WOOFi, which can do neither. The pay-first venues call the
-pool directly; V3/V4/Maverick call the Pot's Router (`ctx.self()`). Token writes are `@sauce/token`'s
+the recipient received; plus a `try` form of each that returns `0n` having moved nothing, while a
+swap that ran returns at least 1, so a `0n` ALWAYS means nothing moved (sauce-recipes' EcoSwap
+executor drops a venue that returns 0 and re-offers its input). Three mechanisms: a check before
+anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
+`querySellBase`/`querySellQuote`, `tryWoofi` WooPPV2's `query` — never its `tryQuery`, which prices
+past the reserve), a caught pool call that resets its approval (`tryCurve`, `tryBalancerV2`), or a
+caught Router call (`tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
+`tryInfinityBin`). The generation-4 Router takes no floor, so a caught Router call that ran is held
+afterwards to `minOut` and at least 1 and reverts below it (an input the pool keeps as its fee
+cannot be undone), except that one that moved nothing either way — the Router's `amountInUsed` and
+the recipient's `tokenOut` gain both 0, a pool with no liquidity in range — returns `0n`. The
+compiler carries only a scalar through `.catch()`, so the try forms call the Router through
+`sauce-router-paid.abi.json`, its methods declaring `amountInUsed` alone. An empty pool with no
+price limit costs a full tick walk (~10M gas measured) before it is skipped.
+The `swap*.mainnet` suites execute every function and its `try` form on real pools (Infinity on
+Base), each skip path with the Pot's and the pool's balances held unchanged. The pay-first venues
+call the pool directly; V3/V4/Maverick/Infinity call the Pot's Router (`ctx.self()`). Token writes are `@sauce/token`'s
 (it imports the package). Orientation is checked from the arguments at run time (V2/V4 sort order,
 DODO base/quote, LB X/Y); `minOut` is uniform (`0n` none; WOOFi requires it). The pool and Router
 ABI fragments live beside it (`*.abi.json`, each `$comment` naming its verified source), pinned by
 `test/std/router/compile.test.ts` (deployed selectors, the released `ISauceRouter`, the registry
 twins), which also holds the export list to the documented API and refuses a module-level `const` —
 a program-wide define would replace it. Keep its functions FLAT: an internal helper call costs a
-frame (measured ~1–4k gas each on the engine), so each exported function is self-contained. EVM only:
-there is no `router.js` and no SVM arm, so an SVM import fails at the import.
+frame (measured ~1–4k gas each on the engine), so each exported function is self-contained.
+
+The SVM arm (`router.svm.js`) is the Solana distributed swap's per-pool code, extracted: a `try` and
+a plain function per Solana venue whose swap stops at a price limit (`tryRaydiumClmm`,
+`tryPancakeswapClmm`, `tryByreal`, `tryStabbleClmm`, `tryOrcaWhirlpool`, `tryCropper`,
+`tryDefituna`, `tryCrema`, `tryPhoenix`, and `raydiumClmm` … `phoenix`), plus `trySwap`/`swap`,
+which read the venue from `pool.owner`. One order: `(slot: Account[], trader: Account[], amountIn,
+maxPrice, minOut, recipient: Account)` — arrays because a non-`main` function keeps ~16 values —
+`maxPrice` fee-inclusive in the skill's units, each function working out the pool's own sqrt limit
+(or Phoenix ticks). A `try` form can only CHECK before the swap (a failed CPI aborts the whole
+transaction): `0` having moved nothing for a missing slot, no input, swaps off, paused/closed, a fee
+that is not one rate, empty, past the limit, dust (an input that buys under one unit at the pool's
+price after its fee, estimated in `clmmOrder`), under one lot, a Phoenix limit past 64 bits, and a
+Phoenix IOC that filled nothing
+(told by the paying account's balance, `settled`); a swap that paid returns at least 1, held to
+`minOut`. A wrong pair, a slot whose program is not the pool's owner, and a pool of another venue
+or of none revert (caller mistakes, never 0); only the System program itself as the pool is a
+missing slot. Each EXPORTED venue function checks its own program id, so a direct call never signs
+a CPI into a program the slot names; only `trySwap`'s internal path relies on its one owner read.
+Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions (each
+venue's `swap<Venue>` body, `clmmOrder`, `settled`): a program carries only the venues it calls
+(`trySwap` ~4.4 KB, one venue's function ~1.3–1.6 KB), and the distributed swap (all nine through
+`trySwap`) is smaller than the inline helper it replaced (6,454 → 6,319 bytes, with the dust estimate). `compile.test.ts` pins its exports, argument order, each venue's program id
+(from the SDK's base58 ids) and instruction discriminator counted per function, and its revert
+reasons; `svm.e2e.test.ts` executes every function on the venues' own programs in LiteSVM against
+`fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from the same state.
 
 `@sauce/token` is the **default ambient MODULE**: `manifest.json`'s `ambient` list
 (`["@sauce/token"]`), which `ambient.ts#chainAmbient()` returns, is added by `compileSauceProgram`,
@@ -851,6 +891,17 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 `eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
+The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
+`cli-solana-distributed-swap.e2e.test.ts`) and `@sauce/router`'s SVM arm's
+(`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way: the
+programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
+take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
+lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
+layout in `scripts/lib/svm-venue-fixture.mjs`). A redump refreshes a fixture file already holding
+an account rather than adding a second, so `raydium-clmm/` and `orca-whirlpool/`'s SOL/USDC pools
+are that snapshot's, read at one slot with every other venue's: the swap's split is only real
+when every pool's price is one moment's. The CLI suite runs its cluster at mainnet's rent and
+Kitchen fee, which a rehearsal's local copy must take from the cluster.
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
 to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
 `ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
@@ -1222,9 +1273,10 @@ publishes it, which is what blocks `dev-tools/scripts/deploy.ts` and `dev-tools/
 unified `swap`, exact-output mode, or quote method. `flash(callback, swap)` wraps the calldata of
 one of those five methods to execute a program during its authenticated callback.
 
-`@sauce/router` keeps its source-level API; its V3/V4/Maverick functions call the new signatures.
-The library checks V3 and Maverick token pairs before the swap. V4 builds the sorted pool key and
-passes the input token explicitly. V2, Curve, Balancer V2, DODO V2, Trader Joe LB and WOOFi are
+`@sauce/router` keeps its source-level API; its V3/V4/Maverick functions call the new signatures,
+and `infinityCL`/`infinityBin` call the two Infinity methods. The library checks V3 and Maverick
+token pairs before the swap. V4 and Infinity build the sorted pool key and pass the input token
+explicitly. V2, Curve, Balancer V2, DODO V2, Trader Joe LB and WOOFi are
 paid first and called directly by the program; their paths do not call the Router.
 
 **Quoting remains on generation 3**, pinned separately as `quoteRouter` in `releases.json` and

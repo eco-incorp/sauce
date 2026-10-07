@@ -18,10 +18,11 @@
 //     back, so these functions call the pool itself: they push the input first (V2, DODO, LB,
 //     WooPPV2) or approve exactly the input for the pool to pull (Curve, the Vault). No Router is
 //     involved, so they run in any Pot.
-//   - Uniswap V3 (and its forks), Uniswap V4 and Maverick V2 pools re-enter their caller mid-swap to
-//     be paid. A program cannot answer that call, so these functions call the Pot's Router
-//     (`ctx.self()`, whose fallback delegatecalls it), which can. Generation 4 pays only the named
-//     input token and only what the pool asks for, up to `amountIn`.
+//   - Uniswap V3 (and its forks), Uniswap V4, Maverick V2 and PancakeSwap Infinity (CL and bin) pools
+//     re-enter their caller mid-swap to be paid. A program cannot answer that call, so these
+//     functions call the Pot's Router (`ctx.self()`, whose fallback delegatecalls it), which can.
+//     Generation 4 pays only the named input token and only what the pool asks for, up to
+//     `amountIn`.
 //
 // Every token write is `@sauce/token`'s: OpenZeppelin `SafeERC20`, so a token that returns nothing
 // (USDT) works, one that returns `false` reverts the program, and an approval resets a standing
@@ -31,11 +32,24 @@
 // those pools spends everything it is paid or reverts (a V2 pair and a DODO V2 pool book their whole
 // balance, LB reverts `LBPair__OutOfLiquidity` rather than fill part of an input, WooPPV2 books
 // exactly `fromAmount`), and only an uncaught revert unwinds the push. The `try` functions are the
-// one way to get a swap that may fail without reverting the program, and each loses nothing: it
-// returns `0n` having moved nothing. They exist only where that can be guaranteed — `tryUniswapV2`
-// and `tryTraderJoeLB` check, before anything moves, that the pool fills the whole input at the
-// floor; `tryCurve` and `tryBalancerV2` catch the pool's failure and reset the approval to zero.
-// DODO V2 and WOOFi have neither, so they have no `try` form.
+// one way to get a swap that may fail without reverting the program, and each loses nothing: a
+// skipped swap returns `0n` having moved nothing, and a swap that ran returns at least 1, so `0n`
+// always means skipped. Three ways make that hold:
+//   - a check before anything moves that the pool takes the whole input at the floor —
+//     `tryUniswapV2` (the reserves), `tryTraderJoeLB` (`getSwapOut`), `tryDodoV2`
+//     (`querySellBase`/`querySellQuote`) and `tryWoofi` (`query`). The swap then runs uncaught, so a
+//     failure the check did not foresee still reverts;
+//   - catching the pool's failure where the pool pulls the input and enforces the floor itself —
+//     `tryCurve` and `tryBalancerV2`, which also reset the approval to zero;
+//   - catching the Router's call where the Router pays the pool from inside it — `tryUniswapV3`,
+//     `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin`. The generation-4 Router
+//     takes no floor, so these hold a swap that ran to the floor afterwards — `minOut`, and at least
+//     1 — and revert below it: a swap that took input and delivered nothing (an input the pool rounds
+//     away, a hook that keeps it) cannot be undone, so it never reads as skipped. A swap that ran and
+//     moved nothing either way (a pool with no liquidity in range) is a skip: the Router's own
+//     `amountInUsed`, what it paid out of the Pot, tells the two apart. With no price limit, an
+//     empty concentrated-liquidity pool (V3, V4, Infinity CL) costs a full tick walk, millions of
+//     gas, before it is skipped; pass a `sqrtPriceLimitX96` to bound it.
 //
 // ORIENTATION is checked from the arguments while the program runs, so a direction cannot be
 // stated backwards. A Uniswap V2 pair's direction IS the sort order of `tokenIn` and `tokenOut`
@@ -53,6 +67,7 @@ import DODOV2Pool from "./dodo-v2-pool.abi.json";
 import LBPair from "./lb-pair.abi.json";
 import MaverickV2Pool from "./maverick-v2-pool.abi.json";
 import SauceRouter from "./sauce-router.abi.json";
+import SauceRouterPaid from "./sauce-router-paid.abi.json";
 import UniswapV2Pair from "./uniswap-v2-pair.abi.json";
 import UniswapV3Pool from "./uniswap-v3-pool.abi.json";
 import WooPPV2 from "./woo-pp-v2.abi.json";
@@ -358,6 +373,61 @@ export function dodoV2(
   return out;
 }
 
+// `dodoV2`, or nothing: `0n` with nothing moved unless the pool's own `querySellBase`/
+// `querySellQuote` view, read before anything moves, prices the whole input at the floor (and at
+// least 1). A pool with no code, or whose view reverts (an empty side, a zero guide price, an input
+// past what its curve can price), is skipped too. Otherwise the swap runs uncaught, so a failure the
+// check did not foresee still reverts. The view is asked for `ctx.self()`'s fee; the pool charges the
+// transaction's origin, which a program cannot read, so where its fee model tells the two apart the
+// swap can deliver other than the quote, and below the floor it reverts.
+export function tryDodoV2(
+  pool: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  baseToken: Address,
+  quoteToken: Address,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  require(tokenIn != tokenOut);
+  const sellBase = tokenIn == baseToken && tokenOut == quoteToken;
+  require(sellBase || (tokenIn == quoteToken && tokenOut == baseToken));
+  if (amountIn == 0n || ctx.codeSize(pool) == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  let quoted = 0n;
+  if (sellBase) {
+    quoted = DODOV2Pool.at(pool)
+      .querySellBase(ctx.self(), amountIn)
+      .catch(() => {
+        return 0n;
+      });
+  } else {
+    quoted = DODOV2Pool.at(pool)
+      .querySellQuote(ctx.self(), amountIn)
+      .catch(() => {
+        return 0n;
+      });
+  }
+  if (quoted < floor) {
+    return 0n;
+  }
+  transfer(tokenIn, pool, amountIn);
+  let out = 0n;
+  if (sellBase) {
+    out = DODOV2Pool.at(pool).sellBase(recipient);
+  } else {
+    out = DODOV2Pool.at(pool).sellQuote(recipient);
+  }
+  require(out >= floor);
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Trader Joe Liquidity Book
 // ---------------------------------------------------------------------------------------------
@@ -450,6 +520,40 @@ export function woofi(
   return WooPPV2.at(pool).swap(tokenIn, tokenOut, amountIn, minOut, recipient, 0n);
 }
 
+// `woofi`, or nothing: `0n` with nothing moved unless the pool's own `query`, read before anything
+// moves, prices the whole input at the floor. `query` reverts when the oracle, the notional cap, the
+// gamma bound or the output token's reserve refuses the trade, and that revert is a skip; so is a
+// pool with no code. (WooPPV2's `tryQuery` would not do: it skips the reserve check and prices past
+// it.) The floor is `minOut`, or 1 when it is `0n` (WooPPV2 requires a positive one). Otherwise the
+// swap runs uncaught, so a failure the quote did not foresee still reverts.
+export function tryWoofi(
+  pool: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  require(tokenIn != tokenOut);
+  if (amountIn == 0n || ctx.codeSize(pool) == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  const quoted = WooPPV2.at(pool)
+    .query(tokenIn, tokenOut, amountIn)
+    .catch(() => {
+      return 0n;
+    });
+  if (quoted < floor) {
+    return 0n;
+  }
+  transfer(tokenIn, pool, amountIn);
+  return WooPPV2.at(pool).swap(tokenIn, tokenOut, amountIn, floor, recipient, 0n);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Through the Pot's Router: Uniswap V3, Uniswap V4, Maverick V2
 // ---------------------------------------------------------------------------------------------
@@ -480,6 +584,64 @@ export function uniswapV3(
     recipient,
   );
   require(out >= minOut);
+  return out;
+}
+
+// `uniswapV3`, or nothing: `0n` with nothing moved when the pool has no code or is not this pair's
+// pool, or when its swap fails. The Router pays the pool from inside the call that is caught, so a
+// swap the pool or the Router refuses moves nothing. What a swap that ran delivered is the
+// recipient's `tokenOut` balance change, and it must reach the floor — `minOut`, and at least 1 — or
+// the program reverts: the generation-4 Router takes no floor of its own, so a swap below it cannot
+// be undone, and one that took input and delivered nothing (an input the pool rounds away) must not
+// read as skipped. One that ran and moved nothing at all (no liquidity in range: the Router paid
+// nothing and the recipient received nothing) returns `0n`. With no price limit, an empty pool costs
+// a full tick walk before it is skipped; pass a `sqrtPriceLimitX96` to bound it.
+export function tryUniswapV3(
+  pool: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  sqrtPriceLimitX96: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  if (amountIn == 0n || amountIn >> 255n != 0n || tokenIn == tokenOut || ctx.codeSize(pool) == 0n) {
+    return 0n;
+  }
+  const token0 = UniswapV3Pool.at(pool)
+    .token0()
+    .catch(() => {
+      return 0n;
+    });
+  const token1 = UniswapV3Pool.at(pool)
+    .token1()
+    .catch(() => {
+      return 0n;
+    });
+  if ((tokenIn != token0 || tokenOut != token1) && (tokenIn != token1 || tokenOut != token0)) {
+    return 0n;
+  }
+  const before = balanceOf(tokenOut, recipient);
+  // The Router's `amountInUsed`, what it paid out of the Pot; the largest uint256, which no swap
+  // pays, when the call failed.
+  const paid = SauceRouterPaid.at(ctx.self())
+    .swapV3(pool, tokenIn, tokenIn < tokenOut, amountIn, sqrtPriceLimitX96, recipient)
+    .catch(() => {
+      return 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    });
+  if (paid == 115792089237316195423570985008687907853269984665640564039457584007913129639935n) {
+    return 0n;
+  }
+  const out = balanceOf(tokenOut, recipient) - before;
+  // Ran and moved nothing either way (no liquidity in range): a skip, not a swap below the floor.
+  if (paid == 0n && out == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  require(out >= floor);
   return out;
 }
 
@@ -527,6 +689,89 @@ export function uniswapV4(
   return out;
 }
 
+// `uniswapV4`, or nothing: `0n` with nothing moved when the PoolManager has no code or the swap
+// fails (a key no pool has, among others) — the Router settles with the PoolManager inside the call
+// that is caught, so a refused swap moves nothing. What a swap that ran delivered is the recipient's
+// `tokenOut` balance change (its native balance when `tokenOut` is the zero address), and it must
+// reach the floor — `minOut`, and at least 1 — or the program reverts, unless the swap moved nothing
+// at all, as for `tryUniswapV3`. With no price limit, an empty pool costs a full tick walk before it
+// is skipped; pass a `sqrtPriceLimitX96` to bound it.
+export function tryUniswapV4(
+  poolManager: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  fee: Uint256,
+  tickSpacing: Uint256,
+  hooks: Address,
+  sqrtPriceLimitX96: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  if (
+    amountIn == 0n ||
+    amountIn >> 255n != 0n ||
+    tokenIn == tokenOut ||
+    ctx.codeSize(poolManager) == 0n
+  ) {
+    return 0n;
+  }
+  const zeroForOne = tokenIn < tokenOut;
+  let currency0 = tokenOut;
+  let currency1 = tokenIn;
+  if (zeroForOne) {
+    currency0 = tokenIn;
+    currency1 = tokenOut;
+  }
+  let before = 0n;
+  if (tokenOut == 0n) {
+    before = ctx.balance(recipient);
+  } else {
+    before = balanceOf(tokenOut, recipient);
+  }
+  // The Router's `amountInUsed`, what it paid out of the Pot; the largest uint256, which no swap
+  // pays, when the call failed.
+  const paid = SauceRouterPaid.at(ctx.self())
+    .swapV4(
+      poolManager,
+      {
+        currency0: currency0,
+        currency1: currency1,
+        fee: fee,
+        tickSpacing: tickSpacing,
+        hooks: hooks,
+      },
+      tokenIn,
+      zeroForOne,
+      amountIn,
+      sqrtPriceLimitX96,
+      recipient,
+    )
+    .catch(() => {
+      return 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    });
+  if (paid == 115792089237316195423570985008687907853269984665640564039457584007913129639935n) {
+    return 0n;
+  }
+  let after = 0n;
+  if (tokenOut == 0n) {
+    after = ctx.balance(recipient);
+  } else {
+    after = balanceOf(tokenOut, recipient);
+  }
+  const out = after - before;
+  // Ran and moved nothing either way (no liquidity in range): a skip, not a swap below the floor.
+  if (paid == 0n && out == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  require(out >= floor);
+  return out;
+}
+
 // A Maverick V2 pool, through generation 4's `swapMaverickV2` over the pool's full tick range. The
 // Router pays exactly what the pool asks for, so if the pool runs out before taking all of
 // `amountIn`, the rest stays in the Pot. The Router returns the input it paid and the output.
@@ -554,5 +799,318 @@ export function maverickV2(
     recipient,
   );
   require(out >= minOut);
+  return out;
+}
+
+// `maverickV2`, or nothing: `0n` with nothing moved when the pool has no code or is not this pair's
+// pool, or when its swap fails — the Router pays the pool from inside the call that is caught. What
+// a swap that ran delivered is the recipient's `tokenOut` balance change, and it must reach the
+// floor — `minOut`, and at least 1 — or the program reverts, unless the swap moved nothing at all,
+// as for `tryUniswapV3`.
+export function tryMaverickV2(
+  pool: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  if (amountIn == 0n || amountIn >> 255n != 0n || tokenIn == tokenOut || ctx.codeSize(pool) == 0n) {
+    return 0n;
+  }
+  const tokenA = MaverickV2Pool.at(pool)
+    .tokenA()
+    .catch(() => {
+      return 0n;
+    });
+  const tokenB = MaverickV2Pool.at(pool)
+    .tokenB()
+    .catch(() => {
+      return 0n;
+    });
+  const tokenAIn = tokenIn == tokenA;
+  if ((!tokenAIn || tokenOut != tokenB) && (tokenIn != tokenB || tokenOut != tokenA)) {
+    return 0n;
+  }
+  let tickLimit = -2147483648n;
+  if (tokenAIn) tickLimit = 2147483647n;
+  const before = balanceOf(tokenOut, recipient);
+  // The Router's `amountInUsed`, what it paid out of the Pot; the largest uint256, which no swap
+  // pays, when the call failed.
+  const paid = SauceRouterPaid.at(ctx.self())
+    .swapMaverickV2(pool, tokenIn, tokenAIn, amountIn, tickLimit, recipient)
+    .catch(() => {
+      return 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    });
+  if (paid == 115792089237316195423570985008687907853269984665640564039457584007913129639935n) {
+    return 0n;
+  }
+  const out = balanceOf(tokenOut, recipient) - before;
+  // Ran and moved nothing either way (no liquidity in range): a skip, not a swap below the floor.
+  if (paid == 0n && out == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  require(out >= floor);
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Through the Pot's Router: PancakeSwap Infinity
+// ---------------------------------------------------------------------------------------------
+
+// A PancakeSwap Infinity CL pool, through generation 4's `swapInfinityCL` (`vault` is the Infinity
+// Vault, `poolManager` the CL pool manager the key names). The pool key is `tokenIn` and `tokenOut`
+// in sort order — native BNB/ETH is the zero address, which sorts first and which the Pot pays from
+// its own balance — with the pool's `fee`, `parameters` (its packed tick spacing and hook
+// permissions) and `hooks`; the direction is that order. A non-zero `sqrtPriceLimitX96` stops the
+// swap at that price. The Router returns the input used and the output sent.
+export function infinityCL(
+  vault: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  poolManager: Address,
+  fee: Uint256,
+  parameters: Uint256,
+  hooks: Address,
+  sqrtPriceLimitX96: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  require(tokenIn != tokenOut);
+  require(amountIn >> 255n == 0n);
+  const zeroForOne = tokenIn < tokenOut;
+  let currency0 = tokenOut;
+  let currency1 = tokenIn;
+  if (zeroForOne) {
+    currency0 = tokenIn;
+    currency1 = tokenOut;
+  }
+  const [paid, out] = SauceRouter.at(ctx.self()).swapInfinityCL(
+    vault,
+    {
+      currency0: currency0,
+      currency1: currency1,
+      hooks: hooks,
+      poolManager: poolManager,
+      fee: fee,
+      parameters: parameters,
+    },
+    tokenIn,
+    zeroForOne,
+    amountIn,
+    sqrtPriceLimitX96,
+    recipient,
+  );
+  require(out >= minOut);
+  return out;
+}
+
+// `infinityCL`, or nothing: `0n` with nothing moved when the Vault has no code or the swap fails (a
+// key no pool has, among others) — the Router settles with the Vault inside the call that is caught.
+// What a swap that ran delivered is the recipient's `tokenOut` balance change (its native balance
+// when `tokenOut` is the zero address), and it must reach the floor — `minOut`, and at least 1 — or
+// the program reverts, unless the swap moved nothing at all, as for `tryUniswapV3`. With no price
+// limit, an empty pool costs a full tick walk before it is skipped; pass a `sqrtPriceLimitX96` to
+// bound it.
+export function tryInfinityCL(
+  vault: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  poolManager: Address,
+  fee: Uint256,
+  parameters: Uint256,
+  hooks: Address,
+  sqrtPriceLimitX96: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  if (
+    amountIn == 0n ||
+    amountIn >> 255n != 0n ||
+    tokenIn == tokenOut ||
+    ctx.codeSize(vault) == 0n
+  ) {
+    return 0n;
+  }
+  const zeroForOne = tokenIn < tokenOut;
+  let currency0 = tokenOut;
+  let currency1 = tokenIn;
+  if (zeroForOne) {
+    currency0 = tokenIn;
+    currency1 = tokenOut;
+  }
+  let before = 0n;
+  if (tokenOut == 0n) {
+    before = ctx.balance(recipient);
+  } else {
+    before = balanceOf(tokenOut, recipient);
+  }
+  // The Router's `amountInUsed`, what it paid out of the Pot; the largest uint256, which no swap
+  // pays, when the call failed.
+  const paid = SauceRouterPaid.at(ctx.self())
+    .swapInfinityCL(
+      vault,
+      {
+        currency0: currency0,
+        currency1: currency1,
+        hooks: hooks,
+        poolManager: poolManager,
+        fee: fee,
+        parameters: parameters,
+      },
+      tokenIn,
+      zeroForOne,
+      amountIn,
+      sqrtPriceLimitX96,
+      recipient,
+    )
+    .catch(() => {
+      return 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    });
+  if (paid == 115792089237316195423570985008687907853269984665640564039457584007913129639935n) {
+    return 0n;
+  }
+  let after = 0n;
+  if (tokenOut == 0n) {
+    after = ctx.balance(recipient);
+  } else {
+    after = balanceOf(tokenOut, recipient);
+  }
+  const out = after - before;
+  // Ran and moved nothing either way (no liquidity in range): a skip, not a swap below the floor.
+  if (paid == 0n && out == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  require(out >= floor);
+  return out;
+}
+
+// A PancakeSwap Infinity bin pool, through generation 4's `swapInfinityBin` — `infinityCL`'s key and
+// direction, with no price limit (a bin swap has none). Its amount is an `int128` to the pool, so an
+// input past `int128`'s positive range is refused.
+export function infinityBin(
+  vault: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  poolManager: Address,
+  fee: Uint256,
+  parameters: Uint256,
+  hooks: Address,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  require(tokenIn != tokenOut);
+  require(amountIn >> 127n == 0n);
+  const zeroForOne = tokenIn < tokenOut;
+  let currency0 = tokenOut;
+  let currency1 = tokenIn;
+  if (zeroForOne) {
+    currency0 = tokenIn;
+    currency1 = tokenOut;
+  }
+  const [paid, out] = SauceRouter.at(ctx.self()).swapInfinityBin(
+    vault,
+    {
+      currency0: currency0,
+      currency1: currency1,
+      hooks: hooks,
+      poolManager: poolManager,
+      fee: fee,
+      parameters: parameters,
+    },
+    tokenIn,
+    zeroForOne,
+    amountIn,
+    recipient,
+  );
+  require(out >= minOut);
+  return out;
+}
+
+// `infinityBin`, or nothing: `tryInfinityCL`'s contract, for a bin pool.
+export function tryInfinityBin(
+  vault: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  poolManager: Address,
+  fee: Uint256,
+  parameters: Uint256,
+  hooks: Address,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  if (
+    amountIn == 0n ||
+    amountIn >> 127n != 0n ||
+    tokenIn == tokenOut ||
+    ctx.codeSize(vault) == 0n
+  ) {
+    return 0n;
+  }
+  const zeroForOne = tokenIn < tokenOut;
+  let currency0 = tokenOut;
+  let currency1 = tokenIn;
+  if (zeroForOne) {
+    currency0 = tokenIn;
+    currency1 = tokenOut;
+  }
+  let before = 0n;
+  if (tokenOut == 0n) {
+    before = ctx.balance(recipient);
+  } else {
+    before = balanceOf(tokenOut, recipient);
+  }
+  // The Router's `amountInUsed`, what it paid out of the Pot; the largest uint256, which no swap
+  // pays, when the call failed.
+  const paid = SauceRouterPaid.at(ctx.self())
+    .swapInfinityBin(
+      vault,
+      {
+        currency0: currency0,
+        currency1: currency1,
+        hooks: hooks,
+        poolManager: poolManager,
+        fee: fee,
+        parameters: parameters,
+      },
+      tokenIn,
+      zeroForOne,
+      amountIn,
+      recipient,
+    )
+    .catch(() => {
+      return 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    });
+  if (paid == 115792089237316195423570985008687907853269984665640564039457584007913129639935n) {
+    return 0n;
+  }
+  let after = 0n;
+  if (tokenOut == 0n) {
+    after = ctx.balance(recipient);
+  } else {
+    after = balanceOf(tokenOut, recipient);
+  }
+  const out = after - before;
+  // Ran and moved nothing either way (no liquidity in range): a skip, not a swap below the floor.
+  if (paid == 0n && out == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  require(out >= floor);
   return out;
 }

@@ -23,14 +23,15 @@ import { entryReturnType } from "../routes/entry.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connectAt, kitchenFee, potState } from "./chain.js";
 import {
-  cookOf,
-  kitchenAddress,
-  priceLimitNotes,
-  valueOf,
   type ChainAccess,
   type CliFiles,
   type CommandOutput,
   type CookInput,
+  cookOf,
+  kitchenAddress,
+  priceLimitNotes,
+  revertedFirst,
+  valueOf,
 } from "./commands.js";
 import {
   addressLabels,
@@ -204,11 +205,18 @@ function routeLines(
   ];
 }
 
-/** `sauce simulate`: the cook as a rehearsal from the Pot's owner — no key, nothing sent. */
+/**
+ * `sauce simulate`: the cook as a rehearsal from the Pot's owner — no key, nothing sent. A revert
+ * leads its output (`revertedFirst`).
+ */
 export async function simulateCommand(
   input: SimulateInput,
   files: CliFiles,
 ): Promise<CommandOutput> {
+  return revertedFirst(await simulateEvm(input, files));
+}
+
+async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<CommandOutput> {
   const cook = cookOf(input, files);
   // Every read and the rehearsal itself on one block: what it saw is what it says it saw.
   const { client, block } = await connectAt(input.rpcUrl, input.chain, input.block);

@@ -148,7 +148,7 @@ export function routerProgram(
       calls.flatMap((c) =>
         [
           ...c.matchAll(
-            /\b(try[A-Z]\w*|uniswapV[234]|curve|balancerV2|dodoV2|traderJoeLB|woofi|maverickV2)\(/g,
+            /\b(try[A-Z]\w*|uniswapV[234]|curve|balancerV2|dodoV2|traderJoeLB|woofi|maverickV2|infinityCL|infinityBin)\(/g,
           ),
         ].map((m) => m[1]!),
       ),
@@ -201,6 +201,59 @@ export function libraryCall(
   args: readonly Arg[],
 ): Uint8Array {
   return compileSource(env, chain, routerProgram([call(name, args)]));
+}
+
+/** The native coin, as `@sauce/router` names it: the zero address. */
+export const NATIVE = "0x0000000000000000000000000000000000000000";
+
+/** `token`'s balance of `holder`, the native coin's for the zero address. */
+export const held = (env: Anvil, token: string, holder: string): Promise<bigint> =>
+  token === NATIVE
+    ? env.publicClient.getBalance({ address: holder as Address })
+    : balanceOf(env, token, holder);
+
+/** Every `[token, holder]` balance, in order. */
+export const balances = (
+  env: Anvil,
+  watch: ReadonlyArray<readonly [string, string]>,
+): Promise<bigint[]> => Promise.all(watch.map(([token, holder]) => held(env, token, holder)));
+
+/** `name(args)` in a program that requires it to return `expected`, so a landed cook proves it. */
+export function returning(name: string, args: readonly Arg[], expected: bigint): string {
+  return routerProgram([`const out = ${call(name, args)};`, `require(out == ${expected}n);`]);
+}
+
+/**
+ * A `try` form skipping: `name(args)` returns 0, the cook lands, and every balance in `watch` — the
+ * Pot's and the pool's — is what it was. Returns the cook's receipt.
+ */
+export async function assertSkips(
+  env: Anvil,
+  chain: string,
+  name: string,
+  args: readonly Arg[],
+  watch: ReadonlyArray<readonly [string, string]>,
+): Promise<TransactionReceipt> {
+  const before = await balances(env, watch);
+  const receipt = await env.cook(compileSource(env, chain, returning(name, args, 0n)));
+  assert.equal(receipt.status, "success", `${name} did not land returning 0`);
+  assert.deepEqual(await balances(env, watch), before, `${name} moved something`);
+
+  return receipt;
+}
+
+/** `name(args)` reverts the whole cook, and every balance in `watch` is what it was. */
+export async function assertReverts(
+  env: Anvil,
+  chain: string,
+  name: string,
+  args: readonly Arg[],
+  watch: ReadonlyArray<readonly [string, string]>,
+): Promise<void> {
+  const before = await balances(env, watch);
+  const receipt = await env.cook(compileSource(env, chain, routerProgram([call(name, args)])));
+  assert.equal(receipt.status, "reverted", `${name} landed`);
+  assert.deepEqual(await balances(env, watch), before, `${name} moved something`);
 }
 
 /** How a `main` parameter is declared and ABI-encoded. */

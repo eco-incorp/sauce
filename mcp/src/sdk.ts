@@ -34,6 +34,7 @@ export {
 export {
   compileCommand,
   compileProgram,
+  expectingRevert,
   pastDeadline,
   potCommand,
   probeProgram,
@@ -116,11 +117,13 @@ export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wal
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
 export { installedViem } from "../../sdk/dist/cli/init.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
+export { svmPoolsCommand } from "../../sdk/dist/cli/pools-svm.js";
 export {
   parseAccounts,
   parsePubkey,
   svmPotCommand,
   svmPotExists,
+  svmAssumedBalances,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
@@ -133,3 +136,4 @@ export {
   requireChain,
   type CanonicalChain,
 } from "../../sdk/dist/chains/canonical.js";
+export { forkSnapshot, type ForkSnapshot } from "../../sdk/dist/cli/svm-fork.js";

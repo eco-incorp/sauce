@@ -95,13 +95,56 @@ export async function createAltWithAddresses({
   sendAndConfirm,
   commitment = "confirmed",
 }: CreateAltInput): Promise<{ lookupTableAddress: Address; lastExtendedSlot: bigint }> {
+  const recentSlot = await rpc.getSlot({ commitment: "finalized" }).send();
+  const { lookupTableAddress, batches } = await lookupTableBatches({
+    payer,
+    authority,
+    recentSlot,
+    addresses,
+  });
+
+  for (const instructions of batches) {
+    const { value: latestBlockhash } = await rpc.getLatestBlockhash({ commitment }).send();
+    const transaction = await buildExecuteTransaction({ payer, instructions, latestBlockhash });
+    await sendAndConfirm(transaction, { commitment });
+  }
+
+  // The last extend landed no later than the current confirmed slot, so this
+  // is a safe (over-approximated) anchor for the warmup wait below.
+  const lastExtendedSlot = await rpc.getSlot({ commitment }).send();
+
+  return { lookupTableAddress, lastExtendedSlot };
+}
+
+export interface LookupTableBatchesInput {
+  payer: TransactionSigner;
+  authority: TransactionSigner;
+  /** A recent finalized slot: the table's address derives from it and the authority. */
+  recentSlot: bigint;
+  addresses: readonly Address[];
+}
+
+/**
+ * The transactions that create an address lookup table holding `addresses`, as instruction
+ * batches to send in order (one create, then one extend per chunk of 30 addresses, 27 when payer
+ * and authority are distinct signers), and the table's address. Sending them, and waiting a slot
+ * past the last extend before compressing against the table, is the caller's:
+ * `createAltWithAddresses` sends them through a confirmation callback, the `sauce` command with its
+ * own sends.
+ *
+ * More than LOOKUP_TABLE_MAX_ADDRESSES addresses throws, so no table is funded.
+ */
+export async function lookupTableBatches({
+  payer,
+  authority,
+  recentSlot,
+  addresses,
+}: LookupTableBatchesInput): Promise<{ lookupTableAddress: Address; batches: Instruction[][] }> {
   if (addresses.length > LOOKUP_TABLE_MAX_ADDRESSES) {
     throw new Error(
       `cannot create an address lookup table with ${addresses.length} addresses: one table holds at most ${LOOKUP_TABLE_MAX_ADDRESSES}`,
     );
   }
-
-  const recentSlot = await rpc.getSlot({ commitment: "finalized" }).send();
   // The table's PDA, `[authority, recentSlot]`: what the async instruction builder would derive.
   const lookupTable = await memoizedGetProgramDerivedAddressWithBump(
     ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS,
@@ -129,17 +172,7 @@ export async function createAltWithAddresses({
     ]);
   }
 
-  for (const instructions of batches) {
-    const { value: latestBlockhash } = await rpc.getLatestBlockhash({ commitment }).send();
-    const transaction = await buildExecuteTransaction({ payer, instructions, latestBlockhash });
-    await sendAndConfirm(transaction, { commitment });
-  }
-
-  // The last extend landed no later than the current confirmed slot, so this
-  // is a safe (over-approximated) anchor for the warmup wait below.
-  const lastExtendedSlot = await rpc.getSlot({ commitment }).send();
-
-  return { lookupTableAddress, lastExtendedSlot };
+  return { lookupTableAddress, batches };
 }
 
 export interface ExtendAltInput {

@@ -118,6 +118,7 @@
     "@sveltejs/acorn-typescript": "1.0.13",
     "acorn": "8.16.0",
     "dotenv": "^17.3.1",
+    "litesvm": "^1.2.1",
     "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-local",
     "typescript": "^5.7.0",
     "viem": "^2.45.3",

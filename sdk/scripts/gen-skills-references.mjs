@@ -33,6 +33,8 @@
 //                                                                  `sauce-script` skill's file verbatim
 //   ../guides/distributed-swap.md                                  the `sauce-distributed-swap` skill,
 //                                                                  rendered as a guide
+//   ../guides/solana-distributed-swap.md                           the `sauce-solana-distributed-swap`
+//                                                                  skill and its venues reference
 //
 // The two audiences differ only in their links and in how they name what the other has: a skill
 // names another skill (`sauce-swaps`), and a manual page links the page that covers it. The manual
@@ -81,9 +83,10 @@ export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/refer
 /** The same under the manual's reference, which is generated whole: a page written there by hand
  *  would be removed, so a hand-written reference page belongs in `docs/api/`. */
 export const DOCS_GENERATED_DIRS = [".", "chains", "protocols"];
-/** The one generated page outside `docs/reference/`: the distributed swap, a guide rendered from
- *  its skill, by path relative to `docs/reference/`. */
+/** The generated pages outside `docs/reference/`: the distributed swaps, guides rendered from their
+ *  skills, by path relative to `docs/reference/`. */
 export const DISTRIBUTED_SWAP_GUIDE = "../guides/distributed-swap.md";
+export const SOLANA_DISTRIBUTED_SWAP_GUIDE = "../guides/solana-distributed-swap.md";
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
 
@@ -714,6 +717,11 @@ const DOCS_FOR_SKILL = {
   "sauce-chains": ["chains", "reference/chains.md"],
   "sauce-protocols": ["protocols", "reference/protocols.md"],
   "sauce-swaps": ["the `@sauce/router` reference", "api/router.md"],
+  "sauce-distributed-swap": ["the distributed swap", "guides/distributed-swap.md"],
+  "sauce-solana-distributed-swap": [
+    "the distributed swap on Solana",
+    "guides/solana-distributed-swap.md",
+  ],
   "sauce-intents": ["intents", "guides/intents.md"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],
@@ -2009,6 +2017,29 @@ export function renderDocsReference(data, skillFiles) {
       },
       DISTRIBUTED_SWAP_GUIDE,
     ),
+    // The Solana one, with its venues reference after it: one page, so a link to it is in-page.
+    [SOLANA_DISTRIBUTED_SWAP_GUIDE]: [
+      renderSkillGuide(
+        join(SKILLS_DIR, "sauce-solana-distributed-swap", "SKILL.md"),
+        skillFiles.solanaDistributedSwap,
+        skillFiles.solanaDistributedSwapExample,
+        {
+          "examples/solana-distributed-swap.sauce.ts": ["`solana-distributed-swap.sauce.ts`"],
+          "examples/solana-distributed-swap-5.sauce.ts": ["`solana-distributed-swap-5.sauce.ts`"],
+          "examples/solana-distributed-swap.mts": ["`solana-distributed-swap.mts`"],
+          "references/venues.md": [
+            "the venues, their pools and their slots",
+            "#the-venues-their-pools-and-their-slots",
+          ],
+        },
+        SOLANA_DISTRIBUTED_SWAP_GUIDE,
+      ).trimEnd(),
+      "",
+      ...docsProse(
+        skillFiles.solanaVenues.replace(/^(#+) /gm, "#$1 ").split("\n"),
+        SOLANA_DISTRIBUTED_SWAP_GUIDE,
+      ),
+    ].join("\n"),
   };
   for (const chain of data.chains) {
     files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
@@ -2059,6 +2090,13 @@ function skillFiles(dir, data) {
     builtins: read(relative(SKILLS_DIR, BUILTINS)),
     distributedSwap: read("sauce-distributed-swap", "SKILL.md"),
     distributedSwapExample: read("sauce-distributed-swap", "examples", "distributed-swap.sauce.ts"),
+    solanaDistributedSwap: read("sauce-solana-distributed-swap", "SKILL.md"),
+    solanaDistributedSwapExample: read(
+      "sauce-solana-distributed-swap",
+      "examples",
+      "solana-distributed-swap.sauce.ts",
+    ),
+    solanaVenues: read("sauce-solana-distributed-swap", "references", "venues.md"),
   };
 }
 

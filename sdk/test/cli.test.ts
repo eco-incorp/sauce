@@ -2,6 +2,7 @@
  * The `sauce` command, in process: its flags, what each command prints, and that it compiles a
  * file exactly as `compileSauceProgram` compiles it. Executing what it prints is `cli.e2e.test.ts`.
  */
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { address as svmAddress } from "@solana/kit";
+import { address as svmAddress, type Address } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   bytesToHex,
@@ -45,6 +46,7 @@ import { PRICE_UNITS } from "../src/cli/price.js";
 import {
   awaitAccount,
   failureReason,
+  namingAccount,
   parseAccounts,
   resolveTokenAccounts,
 } from "../src/cli/solana.js";
@@ -1770,6 +1772,34 @@ describe("sauce pot", () => {
     expect(svm.stderr).toMatch(/is not a Solana address \(a base58 public key\)/);
   });
 
+  it("names the account a Solana transaction error gives only by its index", () => {
+    const accounts = [
+      "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+      "ComputeBudget111111111111111111111111111111",
+      "DRBtuXHdgM2qjkC6rfZn6s1cMeU6rxauV5K9TVX5DpFs",
+    ] as Address[];
+    const labels = new Map([[accounts[2]!, "the Kitchen's fee config"]]);
+    // As LiteSVM words it, and as a node's simulation does.
+    expect(
+      namingAccount(
+        '"TransactionErrorInsufficientFundsForRent { account_index: 2 }"',
+        accounts,
+        labels,
+      ),
+    ).toBe(
+      '"TransactionErrorInsufficientFundsForRent { account_index: 2 }": account 2 is ' +
+        "DRBtuXHdgM2qjkC6rfZn6s1cMeU6rxauV5K9TVX5DpFs (the Kitchen's fee config), which the " +
+        "transaction would leave below its rent-exempt minimum",
+    );
+    expect(namingAccount('{"InvalidAccountForFee":{"account_index":0}}', accounts)).toBe(
+      '{"InvalidAccountForFee":{"account_index":0}}: account 0 is ' +
+        "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+    );
+    // No index, or one past the message: the reason as it was.
+    expect(namingAccount("the program threw", accounts)).toBe("the program threw");
+    expect(namingAccount("x { account_index: 9 }", accounts)).toBe("x { account_index: 9 }");
+  });
+
   it("names a Solana failure only for the program the logs show failing", () => {
     const engine = v12SvmEngineProgramId();
     const kitchen = v12SvmKitchenProgramId();
@@ -2619,5 +2649,26 @@ describe("the CLI stays out of the browser-facing surface", () => {
 
   it("has a chain to name for every canonical slug", () => {
     expect(requireChain("solana").kind).toBe("svm");
+  });
+
+  it("loads LiteSVM, a dependency for the command's rehearsals alone, lazily and from it alone", () => {
+    // `git grep` over the shipped source: every file that names the package, and how.
+    const naming = execFileSync(
+      "git",
+      ["grep", "-l", "litesvm", "--", "sdk/src", "actions/src", "mcp/src"],
+      {
+        cwd: join(SDK, ".."),
+        encoding: "utf8",
+      },
+    )
+      .trim()
+      .split("\n");
+    expect(naming).toEqual(["sdk/src/cli/svm-fork.ts"]);
+    const fork = readFileSync(join(SDK, "src/cli/svm-fork.ts"), "utf8");
+    // A type-only import, which compiles to nothing, and the one dynamic import.
+    expect(fork.match(/^import .* from "litesvm";$/gm)).toEqual([
+      'import type { Clock as ClockType, LiteSVM as LiteSVMType } from "litesvm";',
+    ]);
+    expect(fork.match(/await import\("litesvm"\)/g)).toHaveLength(1);
   });
 });

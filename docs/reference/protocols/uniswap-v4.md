@@ -2,7 +2,7 @@
 
 # Uniswap V4 (`uniswap-v4`)
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, the `sauce-distributed-swap` agent skill). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
 
 Singleton AMM with hooks architecture enabling custom pool logic, flash accounting, and native ETH support. All pools share a single PoolManager contract for gas savings on multi-hop swaps.
 
@@ -28,7 +28,7 @@ hooks)`. A pool can attach a hook contract that runs around swaps and liquidity 
 - A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0`) unless you have
   reviewed the hook.
 - A protocol fee can apply on top of the LP fee; both are in the pool's state
-  (the `sauce-distributed-swap` agent skill reads them).
+  ([the distributed swap](../../guides/distributed-swap.md) reads them).
 - Anyone can initialize a key: a pool can exist with no liquidity at a stale price. Read its
   liquidity before trusting its price.
 - A native-coin pool (`currency0` of `0x0`) is a different pair from the WETH pools.

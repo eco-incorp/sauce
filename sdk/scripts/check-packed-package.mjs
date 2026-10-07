@@ -2,7 +2,7 @@
 // Exercise the published entry points from a clean consumer, without workspace
 // dependencies or a separately installed compiler hiding a broken bundle.
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import {
   existsSync,
@@ -19,6 +19,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 
 import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
 
@@ -423,6 +424,76 @@ try {
     `Clean package install: the sauce bin compiles the shipped example (${compiled.size} bytes) ` +
       `and builds its Pot and cook transactions`,
   );
+
+  // A Solana cook rehearsed in the local copy from the tarball alone: LiteSVM is the package's own
+  // dependency, so `npx sauce simulate` needs nothing else installed. The endpoint is a loopback stub
+  // holding the Rent sysvar at mainnet's rent, the Kitchen's fee config and USDC's mint
+  // (`solana-rpc-stub.mjs`); --assume-balance takes the rehearsal into the copy, as a cook too large
+  // for one transaction does. The command runs asynchronously: the stub answers from this process.
+  if (shipsEngine) {
+    assert.ok(
+      existsSync(join(work, "node_modules/litesvm/package.json")),
+      "installing the package installs LiteSVM",
+    );
+    writeFileSync(
+      join(work, "solana-ids.mjs"),
+      `export { deriveExecutionFeeConfigPda } from "${name}/svm";\n` +
+        `export { v12SvmKitchenProgramId } from "${name}/deployments";\n`,
+    );
+    const ids = await import(pathToFileURL(join(work, "solana-ids.mjs")).href);
+    const kitchen = ids.v12SvmKitchenProgramId();
+    const { address: feeConfig } = await ids.deriveExecutionFeeConfigPda(kitchen);
+    const usdc = JSON.parse(
+      readFileSync(
+        join(
+          root,
+          "sdk/test/svm/fixtures/raydium-clmm/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v.json",
+        ),
+        "utf8",
+      ),
+    );
+    const { solanaRpcStub } = await import(
+      pathToFileURL(join(root, "sdk/scripts/solana-rpc-stub.mjs")).href
+    );
+    const stub = await solanaRpcStub({
+      kitchen,
+      feeConfig,
+      fee: 85_672n,
+      accounts: {
+        [usdc.address]: { owner: usdc.owner, data: Buffer.from(usdc.base64Data, "base64") },
+      },
+    });
+    try {
+      writeFileSync(
+        join(work, "solana-check.sauce.ts"),
+        "function main(x: Uint256): Uint256 {\n  return x + 1;\n}\n",
+      );
+      const { stdout } = await promisify(execFile)(
+        "npx",
+        [
+          ...["--no", "--", "sauce", "simulate", join(work, "solana-check.sauce.ts")],
+          ...["--chain", "solana", "--rpc-url", stub.url],
+          ...["--owner", "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"],
+          ...["--assume-balance", "USDC:1", "--args", "1", "--json"],
+        ],
+        { cwd: work, encoding: "utf8", env: smokeEnv },
+      );
+      const rehearsal = JSON.parse(stdout);
+      assert.equal(rehearsal.ok, true, `the rehearsal succeeds: ${rehearsal.reason}`);
+      assert.equal(rehearsal.path, "local copy (LiteSVM)", "in the local copy");
+      assert.equal(String(rehearsal.returned), "2", "and main's return comes back");
+      assert.ok(
+        stub.methods.has("getMultipleAccounts"),
+        "the copy read its accounts from the stub",
+      );
+    } finally {
+      await stub.close();
+    }
+    console.log(
+      "Clean package install: npx sauce simulate rehearses a Solana cook in its local copy, with " +
+        "the LiteSVM the package installs",
+    );
+  }
 
   // `sauce update` tells a copy's install from its real path. This one is a project's own (the
   // consumer's node_modules): it prints the project's command and installs nothing. The same

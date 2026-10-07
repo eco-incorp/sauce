@@ -281,9 +281,21 @@ Pots and intent steps are built and sent there.
   `sauce simulate` runs it from `--owner` with no signature and prints the compute units, or the
   reason (a `throw` or `require` message, decoded) and the program logs. A Pot the Kitchen has not
   created yet is created in the same simulated transaction, ahead of the cook. Solana's simulation
-  takes no account overrides, so the owner must hold the Pot's rent and the fees, and the accounts
-  hold what they hold: there is no `--assume-balance` on Solana. `sauce run` signs with
-  `--keypair`; `sauce tx` prints a base64 transaction for the owner's wallet.
+  takes no account overrides, so there the owner must hold the Pot's rent and the fees, and the
+  accounts hold what they hold. `sauce run` signs with `--keypair`; `sauce tx` prints a base64
+  transaction for the owner's wallet.
+- **A rehearsal in a local copy.** A cook too large for one transaction, or one given
+  `--assume-balance`, `sauce simulate` runs in a local copy of every account the cook names, read
+  from the cluster as it is, with the cluster's rent and the released engine and Kitchen (the copy
+  is LiteSVM, which the package brings): the Pot created where it is missing, the owner given the
+  lamports the staging and the fees take (so any address can rehearse), the program staged as
+  `sauce run` stages it, then the cook. Nothing is signed or sent. A failure names the account an
+  error gives only by its index, and what `main` returned when the program finished first. There
+  `--assume-balance USDC:1000` gives the account the cook spends USDC from (the Pot's, or the
+  owner's with `--via engine`) that balance, whole tokens as `--fund` takes them, and a
+  `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a
+  note; `sauce run` creates it before the cook (asking first, or with `--auto-approve`). The
+  owner must be a wallet, or an address with no account: it signs and pays.
 - **Through the Kitchen or directly.** `--via kitchen`, the default, is the Kitchen's cook on the
   owner's Pot: the program holds and spends what the Pot owns and can write the Pot's storage.
   `--via engine` calls the engine itself, with no Kitchen and no Pot: nothing is created, and the
@@ -299,9 +311,14 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   --account authority=owner --args <mint> 400
 ```
 
-- A program too large for one transaction is staged through the Kitchen by `sauce run`. `simulate`
-  and `tx` refuse it, naming how many bytes the payload (the program and its arguments) must
-  shrink by to fit.
+- A program too large for one transaction is staged through the Kitchen by `sauce run`, and
+  rehearsed by `sauce simulate` in a local copy; `sauce tx` refuses it, naming how many bytes the
+  payload (the program and its arguments) must shrink by to fit.
+- **Accounts past one transaction go through a lookup table.** Each account a transaction lists
+  costs 32 bytes, and one taken through an address lookup table one byte. `sauce run` creates a
+  table holding a staged cook's accounts when they do not fit, from the signer, which pays its
+  rent, and prints its address; `--lookup-table <address>` takes the accounts through a table that
+  holds them, on `run`, `simulate` and `tx`, so a later cook naming the same accounts reuses it.
 - The engine and Kitchen program ids are `svm.engine` and `svm.kitchen` in
   [../sauce-chains/references/deployments.json](../sauce-chains/references/deployments.json), the
   same on every cluster; confirm both are deployed on the cluster (`getAccountInfo` returns an
@@ -313,6 +330,12 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - For a local run, the package ships the engine and Kitchen programs, to load into a local
   validator or LiteSVM; `sauce-typescript` says where they are. Setting one up is outside this
   skill.
+- A swap at one of Solana's venues whose swap stops at a price limit (Raydium CLMM and the programs
+  on its code, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix) is a call into `@sauce/router`:
+  one function per venue, and `trySwap` for a pool at any of them, each taking the pool's nine
+  accounts and the trader's as `Account[]` arrays, a `maxPrice` with the fee included, and
+  returning what arrived (`sauce-swaps`). One order over several pools under one price is
+  `sauce-solana-distributed-swap`.
 - From TypeScript, the SVM client (`createSauceSvmClient`) builds the same cooks: `via: "engine"`
   for the direct one, and `executionFee()` quotes the fee to set `maxExecutionFee` from. Venue
   adapters build swaps on Solana venues such as Raydium (`sauce-typescript`). A venue swap they

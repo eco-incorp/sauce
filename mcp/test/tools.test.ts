@@ -26,6 +26,7 @@ import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { FLAG_INPUTS, flagInputLines, LISTED_FLAG_INPUTS } from "../src/terms.js";
 import { simulateSummary, TOOL_NAMES } from "../src/tools.js";
+import { solanaRpcStub } from "../../sdk/scripts/solana-rpc-stub.mjs";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -420,10 +421,47 @@ describe("sauce_pools", () => {
     assert.match(message, /Pass rpcUrl with the call/);
   });
 
-  it("refuses a chain with no such pools, and a V4 key it cannot read, before any endpoint", async () => {
+  it("returns a Solana listing its output schema takes: no block, mints for addresses, skipped", async () => {
+    const stub = await solanaRpcStub();
+    try {
+      const listed = ok(
+        await mcp.call("sauce_pools", {
+          chain: "solana",
+          tokenA: "USDC",
+          tokenB: "SOL",
+          limit: 4,
+          rpcUrl: stub.url,
+        }),
+      ) as { tokens: { symbol: string; mint: string }[]; pools: unknown[]; skipped: unknown[] };
+      assert.deepEqual(
+        listed.tokens.map((token) => token.symbol),
+        ["USDC", "WSOL"],
+      );
+      assert.deepEqual([listed.pools, listed.skipped], [[], []]);
+      assert.ok(stub.methods.has("getProgramAccounts"));
+      // Chosen for a swap paying USDC: no pool, so every slot's accounts the System program.
+      const chosen = ok(
+        await mcp.call("sauce_pools", {
+          chain: "solana",
+          tokenA: "USDC",
+          tokenB: "WSOL",
+          pay: "USDC",
+          perVenue: true,
+          rpcUrl: stub.url,
+        }),
+      ) as { chosen: unknown[]; accounts: Record<string, string> };
+      assert.deepEqual(chosen.chosen, []);
+      assert.equal(Object.keys(chosen.accounts).length, 36);
+      assert.equal(chosen.accounts.ticks32, "11111111111111111111111111111111");
+    } finally {
+      await stub.close();
+    }
+  });
+
+  it("lists Solana's pools through an endpoint too, and refuses a V4 key it cannot read before one", async () => {
     assert.match(
       failed(await mcp.call("sauce_pools", { chain: "solana", tokenA: "USDC", tokenB: "SOL" })),
-      /sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; solana has none/,
+      /Listing a pair's pools needs an RPC endpoint for solana/,
     );
     assert.match(
       failed(

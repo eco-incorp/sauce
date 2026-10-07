@@ -24,7 +24,9 @@ export const SKILLS_INDEX = `${SKILLS_SCHEME}index`;
 export const WRITE_IT_YOURSELF: readonly string[] = [
   "WRITE EACH PROGRAM YOURSELF, in SauceScript, for the task as asked. The skills teach the",
   "language, each chain's names and the patterns; their examples show idioms and the rules a",
-  "correct program follows, and are not templates to copy, adapt or choose between. Never ask",
+  "correct program follows, and are not templates to copy, adapt or choose between (but for a",
+  "complete implementation a skill says to use whole, as the Solana distributed swap's venue",
+  "code is: there take its code as given and write the rest). Never ask",
   "the user which example or existing file to start from: ask only for facts the request leaves",
   "open (an amount, a price limit, a recipient, the chain), then decide, write the program and",
   "rehearse it with sauce_simulate. Call typed bindings, namespaces and library functions",

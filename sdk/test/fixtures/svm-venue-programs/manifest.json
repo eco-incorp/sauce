@@ -1,0 +1,961 @@
+{
+  "$comment": "The Solana venues the distributed-swap suites run, as mainnet held them, dumped by scripts/dump-svm-venues.mjs: each program here, each account under test/svm/fixtures (`file`, relative to it), every account read at `slot`. Test-only: nothing ships them.",
+  "cluster": "mainnet-beta",
+  "slot": 454084504,
+  "unixTimestamp": 1791338994,
+  "date": "2026-10-07",
+  "programs": [
+    {
+      "name": "raydium-clmm",
+      "programId": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "programData": "HzD2cCXXT3UQNjMMY6kDv9w6gZ9qquSdfoGXrLL3LXx",
+      "lastDeploySlot": "451479902",
+      "size": 1700160,
+      "sha256": "b1e8b3eb1c0027b3c05b059dec773661cbe93e2b304c1166e575b502ee2ca6d2",
+      "file": "raydium-clmm.so.gz"
+    },
+    {
+      "name": "pancakeswap-clmm",
+      "programId": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "programData": "66S4Bs8HVyaPdQ5JGfKixEZMf5CczcfnLGgGYEKnvi3Z",
+      "lastDeploySlot": "432564695",
+      "size": 1330256,
+      "sha256": "5227d6ae48e15c1703aa2fc341b8184a56499ed9695edcd5d2550ee6a61da84f",
+      "file": "pancakeswap-clmm.so.gz"
+    },
+    {
+      "name": "byreal",
+      "programId": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "programData": "6YDesqidNpd8H4pWThk3yzT1aYaHLK4XYDXJcwbgMxdq",
+      "lastDeploySlot": "438767271",
+      "size": 1498048,
+      "sha256": "47e871597ac7c6750991722744a2fca235e6fc10448eb705adce10e7261c660c",
+      "file": "byreal.so.gz"
+    },
+    {
+      "name": "stabble-clmm",
+      "programId": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "programData": "9fv3MPkmJPZACbjisNkyKAZ2HJeXYUJnZPYHqUZBx7xp",
+      "lastDeploySlot": "377879224",
+      "size": 1105112,
+      "sha256": "263abe7bbb595b779e7be3be7a230758f7469740dfab31ddd985d49dccf41e82",
+      "file": "stabble-clmm.so.gz"
+    },
+    {
+      "name": "orca-whirlpool",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "programData": "CtXfPzz36dH5Ws4UYKZvrQ1Xqzn42ecDW6y8NKuiN8nD",
+      "lastDeploySlot": "440170207",
+      "size": 10485715,
+      "sha256": "610b1e394973bd1b86de8afc983524bd21dea177e87bfae75ec289d4c350f9ae",
+      "file": "orca-whirlpool.so.gz"
+    },
+    {
+      "name": "cropper",
+      "programId": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "programData": "6xY44Go2bnR9VoVckoE2weNhGxwPwVo6rf7fe4LtW651",
+      "lastDeploySlot": "264411854",
+      "size": 992544,
+      "sha256": "e82e0686e7c793b8d1b08579c7952c4334c535bb5aa9b7d3836cb0297567766c",
+      "file": "cropper.so.gz"
+    },
+    {
+      "name": "defituna",
+      "programId": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "programData": "BE9x1sjqL2aAKV54MMqwMjHcztm5PfB23wsg1uz5ZNbN",
+      "lastDeploySlot": "423371029",
+      "size": 1238368,
+      "sha256": "d0e3a75e1d6cea09c6387c8652e80a6a0d2c7eb6b9949878998462a2443b9a9e",
+      "file": "defituna.so.gz"
+    },
+    {
+      "name": "crema",
+      "programId": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "programData": "57uurAYB33adABQ2yTvSBdhNV8jChDs6yqkxwur4Svgd",
+      "lastDeploySlot": "169658954",
+      "size": 2246688,
+      "sha256": "c915abcd179507f611b7dd4d1fdf7c640c7cf443824f61738ae8b6ccfc029034",
+      "file": "crema.so.gz"
+    },
+    {
+      "name": "phoenix",
+      "programId": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+      "programData": "2myyNegEA6pjAHmmEsJC6JdYhW51gwxQW7ZCTWvwaKTk",
+      "lastDeploySlot": "231433470",
+      "size": 5000000,
+      "sha256": "e3d76e5f479989823847fd77b4f96a9c8ce4255dafefcacf920a99643e15420f",
+      "file": "phoenix.so.gz"
+    }
+  ],
+  "pools": [
+    {
+      "name": "raydium-clmm-sol-usdc",
+      "venue": "raydium-clmm",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+      "config": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+      "vaultA": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+      "vaultB": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+      "extra": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+      "payA": [
+        "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+        "2BZdCyhMaxmKTi15yWBHEzWpDM3J27xMeojxKU9Wou22",
+        "ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC"
+      ],
+      "payB": [
+        "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+        "BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt",
+        "7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX"
+      ]
+    },
+    {
+      "name": "pancakeswap-clmm-sol-usdc",
+      "venue": "pancakeswap-clmm",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+      "config": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+      "vaultA": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+      "vaultB": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+      "extra": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+      "payA": [
+        "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+        "F2CPsFh4yKxDLmEnFRXk1hwb6QjjP22vWCfPTHgDpWkb",
+        "bjnDeH75Tk7UqoyZHMRx5svjR1ndzSxLuxnzoX3wYSr"
+      ],
+      "payB": [
+        "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+        "2xmhJyp2uNmttg5VfMbiWfMSdWtrN4N9vLX4MTPuMZ4J",
+        "syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy"
+      ]
+    },
+    {
+      "name": "byreal-sol-usdc",
+      "venue": "byreal",
+      "program": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "pool": "9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq",
+      "config": "11111111111111111111111111111111",
+      "vaultA": "11111111111111111111111111111111",
+      "vaultB": "11111111111111111111111111111111",
+      "extra": "11111111111111111111111111111111",
+      "payA": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ],
+      "payB": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ]
+    },
+    {
+      "name": "orca-whirlpool-sol-usdc",
+      "venue": "orca-whirlpool",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+      "config": "11111111111111111111111111111111",
+      "vaultA": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+      "vaultB": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+      "extra": "FoKYKtRpD25TKzBMndysKpgPqbj8AdLXjfpYHXn9PGTX",
+      "payA": [
+        "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+        "D3461zSTVPNdBFPRk2b6zpqQ93g2LW5Kw2potgMdxNJP",
+        "8NPFeBD52yqJWnsmBNma9qXXGEjXa6WatYcLMXjzSeyK"
+      ],
+      "payB": [
+        "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+        "FdtvWk8j5u1a64YK2Uxk9eXxKZJTwLHDGx8aJPbJyw2Q",
+        "8fV1MQYaRiW9qDWinzYfNa3FLs8PXSdPxoytiwrcyJPD"
+      ]
+    },
+    {
+      "name": "cropper-sol-usdc",
+      "venue": "cropper",
+      "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "pool": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+      "config": "11111111111111111111111111111111",
+      "vaultA": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+      "vaultB": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+      "extra": "BLGsJzPU8UngoHz481jbFeC7jBNHhYCH2YF6L2nXoZHs",
+      "payA": [
+        "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG",
+        "5zLmSAxN5dNQUeeFgnk55f3xViyDCrbbDL5yr79AM9NH",
+        "CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF"
+      ],
+      "payB": [
+        "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG",
+        "49udb4GM9HDWSLfeejFSPmBKTFkWyaKRHTviNiH1nKcK",
+        "YzanZTYF2VqhpurmgFWkzippjhT8LLUAFcXTKBeP5Au"
+      ]
+    },
+    {
+      "name": "defituna-sol-usdc",
+      "venue": "defituna",
+      "program": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "pool": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+      "config": "11111111111111111111111111111111",
+      "vaultA": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+      "vaultB": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+      "extra": "11111111111111111111111111111111",
+      "payA": [
+        "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+        "4AyU4fjeHuxwN7j2QDF6HuGRBGYjnr3zuMvWHcjvfze5",
+        "BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3"
+      ],
+      "payB": [
+        "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+        "5EB33uqp5Lc6JKvdFwE3p7G5sYMwG26uCcKfjqconxdc",
+        "CSyeqvPvzDuL7PmuqjXiGC39Sh2cqcAyzwNrRrfqGQJF"
+      ]
+    },
+    {
+      "name": "crema-sol-usdc",
+      "venue": "crema",
+      "program": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "pool": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+      "config": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+      "vaultA": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+      "vaultB": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+      "extra": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+      "payA": [
+        "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+        "GJVeGpgFfykzVkK3YiNt5jiu1xiWHacdiKmTxApApGGG",
+        "7kDjYVixL55tcQXAzkUsDtCqvYEyZkYecJCi2qAR97HH"
+      ],
+      "payB": [
+        "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+        "5SroGZpjj5TCi9H5k2UfGpsxMXYos189V7uBkDFW2aQV",
+        "6hcX32PtyRsVxdsWZHCn6edt9bsxWHRP3TPkmcfmwJzT"
+      ]
+    },
+    {
+      "name": "phoenix-sol-usdc",
+      "venue": "phoenix",
+      "program": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+      "pool": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+      "config": "7aDTsspkQNGKmrexAN7FLx9oxU3iPczSSvHNggyuqYkR",
+      "vaultA": "8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG",
+      "vaultB": "3HSYXeGc3LjEPCuzoNDjQN37F1ebsSiR4CqXVqQCdekZ",
+      "extra": "11111111111111111111111111111111",
+      "payA": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ],
+      "payB": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ]
+    },
+    {
+      "name": "byreal-usdc",
+      "venue": "byreal",
+      "program": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "pool": "8HPQzqMDoDcRDMh3Si75EGWh276QbcVrfHvrNFVPnW8s",
+      "config": "3mYgrhhxcEWU7YryJMm2GikfhjpckC7DvFTDQmZpqzux",
+      "vaultA": "FBfbFcUThYcXBPLseG2F6mPoLL38ooHY8HV9RNAmNTHY",
+      "vaultB": "GxmHBFUh2KWST8AqV2uiG5dVFt6kyS8e1qUg3sbmiVRw",
+      "extra": "76x9964TvFSUVdHAEezmT6JWi2Nn9sGnRof1JXgTJtcx",
+      "payA": [
+        "FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33",
+        "Cy82p2uN8UzXUeiSsVuN21NTV3Lsbg8dsJSrBr3pugDR",
+        "DauY8vZHBRNdqrWw9xy2yiAyPfUdf5GRvoJSCnyr4Ygw"
+      ],
+      "payB": [
+        "FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33",
+        "21YCFMkgAqeb6NaPhQM74KbB2cMtS1XKTFzd9RN12yYy",
+        "GBp3rLVnESTqAJpqW2dnk4351TNeAmW3xw6vqh2CdTtp"
+      ]
+    },
+    {
+      "name": "stabble-clmm-usdc-usdt",
+      "venue": "stabble-clmm",
+      "program": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "pool": "9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x",
+      "config": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+      "vaultA": "GDcVu2J7RPJMg7Q8AbhFE8Reg2Y9ebP2qg1sD3Fm9jzJ",
+      "vaultB": "7SYkZbyjjYYW41WEmheCFSbx2jihVAMfdFssXxKvgSsh",
+      "extra": "7TLtAZvbjYnouLUS8tu84rimiVTnopzq6HUy3QBMe5Rc",
+      "payA": [
+        "GWFGgnF2qdRDzmM2eFbveYyZVFRxzhZDyJjJtwmF2QFF",
+        "41f7eBK1GzfSCQbkxdhomYJdjXfysx8zw56vpGKYLAek",
+        "GKWvvwxtYaMBgpseoq6Fg2QmmbPCHRFDJBBvxZJzAPo1"
+      ],
+      "payB": [
+        "41f7eBK1GzfSCQbkxdhomYJdjXfysx8zw56vpGKYLAek",
+        "GWFGgnF2qdRDzmM2eFbveYyZVFRxzhZDyJjJtwmF2QFF",
+        "GKWvvwxtYaMBgpseoq6Fg2QmmbPCHRFDJBBvxZJzAPo1"
+      ]
+    },
+    {
+      "name": "meteora-dlmm-sol-usdc",
+      "venue": "meteora-dlmm",
+      "program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+      "pool": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+      "config": "11111111111111111111111111111111",
+      "vaultA": "11111111111111111111111111111111",
+      "vaultB": "11111111111111111111111111111111",
+      "extra": "11111111111111111111111111111111",
+      "payA": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ],
+      "payB": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "address": "21YCFMkgAqeb6NaPhQM74KbB2cMtS1XKTFzd9RN12yYy",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "71381760",
+      "size": 10128,
+      "sha256": "4886d5be9f81167ea0eda09ab02f58aab8c20304a21e79243b0a9ccf426d4ea8",
+      "file": "byreal/21YCFMkgAqeb6NaPhQM74KbB2cMtS1XKTFzd9RN12yYy.json"
+    },
+    {
+      "address": "2BZdCyhMaxmKTi15yWBHEzWpDM3J27xMeojxKU9Wou22",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "c31e8a78428c6253cc381ff400880873bec1c726cc2ceb076ef5964f701247c8",
+      "file": "raydium-clmm/2BZdCyhMaxmKTi15yWBHEzWpDM3J27xMeojxKU9Wou22.json"
+    },
+    {
+      "address": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "1c3fcd819c0935b0f40ea804a970b1fa23c1c3bd02dd192a44098e760084f161",
+      "file": "crema/2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN.json"
+    },
+    {
+      "address": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2463397",
+      "size": 165,
+      "sha256": "d5165cda5fca44702b8c4880aca8cd2fd09e1397f5530b664df7458dfd3432c6",
+      "file": "orca-whirlpool/vault-b.json"
+    },
+    {
+      "address": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "6987840",
+      "size": 876,
+      "sha256": "d2bbb69157b1acf4518d0c5beb2524446a105d297cf78cd8a127b13e76d54296",
+      "file": "crema/2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq.json"
+    },
+    {
+      "address": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "1851360",
+      "size": 138,
+      "sha256": "f6122b69008db08720addb27c59c88064f462c016fea0e4d7631604a68b25306",
+      "file": "crema/2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox.json"
+    },
+    {
+      "address": "2xmhJyp2uNmttg5VfMbiWfMSdWtrN4N9vLX4MTPuMZ4J",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "72161283",
+      "size": 10240,
+      "sha256": "c66c02b1d8609522483a35252a394c5e140036fe71ea9848135f07820aa51d50",
+      "file": "pancakeswap-clmm/2xmhJyp2uNmttg5VfMbiWfMSdWtrN4N9vLX4MTPuMZ4J.json"
+    },
+    {
+      "address": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+      "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "lamports": "1705200",
+      "size": 117,
+      "sha256": "5d6ad520d02b876351d66e2a2b918b449fd3af1b4c651eff7dae501485503231",
+      "file": "stabble-clmm/37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS.json"
+    },
+    {
+      "address": "3HSYXeGc3LjEPCuzoNDjQN37F1ebsSiR4CqXVqQCdekZ",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "3514098",
+      "size": 165,
+      "sha256": "88ac25c3172bcd9e0a38eb9a7c9def23fddefa89074bdc4ce348f4a4621fd716",
+      "file": "phoenix/3HSYXeGc3LjEPCuzoNDjQN37F1ebsSiR4CqXVqQCdekZ.json"
+    },
+    {
+      "address": "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "c71f758797ccd7c03e3bcdf723c0edb7e3f70cdea48f52210a8338007f832341",
+      "file": "pancakeswap-clmm/3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3.json"
+    },
+    {
+      "address": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "32598563",
+      "size": 4483,
+      "sha256": "15a90e70b96837c4e5f5f8a3ce62bd0076f4668a39c062fae11fed238d11c6cf",
+      "file": "raydium-clmm/3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ.json"
+    },
+    {
+      "address": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "2155204",
+      "size": 117,
+      "sha256": "2da913a9378895fa8c931f4176d5d6ec02cea1d744fef6779854665d0decd806",
+      "file": "raydium-clmm/3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL.json"
+    },
+    {
+      "address": "3mYgrhhxcEWU7YryJMm2GikfhjpckC7DvFTDQmZpqzux",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "1705200",
+      "size": 117,
+      "sha256": "c617123211881cb4f78e7bc07f2b22e633fa5b15ccb20d112d64a97ecb97ba41",
+      "file": "byreal/3mYgrhhxcEWU7YryJMm2GikfhjpckC7DvFTDQmZpqzux.json"
+    },
+    {
+      "address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "1358091805",
+      "size": 1544,
+      "sha256": "320a8be5ff91dbd8fb0b553c4124b7678db8a756429d3b7427a5cdd2f0703dda",
+      "file": "raydium-clmm/3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv.json"
+    },
+    {
+      "address": "41f7eBK1GzfSCQbkxdhomYJdjXfysx8zw56vpGKYLAek",
+      "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "3f4dd06f6b6465eba27c9a7f7519f15e7a9c39a76ef32f916dc5856fdf879579",
+      "file": "stabble-clmm/41f7eBK1GzfSCQbkxdhomYJdjXfysx8zw56vpGKYLAek.json"
+    },
+    {
+      "address": "49udb4GM9HDWSLfeejFSPmBKTFkWyaKRHTviNiH1nKcK",
+      "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "c1ee25f339f423ca588c3ebfec2e3dbe6b41261c9cd350a1c5cf189ab357f58b",
+      "file": "cropper/49udb4GM9HDWSLfeejFSPmBKTFkWyaKRHTviNiH1nKcK.json"
+    },
+    {
+      "address": "4AyU4fjeHuxwN7j2QDF6HuGRBGYjnr3zuMvWHcjvfze5",
+      "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "lamports": "5138240",
+      "size": 580,
+      "sha256": "bf6776f8a4ffc1a4038326ee766ea5b9a28ae32554af12a2e6c0194685e3d281",
+      "file": "defituna/4AyU4fjeHuxwN7j2QDF6HuGRBGYjnr3zuMvWHcjvfze5.json"
+    },
+    {
+      "address": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+      "owner": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+      "lamports": "12096367507",
+      "size": 1723488,
+      "sha256": "01275cce0bb4016e62c3d31b8466a58208594f04538a2f0463a3fef88412a04b",
+      "file": "phoenix/4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg.json.gz"
+    },
+    {
+      "address": "4SoQ8UkWfeDH47T56PA53CZCeW4KytYCiU65CwBWoJUt",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "1462357",
+      "size": 82,
+      "sha256": "fb3974ff0f5b383cd16def91652c17dcdd939849264c255f644289caf1c79b8f",
+      "file": "byreal/4SoQ8UkWfeDH47T56PA53CZCeW4KytYCiU65CwBWoJUt.json"
+    },
+    {
+      "address": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "41550006751083",
+      "size": 165,
+      "sha256": "46046bd29a3efe1a6d0cf14751dd44bd562f62b1a08056ff99a2dac221c6f7fe",
+      "file": "raydium-clmm/4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A.json"
+    },
+    {
+      "address": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+      "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "lamports": "11935486",
+      "size": 653,
+      "sha256": "3d1875fe030d0db79d7cd99665456db03016d678cd32efd3fbc296abc07de3ea",
+      "file": "cropper/55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ.json"
+    },
+    {
+      "address": "5EB33uqp5Lc6JKvdFwE3p7G5sYMwG26uCcKfjqconxdc",
+      "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "lamports": "8614720",
+      "size": 916,
+      "sha256": "828552f6c75cefa03d34380431af9bfa779d67c747af5276c04a60cb498791ae",
+      "file": "defituna/5EB33uqp5Lc6JKvdFwE3p7G5sYMwG26uCcKfjqconxdc.json"
+    },
+    {
+      "address": "5SroGZpjj5TCi9H5k2UfGpsxMXYos189V7uBkDFW2aQV",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "39d44843ea473afd8d6aba70848ad2112cea7e896cb5e0acaf19a6c99c1a3ecf",
+      "file": "crema/5SroGZpjj5TCi9H5k2UfGpsxMXYos189V7uBkDFW2aQV.json"
+    },
+    {
+      "address": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2512298",
+      "size": 165,
+      "sha256": "484a8a7979d724009a0a0d1709363c89b416ec0c0a9dcfd606c1d167589dccdd",
+      "file": "raydium-clmm/5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo.json"
+    },
+    {
+      "address": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+      "owner": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+      "size": 904,
+      "sha256": "9c28b4381400e5fcfc4ac8740a3a305e7e193d011f971124aa6644eb6394e840",
+      "file": "meteora-dlmm/5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6.json"
+    },
+    {
+      "address": "5zLmSAxN5dNQUeeFgnk55f3xViyDCrbbDL5yr79AM9NH",
+      "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "5633c535ce83d641236d17bd88ed28f1b175d699242abc39108d7a8e9e590420",
+      "file": "cropper/5zLmSAxN5dNQUeeFgnk55f3xViyDCrbbDL5yr79AM9NH.json"
+    },
+    {
+      "address": "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "ae2ecd35b343ce95d74935747e164ead3224a7ec07a603c254b80a92a549e35b",
+      "file": "orca-whirlpool/6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M.json"
+    },
+    {
+      "address": "6hcX32PtyRsVxdsWZHCn6edt9bsxWHRP3TPkmcfmwJzT",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "48bc14c006c5054437619f24470bb2ab0b852346c4a30dedf8bfc8b5854f4f8c",
+      "file": "crema/6hcX32PtyRsVxdsWZHCn6edt9bsxWHRP3TPkmcfmwJzT.json"
+    },
+    {
+      "address": "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "e5321d7ee1affbacfe7cce359ab17d0cf41e6dbf16bdb97b80d72d600df6273f",
+      "file": "raydium-clmm/6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf.json"
+    },
+    {
+      "address": "76x9964TvFSUVdHAEezmT6JWi2Nn9sGnRof1JXgTJtcx",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "32092560",
+      "size": 4483,
+      "sha256": "5e7e3b306690ec72c7d75c99bfa87c0059fd9b2c37957d1c89fb74a53838b451",
+      "file": "byreal/76x9964TvFSUVdHAEezmT6JWi2Nn9sGnRof1JXgTJtcx.json"
+    },
+    {
+      "address": "7SYkZbyjjYYW41WEmheCFSbx2jihVAMfdFssXxKvgSsh",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "6c0245fe4e40a00186c3efb7cacf63addcb38c5d5ce3362d7ff8f0151e097288",
+      "file": "stabble-clmm/7SYkZbyjjYYW41WEmheCFSbx2jihVAMfdFssXxKvgSsh.json"
+    },
+    {
+      "address": "7TLtAZvbjYnouLUS8tu84rimiVTnopzq6HUy3QBMe5Rc",
+      "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "lamports": "32092560",
+      "size": 4483,
+      "sha256": "fb661f6f50d0c0fa3cbc61f4b449f51fef216aec5bd7db12218eaf87f87a1bfa",
+      "file": "stabble-clmm/7TLtAZvbjYnouLUS8tu84rimiVTnopzq6HUy3QBMe5Rc.json"
+    },
+    {
+      "address": "7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "97e155c0147d440f09698d868b2073e644588b0c5da44c0198879266a4a76356",
+      "file": "raydium-clmm/7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX.json"
+    },
+    {
+      "address": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+      "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "lamports": "3835694",
+      "size": 423,
+      "sha256": "c918528c9f9d83e2d9dd28eac7bf36a5f7e53b11cc5feb3cff319969990960ff",
+      "file": "defituna/7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65.json"
+    },
+    {
+      "address": "7kDjYVixL55tcQXAzkUsDtCqvYEyZkYecJCi2qAR97HH",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "f7637029496a237553848483c85e11d7e5c4f92c54191cfc21028efde6445232",
+      "file": "crema/7kDjYVixL55tcQXAzkUsDtCqvYEyZkYecJCi2qAR97HH.json"
+    },
+    {
+      "address": "8HPQzqMDoDcRDMh3Si75EGWh276QbcVrfHvrNFVPnW8s",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "11639121",
+      "size": 1544,
+      "sha256": "7df65dc7cc6d49e805294ed07e1c5fcebcc73fd90c3f4cfe58876f2175e7c01c",
+      "file": "byreal/8HPQzqMDoDcRDMh3Si75EGWh276QbcVrfHvrNFVPnW8s.json"
+    },
+    {
+      "address": "8NPFeBD52yqJWnsmBNma9qXXGEjXa6WatYcLMXjzSeyK",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "85eb6ca43df1dc6f56de754752bbb03f2a1fc01b2e7b87d23d6f725cd4446f1e",
+      "file": "orca-whirlpool/8NPFeBD52yqJWnsmBNma9qXXGEjXa6WatYcLMXjzSeyK.json"
+    },
+    {
+      "address": "8fV1MQYaRiW9qDWinzYfNa3FLs8PXSdPxoytiwrcyJPD",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "70407460",
+      "size": 9988,
+      "sha256": "4c5a9b118e8b7cd870f862f5936322e69086f276112f627214f1445982b7c93b",
+      "file": "orca-whirlpool/8fV1MQYaRiW9qDWinzYfNa3FLs8PXSdPxoytiwrcyJPD.json"
+    },
+    {
+      "address": "8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2872868823864",
+      "size": 165,
+      "sha256": "4fabff2979eb6b3b88ec4942efe9b06f5e0f7290d58fa9aa01e58a53bd4d9b67",
+      "file": "phoenix/8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG.json"
+    },
+    {
+      "address": "9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "11686550",
+      "size": 1544,
+      "sha256": "97e8021523efc9a048558d26d153417fcf239094cda890012f272c0643ad811e",
+      "file": "byreal/9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq.json"
+    },
+    {
+      "address": "9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x",
+      "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "lamports": "11637124",
+      "size": 1544,
+      "sha256": "685e0a4beec345a89a77a81c70184636b9fbdc37e827fa291f90268d6ecf90ac",
+      "file": "stabble-clmm/9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x.json"
+    },
+    {
+      "address": "ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "dee1132b3de5770c91fc068e610d5bc52c87750f45183274ba9bb84dd7b087c9",
+      "file": "raydium-clmm/ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC.json"
+    },
+    {
+      "address": "BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "2eab9a1d62f81814cbd3403eeaaaf7ae9d1dbe0afd02408ffea2c9df203d8b28",
+      "file": "raydium-clmm/BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt.json"
+    },
+    {
+      "address": "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+      "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "lamports": "7110896",
+      "size": 468,
+      "sha256": "73c5882aa5a1fdf38546c7e6aa7e06c580c3b430ef61975f1d2dd6a3434949f8",
+      "file": "defituna/BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh.json"
+    },
+    {
+      "address": "BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3",
+      "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "lamports": "7258736",
+      "size": 580,
+      "sha256": "4bfcf0db5e904775d0b3775b00c060054d1b1b6023c495c54a1d7041ad139143",
+      "file": "defituna/BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3.json"
+    },
+    {
+      "address": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2303301",
+      "size": 165,
+      "sha256": "4f8b97dd3597e58f42022d197525f8dbcd94b444ffe230e0c1266208480d6088",
+      "file": "pancakeswap-clmm/CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n.json"
+    },
+    {
+      "address": "CSyeqvPvzDuL7PmuqjXiGC39Sh2cqcAyzwNrRrfqGQJF",
+      "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "lamports": "7694864",
+      "size": 804,
+      "sha256": "b614708fb12e0d271208e152c50ea8d8415a0964d78bb27c48259b4d338498d1",
+      "file": "defituna/CSyeqvPvzDuL7PmuqjXiGC39Sh2cqcAyzwNrRrfqGQJF.json"
+    },
+    {
+      "address": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "246866349955",
+      "size": 165,
+      "sha256": "16e385e669a6f4135039137cf5b09888d6a24a97c2fa375831caea7555d9cebe",
+      "file": "defituna/CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7.json"
+    },
+    {
+      "address": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039302",
+      "size": 165,
+      "sha256": "a2e432b0140a78524f059fe16df9adea3a87ff47d68d8d71dc83a645e4cf72a9",
+      "file": "defituna/CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd.json"
+    },
+    {
+      "address": "CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF",
+      "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "e07162da08b6bfd46830b148e4b0729198adb006548ec5be3ce052cfc9f10dbe",
+      "file": "cropper/CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF.json"
+    },
+    {
+      "address": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2648743973",
+      "size": 165,
+      "sha256": "56518a6a5c9b35c53c9e86b6690c5ec197f24abe244a4fe96c8b10210bec4de5",
+      "file": "cropper/Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW.json"
+    },
+    {
+      "address": "Cy82p2uN8UzXUeiSsVuN21NTV3Lsbg8dsJSrBr3pugDR",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "72551040",
+      "size": 10296,
+      "sha256": "2cc5de1448b9319026fd6c1b8f293294039cfa7a833ef89c4d3d8ec5b0270417",
+      "file": "byreal/Cy82p2uN8UzXUeiSsVuN21NTV3Lsbg8dsJSrBr3pugDR.json"
+    },
+    {
+      "address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "10754683728",
+      "size": 653,
+      "sha256": "e55919702636e6f17eb3acf7ee8381b14d543631703087a21eaec98ca479a26b",
+      "file": "orca-whirlpool/pool.json"
+    },
+    {
+      "address": "D3461zSTVPNdBFPRk2b6zpqQ93g2LW5Kw2potgMdxNJP",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "1ab7913fc6d4ed13a8629f32b772f46564eee3a84651cf1a95b2541160bb8c19",
+      "file": "orca-whirlpool/D3461zSTVPNdBFPRk2b6zpqQ93g2LW5Kw2potgMdxNJP.json"
+    },
+    {
+      "address": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "33231123",
+      "size": 1544,
+      "sha256": "5d035dfb88066a6cb78f33d6c88a8e7cc46d1188ddb52a25496e42fb66ac71a7",
+      "file": "pancakeswap-clmm/DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ.json"
+    },
+    {
+      "address": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "6104574",
+      "size": 748,
+      "sha256": "876e5e17c382577239053d5d3b36e331ff675aa1b30ef2f200628aa49da9f0a8",
+      "file": "crema/DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm.json"
+    },
+    {
+      "address": "DauY8vZHBRNdqrWw9xy2yiAyPfUdf5GRvoJSCnyr4Ygw",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "38641920",
+      "size": 5424,
+      "sha256": "96c381e66b05f400bafbec40123086180c6b8c8f9e932f3dcf689fa6a2231dcd",
+      "file": "byreal/DauY8vZHBRNdqrWw9xy2yiAyPfUdf5GRvoJSCnyr4Ygw.json"
+    },
+    {
+      "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "535425628821",
+      "size": 82,
+      "sha256": "ca36588ae6785cfd27d059cd020ea49a35ab16466e5727f2150ac800334e9be0",
+      "file": "raydium-clmm/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v.json"
+    },
+    {
+      "address": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "179898424636443",
+      "size": 165,
+      "sha256": "6696694109497605cb97323e0db6c214a2ef9470385561ceaee9c9d107902fe8",
+      "file": "orca-whirlpool/vault-a.json"
+    },
+    {
+      "address": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "32389560",
+      "size": 4483,
+      "sha256": "12a13872dfe01be84b025289cdea2b6da64b6076eef6902650cac592485cdb65",
+      "file": "pancakeswap-clmm/EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD.json"
+    },
+    {
+      "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "213144203777",
+      "size": 82,
+      "sha256": "e63ae5fa7a506a7fc1ee65ad65143d0fc1cbe3529981c2fddbd994ac92589f1c",
+      "file": "stabble-clmm/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB.json"
+    },
+    {
+      "address": "F2CPsFh4yKxDLmEnFRXk1hwb6QjjP22vWCfPTHgDpWkb",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "a0c0dc384baca4d674f61dadfb6b34d5fbfa4b2224c0f70c799cf67982028b6a",
+      "file": "pancakeswap-clmm/F2CPsFh4yKxDLmEnFRXk1hwb6QjjP22vWCfPTHgDpWkb.json"
+    },
+    {
+      "address": "FBfbFcUThYcXBPLseG2F6mPoLL38ooHY8HV9RNAmNTHY",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "c826a56ac14cae7e3d768ecf1c22cd328d140bd16fb529e89a2177cab42e02cb",
+      "file": "byreal/FBfbFcUThYcXBPLseG2F6mPoLL38ooHY8HV9RNAmNTHY.json"
+    },
+    {
+      "address": "FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "72551040",
+      "size": 10296,
+      "sha256": "c05ab9110f390942e5a4221a8d82d211fe104f4250eb088d62b06f61cb747775",
+      "file": "byreal/FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33.json"
+    },
+    {
+      "address": "FdtvWk8j5u1a64YK2Uxk9eXxKZJTwLHDGx8aJPbJyw2Q",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "1a4e6a2923b6d78c22c6f15457e63c82864a2a5e86a5cf3ce122dd30c71aecc3",
+      "file": "orca-whirlpool/FdtvWk8j5u1a64YK2Uxk9eXxKZJTwLHDGx8aJPbJyw2Q.json"
+    },
+    {
+      "address": "GBp3rLVnESTqAJpqW2dnk4351TNeAmW3xw6vqh2CdTtp",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "35134080",
+      "size": 4920,
+      "sha256": "e6a89ff4a08c7fa6a09eb5749c990ab70f864b2e71248f20e6a60cf93d5f0084",
+      "file": "byreal/GBp3rLVnESTqAJpqW2dnk4351TNeAmW3xw6vqh2CdTtp.json"
+    },
+    {
+      "address": "GDcVu2J7RPJMg7Q8AbhFE8Reg2Y9ebP2qg1sD3Fm9jzJ",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "f7a2eb47eb291afab470fda4812c6ac17f6edc9f1c18eaab04221d45ea4bf085",
+      "file": "stabble-clmm/GDcVu2J7RPJMg7Q8AbhFE8Reg2Y9ebP2qg1sD3Fm9jzJ.json"
+    },
+    {
+      "address": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "153424129770",
+      "size": 165,
+      "sha256": "b5389f6eb2b2d023915abb35e71a38226be4303f361176105a713317f46ebd2a",
+      "file": "crema/GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ.json"
+    },
+    {
+      "address": "GJVeGpgFfykzVkK3YiNt5jiu1xiWHacdiKmTxApApGGG",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "5d78d5d28df7dc38f9fa33f40cb5b85e455fa537503776548220a4c78d9eb7ea",
+      "file": "crema/GJVeGpgFfykzVkK3YiNt5jiu1xiWHacdiKmTxApApGGG.json"
+    },
+    {
+      "address": "GKWvvwxtYaMBgpseoq6Fg2QmmbPCHRFDJBBvxZJzAPo1",
+      "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "44aeb17b592927394de7792906e90a17d90d0a27c5edbf2dd1b5b0e0350684da",
+      "file": "stabble-clmm/GKWvvwxtYaMBgpseoq6Fg2QmmbPCHRFDJBBvxZJzAPo1.json"
+    },
+    {
+      "address": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039282",
+      "size": 165,
+      "sha256": "97752746a84a861a28de3f6e1f229451055d9ac0592b5bc154ee41aeef195945",
+      "file": "cropper/GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM.json"
+    },
+    {
+      "address": "GWFGgnF2qdRDzmM2eFbveYyZVFRxzhZDyJjJtwmF2QFF",
+      "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "0979285d0007ddd4dcc753ab442411df578dfdf56b046ad3cccf7cd36d965ee2",
+      "file": "stabble-clmm/GWFGgnF2qdRDzmM2eFbveYyZVFRxzhZDyJjJtwmF2QFF.json"
+    },
+    {
+      "address": "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "f05fba6143ca880214fec09fd7b73f026f38aae651896eabdbd1b7e4a601733e",
+      "file": "crema/GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU.json"
+    },
+    {
+      "address": "GxmHBFUh2KWST8AqV2uiG5dVFt6kyS8e1qUg3sbmiVRw",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039281",
+      "size": 165,
+      "sha256": "1702a25d48e7938365c8bdcf5539095b799d549286a7f8efbf6f614e1d788708",
+      "file": "byreal/GxmHBFUh2KWST8AqV2uiG5dVFt6kyS8e1qUg3sbmiVRw.json"
+    },
+    {
+      "address": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "1953201",
+      "size": 117,
+      "sha256": "c0ed4459e8ecb0bc639ea83f2931d51b26d608cb89a5981390c99a28d8d03f56",
+      "file": "pancakeswap-clmm/HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp.json"
+    },
+    {
+      "address": "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG",
+      "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "27bb758f486cc4571ed5b902e31915b85b5052e737f53b78c26d10d0783905f9",
+      "file": "cropper/J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG.json"
+    },
+    {
+      "address": "So11111111111111111111111111111111111111112",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "1849510085976",
+      "size": 82,
+      "sha256": "b0f919425a529f4971ef8dabd535aec34947d5c8c4885df80dae91635b98c5f3",
+      "file": "raydium-clmm/So11111111111111111111111111111111111111112.json"
+    },
+    {
+      "address": "YzanZTYF2VqhpurmgFWkzippjhT8LLUAFcXTKBeP5Au",
+      "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "lamports": "70407360",
+      "size": 9988,
+      "sha256": "d275e064bb0170a163e2e14d5379f5bbaa6b9034c421c8c4802a6d3d281dddce",
+      "file": "cropper/YzanZTYF2VqhpurmgFWkzippjhT8LLUAFcXTKBeP5Au.json"
+    },
+    {
+      "address": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "5749130850026",
+      "size": 165,
+      "sha256": "5fb7d6b3e12268a38b104b5938c42acc106b13f897ab740890caa09aa56bc08d",
+      "file": "pancakeswap-clmm/bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE.json"
+    },
+    {
+      "address": "bjnDeH75Tk7UqoyZHMRx5svjR1ndzSxLuxnzoX3wYSr",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "72264280",
+      "size": 10240,
+      "sha256": "81697356ae8f94535deaf1b3915ddf5d647fa03b40f438c7d1e5518900c91be3",
+      "file": "pancakeswap-clmm/bjnDeH75Tk7UqoyZHMRx5svjR1ndzSxLuxnzoX3wYSr.json"
+    },
+    {
+      "address": "syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "72161280",
+      "size": 10240,
+      "sha256": "7ea8ff84c37cc0928f2a32771bd4aa8e7b9ac99459983b0ba859ca7c439d4e34",
+      "file": "pancakeswap-clmm/syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy.json"
+    }
+  ]
+}

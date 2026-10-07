@@ -31,72 +31,77 @@ import {
   addressDefinesOf,
   assumedBalances,
   CANONICAL_CHAINS,
+  type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
+  type CliFiles,
+  type CommandOutput,
   compileCommand,
+  type CompileInput,
   compileProgram,
   connect,
   connectAt,
+  type CookInput,
   definesReach,
+  expectingRevert,
+  forkSnapshot,
+  type ForkSnapshot,
   fundingFor,
   globalsCommand,
   inspectCommand,
   inspectFile,
   kitchenFee,
+  MAX_V4_KEYS,
   parseAccounts,
   parseAddress,
   parseChain,
   parseDefineMap,
   parseLamports,
-  MAX_V4_KEYS,
+  parseIntentSalt,
   parsePin,
   parsePubkey,
-  parseIntentSalt,
   parseSalt,
-  plannedTransactions,
   parseUnixSeconds,
-  randomSalt,
   parseV4Key,
   parseVia,
   parseWei,
+  plannedTransactions,
   poolsCommand,
   potCommand,
   potState,
   potTarget,
+  PreviewChainError,
+  type PreviewChainRefusal,
+  previewRefusal,
   priceCommand,
   pricedChain,
   priceGiven,
-  previewRefusal,
-  PreviewChainError,
   programChain,
   programChains,
-  withoutShebang,
+  type ProgramInput,
   publishCommand,
+  randomSalt,
   readPoolAt,
   registeredBalances,
   requireSupported,
   resolvePriceTokens,
-  tokenGiven,
   simulateCommand,
+  supportedChainNames,
+  svmAssumedBalances,
+  type SvmCookInput,
+  svmPoolsCommand,
   svmPotCommand,
   svmPotExists,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
-  supportedChainNames,
   svmVerifyCommand,
+  tokenGiven,
   txCommand,
   UsageError,
   verifyCommand,
-  type CanonicalChain,
-  type CliFiles,
-  type CommandOutput,
-  type CompileInput,
-  type CookInput,
-  type PreviewChainRefusal,
-  type ProgramInput,
-  type SvmCookInput,
   type WalletStore,
+  withoutShebang,
 } from "./sdk.js";
 
 /** Input bounds, so one call cannot hand the server unbounded work. */
@@ -320,8 +325,10 @@ const COOK = {
     .record(z.string().min(1).max(64), z.string().max(64))
     .optional()
     .describe(
-      "Solana only: each Account parameter main takes, by name: a base58 address, or `pot` (the " +
-        "Pot, signed for by the Kitchen) or `owner`. sauce_compile's manifest lists them.",
+      "Solana only: each Account parameter main takes, by name: a base58 address, `pot` (the " +
+        "Pot, signed for by the Kitchen), `owner`, `pot:USDC` or `owner:USDC` (that holder's " +
+        "associated account for a token, by symbol or mint), `mint:USDC` (the mint) or " +
+        "`program:USDC` (its token program). sauce_compile's manifest lists them.",
     ),
   via: z
     .enum(["kitchen", "engine"])
@@ -340,6 +347,15 @@ const COOK = {
       "Solana only: the most the cook may pay in execution fee, in lamports. The fee is read from " +
         "the cluster and returned as `fee`; above this the call refuses before building anything. " +
         "Either way the cook signs the fee it read as its max_execution_fee.",
+    ),
+  lookupTables: z
+    .array(z.string())
+    .max(LIMITS.entries)
+    .optional()
+    .describe(
+      "Solana only: address lookup tables (base58) holding the cook's accounts, each read from " +
+        "the cluster. An account listed in the transaction costs 32 bytes and one through a table " +
+        "one byte, so a cook naming more accounts than one transaction lists fits through one.",
     ),
   rpcUrl: RPC_URL,
 };
@@ -364,8 +380,21 @@ export const MAX_SCENARIOS = 16;
 
 /** One of `sauce_simulate`'s scenarios: the call's program with other arguments, defines and
  *  balances. */
+/** What a rehearsal is expected to revert with, rather than succeed. */
+const EXPECT_REVERT = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe(
+    "Expect the cook to revert with a reason containing this text (a guard's message, such as " +
+      "bought below minTokens): the rehearsal is ok, with asExpected, only when it does, and " +
+      "fails when the cook succeeds or reverts for another reason.",
+  );
+
 const SCENARIO = z.strictObject({
   args: ARGS,
+  expectRevert: EXPECT_REVERT,
   defines: PROGRAM.defines.describe(
     "Defines for this scenario, laid over the call's own (a define compiles into the program).",
   ),
@@ -379,6 +408,10 @@ type Scenario = z.infer<typeof SCENARIO>;
  *  moved, each transaction's gas, and the block. */
 const SUMMARY_FIELDS = [
   "ok",
+  "reverted",
+  "error",
+  "expectRevert",
+  "asExpected",
   "chain",
   "block",
   "stage",
@@ -625,6 +658,7 @@ function evmCook(args: CookArgs, program: Program): CookInput {
   for (const [name, given] of [
     ["via", args.via],
     ["maxExecutionFee", args.maxExecutionFee],
+    ["lookupTables", args.lookupTables],
   ] as const) {
     if (given !== undefined) {
       throw new UsageError(
@@ -689,6 +723,11 @@ function svmCook(args: CookArgs, program: Program, rpcUrl: string): SvmCookInput
             "maxExecutionFee",
             integerText(args.maxExecutionFee, "maxExecutionFee"),
           ),
+        }),
+    ...(args.lookupTables === undefined
+      ? {}
+      : {
+          lookupTables: args.lookupTables.map((table) => parsePubkey("lookupTables", table)),
         }),
   };
 }
@@ -767,6 +806,19 @@ function hexArg(raw: string, what: string): Hex {
 export interface ToolOutput {
   readonly json: Record<string, unknown>;
   readonly notes?: readonly string[] | undefined;
+  /** An error result whose structured content is still `json`: a rehearsal that reverted. */
+  readonly isError?: boolean;
+}
+
+/** A pools listing cut to its `limit` deepest pools, `more` counting the rest. */
+function limited(output: CommandOutput, limit: number | undefined): CommandOutput {
+  const json = output.json as { pools?: unknown[] } | undefined;
+  if (limit === undefined || json?.pools === undefined || json.pools.length <= limit) return output;
+
+  return {
+    ...output,
+    json: { ...json, pools: json.pools.slice(0, limit), more: json.pools.length - limit },
+  };
 }
 
 export const fromCommand = (output: CommandOutput): ToolOutput => ({
@@ -831,6 +883,7 @@ const result = (output: ToolOutput, scrub: (text: string) => string): CallToolRe
   ) as Record<string, unknown>;
 
   return {
+    ...(output.isError === true ? { isError: true } : {}),
     structuredContent: structured,
     content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
   };
@@ -1400,7 +1453,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "move the price 1% against the taker, through its ticks). `empty` lists the pools with " +
         "no liquidity at their price, which a swap skips; `checked`, what was looked at. Every " +
         "read is at one block, `block` (the latest, or the one given): pass it to " +
-        "sauce_simulate's block to rehearse on the prices a maxPrice was taken from.",
+        "sauce_simulate's block to rehearse on the prices a maxPrice was taken from. On Solana " +
+        "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
+        "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
+        "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts the distributed swap " +
+        "takes for the pool (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
+        "System program; `skipped` lists the pools the distributed swap skips, with why.",
       input: {
         chain: chainRef,
         tokenA: z
@@ -1424,23 +1482,66 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         block: BLOCK.describe(
           "The block to read the pools at: a number, or latest, safe, finalized (default: latest).",
         ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe(
+            "Return only this many pools, the deepest first; `more` counts the rest. A Solana " +
+              "pair can have dozens, each with its slots both ways.",
+          ),
+        pay: z
+          .string()
+          .min(1)
+          .max(64)
+          .optional()
+          .describe(
+            "Solana only: choose the pools a distributed swap paying this token (one of the " +
+              "pair) takes, and return `chosen` and `accounts`, the program's slots' accounts " +
+              "(program0 … ticks32), every slot past the last chosen the System program.",
+          ),
+        maxPrice: z
+          .string()
+          .regex(/^\d+$/)
+          .optional()
+          .describe("With pay: only pools whose price with the fee is within this maxPrice."),
+        perVenue: z.boolean().optional().describe("With pay: the deepest pool of each venue only."),
+        slots: z
+          .number()
+          .int()
+          .min(1)
+          .max(9)
+          .optional()
+          .describe("With pay: how many slots the program has (default 4)."),
         rpcUrl: RPC_URL,
       },
+      // One schema for both kinds of chain: what only an EVM chain's pools have (a block, a
+      // contract, tickSpacing, sqrtPriceX96, `empty`) and what only Solana's have (a mint, a
+      // program, `slots`, `skipped`) is optional.
       output: {
         chain: z.string(),
-        block: z.string(),
+        block: z.string().optional(),
         tokens: z.array(
-          z.looseObject({ symbol: z.string(), address: z.string(), decimals: z.number() }),
+          z.looseObject({
+            symbol: z.string(),
+            address: z.string().optional(),
+            mint: z.string().optional(),
+            decimals: z.number(),
+          }),
         ),
         sortedBy: z.string(),
         pools: z.array(
           z.looseObject({
             venue: z.string(),
-            contract: z.string(),
+            contract: z.string().optional(),
+            program: z.string().optional(),
+            pool: z.string().optional(),
             fee: z.number(),
-            tickSpacing: z.number(),
-            liquidity: z.string(),
-            sqrtPriceX96: z.string(),
+            tickSpacing: z.number().optional(),
+            liquidity: z.string().optional(),
+            sqrtPriceX96: z.string().optional(),
             sides: z.array(
               z.looseObject({
                 pay: z.string(),
@@ -1450,26 +1551,63 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                 maxPrice: z.string(),
               }),
             ),
+            slots: z.record(z.string(), z.looseObject({})).optional(),
           }),
         ),
-        empty: z.array(z.looseObject({ venue: z.string(), why: z.string() })),
-        checked: z.array(z.looseObject({ venue: z.string(), contract: z.string() })),
+        more: z.number().optional(),
+        chosen: z
+          .array(z.looseObject({ venue: z.string(), pool: z.string(), taker: z.string() }))
+          .optional(),
+        accounts: z.record(z.string(), z.string()).optional(),
+        empty: z.array(z.looseObject({ venue: z.string(), why: z.string() })).optional(),
+        skipped: z.array(z.looseObject({ venue: z.string(), why: z.string() })).optional(),
+        checked: z.array(z.looseObject({ venue: z.string() })),
       },
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
       const chain = parseChain(String(args.chain), "chain");
       if (chain.kind !== "evm") {
-        throw new UsageError(
-          `sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
+        if (args.v4Pools !== undefined || args.block !== undefined)
+          throw new UsageError("v4Pools and block are for an EVM chain's pools");
+        const url = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
+        if (
+          args.pay === undefined &&
+          (args.maxPrice !== undefined || args.perVenue !== undefined || args.slots !== undefined)
+        )
+          throw new UsageError("maxPrice, perVenue and slots choose pools for pay");
+
+        return fromCommand(
+          limited(
+            await svmPoolsCommand({
+              chain,
+              rpcUrl: url,
+              tokens: [args.tokenA, args.tokenB],
+              ...(args.pay === undefined
+                ? {}
+                : {
+                    choose: {
+                      pay: args.pay,
+                      ...(args.maxPrice === undefined ? {} : { maxPrice: BigInt(args.maxPrice) }),
+                      perVenue: args.perVenue === true,
+                      ...(args.slots === undefined ? {} : { slots: args.slots }),
+                    },
+                  }),
+            }),
+            args.limit,
+          ),
         );
       }
+      if (args.pay !== undefined) throw new UsageError("pay chooses a Solana pair's pools");
       const v4Keys = (args.v4Pools ?? []).map((raw) => parseV4Key(raw, "v4Pools"));
       const rpcUrl = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
       const { client, block } = await connectAt(rpcUrl, chain, blockText(args.block));
 
       return fromCommand(
-        await poolsCommand({ chain, client, tokens: [args.tokenA, args.tokenB], v4Keys, block }),
+        limited(
+          await poolsCommand({ chain, client, tokens: [args.tokenA, args.tokenB], v4Keys, block }),
+          args.limit,
+        ),
       );
     },
   );
@@ -1853,8 +1991,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "says which), on a Pot that need not be deployed yet — the rehearsal deploys it first, " +
         "and `transactions` gives each transaction's gas (Kitchen.deployPot, then the cook). " +
         "Returns ok, gas, what main returns, the ERC-20 transfers and approvals, native " +
-        "transfers and each address's net balance change; or the `stage` and decoded `reason` " +
-        "it reverts — a revert is a result (ok: false), not an error. assumeBalance gives the " +
+        "transfers and each address's net balance change. A cook that reverts is an ERROR " +
+        "result, led by reverted: true and error (the decoded reason), with ok: false and the " +
+        "`stage` it reverts at: it did not work. expectRevert holds a rehearsal of a guard to " +
+        "its revert instead (ok, and asExpected, only when it reverts with that reason). " +
+        "assumeBalance gives the " +
         "Pot balances for the rehearsal only; fund rehearses pulling tokens from the owner into " +
         "the Pot in the cook, the Pot credited what they would bring. block pins the chain's " +
         "state (sauce_pools' block, to rehearse on the prices a limit was taken from). " +
@@ -1863,16 +2004,21 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "a trade: ok or the reason, what main returns, balance changes, transfers, each " +
         "transaction's gas and the block. Solana: the Kitchen cook simulated from the owner (a " +
         "missing Pot created first), or via engine the engine's own paid cook with no Pot: " +
-        "compute units, the fee, or the reason and the program logs. `sourceSha256` is the " +
+        "compute units, the fee, or the reason and the program logs; a cook too large for one " +
+        "transaction, or given assumeBalance, in a local copy of the accounts it names (`path`), " +
+        "its program staged as sauce run stages it. `sourceSha256` is the " +
         "sha256 of the program's text. Nothing is signed or sent.",
       input: {
         ...PROGRAM,
         ...sourceInputs(local),
         ...COOK,
         assumeBalance: TOKEN_AMOUNTS.describe(
-          "EVM only: balances the Pot holds for this rehearsal only, by state override. Each " +
-            "<TOKEN|address>:<amount>, the amount in whole tokens (USDC:2 is 2 USDC), or base " +
-            "units ending in n (USDC:2000000n); ETH:<amount> for the native currency.",
+          "Balances the Pot holds for this rehearsal only. Each <TOKEN|address>:<amount>, the " +
+            "amount in whole tokens (USDC:2 is 2 USDC), or base units ending in n " +
+            "(USDC:2000000n); ETH:<amount> for an EVM chain's native currency. EVM: by state " +
+            "override. Solana: in a local copy of the accounts the cook names (the Pot's token " +
+            "account for the mint, or the owner's via engine), as a cook too large for one " +
+            "transaction is rehearsed too.",
         ),
         fund: TOKEN_AMOUNTS.describe(
           "EVM only: tokens the cook would pull from the owner into the Pot before the program " +
@@ -1898,11 +2044,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .optional()
           .describe(
             `Up to ${MAX_SCENARIOS} rehearsals of the same program, in order, all at one block ` +
-              "(block, or the latest when the call starts). Each scenario's args and " +
+              "(block, or the latest when the call starts); on Solana, all in local copies of one " +
+              "read of the accounts, at one slot. Each scenario's args and " +
               "assumeBalance replace the call's own; its defines are laid over the call's. " +
-              "The result is { ok: every scenario ok, block, scenarios: [one result each, or " +
-              "its error] }.",
+              "Each takes its own expectRevert. The result is { ok: every scenario ok, block, " +
+              "scenarios: [one result each, or its error] }, an error result unless every one is ok.",
           ),
+        expectRevert: EXPECT_REVERT,
         summary: z
           .boolean()
           .optional()
@@ -1914,6 +2062,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       },
       output: {
         ok: z.boolean(),
+        reverted: z.boolean().optional(),
+        error: z.string().optional(),
+        expectRevert: z.string().optional(),
+        asExpected: z.boolean().optional(),
         sourceSha256: z.string(),
         scenarios: z.array(z.looseObject({ ok: z.boolean() })).optional(),
       },
@@ -1929,7 +2081,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         );
       }
       // One rehearsal, its scenario's args, defines and balances over the call's own.
-      const rehearse = async (each: Scenario, block: string | undefined): Promise<ToolOutput> => {
+      const rehearse = async (
+        each: Scenario,
+        block: string | undefined,
+        snapshot?: ForkSnapshot,
+      ): Promise<ToolOutput> => {
+        const expected = each.expectRevert ?? args.expectRevert;
+        const held = (output: CommandOutput) =>
+          fromCommand(expected === undefined ? output : expectingRevert(output, expected));
         const scenario = {
           ...args,
           ...(each.args === undefined ? {} : { args: each.args }),
@@ -1950,23 +2109,25 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           approver: NO_APPROVER,
         };
         if (chain.kind === "svm") {
-          if ((scenario.assumeBalance ?? []).length > 0) {
-            throw new UsageError(
-              "assumeBalance is for EVM chains: a Solana endpoint's simulateTransaction takes " +
-                "no account overrides, so on solana the rehearsal runs on the accounts as they are",
-            );
-          }
           fundingFor(funding);
+          const assumed = svmAssumedBalances(scenario.assumeBalance ?? [], chain);
 
-          return fromCommand(
-            await svmSimulateCommand(svmCook(scenario, built, rpcUrl), built.files),
+          return held(
+            await svmSimulateCommand(
+              {
+                ...svmCook(scenario, built, rpcUrl),
+                ...(assumed.length === 0 ? {} : { assume: assumed }),
+                ...(snapshot === undefined ? {} : { snapshot }),
+              },
+              built.files,
+            ),
           );
         }
         const cook = evmCook(scenario, built);
         const assume = assumedBalances(scenario.assumeBalance ?? [], chain);
         const fund = fundingFor(funding);
 
-        return fromCommand(
+        return held(
           await simulateCommand(
             {
               ...cook,
@@ -1984,20 +2145,25 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (args.scenarios === undefined) {
         const output = await rehearse({}, blockText(args.block));
 
+        // A revert nobody expected is an error result: the call did not do what was asked.
         return {
           json: { ...shaped(output.json), sourceSha256: program.sourceSha256 },
           notes: output.notes,
+          isError: output.json.ok === false,
         };
       }
-      // Every scenario on one block: the one given, or the latest now, read once.
+      // Every scenario on one block: the one given, or the latest now, read once. On Solana, one
+      // local copy's reads: the accounts and the slot the first scenario read, every one rehearsed
+      // on a fresh copy of them.
       const block =
         chain.kind === "svm"
           ? undefined
           : (await connectAt(rpcUrl, chain, blockText(args.block))).block.toString();
+      const snapshot = chain.kind === "svm" ? forkSnapshot() : undefined;
       const results: Array<Record<string, unknown>> = [];
       for (const [index, each] of args.scenarios.entries()) {
         try {
-          const output = await rehearse(each, block);
+          const output = await rehearse(each, block, snapshot);
           const notes = output.notes ?? [];
           results.push({
             index,
@@ -2014,13 +2180,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         }
       }
 
+      const ok = results.every((each) => each.ok === true);
+
       return {
         json: {
-          ok: results.every((each) => each.ok === true),
+          ok,
           sourceSha256: program.sourceSha256,
           ...(block === undefined ? {} : { block }),
+          ...(snapshot?.slot === undefined ? {} : { slot: snapshot.slot.toString() }),
           scenarios: results,
         },
+        isError: !ok,
       };
     },
   );

@@ -25,6 +25,8 @@ import {
   buildCookAndPayFromAccountPinnedInstruction,
   buildCookAndPayInstruction,
 } from "./instructions.js";
+import { COMPUTE_BUDGET_PROGRAM_ADDRESS } from "@solana-program/compute-budget";
+import { ENGINE_GAS_LIMIT_CU } from "./engine.js";
 import { buildComputeBudgetPrepend, buildHeapFramePrepend } from "./prepends.js";
 import { resolveAccounts } from "./resolve.js";
 import {
@@ -368,7 +370,7 @@ export async function createSauceSvmClient({
       bytecode,
       manifest,
       resolution,
-      opts.prepends ?? [],
+      measuring(opts.prepends ?? []),
       opts,
     );
 
@@ -432,7 +434,7 @@ export async function createSauceSvmClient({
       buffer,
       manifest,
       resolution,
-      opts.prepends ?? [],
+      measuring(opts.prepends ?? []),
       opts,
     );
 
@@ -442,6 +444,22 @@ export async function createSauceSvmClient({
       opts.accounts === undefined ? {} : { accounts: opts.accounts },
     );
   }
+
+  /**
+   * A simulation's prepends with the most compute a transaction may use, unless they set a limit
+   * themselves: a rehearsal measures the units a cook takes, and with no limit a transaction gets
+   * 200,000 for its one instruction, which a program past that would fail rather than report.
+   */
+  /** The compute-budget instruction that sets a transaction's limit, by its first byte. */
+  const SET_COMPUTE_UNIT_LIMIT = 2;
+  const measuring = (prepends: readonly Instruction[]): Instruction[] =>
+    prepends.some(
+      (instruction) =>
+        instruction.programAddress === COMPUTE_BUDGET_PROGRAM_ADDRESS &&
+        instruction.data?.[0] === SET_COMPUTE_UNIT_LIMIT,
+    )
+      ? [...prepends]
+      : [...buildComputeBudgetPrepend({ unitLimit: ENGINE_GAS_LIMIT_CU }), ...prepends];
 
   async function autoComputeUnitPrepends(
     simulateRun: () => Promise<SimulateExecuteResult>,

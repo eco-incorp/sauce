@@ -46,26 +46,27 @@ import {
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
 import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
 import {
+  type Approver,
+  type ArgsInput,
+  type CliFiles,
+  type CommandOutput,
   compileCommand,
-  pastDeadline,
   compileProgram,
+  type Confirm,
+  type CookInput,
+  expectingRevert,
+  pastDeadline,
   potCommand,
+  potDeployCommand,
+  type PotInput,
+  potStatusCommand,
   probeProgram,
   programChains,
-  potDeployCommand,
-  potStatusCommand,
+  type ProgramInput,
   readInput,
   runCommand,
   txCommand,
   unapproved,
-  type ArgsInput,
-  type CliFiles,
-  type CommandOutput,
-  type Approver,
-  type Confirm,
-  type CookInput,
-  type PotInput,
-  type ProgramInput,
 } from "./commands.js";
 import { createIntent } from "./create.js";
 import { defineLabels, fillCommand, fillTargets, type FillTarget } from "./fill.js";
@@ -111,6 +112,7 @@ import {
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
 import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
+import { svmPoolsCommand } from "./pools-svm.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import {
@@ -124,6 +126,7 @@ import {
   loadKeypair,
   parseAccounts,
   parsePubkey,
+  svmAssumedBalances,
   svmPotCommand,
   svmPotDeployCommand,
   svmPotStatusCommand,
@@ -458,6 +461,12 @@ const COOK: FlagSpecs = {
     help: "An account main takes, by name: an address, pot, owner, pot:USDC (the Pot's USDC account), mint:USDC or program:USDC (its token program)",
     only: "svm",
   },
+  accounts: {
+    type: "string",
+    value: "<json|file>",
+    help: "The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file",
+    only: "svm",
+  },
   via: {
     type: "string",
     value: "<kitchen|engine>",
@@ -468,6 +477,13 @@ const COOK: FlagSpecs = {
     type: "string",
     value: "<lamports>",
     help: "Refuse a cook whose execution fee is above this",
+    only: "svm",
+  },
+  "lookup-table": {
+    type: "string",
+    multiple: true,
+    value: "<address>",
+    help: "An address lookup table holding the cook's accounts (sauce run creates one when they do not fit)",
     only: "svm",
   },
 };
@@ -840,6 +856,32 @@ function argsInput(
   return { args: { from: "--args-json", values } };
 }
 
+/**
+ * A Solana cook's accounts: `--accounts`' object (inline, or a file) and each `--account`, every name
+ * once.
+ */
+function accountsOf(args: ParsedArgs, io: CliIo): Record<string, string> {
+  const json = stringFlag(args, "accounts");
+  const given = repeatedFlag(args, "account");
+  if (json === undefined) return parseAccounts(given);
+  const text = /^\s*\{/.test(json) ? json : readInput(io, json);
+  let object: unknown;
+  try {
+    object = JSON.parse(text);
+  } catch (error) {
+    throw new UsageError(`--accounts: not JSON (${(error as Error).message})`);
+  }
+  if (typeof object !== "object" || object === null || Array.isArray(object)) {
+    throw new UsageError("--accounts: expected a JSON object of each account's name to its value");
+  }
+  const entries = Object.entries(object as Record<string, unknown>).map(([name, value]) => {
+    if (typeof value !== "string") throw new UsageError(`--accounts: ${name} is not a string`);
+    return `${name}=${value}`;
+  });
+
+  return parseAccounts([...entries, ...given]);
+}
+
 /** The salt `--salt`/`--salt-hex` choose (zero when neither). */
 const saltOf = (args: ParsedArgs) =>
   parseSalt(stringFlag(args, "salt"), stringFlag(args, "salt-hex"));
@@ -869,9 +911,15 @@ function cookInput(
   program: ProgramInput,
 ): CookInput {
   const value = stringFlag(args, "value");
-  if (repeatedFlag(args, "account").length > 0) {
+  if (repeatedFlag(args, "account").length > 0 || stringFlag(args, "accounts") !== undefined) {
     throw new UsageError(
       `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
+    );
+  }
+  if (repeatedFlag(args, "lookup-table").length > 0) {
+    throw new UsageError(
+      `--lookup-table takes a Solana cook's accounts through a lookup table; a cook on ` +
+        `${program.chain.slug} has none`,
     );
   }
   for (const flag of ["via", "max-execution-fee"]) {
@@ -1638,18 +1686,22 @@ function svmCookInput(
 
   const via = stringFlag(args, "via");
   const maxFee = stringFlag(args, "max-execution-fee");
+  const lookupTables = repeatedFlag(args, "lookup-table").map((table) =>
+    parsePubkey("lookup-table", table),
+  );
 
   return {
     ...program,
     owner: svmOwner(args, signer),
     ...saltOf(args),
-    accounts: parseAccounts(repeatedFlag(args, "account")),
+    accounts: accountsOf(args, io),
     ...argsInput(args, io, trailing),
     rpcUrl: requiredEndpoint(args, io, program.chain),
     ...(via === undefined ? {} : { via: parseVia(via) }),
     ...(maxFee === undefined
       ? {}
       : { maxExecutionFee: parseLamports("max-execution-fee", maxFee) }),
+    ...(lookupTables.length === 0 ? {} : { lookupTables }),
   };
 }
 
@@ -2596,6 +2648,74 @@ const WALLET_VERBS: Readonly<Record<string, Command>> = {
   },
 };
 
+/** `sauce simulate`'s rehearsal, on either kind of chain, before --expect-revert holds it. */
+async function simulateOf(
+  args: ParsedArgs,
+  io: CliIo,
+  trailing: readonly string[] | undefined,
+): Promise<CommandOutput> {
+  const program = await programOperand(args, io);
+  const funds = repeatedFlag(args, "fund").length > 0;
+  const assume = repeatedFlag(args, "assume-balance");
+  if (program.chain.kind === "svm") {
+    fundingOf(args, io, program.chain, "", false, undefined);
+    if (stringFlag(args, "block") !== undefined) {
+      throw new UsageError(
+        "--block is for EVM chains: Solana's simulateTransaction runs on the cluster's " +
+          "current state, at no slot it can be given",
+      );
+    }
+
+    // A keypair or a wallet names the owner; the rehearsal signs nothing with it.
+    const owner = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
+
+    const assumed = svmAssumedBalances(assume, program.chain);
+
+    return svmSimulateCommand(
+      {
+        ...svmCookInput(args, io, trailing, program, owner),
+        ...(assumed.length === 0 ? {} : { assume: assumed }),
+      },
+      io,
+    );
+  }
+  if (hasSvmSigner(args, io)) {
+    throw new UsageError(
+      "a Solana keypair or wallet names no owner on an EVM chain: name the owner with an EVM " +
+        "--wallet, --keystore or --private-key, or --owner",
+    );
+  }
+  // A key names the owner, whose Pot the rehearsal runs on, and signs --fund's pulls if any.
+  const account = funds && hasSigner(args, io) ? await signerOf(args, io) : undefined;
+  const owner =
+    account?.address ?? (hasSigner(args, io) ? await signerAddress(args, io) : undefined);
+  if (owner !== undefined && stringFlag(args, "owner") !== undefined) {
+    if (parseAddress("owner", stringFlag(args, "owner")!) !== owner) {
+      throw new UsageError(
+        `--owner ${stringFlag(args, "owner")} is not the signer, ${owner}: with a key, the ` +
+          "owner is the key's. Leave --owner out, or give its key.",
+      );
+    }
+  }
+  const input = cookInput(args, io, trailing, owner, program);
+  const assumed = assumedBalancesOf(args, input.chain);
+  const rpcUrl = requiredEndpoint(args, io, input.chain);
+  const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
+
+  const block = stringFlag(args, "block");
+
+  return simulateCommand(
+    {
+      ...input,
+      rpcUrl,
+      assume: assumed,
+      ...(fund === undefined ? {} : { fund }),
+      ...(block === undefined ? {} : { block }),
+    },
+    io,
+  );
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   compile: {
     usage: "sauce compile <file | -> --chain <slug|id> [options]",
@@ -2748,13 +2868,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<TOKEN:amount>",
         help: "Give the Pot this balance, in whole tokens, for the rehearsal only: USDC:2, ETH:0.1",
-        only: "evm",
       },
       block: {
         type: "string",
         value: "<number|tag>",
         help: "Rehearse on this block: a number, or latest, safe, finalized (default: latest)",
         only: "evm",
+      },
+      "expect-revert": {
+        type: "string",
+        value: "<text>",
+        help: "Expect the cook to revert with a reason containing this text: exit 0 only if it does",
       },
       ...FUND,
       wallet: {
@@ -2821,13 +2945,27 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "cook moved — each token account's balance change and each account's lamports, read from the",
       "accounts the transaction writes before it and as the simulation leaves them — or the reason",
       "(a program's revert message decoded) and the program logs. Solana's simulateTransaction",
-      "takes no account overrides, so the owner must hold the Pot's rent and the fees, and",
-      "--assume-balance is refused there. A cook too large for one transaction is refused with the",
-      "bytes to shrink: staging it writes a code buffer on chain, which only `sauce run` does.",
+      "takes no account overrides, so the owner must hold the Pot's rent and the fees there.",
+      "A cook too large for one transaction, or one given --assume-balance, is rehearsed in a",
+      "local copy instead (LiteSVM, which the package brings): every account it names read from",
+      "the cluster with its rent, the released engine and Kitchen, the owner given the lamports",
+      "the staging and the fees take (any address can rehearse), the Pot created",
+      "if missing, the program staged into a code buffer as `sauce run` stages it, then the cook,",
+      "its accounts through a lookup table. There --assume-balance TOKEN:amount gives the account",
+      "the cook spends that token from (the Pot's, or the owner's with --via engine) that balance,",
+      "and a pot:<token> or owner:<token> account the cluster does not have yet is made empty,",
+      "which `sauce run` creates before the cook. An --owner that is not a wallet is refused.",
+      "",
+      "A cook that reverts exits 1, and the first line says so: The cook reverts: <reason>. In",
+      "--json, reverted: true and error lead the JSON, and the same line leads stderr.",
+      "--expect-revert <text> holds a rehearsal of a guard to its revert: it exits 0 only when the",
+      "cook reverts with a reason containing the text, and 1 when it succeeds or reverts otherwise.",
       "",
       "Examples:",
       "  sauce simulate pay.sauce.ts --chain base --owner 0x… \\",
       "    --assume-balance USDC:2 --args 0x… 1000000",
+      "  sauce simulate pay.sauce.ts --chain base --owner 0x… \\",
+      '    --args 0x… 1000000 --expect-revert "too much"',
       "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> \\",
       "    --account source=<token account> --account authority=pot",
       "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> \\",
@@ -2835,64 +2973,18 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = await programOperand(args, io);
-      const funds = repeatedFlag(args, "fund").length > 0;
-      const assume = repeatedFlag(args, "assume-balance");
-      if (program.chain.kind === "svm") {
-        fundingOf(args, io, program.chain, "", false, undefined);
-        if (assume.length > 0) {
-          throw new UsageError(
-            "--assume-balance is for EVM chains: a Solana endpoint's simulateTransaction takes no " +
-              "account overrides, so on solana the rehearsal runs on the accounts as they are",
-          );
-        }
-        if (stringFlag(args, "block") !== undefined) {
-          throw new UsageError(
-            "--block is for EVM chains: Solana's simulateTransaction runs on the cluster's " +
-              "current state, at no slot it can be given",
-          );
-        }
-
-        // A keypair or a wallet names the owner; the rehearsal signs nothing with it.
-        const owner = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
-
-        return svmSimulateCommand(svmCookInput(args, io, trailing, program, owner), io);
-      }
-      if (hasSvmSigner(args, io)) {
-        throw new UsageError(
-          "a Solana keypair or wallet names no owner on an EVM chain: name the owner with an EVM " +
-            "--wallet, --keystore or --private-key, or --owner",
-        );
-      }
-      // A key names the owner, whose Pot the rehearsal runs on, and signs --fund's pulls if any.
-      const account = funds && hasSigner(args, io) ? await signerOf(args, io) : undefined;
-      const owner =
-        account?.address ?? (hasSigner(args, io) ? await signerAddress(args, io) : undefined);
-      if (owner !== undefined && stringFlag(args, "owner") !== undefined) {
-        if (parseAddress("owner", stringFlag(args, "owner")!) !== owner) {
-          throw new UsageError(
-            `--owner ${stringFlag(args, "owner")} is not the signer, ${owner}: with a key, the ` +
-              "owner is the key's. Leave --owner out, or give its key.",
-          );
-        }
-      }
-      const input = cookInput(args, io, trailing, owner, program);
-      const assumed = assumedBalancesOf(args, input.chain);
-      const rpcUrl = requiredEndpoint(args, io, input.chain);
-      const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
-
-      const block = stringFlag(args, "block");
-
-      return simulateCommand(
-        {
-          ...input,
-          rpcUrl,
-          assume: assumed,
-          ...(fund === undefined ? {} : { fund }),
-          ...(block === undefined ? {} : { block }),
-        },
-        io,
-      );
+      const output = await simulateOf(args, io, trailing);
+      const expected = stringFlag(args, "expect-revert");
+      const held = expected === undefined ? output : expectingRevert(output, expected);
+      // In JSON, stdout is the JSON: a revert nobody expected leads stderr too.
+      return args.values.json === true &&
+        held.json.reverted === true &&
+        held.json.asExpected !== true
+        ? {
+            ...held,
+            notes: [`the cook reverts: ${String(held.json.error)}`, ...(held.notes ?? [])],
+          }
+        : held;
     },
   },
   run: {
@@ -2948,8 +3040,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "native currency, when ETH is funded), not only what this run brought.",
       "",
       "On Solana: sign with --keypair; the Kitchen's fee is read from the cluster, a missing Pot",
-      "is created the same way, and a program too large for one transaction is staged in a code",
-      "buffer first (closed again after the cook). A failure prints the program logs.",
+      "is created the same way, and so is a pot:<token> or owner:<token> account the cook names that",
+      "the cluster does not have yet (the owner paying its rent); a program too large for one",
+      "transaction is staged in a code buffer first (closed again after the cook). A failure prints",
+      "the program logs.",
       "",
       "--via kitchen|engine (Solana) is how the cook reaches the engine:",
       "  kitchen  (default) the Kitchen's cook, which signs the owner's Pot: the program can hold",
@@ -3421,8 +3515,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   pools: {
-    usage:
+    usage: [
       "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… [--block <number|tag>] [--json]",
+      "sauce pools --chain solana <pay token> <buy token> [--pay <token> [--max-price <n>] [--per-venue] [--slots <n>]] [--json]",
+    ],
     summary: "List a pair's price-limit pools on a chain, deepest first, with their prices",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pools are on" },
@@ -3431,11 +3527,36 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<fee:spacing>",
         help: "Also try this hookless Uniswap V4 pool key (3000:60)",
+        only: "evm",
       },
       block: {
         type: "string",
         value: "<number|tag>",
         help: "Read the pools at this block: a number, or latest, safe, finalized (default: latest)",
+        only: "evm",
+      },
+      pay: {
+        type: "string",
+        value: "<token>",
+        help: "Choose the pools a distributed swap paying this token takes, and print their slots' accounts",
+        only: "svm",
+      },
+      "max-price": {
+        type: "string",
+        value: "<n>",
+        help: "With --pay: only pools whose price with the fee is within this maxPrice",
+        only: "svm",
+      },
+      "per-venue": {
+        type: "boolean",
+        help: "With --pay: the deepest pool of each venue only",
+        only: "svm",
+      },
+      slots: {
+        type: "string",
+        value: "<n>",
+        help: "With --pay: how many slots the program has (default 4)",
+        only: "svm",
       },
       ...ENDPOINT,
       ...JSON_FLAG,
@@ -3464,10 +3585,24 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "block, which it names: --block, or the latest when it starts. Pass that block to sauce",
       "simulate --block to rehearse on the prices maxPrice was taken from.",
       "",
+      "On Solana: every pool of the pair at each venue whose swap takes a price limit that stops",
+      "it (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper,",
+      "DefiTuna, Crema, and Phoenix's markets), found with getProgramAccounts on each venue's",
+      "program. For each: its fee, liquidity and price both ways with the fee and as maxPrice, and",
+      "its slot paying each token: the nine accounts the distributed swap takes for it (program,",
+      "pool, config, the two vaults, one more account its swap takes, three tick arrays), each",
+      "unused one the System program. A pool the distributed swap skips is listed as skipped with",
+      "why. A token is a symbol the chain registers (SOL for WSOL), or a base58 mint. --pay chooses",
+      "the slots a swap paying that token takes (within --max-price, one a venue with --per-venue,",
+      "--slots of them) and prints them as accounts. A venue it could not read leaves the listing",
+      "partial: a note says which, and the command exits 1.",
+      "",
       "Examples:",
       "  sauce pools --chain base USDC WETH",
       "  sauce pools --chain base USDC 0x… --json",
       "  sauce pools --chain base WETH USDC --v4-key 50:1",
+      "  sauce pools --chain solana USDC WSOL --json",
+      "  sauce pools --chain solana USDC WSOL --pay USDC --max-price 119047619047619047 --per-venue --slots 5 --json",
     ].join("\n"),
     run: async (args, io) => {
       const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
@@ -3477,9 +3612,40 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
       if (chain.kind !== "evm") {
-        throw new UsageError(
-          `sauce pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
-        );
+        for (const flag of ["v4-key", "block"])
+          if (repeatedFlag(args, flag).length > 0 || stringFlag(args, flag) !== undefined)
+            throw new UsageError(`--${flag} is for an EVM chain's pools`);
+        const url = requiredEndpoint(args, io, chain);
+        const pay = stringFlag(args, "pay");
+        const maxPrice = stringFlag(args, "max-price");
+        const slots = stringFlag(args, "slots");
+        if (
+          pay === undefined &&
+          (maxPrice !== undefined || slots !== undefined || args.values["per-venue"])
+        )
+          throw new UsageError(
+            "--max-price, --per-venue and --slots choose pools for --pay <token>",
+          );
+        if (maxPrice !== undefined && !/^\d+$/.test(maxPrice))
+          throw new UsageError(`--max-price ${maxPrice}: a whole number, maxPrice's units`);
+        if (slots !== undefined && !/^[1-9]$/.test(slots))
+          throw new UsageError(`--slots ${slots}: a number from 1 to 9`);
+
+        return svmPoolsCommand({
+          chain,
+          rpcUrl: url,
+          tokens: [first, second],
+          ...(pay === undefined
+            ? {}
+            : {
+                choose: {
+                  pay,
+                  ...(maxPrice === undefined ? {} : { maxPrice: BigInt(maxPrice) }),
+                  perVenue: args.values["per-venue"] === true,
+                  ...(slots === undefined ? {} : { slots: Number(slots) }),
+                },
+              }),
+        });
       }
       const v4Keys = repeatedFlag(args, "v4-key").map((raw) => parseV4Key(raw));
       // Every read at one block, which the report names.

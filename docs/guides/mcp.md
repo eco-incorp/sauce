@@ -315,7 +315,7 @@ server's instructions also list:
 | `--owner`                  | `owner`                |
 | `--pot`                    | `pot`                  |
 | `--value`                  | `value`                |
-| `--account`                | `accounts`             |
+| `--account`, `--accounts`  | `accounts`             |
 | `--intent-deadline`        | `intentDeadline`       |
 | `--intent-execution-fee`   | `intentExecutionFee`   |
 | `--intent-fund-via`        | `intentFundVia`        |
@@ -324,6 +324,7 @@ server's instructions also list:
 | `--intent-salt`            | `intentSalt`           |
 | `--no-prove`               | `prove: false`         |
 | `--max-execution-fee`      | `maxExecutionFee`      |
+| `--lookup-table`           | `lookupTables`         |
 | `--via`                    | `via`                  |
 | `--compact-args`           | `compactArgs`          |
 | `--chain`                  | `chain`                |
@@ -343,6 +344,11 @@ server's instructions also list:
 | `--sqrt-price-x96`         | `sqrtPriceX96`         |
 | `--pool`                   | `pool`                 |
 | `--v4-key`                 | `v4Pools`              |
+| `--pay`                    | `pay`                  |
+| `--max-price`              | `maxPrice`             |
+| `--per-venue`              | `perVenue`             |
+| `--slots`                  | `slots`                |
+| `--expect-revert`          | `expectRevert`         |
 
 Over stdio, `sauce_compile`, `sauce_simulate` and `sauce_tx` take `path` instead of `source`: a
 program file on the same machine, relative to the directory the server runs in, read with its
@@ -456,11 +462,16 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
   ([Solana guide](solana.md#two-ways-to-run-a-program)).
 - `maxExecutionFee` in lamports, on Solana: a cook whose execution fee, read from the cluster, is
   above it is refused before anything is built.
+- `lookupTables`, on Solana: address lookup tables holding the cook's accounts, each one byte in the
+  transaction instead of 32.
 - `rpcUrl`.
 
 `sauce_simulate` also takes:
 
-- `assumeBalance`, such as `["USDC:2", "ETH:0.1"]`: balances the Pot holds for the rehearsal only;
+- `assumeBalance`, such as `["USDC:2", "ETH:0.1"]`: balances the Pot holds for the rehearsal only.
+  On Solana, as for a cook too large for one transaction, the rehearsal then runs in a local copy
+  of the accounts the cook names ([the sauce command](cli.md#solana)), its program staged as
+  `sauce run` stages it;
 - `fund`, `fundMode` and `sweep`, which rehearse [`sauce run --fund`](cli.md#funding-a-run---fund).
   The Pot is credited what the pulls would bring.
 
