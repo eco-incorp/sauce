@@ -325,6 +325,8 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - For a local run, the package ships the engine and Kitchen programs, to load into a local
   validator or LiteSVM; `sauce-typescript` says where they are. Setting one up is outside this
   skill.
+- One order over several pools under one price, on Solana's venues (Raydium, Orca, Phoenix and
+  others), is `sauce-solana-distributed-swap`.
 - From TypeScript, the SVM client (`createSauceSvmClient`) builds the same cooks: `via: "engine"`
   for the direct one, and `executionFee()` quotes the fee to set `maxExecutionFee` from. Venue
   adapters build swaps on Solana venues such as Raydium (`sauce-typescript`). A venue swap they

@@ -1,28 +1,34 @@
 // A limit buy over Solana's price-limited pools: up to `budget` of one token for another, never
-// more than `maxPrice` for any unit, fees included. Four pool slots, each any venue below.
+// more than `maxPrice` for any unit, fees included. Four pool slots, each a pool at any venue that
+// `sauce pools --chain solana` lists, which gives each slot's nine accounts too.
 //
-//   sauce run solana-distributed-swap.sauce.ts --chain solana --keypair <keypair> \
-//     --account authority=pot --account source=pot:<payMint> --account output=<token account> \
-//     --account refund=<token account> --account payMint=<payMint> --account buyMint=<buyMint> \
-//     --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
-//     --account token2022=TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb \
-//     --account memo=MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr \
-//     --account program0=<program> --account pool0=<pool> … --account ticks32=<account> \
-//     --args <budget> <maxPrice> <minTokens> <maxAvgPrice>
+//   sauce run solana-distributed-swap.sauce.ts --chain <chain> --keypair <keypair> \
+//     --accounts <accounts.json> --args <budget> <maxPrice> <minTokens> <maxAvgPrice>
 //
-//   authority     signs for the paying account: pot through the Kitchen, owner directly (--via engine)
-//   source        the authority's payToken account; the budget must be in it
-//   output        the recipient's buyToken account: what is bought goes straight there
-//   refund        refundTo's payToken account: receives what is left of the budget
-//   payMint       the mint paid; buyMint the mint bought
-//   program<k> …  pool slot k, nine accounts: the venue's program, the pool, its config, its two
-//                 vaults, one more account its swap takes, three tick arrays; a slot with no pool
-//                 is the System program, 11111111111111111111111111111111, in all nine
+// The accounts, by name, in one JSON object (or each as --account NAME=<value>):
+//   authority     pot: the Pot, which signs for its accounts (owner, cooked with --via engine)
+//   source        pot:<payToken>: the authority's account the budget is in
+//   output        pot:<buyToken>: the authority's account what is bought arrives in
+//   recipient     the account what is bought goes on to (output itself, to keep it there)
+//   refund        the account what is left of the budget goes to (source itself, to keep it)
+//   payMint       mint:<payToken>; buyMint, mint:<buyToken>
+//   tokenProgram  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA, and token2022,
+//                 TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb, and memo,
+//                 MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr
+//   program<k> pool<k> config<k> vaultA<k> vaultB<k> extra<k> ticks<k>0 ticks<k>1 ticks<k>2
+//                 slot k, 0 to 3: a pool's slot paying payToken, as sauce pools gives it; a slot
+//                 with no pool is the System program, 11111111111111111111111111111111, in all nine
+//
 //   budget: Uint256       the most payToken to spend, in its base units: 1000000000 is 1,000 USDC
 //   maxPrice: Uint256     the most one buyToken may cost, fees included: the price in whole tokens
 //                         times 10^(18 + payDecimals − buyDecimals)
 //   minTokens: Uint256    the least buyToken to receive, in its base units; less reverts the cook
 //   maxAvgPrice: Uint256  the most the average may cost, in maxPrice's units; 0 turns it off
+//
+//   SOL for all of 1,000 USDC or nothing, at most 120 USDC each, rehearsed with no key:
+//   sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
+//     --accounts <accounts.json> --assume-balance USDC:1000 \
+//     --args 1000000000 120000000000000000 8333333334 0
 
 // The venues. A pool is an account of its venue's program, so its owner says how to read and swap
 // it. Raydium CLMM and the three programs built on its code share one pool layout and one swap.
@@ -62,7 +68,6 @@ function trade(
   }
   const venue = pool.owner;
   require(slot[0].address == venue, "a pool's program is not its owner");
-  const zero = 0;
 
   if (venue == PHOENIX) {
     // An order book: base and quote in the market's header, prices in ticks, the fee on top.
@@ -83,27 +88,27 @@ function trade(
     // Buying base: the most a base atom may cost before the fee. Selling it: the least it must
     // fetch before the fee is taken, rounded up.
     let ticks = Math.mulDiv(maxPrice, 10000, (10000 + fee) * tick);
-    let baseLots = 0;
-    let quoteLots = unspent / quoteLot;
     let side = hex`000200`;
     if (paysBase) {
       ticks = Math.mulDiv(10 ** 36, 10000, maxPrice * (10000 - fee) * tick) + 1;
-      baseLots = unspent / baseLot;
-      quoteLots = 0;
       side = hex`000201`;
     }
-    if (baseLots + quoteLots == 0) {
+    // Every lot still unspent, of the token it pays: base lots selling base, quote lots buying it.
+    const lots = unspent / (paysBase ? baseLot : quoteLot);
+    if (lots == 0) {
       return;
     }
     // Swap: an immediate-or-cancel order at `ticks`, for every lot still unspent.
-    // No minimum fill, a crossing order cancels its resting side, no match limit, client id 0,
-    // no deposited funds, no expiry.
-    const none = zero.toBytesLe(16);
+    // No minimum fill, a self-trade cancels the resting order, no match limit, client id 0, no
+    // deposited funds, no expiry.
+    const spend = lots.toBytesLe(8);
+    const noLots = hex`0000000000000000`;
+    const none = hex`00000000000000000000000000000000`;
     const order = side.concat(
       hex`01`,
       ticks.toBytesLe(8),
-      baseLots.toBytesLe(8),
-      quoteLots.toBytesLe(8),
+      paysBase ? spend : noLots,
+      paysBase ? noLots : spend,
     );
     const rest = none.concat(hex`0100`, none, hex`000000`);
     const baseAccount = paysBase ? source : output;
@@ -194,7 +199,7 @@ function trade(
   const programB = mintAccountB.owner == shared[6].address ? shared[6] : shared[5];
   const aToB = paysA ? hex`01` : hex`00`;
   const amount = unspent.toBytesLe(8);
-  const none = zero.toBytesLe(8);
+  const none = hex`0000000000000000`;
   const bound = own.toBytesLe(16);
   if (venue == ORCA_WHIRLPOOL) {
     const swapV2 = hex`2b04ed0b1ac91e62`;

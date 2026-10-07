@@ -33,7 +33,11 @@
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
-    "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"]
+    "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
+    "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
+      "sdk/test/svm/distributed-swap.e2e.test.ts",
+      "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
+    ]
   },
   "compileOnly": {
     "sauce-globals/examples/globals.sauce.ts": "compiled, and its token-write lowering pinned, by globals.mts; no suite executes it",

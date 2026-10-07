@@ -439,6 +439,14 @@ const UNDECLARED_NAMES = {
     CallToEOA:
       "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
   },
+  "sauce-solana-distributed-swap": {
+    SqrtPriceLimitOverflow:
+      "Raydium CLMM's error for a price limit on the wrong side of the price, a venue program's, which the package does not decode",
+    InvalidSqrtPriceLimitDirection:
+      "Orca Whirlpools' error for a price limit on the wrong side of the price, a venue program's, which the package does not decode",
+    WrongSqrtPriceLimit:
+      "Crema's error for a price limit on the wrong side of the price, a venue program's, which the package does not decode",
+  },
 };
 const undeclaredUsed = new Set(); // "<skill>/<name>"
 const allowed = (skill) => new Set(Object.keys(UNDECLARED_NAMES[skill.dir] ?? {}));
