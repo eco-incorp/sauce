@@ -55,16 +55,24 @@
 // skip too: a Phoenix order whose book has no offer within the limit fills nothing, which only the
 // paying account's balance tells. A failure the checks do not foresee still aborts the transaction:
 // a tick array missing from the slot, or an input Raydium's code finds too small to swap. A slot
-// that is not the pair, or whose program is not the venue's or not the pool's owner, reverts: those
-// are the caller's accounts, not the pool's state.
+// that is not the pair, whose program is not the venue's or not the pool's owner, or whose pool no
+// venue here owns (`trySwap`: "not a supported venue's pool"; a venue's own function: "not a <venue>
+// pool") reverts: those are the caller's accounts, not the pool's state. Only a missing slot, the
+// System program itself as its pool, is skipped.
 //
 // The plain forms swap or revert: each is its `try` form, reverting where that returns 0.
 //
 // Every venue's swap is its own instruction, called with `svm.call`. Token reads are
 // `@sauce/token`'s, so either token program's accounts work.
 //
-// Each venue's code is its own internal function, and the functions a program calls are the only
-// ones compiled into it: a program swapping at one venue carries that venue's code alone.
+// SIZE. A Solana program rides in transactions, so the arm shares code through internal functions
+// (each venue's `swap<Venue>`, `clmmOrder`, `settled`) where the EVM arm keeps each function flat,
+// and only the functions a program calls are compiled into it. `trySwap` takes any of the nine, so
+// it carries all nine venues' code: a program calling it is about 4.3 KB, one calling a single
+// venue's function about 1.3 to 1.5 KB. A program that knows its venue calls that venue's function;
+// `trySwap` is for slots whose venue is only known when the program runs. Each venue's function
+// checks its own program id, so a direct call never signs into a program the slot names; only
+// `trySwap`'s internal path relies on its one read of the pool's owner.
 //
 // No module-level `const` here: a compile-time define replaces a same-named `const` in every module,
 // this one included.
@@ -77,19 +85,20 @@ import { balanceOf } from "@sauce/token";
 // What a concentrated-liquidity pool's swap carries, as every venue here lays it out: the amount in,
 // no minimum output of its own, and the pool's own limit as a Q64.64 sqrt price — 32 bytes, empty
 // when the pool has nothing to sell within the limit (no liquidity at its price, or its price already
-// at or past the limit). Requires the pool's two mints, in key order, to be the pair. `fee` is in
-// millionths, taken from the input.
+// at or past the limit). Requires the pool's two mints, in key order, to be `trader`'s pair. `fee`
+// is in millionths, taken from the input.
 function clmmOrder(
   mintA: Uint256,
   mintB: Uint256,
   liquidity: Uint256,
   price: Uint256,
   fee: Uint256,
-  pay: Uint256,
-  buy: Uint256,
+  trader: Account[],
   maxPrice: Uint256,
   amountIn: Uint256,
 ): bytes {
+  const pay = trader[2].address;
+  const buy = trader[3].address;
   const paysA = pay < buy;
   require(mintA == (paysA ? pay : buy) && mintB == (paysA ? buy : pay), "pool is not the pair");
   // maxPrice as a sqrt price: the higher-key token per lower-key token, times 2^64. Paying the
@@ -138,15 +147,13 @@ function swapRaydium(
   }
   const payMint = trader[2];
   const buyMint = trader[3];
-  const buy = buyMint.address;
   const order = clmmOrder(
     svm.sload(pool, 73, 32).toBe(),
     svm.sload(pool, 105, 32).toBe(),
     svm.sload(pool, 237, 16).toLe(),
     svm.sload(pool, 253, 16).toLe(),
     svm.sload(slot[2], 47, 4).toLe(),
-    payMint.address,
-    buy,
+    trader,
     maxPrice,
     amountIn,
   );
@@ -155,7 +162,7 @@ function swapRaydium(
   }
   // The input and output vault, token program, Token-2022 and the memo program, both mints, then the
   // tick arrays.
-  const paysA = payMint.address < buy;
+  const paysA = payMint.address < buyMint.address;
   const swapV2 = hex`2b04ed0b1ac91e62`;
   const data = swapV2.concat(order, hex`01`);
   svm.call(
@@ -197,22 +204,20 @@ function swapWhirlpool(
   }
   const payMint = trader[2];
   const buyMint = trader[3];
-  const buy = buyMint.address;
   const order = clmmOrder(
     svm.sload(pool, 101, 32).toBe(),
     svm.sload(pool, 181, 32).toBe(),
     svm.sload(pool, 49, 16).toLe(),
     svm.sload(pool, 65, 16).toLe(),
     svm.sload(pool, 45, 2).toLe(),
-    payMint.address,
-    buy,
+    trader,
     maxPrice,
     amountIn,
   );
   if (order.length == 0) {
     return;
   }
-  const paysA = payMint.address < buy;
+  const paysA = payMint.address < buyMint.address;
   const source = trader[1];
   const mintA = paysA ? payMint : buyMint;
   const mintB = paysA ? buyMint : payMint;
@@ -254,23 +259,20 @@ function swapCropper(
   if (svm.sload(pool, 41, 2).toLe() != svm.sload(pool, 43, 2).toLe()) {
     return; // an adaptive fee
   }
-  const pay = trader[2].address;
-  const buy = trader[3].address;
   const order = clmmOrder(
     svm.sload(pool, 101, 32).toBe(),
     svm.sload(pool, 181, 32).toBe(),
     svm.sload(pool, 49, 16).toLe(),
     svm.sload(pool, 65, 16).toLe(),
     svm.sload(pool, 45, 2).toLe(),
-    pay,
-    buy,
+    trader,
     maxPrice,
     amountIn,
   );
   if (order.length == 0) {
     return;
   }
-  const paysA = pay < buy;
+  const paysA = trader[2].address < trader[3].address;
   const source = trader[1];
   const swap = hex`f8c69e91e17587c8`;
   const data = swap.concat(order, hex`01`, paysA ? hex`01` : hex`00`);
@@ -306,22 +308,20 @@ function swapDefituna(
   const pool = slot[1];
   const payMint = trader[2];
   const buyMint = trader[3];
-  const buy = buyMint.address;
   const order = clmmOrder(
     svm.sload(pool, 11, 32).toBe(),
     svm.sload(pool, 43, 32).toBe(),
     svm.sload(pool, 151, 16).toLe(),
     svm.sload(pool, 167, 16).toLe(),
     svm.sload(pool, 143, 2).toLe(),
-    payMint.address,
-    buy,
+    trader,
     maxPrice,
     amountIn,
   );
   if (order.length == 0) {
     return;
   }
-  const paysA = payMint.address < buy;
+  const paysA = payMint.address < buyMint.address;
   const source = trader[1];
   const mintA = paysA ? payMint : buyMint;
   const mintB = paysA ? buyMint : payMint;
@@ -363,22 +363,20 @@ function swapCrema(
   }
   const payMint = trader[2];
   const buyMint = trader[3];
-  const buy = buyMint.address;
   const order = clmmOrder(
     svm.sload(pool, 40, 32).toBe(),
     svm.sload(pool, 72, 32).toBe(),
     svm.sload(pool, 174, 16).toLe(),
     svm.sload(pool, 190, 16).toLe(),
     svm.sload(pool, 172, 2).toLe(),
-    payMint.address,
-    buy,
+    trader,
     maxPrice,
     amountIn,
   );
   if (order.length == 0) {
     return;
   }
-  const paysA = payMint.address < buy;
+  const paysA = payMint.address < buyMint.address;
   const source = trader[1];
   const swap = hex`f8c69e91e17587c8`;
   const aToB = paysA ? hex`01` : hex`00`;
@@ -477,7 +475,9 @@ function swapPhoenix(
 }
 
 // What a swap moved: 0 when the paying account paid nothing (`held` is its balance before), else
-// what the recipient received over `before`, held to the floor — `minOut`, and at least 1.
+// what the recipient received over `before`, held to the floor — `minOut`, and at least 1. The
+// balances before were read with `@sauce/token`'s checks, which a swap cannot undo (no venue may
+// change a token account's owner or mint), so these reads take the amount alone.
 function settled(
   trader: Account[],
   recipient: Account,
@@ -485,10 +485,10 @@ function settled(
   before: Uint256,
   minOut: Uint256,
 ): Uint256 {
-  if (balanceOf(trader[2].address, trader[1]) == held) {
+  if (svm.sload(trader[1], 64, 8).toLe() == held) {
     return 0;
   }
-  const received = balanceOf(trader[3].address, recipient) - before;
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
   require(received > 0 && received >= minOut, "below minOut");
   return received;
 }
@@ -540,7 +540,14 @@ export function trySwap(
   } else {
     throw "not a supported venue's pool";
   }
-  return settled(trader, recipient, held, before, minOut);
+  // `settled`, written out: the distributed swap calls this once per slot, and the call costs bytes
+  // every program that takes `trySwap` carries.
+  if (svm.sload(trader[1], 64, 8).toLe() == held) {
+    return 0;
+  }
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
 }
 
 // `trySwap`, or revert.
