@@ -248,7 +248,9 @@ no input, a pool whose swaps are off, a paused pool or a market not open, a fee 
 rate, an empty pool, a pool already past its limit, and a book with no offer within it. A swap that
 ran returns at least 1, and below `minOut` the cook reverts. A failed call into another program
 fails the whole Solana transaction and cannot be caught, so these are checks made before the swap,
-not a catch; a pool that is not the pair, or whose program is not the venue's, reverts.
+not a catch. The accounts are the caller's, so a pool that is not the pair, a slot whose program is
+not the pool's owner, and a pool of another venue or of none revert; only the System program itself
+as the pool is a missing slot.
 
 ```sauce chain=solana
 import { orcaWhirlpool } from "@sauce/router";
@@ -282,8 +284,9 @@ function main(
 ```
 
 A program carries only the venues it calls: one venue's function is about 1.6 KB of program, and
-`trySwap` all nine, about 4.5 KB. Either is past one transaction, so the program is staged
-(`sauce-solana`). For one order over several pools under one price, use
+`trySwap` all nine, about 4.3 KB, so a program that knows its venue calls that venue's function and
+keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
+program is staged (`sauce-solana`). For one order over several pools under one price, use
 `sauce-solana-distributed-swap`.
 
 ## Example

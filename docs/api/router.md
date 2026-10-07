@@ -309,8 +309,12 @@ trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipien
 - **`recipient`** is the token account the output lands in; Crema and Phoenix pay only into the
   authority's own.
 
-Each function requires the slot's program to be its venue's and the pool's owner before it reads
-the pool, because the authority signs the swap. A pool that is not the pair reverts.
+Each venue's function requires the slot's program to be its venue's and the pool's owner before it
+reads the pool, because the authority signs the swap; `trySwap` requires the slot's program to own
+the pool and that owner to be one of the nine. These are the caller's accounts, so each reverts
+rather than skips: a slot naming another program, a pool of another venue (`not a Crema pool`, …)
+or of none (`not a supported venue's pool`), and a pool that is not the pair. Only the System
+program itself as the pool is a missing slot, which a `try` form skips.
 
 A failed call into another program fails the whole Solana transaction and cannot be caught, so a
 `try` form checks before anything moves and returns `0`, having moved nothing, for a missing slot
@@ -357,6 +361,7 @@ function main(
 ```
 
 A program carries the venues it calls and no other: one venue's function is about 1.6 KB of
-program, `trySwap` all nine about 4.5 KB. Either is past one transaction, so the program is staged
-in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
+program, `trySwap` all nine about 4.3 KB. A program that knows its venue calls that venue's
+function, and keeps `trySwap` for slots whose venue it learns as it runs. Either is past one
+transaction, so the program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
 is one `trySwap` call per pool.

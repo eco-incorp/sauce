@@ -599,11 +599,14 @@ maxPrice, minOut, recipient: Account)` — arrays because a non-`main` function 
 transaction): `0` having moved nothing for a missing slot, no input, swaps off, paused/closed, a fee
 that is not one rate, empty, past the limit, under one lot, and a Phoenix IOC that filled nothing
 (told by the paying account's balance, `settled`); a swap that paid returns at least 1, held to
-`minOut`. A wrong pair or a slot whose program is not its venue's and the pool's owner reverts.
+`minOut`. A wrong pair, a slot whose program is not the pool's owner, and a pool of another venue
+or of none revert (caller mistakes, never 0); only the System program itself as the pool is a
+missing slot. Each EXPORTED venue function checks its own program id, so a direct call never signs
+a CPI into a program the slot names; only `trySwap`'s internal path relies on its one owner read.
 Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions (each
-venue's `swap<Venue>` body, `clmmOrder`, `settled`): a program carries only the venues it calls,
-and the distributed swap (all nine through `trySwap`) is smaller than the inline helper it replaced
-(6,454 → 6,386 bytes). `compile.test.ts` pins its exports, argument order, each venue's program id
+venue's `swap<Venue>` body, `clmmOrder`, `settled`): a program carries only the venues it calls
+(`trySwap` ~4.3 KB, one venue's function ~1.3–1.5 KB), and the distributed swap (all nine through
+`trySwap`) is smaller than the inline helper it replaced (6,454 → 6,213 bytes). `compile.test.ts` pins its exports, argument order, each venue's program id
 (from the SDK's base58 ids) and instruction discriminator counted per function, and its revert
 reasons; `svm.e2e.test.ts` executes every function on the venues' own programs in LiteSVM against
 `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from the same state.
