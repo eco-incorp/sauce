@@ -41,6 +41,7 @@ skills/sauce-actions/references/*.md
 # skills' hand-written files it carries), held to the committed copy the same way.
 docs/reference
 docs/guides/distributed-swap.md
+docs/guides/solana-distributed-swap.md
 
 # Captured on-chain account dumps and forge build artifacts committed as fixtures — not authored
 # source. Refreshing them re-emits compact JSON, so formatting only guarantees churn next time.
