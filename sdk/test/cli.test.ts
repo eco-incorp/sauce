@@ -888,6 +888,34 @@ describe("sauce compile", () => {
     expect(run.stderr).not.toContain("main.js");
   });
 
+  it("reports a value returned after an await at the file's own line, the await it follows drawn", async () => {
+    const program = file(
+      "returns.sauce.ts",
+      [
+        "// A hop whose body returns a value.",
+        "function main(to: Address, amount: Uint256): Uint256 {",
+        "  await Ethereum.hop({",
+        "    reward: { token: USDC, amount },",
+        "    receive: { token: USDC, amount },",
+        "    refundee: to,",
+        "  });",
+        "  USDC.transfer(to, amount);",
+        "  return amount;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const run = await sauce(
+      ...["compile", program, "--chain", "base", "--intent-execution-fee", "0", "--offline"],
+    );
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain("a value `return` after an `await`");
+    expect(run.stderr).toContain(`--> ${program}:9:3`);
+    expect(run.stderr).toContain("9 |     return amount;");
+    expect(run.stderr).toContain("the `await` it follows");
+    expect(run.stderr).not.toContain("main.js");
+  });
+
   it("reports a syntax error at the file's own line and column", async () => {
     const program = file("bad.sauce.ts", "USDC.transfer(RECIPIENT, 1n);\nconst z = ;\n");
     const run = await sauce("compile", program, "--chain", "base");
