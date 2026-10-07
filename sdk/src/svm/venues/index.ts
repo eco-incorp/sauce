@@ -39,6 +39,7 @@ export {
 export {
   meteoraDlmm,
   fetchMeteoraDlmmConfig,
+  fetchMeteoraDlmmConfigBytes,
   METEORA_DLMM_PROGRAM_ID,
   METEORA_DLMM_MAX_BINS,
   LB_PAIR_DISCRIMINATOR,
