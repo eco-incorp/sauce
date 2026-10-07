@@ -18,15 +18,17 @@ A correct distributed swap on Solana, whatever its tokens or venues:
    nine accounts. The program trusts none of it. **A pool's venue is the program that owns it**
    (`pool.owner`), so the program reads that, refuses a pool no venue it knows owns, refuses a slot
    whose program is not the pool's owner, and refuses a pool that is not the pair.
-2. **Skips a missing slot, an empty pool, a pool already past its own limit, and one whose fee is
-   not one rate.** A slot with no pool is the System program in all nine accounts. A pool with no
-   liquidity at its price has nothing to sell. A pool whose price is at or past its own limit has
-   nothing to sell within it, and handed such a limit a venue fails the whole cook (Raydium's
-   `SqrtPriceLimitOverflow`, Orca's `InvalidSqrtPriceLimitDirection`, Crema's
+2. **Skips a missing slot, an empty pool, a pool already past its own limit, one whose fee is not
+   one rate, and a slot left only dust.** A slot with no pool is the System program in all nine
+   accounts. A pool with no liquidity at its price has nothing to sell. A pool whose price is at or
+   past its own limit has nothing to sell within it, and handed such a limit a venue fails the whole
+   cook (Raydium's `SqrtPriceLimitOverflow`, Orca's `InvalidSqrtPriceLimitDirection`, Crema's
    `WrongSqrtPriceLimit`). A pool with swaps switched off, a paused pool and a market that is not
    open would fail it too. A dynamic fee, an adaptive fee, or a Byreal pool's decay, imbalance or
    own fee rate is more than the rate the limit is adjusted for, so the program skips that pool
-   rather than pay past `maxPrice`.
+   rather than pay past `maxPrice`. A pool that reaches its limit leaves any remainder, however
+   small, to the slots after it; one too small to buy a unit at a pool's price after its fee buys
+   nothing there, and a venue would keep it or refuse it, so that slot is skipped too.
 3. **Gives each pool its own limit, adjusted for its fee.** A concentrated-liquidity pool takes its
    fee from the input, so its last unit costs its price divided by `1 − fee`: each pool's limit is
    the caller's sqrt price moved toward the trade by `√(1 − fee)`, **`limit ÷ √(1 − fee)` paying
@@ -273,7 +275,8 @@ Step by step:
   program to be the pool's owner and runs that owner's venue code; a pool no venue here owns
   reverts the cook. A concentrated-liquidity pool: it skips one whose fee is more than one rate or
   whose swaps are off, reads the mints and requires the pair, reads the liquidity, price and fee,
-  works out the pool's own limit, skips an empty pool or one not better than that limit, and swaps
+  works out the pool's own limit, skips an empty pool, one not better than that limit and an amount
+  too small to buy a unit at its price after its fee, and swaps
   everything offered up to it with the venue's own instruction. Its price is the square root of
   the higher-key token per lower-key token, times 2^64 (the pair in the order of their 32-byte
   keys), so `maxPrice` as that price is `√(maxPrice × 2^128 ÷ 1e18)` paying the higher-key token
@@ -360,7 +363,7 @@ deep ones, and an order book's offers further still.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 6.2 KB, well past one transaction, so it runs from a code
+- **The program is staged.** It is about 6.3 KB, well past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that ([Solana](solana.md)).
 - **The accounts go through a lookup table.** Four slots and the shared accounts are 46 accounts;
   listed in the transaction they are over 1,500 bytes, and through an address lookup table one byte
@@ -368,9 +371,9 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
 - **About five pools fit.** Four distinct pools, the shared accounts and the cook's own come to
   about 52 accounts of 64; a fifth pool brings eight more, about 60. Measured on the venues' own
   programs, the program costs about 200,000 compute units with every slot empty, each pool that
-  trades about 185,000 more, and each pool skipped after its reads about 75,000: four trading
-  pools take about 930,000 of the 1,400,000, and the five-slot program with four trading and one
-  skipped about 1,020,000. Pools that share a program or a config cost fewer accounts.
+  trades about 190,000 more, and each pool skipped after its reads about 70,000: four trading
+  pools take about 950,000 of the 1,400,000, and the five-slot program with four trading and one
+  skipped about 1,030,000. Pools that share a program or a config cost fewer accounts.
 - **Which pools, then.** On Solana the program does not walk every pool there is: the cook carries
   the four or five best the search found, the deepest and cheapest first. More pools than fit is
   more than one cook.
@@ -499,10 +502,10 @@ again, never a result. Buying SOL with 2,000 USDC, one pool deep enough for all 
 addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 349431 compute units, returns <the same three words, in hex>
+The cook succeeds from <owner>: 354383 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
 Rehearsed in a local copy (LiteSVM) of the 44 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 6341-byte program staged into a code buffer in 10 transactions, as `sauce run` stages it
+  the 6447-byte program staged into a code buffer in 10 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <source> (source, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC

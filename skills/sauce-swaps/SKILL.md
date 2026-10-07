@@ -245,7 +245,8 @@ trySwap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
 
 A `try` form returns `0` having moved nothing for a missing slot (the System program as its pool),
 no input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than one
-rate, an empty pool, a pool already past its limit, and a book with no offer within it. A swap that
+rate, an empty pool, a pool already past its limit, an input too small to buy one unit at the pool's
+price after its fee (dust), and a book with no offer within it. A swap that
 ran returns at least 1, and below `minOut` the cook reverts. A failed call into another program
 fails the whole Solana transaction and cannot be caught, so these are checks made before the swap,
 not a catch. The accounts are the caller's, so a pool that is not the pair, a slot whose program is
@@ -283,8 +284,8 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 1.6 KB of program, and
-`trySwap` all nine, about 4.3 KB, so a program that knows its venue calls that venue's function and
+A program carries only the venues it calls: one venue's function is about 1.7 KB of program, and
+`trySwap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
 keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
 program is staged (`sauce-solana`). For one order over several pools under one price, use
 `sauce-solana-distributed-swap`.

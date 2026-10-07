@@ -320,12 +320,15 @@ A failed call into another program fails the whole Solana transaction and cannot
 `try` form checks before anything moves and returns `0`, having moved nothing, for a missing slot
 (the System program as its pool), no input, a pool whose swaps are off, a paused pool or a market
 not open for taking, a fee that is more than one rate (a dynamic or adaptive fee, or a Byreal
-pool's own), a pool with no liquidity at its price, a pool already past its own limit, and an input
-smaller than one of a market's lots. A Phoenix order whose book has no offer within the limit is
-placed and fills nothing, so it returns `0` too, nothing having moved. A swap that ran returns at
-least 1, held to `minOut` and at least 1: an input too small to buy anything, which Orca's code
-takes and returns nothing for, reverts. A failure the checks do not foresee, such as a tick array
-missing from the slot or an input Raydium's code finds too small, fails the transaction.
+pool's own), a pool with no liquidity at its price, a pool already past its own limit, an input too
+small to buy one unit at the pool's price after its fee, an input smaller than one of a market's
+lots, and a market limit too large for an order's 64-bit price. The price only worsens as a pool
+sells, so the estimate is the most the input could buy: dust an earlier pool left (an atom, which
+the fee takes whole) is skipped, never handed to a venue that would keep it or refuse it. A Phoenix
+order whose book has no offer within the limit is placed and fills nothing, so it returns `0` too,
+nothing having moved. A swap that ran returns at least 1, held to `minOut` and at least 1, and
+reverts below it. A failure the checks do not foresee, such as a tick array missing from the slot,
+fails the transaction.
 
 ```js
 import { trySwap } from "@sauce/router";
@@ -360,8 +363,8 @@ function main(
 }
 ```
 
-A program carries the venues it calls and no other: one venue's function is about 1.6 KB of
-program, `trySwap` all nine about 4.3 KB. A program that knows its venue calls that venue's
+A program carries the venues it calls and no other: one venue's function is about 1.7 KB of
+program, `trySwap` all nine about 4.4 KB. A program that knows its venue calls that venue's
 function, and keeps `trySwap` for slots whose venue it learns as it runs. Either is past one
 transaction, so the program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
 is one `trySwap` call per pool.
