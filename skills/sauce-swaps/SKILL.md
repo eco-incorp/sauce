@@ -68,7 +68,9 @@ moved nothing, instead of reverting when the swap cannot be made. A swap that ra
   no code, a pool for another pair, a key no pool has and a swap the pool or the Router refuses are
   skipped. A swap that ran must then deliver `minOut`, and at least 1, or the whole program reverts:
   an input the pool kept (a dust amount it takes as its fee) cannot be given back. A swap that ran in
-  a pool with no liquidity in range moved nothing either way, and returns `0`.
+  a pool with no liquidity in range moved nothing either way, and returns `0`. With no price limit,
+  an empty pool costs a full tick walk before it is skipped, millions of gas; pass a
+  `sqrtPriceLimitX96` to bound it.
 
 ## How each venue is reached
 

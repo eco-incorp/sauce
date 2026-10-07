@@ -140,7 +140,9 @@ ways:
   for the zero address) must reach `minOut`, and at least 1, or the program reverts, because a swap
   that took input and delivered nothing (an input the pool keeps as its fee) cannot be undone. A
   swap that ran and moved nothing either way, in a pool with no liquidity in range, is skipped: the
-  Pot's `tokenIn` balance, read around the call, tells the two apart.
+  Router's own `amountInUsed`, what it paid out of the Pot, tells the two apart. With no price
+  limit, an empty pool costs a full tick walk before it is skipped (about 10 million gas for an
+  Infinity CL pool of tick spacing 2); pass a `sqrtPriceLimitX96` to bound it.
 
 DODO V2 charges its fee by the transaction's origin, which a program cannot read, so `tryDodoV2`
 asks the view for the Pot's fee. Where a pool's fee model tells the two apart, the swap can deliver

@@ -570,8 +570,11 @@ past the reserve), a caught pool call that resets its approval (`tryCurve`, `try
 caught Router call (`tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
 `tryInfinityBin`). The generation-4 Router takes no floor, so a caught Router call that ran is held
 afterwards to `minOut` and at least 1 and reverts below it (an input the pool keeps as its fee
-cannot be undone), except that one that moved nothing either way — the Pot's `tokenIn` balance and
-the recipient's `tokenOut` balance both unchanged, a pool with no liquidity in range — returns `0n`.
+cannot be undone), except that one that moved nothing either way — the Router's `amountInUsed` and
+the recipient's `tokenOut` gain both 0, a pool with no liquidity in range — returns `0n`. The
+compiler carries only a scalar through `.catch()`, so the try forms call the Router through
+`sauce-router-paid.abi.json`, its methods declaring `amountInUsed` alone. An empty pool with no
+price limit costs a full tick walk (~10M gas measured) before it is skipped.
 The `swap*.mainnet` suites execute every function and its `try` form on real pools (Infinity on
 Base), each skip path with the Pot's and the pool's balances held unchanged. The pay-first venues
 call the pool directly; V3/V4/Maverick/Infinity call the Pot's Router (`ctx.self()`). Token writes are `@sauce/token`'s
