@@ -70,13 +70,23 @@ describe("a token symbol's writes are @sauce/token's, the token first", () => {
     expect(() => bytesOf("base", `function main() { USDC.transfer(${TO}); }`)).toThrow(/transfer/);
   });
 
-  // Pending the compiler (v12 #555): `undefined` passed to an annotated run-time parameter is
-  // refused at the argument, `Unset`, rather than reaching the library function's body while it
-  // compiles ("`toBytesBe` is not a member of `amount`").
-  it.failing("a missing argument is refused at the argument, as unset", () => {
-    const missing = () => bytesOf("base", `function main() { USDC.transfer(${TO}); }`);
-    expect(missing).toThrow(/Unset/);
-    expect(missing).not.toThrow(/`toBytesBe` is not a member of `amount`/);
+  it("a missing argument is refused as unset, at the program's call", () => {
+    let caught: unknown;
+    try {
+      bytesOf("base", `function main() { USDC.transfer(${TO}); }`);
+    } catch (error) {
+      caught = error;
+    }
+    const [diagnostic] = (
+      caught as {
+        diagnostics: { code: string; message: string; path: string; start: { column: number } }[];
+      }
+    ).diagnostics;
+    // The library's parameter is annotated, so `undefined` reaching it is refused there, and the
+    // refusal is placed on the program's own call, not inside the library.
+    expect(diagnostic).toMatchObject({ code: "Unset", path: "main.js" });
+    expect(diagnostic!.message).toBe("`amount` is `undefined`, so it has no run-time value here");
+    expect(String((caught as Error).message)).not.toContain("`toBytesBe` is not a member");
   });
 
   it("a method the type does not have is refused", () => {

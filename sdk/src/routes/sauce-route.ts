@@ -389,11 +389,12 @@ export interface CompiledSauceProgram {
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
-   * `main`'s arguments, in order, the program is compiled for: `main` is compiled with each
-   * parameter a constant of its value, so it takes none at run time. Each must be one word: an
-   * unsigned integer, an address or a `bool`. How a wallet publishes the intents a program opens
-   * from values known before anything runs. Leave it out to compile `main` taking its arguments as
-   * it runs.
+   * `main`'s arguments the program is compiled for, one per entry of `entryParams` and in its
+   * order: `main` is compiled with each such parameter a constant of its value, so it takes none
+   * at run time. On Solana an `Account` parameter is no entry of `entryParams` and takes no value
+   * here: it stays a slot of the manifest. Each value is one word: an unsigned integer, an address
+   * or a `bool`. How a wallet publishes the intents a program opens from values known before
+   * anything runs. Leave it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
 }
