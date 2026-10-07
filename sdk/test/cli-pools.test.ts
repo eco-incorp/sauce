@@ -247,7 +247,8 @@ describe("the venues and the inputs", () => {
     const cases: Array<[string[], RegExp]> = [
       [["--chain", "base", "USDC"], /missing the pair: <token> <token>/],
       [["--chain", "base", "USDC", "WETH", "DAI"], /unexpected argument DAI/],
-      [["--chain", "solana", "USDC", "SOL"], /on an EVM chain; solana has none/],
+      [["--chain", "solana", "USDC", "WSOL"], /missing --rpc-url <url> \(or --config <file>\)/],
+      [["--chain", "solana", "USDC", "WSOL", "--v4-key", "3000:60"], /is for an EVM chain's pools/],
       [["--chain", "base", "USDC", "WETH"], /missing --rpc-url <url> \(or --config <file>\)/],
       [
         ["--chain", "base", "USDC", "WETH", "--v4-key", "3000", "--rpc-url", "http://127.0.0.1:1"],

@@ -420,10 +420,10 @@ describe("sauce_pools", () => {
     assert.match(message, /Pass rpcUrl with the call/);
   });
 
-  it("refuses a chain with no such pools, and a V4 key it cannot read, before any endpoint", async () => {
+  it("lists Solana's pools through an endpoint too, and refuses a V4 key it cannot read before one", async () => {
     assert.match(
       failed(await mcp.call("sauce_pools", { chain: "solana", tokenA: "USDC", tokenB: "SOL" })),
-      /sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; solana has none/,
+      /Listing a pair's pools needs an RPC endpoint for solana/,
     );
     assert.match(
       failed(
