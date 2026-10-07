@@ -340,8 +340,10 @@ const COOK = {
     .record(z.string().min(1).max(64), z.string().max(64))
     .optional()
     .describe(
-      "Solana only: each Account parameter main takes, by name: a base58 address, or `pot` (the " +
-        "Pot, signed for by the Kitchen) or `owner`. sauce_compile's manifest lists them.",
+      "Solana only: each Account parameter main takes, by name: a base58 address, `pot` (the " +
+        "Pot, signed for by the Kitchen), `owner`, `pot:USDC` or `owner:USDC` (that holder's " +
+        "associated account for a token, by symbol or mint), `mint:USDC` (the mint) or " +
+        "`program:USDC` (its token program). sauce_compile's manifest lists them.",
     ),
   via: z
     .enum(["kitchen", "engine"])
@@ -838,6 +840,17 @@ function withRecords(program: Program, output: CommandOutput): ToolOutput {
 export interface ToolOutput {
   readonly json: Record<string, unknown>;
   readonly notes?: readonly string[] | undefined;
+}
+
+/** A pools listing cut to its `limit` deepest pools, `more` counting the rest. */
+function limited(output: CommandOutput, limit: number | undefined): CommandOutput {
+  const json = output.json as { pools?: unknown[] } | undefined;
+  if (limit === undefined || json?.pools === undefined || json.pools.length <= limit) return output;
+
+  return {
+    ...output,
+    json: { ...json, pools: json.pools.slice(0, limit), more: json.pools.length - limit },
+  };
 }
 
 export const fromCommand = (output: CommandOutput): ToolOutput => ({
@@ -1448,8 +1461,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "read is at one block, `block` (the latest, or the one given): pass it to " +
         "sauce_simulate's block to rehearse on the prices a maxPrice was taken from. On Solana " +
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
-        "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix, each with its fee, liquidity, " +
-        "sides as above and `slots`: by the token paid, the nine accounts the distributed swap " +
+        "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
+        "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts the distributed swap " +
         "takes for the pool (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
         "System program; `skipped` lists the pools the distributed swap skips, with why.",
       input: {
@@ -1475,23 +1488,43 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         block: BLOCK.describe(
           "The block to read the pools at: a number, or latest, safe, finalized (default: latest).",
         ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe(
+            "Return only this many pools, the deepest first; `more` counts the rest. A Solana " +
+              "pair can have dozens, each with its slots both ways.",
+          ),
         rpcUrl: RPC_URL,
       },
+      // One schema for both kinds of chain: what only an EVM chain's pools have (a block, a
+      // contract, tickSpacing, sqrtPriceX96, `empty`) and what only Solana's have (a mint, a
+      // program, `slots`, `skipped`) is optional.
       output: {
         chain: z.string(),
-        block: z.string(),
+        block: z.string().optional(),
         tokens: z.array(
-          z.looseObject({ symbol: z.string(), address: z.string(), decimals: z.number() }),
+          z.looseObject({
+            symbol: z.string(),
+            address: z.string().optional(),
+            mint: z.string().optional(),
+            decimals: z.number(),
+          }),
         ),
         sortedBy: z.string(),
         pools: z.array(
           z.looseObject({
             venue: z.string(),
-            contract: z.string(),
+            contract: z.string().optional(),
+            program: z.string().optional(),
+            pool: z.string().optional(),
             fee: z.number(),
-            tickSpacing: z.number(),
-            liquidity: z.string(),
-            sqrtPriceX96: z.string(),
+            tickSpacing: z.number().optional(),
+            liquidity: z.string().optional(),
+            sqrtPriceX96: z.string().optional(),
             sides: z.array(
               z.looseObject({
                 pay: z.string(),
@@ -1501,10 +1534,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                 maxPrice: z.string(),
               }),
             ),
+            slots: z.record(z.string(), z.looseObject({})).optional(),
           }),
         ),
-        empty: z.array(z.looseObject({ venue: z.string(), why: z.string() })),
-        checked: z.array(z.looseObject({ venue: z.string(), contract: z.string() })),
+        more: z.number().optional(),
+        empty: z.array(z.looseObject({ venue: z.string(), why: z.string() })).optional(),
+        skipped: z.array(z.looseObject({ venue: z.string(), why: z.string() })).optional(),
+        checked: z.array(z.looseObject({ venue: z.string() })),
       },
       annotations: READS_CHAIN,
     },
@@ -1516,7 +1552,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         const url = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
 
         return fromCommand(
-          await svmPoolsCommand({ chain, rpcUrl: url, tokens: [args.tokenA, args.tokenB] }),
+          limited(
+            await svmPoolsCommand({ chain, rpcUrl: url, tokens: [args.tokenA, args.tokenB] }),
+            args.limit,
+          ),
         );
       }
       const v4Keys = (args.v4Pools ?? []).map((raw) => parseV4Key(raw, "v4Pools"));
@@ -1524,7 +1563,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const { client, block } = await connectAt(rpcUrl, chain, blockText(args.block));
 
       return fromCommand(
-        await poolsCommand({ chain, client, tokens: [args.tokenA, args.tokenB], v4Keys, block }),
+        limited(
+          await poolsCommand({ chain, client, tokens: [args.tokenA, args.tokenB], v4Keys, block }),
+          args.limit,
+        ),
       );
     },
   );

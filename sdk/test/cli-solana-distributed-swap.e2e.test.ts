@@ -308,18 +308,22 @@ describeSvm(
 
     it("finds the pair's pools and fills each slot with sauce pools, which the rehearsal takes", async () => {
       restoreVenues(harness.svm);
+      // SOL names the wrapped SOL a pool holds.
       const listed = await sauce(
         "pools",
         "--chain",
         "solana",
         "USDC",
-        "WSOL",
+        "SOL",
         "--rpc-url",
         SOLANA_URL,
         "--json",
       );
       if (listed.code !== 0)
         throw new Error(`exit ${listed.code}\n${listed.stderr}\n${listed.stdout}`);
+      expect(
+        (JSON.parse(listed.stdout) as { tokens: { symbol: string }[] }).tokens.map((t) => t.symbol),
+      ).toEqual(["USDC", "WSOL"]);
       const out = JSON.parse(listed.stdout) as {
         pools: {
           venue: string;

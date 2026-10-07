@@ -237,6 +237,25 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
             ? -1
             : 0,
   );
+  // An order book is listed beside the pools only while an offer on it is near the pair's price at
+  // its deepest pool: a book whose every offer costs half as much again (a stale one) fills nothing
+  // that a limit near the pair's price allows.
+  const deepest = listed.find((pool) => pool.liquidity !== undefined);
+  for (const book of deepest === undefined
+    ? []
+    : listed.filter((pool) => pool.liquidity === undefined)) {
+    const near = book.sides.some((side) => {
+      const there = deepest!.sides.find((one) => one.pay === side.pay);
+      return there !== undefined && BigInt(side.maxPrice) * 2n <= BigInt(there.maxPrice) * 3n;
+    });
+    if (near) continue;
+    listed.splice(listed.indexOf(book), 1);
+    skipped.push({
+      venue: book.venue,
+      pool: book.pool,
+      why: "every offer on its book costs more than half as much again as the pair's price at its deepest pool",
+    });
+  }
 
   const json = {
     chain: chain.slug,
@@ -288,7 +307,9 @@ async function mintOf(
   token: string,
   load: (key: Address) => Promise<Uint8Array | null>,
 ): Promise<Mint> {
-  const row = svmTokenRows(chain).find((one) => one.symbol.toUpperCase() === token.toUpperCase());
+  // A pool holds SOL wrapped, so SOL names WSOL here.
+  const symbol = token.toUpperCase() === "SOL" ? "WSOL" : token.toUpperCase();
+  const row = svmTokenRows(chain).find((one) => one.symbol.toUpperCase() === symbol);
   if (row !== undefined)
     return { symbol: row.symbol, mint: address(row.mint), decimals: row.decimals };
   if (!isAddress(token)) {
