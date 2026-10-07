@@ -229,10 +229,9 @@ describe("the intents a program opens, as compiled", () => {
     expect(bytesToHex(handled.bodies[0]!.bytecode)).toBe(bytesToHex(tried.bytecode));
   });
 
-  // Pending the compiler (v12 #554): a handled hop inside a handled hop compiles the library's `try`
-  // arrow again around another body, which the compiler refuses as a program containing itself
-  // until it tells the two apart by what each captures.
-  it.failing("a handled hop opens another handled hop, two and three deep", () => {
+  // A handled hop inside a handled hop compiles the library's `try` arrow again around another
+  // body: a program of its own, told apart by what it captures.
+  it("a handled hop opens another handled hop, two and three deep", () => {
     const hop = (chain: string, body: string) =>
       `${chain}.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { ${body} })

@@ -1355,9 +1355,9 @@ describeEvm("intent bodies, executed", () => {
           0x6e6fn,
         ],
       ] as const) {
-        // Pending the engine: a handler that reads `e` runs on the v12-evm release after 1.2.0 that
-        // carries `CATCH_READS` (v12 #553's major). Against an engine built from #553
-        // (SAUCE_V12_RUNTIME_CREATION_HEX), it passes.
+        // Pending the engine: a handler that reads `e` runs on v12-evm 2.0.0, the major that carries
+        // `CATCH_READS` (v12 #553). Against an engine built from #553 (SAUCE_V12_RUNTIME_CREATION_HEX),
+        // it passes.
         (handler.startsWith("(e)") ? it.failing : it)(
           name,
           async () => {
