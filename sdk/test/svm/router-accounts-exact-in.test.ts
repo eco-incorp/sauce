@@ -72,6 +72,8 @@ const FIRST: Record<string, boolean> = {
   jupToSctm: true,
   sellBase: true,
   sellQuote: false,
+  zeroIn: true,
+  oneIn: false,
 };
 
 /** A vector whose direction's name says the other way: Helium's redemption pays its supply token,
@@ -856,6 +858,31 @@ ROLES.metric = () => ({
   priceAccount: "price",
 });
 
+ROLES.quantum = () => ({
+  pool: "pool",
+  vaultA: "v0",
+  vaultB: "v1",
+  global: "global",
+  tokenProgram: "tokprog",
+  clock: "clock",
+  instructionsSysvar: "ixsys",
+});
+ROLES.obsidian = () => ({
+  pool: "pool",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  tokenProgram: "tp",
+  instructionsSysvar: "obsidianSysvarInstructions",
+});
+ROLES.alphaq = () => ({
+  pool: "market",
+  stats: "stats",
+  vaultA: "vaultA1",
+  vaultB: "vaultB1",
+  tokenProgram: "tokenProgram",
+  instructionsSysvar: "ixSysvar",
+});
+
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -927,6 +954,9 @@ const FAMILY: Record<string, string> = {
   "sanctum-stake-pool-3": "sanctumStakePool",
   archer: "archer",
   metric: "metric",
+  quantum: "quantum",
+  obsidian: "obsidian",
+  alphaq: "alphaq",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */

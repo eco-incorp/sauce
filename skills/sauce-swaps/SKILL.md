@@ -331,8 +331,9 @@ liquidity moved to SolFi v2. `xorca` through `heliumTreasury` stake, deposit, un
 the venue's own rate; xORCA only stakes, the liquid-unstake vault only unstakes, Huma only deposits
 and Helium's treasury only redeems. A venue settled in native SOL on the authority (pump.fun's
 bonding curve, Boop, Moonit) is not served, since a Pot holds no native SOL it can pay out. One
-Intro, BisonFi, the Sanctum stake pools, WOOFi and Metric have no function at all: a Pot cannot swap
-at the first three, and WOOFi's and Metric's swaps cannot be proven. `routerSvmAccountOrder` and
+Intro, BisonFi, the Sanctum stake pools, Quantum, Obsidian, AlphaQ, WOOFi and Metric have no
+function at all: a Pot cannot swap at the first six (the last three admit only routers on their own
+list), and WOOFi's and Metric's swaps cannot be proven. `routerSvmAccountOrder` and
 `routerSvmDataTemplate` still give their instruction, for a program that can send it.
 
 - **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:

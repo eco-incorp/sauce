@@ -839,8 +839,9 @@ It writes the authority, so it is attached writable.
 
 **Instruction only.** `routerSvmAccountOrder` and `routerSvmDataTemplate` also give the swap of
 venues `@sauce/router` has no function for, for a program that can send it; `ROUTER_SVM_VENUES`
-gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three, and WOOFi's and
-Metric's swaps cannot be proven:
+gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three, nor at Quantum,
+Obsidian or AlphaQ until it is on their routers' list, and WOOFi's and Metric's swaps cannot be
+proven:
 
 | Venue (`ROUTER_SVM_VENUES`)      | Program                                                                                                                                     | Why                                                                                                                                             | Data options     |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
@@ -849,12 +850,16 @@ Metric's swaps cannot be proven:
 | `sanctum-stake-pool`, `-2`, `-3` | `SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy`, `SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY`, `SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn` | a deposit (`DepositSol`, the only way here) takes native SOL from its signer                                                                    | none             |
 | `woofi`                          | `WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb`                                                                                               | its keepers stopped (its oracles last updated 2026-04-20 and 2025-11-23): on mainnet state its swap reverts `WooOracleNotFeasible` at any clock | `minOut`         |
 | `metric`                         | `Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j`                                                                                              | its oracle refuses its price as stale (its error 20, on mainnet itself on 2026-10-07)                                                           | `aToB`, `minOut` |
+| `quantum`                        | `QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv`                                                                                               | it admits a swap only when the transaction's outermost program is one of its aggregators                                                        | `aToB`, `minOut` |
+| `obsidian`                       | `HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z`                                                                                              | it admits a swap only from a router on its list                                                                                                 | none             |
+| `alphaq`                         | `ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA`                                                                                              | it admits a swap only from a router on its list                                                                                                 | `aToB`           |
 
 One Intro's pool names its token 0 and 1 vaults `vaultA` and `vaultB`; a swap paying token A takes
-the fee accounts `feeA0` and `feeB0`, one paying B `feeA1` and `feeB1`. WOOFi's token A is the pool's
-base token, and `aToB` sells it; its order takes the quote token's pool, price update and vault a
-second time, and the authority again, unsigned, as the rebate's recipient. A stake pool's
-`referrerFeeAccount` may be its `managerFeeAccount`, as the recipes send it.
+the fee accounts `feeA0` and `feeB0`, one paying B `feeA1` and `feeB1`. WOOFi's token A is the
+pool's base token, and `aToB` sells it; its order takes the quote token's pool, price update and
+vault a second time, and the authority again, unsigned, as the rebate's recipient. A stake pool's
+`referrerFeeAccount` may be its `managerFeeAccount`, as the recipes send it. AlphaQ's order is the
+same both ways, its data saying the direction.
 
 **A swap spends exactly `amountIn`**, with four exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference

@@ -308,6 +308,13 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
     // Exact input, the side (1 pays token A), then the floor as a u128.
     data: ({ aToB, floor }) => ["01", `01${bit(aToB)}${floor}${"00".repeat(8)}`],
   },
+  quantum: { takes: ["minOut"], data: ({ aToB, floor }) => ["07", floor + bit(!aToB)] },
+  obsidian: { takes: [], data: () => ["01", ""] },
+  alphaq: {
+    takes: [],
+    // Eight bytes after the amount every landed swap leaves zero: no floor of its own.
+    data: ({ aToB }) => [`0c${bit(aToB)}`, "00".repeat(8)],
+  },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>

@@ -422,6 +422,25 @@ export const ROUTER_SVM_VENUES = {
     data: null,
     cpi: null,
   },
+  // These three admit a swap only from a router on their own list, which a Pot is not: Quantum
+  // compares the transaction's outermost program with its list, Obsidian and AlphaQ the caller's.
+  // eco-incorp/sauce-recipes holds them back until that changes; their order and template are its
+  // instruction for when it does.
+  quantum: {
+    program: "QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv",
+    data: null,
+    cpi: null,
+  },
+  obsidian: {
+    program: "HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z",
+    data: null,
+    cpi: null,
+  },
+  alphaq: {
+    program: "ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA",
+    data: null,
+    cpi: null,
+  },
   bisonfi: {
     program: "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi",
     data: null,
@@ -799,6 +818,9 @@ const EXACT_IN_VENUES = [
   "sanctum-stake-pool-3",
   "archer",
   "metric",
+  "quantum",
+  "obsidian",
+  "alphaq",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1845,6 +1867,47 @@ function exactInAccountOrder(
         r("oracleProgram"),
         w("oracleConfig"),
         w("priceAccount"),
+      ];
+    case "quantum":
+      // Token 0 is A.
+      return [
+        AUTHORITY,
+        ownerA,
+        ownerB,
+        w("pool"),
+        w("vaultA"),
+        w("vaultB"),
+        r("global"),
+        r("tokenProgram"),
+        r("clock"),
+        r("instructionsSysvar"),
+      ];
+    case "obsidian":
+      return [
+        AUTHORITY,
+        w("pool"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("tokenProgram"),
+        r("instructionsSysvar"),
+      ];
+    case "alphaq":
+      // The data says the direction; the order is the same both ways, the vaults three times.
+      return [
+        AUTHORITY,
+        r("pool"),
+        w("stats"),
+        w("source"),
+        w("recipient"),
+        w("vaultA"),
+        w("vaultB"),
+        r("vaultA"),
+        r("vaultB"),
+        w("vaultB"),
+        r("tokenProgram"),
+        r("instructionsSysvar"),
       ];
     default: {
       const unknown: never = venue;
