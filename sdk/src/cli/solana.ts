@@ -47,7 +47,7 @@ import { bytesToHex, formatUnits, hexToBytes, parseUnits, type Hex } from "viem"
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
-  mainReturnType,
+  entryReturnType,
   parseEntryType,
   type EntryType,
   type EntryValue,
@@ -2047,7 +2047,7 @@ async function simulatePrepared(prepared: Prepared, input: SvmCookInput): Promis
   );
   // What main returned: the engine's return data, read as the type main declares.
   const returns = result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
-  const returnType = mainReturnType(input.text);
+  const returnType = entryReturnType(prepared.program.entrySignature);
   const json = {
     ok: result.ok,
     ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
@@ -2405,7 +2405,7 @@ async function stagedRehearsal(
     /InstructionError/.test(String(simulated.err));
   const returns =
     !failed || (!instructionFailed && returnData.length > 0) ? bytesToHex(returnData) : undefined;
-  const returnType = mainReturnType(input.text);
+  const returnType = entryReturnType(prepared.program.entrySignature);
   const reason = failed
     ? namingAccount(
         failureReason(simulated.err, logs, returnData.length > 0 ? returnData : undefined),
@@ -2506,7 +2506,7 @@ async function planOf(prepared: Prepared, input: SvmCookInput): Promise<SvmPlan>
       continue;
     tokenAccounts.push({ address: token.address, ...token.account, label: token.label });
   }
-  const returnType = mainReturnType(input.text);
+  const returnType = entryReturnType(prepared.program.entrySignature);
 
   return newSvmPlan({
     owner: input.owner,

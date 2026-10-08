@@ -39,7 +39,14 @@ import { unknownBalanceError, unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
-import { bindEntryArguments, mainParams, type EntryParam, type EntryValue } from "./entry.js";
+import {
+  checkEntryWords,
+  entryParamsOf,
+  entryWords,
+  type EntryParam,
+  type EntrySignature,
+  type EntryValue,
+} from "./entry.js";
 import type { AddressInput, CallInput } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -285,7 +292,9 @@ export interface CompiledSauceProgram {
    * [a, b])`, nested ones multiplied), else null. A swap in no loop runs once and is not listed.
    */
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
-  /** Source after the SDK's rewrites, before the compiler adapter adds entry annotations. */
+  /** `main`'s signature as the compile reports it. */
+  readonly entrySignature: EntrySignature;
+  /** Source after the SDK's rewrites: what the compiler was given. */
   readonly source: string;
 }
 
@@ -300,9 +309,13 @@ export interface DerivedValue {
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
-   * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. Leave
-   * it out to compile `main` taking its arguments as it runs.
+   * `main`'s arguments the program is compiled for, one per entry of `entryParams` and in its
+   * order: `main` is compiled with each such parameter a constant of its value (and every `const`
+   * computed from them), so it takes none at run time and the result's `entryParams` is empty. On
+   * Solana an `Account` parameter is no entry of `entryParams` and takes no value here: it stays a
+   * slot of the manifest. Each value is one word: an unsigned integer, an address or a `bool`; the
+   * compiler holds each to its parameter. Leave it out to compile `main` taking its arguments as it
+   * runs.
    */
   readonly args?: readonly EntryValue[];
   /**
@@ -330,16 +343,7 @@ export function compileSauceProgram(
   options: SauceProgramOptions = {},
 ): CompiledSauceProgram {
   const resolved = requireChain(chain);
-  const { args, stops, ...given } = options;
-  const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const taken = (args === undefined ? [] : mainParams(source).map((param) => param.name)).find(
-    (name) => Object.hasOwn(given.defines ?? {}, name),
-  );
-  if (taken !== undefined) {
-    throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
-  }
-  const compile: SauceCompileOptions =
-    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
+  const { args, stops, ...compile } = options;
   // The chain's bundle, in two halves. The ambient MODULES join the caller's. The chain-scoped
   // NAMES travel as a scope for this program's chain, never in `defines`, so `defines` stays exactly
   // what the caller wrote.
@@ -349,16 +353,28 @@ export function compileSauceProgram(
   };
   const program = compileForChain(
     resolved,
-    bound?.source ?? source,
+    source,
     { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
     scope,
     stops,
+    args === undefined ? undefined : entryWords(args),
   );
+  if (args !== undefined) {
+    checkEntryWords(args, program.entrySignature);
+    const taken = program.entrySignature.params.find((param) =>
+      Object.hasOwn(compile.defines ?? {}, param.name),
+    );
+    if (taken !== undefined) {
+      throw new RangeError(
+        `${taken.name} is main's parameter, given in args; it is not also a define`,
+      );
+    }
+  }
   const values = program.derivedValues ?? {};
-  const entryParams = mainParams(program.source).filter(
-    (param) =>
-      (resolved.kind !== "svm" || !/^Account\b/.test(param.type)) &&
-      !Object.hasOwn(values, param.name),
+  // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
+  // carries, and none of the values the SDK added. Nothing is read from the source.
+  const entryParams = entryParamsOf(program.entryParams).filter(
+    (param) => !Object.hasOwn(values, param.name),
   );
   const derivedValues = Object.entries(values).map(([name, derive]): DerivedValue => ({
     name,
@@ -376,6 +392,7 @@ export function compileSauceProgram(
     ...(derivedValues.length === 0 ? {} : { derivedValues }),
     ...(program.stoppable === undefined ? {} : { stoppable: program.stoppable }),
     ...(program.stoppableRuns === undefined ? {} : { stoppableRuns: program.stoppableRuns }),
+    entrySignature: program.entrySignature,
     source: program.source,
   };
 }
@@ -393,6 +410,8 @@ function compileForChain(
   scope: RouteScope,
   /** On Solana, the swaps at a price to hold to a stop (`SauceProgramOptions.stops`). */
   stops: readonly string[] = [],
+  /** `main`'s arguments the program is compiled for, as words (`entryWords`). */
+  args?: readonly (bigint | boolean | string)[],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
@@ -403,6 +422,8 @@ function compileForChain(
   readonly derivedValues?: Readonly<Record<string, string>>;
   readonly stoppable?: readonly string[];
   readonly stoppableRuns?: Readonly<Record<string, number | null>>;
+  readonly entryParams: RsCompileResult["entryParams"];
+  readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -498,8 +519,7 @@ function compileForChain(
       source,
       svmTokenValues(tokenMap, options.defines),
       svmTokenRows(chain),
-      // The caller's values, which a holder may name as a key: main's arguments bound into the
-      // program (`args`).
+      // The caller's values, which a holder may name as a key: its defines.
       new Map(
         Object.entries(options.defines ?? {}).filter(
           (entry): entry is [string, bigint] => typeof entry[1] === "bigint",
@@ -514,6 +534,12 @@ function compileForChain(
       derivedValues = lowered.values;
       stoppable = lowered.stoppable;
       stoppableRuns = lowered.stoppableRuns;
+    }
+    if (args !== undefined && Object.keys(derivedValues ?? {}).length > 0) {
+      throw new RangeError(
+        "args: a swap held to a stop takes its stop as main runs, and a program compiled for its " +
+          "arguments takes none: compile it without args, or without stops",
+      );
     }
   } else {
     absorb(
@@ -557,6 +583,7 @@ function compileForChain(
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
       ambient: options.ambient,
+      ...(args === undefined ? {} : { args }),
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call
@@ -576,7 +603,7 @@ function compileForChain(
       error
     );
   }
-  const { manifest, entryEncoding, ...compiled } = rs;
+  const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
@@ -587,6 +614,8 @@ function compileForChain(
     compiled,
     source,
     entryEncoding,
+    entryParams,
+    entrySignature,
     ...(manifest === undefined ? {} : { manifest }),
     ...(derivedAccounts === undefined ? {} : { derivedAccounts }),
     ...(derivedValues === undefined ? {} : { derivedValues }),

@@ -404,7 +404,7 @@ local chain, the addresses as placeholders and the lines on how it was simulated
 
 ```text
 The cook succeeds from <owner>: gas used 692591, returns <the same three words, in hex>
-main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 1329416629, unspent: 0 }
+main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: { spent: 2000000000, bought: 1329416629, unspent: 0 }
 What moved, in order:
   [1] <pool A>  -> <recipient>  3.40239687 SPCXc
   [2] Pot <Pot> -> <pool A>     512.65916 USDC

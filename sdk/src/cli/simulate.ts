@@ -20,7 +20,7 @@ import {
 import { nativeErc20 } from "../chains/index.js";
 import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
-import { mainReturnType } from "../routes/entry.js";
+import { entryReturnType } from "../routes/entry.js";
 import { mergeOverrides } from "../evm/balance-slot.js";
 import { assumeTokenBalance } from "./assume.js";
 import { balanceReader, connectAt, kitchenFee, potState } from "./chain.js";
@@ -354,7 +354,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
           ),
         ];
   // What main returned, read as the type it declares.
-  const returnType = mainReturnType(input.text);
+  const returnType = entryReturnType(cook.program.entrySignature);
   const returned =
     rehearsal.ok && returnType !== undefined
       ? decodeReturned(returnType, rehearsal.returns, input.chain)

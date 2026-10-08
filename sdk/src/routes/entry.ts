@@ -1,9 +1,10 @@
 /**
- * A program's `main(...)` parameters on the route path: reading its signature, and encoding the
- * values a caller passes for it.
+ * A program's `main(...)` parameters on the route path: the words a program is compiled for, and
+ * encoding the values a caller passes for it.
  *
- * The SDK's passes parse SauceScript with its annotations (`parse.ts`), so a typed `main` reaches
- * the compiler exactly as written; this only reads it.
+ * `main`'s signature is the compiler's: `entryParams` (an ABI signature) and `entrySignature` (the
+ * declared types and the return type, from every compile, one for `args` included). Only
+ * `mainSignature` reads the source, for the `--fund` wrapper, which writes around it.
  *
  * ENTRY ARGUMENTS. A value for a parameter arrives at run time, appended to the program: ABI-v1
  * (`abi.encode` of the parameters in order, no selector, except that a tuple parameter is always
@@ -27,13 +28,36 @@ import {
   numberToHex,
   size,
   sliceHex,
+  type AbiParameter,
   type Hex,
 } from "viem";
 
-import type { AstNode } from "./ast-walk.js";
-import { parseSauce } from "./parse.js";
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
+
+/** `main`'s signature: every runtime parameter and, where the compile reports it, the return type
+ *  (`"void"` for a `main` that returns nothing). */
+export interface EntrySignature {
+  readonly params: readonly EntryParam[];
+  readonly returns?: string;
+}
+
+/** `main`'s signature as the compile reports it: each parameter's name and type in the language's
+ *  own spelling, with its `entryParams` entry (none for an SVM `Account`), and the declared return
+ *  type. A program compiled for its arguments reports them here though it takes none. */
+export function entrySignatureOf(signature: {
+  readonly params: readonly EntryParam[];
+  readonly returns?: string;
+}): EntrySignature {
+  return {
+    params: signature.params.map(({ name, type, abi }) => ({
+      name,
+      type,
+      ...(abi === undefined ? {} : { abi }),
+    })),
+    ...(signature.returns === undefined ? {} : { returns: signature.returns }),
+  };
+}
 
 /** One of `main`'s runtime parameters, as the program declares it. */
 export interface EntryParam {
@@ -41,6 +65,45 @@ export interface EntryParam {
   /** The declared type as written (`Address`, `Uint256[]`, `{ amount: Uint256 }`); `Uint256` when
    *  the parameter has no annotation. */
   readonly type: string;
+  /** In `entrySignature`: its `entryParams` entry, an ABI parameter; none for an SVM `Account`. */
+  readonly abi?: AbiParameter;
+}
+
+/**
+ * `main`'s parameters as the compiler reports them (`CompileResult.entryParams`, an ABI signature)
+ * in the SauceScript spelling `EntryParam` carries — nothing is read from the source.
+ */
+export function entryParamsOf(
+  params: readonly {
+    readonly name: string;
+    readonly type: string;
+    readonly components?: unknown;
+  }[],
+): EntryParam[] {
+  return params.map((param) => ({ name: param.name, type: entryTypeOf(param) }));
+}
+
+function entryTypeOf(param: { readonly type: string; readonly components?: unknown }): string {
+  if (param.type.endsWith("[]")) {
+    return `${entryTypeOf({ ...param, type: param.type.slice(0, -2) })}[]`;
+  }
+  if (param.type === "tuple") {
+    const fields = (param.components as { name: string; type: string; components?: unknown }[])
+      .map((field) => `${field.name}: ${entryTypeOf(field)}`)
+      .join(", ");
+    return `{ ${fields} }`;
+  }
+  // The compiler reports an `Address` as `address` on the EVM and as `bytes32` on Solana, where a
+  // public key is the whole word; no other parameter is a `bytes32`.
+  const scalar: Readonly<Record<string, string>> = {
+    int256: "Int256",
+    address: "Address",
+    bytes32: "Address",
+    bool: "bool",
+    bytes: "bytes",
+    string: "string",
+  };
+  return scalar[param.type] ?? "Uint256";
 }
 
 /** A value for an entry parameter: a scalar as a bigint, safe-integer number or integer string, an
@@ -203,70 +266,6 @@ export function mainSignature(source: string): MainSignatureText | undefined {
         ? brace >= 0 && bodyReturnsValue(code, brace)
         : !/^:\s*void$/.test(returns.trim()),
   };
-}
-
-/**
- * `main`'s parameters as `source` declares them — every one, `Account` slots included. A record
- * type named by an `interface` the file declares is spelled out inline (`{ amount: Uint256 }`),
- * since that is what a value for it is encoded against.
- */
-export function mainParams(source: string): EntryParam[] {
-  const main = locateMain(source);
-  if (main === undefined) return [];
-  const params = splitTopLevel(source.slice(main.open + 1, main.close)).map(splitParam);
-  const records = params.some((param) => param.type !== undefined) ? interfaces(source) : new Map();
-
-  return params.map(({ name, type }) => ({
-    name,
-    type: type === undefined ? "Uint256" : inlineRecords(type, records),
-  }));
-}
-
-/**
- * The type `main` declares it returns (`Address`, `Uint256[]`, `{ out: Uint256 }`), with a record an
- * `interface` names spelled out inline as `mainParams` does — `undefined` when `main` declares none
- * or `void`, or there is no `main`.
- */
-export function mainReturnType(source: string): string | undefined {
-  const main = locateMain(source);
-  if (main === undefined) return undefined;
-  const annotation = source
-    .slice(main.close + 1, main.returnEnd)
-    .replace(/^\s*:/, "")
-    .trim();
-  if (annotation === "" || annotation === "void") return undefined;
-
-  return inlineRecords(annotation, interfaces(source));
-}
-
-/** Each `interface` the module declares, as the inline object type it names. */
-function interfaces(source: string): ReadonlyMap<string, string> {
-  const records = new Map<string, string>();
-  for (const node of (parseSauce(source) as unknown as { body: AstNode[] }).body) {
-    const declaration =
-      node.type === "ExportNamedDeclaration" ? (node.declaration as AstNode | null) : node;
-    if (declaration?.type !== "TSInterfaceDeclaration") continue;
-    const members = (declaration.body as { body: AstNode[] }).body.map((member) => {
-      const key = member.key as AstNode & { name: string };
-      const annotation = (member.typeAnnotation as { typeAnnotation: AstNode }).typeAnnotation;
-
-      return `${key.name}: ${source.slice(annotation.start, annotation.end)}`;
-    });
-    records.set((declaration.id as { name: string }).name, `{ ${members.join(", ")} }`);
-  }
-
-  return records;
-}
-
-/** `type` with every interface name in it replaced by its inline object type, recursively. */
-function inlineRecords(type: string, records: ReadonlyMap<string, string>, depth = 0): string {
-  if (records.size === 0 || depth > 16) return type;
-
-  return type.replace(/[A-Za-z_$][\w$]*/g, (name) => {
-    const record = records.get(name);
-
-    return record === undefined ? name : inlineRecords(record, records, depth + 1);
-  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -530,100 +529,72 @@ function decodeAbiEntry(
   });
 }
 
-/**
- * One of `main`'s arguments as a single compile-time value: a signed or unsigned integer or an
- * address as a bigint, a `bool` as a boolean. `undefined` for a parameter of any other type (bytes,
- * a string, an array, a record, an `Account`), which no one word holds. Throws, naming `at`, on a
- * value that is not of the declared type, as `encodeEntryArguments` does.
- */
-export function entryConstant(
-  type: string,
-  value: EntryValue,
-  at: string,
-): bigint | boolean | undefined {
-  const parsed = parseEntryType(type);
-  if (
-    parsed.kind !== "uint" &&
-    parsed.kind !== "int" &&
-    parsed.kind !== "address" &&
-    parsed.kind !== "bool"
-  ) {
-    return undefined;
-  }
-  // A Solana key, in base58: an account a program on Solana names, bound as the 32-byte word that
-  // is its key there. Never an address on an EVM chain, whose 20 bytes are hex.
-  if (parsed.kind === "address" && typeof value === "string" && isSvmKey(value)) {
-    return BigInt(bytesToHex(new Uint8Array(getAddressEncoder().encode(svmAddress(value)))));
-  }
-  const normalized = normalize(parsed, value, at);
-
-  return typeof normalized === "string" ? BigInt(normalized) : (normalized as bigint | boolean);
+/** `main`'s declared return type, as the compiler reports it (`entrySignature.returns`):
+ *  `undefined` when it returns nothing, or a value it does not annotate. */
+export function entryReturnType(signature: EntrySignature): string | undefined {
+  return signature.returns === undefined || signature.returns === "void"
+    ? undefined
+    : signature.returns;
 }
 
-/** {@link bindEntryArguments}'s result. */
-export interface BoundEntryArguments {
-  /** The source with bound parameters removed; signed constants retain their declared type in
-   *  main's body instead of travelling through the unsigned defines API. */
-  readonly source: string;
-  /** Unsigned, address and bool parameter values, passed through the compiler's defines API. */
-  readonly constants: Readonly<Record<string, bigint | boolean>>;
-  /** The parameters declared `Address`. */
-  readonly addresses: readonly string[];
-}
+/** An argument a program is compiled for that is not one word. */
+export class EntryArgumentError extends TypeError {}
 
 /**
- * `source` with `main`'s arguments bound into it as constants: `main(amount: Uint256)` given
- * `[1000000n]` compiles as if its body read `amount` as `1000000`, the program then taking none at
- * run time. Each must be one word: a signed or unsigned integer, an address or a `bool`.
- *
- * Throws a `RangeError` for a source whose `main` declares no parameters, or a wrong count, and a
- * `TypeError` naming the parameter for a value of the wrong type or a parameter no one word holds.
+ * `main`'s arguments as the words a program is compiled for: the compiler's `args`, which compiles
+ * `main(amount: Uint256)` given `[1000000n]` as if its body read `amount` as `1000000`, so it takes
+ * none as it runs. Each is one word: an integer (a bigint, a safe integer, or its decimal digits; a
+ * negative one, for an `Int256`, as its two's-complement word), `0x` hex (an address, or its bytes),
+ * a Solana key in base58 (the 32 bytes an `Address` is there), or a `bool`. The compiler holds each
+ * to its parameter (`ArgsCount`, `ArgNotWord`, `ArgOutOfRange`), and `checkEntryWords` a negative
+ * one to an `Int256`; anything else is refused here, naming its place.
  */
-export function bindEntryArguments(
-  source: string,
-  values: readonly EntryValue[],
-): BoundEntryArguments {
-  const signature = locateMain(source);
-  const params = mainParams(source);
-  if (signature === undefined || params.length === 0) {
-    throw new RangeError("the program declares no `main` with parameters to bind arguments to");
-  }
-  const shape = params.map((param) => `${param.name}: ${param.type}`).join(", ");
-  if (values.length !== params.length) {
-    throw new RangeError(
-      `main(${shape}) takes ${params.length} argument${params.length === 1 ? "" : "s"}, got ` +
-        `${values.length}`,
+export function entryWords(values: readonly EntryValue[]): (bigint | boolean | string)[] {
+  return values.map((value, index) => {
+    if (typeof value === "boolean") return value;
+    const integer =
+      typeof value === "bigint"
+        ? value
+        : typeof value === "number" && Number.isSafeInteger(value)
+          ? BigInt(value)
+          : typeof value === "string" && /^-\d+$/.test(value)
+            ? BigInt(value)
+            : undefined;
+    if (integer !== undefined && integer >= 0n) return integer;
+    if (integer !== undefined && integer >= -(1n << 255n)) return integer + (1n << 256n);
+    if (typeof value === "string" && /^(?:\d+|0x[0-9a-fA-F]+)$/.test(value)) return value;
+    if (typeof value === "string" && isSvmKey(value)) {
+      return bytesToHex(new Uint8Array(getAddressEncoder().encode(svmAddress(value))));
+    }
+    if (value instanceof Uint8Array) return bytesToHex(value);
+    throw new EntryArgumentError(
+      `args[${index}]: a program is compiled for words: an integer, an address or a bool, ` +
+        `not ${Array.isArray(value) ? "an array" : typeof value === "object" ? "a record" : typeof value === "bigint" ? `${value}, below -2^255` : JSON.stringify(value)}`,
     );
-  }
-  const constants: Record<string, bigint | boolean> = {};
-  const addresses: string[] = [];
-  const signed: string[] = [];
-  params.forEach((param, index) => {
-    const at = `argument ${index + 1} (${param.name}: ${param.type})`;
-    const value = entryConstant(param.type, values[index]!, at);
-    if (value === undefined) {
-      throw new TypeError(
-        `${at}: only one word binds as a constant: an integer, an address or a bool`,
+  });
+}
+
+/**
+ * Holds a negative argument to an `Int256` parameter, by the signature the compile reports: the
+ * compiler took it as `entryWords` gave it, its two's-complement word, which any other parameter
+ * would read as a large unsigned integer.
+ */
+export function checkEntryWords(values: readonly EntryValue[], signature: EntrySignature): void {
+  // In the order the compiler takes `args`: `entryParams`', with no SVM `Account`.
+  const params = signature.params.filter((param) => param.abi !== undefined);
+  values.forEach((value, index) => {
+    const negative =
+      typeof value === "bigint" || typeof value === "number"
+        ? value < 0
+        : typeof value === "string" && value.startsWith("-");
+    const param = params[index];
+    if (negative && param !== undefined && param.type !== "Int256") {
+      throw new EntryArgumentError(
+        `args[${index}]: ${String(value)} is negative, and main's ${param.name} is a ${param.type}, ` +
+          "not an Int256",
       );
     }
-    const kind = parseEntryType(param.type).kind;
-    if (kind === "int") signed.push(`let ${param.name}: Int256 = ${value};`);
-    else constants[param.name] = value;
-    if (kind === "address") addresses.push(param.name);
   });
-  const list = source.slice(signature.open + 1, signature.close);
-  const sourceTail = source.slice(signature.close);
-  const body = blankLiterals(source).indexOf("{", signature.returnEnd) - signature.close;
-  const tail =
-    signed.length === 0
-      ? sourceTail
-      : sourceTail.slice(0, body + 1) + signed.join(" ") + sourceTail.slice(body + 1);
-
-  return {
-    source: source.slice(0, signature.open + 1) + list.replace(/[^\r\n]/g, " ") + tail,
-    constants,
-    addresses,
-  };
 }
 
 /**

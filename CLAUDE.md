@@ -517,8 +517,9 @@ run (see the Foundry gotcha above).
 source is SauceScript, annotations included, so the rewrites must take what the compiler takes; a
 JavaScript-only parse rejected every typed helper. `ast-walk.ts#walk` steps over annotations and
 type-only declarations, so no rewrite reads a type name as a value. Do not add a second parser, and
-do not reintroduce a "rewrites cannot parse annotations" workaround: the compile seam's one remaining
-insertion is `ensureVoidMain`.
+do not reintroduce a "rewrites cannot parse annotations" workaround. `main`'s signature, its return
+type and its void are the compiler's (`entrySignature`, `entryParams`, `args`): nothing reads `main`
+out of the program's text but `mainSignature`, for the `--fund` wrapper.
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
@@ -1481,7 +1482,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   the `SKILL.md` must not depend on them.
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
   `// @chain` header), and every input it takes is a typed `main(...)` parameter passed with
-  `--args` (`compileSauceProgram`'s `args`, over `routes/entry.ts#bindEntryArguments`). A
+  `--args` (`compileSauceProgram`'s `args`, the compiler's own). A
   compile-time define is
   the SDK's own mechanism: `--define`/`--defines` stay as the low-level flags `--help` lists apart,
   and no skill, doc, example or usage line teaches them.
