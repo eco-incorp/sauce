@@ -216,6 +216,37 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
   },
   "runner-rodeo": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
   "scale-vmm": { takes: ["minOut"], data: ({ aToB, floor }) => [aToB ? BUY : SELL, floor] },
+  xorca: { takes: [], oneWay: "xORCA only stakes", data: () => ["00", ""] },
+  solayer: { takes: [], data: ({ aToB }) => [aToB ? "fe00de2891766e14" : "d511d75105727c4e", ""] },
+  voltr: {
+    takes: [],
+    data: ({ aToB }) => (aToB ? ["7ee015ffe4357521", ""] : ["dd3873a880dcebf5", "0100"]),
+  },
+  "vault-liquid-unstake": {
+    takes: [],
+    oneWay: "the liquid-unstake vault only unstakes",
+    data: () => ["64034fd1bf9db40b", "00"],
+  },
+  "hylo-stability-pool": {
+    takes: [],
+    data: ({ aToB }) => [aToB ? "bac68ce981276299" : "35fe1af277ed4921", "00"],
+  },
+  huma: {
+    takes: [],
+    oneWay: "Huma only deposits here",
+    data: () => ["f223c68952e1f2b6", "0d0000004e4f5f434f4d4d49544d454e5400"],
+  },
+  "helium-treasury": {
+    takes: ["minOut"],
+    oneWay: "Helium's treasury only redeems",
+    data: ({ floor }) => ["eb7fab8b774deb76", floor],
+  },
+  "jupiter-lend-earn": {
+    takes: [],
+    data: ({ aToB }) => [aToB ? "f223c68952e1f2b6" : "b80c569546c461e1", ""],
+  },
+  hylo: { takes: [], data: ({ aToB }) => [aToB ? "0e0ea31ae0b69f9b" : "aaed62683c5248a1", "00"] },
+  carrot: { takes: [], data: ({ aToB }) => [aToB ? "be0162d65163def7" : "b80c569546c461e1", ""] },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>
