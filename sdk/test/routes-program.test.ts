@@ -157,28 +157,24 @@ describe("main's signature", () => {
     ]);
   });
 
-  // Pending the compiler: `main`'s declared types and return type (`entrySignature`).
-  it.failing(
-    "reports main's signature, an unannotated parameter a Uint256, compiled for its arguments too",
-    () => {
-      const signature = (source: string, args?: readonly EntryValue[]) =>
-        compileSauceProgram("ethereum", source, args === undefined ? {} : { args }).entrySignature;
-      const params = [
-        { name: "a", type: "Uint256", abi: { name: "a", type: "uint256" } },
-        { name: "b", type: "bool", abi: { name: "b", type: "bool" } },
-      ];
-      expect(signature("function main(a, b: bool): Uint256 { return b ? a : 0; }")).toEqual({
-        params,
-        returns: "Uint256",
-      });
-      // The compiler's `entryParams` is empty for a program compiled for its arguments; its
-      // signature is not.
-      expect(
-        signature("function main(a, b: bool): Uint256 { return b ? a : 0; }", [5n, true]),
-      ).toEqual({ params, returns: "Uint256" });
-      expect(signature("USDC.transfer(0x1, 1);")).toEqual({ params: [], returns: "void" });
-    },
-  );
+  it("reports main's signature, an unannotated parameter a Uint256, compiled for its arguments too", () => {
+    const signature = (source: string, args?: readonly EntryValue[]) =>
+      compileSauceProgram("ethereum", source, args === undefined ? {} : { args }).entrySignature;
+    const params = [
+      { name: "a", type: "Uint256", abi: { name: "a", type: "uint256" } },
+      { name: "b", type: "bool", abi: { name: "b", type: "bool" } },
+    ];
+    expect(signature("function main(a, b: bool): Uint256 { return b ? a : 0; }")).toEqual({
+      params,
+      returns: "Uint256",
+    });
+    // The compiler's `entryParams` is empty for a program compiled for its arguments; its
+    // signature is not.
+    expect(
+      signature("function main(a, b: bool): Uint256 { return b ? a : 0; }", [5n, true]),
+    ).toEqual({ params, returns: "Uint256" });
+    expect(signature("USDC.transfer(0x1, 1);")).toEqual({ params: [], returns: "void" });
+  });
 
   it("spells out a record an interface names, so a value for it can be encoded", () => {
     const source = [

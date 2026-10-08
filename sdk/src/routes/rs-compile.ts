@@ -294,7 +294,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     entrySchema: result.entrySchema,
     entryEncoding: result.entryEncoding,
     entryParams: result.entryParams,
-    entrySignature: entrySignatureOf(result.entryParams),
+    entrySignature: entrySignatureOf(result.entrySignature),
     programs: result.programs,
     absentPaths: result.absentPaths,
   };

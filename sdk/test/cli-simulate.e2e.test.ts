@@ -303,88 +303,78 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     await untouched();
   }, 120_000);
 
-  // Pending: main's return type, which the compiler reports with the v12 #557 port (entrySignature).
-  it.failing(
-    "reads main's return as the type it declares, on both routes",
-    async () => {
-      const program = join(work, "reads.sauce.ts");
-      writeFileSync(
-        program,
-        [
-          "function main(holder: Address): { token: Address, held: Uint256, some: bool } {",
-          "  const held = USDC.balanceOf(holder);",
-          "  return { token: USDC, held: held, some: held > 0n };",
-          "}",
-          "",
-        ].join("\n"),
+  it("reads main's return as the type it declares, on both routes", async () => {
+    const program = join(work, "reads.sauce.ts");
+    writeFileSync(
+      program,
+      [
+        "function main(holder: Address): { token: Address, held: Uint256, some: bool } {",
+        "  const held = USDC.balanceOf(holder);",
+        "  return { token: USDC, held: held, some: held > 0n };",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const words = join(work, "words.sauce.ts");
+    writeFileSync(
+      words,
+      "function main(): Uint256[] {\n  const out = new Array(3);\n  out[0] = 1n;\n  out[1] = 22n;\n" +
+        "  out[2] = 333n;\n  return out;\n}\n",
+    );
+    for (const url of [local.rpcUrl, proxy.url]) {
+      const run = await sauce(
+        ...["simulate", program, "--chain", "ethereum", "--owner", OWNER, "--rpc-url", url],
+        ...["--json", "--args", OWNER],
       );
-      const words = join(work, "words.sauce.ts");
-      writeFileSync(
-        words,
-        "function main(): Uint256[] {\n  const out = new Array(3);\n  out[0] = 1n;\n  out[1] = 22n;\n" +
-          "  out[2] = 333n;\n  return out;\n}\n",
-      );
-      for (const url of [local.rpcUrl, proxy.url]) {
-        const run = await sauce(
-          ...["simulate", program, "--chain", "ethereum", "--owner", OWNER, "--rpc-url", url],
-          ...["--json", "--args", OWNER],
-        );
-        expect(jsonOf(run)).toMatchObject({
-          ok: true,
-          returnType: "{ token: Address, held: Uint256, some: bool }",
-          returned: { token: usdc, held: "0", some: false },
-        });
-        const text = await sauce(
-          ...["simulate", words, "--chain", "ethereum", "--owner", OWNER, "--rpc-url", url],
-        );
-        expect(text.stdout).toContain("main returns Uint256[]: [1, 22, 333]");
-      }
-      // compile --json says what simulate reads it as.
-      const compiled = jsonOf(await sauce("compile", words, "--chain", "ethereum", "--json"));
-      expect(compiled.returnType).toBe("Uint256[]");
-      await untouched();
-    },
-    120_000,
-  );
-
-  // Pending: main's return type, which the compiler reports with the v12 #557 port (entrySignature).
-  it.failing(
-    "rehearses on the block --block names, and says which block it ran on",
-    async () => {
-      const holder = getAddress("0x00000000000000000000000000000000000b10c4");
-      const program = join(work, "held.sauce.ts");
-      writeFileSync(
-        program,
-        "function main(holder: Address): Uint256 {\n  return USDC.balanceOf(holder);\n}\n",
-      );
-      const at = async (...flags: string[]) =>
-        jsonOf(
-          await sauce(
-            ...["simulate", program, "--chain", "ethereum", "--owner", OWNER],
-            ...["--rpc-url", local.rpcUrl, "--json", ...flags, "--args", holder],
-          ),
-        );
-      // Uncached: viem serves a block number up to 4 s old, which can predate the suite's setup.
-      const before = await local.publicClient.getBlockNumber({ cacheTime: 0 });
-      await local.mint(usdc, holder, 5_000_000n);
-      const now = await at();
-      expect(now).toMatchObject({ returned: "5000000" });
-      expect(BigInt(now.block as string)).toBeGreaterThan(before);
-      // Pinned before the mint: every read and the rehearsal see that block's state.
-      expect(await at("--block", before.toString())).toMatchObject({
-        block: before.toString(),
-        returned: "0",
+      expect(jsonOf(run)).toMatchObject({
+        ok: true,
+        returnType: "{ token: Address, held: Uint256, some: bool }",
+        returned: { token: usdc, held: "0", some: false },
       });
-      expect(await at("--block", "latest")).toMatchObject({ returned: "5000000" });
-      const bad = await sauce(
-        ...["simulate", program, "--chain", "ethereum", "--owner", OWNER],
-        ...["--rpc-url", local.rpcUrl, "--block", "yesterday", "--args", holder],
+      const text = await sauce(
+        ...["simulate", words, "--chain", "ethereum", "--owner", OWNER, "--rpc-url", url],
       );
-      expect(bad.code).toBe(2);
-      expect(bad.stderr).toContain("--block: 'yesterday' is not a block number or a tag");
-    },
-    120_000,
-  );
+      expect(text.stdout).toContain("main returns Uint256[]: [1, 22, 333]");
+    }
+    // compile --json says what simulate reads it as.
+    const compiled = jsonOf(await sauce("compile", words, "--chain", "ethereum", "--json"));
+    expect(compiled.returnType).toBe("Uint256[]");
+    await untouched();
+  }, 120_000);
+
+  it("rehearses on the block --block names, and says which block it ran on", async () => {
+    const holder = getAddress("0x00000000000000000000000000000000000b10c4");
+    const program = join(work, "held.sauce.ts");
+    writeFileSync(
+      program,
+      "function main(holder: Address): Uint256 {\n  return USDC.balanceOf(holder);\n}\n",
+    );
+    const at = async (...flags: string[]) =>
+      jsonOf(
+        await sauce(
+          ...["simulate", program, "--chain", "ethereum", "--owner", OWNER],
+          ...["--rpc-url", local.rpcUrl, "--json", ...flags, "--args", holder],
+        ),
+      );
+    // Uncached: viem serves a block number up to 4 s old, which can predate the suite's setup.
+    const before = await local.publicClient.getBlockNumber({ cacheTime: 0 });
+    await local.mint(usdc, holder, 5_000_000n);
+    const now = await at();
+    expect(now).toMatchObject({ returned: "5000000" });
+    expect(BigInt(now.block as string)).toBeGreaterThan(before);
+    // Pinned before the mint: every read and the rehearsal see that block's state.
+    expect(await at("--block", before.toString())).toMatchObject({
+      block: before.toString(),
+      returned: "0",
+    });
+    expect(await at("--block", "latest")).toMatchObject({ returned: "5000000" });
+    const bad = await sauce(
+      ...["simulate", program, "--chain", "ethereum", "--owner", OWNER],
+      ...["--rpc-url", local.rpcUrl, "--block", "yesterday", "--args", holder],
+    );
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toContain("--block: 'yesterday' is not a block number or a tag");
+  }, 120_000);
 
   it("falls back to eth_call with state overrides where the endpoint has no eth_simulateV1", async () => {
     const run = await pay(

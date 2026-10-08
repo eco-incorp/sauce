@@ -2116,31 +2116,27 @@ describe("what main returned", () => {
     expect(decodeReturned("Address", mint.address, solana)).toBe(mint.mint);
   });
 
-  // Pending the compiler: `main`'s declared types and return type (`entrySignature`).
-  it.failing(
-    "reads main's declared return type off the compile, an interface spelled out",
-    async () => {
-      const { entryReturnType } = await import("../src/routes/entry.js");
-      const returns = (text: string) =>
-        entryReturnType(compileSauceProgram("base", text).entrySignature);
-      expect(returns("function main(): Address {\n  return 0;\n}\n")).toBe("Address");
-      expect(returns("function main() {\n}\n")).toBeUndefined();
-      expect(returns("function main(): void {\n}\n")).toBeUndefined();
-      expect(
-        returns(
-          "interface Out { token: Address; out: Uint256 }\nfunction main(): Out[] {\n  return [];\n}\n",
-        ),
-      ).toBe("{ token: Address, out: Uint256 }[]");
-      // Compiled for its arguments, main still reports what it returns.
-      expect(
-        entryReturnType(
-          compileSauceProgram("base", "function main(a: Uint256): Uint256 {\n  return a;\n}\n", {
-            args: [5n],
-          }).entrySignature,
-        ),
-      ).toBe("Uint256");
-    },
-  );
+  it("reads main's declared return type off the compile, an interface spelled out", async () => {
+    const { entryReturnType } = await import("../src/routes/entry.js");
+    const returns = (text: string) =>
+      entryReturnType(compileSauceProgram("base", text).entrySignature);
+    expect(returns("function main(): Address {\n  return 0;\n}\n")).toBe("Address");
+    expect(returns("function main() {\n}\n")).toBeUndefined();
+    expect(returns("function main(): void {\n}\n")).toBeUndefined();
+    expect(
+      returns(
+        "interface Out { token: Address; out: Uint256 }\nfunction main(): Out[] {\n  return [];\n}\n",
+      ),
+    ).toBe("{ token: Address, out: Uint256 }[]");
+    // Compiled for its arguments, main still reports what it returns.
+    expect(
+      entryReturnType(
+        compileSauceProgram("base", "function main(a: Uint256): Uint256 {\n  return a;\n}\n", {
+          args: [5n],
+        }).entrySignature,
+      ),
+    ).toBe("Uint256");
+  });
 });
 
 describe("a program from stdin", () => {

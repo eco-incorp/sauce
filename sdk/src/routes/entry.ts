@@ -27,6 +27,7 @@ import {
   numberToHex,
   size,
   sliceHex,
+  type AbiParameter,
   type Hex,
 } from "viem";
 
@@ -46,10 +47,21 @@ export interface EntrySignature {
   readonly returns?: string;
 }
 
-/** `main`'s signature from what the compile reports, `entryParams`. The return type is left out
- *  until the compiler reports it. */
-export function entrySignatureOf(params: Parameters<typeof entryParamsOf>[0]): EntrySignature {
-  return { params: entryParamsOf(params) };
+/** `main`'s signature as the compile reports it: each parameter's name and type in the language's
+ *  own spelling, with its `entryParams` entry (none for an SVM `Account`), and the declared return
+ *  type. A program compiled for its arguments reports them here though it takes none. */
+export function entrySignatureOf(signature: {
+  readonly params: readonly EntryParam[];
+  readonly returns?: string;
+}): EntrySignature {
+  return {
+    params: signature.params.map(({ name, type, abi }) => ({
+      name,
+      type,
+      ...(abi === undefined ? {} : { abi }),
+    })),
+    ...(signature.returns === undefined ? {} : { returns: signature.returns }),
+  };
 }
 
 /** One of `main`'s runtime parameters, as the program declares it. */
@@ -58,6 +70,8 @@ export interface EntryParam {
   /** The declared type as written (`Address`, `Uint256[]`, `{ amount: Uint256 }`); `Uint256` when
    *  the parameter has no annotation. */
   readonly type: string;
+  /** In `entrySignature`: its `entryParams` entry, an ABI parameter; none for an SVM `Account`. */
+  readonly abi?: AbiParameter;
 }
 
 /**

@@ -29,8 +29,9 @@ describe("a program compiled for main's arguments", () => {
       "function main(a: Uint256, b: bool): Uint256 { if (b) { return a + 1; } return a; }",
       { args: [5n, true] },
     );
+    // It takes none as it runs; its signature still says what `main` declares.
     expect(program.entryParams).toEqual([]);
-    expect(program.entrySignature.params).toEqual([]);
+    expect(program.entrySignature.params.map((param) => param.name)).toEqual(["a", "b"]);
     expect(Array.from(program.bytecode)).toEqual(
       bytes("base", "function main(): Uint256 { return 6; }"),
     );

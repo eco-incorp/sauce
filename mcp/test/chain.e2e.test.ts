@@ -324,8 +324,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     );
   });
 
-  // Pending the compiler: `main`'s declared return type (`entrySignature`).
-  it("summarizes a rehearsal to what decides a trade", { todo: "main's return type" }, async () => {
+  it("summarizes a rehearsal to what decides a trade", async () => {
     const full = ok(
       await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, assumeBalance: ["USDC:2"] }),
     );
@@ -384,66 +383,59 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(returns.returns, undefined);
   });
 
-  // Pending the compiler: `main`'s declared return type (`entrySignature`).
-  it(
-    "rehearses one program as several scenarios at one block, one result each",
-    {
-      todo: "main's return type",
-    },
-    async () => {
-      const out = erred(
-        await mcp.call("sauce_simulate", {
-          ...pay,
-          owner: NOBODY,
-          assumeBalance: ["USDC:2"],
-          summary: true,
-          scenarios: [
-            {},
-            { args: [RECIPIENT, "2500000"] },
-            { args: [RECIPIENT, "2500000"], assumeBalance: ["USDC:3"] },
-            { args: [RECIPIENT] },
-          ],
-        }),
-      ) as {
-        ok: boolean;
-        block: string;
-        sourceSha256: string;
-        scenarios: Array<Record<string, unknown>>;
-      };
-      assert.equal(out.ok, false, "one scenario reverts, one is refused");
-      assert.equal(out.sourceSha256, sha256(PAY));
-      assert.deepEqual(
-        out.scenarios.map((each) => [each.index, each.ok]),
-        [
-          [0, true],
-          [1, false],
-          [2, true],
-          [3, false],
+  it("rehearses one program as several scenarios at one block, one result each", async () => {
+    const out = erred(
+      await mcp.call("sauce_simulate", {
+        ...pay,
+        owner: NOBODY,
+        assumeBalance: ["USDC:2"],
+        summary: true,
+        scenarios: [
+          {},
+          { args: [RECIPIENT, "2500000"] },
+          { args: [RECIPIENT, "2500000"], assumeBalance: ["USDC:3"] },
+          { args: [RECIPIENT] },
         ],
-      );
-      // Every rehearsal at the one block the call read.
-      for (const each of out.scenarios.slice(0, 3)) assert.equal(each.block, out.block);
-      assert.match(out.scenarios[1]!.reason as string, /./);
-      // A scenario's mistake is its own result, in the tool's words.
-      assert.match(out.scenarios[3]!.error as string, /takes 2 arguments/);
-      assert.doesNotMatch(out.scenarios[3]!.error as string, /--args/);
-      // A scenario's defines are laid over the call's, compiled into its own program.
-      const defined = ok(
-        await mcp.call("sauce_simulate", {
-          source: "function main(): Uint256 {\n  return LIMIT;\n}\n",
-          chain: "ethereum",
-          owner: NOBODY,
-          defines: { LIMIT: 7 },
-          summary: true,
-          scenarios: [{}, { defines: { LIMIT: 9 } }],
-        }),
-      ) as { scenarios: Array<{ returned: string }> };
-      assert.deepEqual(
-        defined.scenarios.map((each) => each.returned),
-        ["7", "9"],
-      );
-    },
-  );
+      }),
+    ) as {
+      ok: boolean;
+      block: string;
+      sourceSha256: string;
+      scenarios: Array<Record<string, unknown>>;
+    };
+    assert.equal(out.ok, false, "one scenario reverts, one is refused");
+    assert.equal(out.sourceSha256, sha256(PAY));
+    assert.deepEqual(
+      out.scenarios.map((each) => [each.index, each.ok]),
+      [
+        [0, true],
+        [1, false],
+        [2, true],
+        [3, false],
+      ],
+    );
+    // Every rehearsal at the one block the call read.
+    for (const each of out.scenarios.slice(0, 3)) assert.equal(each.block, out.block);
+    assert.match(out.scenarios[1]!.reason as string, /./);
+    // A scenario's mistake is its own result, in the tool's words.
+    assert.match(out.scenarios[3]!.error as string, /takes 2 arguments/);
+    assert.doesNotMatch(out.scenarios[3]!.error as string, /--args/);
+    // A scenario's defines are laid over the call's, compiled into its own program.
+    const defined = ok(
+      await mcp.call("sauce_simulate", {
+        source: "function main(): Uint256 {\n  return LIMIT;\n}\n",
+        chain: "ethereum",
+        owner: NOBODY,
+        defines: { LIMIT: 7 },
+        summary: true,
+        scenarios: [{}, { defines: { LIMIT: 9 } }],
+      }),
+    ) as { scenarios: Array<{ returned: string }> };
+    assert.deepEqual(
+      defined.scenarios.map((each) => each.returned),
+      ["7", "9"],
+    );
+  });
 
   it("builds a deployment the owner's own wallet signs, then sees the Pot deployed", async () => {
     const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));

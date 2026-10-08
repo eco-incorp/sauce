@@ -609,71 +609,64 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     console.log(`full fill: gas ${receipt.gasUsed}, ${bought} WETH units for ${budget} USDC units`);
   });
 
-  // Pending: main's return type, which the compiler reports with the v12 #557 port (entrySignature).
-  it.failing(
-    "returns { spent, bought, unspent }: the three words abi.encode gave, and simulate names them",
-    async () => {
-      const budget = 2_000n * 10n ** 6n;
-      await call(USDC, erc20, "mint", [sauce.pot, budget]);
-      const record = await returnData(buying(budget));
-      const encoded = await returnData(
-        buying(budget),
-        replacing(
-          "): { spent: Uint256; bought: Uint256; unspent: Uint256 } {",
-          "): bytes {",
-        ).replace(
-          "return { spent, bought, unspent };",
-          "return abi.encode(spent, bought, unspent);",
-        ),
-      );
-      expect(record).toBe(encoded);
-      expect(hexToBytes(record)).toHaveLength(96);
-      const { spent, bought, unspent } = await returned(buying(budget));
+  it("returns { spent, bought, unspent }: the three words abi.encode gave, and simulate names them", async () => {
+    const budget = 2_000n * 10n ** 6n;
+    await call(USDC, erc20, "mint", [sauce.pot, budget]);
+    const record = await returnData(buying(budget));
+    const encoded = await returnData(
+      buying(budget),
+      replacing("): { spent: Uint256; bought: Uint256; unspent: Uint256 } {", "): bytes {").replace(
+        "return { spent, bought, unspent };",
+        "return abi.encode(spent, bought, unspent);",
+      ),
+    );
+    expect(record).toBe(encoded);
+    expect(hexToBytes(record)).toHaveLength(96);
+    const { spent, bought, unspent } = await returned(buying(budget));
 
-      // The skill's rehearsal, through the command: `main`'s value by name, and what the cook moved.
-      let stdout = "";
-      let stderr = "";
-      const io: CliIo = {
-        ...nodeIo(),
-        stdout: (text) => void (stdout += text),
-        stderr: (text) => void (stderr += text),
-      };
-      const code = await runCli(
-        [
-          "simulate",
-          PROGRAM_PATH,
-          "--chain",
-          "base",
-          "--owner",
-          OWNER.address,
-          "--rpc-url",
-          RPC_URL,
-          "--assume-balance",
-          "USDC:2000",
-          "--args",
-          USDC,
-          WETH,
-          String(budget),
-          String(MAX_PRICE),
-          "0",
-          "0",
-          RECIPIENT,
-          REFUND_TO,
-        ],
-        io,
-      );
-      expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
-      // The cook's gas: after the Pot's deploy, when the rehearsal deploys it first.
-      expect(stdout).toMatch(
-        /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+( for the cook, after the Pot's deploy \(1\. below\))?, returns 0x/,
-      );
-      expect(stdout).toContain(
-        `main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: ` +
-          `{ spent: ${spent}, bought: ${bought}, unspent: ${unspent} }`,
-      );
-      console.log(stdout);
-    },
-  );
+    // The skill's rehearsal, through the command: `main`'s value by name, and what the cook moved.
+    let stdout = "";
+    let stderr = "";
+    const io: CliIo = {
+      ...nodeIo(),
+      stdout: (text) => void (stdout += text),
+      stderr: (text) => void (stderr += text),
+    };
+    const code = await runCli(
+      [
+        "simulate",
+        PROGRAM_PATH,
+        "--chain",
+        "base",
+        "--owner",
+        OWNER.address,
+        "--rpc-url",
+        RPC_URL,
+        "--assume-balance",
+        "USDC:2000",
+        "--args",
+        USDC,
+        WETH,
+        String(budget),
+        String(MAX_PRICE),
+        "0",
+        "0",
+        RECIPIENT,
+        REFUND_TO,
+      ],
+      io,
+    );
+    expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
+    // The cook's gas: after the Pot's deploy, when the rehearsal deploys it first.
+    expect(stdout).toMatch(
+      /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+( for the cook, after the Pot's deploy \(1\. below\))?, returns 0x/,
+    );
+    expect(stdout).toContain(
+      `main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: ` +
+        `{ spent: ${spent}, bought: ${bought}, unspent: ${unspent} }`,
+    );
+    console.log(stdout);
+  });
 
   it("spends only what maxPrice allows: every pool with liquidity, V4's too, stops at its own limit", async () => {
     const budget = 5_000n * 10n ** 6n;

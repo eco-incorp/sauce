@@ -275,230 +275,201 @@ describeSvm(
       expect(second.createTokenAccounts).toBeUndefined();
     }, 300_000);
 
-    // Pending: main's return type, which the compiler reports with the v12 #557 port (entrySignature).
-    it.failing(
-      "simulates it in a local copy of its accounts, and refuses to print it as one transaction",
-      async () => {
-        restoreVenues(harness.svm);
-        await potAccount(USDC, budget);
-        await potAccount(WSOL, 0n);
-        const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
-        const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
-        const argv = (command: string, minTokens = "0"): string[] => [
-          ...[command, PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
-          ...["--owner", owner.signer.address, ...accounts(DEEP, recipient, refund)],
-          ...["--args", String(budget), String(maxPrice), minTokens, "0"],
-          ...(command === "simulate" ? ["--json"] : []),
-        ];
-        const rehearsed = await sauce(...argv("simulate"));
-        if (rehearsed.code !== 0)
-          throw new Error(`exit ${rehearsed.code}\n${rehearsed.stderr}\n${rehearsed.stdout}`);
-        const out = JSON.parse(rehearsed.stdout) as {
-          path: string;
-          staged: { bytes: number };
-          returned: { spent: string; bought: string; unspent: string };
-        };
-        expect(out.path).toBe("local copy (LiteSVM)");
-        expect(out.staged.bytes).toBeGreaterThan(1232);
-        const bought = BigInt(out.returned.bought);
-        expect(bought).toBeGreaterThan(0n);
-        expect(BigInt(out.returned.spent) + BigInt(out.returned.unspent)).toBe(budget);
-        // Nothing happened on the cluster: the pools and the accounts are as they were.
-        for (const p of DEEP)
-          expect(priceOf(p)).toBe(le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16));
-        expect(tokenAmount(harness, recipient)).toBe(0n);
+    it("simulates it in a local copy of its accounts, and refuses to print it as one transaction", async () => {
+      restoreVenues(harness.svm);
+      await potAccount(USDC, budget);
+      await potAccount(WSOL, 0n);
+      const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
+      const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
+      const argv = (command: string, minTokens = "0"): string[] => [
+        ...[command, PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
+        ...["--owner", owner.signer.address, ...accounts(DEEP, recipient, refund)],
+        ...["--args", String(budget), String(maxPrice), minTokens, "0"],
+        ...(command === "simulate" ? ["--json"] : []),
+      ];
+      const rehearsed = await sauce(...argv("simulate"));
+      if (rehearsed.code !== 0)
+        throw new Error(`exit ${rehearsed.code}\n${rehearsed.stderr}\n${rehearsed.stdout}`);
+      const out = JSON.parse(rehearsed.stdout) as {
+        path: string;
+        staged: { bytes: number };
+        returned: { spent: string; bought: string; unspent: string };
+      };
+      expect(out.path).toBe("local copy (LiteSVM)");
+      expect(out.staged.bytes).toBeGreaterThan(1232);
+      const bought = BigInt(out.returned.bought);
+      expect(bought).toBeGreaterThan(0n);
+      expect(BigInt(out.returned.spent) + BigInt(out.returned.unspent)).toBe(budget);
+      // Nothing happened on the cluster: the pools and the accounts are as they were.
+      for (const p of DEEP)
+        expect(priceOf(p)).toBe(le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16));
+      expect(tokenAmount(harness, recipient)).toBe(0n);
 
-        // A rehearsal that reverts says why, first; held to that revert, it is what was asked.
-        const short = await sauce(...argv("simulate", String(bought + 1n)));
-        expect(short.code).toBe(1);
-        expect(short.stdout).toContain("bought below minTokens");
-        expect(short.stderr.split("\n")[0]).toBe(
-          'the cook reverts: the program threw "bought below minTokens"',
-        );
-        const guarded = await sauce(
-          ...argv("simulate", String(bought + 1n)),
-          "--expect-revert",
-          "bought below minTokens",
-        );
-        expect(guarded.code).toBe(0);
-        expect((JSON.parse(guarded.stdout) as { asExpected: boolean }).asExpected).toBe(true);
+      // A rehearsal that reverts says why, first; held to that revert, it is what was asked.
+      const short = await sauce(...argv("simulate", String(bought + 1n)));
+      expect(short.code).toBe(1);
+      expect(short.stdout).toContain("bought below minTokens");
+      expect(short.stderr.split("\n")[0]).toBe(
+        'the cook reverts: the program threw "bought below minTokens"',
+      );
+      const guarded = await sauce(
+        ...argv("simulate", String(bought + 1n)),
+        "--expect-revert",
+        "bought below minTokens",
+      );
+      expect(guarded.code).toBe(0);
+      expect((JSON.parse(guarded.stdout) as { asExpected: boolean }).asExpected).toBe(true);
 
-        const tx = await sauce(...argv("tx"));
-        expect(tx.code).toBe(1);
-        expect(tx.stderr).toContain("sauce run");
-        expect(tx.stderr).toContain("--lookup-table");
+      const tx = await sauce(...argv("tx"));
+      expect(tx.code).toBe(1);
+      expect(tx.stderr).toContain("sauce run");
+      expect(tx.stderr).toContain("--lookup-table");
 
-        // An owner that cannot pay, such as a pool, is refused by name before anything runs.
-        const orca = pool("orca-whirlpool-sol-usdc").pool;
-        const pooled = await sauce(
-          ...argv("simulate").map((value) => (value === owner.signer.address ? orca : value)),
-        );
-        expect(pooled.code).toBe(1);
-        expect(pooled.stderr).toContain(
-          `--owner ${orca} is an account of whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`,
-        );
-        expect(pooled.stderr).toContain("not a wallet");
-      },
-      300_000,
-    );
+      // An owner that cannot pay, such as a pool, is refused by name before anything runs.
+      const orca = pool("orca-whirlpool-sol-usdc").pool;
+      const pooled = await sauce(
+        ...argv("simulate").map((value) => (value === owner.signer.address ? orca : value)),
+      );
+      expect(pooled.code).toBe(1);
+      expect(pooled.stderr).toContain(
+        `--owner ${orca} is an account of whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`,
+      );
+      expect(pooled.stderr).toContain("not a wallet");
+    }, 300_000);
 
-    // Pending: main's return type, which the compiler reports with the v12 #557 port (entrySignature).
-    it.failing(
-      "finds the pair's pools and chooses each slot with sauce pools, which the rehearsal takes",
-      async () => {
-        restoreVenues(harness.svm);
-        // SOL names the wrapped SOL a pool holds.
-        const listed = await sauce(
-          "pools",
-          "--chain",
-          "solana",
-          "USDC",
-          "SOL",
-          "--rpc-url",
-          SOLANA_URL,
-          "--json",
-        );
-        if (listed.code !== 0)
-          throw new Error(`exit ${listed.code}\n${listed.stderr}\n${listed.stdout}`);
-        expect(
-          (JSON.parse(listed.stdout) as { tokens: { symbol: string }[] }).tokens.map(
-            (t) => t.symbol,
-          ),
-        ).toEqual(["USDC", "WSOL"]);
-        const out = JSON.parse(listed.stdout) as {
-          pools: {
-            venue: string;
-            pool: Address;
-            slots: Record<
-              string,
-              {
-                program: Address;
-                pool: Address;
-                config: Address;
-                vaultA: Address;
-                vaultB: Address;
-                extra: Address;
-                ticks: Address[];
-              }
-            >;
-          }[];
-          skipped: { venue: string; pool: Address; why: string }[];
-        };
-        // Every SOL/USDC pool of the fixture, its slot paying USDC the one the suite cooks with.
-        for (const name of [
-          "raydium-clmm-sol-usdc",
-          "pancakeswap-clmm-sol-usdc",
-          "orca-whirlpool-sol-usdc",
-          "cropper-sol-usdc",
-          "defituna-sol-usdc",
-          "crema-sol-usdc",
-          "phoenix-sol-usdc",
-        ]) {
-          const p = pool(name);
-          const found = out.pools.find((one) => one.pool === p.pool);
-          if (found === undefined) throw new Error(`sauce pools does not list ${name}`);
-          expect(found.slots.USDC).toEqual({
-            program: p.program,
-            pool: p.pool,
-            config: p.config,
-            vaultA: p.vaultA,
-            vaultB: p.vaultB,
-            extra: p.extra,
-            ticks: p.payB,
-          });
-        }
-        // Byreal's SOL/USDC pool adds fees past its rate: skipped, as the program skips it.
-        expect(out.skipped.find((one) => one.pool === pool("byreal-sol-usdc").pool)?.why).toMatch(
-          /more than one rate/,
-        );
-
-        // Chosen for a swap paying USDC within maxPrice, one pool a venue: the accounts of the
-        // program's four slots, which a rehearsal takes as they are, beside the shared ones.
-        const choosing = await sauce(
-          ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", SOLANA_URL, "--json"],
-          ...["--pay", "USDC", "--max-price", String(maxPrice), "--per-venue"],
-        );
-        if (choosing.code !== 0)
-          throw new Error(`exit ${choosing.code}\n${choosing.stderr}\n${choosing.stdout}`);
-        const picked = JSON.parse(choosing.stdout) as {
-          chosen: { venue: string; pool: Address }[];
-          accounts: Record<string, string>;
-        };
-        expect(picked.chosen).toHaveLength(4);
-        expect(new Set(picked.chosen.map((one) => one.venue)).size).toBe(4);
-        picked.chosen.forEach((one, k) => {
-          const p = manifest.pools.find((entry) => entry.pool === one.pool)!;
-          const each = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra, ...p.payB];
-          SLOT_NAMES(k).forEach((name, j) => expect(picked.accounts[name]).toBe(each[j]));
+    it("finds the pair's pools and chooses each slot with sauce pools, which the rehearsal takes", async () => {
+      restoreVenues(harness.svm);
+      // SOL names the wrapped SOL a pool holds.
+      const listed = await sauce(
+        "pools",
+        "--chain",
+        "solana",
+        "USDC",
+        "SOL",
+        "--rpc-url",
+        SOLANA_URL,
+        "--json",
+      );
+      if (listed.code !== 0)
+        throw new Error(`exit ${listed.code}\n${listed.stderr}\n${listed.stdout}`);
+      expect(
+        (JSON.parse(listed.stdout) as { tokens: { symbol: string }[] }).tokens.map((t) => t.symbol),
+      ).toEqual(["USDC", "WSOL"]);
+      const out = JSON.parse(listed.stdout) as {
+        pools: {
+          venue: string;
+          pool: Address;
+          slots: Record<
+            string,
+            {
+              program: Address;
+              pool: Address;
+              config: Address;
+              vaultA: Address;
+              vaultB: Address;
+              extra: Address;
+              ticks: Address[];
+            }
+          >;
+        }[];
+        skipped: { venue: string; pool: Address; why: string }[];
+      };
+      // Every SOL/USDC pool of the fixture, its slot paying USDC the one the suite cooks with.
+      for (const name of [
+        "raydium-clmm-sol-usdc",
+        "pancakeswap-clmm-sol-usdc",
+        "orca-whirlpool-sol-usdc",
+        "cropper-sol-usdc",
+        "defituna-sol-usdc",
+        "crema-sol-usdc",
+        "phoenix-sol-usdc",
+      ]) {
+        const p = pool(name);
+        const found = out.pools.find((one) => one.pool === p.pool);
+        if (found === undefined) throw new Error(`sauce pools does not list ${name}`);
+        expect(found.slots.USDC).toEqual({
+          program: p.program,
+          pool: p.pool,
+          config: p.config,
+          vaultA: p.vaultA,
+          vaultB: p.vaultB,
+          extra: p.extra,
+          ticks: p.payB,
         });
-        const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
-        const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
-        const file = join(work, "chosen.json");
-        writeFileSync(
-          file,
-          JSON.stringify({ ...named([], recipient, refund), ...picked.accounts }),
-        );
-        const rehearsal = await sauce(
-          ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
-          ...["--owner", (await keypairFile(work)).signer.address, "--accounts", file],
-          ...["--assume-balance", "USDC:1000000", "--json"],
-          ...["--args", String(budget), String(maxPrice), "0", "0"],
-        );
-        if (rehearsal.code !== 0)
-          throw new Error(`exit ${rehearsal.code}\n${rehearsal.stderr}\n${rehearsal.stdout}`);
-        const rehearsed = JSON.parse(rehearsal.stdout) as { returned: { bought: string } };
-        expect(BigInt(rehearsed.returned.bought)).toBeGreaterThan(0n);
-      },
-      300_000,
-    );
+      }
+      // Byreal's SOL/USDC pool adds fees past its rate: skipped, as the program skips it.
+      expect(out.skipped.find((one) => one.pool === pool("byreal-sol-usdc").pool)?.why).toMatch(
+        /more than one rate/,
+      );
 
-    // Pending: main's return type, which the compiler reports with the v12 #557 port (entrySignature).
-    it.failing(
-      "rehearses for an owner with no Pot, no lamports and no USDC, given --assume-balance and --accounts",
-      async () => {
-        restoreVenues(harness.svm);
-        const stranger = (await keypairFile(work)).signer.address;
-        const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
-        const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
-        // Every account but one from an `--accounts` file, and that one as an `--account` beside it.
-        const rest = Object.fromEntries(
-          Object.entries(named(DEEP, recipient, refund)).filter(([name]) => name !== "refund"),
-        );
-        const file = join(work, "accounts.json");
-        writeFileSync(file, JSON.stringify(rest));
-        const run = await sauce(
-          ...[
-            "simulate",
-            PROGRAM,
-            "--chain",
-            "solana",
-            "--rpc-url",
-            SOLANA_URL,
-            "--owner",
-            stranger,
-          ],
-          ...[
-            "--assume-balance",
-            "USDC:1000000",
-            "--accounts",
-            file,
-            "--account",
-            `refund=${refund}`,
-          ],
-          ...["--args", String(budget), String(maxPrice), "0", "0", "--json"],
-        );
-        if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}\n${run.stdout}`);
-        const out = JSON.parse(run.stdout) as {
-          createPot: unknown;
-          returned: { spent: string; bought: string };
-        };
-        expect(out.createPot).not.toBeNull();
-        expect(BigInt(out.returned.bought)).toBeGreaterThan(0n);
-        // The Pot's SOL account, which the cluster does not have, was made empty in the copy.
-        expect(run.stderr).toContain("--account output: the Pot's WSOL account");
-        expect(run.stderr).toContain("assumed: the Pot's USDC account");
-      },
-      300_000,
-    );
+      // Chosen for a swap paying USDC within maxPrice, one pool a venue: the accounts of the
+      // program's four slots, which a rehearsal takes as they are, beside the shared ones.
+      const choosing = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", SOLANA_URL, "--json"],
+        ...["--pay", "USDC", "--max-price", String(maxPrice), "--per-venue"],
+      );
+      if (choosing.code !== 0)
+        throw new Error(`exit ${choosing.code}\n${choosing.stderr}\n${choosing.stdout}`);
+      const picked = JSON.parse(choosing.stdout) as {
+        chosen: { venue: string; pool: Address }[];
+        accounts: Record<string, string>;
+      };
+      expect(picked.chosen).toHaveLength(4);
+      expect(new Set(picked.chosen.map((one) => one.venue)).size).toBe(4);
+      picked.chosen.forEach((one, k) => {
+        const p = manifest.pools.find((entry) => entry.pool === one.pool)!;
+        const each = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra, ...p.payB];
+        SLOT_NAMES(k).forEach((name, j) => expect(picked.accounts[name]).toBe(each[j]));
+      });
+      const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
+      const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
+      const file = join(work, "chosen.json");
+      writeFileSync(file, JSON.stringify({ ...named([], recipient, refund), ...picked.accounts }));
+      const rehearsal = await sauce(
+        ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
+        ...["--owner", (await keypairFile(work)).signer.address, "--accounts", file],
+        ...["--assume-balance", "USDC:1000000", "--json"],
+        ...["--args", String(budget), String(maxPrice), "0", "0"],
+      );
+      if (rehearsal.code !== 0)
+        throw new Error(`exit ${rehearsal.code}\n${rehearsal.stderr}\n${rehearsal.stdout}`);
+      const rehearsed = JSON.parse(rehearsal.stdout) as { returned: { bought: string } };
+      expect(BigInt(rehearsed.returned.bought)).toBeGreaterThan(0n);
+    }, 300_000);
+
+    it("rehearses for an owner with no Pot, no lamports and no USDC, given --assume-balance and --accounts", async () => {
+      restoreVenues(harness.svm);
+      const stranger = (await keypairFile(work)).signer.address;
+      const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
+      const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
+      // Every account but one from an `--accounts` file, and that one as an `--account` beside it.
+      const rest = Object.fromEntries(
+        Object.entries(named(DEEP, recipient, refund)).filter(([name]) => name !== "refund"),
+      );
+      const file = join(work, "accounts.json");
+      writeFileSync(file, JSON.stringify(rest));
+      const run = await sauce(
+        ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL, "--owner", stranger],
+        ...[
+          "--assume-balance",
+          "USDC:1000000",
+          "--accounts",
+          file,
+          "--account",
+          `refund=${refund}`,
+        ],
+        ...["--args", String(budget), String(maxPrice), "0", "0", "--json"],
+      );
+      if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}\n${run.stdout}`);
+      const out = JSON.parse(run.stdout) as {
+        createPot: unknown;
+        returned: { spent: string; bought: string };
+      };
+      expect(out.createPot).not.toBeNull();
+      expect(BigInt(out.returned.bought)).toBeGreaterThan(0n);
+      // The Pot's SOL account, which the cluster does not have, was made empty in the copy.
+      expect(run.stderr).toContain("--account output: the Pot's WSOL account");
+      expect(run.stderr).toContain("assumed: the Pot's USDC account");
+    }, 300_000);
   },
 );
