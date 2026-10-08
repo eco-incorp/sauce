@@ -143,6 +143,14 @@ describe("what a hook refuses, where it is written", () => {
   });
 });
 
+describe("a hop with no hooks", () => {
+  it("is the program it was before hooks: empty lists change no byte", () => {
+    expect(bytesToHex(compile(hop("\n    before: [],\n    after: [],")).bytecode)).toBe(
+      bytesToHex(compile(hop("")).bytecode),
+    );
+  });
+});
+
 describe("`await` of a hop with hooks", () => {
   it("is its `.then`, byte for byte", () => {
     const fields = `{
