@@ -11,27 +11,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { fillTargets } from "../src/cli/fill.js";
 import { intentRecord } from "../src/cli/lifecycle.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { IntentStore } from "../src/cli/store.js";
 import {
   chainSupportRequest,
-  intentDestinations,
   PreviewChainError,
   previewRefusal,
   requireSupported,
 } from "../src/cli/support.js";
-import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
+import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { assembleIntent } from "../src/routes/intent.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const OWNER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
-const INTENT_FLAGS = [
-  ...["--define", `RECIPIENT=${RECIPIENT}`],
-  ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
-];
 
 /** An endpoint that answers the reads a rehearsal starts with, and counts every request. */
 interface Recorder {
@@ -150,22 +146,40 @@ function expectRefused(
 }
 
 const PAY = "function main() {\n  USDC.transfer(RECIPIENT, 1000n);\n}\n";
-/** Base to Arbitrum, the body token writes the Portal's Executor runs. */
-const TO_ARBITRUM =
-  "Arbitrum(() => {\n  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n";
-/** Base to Arbitrum, the body a program on the destination's Pot: it pays the Kitchen's fee. */
-const TO_ARBITRUM_PROGRAM = [
-  "Arbitrum(",
-  "  () => {",
-  "    USDC.transfer(RECIPIENT, USDC.balanceOf(ctx.self()));",
-  "  },",
-  "  { tokens: [{ token: USDC, amount: 5n }] },",
-  ").reward({ tokens: [{ token: USDC, amount: 7n }] });",
-  "",
-].join("\n");
-/** Arbitrum to Base: Arbitrum is its source. */
-const TO_BASE =
-  "Base(() => {\n  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n";
+/** An intent from `source` to `destination` built by hand, `USDC.transfer` its route's one call,
+ *  saved in the store: what every lifecycle step names by its hash. */
+function stored(source: string, destination: string): `0x${string}` {
+  const from = requireChain(source);
+  const to = requireChain(destination);
+  const usdc = (chain: typeof from) =>
+    `0x${registryTokenAddress(chain, "USDC")!.toString(16).padStart(40, "0")}` as `0x${string}`;
+  const intent = assembleIntent(
+    from,
+    to,
+    {
+      deadline: 2_000_000_000n,
+      portal: ecoRoutesPortal(to.slug),
+      tokens: [{ token: usdc(to), amount: 5n }],
+      calls: [
+        {
+          target: usdc(to),
+          data: `0xa9059cbb${RECIPIENT.slice(2).padStart(64, "0")}${5n.toString(16).padStart(64, "0")}`,
+          value: 0n,
+        },
+      ],
+    },
+    {
+      deadline: 2_000_000_000n,
+      creator: CREATOR,
+      prover: ecoRoutesProver(from.slug, to.slug),
+      tokens: [{ token: usdc(from), amount: 7n }],
+    },
+  );
+  const record = intentRecord(intent, { sourcePortal: ecoRoutesPortal(from.slug) });
+  new IntentStore(store).save(record);
+
+  return record.intentHash;
+}
 
 describe("the gate", () => {
   it("refuses only a preview chain, naming each one once with its request", () => {
@@ -192,14 +206,6 @@ describe("the gate", () => {
       /^sending the cook is refused: it involves arbitrum \(Arbitrum One, chain id 42161\) and optimism \(Optimism, chain id 10\), preview chains\./,
     );
     expect(() => requireSupported("sending the cook", [optimism!])).toThrow(PreviewChainError);
-  });
-
-  it("takes a program's intents by their destinations", () => {
-    const { intents } = compileSauceProgram("base", TO_ARBITRUM, {
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
-    });
-    expect(intentDestinations(intents).map((chain) => chain.slug)).toEqual(["arbitrum"]);
   });
 });
 
@@ -228,36 +234,6 @@ describe("refused on a preview chain, before any network call", () => {
     expect(recorded()).toEqual([]);
   });
 
-  it("a cook that publishes an intent to a preview chain", async () => {
-    const { config, recorded } = await endpoints(8453, 42161);
-    const flags = ["--chain", "base", "--owner", OWNER, "--config", config, ...INTENT_FLAGS];
-    expectRefused(
-      await sauce("tx", file("to-arbitrum.sauce.ts", TO_ARBITRUM), ...flags),
-      "arbitrum",
-    );
-    // `--intent-execution-fee auto` reads the destination's Kitchen: refused before it does.
-    expectRefused(
-      await sauce(
-        "tx",
-        file("to-arbitrum-program.sauce.ts", TO_ARBITRUM_PROGRAM),
-        ...flags,
-        "--intent-execution-fee",
-        "auto",
-      ),
-      "arbitrum",
-    );
-    // Before the key: a keystore that is not there would fail first if it were read.
-    expectRefused(
-      await sauce(
-        ...["run", file("run-to-arbitrum.sauce.ts", TO_ARBITRUM), "--chain", "base"],
-        ...["--config", config, ...INTENT_FLAGS, "--keystore", join(work, "missing.json")],
-      ),
-      "arbitrum",
-      /^sauce run: sending the cook is refused/,
-    );
-    expect(recorded()).toEqual([]);
-  });
-
   it("sauce pot --deploy, and a pot's deployment as a cast line", async () => {
     const { config, recorded } = await endpoints(42161);
     expectRefused(
@@ -275,47 +251,12 @@ describe("refused on a preview chain, before any network call", () => {
     expect(recorded()).toEqual([]);
   });
 
-  it("sauce intent publish: sent, printed, or made step by step", async () => {
-    const { config, recorded } = await endpoints(8453, 42161);
-    const intent = file("to-arbitrum.sauce.ts", TO_ARBITRUM);
-    const flags = ["--chain", "base", ...INTENT_FLAGS];
-    expectRefused(
-      await sauce("intent", "publish", intent, ...flags, "--format", "json"),
-      "arbitrum",
-      /^sauce intent publish: publishing intents is refused/,
-    );
-    expectRefused(
-      await sauce(
-        ...["intent", "publish", intent, ...flags],
-        ...["--config", config, "--private-key", OWNER_KEY],
-      ),
-      "arbitrum",
-    );
-    // From a preview chain, too.
-    expectRefused(
-      await sauce(
-        ...["intent", "publish", file("to-base.sauce.ts", TO_BASE), "--chain", "arbitrum"],
-        ...INTENT_FLAGS,
-        ...["--format", "json"],
-      ),
-      "arbitrum",
-    );
-    expectRefused(
-      await sauce(
-        ...["intent", "publish", "--source", "base", "--destination", "arbitrum"],
-        ...["--config", config, "--private-key", OWNER_KEY],
-      ),
-      "arbitrum",
-    );
-    expect(recorded()).toEqual([]);
-  });
-
   it("sauce intent fill --send, prove and cancel by the destination; claim and refund by the source", async () => {
     const { config, recorded } = await endpoints(8453, 42161);
-    const toArbitrum = file("to-arbitrum.sauce.ts", TO_ARBITRUM);
-    const toBase = file("to-base.sauce.ts", TO_BASE);
-    const base = ["--chain", "base", ...INTENT_FLAGS, "--config", config];
-    const arbitrum = ["--chain", "arbitrum", ...INTENT_FLAGS, "--config", config];
+    const toArbitrum = stored("base", "arbitrum");
+    const toBase = stored("arbitrum", "base");
+    const base = ["--config", config];
+    const arbitrum = ["--config", config];
     expectRefused(
       await sauce(...["intent", "fill", toArbitrum, ...base, "--send", "--private-key", OWNER_KEY]),
       "arbitrum",
@@ -345,40 +286,13 @@ describe("refused on a preview chain, before any network call", () => {
 
       return made;
     });
-    const program = {
-      file: "to-arbitrum.sauce.ts",
-      text: TO_ARBITRUM,
-      chain: requireChain("base"),
-      compactArgs: false,
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
-    };
-    const [target] = fillTargets(program, nodeIo());
-    const record = intentRecord(target!.intent, { sourcePortal: target!.sourcePortal });
-    new IntentStore(store).save(record);
+    const hash = stored("base", "arbitrum");
     expectRefused(
-      await sauce(
-        "intent",
-        "prove",
-        record.intentHash,
-        "--rpc-url",
-        url,
-        "--private-key",
-        OWNER_KEY,
-      ),
+      await sauce("intent", "prove", hash, "--rpc-url", url, "--private-key", OWNER_KEY),
       "arbitrum",
     );
     expectRefused(
-      await sauce(
-        "intent",
-        "fill",
-        record.intentHash,
-        "--rpc-url",
-        url,
-        "--send",
-        "--private-key",
-        OWNER_KEY,
-      ),
+      await sauce("intent", "fill", hash, "--rpc-url", url, "--send", "--private-key", OWNER_KEY),
       "arbitrum",
     );
     expect(methods).toEqual([]);
@@ -416,7 +330,7 @@ describe("still runs on a preview chain", () => {
     expect(recorded()).toContain("eth_getCode");
   });
 
-  it("simulates, rehearses publishing, and rehearses a fill: each reaches its chain", async () => {
+  it("simulates, and rehearses a fill: each reaches its chain", async () => {
     const { config, recorded } = await endpoints(10, 8453, 42161);
     const simulated = await sauce(
       ...["simulate", file("pay.sauce.ts", PAY), "--chain", "optimism", "--owner", OWNER],
@@ -425,15 +339,7 @@ describe("still runs on a preview chain", () => {
     expect(simulated.stderr).not.toMatch(/is refused/);
     expect(recorded().length).toBeGreaterThan(0);
 
-    const intent = file("to-arbitrum.sauce.ts", TO_ARBITRUM);
-    const dry = await sauce(
-      ...["intent", "publish", intent, "--chain", "base", ...INTENT_FLAGS],
-      ...["--dry-run", "--from", OWNER, "--config", config],
-    );
-    expect(dry.stderr).not.toMatch(/is refused/);
-    const fill = await sauce(
-      ...["intent", "fill", intent, "--chain", "base", ...INTENT_FLAGS, "--config", config],
-    );
+    const fill = await sauce("intent", "fill", stored("base", "arbitrum"), "--config", config);
     expect(fill.stderr).not.toMatch(/is refused/);
     expect(recorded()).toEqual(expect.arrayContaining(["eth_chainId"]));
   });

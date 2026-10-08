@@ -1,8 +1,7 @@
 /**
- * `sauce intent fill`: a solver's fill of the intents a file opens (or the store holds), on each intent's
- * DESTINATION chain — rehearsed with no key and nothing sent, the other half of
- * `publish --dry-run`, which rehearses only the source chain's funding of the vault and `publish`;
- * or, with `--send` and a signer, rehearsed and then SENT, the signer being the solver. The route's
+ * `sauce intent fill`: a solver's fill of the intents the store holds, on each intent's DESTINATION
+ * chain — rehearsed with no key and nothing sent, or, with `--send` and a signer, rehearsed and
+ * then SENT, the signer being the solver. The route's
  * body is where an intent fails (a swap, a minimum, a refund), and it runs only on the destination,
  * inside `Portal.fulfill`.
  *
@@ -36,7 +35,6 @@ import {
   getAbiItem,
   getAddress,
   keccak256,
-  numberToHex,
   parseAbi,
   toFunctionSelector,
   toHex,
@@ -51,21 +49,12 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress } from "../deployments/index.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
-import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
-import {
-  compileProgram,
-  kitchenAddress,
-  type CliFiles,
-  unapproved,
-  type Approver,
-  type CommandOutput,
-  type ProgramInput,
-} from "./commands.js";
+import { kitchenAddress, unapproved, type Approver, type CommandOutput } from "./commands.js";
 import {
   addressLabels,
   effectLines,
@@ -194,52 +183,6 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
     );
   }
 };
-
-/** The intents the file opens, each one a solver could fill from what the file says. */
-export function fillTargets(input: ProgramInput, files: CliFiles): readonly FillTarget[] {
-  if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `sauce intent fill rehearses intents an EVM chain opens, and ${input.chain.slug} is not one: ` +
-        "the eco-routes Portal this SDK publishes through is EVM only",
-    );
-  }
-  const intents = compileProgram(input, files).intents;
-  if (intents.length === 0) {
-    throw new UsageError(`${input.file} opens no intent: there is nothing for a solver to fill`);
-  }
-  for (const intent of intents) {
-    if (intent.captures.length > 0) {
-      throw new CliError(
-        `the intent to ${intent.destination.slug} uses ` +
-          `${intent.captures.map((name) => `\`${name}\``).join(", ")}, which the program measures ` +
-          "or computes while it runs: its route exists only once the program has run, so it " +
-          "cannot be rehearsed from the file. Name it by its hash once `sauce run` has published " +
-          "it, or make the value a literal, one of main's arguments (given with --args) or a " +
-          "top-level `const` of a literal",
-      );
-    }
-  }
-
-  return intents.map((intent) => ({
-    intent: intent.intent,
-    source: input.chain,
-    destination: intent.destination,
-    sourcePortal: ecoRoutesPortal(input.chain),
-  }));
-}
-
-/** Names for the addresses a define holds: `RECIPIENT`, `REFUND_TO`. A define of an address-sized
- *  integer that is not one names nothing a fill touches. */
-export function defineLabels(input: ProgramInput): Array<readonly [Address, string]> {
-  const names = new Map<string, string[]>();
-  for (const [name, value] of Object.entries(input.defines)) {
-    if (typeof value !== "bigint" || value < 1n << 64n || value >= 1n << 160n) continue;
-    const address = getAddress(numberToHex(value, { size: 20 }));
-    names.set(address, [...(names.get(address) ?? []), name]);
-  }
-
-  return [...names].map(([address, list]) => [address as Address, list.join(", ")] as const);
-}
 
 /** Why the fulfill reverted, unwrapping a failed route call to the reason it failed with. */
 function fulfillReason(data: Hex | undefined, intent: Intent, pot: Address): string {

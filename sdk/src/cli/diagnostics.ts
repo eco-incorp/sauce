@@ -203,9 +203,6 @@ function locate(
 
 /** What to pass the command for a failure whose SDK message names an API option instead. */
 const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]> = [
-  [/needs a `deadline`/, () => "pass --intent-deadline <unix seconds>"],
-  [/needs a `creator`/, () => "pass --intent-creator <address>"],
-  [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [
     /`([A-Za-z_$][\w$]*)` is not a declared variable/,
     (match) =>

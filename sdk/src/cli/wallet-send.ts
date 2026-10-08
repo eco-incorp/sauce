@@ -1,7 +1,7 @@
 /**
  * Sending, from a wallet, transactions another step built unsigned: what `sauce_wallet_send` (the
- * local MCP server's) does with the result of `sauce_tx`, `sauce_pot`, `sauce_actions`,
- * `sauce_intent_publish` or any `sauce_intent_*` tool — taken as they come back, whole.
+ * local MCP server's) does with the result of `sauce_tx`, `sauce_pot`, `sauce_actions` or any
+ * `sauce_intent_*` tool — taken as they come back, whole.
  *
  * Nothing is sent before the whole plan is rehearsed and held to the wallet's policy. On an EVM
  * chain the transactions are rehearsed together in one `eth_simulateV1` block from the wallet (one

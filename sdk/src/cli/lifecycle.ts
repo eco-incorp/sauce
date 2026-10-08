@@ -874,8 +874,8 @@ export async function planFill(
       if (call.value < fee) {
         notes.push(
           `route call ${index + 1} pays the Kitchen ${call.value} wei, and ${chain.slug}'s ` +
-            `Kitchen charges ${fee}: its cook reverts with FeeNotPaid. Build the intent with ` +
-            `--intent-execution-fee ${fee}.`,
+            `Kitchen charges ${fee}: its cook reverts with FeeNotPaid. Build the intent with a ` +
+            `fee of ${fee}.`,
         );
       }
     });

@@ -11,7 +11,6 @@ import { bytesToBigInt, getAddress, isAddress, type Address, type Hex } from "vi
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { potSalt, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
-import { INTENT_FUND_VIA, type IntentFundVia } from "../routes/portal.js";
 import type { CookVia } from "../svm/client.js";
 
 /** A mistyped invocation: an unknown or missing flag, or a value that is not what the flag takes. */
@@ -272,18 +271,6 @@ export function parseSalt(label: string | undefined, hex: string | undefined): S
 export interface SaltChoice {
   readonly salt: Hex;
   readonly flag?: string;
-}
-
-/** How an intent's reward is funded — `routes/portal.ts#IntentFundVia`, spelled the same here. */
-export function parseFundVia(raw: string, from = "--intent-fund-via"): IntentFundVia {
-  if (!(INTENT_FUND_VIA as readonly string[]).includes(raw)) {
-    throw new UsageError(
-      `${from}: '${raw}' is not ${INTENT_FUND_VIA.join(" or ")} — transfer pays the reward into ` +
-        "the intent's vault and then publishes; publishAndFund approves the Portal, which pulls it",
-    );
-  }
-
-  return raw as IntentFundVia;
 }
 
 /** Absolute Unix seconds. */

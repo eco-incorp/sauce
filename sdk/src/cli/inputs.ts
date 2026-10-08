@@ -110,11 +110,10 @@ export function definesReach(file: string, text: string, names: readonly string[
 }
 
 /**
- * A program whose intents a wallet publishes, with `main`'s arguments given: the same program with
- * each argument bound as a constant (`bindEntryArguments`). A wallet publishes an intent from values
- * it knows before anything runs, so `main(amount: Uint256, recipient: Address)` with `--args 1000000
- * 0x…` is compiled as if its body read `amount` and `recipient` as those values. The program keeps
- * its shape, and the intents it opens come out fixed.
+ * A program with `main`'s arguments given: the same program with each argument bound as a constant
+ * (`bindEntryArguments`), so `main(amount: Uint256, recipient: Address)` with `--args 1000000 0x…`
+ * is compiled as if its body read `amount` and `recipient` as those values. The program keeps its
+ * shape.
  *
  * Only a single word binds this way: an integer, an address or a `bool`. A program whose `main`
  * takes bytes, a string, an array or a record is refused, naming the parameter: run it on a Pot
@@ -128,7 +127,7 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
     if (params.length === 0) return input;
     throw new UsageError(
       `${shape} takes ${params.length} argument${params.length === 1 ? "" : "s"}: pass them ` +
-        "after --args, in order, or as --args-json; the intents are built with them",
+        "after --args, in order, or as --args-json; the program is compiled with them",
     );
   }
   if (params.length === 0) {
@@ -144,10 +143,10 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
     const message = (error as Error).message;
     throw new UsageError(
       /only one word binds/.test(message)
-        ? `${args.from}: ${message.replace(/: only one word.*$/, "")}: a wallet publishes an ` +
-            "intent from values known before anything runs, each bound into the intent as one " +
-            "word, and this one is not: an integer, an address or a bool binds. Run the program " +
-            "on a Pot instead (sauce run), where it reads its arguments as it runs"
+        ? `${args.from}: ${message.replace(/: only one word.*$/, "")}: each argument is bound into ` +
+            "the program as one word, and this one is not: an integer, an address or a bool " +
+            "binds. Run the program on a Pot instead (sauce run), where it reads its arguments as " +
+            "it runs"
         : `${args.from}: ${message}`,
     );
   }
