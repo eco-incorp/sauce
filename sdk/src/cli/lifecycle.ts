@@ -39,6 +39,7 @@ import {
 
 import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12PotAbi } from "../evm/engine.js";
+import { v12KitchenAddress } from "../deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../deployments/pot.js";
 import { PortalABI } from "../protocols/eco-routes/abis.js";
 import { ECO_ROUTES_ADDRESSES } from "../protocols/eco-routes/addresses.generated.js";
@@ -72,7 +73,6 @@ import { sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState, type TxRequest } from "./chain.js";
-import { kitchenAddress } from "./commands.js";
 import { formatAmount, tokenInfo, type TokenInfo } from "./effects.js";
 import { requireSupported } from "./support.js";
 import {
@@ -874,8 +874,8 @@ export async function planFill(
       if (call.value < fee) {
         notes.push(
           `route call ${index + 1} pays the Kitchen ${call.value} wei, and ${chain.slug}'s ` +
-            `Kitchen charges ${fee}: its cook reverts with FeeNotPaid. Build the intent with a ` +
-            `fee of ${fee}.`,
+            `Kitchen charges ${fee}: its cook reverts with FeeNotPaid. Build the intent with ` +
+            `--intent-execution-fee ${fee}.`,
         );
       }
     });
@@ -885,7 +885,7 @@ export async function planFill(
   const claimant = (options.claimant ?? solver) as Hex;
   const steps: FillStep[] = [];
   if (cooks && !deployed) {
-    const kitchenAt = kitchenAddress();
+    const kitchenAt = getAddress(v12KitchenAddress());
     steps.push({
       kind: "deploy",
       what: `Kitchen.deployPot(${executor}, ${SAUCE_INTENT_POT_SALT})`,

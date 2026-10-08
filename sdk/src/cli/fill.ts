@@ -1,7 +1,8 @@
 /**
- * `sauce intent fill`: a solver's fill of the intents the store holds, on each intent's DESTINATION
- * chain — rehearsed with no key and nothing sent, or, with `--send` and a signer, rehearsed and
- * then SENT, the signer being the solver. The route's
+ * `sauce intent fill`: a solver's fill of the intents a file opens (or the store holds), on each intent's
+ * DESTINATION chain — rehearsed with no key and nothing sent, the other half of
+ * `publish --dry-run`, which rehearses only the source chain's funding of the vault and `publish`;
+ * or, with `--send` and a signer, rehearsed and then SENT, the signer being the solver. The route's
  * body is where an intent fails (a swap, a minimum, a refund), and it runs only on the destination,
  * inside `Portal.fulfill`.
  *
@@ -35,6 +36,7 @@ import {
   getAbiItem,
   getAddress,
   keccak256,
+  numberToHex,
   parseAbi,
   toFunctionSelector,
   toHex,
@@ -49,12 +51,21 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress } from "../deployments/index.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
+import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
+import { fileIntents, type FileInput, type RehearsalAccess } from "./file-intents.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
-import { kitchenAddress, unapproved, type Approver, type CommandOutput } from "./commands.js";
+import {
+  kitchenAddress,
+  type CliFiles,
+  unapproved,
+  type Approver,
+  type CommandOutput,
+  type ProgramInput,
+} from "./commands.js";
 import {
   addressLabels,
   effectLines,
@@ -183,6 +194,38 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
     );
   }
 };
+
+/**
+ * The intents the file opens, read from a rehearsal of publishing them (`file-intents.ts`), each
+ * one a solver could fill.
+ */
+export async function fillTargets(
+  input: FileInput,
+  files: CliFiles,
+  access: RehearsalAccess,
+): Promise<readonly FillTarget[]> {
+  const intents = await fileIntents(input, files, access, "sauce intent fill");
+
+  return intents.map((intent) => ({
+    intent: intent.intent,
+    source: input.chain,
+    destination: intent.destination,
+    sourcePortal: ecoRoutesPortal(input.chain),
+  }));
+}
+
+/** Names for the addresses a define holds: `RECIPIENT`, `REFUND_TO`. A define of an address-sized
+ *  integer that is not one names nothing a fill touches. */
+export function defineLabels(input: ProgramInput): Array<readonly [Address, string]> {
+  const names = new Map<string, string[]>();
+  for (const [name, value] of Object.entries(input.defines)) {
+    if (typeof value !== "bigint" || value < 1n << 64n || value >= 1n << 160n) continue;
+    const address = getAddress(numberToHex(value, { size: 20 }));
+    names.set(address, [...(names.get(address) ?? []), name]);
+  }
+
+  return [...names].map(([address, list]) => [address as Address, list.join(", ")] as const);
+}
 
 /** Why the fulfill reverted, unwrapping a failed route call to the reason it failed with. */
 function fulfillReason(data: Hex | undefined, intent: Intent, pot: Address): string {

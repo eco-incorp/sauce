@@ -816,8 +816,9 @@ export function intentFromPublished(
 // ---------------------------------------------------------------------------
 
 /**
- * How an intent's reward reaches its vault, everywhere the SDK funds one — `intentSourceTxs` and
- * the program a Pot runs for an intent it opens:
+ * How an intent's reward reaches its vault, everywhere the SDK funds one — `intentSourceTxs`, the
+ * program a Pot runs for an intent it opens, `sauce intent publish` (`--intent-fund-via`) and the MCP
+ * `sauce_intent_publish` tool (`intentFundVia`):
  *
  *  - `"transfer"` (the default): each reward token transferred to the vault, and the native amount
  *    sent to it, then `Portal.publish`. No approval. See the module doc.
@@ -866,7 +867,8 @@ export function rewardVaultLegs(intent: Intent): readonly VaultLeg[] {
  * return: a token that returns nothing (USDT) lands like any other, and one that returns `false`
  * lands having moved nothing. What catches that is the vault's balance, not the receipt — ask
  * `isIntentFundedCall` once the transfers have landed and before `publish` is sent, as
- * a wallet must. (A Pot's transfer into the vault is a program's, and is `SafeERC20`'s.)
+ * `sauce intent publish` does. (A Pot's transfer into the vault is a program's, and is `SafeERC20`'s:
+ * `intent-sugar.ts#vaultFundingStatements`.)
  */
 export function vaultTransferTx(vault: AddressInput, leg: VaultLeg): PortalTx {
   const to = getAddress(denormalizeToEvm(toUniversalAddress(vault))) as Hex;

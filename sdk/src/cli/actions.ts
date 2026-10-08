@@ -130,6 +130,7 @@ export async function actionsProgram(input: ActionsInput): Promise<ProgramInput>
     chain,
     defines: {},
     compactArgs: input.compactArgs === true,
+    intents: {},
     contracts,
   };
 }
@@ -150,6 +151,7 @@ export async function actionsCommand(
     chain: lowering.chain,
     defines: {},
     compactArgs: input.compactArgs === true,
+    intents: {},
     contracts: lowering.contracts,
   };
   const compiled = await compileCommand(program, files);

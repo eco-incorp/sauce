@@ -17,7 +17,7 @@ import type { Abi, Address, Hex, PublicClient } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn, getDescriptor, listContracts } from "../descriptors/query.js";
-import { pascalOfSlug } from "../routes/builder.js";
+import { pascalOfSlug } from "../routes/pascal.js";
 import { UsageError } from "./args.js";
 import { readAll, type ViewCall, type ViewResult } from "./chain.js";
 import type { CommandOutput } from "./commands.js";

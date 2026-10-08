@@ -74,8 +74,9 @@ export interface Target {
 export function storedTargets(store: IntentStore, hash: Hex): Target[] {
   if (!store.has(hash)) {
     throw new CliError(
-      `no intent ${hash.toLowerCase()} in ${store.dir}: import the transaction that published ` +
-        "it (`sauce intent import <tx hash> --chain <source>`)",
+      `no intent ${hash.toLowerCase()} in ${store.dir}: name the transaction that published it ` +
+        "instead, --tx <hash> --chain <source> (or store it: `sauce intent import <tx hash> " +
+        "--chain <source>`)",
     );
   }
   const stored = store.load(hash);
@@ -900,7 +901,7 @@ export async function importCommand(
   };
 }
 
-/** Records the intents a sent transaction published (`run`) in the store. */
+/** Records the intents a sent transaction published (`publish`, `run`) in the store. */
 export async function rememberPublished(
   store: IntentStore,
   chain: CanonicalChain,

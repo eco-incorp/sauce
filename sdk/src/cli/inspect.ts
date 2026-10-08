@@ -13,10 +13,8 @@ import {
   bytesToHex,
   decodeFunctionData,
   getAddress,
-  hexToBigInt,
   hexToBytes,
   keccak256,
-  slice,
   toFunctionSelector,
   type Address,
   type Hex,
@@ -337,26 +335,15 @@ function embeddedIntents(program: Uint8Array, context: InspectContext, depth: nu
         fundedBy(publishedIntent(destination, routeBytes, reward, context, depth), fundVia),
       );
     } catch {
-      // Split around values the program measures when it runs: only the destination, the first
-      // argument, is whole. The rest is filled in on chain.
-      if (data.length < 2 + 8 + 64) continue;
-      const destination = hexToBigInt(slice(data, 4, 36));
-      if (destination >> 64n !== 0n) continue;
+      // A call the program encodes as it runs, from an intent built while it compiled: its route
+      // and reward are in the Portal's log once it runs, not in the bytes.
       parts.push(
         fundedBy(
           {
-            json: {
-              destination: {
-                id: destination.toString(),
-                ...(resolveChain(destination) === undefined
-                  ? {}
-                  : { chain: resolveChain(destination)!.slug }),
-              },
-              measured: true,
-            },
+            json: { measured: true },
             lines: [
-              `intent to ${chainNamed(destination)}, with values the program measures when it ` +
-                "runs (inspect its source file to see them)",
+              "an intent, encoded as the program runs: `sauce simulate` reads it from the " +
+                "Portal's log (`IntentPublished`)",
             ],
           },
           fundVia,
@@ -397,6 +384,7 @@ function programPart(
     // Not the settle: nothing to claim.
   }
   let code = program;
+  let known: Part[] | undefined;
   const source = depth === 0 ? context.source : undefined;
   if (source !== undefined) {
     const compiled = source.program.bytecode;
@@ -409,6 +397,8 @@ function programPart(
       );
     } else {
       code = compiled;
+      // The program is the file's, so its intents are the compile's, with each measured value named.
+      known = sourceIntents(source.program);
       const tail = program.slice(compiled.length);
       let values: EntryValue[] | undefined;
       let problem: string | undefined;
@@ -443,7 +433,7 @@ function programPart(
     }
   }
   if (scan) {
-    const intents = embeddedIntents(code, context, depth);
+    const intents = known ?? embeddedIntents(code, context, depth);
     json.intents = intents.map((intent) => intent.json);
     lines.push(...indent(intents.flatMap((intent) => intent.lines)));
   }
@@ -542,9 +532,37 @@ export function describeData(data: Hex, given: InspectContext): Part {
   return { json: { call: null, program: program.json }, lines: program.lines };
 }
 
-/** `sauce inspect <file>`: the program the file compiles to, and what it takes. */
+/**
+ * The intents a compiled program opens, from the compile: where each goes, and the body it cooks
+ * there. Its route and reward are encoded as the program runs, so they are read from the Portal's
+ * log (`sauce simulate`), not from the compile.
+ */
+function sourceIntents(program: CompiledSauceProgram): Part[] {
+  return program.bodies.map((body) => {
+    const described = programPart(body.bytecode, { chain: body.destination }, 1, false);
+
+    return {
+      json: {
+        destination: { id: String(body.destination.id), chain: body.destination.slug },
+        body: described.json,
+        captures: body.captures,
+      },
+      lines: [
+        `intent to ${body.destination.slug}: its body, cooked on the destination's shared Pot`,
+        ...indent(described.lines),
+        ...(body.captures.length === 0
+          ? []
+          : [`  given by the program as it runs: ${body.captures.join(", ")}`]),
+      ],
+    };
+  });
+}
+
+/** `sauce inspect <file>`: the program the file compiles to, what it takes, the intents it opens. */
 export function inspectFile(file: string, program: CompiledSauceProgram): CommandOutput {
+  // The file's own intents come from the compile; the bytes are not scanned for them.
   const described = programPart(program.bytecode, {}, 1, false);
+  const intents = sourceIntents(program);
   const params = program.entryParams.map((param) => `${param.name}: ${param.type}`).join(", ");
 
   return {
@@ -563,6 +581,13 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
               )
               .join(", ")}`,
           ]),
+      ...indent(intents.flatMap((intent) => intent.lines)),
+      ...(intents.length === 0
+        ? []
+        : [
+            "  each intent's route and reward are encoded as the program runs: `sauce simulate` " +
+              "reads them from the Portal's log",
+          ]),
     ].join("\n"),
     json: {
       file,
@@ -574,6 +599,7 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
         entryParams: program.entryParams,
         ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
       },
+      intents: intents.map((intent) => intent.json),
     },
   };
 }

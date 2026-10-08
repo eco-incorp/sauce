@@ -90,7 +90,8 @@ function relocate(message: string, file: string, text: string): string {
     const line = Number(arrow[2]);
     const column = Number(arrow[3]);
     const quoted = quotedAt(lines, i, line);
-    const site = quoted === undefined ? undefined : locate(own, lines, quoted, line, column);
+    const pad = spanPad(lines, i);
+    const site = quoted === undefined ? undefined : locate(own, lines, quoted, line, column, pad);
     if (site === undefined) {
       unmapped = true;
       continue;
@@ -100,11 +101,12 @@ function relocate(message: string, file: string, text: string): string {
       const gutter = GUTTER.exec(lines[j]!);
       if (gutter === null) continue;
       const number = Number(gutter[2]) + site.line - line;
-      const body = j === quoted && site.text !== undefined ? site.text : gutter[3];
+      const body =
+        j === quoted && site.text !== undefined ? `${" ".repeat(pad)}${site.text}` : gutter[3];
       lines[j] = `${renumber(gutter[1]!, gutter[2]!, number)} | ${body}`;
       const caret = j === quoted && site.text !== undefined ? CARET.exec(lines[j + 1] ?? "") : null;
       if (caret !== null) {
-        lines[j + 1] = `${caret[1]}${" ".repeat(site.column - 1)}${caret[3]}${caret[4]}`;
+        lines[j + 1] = `${caret[1]}${" ".repeat(pad + site.column - 1)}${caret[3]}${caret[4]}`;
       }
     }
   }
@@ -124,6 +126,20 @@ function renumber(indent: string, old: string, number: number): string {
   const digits = String(number);
 
   return `${indent.slice(0, Math.max(0, indent.length - (digits.length - old.length)))}${digits}`;
+}
+
+/**
+ * How far a diagnostic that draws a span over several lines pushes every source line it quotes: the
+ * span's left edge takes two columns in front of the source (`/ `, `| `), and the lines outside the
+ * span are padded by as many to stay aligned.
+ */
+function spanPad(lines: readonly string[], at: number): number {
+  for (let j = at + 1; j < lines.length && !ARROW.test(lines[j]!); j++) {
+    const gutter = GUTTER.exec(lines[j]!);
+    if (gutter !== null && MULTILINE.test(gutter[3]!)) return 2;
+  }
+
+  return 0;
 }
 
 /** The index of the line quoting source line `line`, among the lines following the arrow at `at`. */
@@ -168,12 +184,13 @@ function locate(
   quoted: number,
   line: number,
   column: number,
+  pad: number,
 ): Site | undefined {
   const body = GUTTER.exec(lines[quoted]!)![3]!.trimEnd();
   // A span over several lines draws its left edge in front of the source: `/ ` opens it and `| `
-  // continues it, so the quoted source starts two columns in.
+  // continues it, so the quoted source starts two columns in, on every line it quotes.
   const spanned = MULTILINE.test(body);
-  const text = spanned ? body.slice(2) : body;
+  const text = spanned ? body.slice(2) : body.slice(pad);
   if (text.trim() === "") return undefined;
   const exact = own.flatMap((ownText, index) =>
     ownText === text && index < line ? [index + 1] : [],
@@ -203,6 +220,13 @@ function locate(
 
 /** What to pass the command for a failure whose SDK message names an API option instead. */
 const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]> = [
+  [
+    /a hop needs a `refundee`/,
+    () =>
+      "write `refundee: <address>` in the hop's config, or `refundee: refundTo` with " +
+      "`refundTo: Address` a parameter of main, passed with --args",
+  ],
+  [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [
     /`([A-Za-z_$][\w$]*)` is not a declared variable/,
     (match) =>
@@ -251,11 +275,14 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
 
 /**
  * On Solana a token is a value (`balanceOf(TSLAx, account)`), so a symbol the cluster does not
- * register fails as an undeclared name. Name the cause: a stock's symbol written in another case,
- * or a token only an EVM chain registers.
+ * register fails as an undeclared name, or, where another chain registers it, as a token this one
+ * does not. Name the cause: a stock's symbol written in another case, or a token only an EVM chain
+ * registers.
  */
 function unregisteredMints(message: string, chain: CanonicalChain): string[] {
-  const name = /`([A-Za-z_$][\w$]*)` is not a declared variable/.exec(message)?.[1];
+  const name = /`([A-Za-z_$][\w$]*)` is not (?:a declared variable|a token or protocol on )/.exec(
+    message,
+  )?.[1];
   if (chain.kind !== "svm" || name === undefined) return [];
   const cased = svmTokenRows(chain).find((row) => row.symbol.toUpperCase() === name.toUpperCase());
   if (cased !== undefined) {

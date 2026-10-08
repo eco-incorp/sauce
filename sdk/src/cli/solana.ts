@@ -105,6 +105,7 @@ import {
   compileProgram,
   payloadOf,
   type ProgramInput,
+  refusePastDeadline,
   revertedFirst,
   unapproved,
 } from "./commands.js";
@@ -1152,6 +1153,7 @@ async function prepare(
   files: CliFiles,
   signer: TransactionSigner,
 ): Promise<Prepared> {
+  refusePastDeadline(input);
   const via = input.via ?? "kitchen";
   const program = compileProgram(input, files);
   const bytecode = svmPayload(program, input.args);
