@@ -388,6 +388,47 @@ export const ROUTER_SVM_VENUES = {
     data: "sanctumInfinityData",
     cpi: "sanctumInfinityCpi",
   },
+  "solfi-v1": {
+    program: "SoLFiHG9TfgtdUXUjWAxi3LtvYuFyDLVhBWxdMZxyCe",
+    data: "solfiV1Data",
+    cpi: "solfiV1Cpi",
+  },
+  // `@sauce/router` has no function for these, only their account order and data template:
+  // - a Pot cannot send their swap: One Intro requires its signer owned by the System program,
+  //   BisonFi a signature from the authorization account its routing program signs for, and a
+  //   Sanctum stake pool's deposit takes native SOL from its signer;
+  // - WOOFi's keepers stopped on 2026-04-20, and on the one pool state captured its program
+  //   returns without moving either token, so no swap of it can be proven.
+  "one-intro-swap": {
+    program: "DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm",
+    data: null,
+    cpi: null,
+  },
+  woofi: {
+    program: "WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb",
+    data: null,
+    cpi: null,
+  },
+  bisonfi: {
+    program: "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi",
+    data: null,
+    cpi: null,
+  },
+  "sanctum-stake-pool": {
+    program: "SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy",
+    data: null,
+    cpi: null,
+  },
+  "sanctum-stake-pool-2": {
+    program: "SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY",
+    data: null,
+    cpi: null,
+  },
+  "sanctum-stake-pool-3": {
+    program: "SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn",
+    data: null,
+    cpi: null,
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -734,6 +775,13 @@ const EXACT_IN_VENUES = [
   "perps-jlp",
   "perps-jlp-mint",
   "sanctum-infinity",
+  "one-intro-swap",
+  "solfi-v1",
+  "woofi",
+  "bisonfi",
+  "sanctum-stake-pool",
+  "sanctum-stake-pool-2",
+  "sanctum-stake-pool-3",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1663,6 +1711,83 @@ function exactInAccountOrder(
         r("slab"),
       ];
     }
+    case "one-intro-swap":
+      // A swap paying token A takes the first two fee accounts, one paying token B the last two.
+      return [
+        r("metadata"),
+        w("pool"),
+        r("poolAuthority"),
+        ...paid("vaultA", "vaultB"),
+        PAYER,
+        w("source"),
+        w("recipient"),
+        ...(aToB ? [w("feeA0"), w("feeB0")] : [w("feeA1"), w("feeB1")]),
+        r("tokenProgram"),
+      ];
+    case "solfi-v1":
+      return [
+        AUTHORITY,
+        w("pool"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("tokenProgram"),
+        r("instructionsSysvar"),
+      ];
+    case "woofi": {
+      // Token A is the base, B the quote; `aToB` sells the base. The swap takes the quote token's
+      // pool, price update and vault again, and the rebate's recipient, the authority, unsigned.
+      const [from, to] = aToB ? ["A", "B"] : ["B", "A"];
+      return [
+        r("wooconfig"),
+        r("tokenProgram"),
+        AUTHORITY,
+        w(`wooracle${from}`),
+        w(`woopool${from}`),
+        w("source"),
+        w(`vault${from}`),
+        w(`priceUpdate${from}`),
+        w(`wooracle${to}`),
+        w(`woopool${to}`),
+        w("recipient"),
+        w(`vault${to}`),
+        w(`priceUpdate${to}`),
+        w("woopoolB"),
+        r("priceUpdateB"),
+        w("vaultB"),
+        r("authority"),
+      ];
+    }
+    case "bisonfi":
+      return [
+        AUTHORITY,
+        w("pool"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("authorization"),
+      ];
+    case "sanctum-stake-pool":
+    case "sanctum-stake-pool-2":
+    case "sanctum-stake-pool-3":
+      // `DepositSol`: the authority pays native SOL, so it is writable.
+      if (!aToB) throw new Error("a Sanctum stake pool only deposits here");
+      return [
+        w("pool"),
+        r("withdrawAuthority"),
+        w("reserveStake"),
+        PAYER,
+        w("recipient"),
+        w("managerFeeAccount"),
+        w("referrerFeeAccount"),
+        w("poolMint"),
+        r("systemProgram"),
+        r("tokenProgram"),
+      ];
     default: {
       const unknown: never = venue;
       throw new Error(`not a venue @sauce/router swaps at an exact input: ${String(unknown)}`);

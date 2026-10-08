@@ -328,6 +328,7 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   hyloStabilityPool: 10,
   huma: 8,
   heliumTreasury: 6,
+  solfiV1: 5,
 };
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form
@@ -426,6 +427,7 @@ export const SVM_EXACT_IN_ARGUMENTS: Readonly<Record<string, readonly string[]>>
   carrot: ["aToB"],
   mswap: [],
   sanctumInfinity: ["inCalcAccounts", "outCalcAccounts", "inIndex", "outIndex", "minOut"],
+  solfiV1: ["minOut", "aToB"],
 };
 
 /** An exact-input venue's `…Cpi` or `…Data` arguments, `amountIn` first; undefined for any other

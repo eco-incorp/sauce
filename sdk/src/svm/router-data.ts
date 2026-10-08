@@ -269,6 +269,29 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
       "",
     ],
   },
+  "one-intro-swap": { takes: ["minOut"], data: ({ floor }) => ["0897f54caccb9027", floor] },
+  "solfi-v1": { takes: ["minOut"], data: ({ aToB, floor }) => ["07", floor + bit(!aToB)] },
+  woofi: {
+    takes: ["minOut"],
+    // The amount and the floor are each a u128: the amount's high half, then the floor's.
+    data: ({ floor }) => [SWAP, `${"00".repeat(8)}${floor}${"00".repeat(8)}`],
+  },
+  bisonfi: { takes: ["minOut"], data: ({ aToB, floor }) => ["07", `${floor}${bit(!aToB)}04`] },
+  "sanctum-stake-pool": {
+    takes: [],
+    oneWay: "a Sanctum stake pool only deposits here",
+    data: () => ["0e", ""],
+  },
+  "sanctum-stake-pool-2": {
+    takes: [],
+    oneWay: "a Sanctum stake pool only deposits here",
+    data: () => ["0e", ""],
+  },
+  "sanctum-stake-pool-3": {
+    takes: [],
+    oneWay: "a Sanctum stake pool only deposits here",
+    data: () => ["0e", ""],
+  },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>

@@ -732,6 +732,7 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `flint`                | Flint                 | `FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z`  | `marketB, vaultA, vaultB, instructionsSysvar` (market A as the pool)                                                                 |
 | `deriverse`            | Deriverse             | `DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD` | `assetVault, crncyVault, bidsTree, bidOrders, asksTree, askOrders, lines, maps, clientInfos` (the instrument as the pool)            |
 | `goonfiV2`             | GoonFi v2             | `goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE`  | `vaultA, vaultB, oracle, globalConfig, instructionsSysvar, validator`                                                                |
+| `solfiV1`              | SolFi v1              | `SoLFiHG9TfgtdUXUjWAxi3LtvYuFyDLVhBWxdMZxyCe`  | `vaultA, vaultB, instructionsSysvar`                                                                                                 |
 | `meteoraDbc`           | Meteora DBC           | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`  | `poolAuthority, config, baseVault, quoteVault, eventAuthority`                                                                       |
 | `trends`               | Trends                | `CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz` | `config, poolAuthority, baseVault, quoteVault, eventAuthority`                                                                       |
 | `heaven`               | Heaven                | `HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o` | `vaultA, vaultB, protocolConfig, instructionsSysvar, chainlink, solUsdFeed, associatedTokenProgram, systemProgram`                   |
@@ -745,16 +746,17 @@ vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direct
 and receiving accounts themselves. Perena finds each mint's index among the pool's ten tokens, and
 writes both mints, so they are attached writable.
 
-SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2 are
-proprietary market makers: each prices off its own oracle, quote or book, which a keeper keeps
-fresh, and refuses a swap on a quote gone stale. A `try` form can't see that, so a stale quote fails
-the transaction. `instructionsSysvar` is the Instructions sysvar and `clock` the Clock sysvar.
+SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse, GoonFi v2 and SolFi
+v1 are proprietary market makers: each prices off its own oracle, quote or book, which a keeper
+keeps fresh, and refuses a swap on a quote gone stale. A `try` form can't see that, so a stale quote
+fails the transaction. `instructionsSysvar` is the Instructions sysvar and `clock` the Clock sysvar.
 Riptide's `dontFront` is `jitodontfront111111111111111111111111111111`, and GoonFi v2's `validator`
 is the vote account `J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv`. A Hadron fee vault is the fee
 treasury's token account for that token. A Flint market and its vault are one per token. Tessera V
 sells only its token A. SolFi v2, TaurusFi, Deriverse and GoonFi v2 write the authority, so it is
 attached writable, and Deriverse requires the authority's associated token accounts. Hadron and
-TaurusFi pay wrapped SOL into, and take it out of, native wrapped-SOL accounts.
+TaurusFi pay wrapped SOL into, and take it out of, native wrapped-SOL accounts. SolFi v1's liquidity
+has moved to SolFi v2: every pool it lists holds an empty vault, which its `try` form skips.
 
 Meteora DBC, Trends, Heaven, Virtuals, Raydium LaunchLab, Runner Rodeo and Scale vMM are bonding
 curves: each sells a launched token against its quote token until the token graduates, and a
@@ -774,8 +776,8 @@ circuit breaker. xORCA, the liquid-unstake vault and Hylo's stability pool write
 it is attached writable. Voltr requires the authority's associated token accounts, and its
 withdrawal writes the idle authority; a withdrawal from Hylo's stability pool writes the pool
 config. The liquid-unstake vault pays wrapped SOL into a native wrapped-SOL account. A Sanctum stake
-pool's deposit takes native SOL from the authority, which a Pot cannot pay, so the Sanctum stake
-pools are not here.
+pool's deposit takes native SOL from its signer, which a Pot cannot pay: the stake pools are among
+the instruction-only venues below.
 
 Sixteen venues take more accounts in their swap than a function can list. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
@@ -826,6 +828,24 @@ pool, the stake pool's program and that program's data, 1 account or 5 (`inCalcA
 accounts are named for the trade, `mintIn` and `mintOut`, `custodyIn` and `custodyOut`, and their
 order takes no direction; the JLP mint refuses the other way.
 
+**Instruction only.** `routerSvmAccountOrder` and `routerSvmDataTemplate` also give the swap of
+venues `@sauce/router` has no function for, for a program that can send it; `ROUTER_SVM_VENUES`
+gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three, and WOOFi's swap
+cannot be proven:
+
+| Venue (`ROUTER_SVM_VENUES`)      | Program                                                                                                                                     | Why                                                                                                                   | Data options     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `one-intro-swap`                 | `DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm`                                                                                              | its signer must be owned by the System program, and a Pot is owned by the Kitchen                                     | `minOut`         |
+| `bisonfi`                        | `BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi`                                                                                              | it requires a signature from an authorization account off the curve, which only its routing program signs for         | `aToB`, `minOut` |
+| `sanctum-stake-pool`, `-2`, `-3` | `SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy`, `SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY`, `SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn` | a deposit (`DepositSol`, the only way here) takes native SOL from its signer                                          | none             |
+| `woofi`                          | `WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb`                                                                                               | its keepers stopped on 2026-04-20, and on the one pool state captured its program returns without moving either token | `minOut`         |
+
+One Intro's pool names its token 0 and 1 vaults `vaultA` and `vaultB`; a swap paying token A takes
+the fee accounts `feeA0` and `feeB0`, one paying B `feeA1` and `feeB1`. WOOFi's token A is the pool's
+base token, and `aToB` sells it; its order takes the quote token's pool, price update and vault a
+second time, and the authority again, unsigned, as the rebate's recipient. A stake pool's
+`referrerFeeAccount` may be its `managerFeeAccount`, as the recipes send it.
+
 **A swap spends exactly `amountIn`**, with three exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference
 is a few units, and it stays in `source`; a `Cpi` form returns what was actually paid. A Fluxbeam or
@@ -854,8 +874,8 @@ swap and the staking and vault venues but Helium's treasury have no floor of the
 - the Perena form skips a paused pool and an empty side;
 - the MetaDAO futarchy form skips a DAO not in its spot state, and an empty side;
 - the Saber decimal wrapper form skips a withdrawal the vault cannot pay;
-- the SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2
-  forms skip an empty side;
+- the SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse, GoonFi v2 and
+  SolFi v1 forms skip an empty side;
 - the Meteora DBC, Trends, Heaven and Virtuals forms skip an empty side;
 - the Solayer form skips an undelegation from an empty vault, and the Voltr form a withdrawal from
   an empty idle account;
@@ -914,6 +934,7 @@ because an account list passed to a function is built as an array first, where o
 | Flint                             |  13,666 |        14,507 |       18,247 |    47,604 |       55,243 |         8,241 |
 | Deriverse                         |  18,264 |        23,510 |       27,426 |    64,142 |       71,407 |        39,027 |
 | GoonFi v2                         |  18,097 |        22,772 |       26,804 |    64,586 |       72,225 |        65,485 |
+| SolFi v1                          |  12,539 |        17,208 |       21,096 |    38,114 |       45,753 |        76,015 |
 | Meteora DBC                       |  14,172 |        17,452 |       21,600 |    58,423 |       68,215 |        31,171 |
 | Trends                            |  13,358 |        16,638 |       20,786 |    57,428 |       67,220 |        42,988 |
 | Heaven                            |  16,713 |        21,629 |       26,589 |    70,052 |       79,844 |        48,893 |

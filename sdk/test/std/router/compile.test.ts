@@ -83,6 +83,7 @@ import {
   MSWAP_PROGRAM_ID,
   PERPS_JLP_PROGRAM_ID,
   SANCTUM_INFINITY_PROGRAM_ID,
+  SOLFI_V1_PROGRAM_ID,
   HADRON_PROGRAM_ID,
   HELIUM_TREASURY_PROGRAM_ID,
   HUMA_PROGRAM_ID,
@@ -638,6 +639,7 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
     perpsJlp: PERPS_JLP_PROGRAM_ID,
     perpsJlpMint: PERPS_JLP_PROGRAM_ID,
     sanctumInfinity: SANCTUM_INFINITY_PROGRAM_ID,
+    solfiV1: SOLFI_V1_PROGRAM_ID,
   };
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
   const carries = (code: string) =>

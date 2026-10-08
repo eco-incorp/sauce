@@ -319,17 +319,21 @@ tryRaydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
 The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `tokenSwapV1`,
 `orcaV1`, `penguin`, `stepn`, `saros`, `fluxbeam`, `dexlab`, `meteoraDammV2`, `meteoraDammV1`,
 `aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
-`mercurial`, `perena`, `metadaoFutarchy`, `solfiV2`, `hadron`, `taurusfi`, `riptide`, `denali`,
-`gavel`, `tesserav`, `flint`, `deriverse`, `goonfiV2`, `meteoraDbc`, `trends`, `heaven`, `virtuals`,
-`xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma` and `heliumTreasury`.
+`mercurial`, `perena`, `metadaoFutarchy`, `solfiV1`, `solfiV2`, `hadron`, `taurusfi`, `riptide`,
+`denali`, `gavel`, `tesserav`, `flint`, `deriverse`, `goonfiV2`, `meteoraDbc`, `trends`, `heaven`,
+`virtuals`, `xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma` and
+`heliumTreasury`.
 
-`solfiV2` through `goonfiV2` are market makers pricing off their own oracle, quote or book, and
+`solfiV1` through `goonfiV2` are market makers pricing off their own oracle, quote or book, and
 refuse a swap on a quote gone stale, which a `try` form can't see. `meteoraDbc` through `virtuals`
-are bonding curves; Virtuals only sells its token. `xorca` through `heliumTreasury` stake, deposit,
-unstake or redeem at the venue's own rate; xORCA only stakes, the liquid-unstake vault only
-unstakes, Huma only deposits and Helium's treasury only redeems. A venue settled in native SOL on
-the authority (pump.fun's bonding curve, Boop, Moonit, the Sanctum stake pools) is not served, since
-a Pot holds no native SOL it can pay out.
+are bonding curves; Virtuals only sells its token. SolFi v1's pools all hold an empty vault, its
+liquidity moved to SolFi v2. `xorca` through `heliumTreasury` stake, deposit, unstake or redeem at
+the venue's own rate; xORCA only stakes, the liquid-unstake vault only unstakes, Huma only deposits
+and Helium's treasury only redeems. A venue settled in native SOL on the authority (pump.fun's
+bonding curve, Boop, Moonit) is not served, since a Pot holds no native SOL it can pay out. One
+Intro, BisonFi, the Sanctum stake pools and WOOFi have no function at all: a Pot cannot swap at the
+first three, and WOOFi's swap cannot be proven. `routerSvmAccountOrder` and `routerSvmDataTemplate`
+still give their instruction, for a program that can send it.
 
 - **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:
   `svm.call(program, [accounts…], raydiumCpSwapData(amountIn, minOut))`. It is the cheapest form.

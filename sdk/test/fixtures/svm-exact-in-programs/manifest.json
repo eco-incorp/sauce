@@ -450,6 +450,24 @@
       "programId": "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
       "file": "perps-jlp.so.gz",
       "sha256": "a2891a9277f865eb96feaae67e03cd88efc128d43f6093cc70618ad63cb7d9ba"
+    },
+    {
+      "name": "one-intro-swap",
+      "programId": "DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm",
+      "file": "one-intro-swap.so.gz",
+      "sha256": "530524bc1d66856f36665f8cd0daaeeb2c4b6c2bb8a32f3279a3d88e96e247ee"
+    },
+    {
+      "name": "solfi-v1",
+      "programId": "SoLFiHG9TfgtdUXUjWAxi3LtvYuFyDLVhBWxdMZxyCe",
+      "file": "solfi-v1.so.gz",
+      "sha256": "f937baaf6e8cecad6a4fe90099a3167efe928ea80b1f03a4d0a0e2686c66c6cb"
+    },
+    {
+      "name": "woofi",
+      "programId": "WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb",
+      "file": "woofi.so.gz",
+      "sha256": "7fab739a7f3334fb57f961fc5038081a89f1f0c75452ab43bdf6c9fff68467a0"
     }
   ]
 }

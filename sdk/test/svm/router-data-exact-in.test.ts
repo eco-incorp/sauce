@@ -77,6 +77,8 @@ const FIRST: Record<string, boolean> = {
   wsolToJito: true,
   jitoToWsol: true,
   jupToSctm: true,
+  sellBase: true,
+  sellQuote: false,
 };
 const PAYS_FIRST: Record<string, boolean> = { "helium-treasury:Aon7:redeem": true };
 
@@ -91,9 +93,20 @@ const leHex = (text: string, byte: number, width: number): bigint =>
       .toString("hex")}`,
   );
 
-/** The arguments past the amount the venue's `…Data` takes. */
-const dataArguments = (venue: string): string[] =>
-  svmExactInArguments(ROUTER_SVM_VENUES[venue as RouterSvmVenue].data)!;
+/** The arguments past the amount the venue's data carries: its `…Data`'s, or, for a venue a Pot
+ *  cannot send and `@sauce/router` therefore has no function for, its instruction's. */
+const INSTRUCTION_ONLY: Record<string, string[]> = {
+  "one-intro-swap": ["minOut"],
+  woofi: ["minOut"],
+  bisonfi: ["minOut", "aToB"],
+  "sanctum-stake-pool": [],
+  "sanctum-stake-pool-2": [],
+  "sanctum-stake-pool-3": [],
+};
+const dataArguments = (venue: string): string[] => {
+  const data = ROUTER_SVM_VENUES[venue as RouterSvmVenue].data;
+  return data === null ? INSTRUCTION_ONLY[venue]! : svmExactInArguments(data)!;
+};
 
 const optionsOf = (key: string, vector: Vector): RouterSvmDataOptions => {
   const aToB = PAYS_FIRST[key] ?? FIRST[key.split(":").pop()!];
