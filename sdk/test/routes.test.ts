@@ -7,9 +7,10 @@ import { canonicalChains } from "../src/chains/canonical.js";
 import { chain, chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 
 describe("routes: a chain accessor is a namespace", () => {
-  it("its own keys are exactly ['chain'], and it is not callable", () => {
+  it("its own keys are exactly ['chain','hop'], and it is not callable", () => {
     expect(typeof chainAccessors.Base).toBe("object");
-    expect(Object.keys(chainAccessors.Base)).toEqual(["chain"]);
+    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "hop"]);
+    expect(typeof chainAccessors.Base.hop).toBe("function");
   });
 
   it("chain('eth')/chain(8453)/chain('BNB Chain') resolve", () => {

@@ -54,9 +54,10 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
     installRouteGlobals();
     for (const c of canonicalChains) {
       const key = pascalOfSlug(c.slug);
-      const composed = g[key] as { chain: unknown };
+      const composed = g[key] as { chain: unknown; hop: unknown };
       const origin = chainAccessors[key as keyof typeof chainAccessors];
       expect(composed.chain).toEqual(origin.chain);
+      expect(composed.hop).toBe(origin.hop);
     }
   });
 
@@ -65,12 +66,18 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
     expect(g.Base).toBe(BaseExport);
   });
 
-  it("the installed global carries the native contract accessor tree", () => {
+  it("the installed global carries BOTH its hop and the native contract accessor tree", () => {
     installRouteGlobals();
     const base = g.Base as {
+      hop: unknown;
+      Portal: unknown;
+      EcoRoutes: { Portal: unknown };
       UniswapV4: { UniversalRouter: unknown };
       Uniswap: { UniversalRouter: unknown };
     };
+    expect(typeof base.hop).toBe("function");
+    // Its `Portal` is the eco-routes Portal contract.
+    expect(base.Portal).toBe(base.EcoRoutes.Portal);
     expect(base.UniswapV4.UniversalRouter).toBeDefined();
     // Family alias forwards to the SAME underlying accessor as the canonical namespace.
     expect(base.Uniswap.UniversalRouter).toBe(base.UniswapV4.UniversalRouter);
@@ -78,7 +85,7 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
 
   it("composition never mutates the imported chainAccessors.Base object", () => {
     installRouteGlobals();
-    expect(Object.keys(chainAccessors.Base)).toEqual(["chain"]);
+    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "hop"]);
   });
 
   it("contract namespaces install as lazy, memoising getters (not eagerly constructed)", () => {

@@ -6,8 +6,8 @@
  *
  * Imports the package ROOT (`../src/index.js`), not `routes/`, because the
  * thing under test is what a consumer actually gets from one import: the full
- * composed accessor (`.chain` + the lazy contract tree, plus the svm venue
- * tree on an svm chain) and an untouched `globalThis`.
+ * composed accessor (callable + `.chain`/`.route` + the lazy contract tree,
+ * plus the svm venue tree on an svm chain) and an untouched `globalThis`.
  */
 import * as sauce from "../src/index.js";
 import { Base, Ethereum, Solana, Token, chain, canonicalChains } from "../src/index.js";
@@ -29,9 +29,10 @@ describe("chain accessors: one named export per canonical chain", () => {
   it("every canonical chain is exported under its PascalCase name, over the SAME CanonicalChain", () => {
     for (const c of canonicalChains) {
       const key = pascalOfSlug(c.slug);
-      const exported = sdk[key] as { chain: unknown } | undefined;
+      const exported = sdk[key] as { chain: unknown; hop: unknown } | undefined;
       expect(exported).toBeDefined();
       expect(exported!.chain).toEqual(chainAccessors[key as keyof typeof chainAccessors].chain);
+      expect(typeof exported!.hop).toBe("function");
     }
   });
 
@@ -43,9 +44,12 @@ describe("chain accessors: one named export per canonical chain", () => {
     expect(g.Token).toBeUndefined();
   });
 
-  it("the export is a namespace, not a function", () => {
+  it("the export is a namespace, not a function: an intent is opened with `Base.hop`", () => {
     expect(typeof Base).toBe("object");
-    expect(Base.chain).toBe(chainAccessors.Base.chain);
+    expect(Base.hop).toBe(chainAccessors.Base.hop);
+    // Its `Portal` is the eco-routes Portal contract, read lazily from the contract tree.
+    expect(Base.Portal).toBe(Base.EcoRoutes.Portal);
+    expect(typeof Object.getOwnPropertyDescriptor(Base, "Portal")?.get).toBe("function");
   });
 
   it("carries the native contract accessor tree, with the family alias resolving to the SAME accessor", () => {
@@ -61,8 +65,8 @@ describe("chain accessors: one named export per canonical chain", () => {
   });
 
   it("composing never mutates the underlying chainAccessors entry", () => {
-    expect(Object.keys(chainAccessors.Base)).toEqual(["chain"]);
-    expect(Object.keys(chainAccessors.Solana)).toEqual(["chain"]);
+    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "hop"]);
+    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["chain", "hop"]);
   });
 
   it("an svm chain ALSO carries the venue tree; an EVM chain provably does not", () => {
