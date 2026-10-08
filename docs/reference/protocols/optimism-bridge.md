@@ -66,7 +66,7 @@ function main(
 
 - **L1 to L2 only** via this contract. For L2 to L1 withdrawals, use the L2StandardBridge on Optimism (takes 7 days)
 - OP Stack architecture -- same pattern used by Base, Mode, Zora, and other OP chains
-- `depositETH` / `depositERC20` send to `msg.sender` on L2. Use `depositETHTo` / `depositERC20To` to specify a different recipient
+- `depositETH` / `depositERC20` send to `msg.sender` on L2, which in a Sauce program is the Pot's address there, not the user's wallet. Use `depositETHTo` / `depositERC20To` to name the recipient, the user's wallet unless they chose otherwise
 - L1 to L2 deposits finalize in ~2-5 minutes (after L1 inclusion + sequencer processing)
 - L2 to L1 withdrawals require 7-day challenge period (optimistic rollup security)
 - `_l2Token` must be the official bridged token representation on Optimism -- incorrect L2 token address will cause deposit to fail

@@ -39,7 +39,6 @@ import {
 
 import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12PotAbi } from "../evm/engine.js";
-import { v12KitchenAddress } from "../deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../deployments/pot.js";
 import { PortalABI } from "../protocols/eco-routes/abis.js";
 import { ECO_ROUTES_ADDRESSES } from "../protocols/eco-routes/addresses.generated.js";
@@ -73,6 +72,8 @@ import { sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState, type TxRequest } from "./chain.js";
+import { txLinks } from "./links.js";
+import { kitchenAddress } from "./commands.js";
 import { formatAmount, tokenInfo, type TokenInfo } from "./effects.js";
 import { requireSupported } from "./support.js";
 import {
@@ -885,7 +886,7 @@ export async function planFill(
   const claimant = (options.claimant ?? solver) as Hex;
   const steps: FillStep[] = [];
   if (cooks && !deployed) {
-    const kitchenAt = getAddress(v12KitchenAddress());
+    const kitchenAt = kitchenAddress();
     steps.push({
       kind: "deploy",
       what: `Kitchen.deployPot(${executor}, ${SAUCE_INTENT_POT_SALT})`,
@@ -2366,6 +2367,9 @@ export async function gatewayStatus(
 export interface PublishedIntent {
   readonly record: IntentRecord;
   readonly txHash: Hex;
+  /** The transaction's explorer page and its trace, for a person to open. */
+  readonly explorer?: string;
+  readonly trace?: string;
   readonly block: string;
   readonly time: string;
   readonly logIndex: number;
@@ -2459,6 +2463,7 @@ export async function publishedIntents(
           ...(vault === undefined ? {} : { vault }),
         }),
         txHash: at.txHash,
+        ...txLinks(chain, at.txHash),
         block: at.blockNumber.toString(),
         time: block.timestamp.toString(),
         logIndex: index,

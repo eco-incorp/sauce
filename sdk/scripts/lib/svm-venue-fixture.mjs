@@ -49,17 +49,49 @@ function existing(dir, address) {
  * programs' directory whole; leaves every other file of the venues' directories as it is.
  */
 export function writeVenueFixture(sdk, { programs, pools, accounts, slot, unixTimestamp, date }) {
-  const { programs: programDir, accounts: accountRoot } = roots(sdk);
+  const { programs: programDir } = roots(sdk);
   rmSync(programDir, { recursive: true, force: true });
   mkdirSync(programDir, { recursive: true });
   for (const { entry, elf } of programs)
     writeFileSync(join(programDir, entry.file), gzipSync(elf, { level: 9 }));
+  const entries = writeAccounts(sdk, accounts);
+  writeFileSync(
+    join(programDir, "manifest.json"),
+    `${JSON.stringify(
+      {
+        $comment:
+          "The Solana venues the distributed-swap suites run, as mainnet held them, dumped by " +
+          "scripts/dump-svm-venues.mjs: each program here, each account under test/svm/fixtures " +
+          "(`file`, relative to it), every account read at `slot`. Test-only: nothing ships them.",
+        cluster: "mainnet-beta",
+        slot,
+        unixTimestamp,
+        date,
+        programs: programs.map(({ entry }) => entry),
+        pools,
+        accounts: entries,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  return entries;
+}
+
+/**
+ * Writes each account where `writeVenueFixture` says, and returns its manifest entries. An account
+ * marked `keep` that a file already holds is left as that file has it.
+ */
+function writeAccounts(sdk, accounts) {
+  const accountRoot = roots(sdk).accounts;
   const entries = [];
   for (const account of [...accounts].sort((a, b) => (a.address < b.address ? -1 : 1))) {
     const dir = join(accountRoot, account.venue);
     mkdirSync(dir, { recursive: true });
     const big = account.data.length > GZIP_OVER;
-    const held = big ? undefined : existing(dir, account.address);
+    // A file kept as it is may hold the account at a size it had then.
+    const held = big && !account.keep ? undefined : existing(dir, account.address);
     if (account.keep && held !== undefined) {
       const data = readAccountFile(sdk, `${account.venue}/${held}`);
       entries.push({
@@ -88,28 +120,7 @@ export function writeVenueFixture(sdk, { programs, pools, accounts, slot, unixTi
       file: `${account.venue}/${name}`,
     });
   }
-  writeFileSync(
-    join(programDir, "manifest.json"),
-    `${JSON.stringify(
-      {
-        $comment:
-          "The Solana venues the distributed-swap suites run, as mainnet held them, dumped by " +
-          "scripts/dump-svm-venues.mjs: each program here, each account under test/svm/fixtures " +
-          "(`file`, relative to it), every account read at `slot`. Test-only: nothing ships them.",
-        cluster: "mainnet-beta",
-        slot,
-        unixTimestamp,
-        date,
-        programs: programs.map(({ entry }) => entry),
-        pools,
-        accounts: entries,
-      },
-      null,
-      2,
-    )}\n`,
-  );
-
-  return entries;
+  return entries.sort((a, b) => (a.address < b.address ? -1 : 1));
 }
 
 /** An account file's data, read back as written. */
@@ -118,4 +129,34 @@ export function readAccountFile(sdk, file) {
   const json = JSON.parse((file.endsWith(".gz") ? gunzipSync(raw) : raw).toString("utf8"));
 
   return Buffer.from(json.base64Data, "base64");
+}
+
+/**
+ * Adds to the fixture without moving anything it holds (`dump-svm-venues --add`): each new program,
+ * each new account (a file already on disk is kept as it is), each new pool, and the accounts past
+ * its nine (`more`) that a held pool gains.
+ */
+export function addToVenueFixture(sdk, { before, programs, pools, extended, accounts }) {
+  const { programs: programDir } = roots(sdk);
+  for (const { entry, elf } of programs)
+    writeFileSync(join(programDir, entry.file), gzipSync(elf, { level: 9 }));
+  const entries = writeAccounts(sdk, accounts);
+  const more = new Map(extended.map((item) => [item.name, item]));
+  const manifest = {
+    ...before,
+    programs: [...before.programs, ...programs.map(({ entry }) => entry)],
+    pools: [
+      ...before.pools.map((pool) => {
+        const gained = more.get(pool.name);
+        return gained === undefined
+          ? pool
+          : { ...pool, more: gained.more, moreSlot: gained.moreSlot };
+      }),
+      ...pools,
+    ],
+    accounts: [...before.accounts, ...entries].sort((a, b) => (a.address < b.address ? -1 : 1)),
+  };
+  writeFileSync(join(programDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  return entries;
 }
