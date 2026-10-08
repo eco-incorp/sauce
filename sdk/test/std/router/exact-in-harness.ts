@@ -88,6 +88,9 @@ export interface Trade {
   /** A wrapped-SOL paying or receiving account made native, its amount held in lamports too, for a
    *  venue that requires it. */
   native?: boolean;
+  /** A Token-2022 paying or receiving account given the extensions a transfer-fee mint's accounts
+   *  carry (immutable owner, the withheld fee), for a venue whose token has a transfer fee. */
+  extensions?: boolean;
 }
 
 export type Outcome =
@@ -212,6 +215,27 @@ const makeNative = (harness: EngineHarness, at: Address): void => {
   });
 };
 
+/** A Token-2022 account given a transfer-fee mint's account extensions: the account type, an
+ *  immutable owner and the withheld fee, 182 bytes. Any other program's account is left as it is. */
+const extend = (harness: EngineHarness, at: Address): void => {
+  const account = harness.svm.getAccount(at);
+  if (!account.exists || account.programAddress !== TOKEN_2022) return;
+  const data = new Uint8Array(182);
+  data.set(account.data.subarray(0, 165));
+  const view = new DataView(data.buffer);
+  data[165] = 2; // the account type: an account
+  view.setUint16(166, 7, true); // ImmutableOwner, empty
+  view.setUint16(168, 0, true);
+  view.setUint16(170, 2, true); // TransferFeeAmount, its withheld amount 0
+  view.setUint16(172, 8, true);
+  harness.svm.setAccount({
+    ...account,
+    data,
+    space: 182n,
+    lamports: lamports(harness.svm.minimumBalanceForRentExemption(182n)),
+  });
+};
+
 /** Records the state every cook starts from: the fixture's accounts as they were, and the accounts
  *  the case placed since, as they are now. */
 export const freeze = (harness: EngineHarness, extra: readonly Address[] = []): void => {
@@ -307,6 +331,7 @@ export const cook = async (
     buyProgram,
   );
   if (trade.native === true) for (const at of [source, recipient]) makeNative(harness, at);
+  if (trade.extensions === true) for (const at of [source, recipient]) extend(harness, at);
   const w = AccountRole.WRITABLE;
   const r = AccountRole.READONLY;
   const named: Record<string, { address: Address; role: AccountRole }> = {

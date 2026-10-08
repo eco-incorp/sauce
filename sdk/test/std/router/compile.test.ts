@@ -80,6 +80,13 @@ import {
   GAVEL_PROGRAM_ID,
   GOONFI_V2_PROGRAM_ID,
   HADRON_PROGRAM_ID,
+  HEAVEN_PROGRAM_ID,
+  METEORA_DBC_PROGRAM_ID,
+  RAYDIUM_LAUNCHLAB_PROGRAM_ID,
+  RUNNER_RODEO_PROGRAM_ID,
+  SCALE_VMM_PROGRAM_ID,
+  TRENDS_PROGRAM_ID,
+  VIRTUALS_PROGRAM_ID,
   RIPTIDE_PROGRAM_ID,
   SOLFI_V2_PROGRAM_ID,
   TAURUSFI_PROGRAM_ID,
@@ -597,6 +604,13 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
     flint: FLINT_PROGRAM_ID,
     deriverse: DERIVERSE_PROGRAM_ID,
     goonfiV2: GOONFI_V2_PROGRAM_ID,
+    meteoraDbc: METEORA_DBC_PROGRAM_ID,
+    trends: TRENDS_PROGRAM_ID,
+    heaven: HEAVEN_PROGRAM_ID,
+    virtuals: VIRTUALS_PROGRAM_ID,
+    raydiumLaunchlab: RAYDIUM_LAUNCHLAB_PROGRAM_ID,
+    runnerRodeo: RUNNER_RODEO_PROGRAM_ID,
+    scaleVmm: SCALE_VMM_PROGRAM_ID,
   };
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
   const carries = (code: string) =>

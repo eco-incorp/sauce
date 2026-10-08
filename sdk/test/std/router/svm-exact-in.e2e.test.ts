@@ -1389,6 +1389,193 @@ const VENUES: Venue[] = [
       },
     ],
   },
+  {
+    name: "MeteoraDbc",
+    programs: ["meteora-dbc"],
+    dirs: ["meteora-dbc"],
+    clock: 2_000_000_000n,
+    slot: () => {
+      const c = cfg("meteora-dbc:5HXw:quoteToBase");
+      const a = VECTORS["meteora-dbc:5HXw:quoteToBase"]!.accounts;
+      return [
+        r("dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"),
+        w(c.pool!),
+        r(a[0]!.address!),
+        r(c.config!),
+        w(c.baseVault!),
+        w(c.quoteVault!),
+        r(a[13]!.address!),
+      ];
+    },
+    cases: () => {
+      const c = cfg("meteora-dbc:5HXw:quoteToBase");
+      return [
+        {
+          vector: "meteora-dbc:5HXw:quoteToBase",
+          pay: WSOL,
+          buy: c.baseMint as Address,
+          amountIn: 1_000_000n,
+        },
+        {
+          vector: "meteora-dbc:5HXw:baseToQuote",
+          pay: c.baseMint as Address,
+          buy: WSOL,
+          amountIn: 1_000_000_000_000n,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[4]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Trends",
+    programs: ["trends"],
+    dirs: ["trends", "pumpswap"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const c = cfg("trends:8naj:quoteToBase");
+      const a = VECTORS["trends:8naj:quoteToBase"]!.accounts;
+      return [
+        r("CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz"),
+        w(c.pool!),
+        r(a[0]!.address!),
+        r(a[2]!.address!),
+        w(c.baseVault!),
+        w(c.quoteVault!),
+        r(a[13]!.address!),
+      ];
+    },
+    cases: () => {
+      const c = cfg("trends:8naj:quoteToBase");
+      return [
+        {
+          vector: "trends:8naj:quoteToBase",
+          pay: WSOL,
+          buy: c.baseMint as Address,
+          amountIn: 100_000_000n,
+          received: 3_024_232_156_216n,
+          buyProgram: TOKEN_2022,
+        },
+        {
+          vector: "trends:8naj:baseToQuote",
+          pay: c.baseMint as Address,
+          buy: WSOL,
+          amountIn: 3_024_232_156_216n,
+          payProgram: TOKEN_2022,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[4]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Heaven",
+    programs: ["heaven", "chainlink-store"],
+    dirs: ["heaven"],
+    clock: 1_785_549_284n,
+    atSlot: 436_471_307n,
+    slot: () => {
+      const c = cfg("heaven:EkU9:buy");
+      const a = VECTORS["heaven:EkU9:buy"]!.accounts;
+      return [
+        r("HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o"),
+        w(c.pool!),
+        w(c.tokenAVault!),
+        w(c.tokenBVault!),
+        w(c.protocolConfig!),
+        r(INSTRUCTIONS),
+        r(a[14]!.address!),
+        r(a[15]!.address!),
+        r(a[2]!.address!),
+        r(SYSTEM),
+      ];
+    },
+    cases: () => {
+      const c = cfg("heaven:EkU9:buy");
+      return [
+        {
+          vector: "heaven:EkU9:buy",
+          dir: false,
+          pay: WSOL,
+          buy: c.tokenAMint as Address,
+          amountIn: 100_000_000n,
+          received: 5_967_130_162_906n,
+          buyProgram: TOKEN_2022,
+          authorityWritable: true,
+          native: true,
+          extensions: true,
+        },
+        {
+          vector: "heaven:EkU9:sell",
+          dir: true,
+          pay: c.tokenAMint as Address,
+          buy: WSOL,
+          amountIn: 5_967_130_162_906n,
+          payProgram: TOKEN_2022,
+          authorityWritable: true,
+          native: true,
+          extensions: true,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[2]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Virtuals",
+    programs: ["virtuals"],
+    dirs: ["virtuals"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const c = cfg("virtuals:135Q:baseToQuote");
+      const a = VECTORS["virtuals:135Q:baseToQuote"]!.accounts;
+      return [
+        r("5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki"),
+        w(c.pool!),
+        w(c.vpoolTokenAta!),
+        w(a[6]!.address!),
+        w(c.platformPrototypeVirtualsAta!),
+        w(c.vpoolVirtualsAta!),
+      ];
+    },
+    cases: () => {
+      const c = cfg("virtuals:135Q:baseToQuote");
+      return [
+        {
+          vector: "virtuals:135Q:baseToQuote",
+          pay: c.baseMint as Address,
+          buy: VECTORS["virtuals:135Q:baseToQuote"]!.buy as Address,
+          amountIn: 500_000_000n,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[5]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
 ];
 
 let stabbleBeneficiaryA: Address;
@@ -1966,6 +2153,89 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           buy: cfg("saros-dlmm:DHXK:xToY").tokenXMint as Address,
           amountIn: 500_000_000n,
           received: 499_879_537n,
+        },
+      ],
+    },
+    {
+      name: "raydiumLaunchlab",
+      programs: ["raydium-launchlab"],
+      dirs: ["raydium-launchlab", "pumpswap"],
+      clock: 1_783_123_200n,
+      // The creator's fee vault, which the swap creates (the authority paying) when it is missing.
+      fabricate: (harness) => [
+        setTokenAccount(
+          harness,
+          cfg("raydium-launchlab:At3u:quoteToBase").creatorVault as Address,
+          WSOL,
+          "11111111111111111111111111111111" as Address,
+          0n,
+        ),
+      ],
+      cases: [
+        {
+          vector: "raydium-launchlab:At3u:quoteToBase",
+          dir: false,
+          pay: WSOL,
+          buy: cfg("raydium-launchlab:At3u:quoteToBase").baseMint as Address,
+          amountIn: 100_000_000n,
+          received: 3_376_989_672_690n,
+        },
+        {
+          vector: "raydium-launchlab:At3u:baseToQuote",
+          dir: true,
+          pay: cfg("raydium-launchlab:At3u:quoteToBase").baseMint as Address,
+          buy: WSOL,
+          amountIn: 3_376_989_672_690n,
+        },
+      ],
+    },
+    {
+      name: "runnerRodeo",
+      programs: ["runner-rodeo"],
+      dirs: ["runner-rodeo", "pumpswap"],
+      clock: 1_783_123_200n,
+      cases: [
+        {
+          vector: "runner-rodeo:5r3n:quoteToBase",
+          pay: WSOL,
+          buy: cfg("runner-rodeo:5r3n:quoteToBase").baseMint as Address,
+          amountIn: 1_000_000n,
+          received: 48_770_122_519n,
+          buyProgram: TOKEN_2022,
+          native: true,
+          extensions: true,
+        },
+        {
+          vector: "runner-rodeo:5r3n:baseToQuote",
+          pay: cfg("runner-rodeo:5r3n:quoteToBase").baseMint as Address,
+          buy: WSOL,
+          amountIn: 48_770_122_519n,
+          payProgram: TOKEN_2022,
+          native: true,
+          extensions: true,
+        },
+      ],
+    },
+    {
+      name: "scaleVmm",
+      programs: ["scale-vmm", "scale-amm"],
+      dirs: ["scale-vmm"],
+      clock: 1_800_000_000n,
+      cases: [
+        {
+          vector: "scale-vmm:9vrZ:aToB",
+          dir: true,
+          pay: cfg("scale-vmm:9vrZ:aToB").mintA as Address,
+          buy: cfg("scale-vmm:9vrZ:aToB").mintB as Address,
+          amountIn: 1_000_000n,
+          received: 95_621n,
+        },
+        {
+          vector: "scale-vmm:9vrZ:bToA",
+          dir: false,
+          pay: cfg("scale-vmm:9vrZ:aToB").mintB as Address,
+          buy: cfg("scale-vmm:9vrZ:aToB").mintA as Address,
+          amountIn: 95_621n,
         },
       ],
     },
