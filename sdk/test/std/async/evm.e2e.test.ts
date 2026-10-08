@@ -18,7 +18,7 @@
  *      Kitchen's fee is charged once.
  *
  * And what is refused: a second delivery of the same id, a callback from anyone but the protocol,
- * and `install` on a Shared Pot.
+ * and `install` on a Shared Pot and on a Private Pot whose Router is fixed.
  *
  * And `.catch`: in place of a body that reverted, with the body's writes undone, and in place of
  * a request the protocol's delivery failed; with no `.catch`, a failed request reverts the
@@ -135,6 +135,8 @@ const kitchenAbi = parseAbi([
   "function setExecutionFee(uint256 fee)",
   "function deploySharedPot(bytes32 salt) returns (address)",
   "function predictSharedPot(bytes32 salt) view returns (address)",
+  "function deployPot(address owner, bytes32 salt, bool routerFixed) returns (address)",
+  "function predictPot(address owner, bytes32 salt, bool routerFixed) view returns (address)",
 ]);
 
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
@@ -488,5 +490,39 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     );
     expect(refused.data).toBe(toFunctionSelector("SharedPot()"));
     expect((await cook(install, shared)).ok).toBe(false);
+  });
+
+  it("refuses `install` on a Private Pot whose Router is fixed", async () => {
+    const salt = word(0xf1edn);
+    expect(
+      (
+        await send(
+          owner,
+          stack.kitchen,
+          encodeFunctionData({
+            abi: kitchenAbi,
+            functionName: "deployPot",
+            args: [OWNER.address, salt, true],
+          }),
+        )
+      ).ok,
+    ).toBe(true);
+    const fixed = (await publicClient.readContract({
+      address: stack.kitchen,
+      abi: kitchenAbi,
+      functionName: "predictPot",
+      args: [OWNER.address, salt, true],
+    })) as Address;
+    const refused = await revertOf(
+      OWNER.address,
+      fixed,
+      encodeFunctionData({
+        abi: potAbi,
+        functionName: "cook",
+        args: [stack.engine, compiled(installSource(echo))],
+      }),
+      FEE,
+    );
+    expect(refused.data).toBe(toFunctionSelector("RouterFixed()"));
   });
 });
