@@ -299,8 +299,9 @@ describe("every registry protocol, every contract kind", () => {
     );
   });
 
-  // Pending the compiler: a contract import is not a value a namespace can hold, so an interface
-  // is `(address) => binding` and has no `.at`.
+  // Pending the compiler: a namespace's interface is `(address) => binding`, which `Pool(pool)`
+  // calls and which has no `.at`. Holding the contract import instead gives `.at`, and loses the
+  // call: the compiler calls no contract import (`Pool(pool)` is "not a function").
   it.failing("an interface is called at the address the program supplies", () => {
     expect(
       bytesOf(
