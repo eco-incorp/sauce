@@ -107,5 +107,4 @@ For Aave/Spark withdrawals, use a fixed underlying-asset amount or `amount: "max
 Higher-level routing actions — swaps, bridges, wraps, stakes, and the chaining between them — live
 behind the package's `/actions` subpath and are documented in [Actions](actions.md). An action
 program is plain JSON that compiles, for a chain, to one program — one document for every chain
-where its tokens and contracts exist; `programIntent(program, { ...options, chain })` makes it the
-route of an [intent](intents.md) directly, and `sauce actions` prints what it lowers to.
+where its tokens and contracts exist; `sauce actions` prints what it lowers to.

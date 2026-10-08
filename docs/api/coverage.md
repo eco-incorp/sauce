@@ -82,8 +82,7 @@ The SDK refuses what Arc cannot do before anything is signed: the actions `wrapE
 the native ETH stakes and a `nativeBalance` spent as a token amount, when a program's `chainId` is
 5042; the deposit builder's `weth` templates with Arc's `USDC` or a registry token as the target; and
 an intent reward that offers both native value and `USDC`. An intent to Arc uses the same Portal,
-Executor and derived Pot as every other chain; see
-[One Portal, one Pot](../guides/intents.md#one-portal-one-pot).
+Executor and derived Pot as every other chain.
 
 ## Host discovery and chain coverage
 

@@ -24,18 +24,17 @@ A namespace is its protocol's slug in PascalCase, a contract its role in the pro
 [Names](../guides/protocols-and-tokens.md#names) has the rules, and each protocol's page in the
 [reference](../reference/protocols.md) the names they give. `contracts.deriveContractName` derives an
 interface's name from its ABI export. No protocol, family, token or venue name can collide with a
-chain export's own `route`, `chain`, or a function property: composing the export refuses it.
+chain export's own `chain`, or a function property: composing the export refuses it.
 
 ## TypeScript: chain exports
 
 `import { Base } from "@eco-incorp/sauce"` — one export per canonical chain — carries:
 
-| Property               | What it is                                                                                                                                                                                            |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Base(body, options)`  | Opens an intent on Base; see [routes](routes.md#chain-entry-points)                                                                                                                                   |
-| `Base.chain`, `.route` | The chain record, and the same intent entry point                                                                                                                                                     |
-| `Base.<Symbol>`        | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |
-| `Base.<Namespace>`     | A protocol or family namespace, typed by the generated `contracts.ChainContracts`                                                                                                                     |
+| Property           | What it is                                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Base.chain`       | The chain record; see [routes](routes.md#chain-entry-points)                                                                                                                                          |
+| `Base.<Symbol>`    | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |
+| `Base.<Namespace>` | A protocol or family namespace, typed by the generated `contracts.ChainContracts`                                                                                                                     |
 
 A chain's token properties are exactly its registry rows, and the type names only those: `Base.USDT`
 is a type error and `undefined`. `routes.registryTokens(chain)` returns the same objects for a

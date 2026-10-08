@@ -26,17 +26,13 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 
 - [Kitchen, Pot and cook](concepts/kitchen-pot-cook.md): the account a program runs as, the
   transaction that runs it, and the contract that creates the account.
-- [Quick start](guides/quick-start.md): install the package and build a first intent, offline.
+- [Quick start](guides/quick-start.md): install the package and compile a first program, offline.
 - [Examples](examples/README.md): complete programs, typechecked and run on every release.
 
 ## Guides
 
 - [Protocols and tokens](guides/protocols-and-tokens.md): call tokens and protocols by name inside a
   program, in SauceScript and in TypeScript.
-- [Create an intent](guides/intents.md): construct, fund, submit and follow an intent to another
-  chain.
-- [Nested intents](guides/nested-intents.md): open an intent inside another's body, from an amount
-  it measured.
 - [Compiling programs](guides/compiling.md): compile a standalone program and pass it runtime
   arguments.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several
@@ -44,11 +40,11 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 - [A distributed swap on Solana](guides/solana-distributed-swap.md): the same limit order over
   the pools of every Solana venue whose swap stops at a price limit, each pool's accounts from
   `sauce pools`.
-- [Actions](guides/actions.md): write protocol actions as JSON, then run them or make an intent.
+- [Actions](guides/actions.md): write protocol actions as JSON, then run them.
 - [Builders](guides/builders-and-actions.md): generate programs from structured data.
 - [Solana](guides/solana.md): plan accounts, stage code and execute on Solana.
 - [Verification](guides/verification.md): check what a settlement payload contains.
-- [The sauce command](guides/cli.md): compile, rehearse, run and publish from a terminal, with agent
+- [The sauce command](guides/cli.md): compile, rehearse and run from a terminal, with agent
   wallets and their policies.
 - [The MCP server](guides/mcp.md): give a coding agent Sauce's tools.
 - [Agent skills](guides/skills.md): install the skills that teach a coding agent to write and run
@@ -73,7 +69,7 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 - [SauceScript reference](reference/saucescript.md): every type, statement, builtin and limit, per
   target.
 - [API entry points](api/README.md): every published import and what it contains.
-- [Routes](api/routes.md): chain entry points, intent options, built intents, nesting.
+- [Routes](api/routes.md): chain entry points, route compilation, intent records and the Portal's calls.
 - [Contracts and tokens](api/contracts.md): every protocol namespace and token, in a program and in
   TypeScript.
 - [Compiler](api/compiler.md): `compile()` options and result, and the compact argument codec.

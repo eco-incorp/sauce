@@ -16,14 +16,12 @@ or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-supp
 page links its own.
 
 On a preview chain the `sauce` command and the MCP server still rehearse and read:
-`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and
-every read. What they refuse there, before any endpoint is reached or any key is read, is
-building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)
-and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent
-publishes only when its source and every destination it opens are supported; the later levels
-of a cascade (an intent opened inside another's body) are not checked, so keep every level on a
-supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a
-proof or a cancellation by the destination, a claim or a refund by the source. Every refusal
+`sauce simulate`, `sauce intent fill` without `--send`, and every read. What they refuse there,
+before any endpoint is reached or any key is read, is building or sending a transaction;
+[the command's](../guides/cli.md#supported-and-preview-chains) and
+[the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. Each step
+after publishing is refused by the chain it is sent on: a fill, a proof or a cancellation by the
+destination, a claim or a refund by the source. Every refusal
 names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.
 
 The TypeScript SDK is not gated: its builders take every chain below and build its
