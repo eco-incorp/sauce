@@ -112,6 +112,7 @@ but on a Pot that is not yours: the one owned by that chain's eco-routes Executo
 which every solver's fulfillment drives. The solver deploys it and pays the fee for the cook. Every
 intent to that chain shares that Pot, so a body takes out everything it brought in within the same
 fulfillment: anything left behind is anyone's.
+[The destination Pot](../guides/intents.md#the-destination-pot) covers the details.
 
 ## On Solana
 
@@ -146,5 +147,5 @@ The [Solana guide](../guides/solana.md) covers accounts, staging and both ways t
 | Find the Kitchen and engine | `sauce pot` prints the Kitchen     | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments` |
 
 The [CLI guide's EVM flow](../guides/cli.md#the-flow-on-an-evm-chain) runs a program on your own Pot
-from start to finish, and [router-swap.ts](../examples/router-swap.ts) builds the program it cooks
-from TypeScript.
+from start to finish, and [cross-chain-intent.ts](../examples/cross-chain-intent.ts) builds the same
+cook from TypeScript.

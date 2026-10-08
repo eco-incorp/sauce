@@ -67,38 +67,134 @@ command and the MCP server rehearse them there but build and send no transaction
 [Chains](docs/reference/chains.md) has the policy, every chain's tokens and protocols, and how to
 request a chain.
 
-## A program that calls protocols and tokens by name
+## A program that creates a cross-chain intent
 
-The SDK resolves token symbols and protocol contracts against the chain a program is compiled for,
-so a program reads like the operation it performs. From TypeScript, this example compiles a program
-for Base that approves Uniswap's router, offline; nothing is sent.
+A program can spend what a Pot holds, and it can also create the next intent. That is where the
+runtime and the routes layer meet. This program measures an amount nobody knew in advance and offers
+an intent carrying it onward.
 
-```ts
-import { routes } from "@eco-incorp/sauce";
+```js
+// Create a cross-chain intent from inside a Sauce program.
+//
+// This runs on your Pot, measures the USDC the calls before it left there, and offers a NEW intent
+// that carries that amount to `recipient` on another chain. The amount is never known in advance —
+// it is whatever the swap, bridge or transfer just before it produced — which is the reason to
+// build the intent here rather than off-chain.
+//
+// `await Ethereum.hop({ send, receive, refundee })` is the whole of it: the reward this program
+// escrows, what a solver delivers on Ethereum, and, after it, what runs there. `amount` is
+// an ordinary variable of this program and `recipient` one of its parameters, and using them in the
+// intent is enough: the program encodes the intent as it runs, with their values, and the SDK fills
+// in the Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`,
+// where its reward goes back if no solver fills it: no intent has a default refundee. The body runs
+// on Ethereum as a program, on the Pot every intent there shares, and its cook pays Ethereum's
+// Kitchen fee, which the command reads there. The deadlines and the salt take their defaults.
+//
+// `USDC` is a registered symbol. In the body it means Ethereum's USDC, the chain the body runs on,
+// and so it does in `receive`, whose tokens are looked up again on Ethereum by symbol (its amounts
+// are computed here). In `send` it means the USDC of the chain this program runs on, which
+// escrows the reward.
+//
+//   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
+//     --args <recipient> <minAmount> <refundTo>
+//
+//   recipient: Address   who the intent pays on Ethereum
+//   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
+//                        below it the whole transaction reverts and nothing is published
+//   refundTo: Address    who reclaims the reward if no solver earns it
+function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
+  const amount = USDC.balanceOf(ctx.self());
+  require(amount >= minAmount, "nothing to forward");
 
-const program = routes.compileSauceProgram(
-  "base",
-  `function main(amount: Uint256) {
-    USDC.approve(Uniswap.UniversalRouter, amount);
-  }`,
-);
-
-// What a Pot cooks: the bytecode, with main's argument appended.
-const args = routes.encodeEntryArguments(program, [1_000_000n]);
-console.log(`${program.bytecode.length} bytes, plus ${args.length} of arguments`);
+  await Ethereum.hop({
+    send: { token: USDC, amount },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  });
+  USDC.transfer(recipient, amount); // on Ethereum
+}
 ```
 
-What you did not have to do:
+That is the whole program. What you did not have to do:
 
 - **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in your Pot.
-- **Import anything into the program.** `USDC` and `Uniswap` are **program syntax**: the SDK
-  resolves them to Base's addresses and binds the ABI, so there is no address to look up and no
-  JavaScript object to import.
-- **Compile once per amount.** `amount` is `main`'s parameter: it arrives with the cook, so one
-  compiled program serves every call.
+- **Import anything.** `USDC`, `Ethereum` and `ctx` need no import line.
+- **Encode the intent.** No Portal, prover, selector, approval or ABI encoding appears. The SDK
+  looks up the Portal and prover in its eco-routes deployment tables and emits the rest.
+- **Know the amount in advance.** `amount` is an ordinary variable, and the published intent
+  carries the value the program measured.
+- **Roll back by hand.** Below `minAmount` the `require` reverts the whole transaction: nothing is
+  published.
 
-`sauce run` sends the same program as a cook from a terminal (`--args` gives `main`'s arguments).
-[Quick start](docs/guides/quick-start.md) walks through it, and
+Without Sauce, this step is either a contract you write and deploy (read the balance, encode the
+intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
+a second transaction you build yourself after reading what the first produced.
+
+`await Ethereum.hop({ … })` opens the intent, and the statements after it are the body, which runs
+on Ethereum, so a hop to one chain and on to the next reads top to bottom. As in JavaScript, it is
+`Ethereum.hop({ … }).then(() => { … })`.
+
+`USDC` is a registered token symbol. In the body it means **Ethereum's** USDC, because that is where
+the body runs, and in `receive` only the tokens are Ethereum's, looked up again there by symbol,
+while every other value, an amount included, is computed where the intent opens. In `send` it
+means the USDC of the chain the program runs on — Base, in the line above — because the program
+escrows the reward there. `recipient`,
+`minAmount` and `refundTo` are `main`'s parameters: they arrive with the transaction (`--args`), so
+one compiled program serves every call.
+
+`refundee: refundTo` is the refund address: who reclaims the reward if nobody earns it. A program
+names it for every intent it opens, since the Pot it runs on may be shared. Everything else has a
+default: the deadlines count from when the intent opens, the salt is random, and Ethereum's
+Kitchen fee, which a body that is a program pays, is read from Ethereum. Each has a field of its
+own ([Intent defaults](docs/reference/intent-defaults.md)). The intent is an offer; a solver still
+decides to fill it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
+builds the same transaction from TypeScript, and runs on every release;
+[nested intents](docs/guides/nested-intents.md) opens one intent inside another's body, and covers
+cascades several hops deep.
+
+## A program that calls protocols and tokens by name
+
+Inside a program the SDK resolves token symbols and protocol contracts against the chain it runs
+on, so a program reads like the operation it performs. From TypeScript, this example builds an
+intent whose body approves Uniswap's router on Base, offline; the refundee, the owner and the fees
+are fixtures and nothing is sent.
+
+```ts
+import { Base, Ethereum } from "@eco-incorp/sauce";
+
+const owner = "0x4444444444444444444444444444444444444444";
+const kitchenFee = 1_000n; // Fixture: read each Kitchen's fee with destinationExecutionFee().
+
+const built = Base.hop({
+  source: Ethereum,
+  send: { token: Ethereum.USDC.address, amount: 10_000n },
+  refundee: owner,
+  fee: kitchenFee,
+}).then(() => {
+  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+});
+
+// The cook that publishes it from your Pot on Ethereum: { to, data, value }.
+const cook = built.cook({ owner }, kitchenFee);
+console.log(`${built.program.bytecode.length} bytes, cooked on ${cook.to}`);
+```
+
+`.then(...)` writes the statement a program opens the intent with, compiles it for Ethereum and
+returns the program and its cook. The Pot pays the reward into the intent's vault and publishes it,
+so it must hold the reward when the cook runs. What the snippet leaves out, the SDK fills in from
+what it records: the eco-routes Portal on both chains, the prover for the pair, the destination Pot
+and engine, the native amount the solver sends, which is the body's cook fee, the deadlines, counted
+from when the cook runs, and a random salt. What stays yours are the refundee, the reward and the
+fees, which are on-chain state each chain's Kitchen sets: `destinationExecutionFee()` builds the
+read. The intent's hash is the one the Portal announces when the cook publishes it:
+`built.intents(receipt.logs)` reads it from the receipt, or from a rehearsal's logs.
+
+Two kinds of name meet in that snippet. `Base` and `Ethereum` are **named exports**, one per chain;
+importing the package puts nothing on `globalThis`. `USDC` and `Uniswap` in the body are **program
+syntax**: the SDK resolves them to Base's addresses and binds the ABI, so there is no address to
+look up and no JavaScript object to import. The callback is read as source text and never invoked,
+so it captures nothing; an application value is written into it as a literal, or passed as a define
+(`compile: { defines }`). [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
 ## Agent wallets
@@ -124,8 +220,8 @@ coin and per token. These are hot wallets: keep small balances in them.
 ## Where to go next
 
 - [Documentation](docs/README.md): every guide and reference page, one line each.
-- [Quick start](docs/guides/quick-start.md): compile a first program, offline.
-- [The sauce command](docs/guides/cli.md): compile, rehearse and run from a terminal.
+- [Quick start](docs/guides/quick-start.md): build a first intent, offline.
+- [The sauce command](docs/guides/cli.md): compile, rehearse, run and publish from a terminal.
 - [Agent skills](docs/guides/skills.md): the skills that teach a coding agent to write and run
   programs, beside [the MCP server](docs/guides/mcp.md).
 - [Chains](docs/reference/chains.md), [protocols](docs/reference/protocols.md) and

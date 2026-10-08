@@ -44,9 +44,9 @@ export function beforeReady() {
 export async function run(source) {
   await ready(source);
 
-  // The README's program example, verbatim: `routes.compileSauceProgram("base", ...)`.
-  // Imported only now, because importing it compiles the program.
-  const { program, args } = await import("./readme-route.mjs");
+  // The README's intent example, verbatim: `Base.hop({ … }).then(() => { USDC.approve(...) })`.
+  // Imported only now, because building the intent compiles it.
+  const { built } = await import("./readme-route.mjs");
 
   // A raw compile with compact entry arguments, on both targets, round-tripped through the codec.
   const raw = {};
@@ -139,9 +139,10 @@ export async function run(source) {
   );
 
   return {
+    // The intent's salt is random per compile, so its length and its cook's Pot stand for its bytes.
     readme: {
-      bytecode: hex(program.bytecode),
-      args: hex(args),
+      bytes: built.program.bytecode.length,
+      pot: built.cook({ owner: "0x4444444444444444444444444444444444444444" }, 0n).to,
     },
     raw,
     settle: hex(settle.bytecode),

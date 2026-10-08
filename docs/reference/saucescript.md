@@ -724,7 +724,7 @@ function main(x: Uint256): Uint256 {
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
 
 `await x;` as a statement is JavaScript's: it is `x.then(() => { … })`, the statements after it
-the closure, for a value whose `then` takes one.
+the closure, for a value whose `then` takes one, such as an intent.
 
 ## 15. Limits
 

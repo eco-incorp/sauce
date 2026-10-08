@@ -32,6 +32,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  bytesToHex,
+  concatHex,
   createPublicClient,
   createTestClient,
   createWalletClient,
@@ -59,7 +61,9 @@ import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { EVM_REWARD_PARAM, EVM_ROUTE_PARAM, denormalizeToEvm } from "../src/routes/encode.js";
 import { chainDefines } from "../src/routes/ambient.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { encodeEntryArguments } from "../src/routes/entry.js";
+import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
 import { BODY_TO_ARBITRUM, CASCADE_BODY } from "./fixtures/routes/bodies.js";
@@ -80,6 +84,8 @@ const fixture = (path: string) =>
   JSON.parse(readFileSync(join(HERE, path), "utf8")) as { creationCode: Hex };
 const PORTAL_FIXTURE = fixture("evm/fixtures/Portal.json");
 const MOCK_ERC20 = fixture("std/token/fixtures/MockERC20.json");
+const example = (name: string) =>
+  readFileSync(join(HERE, "../../docs/examples", `${name}.sauce.ts`), "utf8");
 
 const DEPLOYER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -670,6 +676,93 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(await optimism.balanceOf(optimism.usdc, optimism.pot)).toBe(0n);
     }, 300_000);
   });
+
+  it("the guide's cascade file, cooked on Ethereum with main's arguments: Base, Ethereum, then Base again", async () => {
+    // docs/examples/cross-chain-cascade.sauce.ts as written, cooked as `sauce intent publish --args`
+    // cooks it: main's arguments appended to the program, read as it runs. The first hop is the
+    // intent the file publishes on Ethereum, read back from the Portal's log; the levels below it
+    // open as each runs. It runs here on Ethereum's shared Pot, through a route, rather than on a
+    // wallet's own Pot: the program is the same either way.
+    const delivered = 2_000_000n;
+    const reward = 2_010_000n;
+    const program = compileSauceProgram("ethereum", example("cross-chain-cascade"), {
+      intents: intents(),
+    });
+    const args = bytesToHex(encodeEntryArguments(program, [RECIPIENT, delivered, reward, CREATOR]));
+    const cook = buildSauceEvmCall({
+      pot: ethereum.pot,
+      engine: v12EngineAddress() as Hex,
+      program: concatHex([bytesToHex(program.bytecode), args]),
+    });
+    await ethereum.mint(ethereum.usdc, ethereum.pot, reward);
+    const opened = await ethereum.fulfil(
+      {
+        salt: toHex(0xca5cade, { size: 32 }),
+        deadline: DEADLINE,
+        portal: ethereum.portal,
+        nativeAmount: 0n,
+        tokens: [],
+        calls: [
+          {
+            target: denormalizeToEvm(toUniversalAddress(cook.target)) as Address,
+            data: cook.data,
+            value: 0n,
+          },
+        ],
+      },
+      keccak256("0xca5cade"),
+    );
+    expect(opened.status).toBe("success");
+    const [first] = opened.published;
+    expect(first!.destination).toBe(8453n);
+    expect(first!.creator.toLowerCase()).toBe(CREATOR);
+    expect(first!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+      [lower(ethereum.usdc), reward],
+    ]);
+    expect(await ethereum.isFunded(first!)).toBe(true);
+    const { route, rewardHash } = fulfilmentOf(first!);
+    expect(route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
+      [lower(base.usdc), delivered],
+    ]);
+
+    // Each hop pays the next what it was delivered, and asks it for a tenth of a percent less.
+    const second = delivered - delivered / 1000n;
+    const third = second - second / 1000n;
+
+    // ---- hop 1, on Base: the solver delivers; the program opens hop 2 with what was delivered ---
+    // The Pot is shared: what an earlier test's reverted fulfilment left there is not this
+    // intent's, and the body leaves it where it is.
+    const stranger = await base.balanceOf(base.usdc, base.pot);
+    await base.provide(route);
+    const onBase = await base.fulfil(route, rewardHash);
+    expect(onBase.status).toBe("success");
+    const [toEthereum] = onBase.published;
+    expect(toEthereum!.destination).toBe(1n);
+    expect(toEthereum!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+      [lower(base.usdc), delivered],
+    ]);
+    expect(await base.balanceOf(base.usdc, base.pot)).toBe(stranger);
+
+    // ---- hop 2, on Ethereum: what it was delivered opens hop 3, funded in Ethereum's USDC -------
+    const middle = fulfilmentOf(toEthereum!);
+    await ethereum.provide(middle.route);
+    const onEthereum = await ethereum.fulfil(middle.route, middle.rewardHash);
+    expect(onEthereum.status).toBe("success");
+    const [backToBase] = onEthereum.published;
+    expect(backToBase!.destination).toBe(8453n);
+    expect(backToBase!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+      [lower(ethereum.usdc), second],
+    ]);
+    expect(await ethereum.isFunded(backToBase!)).toBe(true);
+
+    // ---- hop 3, on Base: the body pays the recipient its main argument names -----------------
+    const last = fulfilmentOf(backToBase!);
+    const paid = await base.balanceOf(base.usdc, RECIPIENT);
+    await base.provide(last.route);
+    const onBaseAgain = await base.fulfil(last.route, last.rewardHash);
+    expect(onBaseAgain.status).toBe("success");
+    expect(await base.balanceOf(base.usdc, RECIPIENT)).toBe(paid + third);
+  }, 300_000);
 
   it("a body that calls the file's typed helpers and an import runs on Arbitrum", async () => {
     // The body compiles as a program of its own: it carries `fee`, the typed array helper `sum`
