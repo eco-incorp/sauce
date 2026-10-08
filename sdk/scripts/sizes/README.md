@@ -42,3 +42,10 @@ node diff.mjs baselines/rewrite61-5d9f38f3.json candidate.json   # exits 1 when 
   `SAUCE_COMPILER_PKG=./logger SAUCE_COMPILER_REAL=<pkg>`: every compile's inputs (options, each file
   `resolve` answered, each `programOptions` scope and its answer), so a compile replays with no SDK.
   `replay-all.mjs <logs dir> name=<pkg> …` times the recordings on several builds, interleaved.
+
+## Compiler asks still held
+
+`repros/held-asks.mjs <pkg> [<pkg> …]` compiles the two programs each open ask compares: a run-time
+field read in place (146 bytes against 145 on #557 final; the SDK's `fund-by-transfer` is one byte
+over 2.5.0 for it) and a contract import held as a value, called with one address as its `.at`
+(refused against 55 bytes; two `it.failing` in `routes-protocol-names`).
