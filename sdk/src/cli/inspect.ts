@@ -39,6 +39,7 @@ import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
 import { connect, receiptOf } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
+import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 
 /** What a description needs to know beyond the bytes. */
@@ -625,12 +626,14 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
           ? ""
           : `, block ${receipt.blockNumber}, gas used ${receipt.gasUsed}`),
       `  from ${from} to ${to ?? "(a contract creation)"}, value ${transaction.value}`,
+      ...linkLines(txLinks(input.chain, input.hex)),
       ...(cost === undefined ? [] : [`  ${costLine(cost, input.chain, "what it carried")}`]),
       ...indent(part.lines),
       ...indent(effects?.lines ?? []),
     ].join("\n"),
     json: {
       hash: input.hex,
+      ...txLinks(input.chain, input.hex),
       chain: input.chain.slug,
       chainId: input.chain.id,
       status,

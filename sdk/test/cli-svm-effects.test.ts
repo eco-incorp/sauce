@@ -6,7 +6,14 @@
 import { address, getAddressEncoder, type Address } from "@solana/kit";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { movedBy, svmMovedJson, svmMovedLines } from "../src/cli/svm-effects.js";
+import {
+  movedBy,
+  svmLeftInPot,
+  svmLeftInPotJson,
+  svmLeftInPotLines,
+  svmMovedJson,
+  svmMovedLines,
+} from "../src/cli/svm-effects.js";
 import type { SimulatedAccount } from "../src/svm/index.js";
 
 const SOLANA = requireChain("solana");
@@ -21,6 +28,10 @@ const DEST = address("Config1111111111111111111111111111111111111");
 const MINTED = address("Stake11111111111111111111111111111111111111");
 const MINT_ACCOUNT = address("SysvarRent111111111111111111111111111111111");
 const OWNER = address("11111111111111111111111111111111");
+/** The owner's Pot: the authority of its own token accounts. */
+const POT = address("SysvarS1otHashes111111111111111111111111111");
+const POT_USDC = address("Sysvar1nstructions1111111111111111111111111");
+const POT_OTHER = address("SysvarRecentB1ockHashes11111111111111111111");
 
 /** An SPL token account: mint, owner, amount, then the rest of the 165 bytes. */
 function tokenAccount(mint: Address, owner: Address, amount: bigint, size = 165): Uint8Array {
@@ -125,6 +136,52 @@ describe("what a Solana cook moved", () => {
     expect(svmMovedLines(moved)).toContain(
       `  ${SOURCE} (source), owned by ${OWNER} (the owner): -1.5 WSOL`,
     );
+  });
+
+  it("says first what the cook leaves in the Pot's token accounts, and nothing when it leaves nothing", async () => {
+    // The Pot's USDC grows, its other token is emptied, and the owner's own account is paid.
+    const tracked = [POT_USDC, POT_OTHER, SOURCE];
+    const moved = await movedBy(
+      mintRpc({ [USDC]: 6 }),
+      SOLANA,
+      tracked,
+      [
+        account(tokenAccount(USDC, POT, 2_000_000n)),
+        account(tokenAccount(OTHER_MINT, POT, 9n)),
+        account(tokenAccount(USDC, OWNER, 0n)),
+      ],
+      [
+        account(tokenAccount(USDC, POT, 2_500_000n)),
+        account(tokenAccount(OTHER_MINT, POT, 0n)),
+        account(tokenAccount(USDC, OWNER, 1_000_000n)),
+      ],
+      labels,
+      OWNER,
+    );
+    const left = svmLeftInPot(moved, POT);
+
+    expect(svmLeftInPotJson(left)).toEqual([
+      {
+        account: POT_USDC,
+        mint: USDC,
+        symbol: "USDC",
+        amount: "2500000",
+        decimals: 6,
+        formatted: "2.5",
+        before: "2000000",
+      },
+    ]);
+    expect(svmLeftInPotLines(left, "the owner's wallet")).toEqual([
+      "Left in the Pot, not in the owner's wallet:",
+      `  2.5 USDC, in ${POT_USDC} (it held 2 USDC before)`,
+      "  Only another cook moves it out. To end in a wallet, the program must send it there, or " +
+        "name the wallet as the recipient of the call that produces it.",
+    ]);
+    // Only the named holder's accounts count: the owner's own for the owner, none for another.
+    expect(svmLeftInPot(moved, OWNER)).toEqual([
+      expect.objectContaining({ account: SOURCE, after: 1_000_000n }),
+    ]);
+    expect(svmLeftInPotLines(svmLeftInPot(moved, MINTED), "the owner's wallet")).toEqual([]);
   });
 
   it("reads no balance out of a mint, or an extended Token-2022 mint", async () => {

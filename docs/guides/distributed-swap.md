@@ -432,13 +432,15 @@ placeholders and the lines on how it was rehearsed left out:
 ```text
 The cook succeeds from <owner>: gas used 729747, returns <the same three words, in hex>
 main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: { spent: 2000000000, bought: 738558490183795118, unspent: 0 }
-Token transfers:
-  0.167790241413064662 WETH: <pool A> -> <Pot> (the Pot)
-  455.100231 USDC: <Pot> (the Pot) -> <pool A>
-  0.167790241413064662 WETH: <Pot> (the Pot) -> <recipient>
-  0.570768248770730456 WETH: <pool B> -> <Pot> (the Pot)
-  1544.899769 USDC: <Pot> (the Pot) -> <pool B>
-  0.570768248770730456 WETH: <Pot> (the Pot) -> <recipient>
+What moved, in order:
+  [1] wallet <owner> -> Pot <Pot>          … ETH                      the cook's value
+  [2] Pot            -> Kitchen <Kitchen>  … ETH                      the Kitchen's fee
+  [3] <pool A>       -> Pot                0.167790241413064662 WETH
+  [4] Pot            -> <pool A>           455.100231 USDC
+  [5] Pot            -> <recipient>        0.167790241413064662 WETH
+  [6] <pool B>       -> Pot                0.570768248770730456 WETH
+  [7] Pot            -> <pool B>           1544.899769 USDC
+  [8] Pot            -> <recipient>        0.570768248770730456 WETH
 Net balance changes:
   <pool A>: -0.167790241413064662 WETH, +455.100231 USDC
   <Pot> (the Pot): -2000 USDC

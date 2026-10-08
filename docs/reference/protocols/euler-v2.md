@@ -49,7 +49,7 @@ function main(vaultAddress: Address, amount: Uint256, receiver: Address, owner: 
 }
 ```
 
-- `owner`: Address whose shares are burned (must be msg.sender or have allowance)
+- `owner`: Address whose shares are burned (the caller, which in a Sauce program is the Pot, or one that gave the Pot an allowance)
 - Returns the number of shares burned
 
 ### borrow

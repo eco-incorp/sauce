@@ -4,7 +4,9 @@
  * account of the pools a swap takes beside the other venue fixtures in `test/svm/fixtures/<venue>/`,
  * with the slot of nine accounts the skill's program takes for each pool. Loaded into a LiteSVM
  * bank by the suites that execute the program, directly through the Kitchen
- * (`distributed-swap.e2e.test.ts`) and through the `sauce` command (`cli-solana-distributed-swap`).
+ * (`distributed-swap.e2e.test.ts`) and through the `sauce` command (`cli-solana-distributed-swap`),
+ * and by `@sauce/router`'s Solana suites (`std/router/svm*.e2e.test.ts`), which also trade the
+ * venues added after it (`--add`).
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -29,6 +31,14 @@ export interface Pool {
   /** The tick arrays a swap paying the lower-key token walks (the price falls), and the other way. */
   payA: Address[];
   payB: Address[];
+  /** The slot's accounts past its nine, where the venue takes more (`dump-svm-venues`'s `moreOf`):
+   *  a Raydium-layout pool's tick-array bitmap extension, Invariant's program authority, an OpenBook
+   *  v2 market's oracles. */
+  more?: Address[];
+  /** When `dump-svm-venues --add` read a pool after the fixture's own slot, or its `more`. */
+  slot?: number;
+  unixTimestamp?: number;
+  moreSlot?: number;
 }
 export interface Manifest {
   slot: number;
@@ -161,13 +171,20 @@ export const restoreVenues = (
     const account = SNAPSHOT.get(at)!;
     const copy = new Uint8Array(data);
     if (edit !== undefined && edit.address === at) copy.set(edit.bytes, edit.offset);
+    // An earlier fixture that recorded no lamports holds the rent exemption, and a wrapped-SOL
+    // token account its amount on top, which the token program moves with it.
+    const rent = svm.minimumBalanceForRentExemption(BigInt(copy.length));
+    const wrapped =
+      account.owner === TOKEN &&
+      copy.length === 165 &&
+      getAddressCodec().decode(copy.subarray(0, 32)) === WSOL;
     svm.setAccount({
       address: at,
       data: copy,
       executable: false,
       lamports: lamports(
         account.lamports === undefined
-          ? svm.minimumBalanceForRentExemption(BigInt(copy.length))
+          ? rent + (wrapped ? le(copy, 64, 8) : 0n)
           : BigInt(account.lamports),
       ),
       programAddress: account.owner,

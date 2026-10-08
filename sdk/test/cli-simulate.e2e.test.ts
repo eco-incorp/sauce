@@ -19,7 +19,7 @@ import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodeAbiParameters, getAddress, pad, type Address, type Hex } from "viem";
+import { encodeAbiParameters, getAddress, pad, parseAbi, type Address, type Hex } from "viem";
 
 import { kitchenAddress } from "../src/cli/commands.js";
 import { POT_ROUTER_SLOT, probePot } from "../src/cli/rehearse.js";
@@ -297,9 +297,101 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     );
     expect(run.stdout).toContain(`  2. the cook, from the owner ${OWNER}, gas used ${cookGas}\n`);
     expect(run.stdout).toContain("  the Pot holds 2 USDC: --assume-balance");
-    expect(run.stdout).toContain(`  1.5 USDC: ${pot} (the Pot) -> ${RECIPIENT}`);
+    // What moved, in order, each party by its role: the cook's value in, the Kitchen's fee out,
+    // then the payments.
+    expect(run.stdout).toMatch(
+      new RegExp(
+        "^What moved, in order:\n" +
+          ` {2}\\[1\\] wallet 0x5a0C…Beef -> Pot ${pot.slice(0, 6)}…${pot.slice(-4)} +0\\.000000000000001234 ETH  the cook's value\n` +
+          " {2}\\[2\\] Pot +-> Kitchen 0x\\w{4}…\\w{4} +0\\.000000000000001234 ETH  the Kitchen's fee\n" +
+          " {2}\\[3\\] Pot +-> 0x6666…6666 +1\\.5 USDC\n" +
+          " {2}\\[4\\] Pot +-> 0x6666…6666 +1\\.5 USDT$",
+        "m",
+      ),
+    );
     expect(run.stdout).toContain(`  ${pot} (the Pot): -1.5 USDC, -1.5 USDT`);
     expect(run.stdout).toContain(`  ${RECIPIENT}: +1.5 USDC, +1.5 USDT`);
+    // What the cook leaves in the Pot leads, right after the headline: half a token of each.
+    expect(lines.slice(1, 5)).toEqual([
+      "Left in the Pot, not in the owner's wallet:",
+      "  0.5 USDC (it held 2 USDC before)",
+      "  0.5 USDT (it held 2 USDT before)",
+      "  Only another cook moves it out. To end in a wallet, the program must send it there, or " +
+        "name the wallet as the recipient of the call that produces it.",
+    ]);
+    await untouched();
+  }, 120_000);
+
+  it("says first what the cook leaves in the Pot, and nothing when it leaves nothing", async () => {
+    // A receipt token a call mints to whoever it names, as a lending market mints its aToken to
+    // `onBehalfOf`: the Pot (`ctx.self()`), or the owner's wallet.
+    const receipt = getAddress(await local.plant(fixture("MockERC20")));
+    const symbol = await local.publicClient.readContract({
+      address: receipt,
+      abi: parseAbi(["function symbol() view returns (string)"]),
+      functionName: "symbol",
+    });
+    writeFileSync(
+      join(work, "Receipt.json"),
+      JSON.stringify(parseAbi(["function mint(address to, uint256 amount)"])),
+    );
+    const supply = join(work, "supply.sauce.ts");
+    writeFileSync(
+      supply,
+      [
+        'import Receipt from "./Receipt.json";',
+        "",
+        "function main(receipt: Address, wallet: Address, keep: bool) {",
+        "  if (keep) {",
+        "    Receipt.at(receipt).mint(ctx.self(), 10 ** 18);",
+        "  } else {",
+        "    Receipt.at(receipt).mint(wallet, 10 ** 18);",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const rehearse = (keep: boolean, ...flags: string[]) =>
+      sauce(
+        ...["simulate", supply, "--chain", "ethereum", "--owner", OWNER],
+        ...["--rpc-url", local.rpcUrl, ...flags, "--args", receipt, OWNER, String(keep)],
+      );
+
+    const kept = await rehearse(true);
+    expect(kept.code).toBe(0);
+    expect(kept.stdout.split("\n").slice(1, 3)).toEqual([
+      "Left in the Pot, not in the owner's wallet:",
+      `  1 ${symbol}`,
+    ]);
+    const keptJson = jsonOf(await rehearse(true, "--json"));
+    // `leftInPot` comes right after `ok`, before anything else a reader scans.
+    expect(Object.keys(keptJson).slice(0, 2)).toEqual(["ok", "leftInPot"]);
+    expect(keptJson.leftInPot).toEqual([
+      {
+        token: receipt,
+        symbol,
+        decimals: 18,
+        amount: (10n ** 18n).toString(),
+        formatted: "1",
+        before: "0",
+      },
+    ]);
+
+    // Minted to the wallet: the Pot is left nothing, and the report says nothing of it.
+    const delivered = await rehearse(false);
+    expect(delivered.code).toBe(0);
+    expect(delivered.stdout).not.toContain("Left in the Pot");
+    expect(delivered.stdout).toContain(`  ${OWNER} (owner): +1 ${symbol}`);
+    expect(jsonOf(await rehearse(false, "--json")).leftInPot).toEqual([]);
+
+    // A cook that spends everything the Pot was given leaves nothing either.
+    const spent = await sauce(
+      ...["simulate", PAY, "--chain", "ethereum", "--owner", OWNER, "--rpc-url", local.rpcUrl],
+      ...["--assume-balance", "USDC:1.5", "--assume-balance", "USDT:1.5"],
+      ...["--args", RECIPIENT, "1500000"],
+    );
+    expect(spent.code).toBe(0);
+    expect(spent.stdout).not.toContain("Left in the Pot");
     await untouched();
   }, 120_000);
 
@@ -505,6 +597,17 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     expect(out.nativeTransfers).toEqual(
       expect.arrayContaining([expect.objectContaining({ from: pot, to: RECIPIENT, amount: "5" })]),
     );
+    // Of the 7 wei, 2 stay in the Pot; the cook's value passes through it to the Kitchen.
+    expect(out.leftInPot).toEqual([
+      {
+        token: "native",
+        symbol: "ETH",
+        decimals: 18,
+        amount: "2",
+        formatted: "0.000000000000000002",
+        before: "7",
+      },
+    ]);
     await untouched();
   }, 120_000);
 

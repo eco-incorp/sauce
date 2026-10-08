@@ -201,13 +201,16 @@ sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
 ```
 
 `sauce run` compiles, rehearses the cook, signs it, sends it and waits for the receipt, then prints
-the hash, the status and the gas used, what the cook cost, and what it moved:
+the hash, the status and the gas used, the transaction's explorer page and its trace, what the cook
+cost, and what it moved:
 
 ```text
 cook 0x5f…: success, gas used 184211, block 21004500
+  explorer: https://basescan.org/tx/0x5f…
+  trace (calls and balance changes, to open in a browser): https://app.blocksec.com/phalcon/explorer/tx/base/0x5f…
 cost 0.000187 ETH: gas 184211 at 1000000 wei = 0.000184 ETH, L1 data 0.0000018 ETH, value 0.000001 ETH (the Kitchen's fee and any native the program spends)
-Token transfers:
-  1 USDC: 0x8a… (the Pot) -> 0x66…
+What moved, in order:
+  [1] Pot 0x8a… -> 0x66…  1 USDC
 Net balance changes:
   0x8a… (the Pot): -1 USDC
   0x66…: +1 USDC
@@ -215,8 +218,14 @@ Net balance changes:
 
 The cost is the gas at the price the receipt records, an OP-stack chain's L1 data fee where the
 receipt carries one, and the value the cook carried. What moved is read from the receipt's logs by
-the decoder `simulate` uses: token transfers, approvals and each address's net change. `--json`
-carries both under `cook.cost` and `cook.effects`.
+the decoder `simulate` uses: each token movement in order, by role, the approvals and each
+address's net change. A cook that leaves anything in the Pot says so first, after the cost, under
+`Left in the Pot, not in your wallet:`, its balances read at the cook's block (see
+[Where a program's results end](../concepts/kitchen-pot-cook.md#where-a-programs-results-end)).
+Every transaction the command sends prints the same two links: the chain's explorer, and its trace
+on BlockSec's Phalcon explorer, with its calls, balance changes and fund flow, for a person to open.
+`--json` carries the cost and what moved under `cook.cost` and `cook.effects` (`moves` first),
+what stays in the Pot as `leftInPot`, and `explorer` and `trace` beside each hash.
 
 A cook that would revert is not sent: the run stops with the decoded reason — a Pot or Kitchen
 error by name, `Error(string)`, or `the program threw "…"` for a SauceScript `throw` — and exits 1.
@@ -309,17 +318,19 @@ in `--json`) — then what the cook did:
 
 ```text
 The cook succeeds from 0xYou: gas used 128999 for the cook, after the Pot's deploy (1. below), returns 0x
+Left in the Pot, not in the owner's wallet:
+  1 USDC (it held 2 USDC before)
+  Only another cook moves it out. To end in a wallet, the program must send it there, or name the wallet as the recipient of the call that produces it.
 Rehearsed with eth_simulateV1 on the state of block 36120411; nothing was signed or sent:
   1. Kitchen.deployPot(0xYou, 0x00…00), gas used 160415: Pot 0x8a… is not deployed on base yet. Any account may send this; the Pot is the owner's either way.
   2. the cook, from the owner 0xYou, gas used 128999
 Assumed for this rehearsal only, by state override:
   the Pot holds 2 USDC: --assume-balance (its balance word 0x1d39…: Solidity mapping at slot 9)
   the owner holds 0.00000374478538635 ETH: the cook's value; it holds 0, and a real cook needs the value and gas
-Token transfers:
-  1 USDC: 0x8a… (the Pot) -> 0x66…
-Native transfers:
-  0.00000374478538635 ETH: 0xYou (owner) -> 0x8a… (the Pot)
-  0.00000374478538635 ETH: 0x8a… (the Pot) -> 0x1984… (Kitchen)
+What moved, in order:
+  [1] wallet 0xYou -> Pot 0x8a…        0.00000374478538635 ETH  the cook's value
+  [2] Pot          -> Kitchen 0x1984…  0.00000374478538635 ETH  the Kitchen's fee
+  [3] Pot          -> 0x66…            1 USDC
 Net balance changes:
   0x8a… (the Pot): -1 USDC
   0x66…: +1 USDC
@@ -327,11 +338,18 @@ Net balance changes:
   0x1984… (Kitchen): +0.00000374478538635 ETH
 ```
 
+First, right after the headline, comes what the Pot holds after the cook of each token the cook
+moved, with what it held before: it stays in the Pot, not in the owner's wallet, until another
+cook moves it out. Here the Pot keeps 1 of its 2 USDC. A cook that leaves the Pot nothing prints
+no such lines; `leftInPot` in `--json`, first after `ok`, is then empty. Then, after the route,
+what moved, numbered in the order it happened, each party by its role: `wallet` for the owner,
+`Pot`, `Kitchen`, a name the registry gives the address, a token by its symbol, `mint` and `burn`
+for the zero address, with its short address the first time and alone when nothing names it.
 ERC-20 `Transfer` and `Approval` logs are decoded with the registry's symbols and whole units (a
 token the registry does not record is named by its own `symbol()` and `decimals()`), native
 transfers come from the node's `traceTransfers`, wrapping and unwrapping the wrapped native token
-count as moves, and every other log is counted, and listed in full under `--json`. Addresses the
-registry records are named, as are the Pot, its owner and the Kitchen.
+count as moves, and every other log is counted, and listed in full under `--json`, which gives the
+moves as `moves`, each with `fromRole` and `toRole`.
 
 An endpoint without `eth_simulateV1` falls back to `eth_call` with state overrides. A Pot that is
 not deployed is then put in place as its deployment would leave it: an `eth_call` creation runs
@@ -774,13 +792,13 @@ Rehearsed with eth_simulateV1 on base, one block from the solver 0x5A0c…F111; 
 Assumed for this rehearsal only, by state override:
   the solver holds 998 USDC: the route's tokens, which the solver delivers (its balance word 0xc2e6…e5a4: Solidity mapping at slot 9)
   the solver holds 0.00000374478538635 ETH: fulfill's value
-Token transfers:
-  998 USDC: 0x5A0c…F111 (the solver) -> 0x645d…91Ca (the Portal's Executor)
-  998 USDC: 0x645d…91Ca (the Portal's Executor) -> 0x48e8…744a (the shared intent Pot)
-  0.368481796891017787 WETH: 0x72AB…2D38 -> 0x48e8…744a (the shared intent Pot)
-  998 USDC: 0x48e8…744a (the shared intent Pot) -> 0x72AB…2D38
-  0.368481796891017787 WETH: 0x48e8…744a (the shared intent Pot) -> 0x5a0C…Beef
-Native transfers:
+What moved, in order:
+  [1] solver 0x5A0c…F111 -> Portal's Executor 0x645d…91Ca    998 USDC
+  [2] Portal's Executor  -> shared intent Pot 0x48e8…744a    998 USDC
+  …
+  [4] 0x72AB…2D38        -> shared intent Pot                0.368481796891017787 WETH
+  [5] shared intent Pot  -> 0x72AB…2D38                      998 USDC
+  [6] shared intent Pot  -> 0x5a0C…Beef                      0.368481796891017787 WETH
   …
 Net balance changes:
   0x5A0c…F111 (the solver): -998 USDC, -0.00000374478538635 ETH

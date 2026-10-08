@@ -940,6 +940,19 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         expect.objectContaining({ account: ownerTslax, delta: "400", symbol: "TSLAx" }),
       ]),
     );
+    // What stays in the Pot's token account leads the result: 600 of the 1,000 base units.
+    expect(Object.keys(out).slice(0, 2)).toEqual(["ok", "leftInPot"]);
+    expect(out.leftInPot).toEqual([
+      {
+        account: potTslax,
+        mint,
+        symbol: "TSLAx",
+        amount: "600",
+        decimals: 8,
+        formatted: "0.000006",
+        before: "1000",
+      },
+    ]);
 
     // `sauce pot` lists the Pot's account for each registered mint but the stocks, over a thousand.
     const status = await sauce(
@@ -1186,13 +1199,25 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       "--args",
       "400",
     );
-    expect(json(run)).toMatchObject({
+    const out = json(run) as Record<string, unknown> & { cook: { signature: string } };
+    expect(out).toMatchObject({
       chain: "solana",
       owner: owner.signer.address,
       pot,
       fee: FEE.toString(),
       cook: { status: "success" },
     });
+    // Where a person opens it, and what it left in the Pot's token account, read once it landed.
+    expect(out.cook).toMatchObject({
+      explorer: `https://solscan.io/tx/${out.cook.signature}`,
+      trace: `https://app.blocksec.com/phalcon/explorer/tx/solana/${out.cook.signature}`,
+      tokenChanges: expect.arrayContaining([
+        expect.objectContaining({ account: dest, delta: "400" }),
+      ]),
+    });
+    expect(out.leftInPot).toEqual([
+      expect.objectContaining({ account: source, amount: "600", before: "1000" }),
+    ]);
     expect(tokenAmount(harness, source)).toBe(600n);
     expect(tokenAmount(harness, dest)).toBe(400n);
     // The Kitchen's fee, and the transaction's own, from the owner.

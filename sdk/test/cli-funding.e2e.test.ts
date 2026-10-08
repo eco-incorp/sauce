@@ -245,7 +245,7 @@ describeEvm(
         expect(done.code).toBe(0);
         // The cook, alone: then what it cost and moved.
         expect(done.stdout).toMatch(
-          /^cook 0x[0-9a-f]{64}: success, gas used \d+, block \d+\ncost /,
+          /^cook 0x[0-9a-f]{64}: success, gas used \d+, block \d+\n {2}explorer: .*\n {2}trace .*\ncost /,
         );
         expect(await balance(usdc, RECIPIENT)).toBe(2_000_000n);
         expect(await balance(usdc, pot)).toBe(500_000n);
@@ -349,7 +349,9 @@ describeEvm(
           [tether, RECIPIENT, "2000000"],
         );
         expect(done.code).toBe(0);
-        const tx = "0x[0-9a-f]{64}: success, gas used \\d+, block \\d+";
+        // Each sent transaction's line, then its explorer page and its trace.
+        const tx =
+          "0x[0-9a-f]{64}: success, gas used \\d+, block \\d+\\n {2}explorer: .*\\n {2}trace .*";
         expect(done.stdout).toMatch(
           new RegExp(
             `^reset ${tether}'s allowance to ${permit2} ${tx}\\n` +
@@ -991,20 +993,24 @@ describeEvm(
         ),
       );
       expect(done.code).toBe(0);
-      // What was sent, in order; after the cook, what it cost and moved.
+      // What was sent, in order, each with its explorer page and trace; after the cook, what it
+      // cost and moved.
       const lines = done.stdout.trim().split("\n");
+      const sent = lines.slice(
+        0,
+        lines.findIndex((line) => line.startsWith("cost ")),
+      );
       expect(
-        lines
-          .slice(
-            0,
-            lines.findIndex((line) => line.startsWith("cost ")),
-          )
-          .map((line) => line.split(" 0x")[0]),
+        sent.filter((line) => !line.startsWith("  ")).map((line) => line.split(" 0x")[0]),
       ).toEqual(["deployed Pot", "approve USDC to", "cook"]);
+      expect(sent.filter((line) => line.startsWith("  trace "))).toHaveLength(3);
       expect(done.stdout).toMatch(
         /^cost [\d.]+ ETH: gas \d+ at \d+ wei = [\d.]+ ETH, value [\d.]+ ETH/m,
       );
-      expect(done.stdout).toContain(`  1 USDC: `);
+      // What moved, in order: the pull from the wallet, the payment, and the sweep back to it.
+      expect(done.stdout).toMatch(
+        /^ {2}\[1\] wallet 0x\w{4}…\w{4} -> Pot 0x\w{4}…\w{4} +4 USDC\n {2}\[2\] Pot +-> 0x6666…6666 +1 USDC\n {2}\[3\] Pot +-> wallet +3 USDC$/m,
+      );
       expect(await balance(usdc, RECIPIENT)).toBe(before + 1_000_000n);
       expect(await balance(usdc, signer)).toBe(9_000_000n);
     }, 120_000);

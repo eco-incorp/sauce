@@ -1,6 +1,6 @@
 ---
 name: sauce-overview
-description: Start here for any Sauce task — what Sauce is (a programmable-transaction runtime whose programs, written in SauceScript as .sauce.ts files, run atomically on EVM chains and Solana), what a Pot, a cook and the Kitchen are and who may do what with each, the path from a program file to an executed transaction with the sauce command, the rules every program follows, and a map of every Sauce skill (what each teaches and holds, when to load it rather than its neighbour, the skills to read in order for common tasks, and how to read them over MCP). Use when the user mentions Sauce, SauceScript, a .sauce or .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, Eco intents, or asks to "write a Sauce program", "do this atomically on chain", or "swap/bridge/lend with Sauce".
+description: Start here for any Sauce task — what Sauce is (a programmable-transaction runtime whose programs, written in SauceScript as .sauce.ts files, run atomically on EVM chains and Solana), what a Pot, a cook and the Kitchen are and who may do what with each, the path from a program file to an executed transaction with the sauce command, the rules every program follows, where its results end (the user's wallet or the Pot) and what the user is shown before anything is sent, and a map of every Sauce skill (what each teaches and holds, when to load it rather than its neighbour, the skills to read in order for common tasks, and how to read them over MCP). Use when the user mentions Sauce, SauceScript, a .sauce or .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, Eco intents, or asks to "write a Sauce program", "do this atomically on chain", or "swap/bridge/lend with Sauce".
 ---
 
 # Sauce
@@ -23,7 +23,8 @@ developer who meets them for the first time.
   is known before it exists: `sauce pot --chain <chain> --owner <address>` prints it. Anyone may
   deploy an owner's Pot (`sauce pot --deploy`), and it is the owner's whoever sends that. It is
   funded by sending tokens to its address, and what it holds leaves only through a program its
-  owner runs on it: a Pot has no withdraw function.
+  owner runs on it: a Pot has no withdraw function. So what a cook leaves in the Pot is the
+  owner's, but it is not in the owner's wallet, and a wallet does not show it.
 - **Cook**: the transaction that runs one program: `cook(engine, program)`, sent by the owner to
   the Pot, with `main`'s arguments appended to the program and the Kitchen's fee as its value. The
   engine runs the program as the Pot, every step or none: a failed `require` reverts the whole
@@ -48,8 +49,38 @@ ask the user which example or existing file to start from. The one exception is 
 implementation a skill says to use whole: the Solana distributed swap (`sauce-solana-distributed-swap`),
 whose pool slots are the accounts `sauce pools` fills by name. Take its code as given, and
 write the header, the slots and the inputs for the task. Ask only for the facts the request
-leaves open (an amount, a price limit, a recipient, the chain); decide the rest, write the
-program, and rehearse it with `sauce simulate`.
+leaves open (an amount, a price limit, a recipient, the chain, where the results end); decide the
+rest, write the program, and rehearse it with `sauce simulate`.
+
+## Where the results end, and what the user sees first
+
+**Ask where the results go.** Before writing a program that produces assets (a swap's output, a
+lending market's receipt tokens such as aTokens, a vault's shares, what a bridge delivers), ask the
+user whether they should end in their wallet, the Pot's owner, or stay in the Pot. Say the
+difference in a line: the Pot is their own program account, so what stays there is theirs, but only
+another cook moves it out, and their wallet does not show it. Then write the program that way.
+Every call a program makes comes from the Pot, so a protocol that credits its caller, or a
+beneficiary given as `ctx.self()`, leaves the output in the Pot. To deliver it, send it to the
+wallet, or name the wallet as the call's beneficiary (`onBehalfOf`, `receiver`, `recipient`,
+`to`), a `main` parameter. The header says which it is.
+
+**Show it before it is sent.** Before a transaction is sent, or handed to the user's wallet as
+`sauce tx`'s unsigned JSON, show the user, and ask them to confirm:
+
+1. the final program, as it will be compiled;
+2. the arguments it will be called with, each with its meaning and units (`1000000` is 1 USDC);
+3. what the rehearsal (`sauce simulate`) says will happen: what leaves the wallet, what arrives
+   where, and what is left in the Pot. The rehearsal leads with what the cook leaves in the Pot,
+   in the lines under `Left in the Pot`, or as `leftInPot` in its JSON, and prints none when it
+   leaves nothing.
+
+Send only once the user agrees.
+
+**Report what was sent.** Every command that sends a transaction prints its hash and two links: the
+chain's explorer page and its trace (calls and balance changes). Give the user both, to open in a
+browser, and never fetch or read them yourself. With them, report what the command printed from
+the transaction's receipt: what left the wallet, what arrived where, and what stayed in the Pot
+(`Left in the Pot`).
 
 Call typed bindings, namespaces and library functions directly: `USDC.transfer(...)`,
 `UniswapV3.Factory.getPool(...)`, `uniswapV3(...)` from `@sauce/router`. Do not wrap a single call
@@ -70,10 +101,9 @@ one.
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
 `base`, `solana`). Every other chain the SDK knows is a **preview chain**: a program compiles for
 it, and `sauce simulate` and the dry runs rehearse it there, but the `sauce` command and the MCP
-server build and send no transaction on it. `sauce tx`, `sauce run`, `sauce pot --deploy`,
-`sauce intent publish` and the intent steps sent there are refused before anything is read or
-signed, and the refusal names the supported chains and the chain-support request for that chain.
-An intent publishes only when every chain it involves is supported. `sauce-chains` marks each
+server build and send no transaction on it. `sauce tx`, `sauce run`, `sauce pot --deploy` and
+the intent steps sent there are refused before anything is read or signed, and the refusal names
+the supported chains and the chain-support request for that chain. `sauce-chains` marks each
 chain supported or preview.
 
 To ask for a chain, look among the
@@ -149,9 +179,10 @@ to its tool.
 
 ## Rules for every program
 
-1. **Nothing is left behind.** Measure outputs as balance deltas, move them out, return unspent
-   input, and approve exactly what the next call spends. An intent's body runs on a Pot every
-   intent to that chain shares, so there a leftover is anyone's.
+1. **Nothing is left behind by surprise.** Measure outputs as balance deltas, deliver them where
+   the user asked (their wallet, unless they chose the Pot), return unspent input, and approve
+   exactly what the next call spends. An intent's body runs on a Pot every intent to that chain
+   shares, so there a leftover is anyone's.
 2. **A swap leg must not strand input.** Swap exact input, enforce a minimum output with `require`,
    and return what a partial fill leaves (`sauce-swaps`).
 3. **Every check belongs in the program.** A failed `require` reverts the whole transaction; that
@@ -163,6 +194,9 @@ to its tool.
 6. **Transactions on supported chains only.** Build and send on Ethereum, Base or Solana. On a
    preview chain, compile and simulate; when a command refuses one, offer the user the
    chain-support request it names instead of looking for another way to send.
+7. **The user sees it before it is sent, and what it did after.** The program, its arguments and
+   the rehearsal's outcome (what leaves the wallet, what arrives where, what stays in the Pot),
+   then their go-ahead; once sent, its explorer and trace links and what its receipt shows.
 
 ## The skill map
 
@@ -174,8 +208,9 @@ teaches, what it holds, when to load it rather than its neighbour, and a request
 
 ### `sauce-overview`
 
-This skill: what Sauce is, the rules every program follows, the path from a file to a transaction,
-and this map. It holds no references or examples of its own.
+This skill: what Sauce is, the rules every program follows, where a program's results end and
+what the user sees before anything is sent, the path from a file to a transaction, and this map.
+It holds no references or examples of its own.
 
 - **Load it** first, for any Sauce task.
 - **Asked as:** "What is Sauce, and how do I run something with it?"

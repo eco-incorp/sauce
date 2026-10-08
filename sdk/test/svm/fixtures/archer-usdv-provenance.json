@@ -1,0 +1,23 @@
+{
+  "slot": 450615056,
+  "capturedAt": "2026-09-26T08:03:09.173Z",
+  "clockUnixTimestamp": "1790409788",
+  "scope": "One getMultipleAccounts call at slot 450615056: every account resolveSvmSpecSlot reads for archer BZDUzrgR1ns4PykkvHCorxfsg9M3zc9a7xbztv3kjfCC (baseIn,quoteIn), its quote refs, both swap templates' fixed accounts, the mints and the Clock (scripts/capture-svm-pool-fixtures.mts).",
+  "missing": [
+    "Sysvar1nstructions1111111111111111111111111"
+  ],
+  "programs": [
+    "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+  ],
+  "accounts": [
+    "939Pgm7Jz3E8PuTZsXEK4fAf5EpUGPpPqf4dpALkTwmu",
+    "BZDUzrgR1ns4PykkvHCorxfsg9M3zc9a7xbztv3kjfCC",
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "ET5Fc8uB851B8Hunxw6JPTXmJ6eoWBZS8is2NmKF5ipq",
+    "F6CLwdjepySKUrYJVQtwPFG3VBuRoPC6PnQmbintEU9t",
+    "SysvarC1ock11111111111111111111111111111111",
+    "USDvUSpnhCr9yBgj3UyVrD239HRUv4RsHwH2FxsWuMk"
+  ]
+}

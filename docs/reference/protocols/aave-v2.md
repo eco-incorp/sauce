@@ -19,19 +19,20 @@ Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum
 ## Pitfalls for a program
 
 - The supply call is `deposit`, not `supply`; approve the LendingPool first.
+- `onBehalfOf` receives the aTokens. The caller is the Pot, so `ctx.self()` keeps them in the
+  Pot, not in the user's wallet: ask which the user wants, and pass the wallet to deliver them.
 - aTokens are rebasing: measure balances as deltas.
 - A frozen reserve refuses new deposits: check the reserve accepts them before relying on it.
 - Borrowing and liquidation work as in Aave V3, by health factor.
 
 ## In a Sauce program
 
-Deposit the Pot's USDC:
+Deposit the Pot's USDC for `onBehalfOf`, the user's wallet or the Pot (`ctx.self()`):
 
 ```ts
-function main(amount: Uint256) {
-  const self = ctx.self();
+function main(onBehalfOf: Address, amount: Uint256) {
   USDC.approve(AaveV2.LendingPool, amount);
-  AaveV2.LendingPool.deposit(USDC, amount, self, 0);
+  AaveV2.LendingPool.deposit(USDC, amount, onBehalfOf, 0);
 }
 ```
 
@@ -64,7 +65,7 @@ function main(
 - `lendingPoolAddress`: LendingPool contract for the target chain
 - `asset`: ERC-20 token address to deposit
 - `amount`: Amount in token's native decimals (e.g. 1e6 for 1 USDC). Use `type(uint256).max` to deposit entire balance
-- `onBehalfOf`: Address that receives the aTokens (use msg.sender for self)
+- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
 - Requires ERC-20 approval to the LendingPool before calling
 
 ### withdraw
@@ -105,7 +106,7 @@ function main(
 ```
 
 - `interestRateMode`: 1 = stable rate, 2 = variable rate. Variable is more common and typically lower
-- `onBehalfOf`: Address that receives the debt tokens (must have delegated credit if not msg.sender)
+- `onBehalfOf`: Address that receives the debt tokens (must have delegated credit to the caller, the Pot, if it is not the Pot)
 - Must have sufficient collateral deposited first
 
 ### repay
