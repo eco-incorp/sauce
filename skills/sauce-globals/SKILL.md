@@ -160,7 +160,7 @@ function main(
 - A family alias (`Uniswap`, `Aave`, …) names a contract only when one member has it on the chain:
   `Uniswap.UniversalRouter` is `UniswapV4.UniversalRouter`; `Uniswap.Factory` is ambiguous.
 - `Ethereum.UniswapV4.UniversalRouter` takes Ethereum's address but still executes on the program's
-  own chain; running on another chain is an intent (`sauce-intents`).
+  own chain.
 - Every catalogued protocol has a namespace. An interface, such as `Erc4626.Vault` or
   `UniswapV3.Pool`, has no one address and is called with one, together with a method in the same
   expression: `Erc4626.Vault(vault).deposit(...)`, or `UniswapV3.Pool(pool).liquidity()` for a pool

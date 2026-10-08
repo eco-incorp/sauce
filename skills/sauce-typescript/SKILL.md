@@ -35,9 +35,8 @@ and add the use case, or
 ## Compile a program for a chain, and cook it
 
 `routes.compileSauceProgram(chain, source, options)` is what `sauce compile` runs: the chain's
-names and `@sauce/token`, with `options.intents` for the intents it opens, and `options.args` to fix
-`main`'s arguments into the program, as `sauce intent publish --args` does for intents published
-from a wallet. Without `args`, the result carries `main`'s declared
+names and `@sauce/token`, and `options.args` to fix `main`'s arguments into the program. Without
+`args`, the result carries `main`'s declared
 parameters (`entryParams`); `routes.encodeEntryArguments` encodes values for them as `--args` does,
 and program plus arguments is the `program` of the owner's `Pot.cook(engine, program)`.
 
@@ -90,8 +89,6 @@ export async function cookTransactions(
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
-- A program that opens an intent also needs `options.intents`, `{ deadline, creator,
-executionFee }` (`sauce-intents`).
 
 ## The raw compiler
 
@@ -138,8 +135,8 @@ a recorded address, not proof of live code on the chain.
   contracts by namespace (`"UniswapV3.Factory"`), and a swap may give its pool by its factory's
   key (`factory` and `fee`). `compileProgram(program, { chain })` compiles it for any chain that
   has those names; a name the chain lacks throws `ProgramError`, whose `issues` and `chain` say
-  which. `argument` actions become runtime amounts. `programIntent(...)`, `quoteAction(...)` and
-  `compileSplitSwap(...)` resolve names on `chain` the same way. Reference:
+  which. `argument` actions become runtime amounts. `quoteAction(...)` and `compileSplitSwap(...)`
+  resolve names on `chain` the same way. Reference:
   `node_modules/@eco-incorp/sauce/docs/guides/actions.md`; see
   [examples/actions.mts](examples/actions.mts), and `sauce-actions` for writing the documents.
 - **Settlement verification** (`/verify`, `/svm/verify`): `validateSettleProgram`,
@@ -162,26 +159,17 @@ a recorded address, not proof of live code on the chain.
   `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the packaged programs; the program
   ids are `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from `/deployments`. Writing the
   programs is `sauce-solana`.
-- **Intents** (`sauce-intents`): `routes.hashIntent(intent)` gives the three hashes,
-  `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
-  `fulfill`), `destinationPot(chain)` the shared Pot and
+- **Intents**: `routes.assembleIntent(source, destination, route, reward)` builds one by hand,
+  `routes.hashIntent(intent)` gives the three hashes, `routes.encodeRouteEvm(intent.route)` the
+  route bytes (decode with `routes.EVM_ROUTE_PARAM` for `fulfill`), `destinationPot(chain)` the
+  shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
-  its deploy; the intents runner builds a rehearsal with them. For the source side,
-  `built.sourceTxs()` (`routes.intentSourceTxs` for an intent built some other way) is the
-  funding and publication in order: a transfer of each reward token to the vault, then `publish`
+  its deploy. For the source side, `routes.intentSourceTxs(intent, target)` is the funding and
+  publication in order: a transfer of each reward token to the vault, then `publish`
   (`{ fundVia: "publishAndFund" }` for the approvals and `publishAndFund`). Pass `{ vault }` read with
   `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
   own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
   `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
-- **Nested intents** are written in the program: a body that opens the next intent with
-  `Chain(() => { ... }).reward({ ... })` (`sauce-intents`, Cascades). In a typed closure,
-  `Base(() => { ... Ethereum(() => { ... }).reward({ ... }) }, options)`, the inner chain is the
-  imported export, which typechecks there. `routes.compileSauceProgram`
-  lists the intents a program opens in `.intents`, and `routes.intentSourceTxs` publishes a fixed
-  one from a wallet. The lower-level builder, `routes.openRoute(chain, body, options).nest(child,
-{ via })`, attaches a child built in TypeScript instead, with options of its own: by default
-  (`via: "transfer"`) the parent's route funds the child by a transfer into its vault, with no
-  publication of its own; `via: "publishAndFund"` publishes and funds it for public discovery.
 
 ## Example
 
