@@ -9,7 +9,7 @@
  * bytecode segment and one call.
  *
  * An intent a program opens (`await Arbitrum.hop({ … })`, `Arbitrum.hop({ … }).then(() => { … })`) is
- * `@sauce/intents`' classes, which the compiler runs while it compiles. Its body is compiled as a
+ * `@sauce/hop`'s classes, which the compiler runs while it compiles. Its body is compiled as a
  * program of its own, `program(body, chainId)`, with the options `programOptions` gives that chain:
  * its own module of names, its target, and the caller's defines.
  *
@@ -105,7 +105,7 @@ export interface SauceCompileOptions {
    * Settings for `await Chain.hop({ ... })` written inside the
    * program — creating an intent from a program, rather than compiling a program into one.
    * Everything the SDK can look up it looks up; these are the fields it cannot, plus overrides, for
-   * every intent that does not set its own. See `@sauce/intents`.
+   * every intent that does not set its own. See `@sauce/hop`.
    *
    * Omitted entirely, an intent still compiles: its deadlines and salt have defaults, and its
    * refundee (the reward's `creator`), which has none, is its own `refundee`.

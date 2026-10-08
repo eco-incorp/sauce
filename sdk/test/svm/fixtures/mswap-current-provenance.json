@@ -1,0 +1,32 @@
+{
+  "slot": 450614395,
+  "capturedAt": "2026-09-26T08:00:14.024Z",
+  "clockUnixTimestamp": "1790409613",
+  "scope": "One getMultipleAccounts call at slot 450614395: every account resolveSvmSpecSlot reads for mswap 462b7dyevbnv8vmqE3sd49mBLxbqHzJe2JT6QcnJo5Ce (-), its quote refs, both swap templates' fixed accounts, the mints and the Clock (scripts/capture-svm-pool-fixtures.mts).",
+  "missing": [
+    "462b7dyevbnv8vmqE3sd49mBLxbqHzJe2JT6QcnJo5Ce",
+    "8vtsGdu4ErjK2skhV7FfPQwXdae6myWjgWJ8gRMnXi2K",
+    "Am4facCvkQkHjwSArPX8Jqxs1ss14XMoC8JkTV3BDG95",
+    "Anfx7wng5TEe5UrkFKTirtADBawmtRs9KoD15BUbEmvT",
+    "Hkyu8KCkXg16w74BL2D5JpsL5VZhKkXGpPj8UD6wyf9x"
+  ],
+  "programs": [
+    "11111111111111111111111111111111",
+    "MSwapi3WhNKMUGm9YrxGhypgUEt7wYQH3ZgG32XoWzH",
+    "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    "mextzNVPUbLbvyBwqBqnC5J1SSwjDLjjR4yppf6EBzc",
+    "wMXX1K1nca5W4pZr1piETe78gcAVVrEFi9f4g46uXko"
+  ],
+  "accounts": [
+    "3rtUvF3XSMPTLw1pPLgeanfCu4T9YML8Vm1nMRRHagWd",
+    "6U4ZZZkftbuHxjRDHUfh83M9zG66aAAXDV3xTRX7yePr",
+    "7dM9YCAbN9XGixnaP7wnyQDVZH6BVy6HPFeZr1SWVNka",
+    "7upNeuSPSpinN7zzEsrxMe6p3N6tMub67dkkm5LFBTvp",
+    "G7dEeYfaTpJy39FtYkFjQVkCXiFEcvfAtr2zCAJppbpL",
+    "GQBavw2gpCdbZkkSWk9PkzNTDdBwCHUGNpeuuQ7mV9GA",
+    "SysvarC1ock11111111111111111111111111111111",
+    "dawn7ZUF7h7anFuEsDdAU1Y3HYwikwqNMAENZsQJdNL",
+    "mzeroXDoBpRVhnEXBra27qzAMdxgpWVY3DzQW7xMVJp",
+    "mzerojk9tg56ebsrEAhfkyc9VgKjTW2zDqp6C5mhjzH"
+  ]
+}

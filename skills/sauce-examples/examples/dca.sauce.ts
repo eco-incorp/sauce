@@ -4,6 +4,8 @@
 // fail, so a skipped tick costs only gas. The pool fills only up to `maxPrice`: the USDC it leaves
 // stays in the Pot for the next tick, beside the WETH bought. Returns the pool's price before the
 // tick, and the USDC spent and WETH bought.
+// The WETH bought stays in the Pot on purpose (the swap's recipient is the Pot): the plan
+// accumulates there, and a later cook sends it to the wallet.
 //
 //   sauce run dca.sauce.ts --chain <chain> --keystore <keystore> --args <tranche> <maxPrice>
 //

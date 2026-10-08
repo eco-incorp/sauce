@@ -6,7 +6,7 @@
  *
  * `publish` cooks a compiled program on that Pot and returns each intent the Portal logged, rebuilt
  * in full from its `IntentPublished` (`portal.ts#intentFromPublished`, which holds the rebuilt intent
- * to the hash the log announces). An intent a program opens is built by `@sauce/intents` while the
+ * to the hash the log announces). An intent a program opens is built by `@sauce/hop` while the
  * program compiles and encoded as the program runs, so this is where a suite reads it.
  *
  * NOT a `.test.ts`, so jest never collects it. Gated like every executing EVM suite: use

@@ -79,6 +79,8 @@ interface Order {
   minOut?: bigint;
   /** Bytes to change in an account before the cook, for one case: a pool emptied, paused. */
   edit?: { address: Address; offset: number; bytes: number[] };
+  /** The slot's tick arrays, where a case names fewer than the pool's three. */
+  ticks?: Address[];
 }
 
 type Outcome =
@@ -144,7 +146,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       p.vaultA,
       p.vaultB,
       p.extra,
-      ...(paysA ? p.payA : p.payB),
+      ...(order.ticks ?? (paysA ? p.payA : p.payB)),
     ];
     const named: Record<string, { address: Address; role: AccountRole }> = {
       authority: { address: harness.pot, role: r }, // the Kitchen signs for the Pot
@@ -360,6 +362,28 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       120_000,
     );
   });
+
+  // Crema refuses a tick array its map does not mark, so a slot names fewer by the System program,
+  // and the swap at a price passes only the arrays before it.
+  it("Crema: a slot of one tick array passes one", async () => {
+    const order: Order = {
+      ...(await orderFor(VENUES.find((v) => v.venue === "Crema")!)),
+      amountIn: 10n * 10n ** 6n,
+    };
+    const all = succeeded(await cook(compiled("tryCrema"), order));
+    expect(all.received).toBeGreaterThan(0n);
+    const first = (key(order.pay) < key(order.buy) ? order.pool.payA : order.pool.payB)[0]!;
+    for (const name of ["tryCrema", "trySwap"]) {
+      const one = succeeded(
+        await cook(compiled(name), { ...order, ticks: [first, SYSTEM, SYSTEM] }),
+      );
+      expect([one.returned, one.received, one.paid]).toEqual([
+        all.returned,
+        all.received,
+        all.paid,
+      ]);
+    }
+  }, 120_000);
 
   describe("a try form skips, having moved nothing; its plain form reverts", () => {
     const skips: { why: string; fn: string; order: () => Promise<Order>; numbered: boolean }[] = [];

@@ -2,7 +2,7 @@
  * What an intent body's names mean when the body is a program of its own.
  *
  * `Chain.hop({ send, refundee }).then(() => { ... })` compiles its body as a program for the
- * destination — `program(body, chainId)` in `@sauce/intents`, in the destination's scope.
+ * destination — `program(body, chainId)` in `@sauce/hop`, in the destination's scope.
  * A name the body reads is one of: its own local; a value of the enclosing program, carried in as
  * an entry argument (a capture); or a declaration of the file — a function, an import, an
  * interface, a constant — which the body's program has as the file does, compiled only where the

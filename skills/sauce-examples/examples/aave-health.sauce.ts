@@ -4,6 +4,7 @@
 // repayment is priced by Aave's own oracle, read through AaveV3Reads.json beside this file, the
 // reads the registry's Aave V3 ABI does not declare. Returns the health factor before and after,
 // and the USDC repaid.
+// The position is the Pot's (supplied for the Pot), so the repayment is on the Pot's behalf.
 //
 //   sauce run aave-health.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <trigger> <target>

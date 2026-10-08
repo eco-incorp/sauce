@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/hop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript hops: the intent-based way to move money to another chain. A hop is an Eco intent a program opens, whose body runs on the destination's public Shared Pot, where nothing persists between transactions; the class funds its reward and publishes it through the source Portal. `main` names the NEUTRAL BASE the compiler suffixes per target (hop.evm.js); there is no SVM arm, because the Portals a program publishes through from a Pot are EVM contracts.",
+  "main": "hop.js"
+}

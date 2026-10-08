@@ -1,6 +1,6 @@
 /**
  * `sauce intent publish <file>`: the file cooked on the signer's own Pot, which publishes the
- * intents it opens. Every publish is a cook: an intent is `@sauce/intents`' classes, built while the
+ * intents it opens. Every publish is a cook: an intent is `@sauce/hop`'s classes, built while the
  * file compiles and encoded as the program runs, so there is no intent to send from a wallet
  * without running it, and no second encoder to build one with.
  *

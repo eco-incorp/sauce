@@ -21,7 +21,7 @@ import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
 import { entryReturnType } from "../routes/entry.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
-import { connectAt, kitchenFee, potState } from "./chain.js";
+import { balanceReader, connectAt, kitchenFee, potState } from "./chain.js";
 import {
   type ChainAccess,
   type CliFiles,
@@ -40,9 +40,13 @@ import {
   effectLines,
   effectsJson,
   effectsOf,
+  heldAround,
+  leftInPotJson,
+  leftInPotLines,
   nativeSymbol,
   tokenInfo,
   type Effects,
+  type Held,
 } from "./effects.js";
 import { intentLines, intentsJson, loggedIntents } from "./logged-intents.js";
 import { baseUnits, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
@@ -284,6 +288,26 @@ async function simulateEvm(given: SimulateInput, files: CliFiles): Promise<Comma
     rehearsal.ok && rehearsal.logs !== undefined
       ? await effectsOf(client, input.chain, rehearsal.logs, rehearsal.traced, labels)
       : undefined;
+  // What the Pot ends holding of what the cook moved: what it held before (as assumed, else as it
+  // stands at the block) plus the cook's net change.
+  const unread: Array<Address | "native"> = [];
+  const potBefore = balanceReader(client, cook.pot);
+  const potHeld: Held[] | undefined =
+    effects === undefined
+      ? undefined
+      : await heldAround(effects, cook.pot, async (token) => {
+          const given = assumed.find(
+            (balance) =>
+              balance.holder === cook.pot &&
+              (balance.token === "native" || token === "native"
+                ? balance.token === token
+                : getAddress(balance.token) === token),
+          );
+          const before = given?.amount ?? (await potBefore(token));
+          if (before === undefined) unread.push(token);
+
+          return before;
+        });
 
   // The intents the cook published, read back from the Portal's logs.
   const intents =
@@ -320,6 +344,10 @@ async function simulateEvm(given: SimulateInput, files: CliFiles): Promise<Comma
       : undefined;
   const json: Record<string, unknown> = {
     ok: rehearsal.ok,
+    // First, so nobody looks in the owner's wallet for what stays in the Pot.
+    ...(effects === undefined || potHeld === undefined
+      ? {}
+      : { leftInPot: leftInPotJson(effects, potHeld) }),
     chain: input.chain.slug,
     block: block.toString(),
     from: owner,
@@ -392,6 +420,11 @@ async function simulateEvm(given: SimulateInput, files: CliFiles): Promise<Comma
     ...priceLimitNotes(input, cook.program.entryParams, input.args),
     ...(funding?.notes ?? []),
     ...rehearsal.notes,
+    ...unread.map(
+      (token) =>
+        `the Pot's ${effects?.tokens.get(token)?.symbol ?? token} balance could not be read, so ` +
+        "what the cook leaves in the Pot leaves it out",
+    ),
   ];
 
   if (!rehearsal.ok) {
@@ -426,6 +459,9 @@ async function simulateEvm(given: SimulateInput, files: CliFiles): Promise<Comma
       ...(returnType === undefined
         ? []
         : [returnedLine(returnType, rehearsal.returns, input.chain)]),
+      ...(effects === undefined || potHeld === undefined
+        ? []
+        : leftInPotLines(effects, potHeld, "the owner's wallet")),
       ...intentLines(intents),
       ...how,
       ...assumedLines,

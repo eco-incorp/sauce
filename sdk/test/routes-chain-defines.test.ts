@@ -4,7 +4,7 @@
  * define. A define replaces a module's `const` of that name in every module, so left one it would
  * replace the chain's `USDC` token with a plain number, and reach every body on another chain.
  *
- * An intent's delivery names the DESTINATION's token of each symbol (`@sauce/intents`), whatever
+ * An intent's delivery names the DESTINATION's token of each symbol (`@sauce/hop`), whatever
  * the caller defined for the chain the program runs on; every other name in it is the program's
  * own, evaluated where the intent opens. Each case reads the delivery the Portal logs on a Base
  * anvil (`intent-anvil.ts`).
