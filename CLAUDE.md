@@ -725,8 +725,9 @@ parameter drops it, as an arrow called in place does. A handler that reads `e` n
 the major that carries `CATCH_READS` (#553): the releases.json row of the compiler with #553 pairs
 with it. `await x; rest` is the compiler's
 `x.then(() => { rest })`, inside a `try` at every `await` with its `catch`, so a cascade is one
-`await` per hop; an `await` cannot stand in an `if`, a loop or another block, so a hop opened on a
-condition is written with `.then`.
+`await` per hop. An `await` may stand in the branches of an `if` that ends its body (each branch's
+rest is its own `.then`; a statement after such an `if` is refused), not in a loop or another block;
+`funding.ts#thenForm` reads them as the compiler does.
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route

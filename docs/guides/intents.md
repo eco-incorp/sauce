@@ -408,11 +408,13 @@ from before it are captured, and the body cannot assign them, nor declare a name
 still one scope. A `return` after it is the body's. An `await` in the body opens the next hop from
 the destination, so a cascade reads top to bottom.
 
-An `await` stands directly in `main`'s body, a script's top level, a body, or a `try` block there.
-It cannot be inside an `if`, a loop or another block, in another function, or used as a value; each
-of these is a compile error that names it. Start the hop on the `await`'s line: in `main` or a body,
-as in JavaScript outside an `async` function, `await` followed by `(`, `[` or a line break reads as
-a name, and is refused.
+An `await` stands directly in `main`'s body, a script's top level, a body, a `try` block there, or a
+branch of an `if` there that ends its body: `if (change > 0) { await Ethereum.hop({ … }); … }`,
+where the rest of the branch is that hop's body. Nothing may follow such an `if`, since it would run
+wherever the branch taken continued. An `await` cannot be inside a loop or another block, in another
+function, or used as a value; each of these is a compile error that names it. Start the hop on the
+`await`'s line: in `main` or a body, as in JavaScript outside an `async` function, `await` followed
+by `(`, `[` or a line break reads as a name, and is refused.
 
 A `try` around awaited hops handles each of their bodies, and what runs before them:
 
