@@ -172,6 +172,8 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
   },
   bonkswap: { takes: [], data: ({ aToB }) => [SWAP, aToB ? NEVER_SELLING_X : NEVER_BUYING_X] },
   guacswap: { takes: [], data: ({ aToB }) => [SWAP, aToB ? NEVER_SELLING_X : NEVER_BUYING_X] },
+  "meteora-dlmm": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  "saros-dlmm": { takes: ["minOut"], data: ({ aToB, floor }) => [SWAP, `${floor}${bit(aToB)}00`] },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>

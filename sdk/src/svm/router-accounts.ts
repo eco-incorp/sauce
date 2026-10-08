@@ -223,6 +223,16 @@ export const ROUTER_SVM_VENUES = {
     data: "guacswapData",
     cpi: "guacswapCpi",
   },
+  "meteora-dlmm": {
+    program: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+    data: "meteoraDlmmData",
+    cpi: "meteoraDlmmCpi",
+  },
+  "saros-dlmm": {
+    program: "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
+    data: "sarosDlmmData",
+    cpi: "sarosDlmmCpi",
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -271,6 +281,9 @@ export interface RouterSvmAccountOptions {
   /** Scale AMM: how many fee beneficiaries the pool pays, each a token account at the end; 1 when
    *  absent. */
   readonly beneficiaries?: number;
+  /** Meteora DLMM: how many bin arrays the swap crosses, from the active bin's onwards in the trade's
+   *  direction; 3 when absent. */
+  readonly binArrays?: number;
 }
 
 const r = (name: string): RouterSvmAccountRole => ({ name, writable: false, signer: false });
@@ -299,6 +312,9 @@ export function routerSvmAccountOrder(
   }
   if (options.beneficiaries !== undefined && venue !== "scale-amm") {
     throw new Error(`beneficiaries is Scale AMM's alone, not ${venue}'s`);
+  }
+  if (options.binArrays !== undefined && venue !== "meteora-dlmm") {
+    throw new Error(`binArrays is Meteora DLMM's alone, not ${venue}'s`);
   }
   if (isExactInVenue(venue)) return exactInAccountOrder(venue, options);
   const { aToB } = options;
@@ -517,6 +533,8 @@ const EXACT_IN_VENUES = [
   "pumpswap",
   "bonkswap",
   "guacswap",
+  "meteora-dlmm",
+  "saros-dlmm",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -799,6 +817,51 @@ function exactInAccountOrder(
         r("tokenProgram"),
         r("associatedTokenProgram"),
         r("rent"),
+      ];
+    case "meteora-dlmm": {
+      // No bitmap extension or no host fee account: the program itself in its place.
+      const count = options.binArrays ?? 3;
+      if (!Number.isInteger(count) || count < 1)
+        throw new Error(`binArrays is a count, not ${count}`);
+      return [
+        w("pool"),
+        w("bitmapExtension"),
+        w("vaultA"),
+        w("vaultB"),
+        w("source"),
+        w("recipient"),
+        r("mintA"),
+        r("mintB"),
+        w("oracle"),
+        r("hostFee"),
+        AUTHORITY,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("eventAuthority"),
+        r("program"),
+        ...Array.from({ length: count }, (_, i) => w(`binArray${i}`)),
+      ];
+    }
+    case "saros-dlmm":
+      // No hook: the program itself as the hook and its program.
+      return [
+        w("pool"),
+        r("mintA"),
+        r("mintB"),
+        w("binArrayLower"),
+        w("binArrayUpper"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        AUTHORITY,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("memo"),
+        r("hook"),
+        r("hookProgram"),
+        r("eventAuthority"),
+        r("program"),
       ];
     default: {
       const unknown: never = venue;

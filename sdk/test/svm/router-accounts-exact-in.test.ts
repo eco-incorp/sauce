@@ -272,6 +272,39 @@ const ROLES: Record<string, (aToB: boolean) => Record<string, string>> = {
     rent: "rent",
   }),
 };
+ROLES.meteoraDlmm = () => ({
+  pool: "pair",
+  bitmapExtension: "bmx",
+  vaultA: "rx",
+  vaultB: "ry",
+  mintA: "mx",
+  mintB: "my",
+  oracle: "orc",
+  hostFee: "prog",
+  tokenProgramA: "tpx",
+  tokenProgramB: "tpy",
+  eventAuthority: "evt",
+  program: "prog",
+  binArray0: "ba0",
+  binArray1: "ba1",
+  binArray2: "ba2",
+});
+ROLES.sarosDlmm = () => ({
+  pool: "pair",
+  mintA: "mx",
+  mintB: "my",
+  binArrayLower: "ba0",
+  binArrayUpper: "ba1",
+  vaultA: "vx",
+  vaultB: "vy",
+  tokenProgramA: "tpx",
+  tokenProgramB: "tpy",
+  memo: "memo",
+  hook: "hook",
+  hookProgram: "hookprog",
+  eventAuthority: "evt",
+  program: "prog",
+});
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -301,6 +334,8 @@ const FAMILY: Record<string, string> = {
   pumpswap: "pumpswap",
   bonkswap: "bonkswap",
   guacswap: "bonkswap",
+  "meteora-dlmm": "meteoraDlmm",
+  "saros-dlmm": "sarosDlmm",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */
