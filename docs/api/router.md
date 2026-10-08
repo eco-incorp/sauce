@@ -227,6 +227,101 @@ function main(legs: Leg[], amountIn: Uint256, minOut: Uint256): Uint256 {
 arguments. Nothing about the legs is known to the compiler, so the bytecode — and its hash — is the
 same for every route.
 
+## Routes a service builds
+
+`kyberSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`
+swap along a route a service builds while the program compiles: KyberSwap's aggregator, whose
+router calldata the program calls, or eco-swap, whose program the Pot runs. Each returns the amount
+of `tokenOut` that reached the Pot, leaves it there, and reverts below `minOut`. They are
+`@sauce/swap`'s, a module the SDK hands every compile as an ambient one, so there is no import; a
+failure is caught with `try`, and another venue stands in:
+
+```js
+// Base: 1000 USDC for WETH through KyberSwap, or through eco-swap when that reverts.
+function main(recipient: Address, minOut: Uint256) {
+  let filled = true;
+  try {
+    const out = kyberSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  } catch {
+    filled = false;
+  }
+  if (!filled) {
+    const out = ecoSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  }
+}
+```
+
+The tokens are known when the program compiles, and so is `kyberSwap`'s `amountIn`, which its
+calldata fixes; `ecoSwap` also takes an amount the program computes. The fallback goes after the
+`try`, not inside its `catch`, which holds only a few hundred bytes of compiled code.
+
+Each is a function the compiler runs at its call. It names its route by what the compiler knows of
+the call — the provider, the chain it runs on, the tokens and, for KyberSwap, the amount — and reads
+it with `globalIn` from a module the SDK writes for it while the program compiles, so the route is
+constants in the program and nothing in its text is rewritten. `kyberSwap` approves the registry's
+KyberSwap router for exactly `amountIn`, runs the calldata with `minOut` written where the router
+keeps its own floor, and resets whatever approval is left; `ecoSwap` runs eco-swap's program in
+the Pot, for any amount, and refuses one that spends more than `amountIn`. Both measure what reached
+the Pot, never its whole balance, which on an intent's destination every intent shares. A KyberSwap
+route is refused when the program compiles unless it calls the registry's router, swaps exactly
+`amountIn` and pays the Pot it is built for: the one the program runs on, or an intent body's
+destination Pot.
+
+From TypeScript, `routes.compileSauceProgramAsync` compiles twice: once to learn what each swap
+asks for, then, with every route fetched, for real. The SDK ships no URL, so each service is named:
+
+```ts
+const program = await routes.compileSauceProgramAsync("base", source, {
+  swap: {
+    pot, // the Pot the program runs on: KyberSwap's sender and recipient
+    kyber: { url: kyberApiUrl },
+    eco: { url: ecoApiUrl },
+  },
+});
+```
+
+`program.swaps` lists each call with its request and its route. The `sauce` command asks KyberSwap's
+and Jupiter's public APIs unless `--swap-api kyber=<url>` or `--swap-api jupiter=<url>` names
+another, and eco-swap only at `--swap-api eco=<url>`. A route expires twenty minutes after it is
+built and its quote moves, so compile close to running and keep a fallback.
+
+### On Solana
+
+`jupiterSwap(tokenIn, tokenOut, amountIn, minOut)` swaps along a route Jupiter's aggregator
+builds, and `ecoSwap` along eco-swap's. `kyberSwap` is refused on Solana and `jupiterSwap` on an
+EVM chain when the program compiles. A Solana route is one instruction, built for the Pot, which
+the Pot signs as the swap's authority through the Kitchen:
+
+```js
+// Solana: 100 USDC for wrapped SOL through Jupiter.
+function main(minOut: Uint256): Uint256 {
+  return jupiterSwap(USDC, WSOL, 100000000, minOut);
+}
+```
+
+The route is the instruction's data, read as the EVM routes are. Its accounts are not in the
+program: they are the accounts the cook attaches after the program's own, in order, which the
+library reads with `svm.remainingAccounts()`, so a program on Solana makes one such swap. Jupiter's
+own floor is the program's: the route's quoted output is set to `minOut` with no slippage, written
+into the instruction as the program runs. eco-swap's amount and floor go where its instruction
+says, so `ecoSwap` also takes an amount the program computes. The library measures what reached the
+Pot's account for `tokenOut` and refuses less than `minOut`.
+
+From TypeScript, name Jupiter's API (`jupiter: { url }`) and the Pot's key in `swap`.
+`routes.svmSwapTail(program.swaps)` lists what the cook needs beyond the program: the route's
+accounts with their flags (the client's `remaining`, the Pot unsigned), the lookup tables to read
+(its `lookupTables`) and the Pot's account for the output, which must exist before the swap pays
+into it. The `sauce` command attaches them, reads the tables and creates that account ahead of the
+cook.
+
+A route fills Solana's whole call depth: the Kitchen's instruction calls the engine, the engine the
+aggregator, the aggregator a pool and the pool the token program, five levels, the most a
+transaction allows until SIMD-0268 raises it to nine. A route whose pool calls further, such as a
+Token-2022 transfer hook, fails. A route's accounts also count against the 64 a transaction can
+lock, and its work against 1.4 million compute units.
+
 ## From JSON
 
 Each [action](../guides/actions.md#swaps) at these venues is a call into this library with the

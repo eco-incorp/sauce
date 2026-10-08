@@ -53,6 +53,15 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   `.owner` and `.dataLen`. Check the owner before trusting bytes: a hand-made account can carry any layout.
 - `svm.sload(account, offset, length)` reads bytes; `.toLe()`/`.toBe()` make a number.
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
+- A program that CPIs with accounts it does not name (another program's instruction, its accounts
+  given whole) reads them after its named ones: `const rest = svm.remainingAccounts();`, then
+  `svm.call(program, rest, data)`. Attach them in order with `--remaining
+  <address | pot | owner | pot:USDC>[,writable][,signer]`; `pot,signer` is signed for by the
+  Kitchen. `--lookup-table <address>` (repeated) compresses a cook with many accounts into one
+  transaction, the table read from the cluster.
+- `jupiterSwap(USDC, WSOL, amountIn, minOut)` and `ecoSwap(...)` swap along a route Jupiter or
+  eco-swap builds when the program compiles, for the Pot: the cook attaches the route's accounts
+  and lookup tables itself, so such a program takes no `--remaining` (`sauce-swaps`).
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
   32-byte key the program is given, such as a mint, is an `Address` argument of `main`, passed as a
   base58 public key and encoded as one ABI word (not with `--compact-args`), or an `Account`

@@ -157,6 +157,8 @@ Pass `{ accounts: [...] }` to `simulate` to see what the cook would move: the re
 holds each one's state after the transaction (`lamports`, `owner`, `data`), or `null` where it no
 longer exists, read without sending anything.
 
+A program that reads accounts after its named ones (`svm.remainingAccounts()`, whose manifest ends with a `remaining` entry) takes them as the `remaining` option of every client call, in order: `{ address, writable?, signer? }` each, `signer: false` for the Pot the Kitchen signs for. `lookupTables` compresses a cook with many accounts; `sauce run --remaining … --lookup-table …` is the command's form of both.
+
 After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it. Lookup-table helpers can create or extend an address lookup table and wait until it is usable.
 
 ### Select the released programs and quote the fee
@@ -240,6 +242,20 @@ export async function directCook(
   ];
 }
 ```
+
+## Swap through Jupiter
+
+`jupiterSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(...)` swap along a route Jupiter or
+eco-swap builds while the program compiles, for the Pot the cook runs on. The route's accounts are
+attached after the program's own, with the lookup tables it names, and the Pot signs it through
+the Kitchen:
+
+```sh
+sauce run swap.sauce.ts --chain solana --keypair ./owner.json --args 830000000
+```
+
+[Routes a service builds](../api/router.md#on-solana) covers what the route must be, the floor and
+the limits it runs into.
 
 ## Stage a larger program
 
