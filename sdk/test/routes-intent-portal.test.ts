@@ -186,15 +186,11 @@ describe("the intents a program opens, as compiled", () => {
     ]);
   });
 
-  // Pending the compiler: compiling `main` for its arguments (`args`).
-  it.failing(
-    "folds arithmetic of known values, so an intent from main's bound arguments is fixed",
-    () => {
-      expect(compile(NESTED, INTENTS, [1_000_000n, hex(RECIPIENT)]).bodies[0]!.captures).toEqual(
-        [],
-      );
-    },
-  );
+  it("folds arithmetic of known values, so an intent from main's bound arguments is fixed", () => {
+    const bound = compile(NESTED, INTENTS, [1_000_000n, hex(RECIPIENT)]);
+    expect(bound.entryParams).toEqual([]);
+    for (const body of bound.bodies) expect(body.captures).toEqual([]);
+  });
 
   it("an `await` of the intent makes the statements after it its body, byte for byte", () => {
     const opened = `Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;

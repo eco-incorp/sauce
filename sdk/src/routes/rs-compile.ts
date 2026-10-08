@@ -242,6 +242,8 @@ export interface RsCompileInput {
   modules?: ReadonlyMap<string, string>;
   /** The options of each closure compiled as a program of its own, `program(closure, scope)`. */
   programOptions?: (scope: ProgramScope) => ProgramOptions | undefined;
+  /** `main`'s arguments the program is compiled for, one word each, in `entryParams`' order. */
+  args?: readonly (bigint | boolean | string)[];
   /** `"closure"`: `source` is one function expression as `Function.prototype.toString` prints it,
    *  compiled as the entry as it stands. Default `"module"`. */
   entryKind?: "module" | "closure";
@@ -283,6 +285,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     defines: toRsDefines(input.defines, input.baseDefines),
     compactArgs: input.compactArgs,
     ...(input.programOptions === undefined ? {} : { programOptions: input.programOptions }),
+    ...(input.args === undefined ? {} : { args: [...input.args] }),
   });
 
   const compiled: RsCompileResult = {

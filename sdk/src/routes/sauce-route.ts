@@ -46,7 +46,13 @@ import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { randomSalt, type IntentDefaults } from "./intent-defaults.js";
 import { INTENT_FUND_VIA } from "./portal.js";
-import { entryParamsOf, type EntryParam, type EntrySignature, type EntryValue } from "./entry.js";
+import {
+  entryParamsOf,
+  entryWords,
+  type EntryParam,
+  type EntrySignature,
+  type EntryValue,
+} from "./entry.js";
 import { absentPathError, chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
@@ -390,11 +396,13 @@ export interface CompiledSauceProgram {
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
    * `main`'s arguments the program is compiled for, one per entry of `entryParams` and in its
-   * order: `main` is compiled with each such parameter a constant of its value, so it takes none
-   * at run time. On Solana an `Account` parameter is no entry of `entryParams` and takes no value
-   * here: it stays a slot of the manifest. Each value is one word: an unsigned integer, an address
-   * or a `bool`. How a wallet publishes the intents a program opens from values known before
-   * anything runs. Leave it out to compile `main` taking its arguments as it runs.
+   * order: `main` is compiled with each such parameter a constant of its value (and every `const`
+   * computed from them), so it takes none at run time and the result's `entryParams` is empty; an
+   * intent's body folds them in too, capturing nothing for them. On Solana an `Account` parameter
+   * is no entry of `entryParams` and takes no value here: it stays a slot of the manifest. Each
+   * value is one word: an unsigned integer, an address or a `bool`; the compiler holds each to its
+   * parameter. How a wallet publishes the intents a program opens from values known before anything
+   * runs. Leave it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
 }
@@ -419,18 +427,13 @@ export function compileSauceProgram(
   const source = isSauceClosure(body) ? closureText(body) : body;
   const resolved = requireChain(chain);
   const { args, ...given } = options;
-  if (args !== undefined) {
-    throw new RangeError(
-      "args: this compiler does not compile `main` for its arguments yet; pass them as the program " +
-        "runs (`encodeEntryArguments`)",
-    );
-  }
   const ambient = Array.from(new Set([...chainAmbient(resolved), ...(given.ambient ?? [])]));
   const program = compileForChain(
     resolved,
     source,
     { ...given, ambient: ambient.length > 0 ? ambient : given.ambient },
     isSauceClosure(body) ? "closure" : "module",
+    args === undefined ? undefined : entryWords(args),
   );
   // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
   // carries. Nothing is read from the source.
@@ -461,6 +464,7 @@ function compileForChain(
   sauce: string,
   options: SauceCompileOptions,
   entryKind: "module" | "closure" = "module",
+  args?: readonly (bigint | boolean | string)[],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
@@ -504,6 +508,7 @@ function compileForChain(
       compactArgs: options.compactArgs,
       modules: names.modules,
       programOptions: names.programOptions,
+      ...(args === undefined ? {} : { args }),
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call

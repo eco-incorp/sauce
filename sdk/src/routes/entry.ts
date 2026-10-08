@@ -514,26 +514,6 @@ function decodeAbiEntry(
   });
 }
 
-/**
- * One of `main`'s arguments as the single word a compile-time value is: an unsigned integer or an
- * address as a bigint, a `bool` as a boolean. `undefined` for a parameter of any other type (bytes,
- * a string, an array, a record, an `Account`), which no one word holds. Throws, naming `at`, on a
- * value that is not of the declared type, as `encodeEntryArguments` does.
- */
-export function entryConstant(
-  type: string,
-  value: EntryValue,
-  at: string,
-): bigint | boolean | undefined {
-  const parsed = parseEntryType(type);
-  if (parsed.kind !== "uint" && parsed.kind !== "address" && parsed.kind !== "bool") {
-    return undefined;
-  }
-  const normalized = normalize(parsed, value, at, false);
-
-  return typeof normalized === "string" ? BigInt(normalized) : (normalized as bigint | boolean);
-}
-
 /** `main`'s declared return type, as the compiler reports it (`entrySignature.returns`):
  *  `undefined` when it returns nothing, or a value it does not annotate. */
 export function entryReturnType(signature: EntrySignature): string | undefined {
@@ -542,66 +522,28 @@ export function entryReturnType(signature: EntrySignature): string | undefined {
     : signature.returns;
 }
 
-/** An argument a program is compiled for that is not one of `main`'s parameters' kinds. */
+/** An argument a program is compiled for that is not one word. */
 export class EntryArgumentError extends TypeError {}
 
 /**
- * `main`'s arguments as the words a program is compiled for — the compiler's `args`, which compiles
- * `main(amount: Uint256)` given `[1000000n]` as if its body read `amount` as `1000000`: `main`
- * specialized on its arguments, which then takes none as it runs. How a wallet publishes the intents
- * a file opens from values known before anything runs, so they come out fixed.
- *
- * Each is one word, read from the value alone: an integer (a bigint, a safe integer, or its decimal
- * or `0x` digits), `0x` hex, or a `bool` (a boolean, `true` or `false`). A value that is none of them
- * stands as `0` here: the compiler holds each word to its parameter, and {@link checkEntryArguments}
- * holds each value to its declared type once the compile has reported it, naming the parameter.
- * Nothing about the source is read or changed.
+ * `main`'s arguments as the words a program is compiled for: the compiler's `args`, which compiles
+ * `main(amount: Uint256)` given `[1000000n]` as if its body read `amount` as `1000000`, so it takes
+ * none as it runs. Each is one word: an unsigned integer (a bigint, a safe integer, or its decimal
+ * digits), `0x` hex (an address, or its bytes), or a `bool`. The compiler holds each to its parameter
+ * (`ArgsCount`, `ArgNotWord`, `ArgOutOfRange`); anything else is refused here, naming its place.
  */
-export function entryArguments(values: readonly EntryValue[]): readonly string[] {
-  return values.map((value) => {
-    if (typeof value === "bigint" && value >= 0n) return value.toString();
+export function entryWords(values: readonly EntryValue[]): (bigint | boolean | string)[] {
+  return values.map((value, index) => {
+    if (typeof value === "bigint" || typeof value === "boolean") return value;
     if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
-      return String(value);
+      return BigInt(value);
     }
-    if (typeof value === "boolean") return value ? "1" : "0";
     if (typeof value === "string" && /^(?:\d+|0x[0-9a-fA-F]+)$/.test(value)) return value;
-    if (value === "true" || value === "false") return value === "true" ? "1" : "0";
-
-    return "0";
-  });
-}
-
-/**
- * `values`, the arguments a program was compiled for, held to `main`'s parameters as the compile
- * reports them: each value of its parameter's declared type, as `encodeEntryArguments` holds one.
- * The compiler has checked the count and that each fits its parameter's word. A define named like a
- * parameter is refused too: the argument is what the program reads.
- */
-export function checkEntryArguments(
-  signature: EntrySignature,
-  values: readonly EntryValue[],
-  defines: Readonly<Record<string, unknown>> = {},
-): void {
-  const taken = signature.params.find(({ name }) => Object.hasOwn(defines, name));
-  if (taken !== undefined) {
+    if (value instanceof Uint8Array) return bytesToHex(value);
     throw new EntryArgumentError(
-      `${taken.name} is main's parameter, given in args; it is not also a define`,
+      `args[${index}]: a program is compiled for words: an unsigned integer, an address or a bool, ` +
+        `not ${Array.isArray(value) ? "an array" : typeof value === "object" ? "a record" : JSON.stringify(value)}`,
     );
-  }
-  signature.params.forEach((param, index) => {
-    if (index >= values.length) return;
-    const at = `argument ${index + 1} (${param.name}: ${param.type})`;
-    let constant: ReturnType<typeof entryConstant>;
-    try {
-      constant = entryConstant(param.type, values[index]!, at);
-    } catch (error) {
-      throw new EntryArgumentError((error as Error).message);
-    }
-    if (constant === undefined) {
-      throw new EntryArgumentError(
-        `${at}: only one word binds as a constant: an unsigned integer, an address or a bool`,
-      );
-    }
   });
 }
 
