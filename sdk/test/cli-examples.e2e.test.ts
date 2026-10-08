@@ -33,6 +33,7 @@ import {
   encodeFunctionData,
   getAddress,
   hexToBytes,
+  isAddress,
   maxUint256,
   parseAbi,
   parseEther,
@@ -41,6 +42,8 @@ import {
   type Hex,
 } from "viem";
 
+import { shortAddress } from "../src/cli/effects.js";
+import { v12KitchenAddress } from "../src/deployments/index.js";
 import { v12PredictPot } from "../src/deployments/pot.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import { sqrtPriceX96FromPrice } from "../src/price.js";
@@ -89,13 +92,18 @@ const QUOTES = [...SKILL.matchAll(/^( *)```text\n([\s\S]*?)^\1```$/gm)].map(([, 
  * `first` is lines the run printed, in order and one after another, except where a line of the
  * quote is `…` alone, which stands for lines left out; a `…` within a line stands for anything. The
  * output is first written as the skill writes it: each of `roles` (an address, a path, a hash) as
- * the name the skill gives it, a block number as `<block>`, and what `main` returned as `<N bytes>`.
+ * the name the skill gives it, an address's short form (`0x6666…6666`, as the flow of what moved
+ * prints it) too, a block number as `<block>`, and what `main` returned as `<N bytes>`. The columns
+ * the flow pads are then a different width, so a run of spaces inside a line matches any other.
  */
 function expectQuoted(first: string, run: Run, roles: Record<string, string>): void {
   const quote = QUOTES.find((lines) => lines[0]!.startsWith(first));
   if (quote === undefined) throw new Error(`SKILL.md quotes no output starting "${first}"`);
   let text = run.stdout;
-  for (const [value, role] of Object.entries(roles)) text = text.replaceAll(value, role);
+  for (const [value, role] of Object.entries(roles)) {
+    text = text.replaceAll(value, role);
+    if (isAddress(value)) text = text.replaceAll(shortAddress(getAddress(value)), role);
+  }
   text = text
     .replace(/\bblock \d+/g, "block <block>")
     .replace(/returns 0x([0-9a-f]*)/g, (_, hex: string) => `returns <${hex.length / 2} bytes>`);
@@ -107,7 +115,10 @@ function expectQuoted(first: string, run: Run, roles: Record<string, string>): v
       skip = true;
       continue;
     }
-    const escaped = line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll("…", ".*");
+    const escaped = line
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replaceAll("…", ".*")
+      .replace(/(\S) {2,}/g, "$1 +");
     const pattern = new RegExp(`^${escaped}$`);
     const found = skip
       ? printed.findIndex((candidate, index) => index >= at && pattern.test(candidate))
@@ -172,6 +183,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
     [RECIPIENT]: "<recipient>",
     [PAYEE_A]: "<payee A>",
     [PAYEE_B]: "<payee B>",
+    [getAddress(v12KitchenAddress())]: "<Kitchen>",
     [BUY]: "buy.sauce.ts",
   });
   const fresh = async (): Promise<void> => {
