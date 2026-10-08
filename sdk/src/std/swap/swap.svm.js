@@ -19,14 +19,14 @@ import { balanceOf } from "@sauce/token";
 
 // Jupiter's aggregator: its `route` or `shared_accounts_route` instruction, its data cut where its
 // quoted output sits. The program's `minOut` goes there, at no slippage, so the aggregator refuses a
-// short fill before the program does. The route fixes the amount it swaps.
+// short fill before the program does. The route fixes the amount it swaps. A `minOut` past a u64 is
+// cut to its low 8 bytes there, and refused here: the output, a u64, never reaches it.
 export const jupiterSwap = (tokenIn, tokenOut, amountIn, minOut) => {
   const route = { swap: "jupiter", chainId, tokenIn, tokenOut, amountIn };
   const callee = globalIn(route, "__sauce_swap_callee");
   const output = globalIn(route, "__sauce_swap_output");
   const head = globalIn(route, "__sauce_swap_head");
   const tail = globalIn(route, "__sauce_swap_tail");
-  require(minOut < 18446744073709551616, "jupiterSwap: minOut is past a u64");
   const accounts = svm.remainingAccounts();
   const target = svm.remainingAccount(output);
   const before = balanceOf(tokenOut, target);
@@ -46,8 +46,9 @@ export const ecoSwap = (tokenIn, tokenOut, amountIn, minOut) => {
   const head = globalIn(route, "__sauce_swap_head");
   const middle = globalIn(route, "__sauce_swap_middle");
   const tail = globalIn(route, "__sauce_swap_tail");
-  require(amountIn < 18446744073709551616, "ecoSwap: amountIn is past a u64");
-  require(minOut < 18446744073709551616, "ecoSwap: minOut is past a u64");
+  // A token amount on Solana is a u64: a larger one would be cut to its low 8 bytes. A floor past
+  // one is no risk: the output, a u64, never reaches it, so the swap reverts below.
+  require(amountIn < 18446744073709551616, "ecoSwap: amountIn past a u64");
   const amount = amountIn.toBytesLe(8);
   const floor = minOut.toBytesLe(8);
   const data = globalIn(route, "__sauce_swap_amount_first")

@@ -25,9 +25,10 @@ import {
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
-import type { CommandOutput } from "./commands.js";
+import { parseSwapApi, type CommandOutput, type SwapApiUrls } from "./commands.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
+import { secret } from "./signer.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
 import { defaultWalletsDir } from "./wallets.js";
 
@@ -37,6 +38,11 @@ export interface McpServeOptions {
   readonly config?: string;
   /** The built-in public endpoints, started: a chain's when neither the call nor `--config` has one. */
   readonly publicRpcs?: PublicEndpoints;
+  /** Where `kyberSwap`/`ecoSwap` ask for routes: `--swap-api`, over the built-in public one
+   *  (KyberSwap's), which the `--config` file's `swapApis` override in turn. */
+  readonly swapApis?: SwapApiUrls;
+  /** The `--swap-api` URLs alone: over the `--config` file's. */
+  readonly swapApisGiven?: SwapApiUrls;
   /** `--http <port>`: Streamable HTTP on this port instead of stdio. */
   readonly http?: string;
   readonly host?: string;
@@ -107,6 +113,12 @@ export const MCP_FLAGS: FlagSpecs = {
     type: "boolean",
     help: "With --http: let a caller's rpcUrl be http: or a private address (a private deployment)",
   },
+  "swap-api": {
+    type: "string",
+    multiple: true,
+    value: "<kyber|eco|jupiter>=<url>",
+    help: "Where a swap asks for its route (KyberSwap's and Jupiter's public APIs by default)",
+  },
   wallets: {
     ...WALLETS.wallets!,
     help: "Over stdio: sign with the wallets in this directory (default ~/.sauce/wallets)",
@@ -144,6 +156,7 @@ async function loadMcp(): Promise<McpEntry> {
 }
 
 const SERVE_ONLY = [
+  "swap-api",
   "http",
   "host",
   "allowed-host",
@@ -163,6 +176,7 @@ export async function mcpCommand(
   io: {
     readonly stderr: (text: string) => void;
     readonly publicRpcs?: PublicEndpoints | undefined;
+    readonly swapApis?: SwapApiUrls | undefined;
   } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
@@ -190,11 +204,23 @@ export async function mcpCommand(
   const host = stringFlag(args, "host");
   const maxBody = stringFlag(args, "max-body");
   const wallets = await walletsOf(args, io, http !== undefined);
+  const swapApisGiven: { -readonly [K in keyof SwapApiUrls]: SwapApiUrls[K] } = {};
+  for (const entry of repeatedFlag(args, "swap-api")) {
+    const [provider, url] = parseSwapApi(entry);
+    // An eco-swap endpoint may be a private one: scrubbed from everything the server writes.
+    secret(url);
+    swapApisGiven[provider] = url;
+  }
   await (
     await loadMcp()
   ).serve({
     ...(config === undefined ? {} : { config }),
     ...(io.publicRpcs === undefined ? {} : { publicRpcs: io.publicRpcs }),
+    swapApis: {
+      ...(io.swapApis?.kyber === undefined ? {} : { kyber: io.swapApis.kyber }),
+      ...(io.swapApis?.jupiter === undefined ? {} : { jupiter: io.swapApis.jupiter }),
+    },
+    swapApisGiven,
     ...(http === undefined ? {} : { http }),
     ...(host === undefined ? {} : { host }),
     allowedHosts: repeatedFlag(args, "allowed-host"),

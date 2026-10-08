@@ -28,6 +28,8 @@ import {
   type CommandOutput,
   type CookInput,
   cookOf,
+  potOf,
+  withSwapRoutes,
   kitchenAddress,
   priceLimitNotes,
   revertedFirst,
@@ -216,7 +218,8 @@ export async function simulateCommand(
   return revertedFirst(await simulateEvm(input, files));
 }
 
-async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<CommandOutput> {
+async function simulateEvm(given: SimulateInput, files: CliFiles): Promise<CommandOutput> {
+  const input = await withSwapRoutes(given, files, potOf(given.target));
   const cook = cookOf(input, files);
   // Every read and the rehearsal itself on one block: what it saw is what it says it saw.
   const { client, block } = await connectAt(input.rpcUrl, input.chain, input.block);

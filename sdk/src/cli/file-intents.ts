@@ -16,7 +16,10 @@ import { connectAt, kitchenFee, potState } from "./chain.js";
 import {
   cookOf,
   kitchenAddress,
+  potOf,
+  refuseSwappingBodies,
   valueOf,
+  withSwapRoutes,
   type CliFiles,
   type CookInput,
   type ProgramInput,
@@ -57,8 +60,13 @@ export async function fileIntents(
   }
   const owner = access.owner ?? REHEARSAL_OWNER;
   const zero = `0x${"0".repeat(64)}` as Hex;
+  const target = { owner, salt: zero };
+  // A body's swap would be another route, so another intent, than the one published; the program's
+  // own swaps, which the rehearsal runs, are routed for its Pot.
+  refuseSwappingBodies(input, files);
+  const routed = await withSwapRoutes(input, files, potOf(target));
   const cook = cookOf(
-    { ...input, intents: { ...input.intents, fund: false }, target: { owner, salt: zero } },
+    { ...routed, intents: { ...routed.intents, fund: false }, target },
     files,
     true,
   );
