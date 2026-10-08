@@ -5,7 +5,8 @@
  * what the recipient received, what the paying account paid, the venue's own instruction as the
  * engine sent it, and the compute units the cook and the venue each used.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import {
   AccountRole,
@@ -17,7 +18,7 @@ import {
 } from "@solana/kit";
 import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
-import { Clock, FailedTransactionMetadata } from "litesvm";
+import { Clock, EpochSchedule, FailedTransactionMetadata } from "litesvm";
 
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
@@ -160,18 +161,36 @@ export const boot = async (
   dirs: readonly string[],
   programs: readonly [Address, string][],
   slot?: bigint,
+  epoch?: { epoch: bigint; start: bigint },
 ): Promise<EngineHarness> => {
   const harness = await startEngine(clock);
-  // A venue that checks its quote's slot against the Clock's runs at that slot.
+  // A venue that checks its quote's slot (or its stake pool's epoch) against the Clock's runs at
+  // that slot and epoch, the epochs mainnet's 432,000 slots long.
   if (slot !== undefined) {
     harness.svm.warpToSlot(slot);
-    harness.svm.setClock(new Clock(slot, 0n, 0n, 0n, clock));
+    harness.svm.setClock(
+      new Clock(slot, epoch?.start ?? 0n, epoch?.epoch ?? 0n, (epoch?.epoch ?? 0n) + 1n, clock),
+    );
+    if (epoch !== undefined)
+      harness.svm.setEpochSchedule(new EpochSchedule(432_000n, 432_000n, false, 0n, 0n));
   }
   const placed: Address[] = [];
   for (const dir of dirs) {
-    const fixtures = loadFixtures(new URL(dir, FIXTURES).pathname);
+    const path = new URL(dir, FIXTURES).pathname;
+    const fixtures = loadFixtures(path);
     loadFixtureAccounts(harness, fixtures);
     placed.push(...fixtures.map((fixture) => fixture.address as Address));
+    // An account whose fixture records its real lamports (a venue's native-SOL vault) holds them.
+    for (const name of readdirSync(path).filter((file) => file.endsWith(".json"))) {
+      const fixture = JSON.parse(readFileSync(join(path, name), "utf8")) as {
+        address: Address;
+        lamports?: string;
+      };
+      if (fixture.lamports === undefined) continue;
+      const account = harness.svm.getAccount(fixture.address);
+      if (account.exists)
+        harness.svm.setAccount({ ...account, lamports: lamports(BigInt(fixture.lamports)) });
+    }
   }
   // A wrapped-SOL account holds its amount in lamports too, which a fixture loaded at the rent
   // minimum lacks: an account paying wrapped SOL out of it would fall below rent.
@@ -359,7 +378,9 @@ export const cook = async (
             : at === "authority"
               ? harness.pot
               : at;
-      named[`a${i}`] = { address, role: account.writable === true ? w : r };
+      const writable =
+        account.writable === true || (at === "authority" && trade.authorityWritable === true);
+      named[`a${i}`] = { address, role: writable ? w : r };
     });
   }
   const tail = program.manifest!.accounts.map((entry) => {

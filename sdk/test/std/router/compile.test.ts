@@ -79,7 +79,20 @@ import {
   FLINT_PROGRAM_ID,
   GAVEL_PROGRAM_ID,
   GOONFI_V2_PROGRAM_ID,
+  CARROT_PROGRAM_ID,
+  MSWAP_PROGRAM_ID,
+  PERPS_JLP_PROGRAM_ID,
+  SANCTUM_INFINITY_PROGRAM_ID,
   HADRON_PROGRAM_ID,
+  HELIUM_TREASURY_PROGRAM_ID,
+  HUMA_PROGRAM_ID,
+  HYLO_PROGRAM_ID,
+  HYLO_STABILITY_POOL_PROGRAM_ID,
+  JUPITER_LEND_EARN_PROGRAM_ID,
+  SOLAYER_PROGRAM_ID,
+  VOLTR_PROGRAM_ID,
+  XORCA_PROGRAM_ID,
+  vaultLiquidUnstake,
   HEAVEN_PROGRAM_ID,
   METEORA_DBC_PROGRAM_ID,
   RAYDIUM_LAUNCHLAB_PROGRAM_ID,
@@ -611,12 +624,27 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
     raydiumLaunchlab: RAYDIUM_LAUNCHLAB_PROGRAM_ID,
     runnerRodeo: RUNNER_RODEO_PROGRAM_ID,
     scaleVmm: SCALE_VMM_PROGRAM_ID,
+    xorca: XORCA_PROGRAM_ID,
+    solayer: SOLAYER_PROGRAM_ID,
+    voltr: VOLTR_PROGRAM_ID,
+    vaultLiquidUnstake: vaultLiquidUnstake.programId,
+    hyloStabilityPool: HYLO_STABILITY_POOL_PROGRAM_ID,
+    huma: HUMA_PROGRAM_ID,
+    heliumTreasury: HELIUM_TREASURY_PROGRAM_ID,
+    jupiterLendEarn: JUPITER_LEND_EARN_PROGRAM_ID,
+    hylo: HYLO_PROGRAM_ID,
+    carrot: CARROT_PROGRAM_ID,
+    mswap: MSWAP_PROGRAM_ID,
+    perpsJlp: PERPS_JLP_PROGRAM_ID,
+    perpsJlpMint: PERPS_JLP_PROGRAM_ID,
+    sanctumInfinity: SANCTUM_INFINITY_PROGRAM_ID,
   };
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
   const carries = (code: string) =>
     Object.entries(IDS).map(([venue, id]) => ({ venue, carried: count(code, key(id)) > 0 }));
+  // A venue's own program's id, which Jupiter Perpetuals' swap and its JLP mint share.
   const only = (base: string) =>
-    Object.keys(IDS).map((venue) => ({ venue, carried: venue === base }));
+    Object.entries(IDS).map(([venue, id]) => ({ venue, carried: id === IDS[base] }));
 
   it("names a program for every exact-input venue", () => {
     expect(Object.keys(IDS).sort()).toEqual([...Object.keys(SVM_EXACT_IN), ...SVM_CPI_ONLY].sort());
@@ -822,6 +850,14 @@ describe("@sauce/router (SVM): the reasons the exact-input functions revert with
         : svmExactInProgramCalling(name, SVM_EXACT_IN.deriverse!);
       const code = hex(compileStdRouter(source, "svm").bytecode);
       expect(code).toContain(Buffer.from("instrId past 32 bits").toString("hex"));
+    },
+  );
+
+  it.each(["sanctumInfinityCpi", "sanctumInfinityData"])(
+    "%s refuses a calculator's account count past its byte or a token's index past 32 bits",
+    (name) => {
+      const code = hex(compileStdRouter(svmProgramCalling(name, 3), "svm").bytecode);
+      expect(code).toContain(Buffer.from("index past its field").toString("hex"));
     },
   );
 

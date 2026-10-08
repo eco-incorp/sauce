@@ -44,9 +44,14 @@ export interface RouterSvmDataOptions {
    *  orders it may match. */
   readonly priceLots?: bigint;
   readonly orders?: bigint;
-  /** Perena: the indices among the pool's tokens of the one paid and the one bought, a byte each. */
+  /** Perena: the indices among the pool's tokens of the one paid and the one bought, a byte each;
+   *  Sanctum Infinity: the paid and the bought token's indices in its LST list, 32 bits each. */
   readonly inIndex?: bigint;
   readonly outIndex?: bigint;
+  /** Sanctum Infinity: how many accounts the paid and the bought token's calculator takes, a byte
+   *  each: 1 for wrapped SOL's, 5 for a stake pool's. */
+  readonly inCalcAccounts?: bigint;
+  readonly outCalcAccounts?: bigint;
   /** Deriverse: the instrument's id, 32 bits. */
   readonly instrId?: bigint;
 }
@@ -112,12 +117,15 @@ const NEVER_BUYING_X = `${"ff".repeat(16)}00`;
 /** Hadron's deadline, one that never passes: i64's most. */
 const NEVER = "ffffffffffffff7f";
 
+/** A field past the amount and the floor an exact-input venue's data carries. */
+type ExactInField = "inIndex" | "outIndex" | "instrId" | "inCalcAccounts" | "outCalcAccounts";
+
 /** What an exact-input venue's `data` writes from: the direction, the floor's eight bytes in hex,
  *  and a further field of `width` bytes, checked. */
 interface ExactInFields {
   readonly aToB: boolean;
   readonly floor: string;
-  readonly field: (name: "inIndex" | "outIndex" | "instrId", width: number) => string;
+  readonly field: (name: ExactInField, width: number) => string;
 }
 
 /** An exact-input venue's data, as `<venue>Data` writes it. */
@@ -216,6 +224,51 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
   },
   "runner-rodeo": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
   "scale-vmm": { takes: ["minOut"], data: ({ aToB, floor }) => [aToB ? BUY : SELL, floor] },
+  xorca: { takes: [], oneWay: "xORCA only stakes", data: () => ["00", ""] },
+  solayer: { takes: [], data: ({ aToB }) => [aToB ? "fe00de2891766e14" : "d511d75105727c4e", ""] },
+  voltr: {
+    takes: [],
+    data: ({ aToB }) => (aToB ? ["7ee015ffe4357521", ""] : ["dd3873a880dcebf5", "0100"]),
+  },
+  "vault-liquid-unstake": {
+    takes: [],
+    oneWay: "the liquid-unstake vault only unstakes",
+    data: () => ["64034fd1bf9db40b", "00"],
+  },
+  "hylo-stability-pool": {
+    takes: [],
+    data: ({ aToB }) => [aToB ? "bac68ce981276299" : "35fe1af277ed4921", "00"],
+  },
+  huma: {
+    takes: [],
+    oneWay: "Huma only deposits here",
+    data: () => ["f223c68952e1f2b6", "0d0000004e4f5f434f4d4d49544d454e5400"],
+  },
+  "helium-treasury": {
+    takes: ["minOut"],
+    oneWay: "Helium's treasury only redeems",
+    data: ({ floor }) => ["eb7fab8b774deb76", floor],
+  },
+  "jupiter-lend-earn": {
+    takes: [],
+    data: ({ aToB }) => [aToB ? "f223c68952e1f2b6" : "b80c569546c461e1", ""],
+  },
+  hylo: { takes: [], data: ({ aToB }) => [aToB ? "0e0ea31ae0b69f9b" : "aaed62683c5248a1", "00"] },
+  carrot: { takes: [], data: ({ aToB }) => [aToB ? "be0162d65163def7" : "b80c569546c461e1", ""] },
+  mswap: { takes: [], data: () => [SWAP, "00"] },
+  "perps-jlp": { takes: ["minOut"], data: ({ floor }) => ["414b3f4ceb5b5b88", floor] },
+  "perps-jlp-mint": {
+    takes: ["minOut"],
+    oneWay: "Jupiter Perpetuals' JLP pool only mints here",
+    data: ({ floor }) => ["e4a24e1c46db7473", `${floor}00`],
+  },
+  "sanctum-infinity": {
+    takes: ["inCalcAccounts", "outCalcAccounts", "inIndex", "outIndex", "minOut"],
+    data: ({ field, floor }) => [
+      `17${field("inCalcAccounts", 1)}${field("outCalcAccounts", 1)}${field("inIndex", 4)}${field("outIndex", 4)}${floor}`,
+      "",
+    ],
+  },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>
@@ -232,7 +285,7 @@ const exactInTemplate = (
       throw new Error(`${venue}'s swap takes no ${name}`);
   if (oneWay !== undefined && !options.aToB) throw new Error(oneWay);
   const minOut = within(venue, "minOut", options.minOut ?? 0n, U64, "64 bits");
-  const field = (name: "inIndex" | "outIndex" | "instrId", width: number): string => {
+  const field = (name: ExactInField, width: number): string => {
     const value = options[name];
     if (value === undefined) throw new Error(`${venue}'s swap takes its ${name}`);
     const max = (1n << BigInt(8 * width)) - 1n;

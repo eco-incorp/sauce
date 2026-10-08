@@ -321,6 +321,13 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   trends: 7,
   heaven: 10,
   virtuals: 6,
+  xorca: 4,
+  solayer: 5,
+  voltr: 8,
+  vaultLiquidUnstake: 9,
+  hyloStabilityPool: 10,
+  huma: 8,
+  heliumTreasury: 6,
 };
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form
@@ -335,6 +342,13 @@ export const SVM_CPI_ONLY = [
   "raydiumLaunchlab",
   "runnerRodeo",
   "scaleVmm",
+  "jupiterLendEarn",
+  "hylo",
+  "carrot",
+  "mswap",
+  "perpsJlp",
+  "perpsJlpMint",
+  "sanctumInfinity",
 ] as const;
 
 const capitalized = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
@@ -401,6 +415,17 @@ export const SVM_EXACT_IN_ARGUMENTS: Readonly<Record<string, readonly string[]>>
   heaven: ["minOut", "aToB"],
   raydiumLaunchlab: ["minOut", "paysBase"],
   scaleVmm: ["minOut", "aToB"],
+  xorca: [],
+  solayer: ["aToB"],
+  voltr: ["aToB"],
+  vaultLiquidUnstake: [],
+  hyloStabilityPool: ["aToB"],
+  huma: [],
+  jupiterLendEarn: ["aToB"],
+  hylo: ["aToB"],
+  carrot: ["aToB"],
+  mswap: [],
+  sanctumInfinity: ["inCalcAccounts", "outCalcAccounts", "inIndex", "outIndex", "minOut"],
 };
 
 /** An exact-input venue's `…Cpi` or `…Data` arguments, `amountIn` first; undefined for any other

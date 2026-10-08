@@ -326,12 +326,16 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
 `orcaV1`, `penguin`, `stepn`, `saros`, `fluxbeam`, `dexlab`, `meteoraDammV2`, `meteoraDammV1`,
 `aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
 `mercurial`, `perena`, `metadaoFutarchy`, `solfiV2`, `hadron`, `taurusfi`, `riptide`, `denali`,
-`gavel`, `tesserav`, `flint`, `deriverse`, `goonfiV2`, `meteoraDbc`, `trends`, `heaven` and
-`virtuals`.
+`gavel`, `tesserav`, `flint`, `deriverse`, `goonfiV2`, `meteoraDbc`, `trends`, `heaven`, `virtuals`,
+`xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma` and `heliumTreasury`.
 
 `solfiV2` through `goonfiV2` are market makers pricing off their own oracle, quote or book, and
 refuse a swap on a quote gone stale, which a `try` form can't see. `meteoraDbc` through `virtuals`
-are bonding curves; Virtuals only sells its token.
+are bonding curves; Virtuals only sells its token. `xorca` through `heliumTreasury` stake, deposit,
+unstake or redeem at the venue's own rate; xORCA only stakes, the liquid-unstake vault only
+unstakes, Huma only deposits and Helium's treasury only redeems. A venue settled in native SOL on
+the authority (pump.fun's bonding curve, Boop, Moonit, the Sanctum stake pools) is not served, since
+a Pot holds no native SOL it can pay out.
 
 - **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:
   `svm.call(program, [accounts…], raydiumCpSwapData(amountIn, minOut))`. It is the cheapest form.
@@ -358,12 +362,16 @@ Measured on the released engine, a venue's `Data` form costs about 3,300 compute
 its data written by hand, its `Cpi` form about 7,500 more, and the slot forms about 1,400 more for
 each account they read out of `slot` or `trader`.
 
-A function cannot list more than sixteen accounts. `scaleAmm`, `pumpswap`, `bonkswap`,
-`guacswap`, `meteoraDlmm`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo` and `scaleVmm` swap with
-more, so they have only their `Cpi` and `Data` forms: `scaleAmmCpi`, `pumpswapCpi`, `bonkswapCpi`,
-`guacswapCpi`, `meteoraDlmmCpi`, `sarosDlmmCpi`, `raydiumLaunchlabCpi`, `runnerRodeoCpi`,
-`scaleVmmCpi`, `scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `meteoraDlmmData`,
-`sarosDlmmData`, `raydiumLaunchlabData`, `runnerRodeoData` and `scaleVmmData`.
+A function cannot list more than sixteen accounts. `scaleAmm`, `pumpswap`, `bonkswap`, `guacswap`,
+`meteoraDlmm`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo`, `scaleVmm`, `jupiterLendEarn`,
+`hylo`, `carrot`, `mswap`, `perpsJlp` and `sanctumInfinity`, and Jupiter Perpetuals' JLP mint, swap
+with more, so they have only their `Cpi` and `Data` forms: `scaleAmmCpi`, `pumpswapCpi`,
+`bonkswapCpi`, `guacswapCpi`, `meteoraDlmmCpi`, `sarosDlmmCpi`, `raydiumLaunchlabCpi`,
+`runnerRodeoCpi`, `scaleVmmCpi`, `jupiterLendEarnCpi`, `hyloCpi`, `carrotCpi`, `mswapCpi`,
+`perpsJlpCpi`, `perpsJlpMintCpi`, `sanctumInfinityCpi`, `scaleAmmData`, `pumpswapData`,
+`bonkswapData`, `guacswapData`, `meteoraDlmmData`, `sarosDlmmData`, `raydiumLaunchlabData`,
+`runnerRodeoData`, `scaleVmmData`, `jupiterLendEarnData`, `hyloData`, `carrotData`, `mswapData`,
+`perpsJlpData`, `perpsJlpMintData` and `sanctumInfinityData`.
 
 ## Example
 
