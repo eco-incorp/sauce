@@ -3,5 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "description": "SauceScript's oracle requests: a program asks a Chainlink CRE workflow for an off-chain result, and its `.then` runs on the same Private Pot when the workflow's report arrives through Chainlink's KeystoneForwarder. `Oracle.cre({ owner, args })` logs the request and parks the body under a key bound to the workflow's owner; `onReport` is the handler a report lands on. Built on `@sauce/async`. `main` names the NEUTRAL BASE the compiler suffixes per target (oracle.evm.js); there is no SVM arm, because the handlers a report lands on are a Private Pot's Router's.",
-  "main": "oracle.js"
+  "main": "oracle.js",
+  "handlers": [
+    {
+      "selector": "onReport(bytes,bytes)",
+      "program": "report.handler.js",
+      "readOnly": false
+    }
+  ]
 }
