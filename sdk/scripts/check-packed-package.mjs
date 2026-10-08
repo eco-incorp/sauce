@@ -298,7 +298,7 @@ try {
     const owner = '0x3333333333333333333333333333333333333333' as const;
     const built = Base.hop({
       source: Ethereum,
-      reward: { token: Ethereum.USDC.address, amount: 1n },
+      send: { token: Ethereum.USDC.address, amount: 1n },
       refundee: owner,
       fee: 0n,
     }).then(() => {
