@@ -19,7 +19,8 @@
  * and role for role, against the instructions eco-incorp/sauce-recipes builds for the same pools.
  */
 
-/** The venues `@sauce/router`'s Solana arm swaps at a limit, by the recipes' venue names. */
+/** The venues `@sauce/router`'s Solana arm swaps, by the recipes' venue names: at a limit, then an
+ *  exact input. */
 export const ROUTER_SVM_VENUES = {
   "raydium-clmm": {
     program: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
@@ -81,6 +82,147 @@ export const ROUTER_SVM_VENUES = {
     data: "openbookV2Data",
     cpi: "openbookV2Cpi",
   },
+  // The venues it swaps an exact input at, with no limit (`router.svm.js`'s EXACT INPUT section).
+  "raydium-cp-swap": {
+    program: "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+    data: "raydiumCpSwapData",
+    cpi: "raydiumCpSwapCpi",
+  },
+  gamma: {
+    program: "GAMMA7meSFWaBXF25oSUgmGRwaW6sCMFLmBNiMSdbHVT",
+    data: "gammaData",
+    cpi: "gammaCpi",
+  },
+  "raydium-amm-v4": {
+    program: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+    data: "raydiumAmmV4Data",
+    cpi: "raydiumAmmV4Cpi",
+  },
+  "orca-legacy-token-swap": {
+    program: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+    data: "orcaLegacyTokenSwapData",
+    cpi: "orcaLegacyTokenSwapCpi",
+  },
+  "orca-legacy-token-swap-stable": {
+    program: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+    data: "orcaLegacyTokenSwapData",
+    cpi: "orcaLegacyTokenSwapCpi",
+  },
+  "token-swap-v1": {
+    program: "SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8",
+    data: "tokenSwapV1Data",
+    cpi: "tokenSwapV1Cpi",
+  },
+  "orca-v1": {
+    program: "DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1",
+    data: "orcaV1Data",
+    cpi: "orcaV1Cpi",
+  },
+  penguin: {
+    program: "PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP",
+    data: "penguinData",
+    cpi: "penguinCpi",
+  },
+  stepn: {
+    program: "Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j",
+    data: "stepnData",
+    cpi: "stepnCpi",
+  },
+  saros: {
+    program: "SSwapUtytfBdBn1b9NUGG6foMVPtcWgpRU32HToDUZr",
+    data: "sarosData",
+    cpi: "sarosCpi",
+  },
+  fluxbeam: {
+    program: "FLUXubRmkEi2q6K3Y9kBPg9248ggaZVsoSFhtJHSrm1X",
+    data: "fluxbeamData",
+    cpi: "fluxbeamCpi",
+  },
+  dexlab: {
+    program: "DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N",
+    data: "dexlabData",
+    cpi: "dexlabCpi",
+  },
+  "meteora-damm-v2": {
+    program: "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+    data: "meteoraDammV2Data",
+    cpi: "meteoraDammV2Cpi",
+  },
+  "meteora-damm-v1-cp": {
+    program: "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
+    data: "meteoraDammV1Data",
+    cpi: "meteoraDammV1Cpi",
+  },
+  "meteora-damm-v1-stable": {
+    program: "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
+    data: "meteoraDammV1Data",
+    cpi: "meteoraDammV1Cpi",
+  },
+  aldrin: {
+    program: "AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6",
+    data: "aldrinData",
+    cpi: "aldrinCpi",
+  },
+  omnipair: {
+    program: "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE",
+    data: "omnipairData",
+    cpi: "omnipairCpi",
+  },
+  "saber-stableswap": {
+    program: "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ",
+    data: "saberData",
+    cpi: "saberCpi",
+  },
+  "saber-decimals-wrapper": {
+    program: "DecZY86MU5Gj7kppfUCEmd4LbXXuyZH1yHaP2NTqdiZB",
+    data: "saberDecimalsWrapperData",
+    cpi: "saberDecimalsWrapperCpi",
+  },
+  "stabble-stable-swap": {
+    program: "swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ",
+    data: "stabbleStableSwapData",
+    cpi: "stabbleStableSwapCpi",
+  },
+  "stabble-weighted-swap": {
+    program: "swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW",
+    data: "stabbleWeightedSwapData",
+    cpi: "stabbleWeightedSwapCpi",
+  },
+  mercurial: {
+    program: "MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky",
+    data: "mercurialData",
+    cpi: "mercurialCpi",
+  },
+  perena: {
+    program: "NUMERUNsFCP3kuNmWZuXtm1AaQCPj9uw6Guv2Ekoi5P",
+    data: "perenaData",
+    cpi: "perenaCpi",
+  },
+  "metadao-futarchy": {
+    program: "FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq",
+    data: "metadaoFutarchyData",
+    cpi: "metadaoFutarchyCpi",
+  },
+  "scale-amm": {
+    program: "SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA",
+    data: "scaleAmmData",
+    cpi: "scaleAmmCpi",
+  },
+  pumpswap: {
+    program: "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
+    data: "pumpswapData",
+    cpi: "pumpswapCpi",
+  },
+  bonkswap: {
+    program: "BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p",
+    data: "bonkswapData",
+    cpi: "bonkswapCpi",
+  },
+  guacswap: {
+    program: "Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1",
+    data: "guacswapData",
+    cpi: "guacswapCpi",
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -121,6 +263,11 @@ export interface RouterSvmAccountOptions {
    * take fewer; the others take 3, the same array again where the walk needs fewer.
    */
   readonly tickArrays?: 1 | 2 | 3;
+  /** PumpSwap: the pool has a coin creator, so its swap takes the pool's v2 account. */
+  readonly poolV2?: boolean;
+  /** Scale AMM: how many fee beneficiaries the pool pays, each a token account at the end; 1 when
+   *  absent. */
+  readonly beneficiaries?: number;
 }
 
 const r = (name: string): RouterSvmAccountRole => ({ name, writable: false, signer: false });
@@ -144,6 +291,13 @@ export function routerSvmAccountOrder(
   venue: RouterSvmVenue,
   options: RouterSvmAccountOptions,
 ): RouterSvmAccountRole[] {
+  if (options.poolV2 !== undefined && venue !== "pumpswap") {
+    throw new Error(`poolV2 is PumpSwap's alone, not ${venue}'s`);
+  }
+  if (options.beneficiaries !== undefined && venue !== "scale-amm") {
+    throw new Error(`beneficiaries is Scale AMM's alone, not ${venue}'s`);
+  }
+  if (isExactInVenue(venue)) return exactInAccountOrder(venue, options);
   const { aToB } = options;
   const count = options.tickArrays ?? 3;
   if (!Number.isInteger(count) || count < 1 || count > 3) {
@@ -326,6 +480,326 @@ export function routerSvmAccountOrder(
     default: {
       const unknown: never = venue;
       throw new Error(`not a venue @sauce/router swaps at a limit: ${String(unknown)}`);
+    }
+  }
+}
+
+/** The venues swapped at an exact input with no limit. */
+const EXACT_IN_VENUES = [
+  "raydium-cp-swap",
+  "gamma",
+  "raydium-amm-v4",
+  "orca-legacy-token-swap",
+  "orca-legacy-token-swap-stable",
+  "token-swap-v1",
+  "orca-v1",
+  "penguin",
+  "stepn",
+  "saros",
+  "fluxbeam",
+  "dexlab",
+  "meteora-damm-v2",
+  "meteora-damm-v1-cp",
+  "meteora-damm-v1-stable",
+  "aldrin",
+  "omnipair",
+  "saber-stableswap",
+  "saber-decimals-wrapper",
+  "stabble-stable-swap",
+  "stabble-weighted-swap",
+  "mercurial",
+  "perena",
+  "metadao-futarchy",
+  "scale-amm",
+  "pumpswap",
+  "bonkswap",
+  "guacswap",
+] as const satisfies readonly RouterSvmVenue[];
+type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
+const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
+  (EXACT_IN_VENUES as readonly string[]).includes(venue);
+
+/**
+ * An exact-input venue's swap accounts. `aToB` pays the pool's first token: token 0 or A, X, the
+ * base token (Aldrin, MetaDAO, PumpSwap), the underlying token (the Saber decimal wrapper).
+ */
+function exactInAccountOrder(
+  venue: ExactInVenue,
+  options: RouterSvmAccountOptions,
+): RouterSvmAccountRole[] {
+  const { aToB } = options;
+  const [ownerA, ownerB] = owners(aToB);
+  const paid = (a: string, b: string): RouterSvmAccountRole[] =>
+    aToB ? [w(a), w(b)] : [w(b), w(a)];
+  const read = (a: string, b: string): RouterSvmAccountRole[] =>
+    aToB ? [r(a), r(b)] : [r(b), r(a)];
+  switch (venue) {
+    case "raydium-cp-swap":
+    case "gamma":
+      return [
+        AUTHORITY,
+        r("poolAuthority"),
+        r("ammConfig"),
+        w("pool"),
+        w("source"),
+        w("recipient"),
+        ...paid("vaultA", "vaultB"),
+        ...read("tokenProgramA", "tokenProgramB"),
+        ...read("mintA", "mintB"),
+        w("observation"),
+      ];
+    case "raydium-amm-v4":
+      return [
+        r("tokenProgram"),
+        w("pool"),
+        r("poolAuthority"),
+        w("vaultA"),
+        w("vaultB"),
+        w("source"),
+        w("recipient"),
+        AUTHORITY,
+      ];
+    case "orca-legacy-token-swap":
+    case "orca-legacy-token-swap-stable":
+    case "token-swap-v1":
+    case "orca-v1":
+    case "penguin":
+    case "stepn":
+    case "saros":
+    case "fluxbeam":
+    case "dexlab": {
+      const accounts = [
+        r("pool"),
+        r("poolAuthority"),
+        AUTHORITY,
+        w("source"),
+        ...paid("vaultA", "vaultB"),
+        w("recipient"),
+        w("poolMint"),
+        w("poolFeeAccount"),
+      ];
+      // The Token-2022 build names both mints and three token programs: each side's, the pool mint's.
+      return venue === "fluxbeam" || venue === "dexlab"
+        ? [
+            ...accounts,
+            ...read("mintA", "mintB"),
+            ...read("tokenProgramA", "tokenProgramB"),
+            r("poolTokenProgram"),
+          ]
+        : [...accounts, r("tokenProgram")];
+    }
+    case "meteora-damm-v2":
+      return [
+        r("poolAuthority"),
+        w("pool"),
+        w("source"),
+        w("recipient"),
+        w("vaultA"),
+        w("vaultB"),
+        r("mintA"),
+        r("mintB"),
+        AUTHORITY,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("program"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "meteora-damm-v1-cp":
+    case "meteora-damm-v1-stable":
+      return [
+        w("pool"),
+        w("source"),
+        w("recipient"),
+        w("vaultA"),
+        w("vaultB"),
+        w("tokenVaultA"),
+        w("tokenVaultB"),
+        w("lpMintA"),
+        w("lpMintB"),
+        w("vaultLpA"),
+        w("vaultLpB"),
+        w(aToB ? "protocolFeeA" : "protocolFeeB"),
+        AUTHORITY,
+        r("vaultProgram"),
+        r("tokenProgram"),
+      ];
+    case "aldrin":
+      return [
+        r("pool"),
+        r("poolSigner"),
+        w("poolMint"),
+        w("vaultA"),
+        w("vaultB"),
+        w("feeAccount"),
+        AUTHORITY,
+        ownerA,
+        ownerB,
+        r("tokenProgram"),
+      ];
+    case "omnipair":
+      return [
+        w("pool"),
+        w("rateModel"),
+        r("futarchyAuthority"),
+        ...paid("vaultA", "vaultB"),
+        w("source"),
+        w("recipient"),
+        ...read("mintA", "mintB"),
+        AUTHORITY,
+        r("tokenProgram"),
+        r("token2022"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "saber-stableswap":
+      return [
+        r("pool"),
+        r("poolAuthority"),
+        AUTHORITY,
+        w("source"),
+        ...paid("vaultA", "vaultB"),
+        w("recipient"),
+        w(aToB ? "adminFeeB" : "adminFeeA"),
+        r("tokenProgram"),
+      ];
+    case "saber-decimals-wrapper":
+      return [
+        r("pool"),
+        w("wrapperMint"),
+        w("underlyingVault"),
+        AUTHORITY,
+        ownerA,
+        ownerB,
+        r("tokenProgram"),
+      ];
+    case "stabble-stable-swap":
+    case "stabble-weighted-swap":
+      return [
+        AUTHORITY,
+        w("source"),
+        w("recipient"),
+        ...paid("vaultA", "vaultB"),
+        w(aToB ? "beneficiaryB" : "beneficiaryA"),
+        w("pool"),
+        r("withdrawAuthority"),
+        r("vault"),
+        r("vaultAuthority"),
+        r("vaultProgram"),
+        r("tokenProgram"),
+      ];
+    case "mercurial":
+      return [
+        w("pool"),
+        r("tokenProgram"),
+        r("poolAuthority"),
+        AUTHORITY,
+        w("vaultA"),
+        w("vaultB"),
+        w("source"),
+        w("recipient"),
+      ];
+    case "perena":
+      return [
+        w("pool"),
+        ...paid("mintA", "mintB"),
+        w("source"),
+        w("recipient"),
+        ...paid("vaultA", "vaultB"),
+        r("numeraireConfig"),
+        AUTHORITY,
+        r("tokenProgram"),
+        r("token2022"),
+      ];
+    case "metadao-futarchy":
+      return [
+        w("pool"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        AUTHORITY,
+        r("tokenProgram"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "scale-amm": {
+      const count = options.beneficiaries ?? 1;
+      if (!Number.isInteger(count) || count < 0) {
+        throw new Error(`beneficiaries is a count, not ${count}`);
+      }
+      return [
+        w("pool"),
+        PAYER,
+        r("poolOwner"),
+        r("mintA"),
+        r("mintB"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        w("platformFeeA"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("systemProgram"),
+        r("platformConfig"),
+        ...Array.from({ length: count }, (_, i) => w(`beneficiary${i}`)),
+      ];
+    }
+    case "pumpswap":
+      return [
+        w("pool"),
+        PAYER,
+        r("globalConfig"),
+        r("mintA"),
+        r("mintB"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        r("protocolFeeRecipient"),
+        w("protocolFeeRecipientTokenAccount"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("systemProgram"),
+        r("associatedTokenProgram"),
+        r("eventAuthority"),
+        r("program"),
+        w("coinCreatorVault"),
+        r("coinCreatorVaultAuthority"),
+        // A buy tracks the authority's volume, which a sell does not.
+        ...(aToB ? [] : [r("globalVolumeAccumulator"), w("userVolumeAccumulator")]),
+        r("feeConfig"),
+        r("feeProgram"),
+        ...(options.poolV2 === true ? [r("poolV2")] : []),
+        r("buybackFeeRecipient"),
+        w("buybackFeeRecipientTokenAccount"),
+      ];
+    case "bonkswap":
+    case "guacswap":
+      // The authority again as the referrer: the same three accounts, the authority not signing.
+      return [
+        r("state"),
+        w("pool"),
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        PAYER,
+        ownerA,
+        ownerB,
+        { name: "authority", writable: true, signer: false },
+        r("programAuthority"),
+        r("systemProgram"),
+        r("tokenProgram"),
+        r("associatedTokenProgram"),
+        r("rent"),
+      ];
+    default: {
+      const unknown: never = venue;
+      throw new Error(`not a venue @sauce/router swaps at an exact input: ${String(unknown)}`);
     }
   }
 }

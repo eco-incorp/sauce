@@ -175,8 +175,11 @@ describe("routerSvmAccounts: the recipes' own account order", () => {
     );
   });
 
+  // The exact-input venues are `router-accounts-exact-in.test.ts`'s.
   it("covers every venue the fixture carries", () => {
-    expect(new Set(TEMPLATES.map((t) => t.venue))).toEqual(new Set(Object.keys(ROUTER_SVM_VENUES)));
+    expect(new Set(TEMPLATES.map((t) => t.venue))).toEqual(
+      new Set(Object.keys(ROUTER_SVM_VENUES).filter((venue) => venue in FAMILY)),
+    );
   });
 
   it.each(TEMPLATES.map((t) => [`${t.pool} ${t.direction} ${t.builder}`, t] as const))(

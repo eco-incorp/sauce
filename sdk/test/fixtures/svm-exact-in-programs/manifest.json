@@ -1,0 +1,179 @@
+{
+  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07: the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
+  "programs": [
+    {
+      "name": "raydium-cp-swap",
+      "programId": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+      "file": "raydium-cp-swap.so.gz",
+      "sha256": "b6dbea8cefc2e7d490775ce6115e34a2ba480c0853c359e0bb4043b9381ef09a"
+    },
+    {
+      "name": "raydium-amm-v4",
+      "programId": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+      "file": "raydium-amm-v4.so.gz",
+      "sha256": "3bcf0828cf38e5f703adbf31dc1bf81f0a1254dcb176ca950ae52231c20e6d14"
+    },
+    {
+      "name": "gamma",
+      "programId": "GAMMA7meSFWaBXF25oSUgmGRwaW6sCMFLmBNiMSdbHVT",
+      "file": "gamma.so.gz",
+      "sha256": "e9a477e3b533ab7d3fe1099afc7498cd055e5ad94afb922374e634d27f75d1e0"
+    },
+    {
+      "name": "orca-legacy-token-swap",
+      "programId": "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+      "file": "orca-legacy-token-swap.so.gz",
+      "sha256": "930a47e23fe7f8185557c1b5acabf658f97ca0f4c6cdd1f0d0510a897a9322e6"
+    },
+    {
+      "name": "token-swap-v1",
+      "programId": "SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8",
+      "file": "token-swap-v1.so.gz",
+      "sha256": "f86b866c8717f4a052bd61b36bfd1dee203d32673a0bb5cb1fbd8b99f8e65719"
+    },
+    {
+      "name": "orca-v1",
+      "programId": "DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1",
+      "file": "orca-v1.so.gz",
+      "sha256": "4f316b5d1eb435105dc8166e77e9dc44569e9a30ed0d8ec8636f6a14e74b2739"
+    },
+    {
+      "name": "penguin",
+      "programId": "PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP",
+      "file": "penguin.so.gz",
+      "sha256": "93622e51c0582563f50e4e16e9912c3768026fc51c9f741ae2b791dbc33614f6"
+    },
+    {
+      "name": "stepn",
+      "programId": "Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j",
+      "file": "stepn.so.gz",
+      "sha256": "bd4b1920d38a9563b271fbb76a360f8dcc592130af99ecd2e16ceef3e3314b96"
+    },
+    {
+      "name": "saros",
+      "programId": "SSwapUtytfBdBn1b9NUGG6foMVPtcWgpRU32HToDUZr",
+      "file": "saros.so.gz",
+      "sha256": "ab4b070bdb09c47a310f5bbbcec93444c3f3c1bb720096497dd2ff0694e641bd"
+    },
+    {
+      "name": "dexlab",
+      "programId": "DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N",
+      "file": "dexlab.so.gz",
+      "sha256": "a5c7ba060b2b50ed4b3ad9cb049f877178f9be1a2808e3010e5dd0188349f428"
+    },
+    {
+      "name": "fluxbeam",
+      "programId": "FLUXubRmkEi2q6K3Y9kBPg9248ggaZVsoSFhtJHSrm1X",
+      "file": "fluxbeam.so.gz",
+      "sha256": "cb734530a4689c2e14e8fcdd2c4e4b36c3871cb3d7d62ac2e752439ac5f24f6f"
+    },
+    {
+      "name": "meteora-damm-v2",
+      "programId": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "file": "meteora-damm-v2.so.gz",
+      "sha256": "4d5b920baebc090f89b2e8796a3452ed067c9667a143058c96a312f2c1e6848b"
+    },
+    {
+      "name": "meteora-damm-v1",
+      "programId": "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
+      "file": "meteora-damm-v1.so.gz",
+      "sha256": "de81c5e8e2725857af73da5294323cecae4eb639f5b4b66e300662b5a0f2547b"
+    },
+    {
+      "name": "meteora-vault",
+      "programId": "24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi",
+      "file": "meteora-vault.so.gz",
+      "sha256": "fd0f3dd9e38a51f3afe04084a9df9dad1017af3e482674d2eed5b16e47ec78eb"
+    },
+    {
+      "name": "aldrin",
+      "programId": "AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6",
+      "file": "aldrin.so.gz",
+      "sha256": "9116c1d1c87543f57e03e2131ab349b0252203e6ba839d5852ac72ba91cef0ff"
+    },
+    {
+      "name": "omnipair",
+      "programId": "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE",
+      "file": "omnipair.so.gz",
+      "sha256": "e0a962a59706bc20f7b4bb96c7343c9348b74e736312a04ca6ca3013b24cae5c"
+    },
+    {
+      "name": "saber-stableswap",
+      "programId": "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ",
+      "file": "saber-stableswap.so.gz",
+      "sha256": "383f720f2e0d47ce616dfda2f9f263ccd83fc6d38a2629b472dcbfad9dfb4504"
+    },
+    {
+      "name": "saber-decimals-wrapper",
+      "programId": "DecZY86MU5Gj7kppfUCEmd4LbXXuyZH1yHaP2NTqdiZB",
+      "file": "saber-decimals-wrapper.so.gz",
+      "sha256": "1ade3ebbb7cab4c415e98c49ff936641ef7f5f295d1724a3d8bb8d659fba61f8"
+    },
+    {
+      "name": "stabble-stable-swap",
+      "programId": "swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ",
+      "file": "stabble-stable-swap.so.gz",
+      "sha256": "ee3d3ecf3d7759cef2d91123eef1c363f076e5a456ba9dcc5c8a79cf44890622"
+    },
+    {
+      "name": "stabble-weighted-swap",
+      "programId": "swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW",
+      "file": "stabble-weighted-swap.so.gz",
+      "sha256": "847dbff22f4e1ec19c221b702035f87a2a483f089bf461ca4dd7bdad342f4ffe"
+    },
+    {
+      "name": "stabble-vault",
+      "programId": "vo1tWgqZMjG61Z2T9qUaMYKqZ75CYzMuaZ2LZP1n7HV",
+      "file": "stabble-vault.so.gz",
+      "sha256": "5a9b742c972f94db0c0fe50b069eaa1779574693b0438b55f486b1a4d9747f51"
+    },
+    {
+      "name": "mercurial",
+      "programId": "MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky",
+      "file": "mercurial.so.gz",
+      "sha256": "c2f985f87621e69d329fb3c1e60c5bfe5cdb87c361dbd88097f213aef76790ae"
+    },
+    {
+      "name": "pumpswap",
+      "programId": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
+      "file": "pumpswap.so.gz",
+      "sha256": "2e2608ddce89d1d23216756f0ace0f718e9164660bcdb4a40221318dc56db4ca"
+    },
+    {
+      "name": "pump-fee",
+      "programId": "pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ",
+      "file": "pump-fee.so.gz",
+      "sha256": "8a9bfa986ac0f97ade1a327a09ccc24421dfa52bb8ee462f75458e3e5bad48d9"
+    },
+    {
+      "name": "bonkswap",
+      "programId": "BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p",
+      "file": "bonkswap.so.gz",
+      "sha256": "da1503cc9a49809db24e6f6dd95c30b7681535749de830e3517595e5d419737c"
+    },
+    {
+      "name": "guacswap",
+      "programId": "Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1",
+      "file": "guacswap.so.gz",
+      "sha256": "127f070b4c2b3ed764721b0946a0c33d926de62ba4b6b1872c5e8d315d202d48"
+    },
+    {
+      "name": "metadao-futarchy",
+      "programId": "FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq",
+      "file": "metadao-futarchy.so.gz",
+      "sha256": "753daac67ed0393dc6b3678420ead88814205780eae13cacb5dbafdb179bf8d6"
+    },
+    {
+      "name": "scale-amm",
+      "programId": "SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA",
+      "file": "scale-amm.so.gz",
+      "sha256": "c5c2be12884f4d0627bb7e89d00e9c3ef189c2c669f84f22c4d6c55626ae5511"
+    },
+    {
+      "name": "perena",
+      "programId": "NUMERUNsFCP3kuNmWZuXtm1AaQCPj9uw6Guv2Ekoi5P",
+      "file": "perena.so.gz",
+      "sha256": "f45357b0b8273edacf1ca3f497edf7c7a008fc3896de4f477d6a9bf9e31f5e04"
+    }
+  ]
+}

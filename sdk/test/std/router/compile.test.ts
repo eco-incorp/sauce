@@ -11,7 +11,8 @@
  * The SVM arm:
  *   4. every exported function compiles, from run-time arguments, to the same bytes either way, and
  *      takes the accounts its callers attach in the documented order;
- *   5. the exports are exactly the documented API;
+ *   5. the exports are exactly the documented API, the limit functions taking one argument order and
+ *      the exact-input functions another;
  *   6. each venue's program id, derived from the SDK's base58 id, and each instruction's
  *      discriminator, derived from its name, counted in the bytecode: a function carries its own
  *      venue's and no other, `trySwap` every one;
@@ -22,7 +23,8 @@
  *
  * What the EVM functions DO on chain is `actions/tests/swap*.mainnet.test.ts`'s (real pools, captured
  * state) and `test/evm/{swap,router}.e2e.test.ts`'s (the Router's V3 and V4 paths, on mocks); what
- * the SVM functions do is `svm.e2e.test.ts`'s, on the venues' own programs and pools in LiteSVM.
+ * the SVM functions do is `svm.e2e.test.ts`'s and `svm-exact-in.e2e.test.ts`'s, on the venues' own
+ * programs and pools in LiteSVM.
  */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -32,6 +34,8 @@ import { toFunctionSelector, type AbiFunction } from "viem";
 
 import { compileWithRs } from "../../../src/routes/rs-compile.js";
 import {
+  aldrin,
+  bonkswap,
   BYREAL_PROGRAM_ID,
   CREMA_PROGRAM_ID,
   CROPPER_PROGRAM_ID,
@@ -44,6 +48,30 @@ import {
   PHOENIX_PROGRAM_ID,
   RAYDIUM_CLMM_PROGRAM_ID,
   STABBLE_CLMM_PROGRAM_ID,
+  dexlab,
+  fluxbeam,
+  gamma,
+  guacswap,
+  mercurial,
+  METADAO_FUTARCHY_PROGRAM_ID,
+  meteoraDammV1Stable,
+  meteoraDammV2,
+  omnipair,
+  orcaLegacyTokenSwap,
+  orcaV1,
+  penguin,
+  perena,
+  pumpswapAdapter,
+  raydiumAmmV4,
+  raydiumCpSwap,
+  saberDecimalsWrapper,
+  saberStableswap,
+  saros,
+  SCALE_AMM_PROGRAM_ID,
+  stabbleStableSwap,
+  stabbleWeightedSwap,
+  stepn,
+  tokenSwapV1,
 } from "../../../src/svm/index.js";
 import {
   compileStdRouter,
@@ -51,6 +79,11 @@ import {
   programCalling,
   routerAbi,
   routerSource,
+  SVM_CPI_FUNCTIONS,
+  SVM_DATA_FUNCTIONS,
+  SVM_CPI_ONLY,
+  SVM_EXACT_IN,
+  SVM_EXACT_IN_FUNCTIONS,
   SVM_FUNCTIONS,
   SVM_SLOT,
   SVM_TRADER,
@@ -58,6 +91,8 @@ import {
   svmCpiArguments,
   svmDataArguments,
   svmInstructionForm,
+  svmExactInArguments,
+  svmExactInProgramCalling,
   svmProgramCalling,
 } from "./harness.js";
 
@@ -278,12 +313,51 @@ describe("@sauce/router (SVM): every function compiles from run-time arguments",
   });
 });
 
+describe("@sauce/router (SVM): every exact-input function compiles from run-time arguments", () => {
+  it.each(SVM_EXACT_IN_FUNCTIONS)("%s, off disk and embedded, to the same bytes", (name, slot) => {
+    const source = svmExactInProgramCalling(name, slot);
+    const fromDisk = compileStdRouter(source, "svm");
+    const embedded = compileWithRs({ source, target: "svm" });
+    expect(fromDisk.bytecode.length).toBeGreaterThan(0);
+    expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
+  });
+
+  it.each(SVM_EXACT_IN_FUNCTIONS)(
+    "%s takes its slot, the trader's accounts and the recipient",
+    (name, slot) => {
+      const { manifest } = compileStdRouter(svmExactInProgramCalling(name, slot), "svm");
+      expect(manifest?.accounts.map((entry) => (entry.kind === "slot" ? entry.name : "…"))).toEqual(
+        [...Array.from({ length: slot }, (_, i) => `s${i}`), ...SVM_TRADER, "recipient"],
+      );
+    },
+  );
+
+  // A `Cpi` or `Data` form takes the list whole, so one compiled program serves a list of any length.
+  it.each([...SVM_CPI_FUNCTIONS, ...SVM_DATA_FUNCTIONS])(
+    "%s, off disk and embedded, to the same bytes",
+    (name) => {
+      const source = svmProgramCalling(name, 3);
+      const fromDisk = compileStdRouter(source, "svm");
+      const embedded = compileWithRs({ source, target: "svm" });
+      expect(fromDisk.bytecode.length).toBeGreaterThan(0);
+      expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
+    },
+  );
+});
+
 describe("@sauce/router (SVM): the exports are the documented API", () => {
   it("exports trySwap/swap, the nine venues at a price, the eleven at their own limit, each instruction's data and Manifest's", () => {
     const exported = [...routerSource("svm").matchAll(/^export function (\w+)\(/gm)].map(
       (m) => m[1],
     );
-    expect(exported.sort()).toEqual([...SVM_FUNCTIONS].sort());
+    expect(exported.sort()).toEqual(
+      [
+        ...SVM_FUNCTIONS,
+        ...SVM_EXACT_IN_FUNCTIONS.map(([name]) => name),
+        ...SVM_CPI_FUNCTIONS,
+        ...SVM_DATA_FUNCTIONS,
+      ].sort(),
+    );
   });
 
   it("takes each family's arguments in one order", () => {
@@ -320,16 +394,54 @@ describe("@sauce/router (SVM): the exports are the documented API", () => {
       );
       return ["slot: Account[]", "trader: Account[]", ...middle, "recipient: Account"];
     };
+    const limit = new Set<string>(SVM_FUNCTIONS);
     for (const [, name, params] of routerSource("svm").matchAll(
       /^export function (\w+)\(([^)]*)\)/gm,
     ))
-      expect({
+      if (limit.has(name!))
+        expect({
+          name,
+          params: params!
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean),
+        }).toEqual({ name, params: signature(name!) });
+  });
+
+  const signatures = (): [string, string[]][] =>
+    [...routerSource("svm").matchAll(/^export function (\w+)\(([^)]*)\)/gm)].map((m) => [
+      m[1]!,
+      m[2]!
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean),
+    ]);
+
+  it("takes the exact-input functions' arguments in one order, and each instruction form what its instruction carries, its floor and its direction", () => {
+    const limit = new Set<string>(SVM_FUNCTIONS);
+    const BOOLS = ["aToB", "xToY", "paysBase"];
+    const typed = (args: string[]) =>
+      args.map((arg) => `${arg}: ${BOOLS.includes(arg) ? "bool" : "Uint256"}`);
+    for (const [name, params] of signatures().filter(([name]) => !limit.has(name)))
+      expect({ name, params }).toEqual({
         name,
-        params: params!
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean),
-      }).toEqual({ name, params: signature(name!) });
+        params: name.endsWith("Data")
+          ? typed(svmExactInArguments(name)!)
+          : name.endsWith("Cpi")
+            ? [
+                "program: Account",
+                "accounts: Account[]",
+                "source: Account",
+                ...typed(svmExactInArguments(name)!),
+              ]
+            : [
+                "slot: Account[]",
+                "trader: Account[]",
+                "amountIn: Uint256",
+                "minOut: Uint256",
+                "recipient: Account",
+              ],
+      });
   });
 
   it("declares no module-level const, which a program-wide define could replace", () => {
@@ -425,6 +537,68 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     // two directions.
     expect(count(code, discriminator("swap_v2"))).toBe(2);
     expect(count(code, discriminator("swap"))).toBe(5);
+  });
+});
+
+describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
+  const key = (base58: string): string =>
+    Buffer.from(getAddressCodec().encode(address(base58))).toString("hex");
+  const IDS: Record<string, string> = {
+    raydiumCpSwap: raydiumCpSwap.programId,
+    gamma: gamma.programId,
+    raydiumAmmV4: raydiumAmmV4.programId,
+    orcaLegacyTokenSwap: orcaLegacyTokenSwap.programId,
+    tokenSwapV1: tokenSwapV1.programId,
+    orcaV1: orcaV1.programId,
+    penguin: penguin.programId,
+    stepn: stepn.programId,
+    saros: saros.programId,
+    fluxbeam: fluxbeam.programId,
+    dexlab: dexlab.programId,
+    meteoraDammV2: meteoraDammV2.programId,
+    meteoraDammV1: meteoraDammV1Stable.programId,
+    aldrin: aldrin.programId,
+    omnipair: omnipair.programId,
+    saber: saberStableswap.programId,
+    saberDecimalsWrapper: saberDecimalsWrapper.programId,
+    stabbleStableSwap: stabbleStableSwap.programId,
+    stabbleWeightedSwap: stabbleWeightedSwap.programId,
+    mercurial: mercurial.programId,
+    perena: perena.programId,
+    metadaoFutarchy: METADAO_FUTARCHY_PROGRAM_ID,
+    scaleAmm: SCALE_AMM_PROGRAM_ID,
+    pumpswap: pumpswapAdapter.programId,
+    bonkswap: bonkswap.programId,
+    guacswap: guacswap.programId,
+  };
+  const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+  const carries = (code: string) =>
+    Object.entries(IDS).map(([venue, id]) => ({ venue, carried: count(code, key(id)) > 0 }));
+  const only = (base: string) =>
+    Object.keys(IDS).map((venue) => ({ venue, carried: venue === base }));
+
+  it("names a program for every exact-input venue", () => {
+    expect(Object.keys(IDS).sort()).toEqual([...Object.keys(SVM_EXACT_IN), ...SVM_CPI_ONLY].sort());
+  });
+
+  it.each(SVM_EXACT_IN_FUNCTIONS)(
+    "%s carries its venue's program id and no other's",
+    (name, slot) => {
+      const code = hex(compileStdRouter(svmExactInProgramCalling(name, slot), "svm").bytecode);
+      const base = name.startsWith("try") ? name.charAt(3).toLowerCase() + name.slice(4) : name;
+      expect(carries(code)).toEqual(only(base));
+    },
+  );
+
+  it.each(SVM_DATA_FUNCTIONS)("%s carries no program id: its caller names the program", (name) => {
+    const code = hex(compileStdRouter(svmProgramCalling(name, 3), "svm").bytecode);
+    expect(carries(code)).toEqual(Object.keys(IDS).map((venue) => ({ venue, carried: false })));
+  });
+
+  it.each(SVM_CPI_FUNCTIONS)("%s carries its venue's program id and no other's", (name) => {
+    const code = hex(compileStdRouter(svmProgramCalling(name, 3), "svm").bytecode);
+    const base = name.replace(/Cpi$/, "");
+    expect(carries(code)).toEqual(only(base));
   });
 });
 
@@ -549,6 +723,49 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       );
       expect(code.split(Buffer.from(reason).toString("hex")).length - 1).toBe(1);
     }
+  });
+});
+
+describe("@sauce/router (SVM): the reasons the exact-input functions revert with", () => {
+  const reasons = (source: string): string[] => {
+    const code = hex(compileStdRouter(source, "svm").bytecode);
+    return ["minOut past 64 bits", "below minOut", "debit"].filter((reason) =>
+      code.includes(Buffer.from(reason).toString("hex")),
+    );
+  };
+  const venue = (source: string): boolean =>
+    /6e6f742061(6e)?20/.test(hex(compileStdRouter(source, "svm").bytecode)); // "not a " / "not an "
+
+  // A floor its field cannot carry, where the venue's instruction has one.
+  const floor = (name: string): string[] =>
+    svmExactInArguments(
+      `${name.replace(/^try([A-Z])/, (_, c: string) => c.toLowerCase())}Data`,
+    )!.includes("minOut")
+      ? ["minOut past 64 bits"]
+      : [];
+
+  it.each(SVM_EXACT_IN_FUNCTIONS)(
+    "%s refuses another program, a floor past 64 bits and a swap below its floor",
+    (name, slot) => {
+      const source = svmExactInProgramCalling(name, slot);
+      expect(venue(source)).toBe(true);
+      expect(reasons(source)).toEqual([...floor(name), "below minOut"]);
+    },
+  );
+
+  it.each(SVM_CPI_FUNCTIONS)(
+    "%s refuses another program, a floor past 64 bits and a debit past its input",
+    (name) => {
+      const source = svmProgramCalling(name, 3);
+      expect(venue(source)).toBe(true);
+      expect(reasons(source)).toEqual([...floor(name.replace(/Cpi$/, "")), "debit"]);
+    },
+  );
+
+  it.each(SVM_DATA_FUNCTIONS)("%s checks nothing but its floor's width", (name) => {
+    const source = svmProgramCalling(name, 3);
+    expect(venue(source)).toBe(false);
+    expect(reasons(source)).toEqual(floor(name.replace(/Data$/, "")));
   });
 });
 
