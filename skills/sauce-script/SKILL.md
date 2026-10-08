@@ -101,6 +101,10 @@ Every program starts with a comment that says how to run it, in this order:
 4. one concrete run on a supported chain with real values: addresses taken from the registry
    (`sauce globals --chain <chain> --tokens`), the developer's own inputs left as `<placeholders>`.
 
+An intent file is written the same way: its `main` parameters, then its `--intent-…` flags.
+`sauce intent publish <file> --args …` takes the same arguments as `sauce run` and fixes them into
+the intents it publishes (`sauce-intents`).
+
 ```sauce chain=base
 // Pays each of `recipients` `amount` of the chain's USDC, from the Pot.
 //
@@ -124,11 +128,12 @@ function main(recipients: Address[], amount: Uint256) {
 
 ## Inputs and fixed values
 
-| Value                                                                    | Write it as                         | Arrives                                                         |
-| ------------------------------------------------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
-| Anything the caller chooses per run: tokens, amounts, recipients, limits | a **`main(...)` parameter**         | with the transaction (`--args`); one program serves every value |
-| A value the program fixes: a fee, a pool's tier                          | a **module constant** beside `main` | folded into the bytecode                                        |
-| A value the chain supplies                                               | a global (`sauce-globals`)          | resolved when compiling for that chain                          |
+| Value                                                                    | Write it as                              | Arrives                                                                          |
+| ------------------------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------- |
+| Anything the caller chooses per run: tokens, amounts, recipients, limits | a **`main(...)` parameter**              | with the transaction (`--args`); one program serves every value                  |
+| The inputs of an intent, its refundee among them                         | **`main(...)` parameters**, the same way | with the cook that publishes it (`sauce intent publish --args`, `sauce-intents`) |
+| A value the program fixes: a fee, a pool's tier                          | a **module constant** beside `main`      | folded into the bytecode                                                         |
+| A value the chain supplies                                               | a global (`sauce-globals`)               | resolved when compiling for that chain                                           |
 
 `main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
 program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
@@ -286,15 +291,15 @@ Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...o
 The full list, with what each rejection says, is section 14 of
 [references/builtins.md](references/builtins.md).
 
-| Rejected                                                             | Write instead                                                               |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `switch`, `for...in`, `enum`, `type` aliases                         | `if` chains, arrays, inline object types, plain functions                   |
-| `await` used as a value, or of a value with no `then`                | `await x;` alone, which is `x.then(() => { … })`                            |
-| `finally`                                                            | code after the `try`; to survive a failure on EVM, `try`/`catch` (below)    |
-| arrow functions and nested functions, except `.catch(() => { ... })` | top-level function declarations                                             |
-| template literals, comparing bytes with `==`                         | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each |
-| `as` casts, default parameters, spread, object destructuring         | explicit values and field access                                            |
-| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`           | `new Array(n)` and an index; `if`; `**`                                     |
+| Rejected                                                                                                           | Write instead                                                               |
+| ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `switch`, `for...in`, `enum`, `type` aliases                                                                       | `if` chains, arrays, inline object types, plain functions                   |
+| `await` used as a value, or of a value with no `then`                                                              | `await x;` alone, which is `x.then(() => { … })` (`sauce-intents`)          |
+| `finally`                                                                                                          | code after the `try`; to survive a failure on EVM, `try`/`catch` (below)    |
+| arrow functions and nested functions, except an intent's body, `.then(() => { ... })`, and `.catch(() => { ... })` | top-level function declarations                                             |
+| template literals, comparing bytes with `==`                                                                       | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each |
+| `as` casts, default parameters, spread, object destructuring                                                       | explicit values and field access                                            |
+| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                         | `new Array(n)` and an index; `if`; `**`                                     |
 
 ```sauce fails
 function main(x: Uint256): Uint256 {

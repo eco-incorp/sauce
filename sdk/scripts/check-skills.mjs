@@ -18,7 +18,9 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, and nothing that
+//      the intents skill (a chain's `Portal` is the contract too), no RPC endpoint,
+//      no description of Sauce as a multicall, no call to `available(...)` (a name a chain lacks is
+//      zero there: `X != 0`), and nothing that
 //      tells the reader to copy, adapt or start from an example (the agent writes each program
 //      itself: COPY_FRAMING), no skill named in code (`sauce-<name>`) that the package does not
 //      ship; the command is written `sauce …`, `sauce-cli` says in one paragraph how to get it
@@ -116,6 +118,8 @@ const SKILLS_DIR =
   skillsFlag < 0 ? join(REPOSITORY, "skills") : resolve(process.argv[skillsFlag + 1]);
 const INDEX_SKILL = "sauce-examples";
 const INTENTS_SKILL = "sauce-intents";
+// A program that opens an intent: `<Chain>.hop(…)`.
+const OPENS_INTENT = /\b[A-Z]\w*\s*\.hop\s*\(/;
 const PKG = "@eco-incorp/sauce";
 
 const failures = [];
@@ -440,6 +444,12 @@ const UNDECLARED_NAMES = {
     getCreateAssociatedTokenIdempotentInstruction:
       "@solana-program/token's ATA creation, a dependency the package re-exports none of",
   },
+  "sauce-intents": {
+    CallFailed:
+      "the eco-routes Executor's error for a route call that reverted; the registry declares the Portal's errors, not the Executor's",
+    CallToEOA:
+      "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
+  },
   "sauce-solana-distributed-swap": {
     SqrtPriceLimitOverflow:
       "Raydium CLMM's error for a price limit on the wrong side of the price, a venue program's, which the package does not decode",
@@ -634,6 +644,12 @@ function wording(skill, file) {
         fail(where(i), "names a placeholder address; take it from the SDK or write <address>");
     for (const [pattern, what] of NOT_PORTABLE)
       if (pattern.test(line)) fail(where(i), `names ${what}`);
+    // `available(X)` is not SauceScript: a program compares a name its chain may lack with zero.
+    if (/\bavailable\(/.test(line))
+      fail(
+        where(i),
+        "calls `available(...)`, which is removed; compare the name with zero, `X != 0n`",
+      );
     // A skill named in code is one the package ships: a renamed or removed skill fails here.
     for (const m of line.matchAll(/`(sauce-[a-z0-9-]+)`/g))
       if (!SKILL_NAMES.has(m[1]))
@@ -1056,11 +1072,11 @@ async function runUsage(where, file, argv, chain, header = false) {
     } else if (flag === "--compact-args") kept.push(flag);
     else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
-  if (/\.reward\(/.test(read(file)) && !kept.includes("--intent-deadline"))
-    fail(
-      where,
-      "opens an intent, so its usage line must give --intent-deadline and --intent-creator",
-    );
+  // An intent's deadlines have defaults, which a usage line need not give, and its refundee is the
+  // file's: offline, the run gives the fee the Kitchen would be read for.
+  if (OPENS_INTENT.test(read(file))) {
+    if (!kept.includes("--intent-execution-fee")) kept.push("--intent-execution-fee", "0");
+  }
   const compiled = await compileJson(file, chain, kept);
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
@@ -1268,8 +1284,9 @@ try {
       if (chains !== undefined) {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
         writeFileSync(file, `${block.body}\n`);
-        const intents = /\.reward\(/.test(block.body)
-          ? ["--intent-deadline", DEADLINE, "--intent-creator", DEV, "--intent-execution-fee", "0"]
+        const intents = OPENS_INTENT.test(block.body)
+          ? // Its deadlines default and its refundee is the block's; the fee is what a read gives.
+            ["--intent-execution-fee", "0"]
           : [];
         for (const chain of chains) {
           const compiled = await compileJson(file, chain, intents);
@@ -1423,8 +1440,18 @@ for (const file of runners) {
   );
   if (run.status !== 0) {
     const lines = `${run.stderr ?? ""}${run.stdout ?? ""}`.trim().split("\n");
-    const at = lines.findIndex((line) => /\b\w*Error\b|check failed/.test(line));
-    const tail = (at === -1 ? lines.slice(-6) : lines.slice(at, at + 3)).join("\n    ");
+    // The thrown message or the compiler's own diagnostic when there is one, else the first error
+    // or failed check.
+    const diagnosed = lines.findIndex((line) => /^\s*\w*Error: |\berror: /.test(line));
+    const at =
+      diagnosed === -1
+        ? lines.findIndex((line) => /\b\w*Error\b|check failed/.test(line))
+        : diagnosed;
+    const shown = at === -1 ? lines.slice(-6) : lines.slice(at, at + 3);
+    // The compiler's diagnostic line too, which a thrown "compiling the program failed" leads to.
+    const compiler = lines.find((line) => /\berror: /.test(line));
+    if (compiler !== undefined && !shown.includes(compiler)) shown.push(compiler.trim());
+    const tail = shown.map((line) => stripVTControlCharacters(line)).join("\n    ");
     fail(rel(file), `exited ${run.status ?? run.signal}:\n    ${tail}`);
   }
 }
@@ -1665,9 +1692,11 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     const [family, contract] = name.split(".");
     return [...(members.get(family) ?? [])].some((ns) => contracts.has(`${ns}.${contract}`));
   };
-  // The globals index leaves the eco-routes namespace out: no program calls the Portal by name. An
-  // exception is a name here, for the skill that names the Portal; each entry must still be used.
-  const PORTAL_GLOBALS = new Set();
+  // The globals index leaves the eco-routes namespace out: a program opens an intent with the chain
+  // syntax, never by calling the Portal. The one exception is the skill that names the Portal, for
+  // an intent built elsewhere: `fund-by-transfer.sauce.ts` publishes one through the registry's
+  // Portal by name rather than by hand-written selectors. Each entry must still be used.
+  const PORTAL_GLOBALS = new Set(["EcoRoutes.Portal"]);
   const portalGlobalsUsed = new Set();
   const inIntentsSkill = (where) => where.split(/[\\/]/).includes(INTENTS_SKILL);
   const uses = (where, text, strict) => {
@@ -1914,10 +1943,32 @@ const summary =
   `${executedExamples} example programs executed by a suite; ${counts.integers} programs write ` +
   `their integers plainly; against ` +
   `${PKG}@${sdkPkg.version}`;
+// Failures that wait on a compiler change the skills already describe: each entry names the file,
+// the failure's words and the change it waits on. An entry no failure matches any more fails, so
+// the change landing is noticed and the entry goes; nothing of this is a marker in a skill.
+const PENDING = [];
+const pending = [];
+for (const entry of PENDING) {
+  const matched = failures.filter(
+    (failure) => failure.startsWith(entry.file) && entry.match.test(failure),
+  );
+  if (matched.length === 0) {
+    failures.push(
+      `PENDING entry for ${entry.file} matches no failure: ${entry.waits} landed; remove it`,
+    );
+  }
+  for (const failure of matched) {
+    failures.splice(failures.indexOf(failure), 1);
+    pending.push(`${failure.split(": ")[0]}: waits on ${entry.waits}`);
+  }
+}
+if (pending.length > 0) {
+  console.log(`\nPending on the compiler (${pending.length}):\n- ${pending.join("\n- ")}`);
+}
 if (failures.length > 0) {
   console.error(
     `\nskills check FAILED (${failures.length}):\n- ${failures.join("\n- ")}\n\n${summary}`,
   );
   process.exit(1);
 }
-console.log(`skills check OK: ${summary}`);
+console.log(`skills check OK: ${summary}; ${pending.length} pending on the compiler`);

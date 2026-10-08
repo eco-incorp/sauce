@@ -197,8 +197,9 @@ The library checks `minOut`; what is left is the input a price limit left unspen
 1. Pass a `minOut` that is a `main` input, so a short fill reverts the whole transaction.
 2. Pay the output to its recipient (`recipient` does it), or keep it in the Pot for the next step.
 3. Send the rest of the input back to the user or a refund address: `amountIn` less what the
-   swap took (the input balance before minus after), not the Pot's whole balance of the token,
-   which on an owner's Pot may hold more of it for other uses.
+   swap took (the input balance before minus after), never the Pot's whole balance of the token:
+   an owner's Pot may hold more of it for other uses, and an intent body's Pot is shared by every
+   intent to its chain (`sauce-intents`).
 
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
 Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):

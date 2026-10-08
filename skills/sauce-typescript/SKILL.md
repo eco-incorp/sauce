@@ -35,9 +35,8 @@ and add the use case, or
 ## Compile a program for a chain, and cook it
 
 `routes.compileSauceProgram(chain, source, options)` is what `sauce compile` runs: the chain's
-names and `@sauce/token`, and `options.args` to fix `main`'s arguments into the program. Without
-`args`, the result carries `main`'s declared
-parameters (`entryParams`); `routes.encodeEntryArguments` encodes values for them as `--args` does,
+names and `@sauce/token`, with `options.intents` for the intents it opens. The result carries
+`main`'s declared parameters (`entryParams`); `routes.encodeEntryArguments` encodes values for them as `--args` does,
 and program plus arguments is the `program` of the owner's `Pot.cook(engine, program)`.
 
 ```ts
@@ -89,6 +88,11 @@ export async function cookTransactions(
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
+- A program that opens an intent names its refundee in its hop, `refundee`, always: no option
+  defaults it. Its body's cook also needs `options.intents.executionFee` (one fee, or a function of
+  the destination) unless the hop gives a `fee`. `openedAt` (Unix seconds) makes its
+  default deadlines count from then rather than from when the program runs, and `salt` fixes the
+  salt, random otherwise (`sauce-intents`).
 
 ## The raw compiler
 
@@ -145,7 +149,7 @@ a recorded address, not proof of live code on the chain.
   it). See [examples/verify.mts](examples/verify.mts).
 - **Solana execution** (`/svm`): the Kitchen client,
   `createSauceSvmClient({ rpcUrl, payer, programId, kitchen, maxExecutionFee })`, with no default
-  endpoint; the SVM route helpers (`Solana(...)` routes, `buildSauceSvmCall`) do not produce an
+  endpoint; the SVM route helpers (`compileSauceRoute("solana", …)`, `buildSauceSvmCall`) do not produce an
   instruction the engine accepts, so build execution with the Kitchen client. `USDC_MINT` is the
   mainnet USDC mint. The token builder generates Token-2022 and `TransferChecked` programs:
   `token.Token.transfer({ amount, svm: { ... } }).source("svm")`, with top-level
@@ -159,17 +163,33 @@ a recorded address, not proof of live code on the chain.
   `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the packaged programs; the program
   ids are `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from `/deployments`. Writing the
   programs is `sauce-solana`.
-- **Intents**: `routes.assembleIntent(source, destination, route, reward)` builds one by hand,
-  `routes.hashIntent(intent)` gives the three hashes, `routes.encodeRouteEvm(intent.route)` the
-  route bytes (decode with `routes.EVM_ROUTE_PARAM` for `fulfill`), `destinationPot(chain)` the
-  shared Pot and
+- **Intents** (`sauce-intents`): `routes.hashIntent(intent)` gives the three hashes,
+  `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
+  `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
-  its deploy. For the source side, `routes.intentSourceTxs(intent, target)` is the funding and
-  publication in order: a transfer of each reward token to the vault, then `publish`
-  (`{ fundVia: "publishAndFund" }` for the approvals and `publishAndFund`). Pass `{ vault }` read with
-  `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
-  own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
-  `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
+  its deploy; the intents runner builds a rehearsal with them. In TypeScript,
+  `Base.hop({ source: Ethereum, send, receive, refundee: owner, fee, compile: options }).then(body)`
+  writes the statement a program opens that intent with, compiles it for the source chain and
+  returns `{ source, program, cook(target, value), intents(logs) }`: the same program the
+  statement compiles to in a file, taking the fields a program's hop takes; there `source` is
+  required, since the host runs on no chain, `compile` is the compile's options (`defines` the body
+  reads, `intents` defaults), and a field it does not know is refused. Its cook runs on a Pot on the source chain (`{ owner }` or the Pot's
+  address, the source Kitchen's fee as value), which pays the reward into the intent's vault and
+  publishes it, so the Pot holds the reward first. There is no offline hash: `intents(logs)` reads
+  each published intent and its hash from the `IntentPublished` in the cook's receipt or
+  rehearsal (`routes.loggedIntents`). For an intent built some other way,
+  `routes.intentSourceTxs` is a wallet's funding and publication in order: a transfer of each
+  reward token to the vault, then `publish` (`{ fundVia: "publishAndFund" }` for the approvals and
+  `publishAndFund`); pass `{ vault }` read with `routes.intentVaultAddressCall`, checked against
+  `routes.predictIntentVault`. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`
+  and `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
+- **Nested intents** are written in the program: a body that opens the next intent with
+  `await Chain.hop({ send, receive, refundee })`, or `Chain.hop({ … }).then(() => { ... })`
+  (`sauce-intents`, Cascades). In a typed closure the chain is the imported export, whose `hop`
+  typechecks there, its fields included. `routes.compileSauceProgram`
+  lists each intent's body in `.bodies`, its destination and its program. The intents themselves
+  are encoded as the program runs, so every one is published by a cook, and read back from the
+  cook's logs, in its receipt or rehearsal (`routes.intentFromPublished`).
 
 ## Example
 

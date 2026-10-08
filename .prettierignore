@@ -35,6 +35,7 @@ skills/sauce-chains/references/*.md
 skills/sauce-chains/references/deployments.json
 skills/sauce-protocols/references/index.md
 skills/sauce-protocols/references/registry/*.md
+skills/sauce-intents/references/defaults.md
 # The actions skill's reference, which `sdk/scripts/gen-skills-actions.mjs` renders from the actions
 # JSON Schema on every SDK build, held to the committed copy the same way.
 skills/sauce-actions/references/*.md
@@ -73,6 +74,6 @@ sdk/test/fixtures/sauce-script
 # `recipes-assets.test.ts` ("settleSource() returns the exact on-disk settle.sauce.ts") and
 # `svm-settle.compile.test.ts` ("svmSettleSource(1) returns ..."). Formatting one side diverges it
 # from the other; the generator's own alignment is what ships. Every OTHER `.sauce.ts` here is
-# hand-written (e.g. `cctp-split.sauce.ts`, a standalone asset read off disk) and IS formatted.
+# hand-written (a standalone asset read off disk) and IS formatted.
 sdk/src/recipes/settle.sauce.ts
 sdk/src/svm/recipes/settle.sauce.ts

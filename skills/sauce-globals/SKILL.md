@@ -159,7 +159,7 @@ function main(
 - A family alias (`Uniswap`, `Aave`, …) names a contract only when one member has it on the chain:
   `Uniswap.UniversalRouter` is `UniswapV4.UniversalRouter`; `Uniswap.Factory` is ambiguous.
 - `Ethereum.UniswapV4.UniversalRouter` takes Ethereum's address but still executes on the program's
-  own chain.
+  own chain; running on another chain is an intent (`sauce-intents`).
 - Every catalogued protocol has a namespace. An interface, such as `Erc4626.Vault` or
   `UniswapV3.Pool`, has no one address and is called with one, together with a method in the same
   expression: `Erc4626.Vault(vault).deposit(...)`, or `UniswapV3.Pool(pool).liquidity()` for a pool
@@ -188,8 +188,8 @@ function main(tokenA: Address, tokenB: Address) {
 
 ## Chains, context, imports
 
-- **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) qualify
-  a contract with another chain's address: `Ethereum.UniswapV4.UniversalRouter`.
+- **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) open an
+  intent from inside a program: `await Ethereum.hop({ send, receive, refundee })`.
   A chain's name alone is its chain id, so `if (chainId == Ethereum) { … } else { … }` is decided
   while compiling: a program compiled for a chain keeps only that chain's branch. Every chain's names
   compile; for the initial release its transactions are built and sent only on Ethereum, Base and

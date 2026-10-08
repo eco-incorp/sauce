@@ -114,6 +114,11 @@ function main(): Address {
 
 - **A token is never qualified.** `Base.USDC` is refused (`a token is never qualified by a chain`);
   the symbol is always the compiled-for chain's, and another chain's token is an address.
+- **To act on another chain, open an intent** (`sauce-intents`):
+  `await Ethereum.hop({ send, receive, refundee })`, the code after it running on Ethereum. In
+  the body every name is the destination's, and in `receive` only the tokens are, looked up again
+  by symbol; every other value, there and in `send`, is computed on the chain the file is
+  compiled for, which funds it. Both chains must take intents (each chain's file says).
 
 ## EVM chains and Solana
 
@@ -239,7 +244,7 @@ confirm the deployment on a chain.
 | The top           | supported, or a preview chain with the link to request it                            |
 | The facts table   | slug and aliases for `--chain`, chain id, kind, the name a program uses, native coin |
 | Sauce             | a pointer to `references/deployments.json`, the same deployment on every chain       |
-| Intents           | whether it takes intents and its eco-routes contracts                                |
+| Intents           | whether it takes intents and its eco-routes contracts (`sauce-intents`)              |
 | In a program      | a compiled example of the chain's names                                              |
 | Tokens            | every token symbol a program can name there, with its address and decimals           |
 | Protocols         | every recorded deployment, each with how a program names it                          |
@@ -248,7 +253,7 @@ confirm the deployment on a chain.
 | --------------------------- | --------------------------------------------------------------------------------------- |
 | Where a transaction can run | a supported chain: Ethereum, Base or Solana; elsewhere compile and simulate only        |
 | Which chain has a protocol  | the protocol's registry file in `sauce-protocols`, or the Protocols table of each chain |
-| Moving value between chains | "Intents": both chains must take intents; the CCTP domain for USDC                      |
+| Moving value between chains | "Intents": both chains must take intents (`sauce-intents`); the CCTP domain for USDC    |
 | Token order in a pool       | the token addresses: token0 is the lower one, and the order differs per chain           |
 | Native coin or its ERC-20   | the native coin row: on some chains the coin is also an ERC-20 with other decimals      |
 | Amounts                     | the token's decimals, from the Tokens table: the same symbol may differ per chain       |

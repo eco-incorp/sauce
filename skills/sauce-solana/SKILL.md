@@ -323,9 +323,10 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   [../sauce-chains/references/deployments.json](../sauce-chains/references/deployments.json), the
   same on every cluster; confirm both are deployed on the cluster (`getAccountInfo` returns an
   executable account).
-- An intent's destination may be Solana: `sauce intent fill`, `prove` and `cancel` act on it there
-  with `--keypair`, and take no `--via`: an intent's program on Solana runs through the Kitchen. A
-  failed `sauce run` prints the program logs.
+- `sauce intent publish` does not work from Solana; open an intent from Ethereum or Base. Its
+  destination may be Solana: `sauce intent fill`, `prove` and `cancel` act on it there with
+  `--keypair` (`sauce-intents`), and take no `--via`: an intent's program on Solana runs
+  through the Kitchen. A failed `sauce run` prints the program logs.
 - For a local run, the package ships the engine and Kitchen programs, to load into a local
   validator or LiteSVM; `sauce-typescript` says where they are. Setting one up is outside this
   skill.
