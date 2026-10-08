@@ -78,6 +78,7 @@ address.
 | [Aerodrome Slipstream](../protocols/aerodrome-slipstream.md) | nonfungiblePositionManagerGaugesV3 | `0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53` | `AerodromeSlipstream.NonfungiblePositionManagerGaugesV3` |
 | [Axelar](../protocols/axelar.md) | gateway | `0xe432150cce91c13a887f7D836923d5597adD8E31` | `Axelar.Gateway` |
 | [Axelar](../protocols/axelar.md) | its | `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C` | `Axelar.ITS` |
+| [Axiom V2](../protocols/axiom-v2.md) | query | `0xfe059442B0379D5f22Bec384A588766f98A36812` | `AxiomV2.Query` |
 | [Balancer V2](../protocols/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
 | [Base Native Bridge](../protocols/base-bridge.md) | l2StandardBridge | `0x4200000000000000000000000000000000000010` | `BaseBridge.L2StandardBridge` |
 | [BaseSwap](../protocols/baseswap.md) | v2Router | `0x327Df1E6de05895d2ab08513aaDD9313Fe505d86` | `Baseswap.V2Router` |

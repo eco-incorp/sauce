@@ -94,6 +94,7 @@ address.
 | [Axelar](../../sauce-protocols/references/registry/axelar.md) | gasService | `0x2d5d7d31F671F86C782533cc367F14109a082712` | `Axelar.GasService` |
 | [Axelar](../../sauce-protocols/references/registry/axelar.md) | gateway | `0x4F4495243837681061C4743b74B3eEdf548D56A5` | `Axelar.Gateway` |
 | [Axelar](../../sauce-protocols/references/registry/axelar.md) | its | `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C` | `Axelar.ITS` |
+| [Axiom V2](../../sauce-protocols/references/registry/axiom-v2.md) | query | `0x83c8c0B395850bA55c830451Cfaca4F2A667a983` | `AxiomV2.Query` |
 | [Balancer V2](../../sauce-protocols/references/registry/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
 | [Base Native Bridge](../../sauce-protocols/references/registry/base-bridge.md) | l1StandardBridge | `0x3154Cf16ccdb4C6d922629664174b904d80F2C35` | `BaseBridge.L1StandardBridge` |
 | [Beefy Finance](../../sauce-protocols/references/registry/beefy.md) | BIFI | `0xB1F1ee126e9c96231Cc3d3fAD7C08b4cf873b1f1` | `Beefy.BIFI` |

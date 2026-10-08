@@ -1,0 +1,436 @@
+{
+  "abi": [
+    {
+      "name": "sendQuery",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "sourceChainId",
+          "type": "uint64"
+        },
+        {
+          "name": "dataQueryHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "computeQuery",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "k",
+              "type": "uint8"
+            },
+            {
+              "name": "resultLen",
+              "type": "uint16"
+            },
+            {
+              "name": "vkey",
+              "type": "bytes32[]"
+            },
+            {
+              "name": "computeProof",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "callback",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "name": "extraData",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "feeData",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "maxFeePerGas",
+              "type": "uint64"
+            },
+            {
+              "name": "callbackGasLimit",
+              "type": "uint32"
+            },
+            {
+              "name": "overrideAxiomQueryFee",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "userSalt",
+          "type": "bytes32"
+        },
+        {
+          "name": "refundee",
+          "type": "address"
+        },
+        {
+          "name": "dataQuery",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "queryId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "increaseQueryGas",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "uint256"
+        },
+        {
+          "name": "newMaxFeePerGas",
+          "type": "uint64"
+        },
+        {
+          "name": "newCallbackGasLimit",
+          "type": "uint32"
+        },
+        {
+          "name": "overrideAxiomQueryFee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "refundQuery",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "queryWitness",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "caller",
+              "type": "address"
+            },
+            {
+              "name": "userSalt",
+              "type": "bytes32"
+            },
+            {
+              "name": "queryHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "callbackHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "refundee",
+              "type": "address"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "payor",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "payee",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "axiomQueryFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "proofVerificationGas",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "minMaxFeePerGas",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "queryDeadlineInterval",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "queries",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "state",
+          "type": "uint8"
+        },
+        {
+          "name": "deadlineBlockNumber",
+          "type": "uint32"
+        },
+        {
+          "name": "callbackGasLimit",
+          "type": "uint32"
+        },
+        {
+          "name": "payee",
+          "type": "address"
+        },
+        {
+          "name": "payment",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "balances",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "frozen",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "QueryInitiatedOnchain",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "queryHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "queryId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "userSalt",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "refundee",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "target",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "extraData",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "QueryFeeInfoRecorded",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "payor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "deadlineBlockNumber",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "maxFeePerGas",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "callbackGasLimit",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "QueryFulfilled",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "payee",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "callbackSucceeded",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "QueryRefunded",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "refundee",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "SourceChainIdDoesNotMatch",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MaxFeePerGasIsTooLow",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "EscrowAmountExceedsBalance",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "QueryIsNotInactive",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CannotRefundIfNotRefundee",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CannotRefundIfNotActive",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CannotRefundBeforeDeadline",
+      "inputs": []
+    }
+  ]
+}
