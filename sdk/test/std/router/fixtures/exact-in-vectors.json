@@ -5041,21 +5041,26 @@
         },
         {
           "address": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+          "role": "s0:pool",
           "writable": true
         },
         {
-          "address": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou"
+          "address": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou",
+          "role": "s0:oracle"
         },
         {
           "address": "FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp",
+          "role": "s0:registry",
           "writable": true
         },
         {
           "address": "CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A",
+          "role": "s0:va",
           "writable": true
         },
         {
           "address": "GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic",
+          "role": "s0:vb",
           "writable": true
         },
         {
@@ -5067,16 +5072,20 @@
           "writable": true
         },
         {
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:ma"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mb"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
           "ref": "Sysvar1nstructions1111111111111111111111111"
@@ -5114,21 +5123,26 @@
         },
         {
           "address": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+          "role": "s0:pool",
           "writable": true
         },
         {
-          "address": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou"
+          "address": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou",
+          "role": "s0:oracle"
         },
         {
           "address": "FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp",
+          "role": "s0:registry",
           "writable": true
         },
         {
           "address": "CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A",
+          "role": "s0:va",
           "writable": true
         },
         {
           "address": "GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic",
+          "role": "s0:vb",
           "writable": true
         },
         {
@@ -5140,16 +5154,20 @@
           "writable": true
         },
         {
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:ma"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mb"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
           "ref": "Sysvar1nstructions1111111111111111111111111"
@@ -5184,29 +5202,36 @@
       "patch": "in",
       "accounts": [
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
           "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "role": "s0:pool",
           "writable": true
         },
         {
           "address": "BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy",
+          "role": "s0:assetCfgA",
           "writable": true
         },
         {
           "address": "GCUvxH2tqxCYh4YcLD3PMMf1PCUbYPXeKVvXR1oUVVis",
+          "role": "s0:assetCfgB",
           "writable": true
         },
         {
           "address": "ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe",
+          "role": "s0:growingA",
           "writable": true
         },
         {
           "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "role": "s0:poolAuth",
           "writable": true
         },
         {
@@ -5219,10 +5244,12 @@
         },
         {
           "address": "2ntWy8nrEJNTtc79Epa3GxagBGTUZT5JHDoZuqunCWQ1",
+          "role": "s0:vaultIn",
           "writable": true
         },
         {
           "address": "9XLNHvXpe18meH8P5zZ1fzL697dBpBakoWnnKXCxiL6y",
+          "role": "s0:vaultOut",
           "writable": true
         },
         {
@@ -5231,17 +5258,21 @@
         },
         {
           "address": "63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt",
+          "role": "s0:global",
           "writable": true
         },
         {
           "address": "fqTrbnsCjPQFS434BHRAfs8bMC5JH7pZWm5sfDYkPWr",
+          "role": "s0:feeDest",
           "writable": true
         },
         {
-          "address": "SysvarC1ock11111111111111111111111111111111"
+          "address": "SysvarC1ock11111111111111111111111111111111",
+          "role": "s0:clock"
         },
         {
           "address": "FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk",
+          "role": "s0:metaA",
           "writable": true
         }
       ]
@@ -5274,29 +5305,36 @@
       "patch": "in",
       "accounts": [
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
           "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "role": "s0:pool",
           "writable": true
         },
         {
           "address": "BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy",
+          "role": "s0:assetCfgA",
           "writable": true
         },
         {
           "address": "GCUvxH2tqxCYh4YcLD3PMMf1PCUbYPXeKVvXR1oUVVis",
+          "role": "s0:assetCfgB",
           "writable": true
         },
         {
           "address": "ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe",
+          "role": "s0:growingA",
           "writable": true
         },
         {
           "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "role": "s0:poolAuth",
           "writable": true
         },
         {
@@ -5309,10 +5347,12 @@
         },
         {
           "address": "9XLNHvXpe18meH8P5zZ1fzL697dBpBakoWnnKXCxiL6y",
+          "role": "s0:vaultIn",
           "writable": true
         },
         {
           "address": "2ntWy8nrEJNTtc79Epa3GxagBGTUZT5JHDoZuqunCWQ1",
+          "role": "s0:vaultOut",
           "writable": true
         },
         {
@@ -5321,17 +5361,21 @@
         },
         {
           "address": "63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt",
+          "role": "s0:global",
           "writable": true
         },
         {
           "address": "AwaxSAq5Fzr6GmgVLnSxQ6mqawTKWszjwAHXDC4DZhf2",
+          "role": "s0:feeDest",
           "writable": true
         },
         {
-          "address": "SysvarC1ock11111111111111111111111111111111"
+          "address": "SysvarC1ock11111111111111111111111111111111",
+          "role": "s0:clock"
         },
         {
           "address": "FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk",
+          "role": "s0:metaA",
           "writable": true
         }
       ]
@@ -5365,10 +5409,12 @@
       "accounts": [
         {
           "address": "BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H",
+          "role": "s0:vault0",
           "writable": true
         },
         {
           "address": "7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK",
+          "role": "s0:vault1",
           "writable": true
         },
         {
@@ -5386,31 +5432,40 @@
         },
         {
           "address": "544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX",
+          "role": "s0:vaultAuthority",
           "writable": true
         },
         {
-          "address": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9"
+          "address": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9",
+          "role": "s0:config"
         },
         {
-          "address": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP"
+          "address": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP",
+          "role": "s0:price"
         },
         {
-          "address": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo"
+          "address": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo",
+          "role": "s0:authority"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:mintIn"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mintOut"
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "s0:sysvarIx"
         }
       ]
     },
@@ -5443,10 +5498,12 @@
       "accounts": [
         {
           "address": "BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H",
+          "role": "s0:vault0",
           "writable": true
         },
         {
           "address": "7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK",
+          "role": "s0:vault1",
           "writable": true
         },
         {
@@ -5464,31 +5521,40 @@
         },
         {
           "address": "544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX",
+          "role": "s0:vaultAuthority",
           "writable": true
         },
         {
-          "address": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9"
+          "address": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9",
+          "role": "s0:config"
         },
         {
-          "address": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP"
+          "address": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP",
+          "role": "s0:price"
         },
         {
-          "address": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo"
+          "address": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo",
+          "role": "s0:authority"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mintIn"
         },
         {
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:mintOut"
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "s0:sysvarIx"
         }
       ]
     },
@@ -5518,13 +5584,16 @@
         },
         {
           "address": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+          "role": "s0:pool",
           "writable": true
         },
         {
-          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+          "role": "s0:mintA"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mintB"
         },
         {
           "user": "in",
@@ -5536,26 +5605,33 @@
         },
         {
           "address": "A6rHcum9j6Sp9aqC4HeicRCxs1Q9bHKSUYkFJcpSd42m",
+          "role": "s0:vaultA",
           "writable": true
         },
         {
           "address": "6mPqT4tT2YjgSRrVCkcf1LDdvTWVSR4NQRy6ddfrST8",
+          "role": "s0:vaultB",
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "role": "s0:memo"
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "s0:sysvarInstructions"
         },
         {
-          "address": "jitodontfront111111111111111111111111111111"
+          "address": "jitodontfront111111111111111111111111111111",
+          "role": "jitodontfront"
         }
       ]
     },
@@ -5585,13 +5661,16 @@
         },
         {
           "address": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+          "role": "s0:pool",
           "writable": true
         },
         {
-          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+          "role": "s0:mintA"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mintB"
         },
         {
           "user": "out",
@@ -5603,26 +5682,33 @@
         },
         {
           "address": "A6rHcum9j6Sp9aqC4HeicRCxs1Q9bHKSUYkFJcpSd42m",
+          "role": "s0:vaultA",
           "writable": true
         },
         {
           "address": "6mPqT4tT2YjgSRrVCkcf1LDdvTWVSR4NQRy6ddfrST8",
+          "role": "s0:vaultB",
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "role": "s0:memo"
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "s0:sysvarInstructions"
         },
         {
-          "address": "jitodontfront111111111111111111111111111111"
+          "address": "jitodontfront111111111111111111111111111111",
+          "role": "jitodontfront"
         }
       ]
     },
@@ -5653,33 +5739,42 @@
         },
         {
           "address": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+          "role": "s0:pool",
           "writable": true
         },
         {
-          "address": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1"
+          "address": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1",
+          "role": "s0:mintA"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mintB"
         },
         {
           "address": "BeSFY7QztQo6GX812ekv1ub8t9kXgpTKUH71ngD5rPzY",
+          "role": "s0:vaultA",
           "writable": true
         },
         {
           "address": "HXuusHMQViPmRr2wxMJU2tYoqHxhVkRT8YTkWWW2dvDS",
+          "role": "s0:vaultB",
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F"
+          "address": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F",
+          "role": "s0:oracle"
         },
         {
-          "address": "46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ"
+          "address": "46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ",
+          "role": "s0:global"
         },
         {
           "user": "in",
@@ -5718,33 +5813,42 @@
         },
         {
           "address": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+          "role": "s0:pool",
           "writable": true
         },
         {
-          "address": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1"
+          "address": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1",
+          "role": "s0:mintA"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mintB"
         },
         {
           "address": "BeSFY7QztQo6GX812ekv1ub8t9kXgpTKUH71ngD5rPzY",
+          "role": "s0:vaultA",
           "writable": true
         },
         {
           "address": "HXuusHMQViPmRr2wxMJU2tYoqHxhVkRT8YTkWWW2dvDS",
+          "role": "s0:vaultB",
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F"
+          "address": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F",
+          "role": "s0:oracle"
         },
         {
-          "address": "46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ"
+          "address": "46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ",
+          "role": "s0:global"
         },
         {
           "user": "out",
@@ -5780,13 +5884,16 @@
       "patch": "in",
       "accounts": [
         {
-          "address": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi"
+          "address": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi",
+          "role": "s0:prog"
         },
         {
-          "address": "37zgQb6PjFuxah6R8CTk67gEvLrpqPQ61E7vh9ARPGFD"
+          "address": "37zgQb6PjFuxah6R8CTk67gEvLrpqPQ61E7vh9ARPGFD",
+          "role": "s0:log"
         },
         {
           "address": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+          "role": "s0:pool",
           "writable": true
         },
         {
@@ -5803,14 +5910,17 @@
         },
         {
           "address": "DJcpo1c2dExp7c1P3FQ2tb3VyRPQvcwh1pXapvPnL8yC",
+          "role": "s0:bv",
           "writable": true
         },
         {
           "address": "8vtp7k9xybmfj4QiD2nvGRP5jd6o3zVRcUKpRc8P2Sye",
+          "role": "s0:qv",
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         }
       ]
     },
@@ -5838,13 +5948,16 @@
       "patch": "in",
       "accounts": [
         {
-          "address": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi"
+          "address": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi",
+          "role": "s0:prog"
         },
         {
-          "address": "37zgQb6PjFuxah6R8CTk67gEvLrpqPQ61E7vh9ARPGFD"
+          "address": "37zgQb6PjFuxah6R8CTk67gEvLrpqPQ61E7vh9ARPGFD",
+          "role": "s0:log"
         },
         {
           "address": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+          "role": "s0:pool",
           "writable": true
         },
         {
@@ -5861,14 +5974,17 @@
         },
         {
           "address": "DJcpo1c2dExp7c1P3FQ2tb3VyRPQvcwh1pXapvPnL8yC",
+          "role": "s0:bv",
           "writable": true
         },
         {
           "address": "8vtp7k9xybmfj4QiD2nvGRP5jd6o3zVRcUKpRc8P2Sye",
+          "role": "s0:qv",
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         }
       ]
     },
@@ -5899,10 +6015,12 @@
       "patch": "in",
       "accounts": [
         {
-          "address": "8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF"
+          "address": "8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF",
+          "role": "s0:auth"
         },
         {
           "address": "FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n",
+          "role": "s0:pool",
           "writable": true
         },
         {
@@ -5911,10 +6029,12 @@
         },
         {
           "address": "5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV",
+          "role": "s0:vaultA",
           "writable": true
         },
         {
           "address": "9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx",
+          "role": "s0:vaultB",
           "writable": true
         },
         {
@@ -5926,25 +6046,32 @@
           "writable": true
         },
         {
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:mintA"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mintB"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp1"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "s0:ixSysvar"
         },
         {
-          "address": "BAT1Ndpu5gbLTp2AZkSXP79LJBZfCH4B3zGhi6LtvdhK"
+          "address": "BAT1Ndpu5gbLTp2AZkSXP79LJBZfCH4B3zGhi6LtvdhK",
+          "role": "s0:cfgGlobal"
         },
         {
-          "address": "4cG31VNF9TzFinNc7BmnjhFvGjxkY3sCETVMtMgbrhPs"
+          "address": "4cG31VNF9TzFinNc7BmnjhFvGjxkY3sCETVMtMgbrhPs",
+          "role": "s0:oracleGlobal"
         }
       ]
     },
@@ -5983,14 +6110,17 @@
           "signer": true
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "s0:sysvar"
         },
         {
           "address": "35JazRP82XNsPLWL31Y3kwxYr3SABLufx9UnUJLnpkZz",
+          "role": "s0:marketIn",
           "writable": true
         },
         {
           "address": "Dj9TPFLUsN9BmGMMC3GEbRb2Nuu3q5RMCQ7rzY8tg1Ww",
+          "role": "s0:marketOut",
           "writable": true
         },
         {
@@ -5999,6 +6129,7 @@
         },
         {
           "address": "67nP7KoBRgrM6uJgPwVjDsxeV132471AvtJABLhj6jq5",
+          "role": "s0:vaultIn",
           "writable": true
         },
         {
@@ -6007,16 +6138,20 @@
         },
         {
           "address": "EiyYcHeonaax5m3BaUK55GkjevQrueatjCDaUoUQ7FJU",
+          "role": "s0:vaultOut",
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpIn"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tpOut"
         },
         {
-          "address": "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z"
+          "address": "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z",
+          "role": "s0:flintSelf"
         }
       ]
     },
@@ -6058,41 +6193,51 @@
           "signer": true
         },
         {
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:am"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:cm"
         },
         {
           "address": "CJ1fhvsz9FwFM54JyXpNvAj6dvxtiRQjMhYmG1aQVVX8",
+          "role": "s0:av",
           "writable": true
         },
         {
           "address": "EPUHjseXG3izk3MVUJ1PcyWT9xeBhtAnq8gUpq3j8Uni",
+          "role": "s0:cv",
           "writable": true
         },
         {
           "address": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+          "role": "s0:instr",
           "writable": true
         },
         {
           "address": "3vCToKSjuzX3dZ48hert2LsCTRyfDS6Cf7fXULfxsoPy",
+          "role": "s0:bidt",
           "writable": true
         },
         {
           "address": "BaojxUEuwerwQHQRBtTpuuMUreboaxymjyySPsdoJkYc",
+          "role": "s0:bido",
           "writable": true
         },
         {
           "address": "5163SrbBvsKPQz86yfSGXLnPqu83X6bAQD1Gy7AA4n3",
+          "role": "s0:lines",
           "writable": true
         },
         {
           "address": "9zeBhQkMGmvko7CyPcYg3TUmfneES329dTYtMGs3wx6j",
+          "role": "s0:maps",
           "writable": true
         },
         {
           "address": "HfJ9RgUGSrcsx1ctERFUUkHaMeeNr4a6vB7QQDFBKFwJ",
+          "role": "s0:ci",
           "writable": true
         },
         {
@@ -6104,7 +6249,8 @@
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         }
       ]
     },
@@ -6146,41 +6292,51 @@
           "signer": true
         },
         {
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "So11111111111111111111111111111111111111112",
+          "role": "s0:am"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:cm"
         },
         {
           "address": "CJ1fhvsz9FwFM54JyXpNvAj6dvxtiRQjMhYmG1aQVVX8",
+          "role": "s0:av",
           "writable": true
         },
         {
           "address": "EPUHjseXG3izk3MVUJ1PcyWT9xeBhtAnq8gUpq3j8Uni",
+          "role": "s0:cv",
           "writable": true
         },
         {
           "address": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+          "role": "s0:instr",
           "writable": true
         },
         {
           "address": "5HrX1UJLHQEBy3r5MTFNqEEw5sdQ3Fq4Sjq1JCmFgYWA",
+          "role": "s0:askt",
           "writable": true
         },
         {
           "address": "DUSwtK7JwPbCbRpUmKZsDmuaZasGVnvX5VJpgR8yHKKY",
+          "role": "s0:asko",
           "writable": true
         },
         {
           "address": "5163SrbBvsKPQz86yfSGXLnPqu83X6bAQD1Gy7AA4n3",
+          "role": "s0:lines",
           "writable": true
         },
         {
           "address": "9zeBhQkMGmvko7CyPcYg3TUmfneES329dTYtMGs3wx6j",
+          "role": "s0:maps",
           "writable": true
         },
         {
           "address": "HfJ9RgUGSrcsx1ctERFUUkHaMeeNr4a6vB7QQDFBKFwJ",
+          "role": "s0:ci",
           "writable": true
         },
         {
@@ -6192,7 +6348,8 @@
           "writable": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         }
       ]
     },
@@ -6241,6 +6398,7 @@
         },
         {
           "address": "TcMgpxh6SLph4DZNchtSp63KXK115g5Xo9vQ76kwbAZ",
+          "role": "s0:pool",
           "writable": true
         },
         {
@@ -6253,35 +6411,45 @@
         },
         {
           "address": "HjGGxEA7CvswS6h6ZWZEgBpo9zxnC2GSWtWkVVVNyd7o",
+          "role": "s0:va",
           "writable": true
         },
         {
           "address": "3qFqW6m1smXQNC6bNjfAAYJycqBAaWSVrjCGUG9gFgyC",
+          "role": "s0:vb",
           "writable": true
         },
         {
-          "address": "GbbesPbaYh5uiAZSYNXTc7w9jty1rpg3P9L4JeN4LkKc"
+          "address": "GbbesPbaYh5uiAZSYNXTc7w9jty1rpg3P9L4JeN4LkKc",
+          "role": "s0:ma"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mb"
         },
         {
-          "address": "6WGte45EuqH2hPKMxaXyc52DzCPWb4kfyP2EtN6gpNVs"
+          "address": "6WGte45EuqH2hPKMxaXyc52DzCPWb4kfyP2EtN6gpNVs",
+          "role": "s0:oracle"
         },
         {
-          "address": "BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV"
+          "address": "BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV",
+          "role": "s0:global"
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "Sysvar1nstructions1111111111111111111111111"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv"
+          "address": "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv",
+          "role": "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv"
         }
       ]
     },
@@ -6330,6 +6498,7 @@
         },
         {
           "address": "TcMgpxh6SLph4DZNchtSp63KXK115g5Xo9vQ76kwbAZ",
+          "role": "s0:pool",
           "writable": true
         },
         {
@@ -6342,35 +6511,45 @@
         },
         {
           "address": "HjGGxEA7CvswS6h6ZWZEgBpo9zxnC2GSWtWkVVVNyd7o",
+          "role": "s0:va",
           "writable": true
         },
         {
           "address": "3qFqW6m1smXQNC6bNjfAAYJycqBAaWSVrjCGUG9gFgyC",
+          "role": "s0:vb",
           "writable": true
         },
         {
-          "address": "GbbesPbaYh5uiAZSYNXTc7w9jty1rpg3P9L4JeN4LkKc"
+          "address": "GbbesPbaYh5uiAZSYNXTc7w9jty1rpg3P9L4JeN4LkKc",
+          "role": "s0:ma"
         },
         {
-          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mb"
         },
         {
-          "address": "6WGte45EuqH2hPKMxaXyc52DzCPWb4kfyP2EtN6gpNVs"
+          "address": "6WGte45EuqH2hPKMxaXyc52DzCPWb4kfyP2EtN6gpNVs",
+          "role": "s0:oracle"
         },
         {
-          "address": "BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV"
+          "address": "BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV",
+          "role": "s0:global"
         },
         {
-          "address": "Sysvar1nstructions1111111111111111111111111"
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": "Sysvar1nstructions1111111111111111111111111"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tp2"
         },
         {
-          "address": "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv"
+          "address": "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv",
+          "role": "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv"
         }
       ]
     }

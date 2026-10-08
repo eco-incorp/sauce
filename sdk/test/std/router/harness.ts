@@ -382,6 +382,15 @@ export const SVM_EXACT_IN_ARGUMENTS: Readonly<Record<string, readonly string[]>>
   bonkswap: ["xToY"],
   guacswap: ["xToY"],
   sarosDlmm: ["minOut", "xToY"],
+  solfiV2: ["minOut", "aToB"],
+  hadron: ["minOut", "aToB"],
+  taurusfi: [],
+  riptide: ["aToB"],
+  denali: ["minOut", "aToB"],
+  gavel: ["minOut", "paysBase"],
+  flint: [],
+  deriverse: ["instrId", "minOut", "paysBase"],
+  goonfiV2: ["minOut", "aToB"],
 };
 
 /** An exact-input venue's `…Cpi` or `…Data` arguments, `amountIn` first; undefined for any other

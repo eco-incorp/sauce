@@ -104,6 +104,10 @@ const bakedFor = (base: string, trade: Case, vector?: Vector): Record<string, st
       if (trade.dir === undefined) throw new Error(`${base}: the case names its direction`);
       baked[name] = String(trade.dir);
     }
+  if (args.includes("instrId")) {
+    const instr = vector!.prefix.slice(8, 16).match(/../g)!.reverse().join("");
+    baked.instrId = String(parseInt(instr, 16));
+  }
   if (args.includes("inIndex")) {
     baked.inIndex = String(parseInt(vector!.prefix.slice(16, 18), 16));
     baked.outIndex = String(parseInt(vector!.prefix.slice(18, 20), 16));
@@ -930,6 +934,7 @@ const VENUES: Venue[] = [
     cases: () => [
       {
         vector: "solfi-v2:65ZH:0",
+        dir: true,
         pay: WSOL,
         buy: USDC,
         amountIn: 2_000_000_000n,
@@ -938,6 +943,7 @@ const VENUES: Venue[] = [
       },
       {
         vector: "solfi-v2:65ZH:1",
+        dir: false,
         pay: USDC,
         buy: WSOL,
         amountIn: 148_944_767n,
@@ -955,6 +961,7 @@ const VENUES: Venue[] = [
   },
   {
     name: "Hadron",
+    floor: 0n,
     programs: ["hadron"],
     dirs: ["hadron"],
     clock: 1_783_175_236n,
@@ -990,6 +997,7 @@ const VENUES: Venue[] = [
       return [
         {
           vector: "hadron:6rK6:AtoB",
+          dir: true,
           pay: c.mintA as Address,
           buy: WSOL,
           amountIn: 50_000_000n,
@@ -998,6 +1006,7 @@ const VENUES: Venue[] = [
         },
         {
           vector: "hadron:6rK6:BtoA",
+          dir: false,
           pay: WSOL,
           buy: c.mintA as Address,
           amountIn: 64_586_434n,
@@ -1082,6 +1091,7 @@ const VENUES: Venue[] = [
     cases: () => [
       {
         vector: "riptide:6Vzx:0",
+        dir: true,
         pay: USDT,
         buy: USDC,
         amountIn: 1_000_000n,
@@ -1089,6 +1099,7 @@ const VENUES: Venue[] = [
       },
       {
         vector: "riptide:6Vzx:1",
+        dir: false,
         pay: USDC,
         buy: USDT,
         amountIn: 1_000_000n,
@@ -1106,6 +1117,7 @@ const VENUES: Venue[] = [
   },
   {
     name: "Denali",
+    floor: 0n,
     programs: ["denali"],
     dirs: ["denali"],
     clock: 1_783_123_200n,
@@ -1126,6 +1138,7 @@ const VENUES: Venue[] = [
       return [
         {
           vector: "denali:8njE:0",
+          dir: true,
           pay: c.mintA as Address,
           buy: USDC,
           amountIn: 100_000_000n,
@@ -1133,6 +1146,7 @@ const VENUES: Venue[] = [
         },
         {
           vector: "denali:8njE:1",
+          dir: false,
           pay: USDC,
           buy: c.mintA as Address,
           amountIn: 90_535_066n,
@@ -1190,6 +1204,7 @@ const VENUES: Venue[] = [
       return [
         {
           vector: "gavel:CcWf:baseIn",
+          dir: true,
           pay: c.baseMint as Address,
           buy: WSOL,
           amountIn: 1_000_000_000n,
@@ -1197,6 +1212,7 @@ const VENUES: Venue[] = [
         },
         {
           vector: "gavel:CcWf:quoteIn",
+          dir: false,
           pay: WSOL,
           buy: c.baseMint as Address,
           amountIn: 10_370_694n,
@@ -1295,6 +1311,7 @@ const VENUES: Venue[] = [
     cases: () => [
       {
         vector: "deriverse:8Wk2:sell",
+        dir: true,
         pay: WSOL,
         buy: USDC,
         amountIn: 100_000_000n,
@@ -1303,6 +1320,7 @@ const VENUES: Venue[] = [
       },
       {
         vector: "deriverse:8Wk2:buy",
+        dir: false,
         pay: USDC,
         buy: WSOL,
         amountIn: 10_000_000n,
@@ -1346,6 +1364,7 @@ const VENUES: Venue[] = [
       return [
         {
           vector: "goonfi-v2:TcMg:xToY",
+          dir: true,
           pay: c.mintA as Address,
           buy: USDC,
           amountIn: 1_000_000_000n,
@@ -1353,6 +1372,7 @@ const VENUES: Venue[] = [
         },
         {
           vector: "goonfi-v2:TcMg:yToX",
+          dir: false,
           pay: USDC,
           buy: c.mintA as Address,
           amountIn: 1_000_000_000n,

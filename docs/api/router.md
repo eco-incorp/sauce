@@ -841,6 +841,16 @@ because an account list passed to a function is built as an array first, where o
 | Guacswap                          |  16,985 |        19,981 |       24,621 |           |              | 64,613–70,631 |
 | Meteora DLMM                      |  15,518 |        18,798 |       22,946 |           |              |        40,225 |
 | Saros DLMM                        |   9,529 |        14,187 |       18,241 |           |              |        53,053 |
+| SolFi v2                          |  18,924 |        23,593 |       27,625 |    61,769 |       69,408 |        81,206 |
+| Hadron                            |  16,108 |        21,692 |       25,608 |    58,889 |       66,528 |        31,027 |
+| TaurusFi                          |  15,204 |        16,572 |       20,284 |    51,688 |       59,327 |       117,086 |
+| Riptide                           |  15,039 |        17,791 |       21,387 |    57,312 |       64,951 |       531,428 |
+| Denali                            |  14,276 |        19,163 |       23,195 |    54,367 |       62,006 |        23,501 |
+| Gavel                             |  12,633 |        16,809 |       20,841 |    37,577 |       45,216 |        19,084 |
+| Tessera V                         |  15,257 |        19,381 |       23,529 |    54,512 |       59,616 |        51,729 |
+| Flint                             |  13,666 |        14,507 |       18,247 |    47,604 |       55,243 |         8,241 |
+| Deriverse                         |  18,264 |        23,510 |       27,426 |    64,142 |       71,407 |        39,027 |
+| GoonFi v2                         |  18,097 |        22,772 |       26,804 |    64,586 |       72,225 |        65,485 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own
