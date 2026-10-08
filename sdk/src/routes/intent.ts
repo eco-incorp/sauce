@@ -37,8 +37,8 @@ export function assembleIntent(
  * On a chain whose native coin IS an ERC-20 (Arc's USDC, `nativeErc20`), the source Portal treats a
  * native amount and a leg of that token as one asset: `publish`, `fund` and `publishAndFund` revert
  * `RewardTokensNotUnique(token)` for a reward that carries both, because funding one would satisfy
- * the other's balance check for free. Exported for a program that opens an intent, which reports
- * through its own error type.
+ * the other's balance check for free. Exported for the in-program hop's `send`, which
+ * reports through its own error type.
  */
 export function rewardAssetsConflict(
   sourceChainId: bigint | number,

@@ -11,7 +11,8 @@ import { approve, transfer, transferFrom } from "@sauce/token";
 import ERC20 from "./erc20.abi.json";
 
 // An ERC-20 token. `symbol` is the registry's, or undefined for a token named by its address
-// (`Token(address)`). The writes are `@sauce/token`'s, with SafeERC20 semantics, and return nothing. A read is the typed
+// (`Token(address)`); an intent's delivery names the destination's token of the same symbol. The
+// writes are `@sauce/token`'s, with SafeERC20 semantics, and return nothing. A read is the typed
 // call where it is used, the program a hand-written `ERC20.at(token).balanceOf(holder)` is, rather
 // than a call into the library's `balanceOf`, which adds a frame.
 export class Token {

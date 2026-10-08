@@ -1,21 +1,23 @@
 /**
- * Arc (5042) through the public surface: the named `Arc` export, Arc's chain-scoped defines, and
- * the rewards an intent from Arc may offer.
+ * Arc (5042) end to end through the public surface: the named `Arc` export and a typed closure on
+ * it, Arc's chain-scoped defines, and intents in both directions between Base and Arc.
  *
- * An intent from Arc publishes and funds on Arc's Portal, with native value in USDC at 18 decimals.
- * Arc's Portal aliases that native coin to the USDC ERC-20, so a reward offers native
+ * Arc has the Portal every other chain has, so an intent to Arc records it and cooks on the shared
+ * Pot its Executor owns; an intent from Arc publishes and funds on it, with native value in USDC at
+ * 18 decimals. Arc's Portal aliases that native coin to the USDC ERC-20, so a reward offers native
  * value or the USDC token, never both: one with a native amount and a USDC leg reverts
  * `RewardTokensNotUnique(USDC)` at publish (read with an `eth_call` on Arc). Offline: every address
  * below was read from the chain or comes from the registries; Pot predictions use Kitchen 1.1.0
  * release initcode (see deployments-pot.test.ts), pending deployment.
  */
-import { getAddress, type Hex } from "viem";
+import { bytesToHex, decodeFunctionData, getAddress, type Hex } from "viem";
 
-import { Arc, Base, requireChain, routes } from "../src/index.js";
+import { Arc, Base, destinationPot, requireChain, routes } from "../src/index.js";
 import { chainDefines } from "../src/routes/ambient.js";
 import { denormalizeToEvm } from "../src/routes/encode.js";
+import { v12Pot } from "../src/evm/engine.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
-import { ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
+import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
 
 const PORTAL = "0xEC000769A73b70e16f361a442292500b3BCf4A85";
 const SHARED_POT = "0x6340080a1967a03cAAD490a170828d4C59EE5983";
@@ -90,48 +92,119 @@ describe("Arc: chain-scoped defines", () => {
   });
 });
 
+describe("Arc: intents", () => {
+  const amount = 1_000_000n;
+  const carries = (bytes: Uint8Array, word: string) =>
+    Buffer.from(bytes).toString("hex").includes(word.slice(2).toLowerCase());
+
+  it("Base -> Arc: the body compiles for Arc and cooks on the shared Pot through its Portal", () => {
+    const intent = Arc.hop({
+      source: Base,
+      send: { token: BASE_USDC, amount },
+      receive: { token: ARC_USDC, amount },
+      refundee: CREATOR,
+      prover: ecoRoutesProver("base", "arc"),
+      fee: ARC_EXECUTION_FEE,
+    }).then(() => {
+      USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
+    });
+
+    expect(intent.program.chain).toBe(requireChain("base"));
+    const [body] = intent.program.bodies;
+    expect(body!.destination).toBe(requireChain("arc"));
+    expect(ecoRoutesPortal("arc")).toBe(PORTAL);
+    expect(destinationPot("arc")).toBe(SHARED_POT);
+    expect(destinationPot("base")).toBe(SHARED_POT);
+    // The program publishes on Base's Portal an intent whose route names Arc's Portal and cooks on
+    // the shared Pot: both are one address, carried in the program.
+    expect(carries(intent.program.bytecode, PORTAL)).toBe(true);
+    expect(carries(intent.program.bytecode, SHARED_POT)).toBe(true);
+    // Its cook runs on the owner's Pot, with the source Kitchen's fee.
+    const cook = intent.cook({ owner: CREATOR }, 7n);
+    expect(cook.value).toBe(7n);
+    const decoded = decodeFunctionData({ abi: v12Pot.abi, data: cook.data });
+    expect(decoded.args?.[0]).toBe(v12EngineAddress());
+    expect(decoded.args?.[1]).toBe(bytesToHex(intent.program.bytecode));
+  });
+
+  it("Arc -> Base: a native reward, or Arc's USDC as a token, opens from Arc", () => {
+    const open = (send: routes.HopSend) =>
+      Base.hop({ source: Arc, send, refundee: CREATOR, fee: 1n }).then(() => {});
+    expect(open({ native: 10n ** 18n }).program.chain).toBe(requireChain("arc"));
+    expect(open({ token: ARC_USDC, amount }).program.chain).toBe(requireChain("arc"));
+  });
+
+  it("both directions share the prover eco-routes deploys on both ends", () => {
+    expect(ecoRoutesProver("base", "arc")).toBe(ecoRoutesProver("arc", "base"));
+  });
+});
+
 describe("Arc: a reward cannot offer native value and USDC together", () => {
   const amount = 1_000_000n;
   const oneUsdcNative = 10n ** 18n;
   const REFUSAL =
     /arc \(chain 5042\) offers both a nativeAmount and a USDC token leg \(0x3600000000000000000000000000000000000000\)[\s\S]*RewardTokensNotUnique[\s\S]*Fold them into one leg/;
-  const reward = (source: typeof Arc.chain, destination: string, token: Hex) => ({
-    creator: CREATOR as Hex,
-    prover: ecoRoutesProver(source.slug, destination),
-    deadline: 2_000_003_600n,
-    nativeAmount: oneUsdcNative,
-    tokens: [{ token, amount }],
-  });
+  /** Both: native value and `token`, from `source` to `destination`. */
+  const both = (
+    source: routes.HopChain,
+    destination: { readonly hop: routes.ChainHop },
+    token: Hex,
+  ) =>
+    destination
+      .hop({
+        source,
+        send: [{ native: oneUsdcNative }, { token, amount }],
+        refundee: CREATOR,
+        fee: 1n,
+      })
+      .then(() => {});
+  /** A program that opens an intent to `destination`, rewarded in native value AND its own chain's
+   *  USDC. */
+  const program = (destination: string) => `
+    function main() {
+      const amount = USDC.balanceOf(ctx.self());
+      ${destination}.hop({ send: [{ token: USDC, amount }, { native: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+        USDC.transfer(RECIPIENT, amount);
+      });
+    }
+  `;
+  const compileOn = (chain: string, destination: string) =>
+    routes.compileSauceRoute(
+      chain,
+      program(destination),
+      { pot: SHARED_POT, engine: ENGINE },
+      {
+        ambient: ["@sauce/token"],
+        defines: { RECIPIENT: 0x2222222222222222222222222222222222222222n },
+        intents: { deadline: 2_000_000_000n, executionFee: 1n },
+      },
+    );
 
-  it("an intent is refused when it is assembled, naming the chain, the token and the remedy", () => {
-    expect(() =>
-      routes.assembleIntent(Arc.chain, Base.chain, undefined, reward(Arc.chain, "base", ARC_USDC)),
-    ).toThrow(REFUSAL);
+  it("the TypeScript builder refuses it when it compiles, naming the chain, the token and the remedy", () => {
+    expect(() => both(Arc, Base, ARC_USDC)).toThrow(REFUSAL);
   });
 
   it("the Portal helpers refuse a hand-built one before encoding anything", () => {
-    const assembled = routes.assembleIntent(Arc.chain, Base.chain, undefined, {
-      ...reward(Arc.chain, "base", ARC_USDC),
+    const valid = routes.assembleIntent(requireChain("arc"), requireChain("base"), undefined, {
+      creator: CREATOR,
+      prover: ecoRoutesProver("arc", "base"),
+      deadline: 2_000_003_600n,
       nativeAmount: 0n,
+      tokens: [{ token: ARC_USDC, amount }],
     });
-    const intent = {
-      ...assembled,
-      reward: { ...assembled.reward, nativeAmount: oneUsdcNative },
-    };
+    const intent = { ...valid, reward: { ...valid.reward, nativeAmount: oneUsdcNative } };
     expect(() => routes.publishAndFundTx(intent, false, { portal: PORTAL })).toThrow(REFUSAL);
     expect(() => routes.approvalTxs(intent, { portal: PORTAL })).toThrow(REFUSAL);
     expect(() => routes.fundTx(intent, false, { portal: PORTAL })).toThrow(REFUSAL);
     expect(() => routes.publishTx(intent, { portal: PORTAL })).toThrow(REFUSAL);
   });
 
+  it("an intent a program opens on Arc is refused when it is compiled", () => {
+    expect(() => compileOn("arc", "Base")).toThrow(REFUSAL);
+  });
+
   it("the same shape is fine on Base, whose native coin is not a token", () => {
-    const intent = routes.assembleIntent(
-      Base.chain,
-      Arc.chain,
-      undefined,
-      reward(Base.chain, "arc", BASE_USDC),
-    );
-    expect(routes.publishAndFundTx(intent, false, { portal: PORTAL }).value).toBe(oneUsdcNative);
-    expect(routes.approvalTxs(intent, { portal: PORTAL })).toHaveLength(1);
+    expect(both(Base, Arc, BASE_USDC).program.bytecode.length).toBeGreaterThan(0);
+    expect(compileOn("base", "Arbitrum").compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

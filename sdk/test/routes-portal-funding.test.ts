@@ -2,16 +2,19 @@
  * routes/portal.ts — how an intent's reward reaches its vault from a wallet: by transfer, then
  * `publish` (the default), or approvals then `publishAndFund` (the opt-in).
  *
- * Pure: hand-built `Intent`s, no compiler, no network.
+ * Pure: hand-built `Intent`s, no compiler, no network. `routes-intent-bodies.e2e.test.ts` and
+ * `cli.e2e.test.ts` run both against the real Portal and check `isIntentFunded`.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  bytesToHex,
   decodeFunctionData,
   erc20Abi,
   toFunctionSignature,
   getAddress,
+  toFunctionSelector,
   type AbiFunction,
   type Hex,
 } from "viem";
@@ -19,6 +22,7 @@ import {
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { hashIntent } from "../src/routes/encode.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import {
   approvalTxs,
@@ -68,11 +72,11 @@ const transferOf = (data: Hex) => {
 };
 
 describe("the vault read a Pot makes is publish's payload under another selector", () => {
-  // A program that funds an intent asks for the vault with `publish`'s rendered calldata behind
-  // `intentVaultAddress`'s selector, which is sound only while the two take the same arguments.
-  // That is held two ways: this compares the registry's declarations; and
-  // `registry-abi/targets.json` requires both overloads, so the registry test fails if a deployed
-  // Portal stops dispatching either signature.
+  // `intent-sugar.ts#vaultFundingStatements` asks for the vault with `publish`'s rendered calldata
+  // behind `intentVaultAddress`'s selector, which is sound only while the two take the same
+  // arguments. That is held three ways: the lowering compares the two encodings of each intent; this
+  // compares the registry's declarations; and `registry-abi/targets.json` requires both overloads,
+  // so the registry test fails if a deployed Portal stops dispatching either signature.
   const signature = (name: string) =>
     toFunctionSignature(
       PortalABI.find((item) => item.type === "function" && item.name === name) as AbiFunction,
@@ -219,5 +223,32 @@ describe("intentSourceTxs: approvals then publishAndFund (the opt-in)", () => {
     expect(() =>
       intentSourceTxs(built, { portal: PORTAL }, { fundVia: "permit" as never }),
     ).toThrow(/fundVia 'permit' is not "transfer" or "publishAndFund"/);
+  });
+});
+
+describe("intents.fundVia, in the program that opens the intent", () => {
+  it("funds by transfer into the vault by default, and through publishAndFund when told", () => {
+    const body = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Base.hop({ send: [{ token: USDC, amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+    USDC.transfer(RECIPIENT, amount);
+  });
+}`;
+    const programOf = (fundVia?: "publishAndFund") =>
+      bytesToHex(
+        compileSauceProgram("optimism", body, {
+          defines: { RECIPIENT: 0x5555555555555555555555555555555555555555n },
+          intents: { executionFee: 0n, ...(fundVia === undefined ? {} : { fundVia }) },
+        }).bytecode,
+      );
+    const selectorOf = (name: string) =>
+      toFunctionSelector(
+        PortalABI.find((item) => item.type === "function" && item.name === name) as AbiFunction,
+      ).slice(2);
+
+    expect(programOf()).toContain(selectorOf("intentVaultAddress"));
+    expect(programOf()).not.toContain(selectorOf("publishAndFund"));
+    expect(programOf("publishAndFund")).toContain(selectorOf("publishAndFund"));
+    expect(programOf("publishAndFund")).not.toContain(selectorOf("intentVaultAddress"));
   });
 });

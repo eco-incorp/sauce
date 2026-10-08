@@ -177,7 +177,7 @@ export function ecoRoutesExecutorOf(portal: Hex): Hex {
  * Portal's FIRST `CREATE`. Like the Executor, a pure function of the Portal address.
  *
  * `routes/vault.ts#ecoRoutesVaultConfig` builds the vault's CREATE2 init code from it.
- * `eco-routes-vault.test.ts` holds the derivation to the real Portal's.
+ * `routes-intent-bodies.e2e.test.ts` deploys the real Portal and checks the vault it reports.
  */
 export const ECO_ROUTES_VAULT_IMPLEMENTATION_NONCE = 1n;
 

@@ -21,7 +21,7 @@ import {
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
 
-const RECIPIENT = "0x6666666666666666666666666666666666666666";
+const RECIPIENT = "0x6666666666666666666666666666666666666666" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333";
 const PROVER = "0x4444444444444444444444444444444444444444";
 
@@ -62,14 +62,58 @@ describe("compileSauceProgram", () => {
     ]);
   });
 
-  it("gives a program the chain's ambient names, which compileSauceRoute leaves out", () => {
+  it("gives a program the default ambient token module, which compileSauceRoute adds only when asked", () => {
     const body = "require(chainId == 8453n);\ntransfer(USDC, RECIPIENT, 5n);\n";
     const defines = { RECIPIENT: BigInt(RECIPIENT) };
-    expect(compileSauceProgram("base", body, { defines }).bytecode.length).toBeGreaterThan(0);
-    // compileSauceRoute adds none of it, deliberately: chainId and `transfer` are undeclared there.
-    expect(() =>
-      compileSauceRoute("base", body, { pot: RECIPIENT, engine: RECIPIENT }, { defines }),
-    ).toThrow();
+    const execution = { pot: RECIPIENT, engine: RECIPIENT };
+    const program = compileSauceProgram("base", body, { defines });
+    const route = compileSauceRoute("base", body, execution, {
+      defines,
+      ambient: ["@sauce/token"],
+    });
+    expect(program.bytecode).toEqual(route.compiled.bytecode[0]);
+    // Not asked, compileSauceRoute adds none of it: `transfer` is undeclared there.
+    expect(() => compileSauceRoute("base", body, execution, { defines })).toThrow();
+  });
+
+  it("builds an intent the program opens", () => {
+    const body = [
+      "function main(recipient: Address) {",
+      "  const amount = USDC.balanceOf(ctx.self());",
+      "  Arbitrum.hop({ send: [{ token: USDC, amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
+      "    USDC.transfer(recipient, amount);",
+      "  });",
+      "}",
+    ].join("\n");
+    const program = compileSauceProgram("base", body, {
+      intents: { deadline: 2_000_000_000n, executionFee: 0n },
+    });
+    expect(program.entryParams).toEqual([{ name: "recipient", type: "Address" }]);
+    expect(program.bytecode.length).toBeGreaterThan(0);
+  });
+
+  it("compiles the body of an intent every value of which is known now, with nothing to carry", () => {
+    const body = [
+      "Base.hop({ send: [{ token: USDC, amount: 7n }], receive: { token: USDC, amount: 5n }, refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
+      "  USDC.transfer(RECIPIENT, 5n);",
+      "});",
+    ].join("\n");
+    const program = compileSauceProgram("arbitrum", body, {
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+      intents: { deadline: 2_000_000_000n, executionFee: 0n },
+    });
+    expect(program.bodies).toHaveLength(1);
+    const [opened] = program.bodies;
+    expect(opened!.captures).toEqual([]);
+    expect(opened!.destination.slug).toBe("base");
+    // The body is a program of its own, its bytes inside the program that opens the intent.
+    expect(bytesToHex(program.bytecode)).toContain(bytesToHex(opened!.bytecode).slice(2));
+    // Funded by transfer, or opted into publishAndFund: two programs.
+    const optedOut = compileSauceProgram("arbitrum", body, {
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+      intents: { deadline: 2_000_000_000n, executionFee: 0n, fundVia: "publishAndFund" },
+    });
+    expect(bytesToHex(optedOut.bytecode)).not.toBe(bytesToHex(program.bytecode));
   });
 
   it("reports compact-v1 with its schema, and on Solana the accounts apart from the arguments", () => {

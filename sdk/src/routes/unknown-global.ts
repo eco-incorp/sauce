@@ -17,6 +17,8 @@ import { addressOn } from "../descriptors/query.js";
 import { chainSlugForKey, isChainKey, NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
 import { requireChain } from "../chains/canonical.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
+import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
+import { chainAt } from "./intent-parts.js";
 import { pascalOfSlug } from "./pascal.js";
 
 /** The diagnostics a name nothing declares produces: an unknown value, or a call of one. */
@@ -37,9 +39,9 @@ interface Located {
   readonly end: { readonly offset: number };
 }
 
-/** Where a name the compiler reports is written: the start of a diagnostic's span, or, for a name
- *  read on another chain that the chain lacks (`globalIn`), whose span is wider, the name itself
- *  within it. */
+/** Where a name the compiler reports is written: the start of a diagnostic's span, or, for a name a
+ *  hop's delivery read on its destination that the destination lacks (`globalIn`), whose span is
+ *  the hop, the name itself within it. */
 function nameAt(source: string, d: Located): number | undefined {
   if (d.code !== "GlobalInMissing") return d.start.offset;
   const name = /global `([A-Za-z_$][\w$]*)`/.exec(d.message ?? "")?.[1];
@@ -148,7 +150,11 @@ export function unknownGlobalError(
       if (at === undefined) return undefined;
       // The name as written, from where it starts: a dotted path, the root alone included.
       const dotted = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/.exec(source.slice(at))?.[0];
-      return dotted === undefined ? undefined : absentNameError(dotted, chain, tokenList, options);
+      // Worded for the chain the code it is in runs on: an intent's body is its destination's.
+      const on = chainAt(source, at, chain);
+      return dotted === undefined
+        ? undefined
+        : absentNameError(dotted, on, on.id === chain.id ? tokenList : undefined, options);
     })
     .find((message): message is string => message !== undefined);
   if (refusal === undefined) return undefined;
@@ -198,6 +204,7 @@ export function absentNameError(
     on = requireChain(chainSlugForKey(segments[0]!)!);
     rest = segments.slice(1);
     if (rest[0] === undefined) return undefined;
+    if (rest[0] === "Portal") return portalAbsence(chain, on);
     if (registryTokenSymbols().has(rest[0])) {
       return (
         `'${rest[0]}' is not a known protocol or family alias: a token is never qualified by a ` +
@@ -267,15 +274,39 @@ export function absentNameError(
  * a real absence, which the comparison decides (`if (UniswapV3.Factory != 0) { … }`).
  */
 export function absentPathError(name: string, chain: CanonicalChain): string | undefined {
-  // A contract the chain lacks is what a comparison with zero is for.
+  // A chain with no Portal from here, or a contract the chain lacks, is what a comparison with zero
+  // is for.
+  if (name.split(".")[1] === "Portal") return undefined;
   const refusal = absentNameError(name, chain);
   return refusal === undefined || refusal.startsWith("Contract '") ? undefined : refusal;
 }
 
+/** Why a program on `source` has no `Portal` of `destination` to open an intent with, or
+ *  `undefined` when it has one. */
+function portalAbsence(source: CanonicalChain, destination: CanonicalChain): string | undefined {
+  if (source.kind !== "evm") {
+    return `a program on ${source.slug} opens no intent: the Portals a program publishes through are EVM contracts`;
+  }
+  if (destination.kind !== "evm") {
+    return (
+      `an intent a program opens runs its body on an EVM chain: ${destination.slug} runs ` +
+      "programs for its Kitchen, which a route call does not issue from here yet"
+    );
+  }
+  for (const chain of [source, destination]) {
+    try {
+      ecoRoutesPortal(chain);
+    } catch (error) {
+      return (error as Error).message;
+    }
+  }
+  return undefined;
+}
+
 /**
  * A chain's name called as a function — `Arbitrum(() => { … }).reward(…)`, the removed intent
- * form — reported as what it is. A chain's name is an instance of its chain's class
- * (`chain-module.ts`), which the compiler refuses to call.
+ * form — reported with the form that replaced it. A chain's name is an instance
+ * of its chain's class (`chain-module.ts`), which the compiler refuses to call.
  */
 export function chainCalledError(cause: unknown): Error | undefined {
   const message = String((cause as Error | undefined)?.message ?? cause);
@@ -283,8 +314,8 @@ export function chainCalledError(cause: unknown): Error | undefined {
   if (name === undefined || !isChainKey(name)) return undefined;
 
   return new Error(
-    `compileSauceRoute: \`${name}\` is a chain id, not a function: \`${name}(() => { … })\` no ` +
-      `longer opens an intent. The compiler ` +
+    `compileSauceRoute: \`${name}\` is a chain id, not a function: an intent opens with ` +
+      `\`await ${name}.hop({ send, receive, refundee })\`. The compiler ` +
       `reported: ${headline(cause) ?? `\`${name}\` is not a function`}`,
     { cause },
   );
