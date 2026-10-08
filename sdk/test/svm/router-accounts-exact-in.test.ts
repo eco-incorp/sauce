@@ -70,6 +70,8 @@ const FIRST: Record<string, boolean> = {
   wsolToJito: true,
   jitoToWsol: true,
   jupToSctm: true,
+  sellBase: true,
+  sellQuote: false,
 };
 
 /** A vector whose direction's name says the other way: Helium's redemption pays its supply token,
@@ -777,6 +779,83 @@ ROLES.sanctumInfinity = () => ({
   slab: "slab",
 });
 
+ROLES.oneIntroSwap = (aToB) => ({
+  metadata: "metadata",
+  pool: "pool",
+  poolAuthority: "authority",
+  vaultA: aToB ? "vin" : "vout",
+  vaultB: aToB ? "vout" : "vin",
+  ...(aToB ? { feeA0: "feeA", feeB0: "feeB" } : { feeA1: "feeA", feeB1: "feeB" }),
+  tokenProgram: "tp",
+});
+ROLES.solfiV1 = () => ({
+  pool: "pool",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  tokenProgram: "tokenProgram",
+  instructionsSysvar: "sysvarIx",
+});
+ROLES.woofi = (aToB) => {
+  const [a, b] = aToB ? ["f", "t"] : ["t", "f"];
+  return {
+    wooconfig: "wooconfig",
+    tokenProgram: "tokprog",
+    wooracleA: `wo${a}`,
+    woopoolA: `wp${a}`,
+    vaultA: `v${a}`,
+    priceUpdateA: `pu${a}`,
+    wooracleB: `wo${b}`,
+    woopoolB: `wp${b}`,
+    vaultB: `v${b}`,
+    priceUpdateB: `pu${b}`,
+  };
+};
+ROLES.bisonfi = () => ({
+  pool: "pool",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  tokenProgramA: "tp1",
+  tokenProgramB: "tp2",
+  authorization: "auth",
+});
+ROLES.sanctumStakePool = () => ({
+  pool: "pool",
+  withdrawAuthority: "withdrawAuthority",
+  reserveStake: "reserveStake",
+  managerFeeAccount: "managerFeeAccount",
+  referrerFeeAccount: "referrerFeeAccount",
+  poolMint: "poolMint",
+  systemProgram: "systemProgram",
+  tokenProgram: "tokenProgram",
+});
+
+ROLES.archer = () => ({
+  pool: "mkt",
+  mintA: "mA",
+  mintB: "mB",
+  vaultA: "vA",
+  vaultB: "vB",
+  tokenProgramA: "tpA",
+  tokenProgramB: "tpB",
+  maker0: "mk0",
+  maker1: "mk1",
+});
+
+ROLES.metric = () => ({
+  pool: "pool",
+  mintA: "ma",
+  mintB: "mb",
+  vaultA: "va",
+  vaultB: "vb",
+  tokenProgramA: "tpa",
+  tokenProgramB: "tpb",
+  systemProgram: "sys",
+  program: "self",
+  oracleProgram: "oracleProg",
+  oracleConfig: "oracleConfig",
+  priceAccount: "price",
+});
+
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -839,6 +918,15 @@ const FAMILY: Record<string, string> = {
   "perps-jlp": "perpsJlp",
   "perps-jlp-mint": "perpsJlpMint",
   "sanctum-infinity": "sanctumInfinity",
+  "one-intro-swap": "oneIntroSwap",
+  "solfi-v1": "solfiV1",
+  woofi: "woofi",
+  bisonfi: "bisonfi",
+  "sanctum-stake-pool": "sanctumStakePool",
+  "sanctum-stake-pool-2": "sanctumStakePool",
+  "sanctum-stake-pool-3": "sanctumStakePool",
+  archer: "archer",
+  metric: "metric",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */
@@ -872,6 +960,9 @@ describe("routerSvmAccountOrder: the exact-input venues, as sauce-recipes builds
       aToB: aToB!,
       ...(vector.venue === "pumpswap"
         ? { poolV2: vector.accounts.some((a) => roleOf(a) === "pv2") }
+        : {}),
+      ...(vector.venue === "archer"
+        ? { makers: vector.accounts.filter((a) => /^mk\d+$/.test(roleOf(a) ?? "")).length }
         : {}),
       ...(vector.venue === "perps-jlp-mint"
         ? {

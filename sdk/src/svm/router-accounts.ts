@@ -388,6 +388,60 @@ export const ROUTER_SVM_VENUES = {
     data: "sanctumInfinityData",
     cpi: "sanctumInfinityCpi",
   },
+  "solfi-v1": {
+    program: "SoLFiHG9TfgtdUXUjWAxi3LtvYuFyDLVhBWxdMZxyCe",
+    data: "solfiV1Data",
+    cpi: "solfiV1Cpi",
+  },
+  archer: {
+    program: "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+    data: "archerData",
+    cpi: "archerCpi",
+  },
+  // `@sauce/router` has no function for these, only their account order and data template:
+  // - a Pot cannot send their swap: One Intro requires its signer owned by the System program,
+  //   BisonFi a signature from the authorization account its routing program signs for, and a
+  //   Sanctum stake pool's deposit takes native SOL from its signer;
+  // - WOOFi's keepers stopped (its oracles last updated 2026-04-20 and 2025-11-23): on mainnet
+  //   state its swap refuses every price as infeasible (WooOracleNotFeasible) at any clock, so no
+  //   swap of it can be proven;
+  // - Metric's oracle refuses its price as stale (its error 20, on mainnet itself on 2026-10-07),
+  //   so no swap of it can be proven either.
+  "one-intro-swap": {
+    program: "DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm",
+    data: null,
+    cpi: null,
+  },
+  woofi: {
+    program: "WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb",
+    data: null,
+    cpi: null,
+  },
+  metric: {
+    program: "Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j",
+    data: null,
+    cpi: null,
+  },
+  bisonfi: {
+    program: "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi",
+    data: null,
+    cpi: null,
+  },
+  "sanctum-stake-pool": {
+    program: "SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy",
+    data: null,
+    cpi: null,
+  },
+  "sanctum-stake-pool-2": {
+    program: "SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY",
+    data: null,
+    cpi: null,
+  },
+  "sanctum-stake-pool-3": {
+    program: "SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn",
+    data: null,
+    cpi: null,
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -441,6 +495,8 @@ export interface RouterSvmAccountOptions {
   readonly assets?: number;
   /** Jupiter Perpetuals' JLP mint: how many custodies its pool holds, each a custody and its oracle
    *  at the end; 6 when absent. */
+  /** Archer: how many makers the swap takes, each at the end; 1 when absent. */
+  readonly makers?: number;
   readonly custodies?: number;
   /** Sanctum Infinity: how many accounts the paid and the bought token's calculator takes, 1 for
    *  wrapped SOL's and 5 for a stake pool's; 5 when absent. */
@@ -734,6 +790,15 @@ const EXACT_IN_VENUES = [
   "perps-jlp",
   "perps-jlp-mint",
   "sanctum-infinity",
+  "one-intro-swap",
+  "solfi-v1",
+  "woofi",
+  "bisonfi",
+  "sanctum-stake-pool",
+  "sanctum-stake-pool-2",
+  "sanctum-stake-pool-3",
+  "archer",
+  "metric",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1663,6 +1728,124 @@ function exactInAccountOrder(
         r("slab"),
       ];
     }
+    case "one-intro-swap":
+      // A swap paying token A takes the first two fee accounts, one paying token B the last two.
+      return [
+        r("metadata"),
+        w("pool"),
+        r("poolAuthority"),
+        ...paid("vaultA", "vaultB"),
+        PAYER,
+        w("source"),
+        w("recipient"),
+        ...(aToB ? [w("feeA0"), w("feeB0")] : [w("feeA1"), w("feeB1")]),
+        r("tokenProgram"),
+      ];
+    case "solfi-v1":
+      return [
+        AUTHORITY,
+        w("pool"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("tokenProgram"),
+        r("instructionsSysvar"),
+      ];
+    case "woofi": {
+      // Token A is the base, B the quote; `aToB` sells the base. The swap takes the quote token's
+      // pool, price update and vault again, and the rebate's recipient, the authority, unsigned.
+      const [from, to] = aToB ? ["A", "B"] : ["B", "A"];
+      return [
+        r("wooconfig"),
+        r("tokenProgram"),
+        AUTHORITY,
+        w(`wooracle${from}`),
+        w(`woopool${from}`),
+        w("source"),
+        w(`vault${from}`),
+        w(`priceUpdate${from}`),
+        w(`wooracle${to}`),
+        w(`woopool${to}`),
+        w("recipient"),
+        w(`vault${to}`),
+        w(`priceUpdate${to}`),
+        w("woopoolB"),
+        r("priceUpdateB"),
+        w("vaultB"),
+        r("authority"),
+      ];
+    }
+    case "bisonfi":
+      return [
+        AUTHORITY,
+        w("pool"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("authorization"),
+      ];
+    case "sanctum-stake-pool":
+    case "sanctum-stake-pool-2":
+    case "sanctum-stake-pool-3":
+      // `DepositSol`: the authority pays native SOL, so it is writable.
+      if (!aToB) throw new Error("a Sanctum stake pool only deposits here");
+      return [
+        w("pool"),
+        r("withdrawAuthority"),
+        w("reserveStake"),
+        PAYER,
+        w("recipient"),
+        w("managerFeeAccount"),
+        w("referrerFeeAccount"),
+        w("poolMint"),
+        r("systemProgram"),
+        r("tokenProgram"),
+      ];
+    case "archer": {
+      // Token A is the market's base, B its quote; `aToB` sells the base. The authority's quote
+      // account comes twice.
+      const count = options.makers ?? 1;
+      if (!Number.isInteger(count) || count < 1) throw new Error(`makers is a count, not ${count}`);
+      const quote = aToB ? w("recipient") : w("source");
+      return [
+        PAYER,
+        w("pool"),
+        quote,
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        aToB ? w("source") : w("recipient"),
+        quote,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        ...Array.from({ length: count }, (_, i) => w(`maker${i}`)),
+      ];
+    }
+    case "metric":
+      // The swap prices off its oracle, by a CPI to `oracleProgram` on `oracleConfig` and
+      // `priceAccount`.
+      return [
+        AUTHORITY,
+        w("pool"),
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("systemProgram"),
+        r("program"),
+        r("oracleProgram"),
+        w("oracleConfig"),
+        w("priceAccount"),
+      ];
     default: {
       const unknown: never = venue;
       throw new Error(`not a venue @sauce/router swaps at an exact input: ${String(unknown)}`);

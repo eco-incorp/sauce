@@ -20,6 +20,9 @@ interface Vector {
   venue: string;
   prefix: string;
   suffix: string;
+  cfg: Record<string, unknown>;
+  /** What the recipes divide the amount by, where it is not 1: Archer's base lot, selling base. */
+  amountPatch?: { patchDivisorIn?: string };
 }
 const VECTORS = (
   JSON.parse(
@@ -77,11 +80,18 @@ const FIRST: Record<string, boolean> = {
   wsolToJito: true,
   jitoToWsol: true,
   jupToSctm: true,
+  sellBase: true,
+  sellQuote: false,
 };
 const PAYS_FIRST: Record<string, boolean> = { "helium-treasury:Aon7:redeem": true };
 
 /** The floor the recipes' instruction writes where the venue's swap carries one: 1, but 0 here. */
-const FLOOR: Record<string, bigint> = { hadron: 0n, denali: 0n, "helium-treasury": 0n };
+const FLOOR: Record<string, bigint> = {
+  hadron: 0n,
+  denali: 0n,
+  "helium-treasury": 0n,
+  archer: 0n,
+};
 
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 const leHex = (text: string, byte: number, width: number): bigint =>
@@ -91,9 +101,21 @@ const leHex = (text: string, byte: number, width: number): bigint =>
       .toString("hex")}`,
   );
 
-/** The arguments past the amount the venue's `…Data` takes. */
-const dataArguments = (venue: string): string[] =>
-  svmExactInArguments(ROUTER_SVM_VENUES[venue as RouterSvmVenue].data)!;
+/** The arguments past the amount the venue's data carries: its `…Data`'s, or, for a venue a Pot
+ *  cannot send and `@sauce/router` therefore has no function for, its instruction's. */
+const INSTRUCTION_ONLY: Record<string, string[]> = {
+  "one-intro-swap": ["minOut"],
+  woofi: ["minOut"],
+  metric: ["minOut", "aToB"],
+  bisonfi: ["minOut", "aToB"],
+  "sanctum-stake-pool": [],
+  "sanctum-stake-pool-2": [],
+  "sanctum-stake-pool-3": [],
+};
+const dataArguments = (venue: string): string[] => {
+  const data = ROUTER_SVM_VENUES[venue as RouterSvmVenue].data;
+  return data === null ? INSTRUCTION_ONLY[venue]! : svmExactInArguments(data)!;
+};
 
 const optionsOf = (key: string, vector: Vector): RouterSvmDataOptions => {
   const aToB = PAYS_FIRST[key] ?? FIRST[key.split(":").pop()!];
@@ -114,6 +136,7 @@ const optionsOf = (key: string, vector: Vector): RouterSvmDataOptions => {
         ? { inIndex: leHex(vector.prefix, 8, 1), outIndex: leHex(vector.prefix, 9, 1) }
         : {}),
     ...(args.includes("instrId") ? { instrId: leHex(vector.prefix, 4, 4) } : {}),
+    ...(args.includes("baseLot") ? { baseLot: BigInt(vector.cfg.baseLotSize as string) } : {}),
   };
 };
 
@@ -131,6 +154,7 @@ const fieldsOf = (venue: string): Partial<RouterSvmDataOptions> => {
     ...(args.includes("inIndex") ? { inIndex: 0n, outIndex: 1n } : {}),
     ...(args.includes("inCalcAccounts") ? { inCalcAccounts: 5n, outCalcAccounts: 1n } : {}),
     ...(args.includes("instrId") ? { instrId: 1n } : {}),
+    ...(args.includes("baseLot") ? { baseLot: 1n } : {}),
   };
 };
 
@@ -141,7 +165,11 @@ describe("routerSvmDataTemplate at an exact input: the recipes' own bytes", () =
       prefix: hex(written.prefix),
       suffix: hex(written.suffix),
       divisor: String(written.divisor),
-    }).toEqual({ prefix: vector.prefix, suffix: vector.suffix, divisor: "1" });
+    }).toEqual({
+      prefix: vector.prefix,
+      suffix: vector.suffix,
+      divisor: vector.amountPatch?.patchDivisorIn ?? "1",
+    });
   });
 
   it("covers every venue: each one swaps at a limit or has the recipes' exact-input vector", () => {

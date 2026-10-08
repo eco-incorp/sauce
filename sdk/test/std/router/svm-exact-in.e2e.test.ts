@@ -28,7 +28,16 @@ import type { Address } from "@solana/kit";
 import { AccountRole, getAddressEncoder, getProgramDerivedAddress, lamports } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 
-import { describeSvm, sendInstructions, setTokenAccount } from "../../svm/engine-harness.js";
+import {
+  describeSvm,
+  randomAddress,
+  sendInstructions,
+  setTokenAccount,
+  tokenAmount,
+} from "../../svm/engine-harness.js";
+import { ROUTER_SVM_VENUES, routerSvmAccounts } from "../../../src/svm/router-accounts.js";
+import type { RouterSvmVenue } from "../../../src/svm/router-accounts.js";
+import { routerSvmDataTemplate } from "../../../src/svm/router-data.js";
 import type { EngineHarness } from "../../svm/engine-harness.js";
 import {
   boot,
@@ -50,6 +59,7 @@ import type { Compiled, CpiAccount, SlotAccount, Trade } from "./exact-in-harnes
 import { svmExactInArguments } from "./harness.js";
 
 interface Vector {
+  amountPatch?: { patchDivisorIn?: string };
   program: Address;
   pay: Address;
   buy: Address;
@@ -105,6 +115,7 @@ const bakedFor = (base: string, trade: Case, vector?: Vector): Record<string, st
       if (trade.dir === undefined) throw new Error(`${base}: the case names its direction`);
       baked[name] = String(trade.dir);
     }
+  if (args.includes("baseLot")) baked.baseLot = String(vector!.cfg.baseLotSize);
   if (args.includes("instrId")) {
     const instr = vector!.prefix.slice(8, 16).match(/../g)!.reverse().join("");
     baked.instrId = String(parseInt(instr, 16));
@@ -1863,6 +1874,61 @@ const VENUES: Venue[] = [
       },
     ],
   },
+  {
+    name: "SolfiV1",
+    programs: ["solfi-v1"],
+    dirs: ["solfi-v1"],
+    clock: 1_783_175_236n,
+    slot: () => {
+      const c = cfg("solfi-v1:rfyn:0");
+      return [
+        r("SoLFiHG9TfgtdUXUjWAxi3LtvYuFyDLVhBWxdMZxyCe"),
+        w(c.pool!),
+        w(c.vaultA!),
+        w(c.vaultB!),
+        r(INSTRUCTIONS),
+      ];
+    },
+    // Every SolFi v1 pool holds an empty vault: its liquidity has moved to SolFi v2. The vaults get
+    // 1e14 each, as the recipes' own cell gives them; the pool, its prices and the program are real.
+    fabricate: (harness) =>
+      [cfg("solfi-v1:rfyn:0").vaultA!, cfg("solfi-v1:rfyn:0").vaultB!].map((at) => {
+        const account = harness.svm.getAccount(at as Address);
+        if (!account.exists) throw new Error(`no vault ${at}`);
+        const data = new Uint8Array(account.data);
+        new DataView(data.buffer).setBigUint64(64, 100_000_000_000_000n, true);
+        harness.svm.setAccount({ ...account, data });
+        return at as Address;
+      }),
+    cases: () => [
+      {
+        vector: "solfi-v1:rfyn:0",
+        dir: true,
+        pay: cfg("solfi-v1:rfyn:0").mintA as Address,
+        buy: USDC,
+        amountIn: 1_000_000_000n,
+        // The recipes quote SolFi v1 at its floor rate, 96,482,663 here; the program pays more.
+        received: 106_888_897n,
+      },
+      {
+        vector: "solfi-v1:rfyn:1",
+        dir: false,
+        pay: USDC,
+        buy: cfg("solfi-v1:rfyn:0").mintA as Address,
+        amountIn: 1_000_000n,
+        // The recipes' floor-rate quote: 8,395,290.
+        received: 9_301_416n,
+      },
+    ],
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
 ];
 
 let stabbleBeneficiaryA: Address;
@@ -1883,7 +1949,8 @@ const expectedCall = (
   user: { owner: Address; in: Address; out: Address },
   refs: Record<string, Address> = {},
 ): { data: string; accounts: Address[] } => ({
-  data: `${vector.prefix}${le64(amountIn)}${vector.suffix}`,
+  // Archer's data counts whole base lots selling base.
+  data: `${vector.prefix}${le64(amountIn / BigInt(vector.amountPatch?.patchDivisorIn ?? 1))}${vector.suffix}`,
   accounts: vector.accounts.map((account) => {
     if (account.user !== undefined) return user[account.user as "owner" | "in" | "out"];
     if (account.address !== undefined) return account.address;
@@ -2214,12 +2281,16 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
     clock: bigint;
     atSlot?: bigint;
     atEpoch?: { epoch: bigint; start: bigint };
+    /** The floor the recipes' instruction writes, which the `Cpi` and `Data` forms are given: 1. */
+    floor?: bigint;
     fabricate?: (harness: EngineHarness) => Address[];
     /** Transactions to send before the state is frozen, and the accounts they create. */
     prepare?: (harness: EngineHarness) => Promise<Address[]>;
     cases: (Omit<Trade, "slot"> & {
       vector: string;
       received?: bigint;
+      /** What the swap spends, where it is not `amountIn`: Archer's whole lots, buying base. */
+      paid?: bigint;
       ata?: boolean;
       dir?: boolean;
     })[];
@@ -2753,6 +2824,66 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         },
       ],
     },
+    {
+      name: "archer",
+      programs: ["archer"],
+      dirs: ["archer-usdv"],
+      clock: 1_790_409_788n,
+      atSlot: 450_615_056n,
+      floor: 0n,
+      cases: [
+        {
+          vector: "archer:BZDU:baseIn",
+          dir: true,
+          pay: VECTORS["archer:BZDU:baseIn"]!.pay,
+          buy: USDC,
+          amountIn: 100_000_000n,
+          received: 99_999_000n,
+          payProgram: TOKEN_2022,
+          authorityWritable: true,
+        },
+        {
+          vector: "archer:BZDU:quoteIn",
+          dir: false,
+          pay: USDC,
+          buy: VECTORS["archer:BZDU:baseIn"]!.pay,
+          amountIn: 100_000_000n,
+          received: 99_000_000n,
+          paid: 99_000_990n,
+          buyProgram: TOKEN_2022,
+          authorityWritable: true,
+        },
+      ],
+    },
+    {
+      name: "archer",
+      programs: ["archer"],
+      dirs: ["archer-sol"],
+      clock: 1_790_409_789n,
+      atSlot: 450_615_059n,
+      floor: 0n,
+      cases: [
+        {
+          vector: "archer:u8tn:baseIn",
+          dir: true,
+          pay: WSOL,
+          buy: USDC,
+          amountIn: 100_000_000n,
+          received: 12_059_300n,
+          authorityWritable: true,
+        },
+        {
+          vector: "archer:u8tn:quoteIn",
+          dir: false,
+          pay: USDC,
+          buy: WSOL,
+          amountIn: 100_000_000n,
+          received: 828_000_000n,
+          paid: 99_906_480n,
+          authorityWritable: true,
+        },
+      ],
+    },
   ];
 
   describe.each(CPI_VENUES)("$name", (venue) => {
@@ -2787,7 +2918,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         const list = cpiFromVector(vector, refs);
         const at = {
           ...trade,
-          minOut: 1n,
+          minOut: venue.floor ?? 1n,
           slot: [],
           cpi: { program: vector.program, accounts: list },
         };
@@ -2803,6 +2934,9 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             instruction("hand", venue.name, list.length, {
               prefix: vector.prefix,
               suffix: vector.suffix,
+              ...(vector.amountPatch?.patchDivisorIn === undefined
+                ? {}
+                : { divisor: vector.amountPatch.patchDivisorIn }),
             }),
           ],
         ];
@@ -2812,8 +2946,8 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             trade: trade.vector,
             form,
             received: String(trade.received ?? outcome.received),
-            paid: String(trade.amountIn),
-            returned: String(trade.amountIn),
+            paid: String(trade.paid ?? trade.amountIn),
+            returned: String(trade.paid ?? trade.amountIn),
           });
           expect(outcome.received > 0n).toBe(true);
           expect(outcome.call).toEqual({
@@ -2868,6 +3002,163 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
               ),
             ).toBe("index past its field");
       }
+    }, 300_000);
+  });
+  // The venues a Pot cannot swap at, which `@sauce/router` has no function for: One Intro requires its
+  // signer owned by the System program (a Pot's owner is the Kitchen), and a Sanctum stake pool's
+  // deposit takes native SOL from its signer. Their instruction, built from the SDK's account order
+  // and data template alone, lands on the venue's own program when a wallet sends it, and delivers
+  // the recipes' pin.
+  interface WalletCase {
+    venue: RouterSvmVenue;
+    program: string;
+    vector: string;
+    clock: bigint;
+    atSlot?: bigint;
+    atEpoch?: { epoch: bigint; start: bigint };
+    aToB: boolean;
+    /** The token paid, or none for native SOL from the wallet. */
+    pay?: Address;
+    buy: Address;
+    amountIn: bigint;
+    received: bigint;
+    minOut?: bigint;
+    refs: (c: Record<string, string>) => Record<string, Address>;
+  }
+  const stakePool = (
+    venue: RouterSvmVenue,
+    program: string,
+    vector: string,
+    received: bigint,
+  ): WalletCase => ({
+    venue,
+    program,
+    vector,
+    // The pools' capture is at slot 436,445,025 in epoch 1010, which a deposit checks.
+    clock: 1_785_538_204n,
+    atSlot: 436_445_025n,
+    atEpoch: { epoch: 1010n, start: 1_785_485_417n },
+    aToB: true,
+    buy: cfg(vector).poolMint as Address,
+    amountIn: 3_000_000_000n,
+    received,
+    refs: (c) => ({
+      pool: c.pool as Address,
+      withdrawAuthority: c.withdrawAuthority as Address,
+      reserveStake: c.reserveStake as Address,
+      managerFeeAccount: c.managerFeeAccount as Address,
+      referrerFeeAccount: c.managerFeeAccount as Address,
+      poolMint: c.poolMint as Address,
+      systemProgram: SYSTEM,
+      tokenProgram: TOKEN,
+    }),
+  });
+  const oneIntro = (vector: string, aToB: boolean, received: bigint): WalletCase => ({
+    venue: "one-intro-swap",
+    program: "one-intro-swap",
+    vector,
+    clock: 1_783_123_200n,
+    aToB,
+    pay: aToB ? USDC : WSOL,
+    buy: aToB ? WSOL : USDC,
+    amountIn: 1_000_000n,
+    received,
+    minOut: 1n,
+    refs: (c) => ({
+      metadata: VECTORS[vector]!.accounts[0]!.address!,
+      pool: c.pool as Address,
+      poolAuthority: c.authority as Address,
+      vaultA: c.vault0 as Address,
+      vaultB: c.vault1 as Address,
+      feeA0: c.feeA0 as Address,
+      feeB0: c.feeB0 as Address,
+      feeA1: c.feeA1 as Address,
+      feeB1: c.feeB1 as Address,
+      tokenProgram: TOKEN,
+    }),
+  });
+  const WALLET_ONLY: WalletCase[] = [
+    oneIntro("one-intro-swap:Dbuv:0to1", true, 13_699_964n),
+    oneIntro("one-intro-swap:Dbuv:1to0", false, 72_975n),
+    stakePool(
+      "sanctum-stake-pool",
+      "infinity-spl-pool",
+      "sanctum-stake-pool:Jito:deposit",
+      2_319_261_901n,
+    ),
+    stakePool(
+      "sanctum-stake-pool-2",
+      "infinity-sanctum-pool",
+      "sanctum-stake-pool-2:9mhG:deposit",
+      2_484_505_865n,
+    ),
+    stakePool(
+      "sanctum-stake-pool-3",
+      "infinity-multi-pool",
+      "sanctum-stake-pool-3:8VpR:deposit",
+      2_497_391_149n,
+    ),
+  ];
+
+  describe.each(WALLET_ONLY)("$vector, sent by a wallet", (trade) => {
+    it("lands on the SDK's account order and data template: the recipes' instruction and pin", async () => {
+      const harness = await boot(
+        trade.clock,
+        [trade.venue],
+        [[venueProgramId(trade.program), `${trade.program}.so.gz`]],
+        trade.atSlot,
+        trade.atEpoch,
+      );
+      const wallet = harness.payer.address;
+      const source =
+        trade.pay === undefined
+          ? undefined
+          : setTokenAccount(harness, randomAddress(), trade.pay, wallet, trade.amountIn + 7n);
+      const recipient = setTokenAccount(harness, randomAddress(), trade.buy, wallet, 0n);
+      const refs = {
+        ...trade.refs(cfg(trade.vector)),
+        authority: wallet,
+        recipient,
+        ...(source === undefined ? {} : { source }),
+      };
+      const accounts = routerSvmAccounts(trade.venue, { aToB: trade.aToB }, refs);
+      const { prefix, suffix, divisor } = routerSvmDataTemplate(trade.venue, {
+        aToB: trade.aToB,
+        ...(trade.minOut === undefined ? {} : { minOut: trade.minOut }),
+      });
+      const amount = new Uint8Array(8);
+      new DataView(amount.buffer).setBigUint64(0, trade.amountIn / divisor, true);
+      const data = new Uint8Array([...prefix, ...amount, ...suffix]);
+      const vector = VECTORS[trade.vector]!;
+      expect(Buffer.from(data).toString("hex")).toBe(
+        `${vector.prefix}${Buffer.from(amount).toString("hex")}${vector.suffix}`,
+      );
+      const lamportsBefore = harness.svm.getBalance(wallet)!;
+      const result = await sendInstructions(harness, [
+        {
+          programAddress: ROUTER_SVM_VENUES[trade.venue].program as Address,
+          accounts: accounts.map((account) => ({
+            address: account.ref,
+            role: account.signer
+              ? account.writable
+                ? AccountRole.WRITABLE_SIGNER
+                : AccountRole.READONLY_SIGNER
+              : account.writable
+                ? AccountRole.WRITABLE
+                : AccountRole.READONLY,
+          })),
+          data,
+        },
+      ]);
+      if (!result.ok) throw new Error(`${result.err}\n${result.logs.join("\n")}`);
+      expect({
+        received: String(tokenAmount(harness, recipient)),
+        paid: String(
+          source === undefined
+            ? lamportsBefore - harness.svm.getBalance(wallet)! - 5_000n
+            : trade.amountIn + 7n - tokenAmount(harness, source),
+        ),
+      }).toEqual({ received: String(trade.received), paid: String(trade.amountIn) });
     }, 300_000);
   });
 });
