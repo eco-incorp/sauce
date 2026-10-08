@@ -77,7 +77,8 @@ function afterFee(amount: Uint256): Uint256 {
   return amount - amount / 1000;
 }
 
-// Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot itself.
+// Supplies the USDC this Pot holds, less 0.1%, to Aave V3. The aTokens stay in the Pot
+// (`ctx.self()`), as its owner chose: only a later cook moves them.
 const held = USDC.balanceOf(ctx.self());
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
@@ -224,6 +225,22 @@ function main(vault: Address, shares: Uint256): Uint256 {
   const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();
   require(sqrtPriceX96 > 0, "the pool is not initialized");
   return Erc4626.Vault(vault).convertToAssets(shares);
+}
+```
+
+**Who receives what a call produces.** Many calls name a beneficiary: a lending market's
+`onBehalfOf` (who gets the aTokens), a vault's `receiver`, a swap's `recipient`, a bridge's `to`.
+Every call comes from the Pot, so `ctx.self()` there, or a call that credits its caller, leaves the
+output in the Pot: it is the owner's, but not in their wallet, and only another cook moves it.
+Ask the user whether it should end in their wallet or stay in the Pot, and write it that way, the
+wallet a `main` parameter:
+
+```sauce chain=base,ethereum
+// Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
+// user's wallet, or the Pot itself (`ctx.self()`) when the user keeps the position there.
+function main(onBehalfOf: Address, amount: Uint256) {
+  USDC.approve(AaveV3.Pool, amount);
+  AaveV3.Pool.supply(USDC, amount, onBehalfOf, 0);
 }
 ```
 

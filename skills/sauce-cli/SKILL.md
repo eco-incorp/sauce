@@ -215,6 +215,22 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    - **`main returns`** is what `main` returned, read as the type it declares: the pool the
      program chose, the 100 USDC it spent and the 0.0377 WETH it bought. With no declared type,
      the hex after `returns` is all there is.
+   - **`Left in the Pot`**, right after the headline, is what the Pot holds after the cook of each
+     token the cook moved, with what it held before: it stays in the Pot, not in the owner's
+     wallet, until another cook moves it out. A cook that leaves the Pot nothing, such as this
+     one, prints none; `--json` gives it as `leftInPot`, first after `ok`, an empty list then. A
+     program that supplies the Pot's USDC to Aave V3 for `ctx.self()` keeps the aTokens there:
+
+     ```text
+     The cook succeeds from <owner>: gas used 268566 for the cook, after the Pot's deploy (1. below), returns 0x
+     Left in the Pot, not in the owner's wallet:
+       0.999999 aBasUSDC
+       Only another cook moves it out. To end in a wallet, the program must send it there, or name the wallet as the recipient of the call that produces it.
+     ```
+
+     It counts tokens: a position a protocol keeps in its own books, with no token for it, shows
+     in no balance, so read it from the protocol.
+
    - **What the cook did**: the token transfers and approvals in its logs, in whole units; the
      native transfers the node traces (the cook's value, paid to the Kitchen); and each address's
      net change. The rehearsal names its route: `eth_simulateV1`, or `eth_call` where the endpoint
@@ -278,7 +294,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    it: the pulls signed, and before the cook, in the same block, each approval or transfer
    `sauce run` would send first, each listed as a transaction of its own with its gas.
 
-6. **Run**, from the Pot's owner:
+6. **Run**, from the Pot's owner, once the user has seen the program, the arguments and what the
+   rehearsal says will happen, and agreed:
 
    ```sh
    sauce run buy.sauce.ts --chain base --wallet <name> --password-env <NAME> \
@@ -302,6 +319,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
      <Pot> (the Pot): -100 USDC
    …
    ```
+
+   A cook that leaves anything in the Pot says so after its cost, under
+   `Left in the Pot, not in your wallet:`, read at the cook's block; `--json` gives it as
+   `leftInPot`.
 
    A Pot not deployed yet is deployed first once the user agrees at the prompt. `--auto-approve`
    approves, in advance, everything a run sends before its cook (deploying the Pot, approving
@@ -339,7 +360,8 @@ The transaction's value defaults to the Kitchen's execution fee, read from the c
 `sauce tx buy.sauce.ts --chain base --owner <address> --value <wei> --args <arguments>`, with
 the same arguments, prints the unsigned transaction as JSON, `{ chainId, to, data, value }`, for
 any wallet to sign from the owner. `--format cast` prints it as a `cast send` line instead. Like
-`run`, it is refused on a preview chain.
+`run`, it is refused on a preview chain. It rehearses nothing: show the user the program, the
+arguments and `sauce simulate`'s outcome before handing it over, as before `run`.
 
 ## Arguments to `main`
 
@@ -475,7 +497,8 @@ The same commands are tools of the Sauce MCP server (`sauce mcp`), by one rule:
 each `sauce <command>` is the tool `sauce_<command>` (`sauce intent publish` is
 `sauce_intent_publish`), its flags are the tool's inputs in camelCase, the program goes in as
 `source`, and an endpoint of the user's own, optional, is the call's `rpcUrl`. Each tool's own
-description gives its inputs.
+description gives its inputs. `sauce_simulate` returns `leftInPot` first after `ok`, and a note
+when the cook leaves anything in the Pot: tell the user.
 
 The tools sign nothing, so `sauce run` has none: the user signs what they return. The one exception
 is a server started over stdio with `--wallets` and a password source (`--password-env <NAME>`,
@@ -490,8 +513,12 @@ Over HTTP, nothing signs.
   you commit; name the password's source instead.
 - Never edit a wallet's policy to get past a refusal: the limit is the user's. Tell the user what
   was refused and which limit.
-- Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's body)
-  before the first real send.
+- Before writing a program that produces assets, ask the user whether they should end in their
+  wallet or stay in the Pot: what stays in the Pot is theirs, but only another cook moves it out.
+- Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's
+  body) before the first real send. Then show the user the program, its arguments and what the
+  rehearsal says will happen (what leaves the wallet, what arrives where, what is left in the
+  Pot), and send, or hand over `sauce tx`'s transaction, only once they confirm.
 - Send only on a supported chain: Ethereum, Base or Solana. On a preview chain, compile and
   simulate, and offer the user the chain-support request the refusal names; never look for another
   way to send there.

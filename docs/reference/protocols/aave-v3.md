@@ -21,6 +21,12 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 ## Pitfalls for a program
 
 - `supply` pulls the asset with `transferFrom`: approve the Pool for exactly the amount first.
+- `onBehalfOf` receives the aTokens, and with them the position. Every call comes from the Pot,
+  so `ctx.self()` there keeps the position in the Pot, not in the user's wallet; ask the user
+  which they want, and pass their wallet as a `main` parameter to give it to them. A position in
+  the wallet is the wallet's: `withdraw` burns the caller's aTokens, so a later cook withdraws it
+  only once they are back in the Pot, and borrows against it only with the wallet's credit
+  delegation.
 - The aToken minted to `onBehalfOf` is rebasing: its balance grows with interest, so measure it
   as a delta, not as the amount supplied.
 - A reserve can be frozen, paused or at its supply cap, and then `supply` reverts.
@@ -32,14 +38,14 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 
 ## In a Sauce program
 
-Supply the Pot's USDC and check the position now has collateral:
+Supply the Pot's USDC for `onBehalfOf` (the user's wallet, or `ctx.self()` to keep the position in
+the Pot) and check the position now has collateral:
 
 ```ts
-function main(amount: Uint256) {
-  const self = ctx.self();
+function main(onBehalfOf: Address, amount: Uint256) {
   USDC.approve(AaveV3.Pool, amount);
-  AaveV3.Pool.supply(USDC, amount, self, 0);
-  const account = AaveV3.Pool.getUserAccountData(self);
+  AaveV3.Pool.supply(USDC, amount, onBehalfOf, 0);
+  const account = AaveV3.Pool.getUserAccountData(onBehalfOf);
   require(account.totalCollateralBase > 0, "nothing supplied");
 }
 ```
@@ -68,7 +74,7 @@ function main(poolAddress: Address, asset: Address, amount: Uint256, onBehalfOf:
 - `poolAddress`: Pool contract for the target chain
 - `asset`: ERC-20 token address to supply
 - `amount`: Amount in token's native decimals. Use `type(uint256).max` for entire balance
-- `onBehalfOf`: Address that receives aTokens (use msg.sender for self)
+- `onBehalfOf`: Address that receives the aTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
 - Requires ERC-20 approval to the Pool before calling
 
 ### withdraw
