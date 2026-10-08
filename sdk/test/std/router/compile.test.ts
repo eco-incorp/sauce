@@ -438,6 +438,7 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
     "nothing swapped",
     "minOut past 64 bits",
     "limit past 64 bits",
+    "limit past 128 bits",
     "limit past its field",
     "debit",
   ];
@@ -450,8 +451,8 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
   const none = Object.fromEntries(REASONS.map((reason) => [reason, 0]));
 
   it("trySwap refuses a slot whose program is not its pool's owner, a pool of no venue here, a pool or market not the pair, and a swap below its floor", () => {
-    // And each venue's data's: a floor its field cannot carry (Raydium's code, Orca's two swaps,
-    // Cropper, DefiTuna, Crema), and Phoenix's limit.
+    // And each venue's data's: a floor and a sqrt price limit their fields cannot carry (Raydium's
+    // code, Orca's two swaps, Cropper, DefiTuna, Crema), and Phoenix's limit.
     expect(reasons("trySwap")).toEqual({
       ...none,
       "a pool's program is not its owner": 1,
@@ -460,6 +461,7 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       "market is not the pair": 1,
       "below minOut": 1,
       "minOut past 64 bits": 6,
+      "limit past 128 bits": 6,
       "limit past 64 bits": 1,
     });
     expect(reasons("swap")["nothing swapped"]).toBe(1);
@@ -507,14 +509,21 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
         : venue === "OpenbookV2"
           ? "limit past its field"
           : undefined;
+    // A sqrt price limit's 16 bytes (Invariant's too), on every concentrated-liquidity venue.
+    const wide = book(venue) ? 0 : venue === "Invariant" ? 1 : floors;
     const data = {
       ...(floors > 0 ? { "minOut past 64 bits": floors } : {}),
+      ...(wide > 0 ? { "limit past 128 bits": wide } : {}),
       ...(limit === undefined ? {} : { [limit]: 1 }),
     };
     const lower = `${venue.charAt(0).toLowerCase()}${venue.slice(1)}`;
     if (venue === "OrcaWhirlpool")
       for (const name of ["orcaWhirlpoolData", "orcaWhirlpoolV2Data"])
-        expect(reasons(name)).toEqual({ ...none, "minOut past 64 bits": 1 });
+        expect(reasons(name)).toEqual({
+          ...none,
+          "minOut past 64 bits": 1,
+          "limit past 128 bits": 1,
+        });
     else expect(reasons(`${lower}Data`)).toEqual({ ...none, ...data });
     if (venue === "OpenbookV2") expect(reasons("openbookV2LotsData")).toEqual({ ...none, ...data });
     expect(reasons(tryForm)).toEqual({
@@ -523,13 +532,15 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       [book(venue) ? "market is not the pair" : "pool is not the pair"]: 1,
       "below minOut": 1,
       ...(limit === undefined ? {} : { [limit]: 2 }),
+      // and a sqrt price limit wider than its field, whatever the pool's state, checked first too.
+      ...(wide > 0 ? { "limit past 128 bits": wide + 1 } : {}),
     });
     const cpi = `${lower}Cpi`;
     // `…Cpi` writes its data itself (Orca's two swaps' under one floor check), Phoenix's excepted.
     expect(reasons(cpi)).toEqual({
       ...none,
       ...data,
-      ...(venue === "OrcaWhirlpool" ? { "minOut past 64 bits": 1 } : {}),
+      ...(venue === "OrcaWhirlpool" ? { "minOut past 64 bits": 1, "limit past 128 bits": 1 } : {}),
       debit: 1,
     });
     for (const name of [tryForm, cpi]) {

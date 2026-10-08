@@ -126,15 +126,15 @@
 //
 // Every venue's swap is its own instruction, called with `svm.call`. Its data is a few fixed bytes
 // around little-endian integers, packed into one word and written with one `toBytesLe`, each field
-// its low bytes (an amount 8, a limit 16; a floor past its 8 reverts). The price-limited forms read
-// the pair's balances with `@sauce/token`'s checks; the others read the amount alone, which only a
-// token account of the pair that a swap moved could hold.
+// its low bytes (an amount 8; a floor past its 8 bytes or a limit past its 16 reverts). The
+// price-limited forms read the pair's balances with `@sauce/token`'s checks; the others read the
+// amount alone, which only a token account of the pair that a swap moved could hold.
 //
 // SIZE. A Solana program rides in transactions, so the arm shares code through functions (each
 // venue's data, its accounts from a slot, its checks, `settled`) where the EVM arm keeps each
 // function flat, and only the functions a program calls are compiled into it. `trySwap` takes any of
-// the nine, so it carries all nine venues' code: a program calling it is about 5.8 KB, one calling a
-// single venue's function about 0.9 to 2.0 KB, its instruction alone about 0.3 to 0.6 KB, its data
+// the nine, so it carries all nine venues' code: a program calling it is about 6.1 KB, one calling a
+// single venue's function about 0.9 to 2.0 KB, its instruction alone about 0.4 to 0.5 KB, its data
 // alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `trySwap` is
 // for slots whose venue is only known when the program runs. Each venue's functions check its own program id, so a direct call never
 // signs into a program the caller names; only `trySwap`'s internal path relies on its one read of the
@@ -186,9 +186,9 @@ function clmmLimit(
 }
 
 // Whether a concentrated-liquidity pool can take `amountIn` toward a limit given in its own terms
-// (0: none, the program's own bound): its two mints, in key order, must be `pay` and `buy`; it can
-// when it has liquidity at its price, its price is not already at or past the limit, and the input
-// is not dust at the pool's base fee.
+// (0: none, the program's own bound): the limit must fit its 16-byte field and the pool's two mints,
+// in key order, must be `pay` and `buy`; it can when it has liquidity at its price, its price is not
+// already at or past the limit, and the input is not dust at the pool's base fee.
 function clmmCan(
   mintA: Uint256,
   mintB: Uint256,
@@ -200,6 +200,9 @@ function clmmCan(
   limit: Uint256,
   amountIn: Uint256,
 ): bool {
+  // Checked here as well as in the data, so a limit no order can carry reverts whichever way the
+  // price would move, not only when the swap runs.
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const paysA = pay < buy;
   require(mintA == (paysA ? pay : buy) && mintB == (paysA ? buy : pay), "pool is not the pair");
   if (liquidity == 0 || dust(paysA, price, fee, amountIn)) {
@@ -226,13 +229,15 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
 // `routerSvmAccountOrder` names them in order) calls `svm.call(program, [accounts…], <venue>Data(…))`,
 // the cheapest way to send it. The data is a few fixed bytes around little-endian integers, packed
 // into one word and written with one `toBytesLe`, the dearest step of building it, so each field takes
-// the low bytes `toBytesLe` would write for it alone: an amount its low 8, a limit its low 16. A
-// `minOut` past 64 bits, which its field cannot carry, reverts.
+// the low bytes `toBytesLe` would write for it alone: an amount its low 8. A `minOut` past 64 bits
+// and a limit past 128, which their fields cannot carry, revert: cut to its field, a limit of 2^128
+// would be 0, which most of these venues read as no limit at all.
 
 // Raydium CLMM's `swap_v2`: exact input of `amountIn`, `minOut` its least out, `limit` its
 // `sqrt_price_limit_x64`. The direction is the accounts'.
 export function raydiumClmmData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   return swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -241,6 +246,7 @@ export function raydiumClmmData(amountIn: Uint256, limit: Uint256, minOut: Uint2
 // PancakeSwap CLMM's, Byreal's and Stabble CLMM's: Raydium's code, Raydium's data.
 export function pancakeswapClmmData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   return swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -248,6 +254,7 @@ export function pancakeswapClmmData(amountIn: Uint256, limit: Uint256, minOut: U
 
 export function byrealData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   return swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -255,6 +262,7 @@ export function byrealData(amountIn: Uint256, limit: Uint256, minOut: Uint256): 
 
 export function stabbleClmmData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   return swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -268,6 +276,7 @@ export function orcaWhirlpoolData(
   aToB: bool,
 ): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
   return swap.concat(word.toBytesLe(32), aToB ? hex`0101` : hex`0100`);
@@ -282,6 +291,7 @@ export function orcaWhirlpoolV2Data(
   aToB: bool,
 ): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   return swapV2.concat(word.toBytesLe(32), aToB ? hex`010100` : hex`010000`);
@@ -290,6 +300,7 @@ export function orcaWhirlpoolV2Data(
 // Cropper's `swap`, a whirlpool's classic one.
 export function cropperData(amountIn: Uint256, limit: Uint256, minOut: Uint256, aToB: bool): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
   return swap.concat(word.toBytesLe(32), aToB ? hex`0101` : hex`0100`);
@@ -303,6 +314,7 @@ export function defitunaData(
   aToB: bool,
 ): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
   return swap.concat(word.toBytesLe(32), aToB ? hex`010100` : hex`010000`);
@@ -312,6 +324,7 @@ export function defitunaData(
 // out) and its `sqrt_price_limit`.
 export function cremaData(amountIn: Uint256, limit: Uint256, minOut: Uint256, aToB: bool): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = aToB ? hex`f8c69e91e17587c80101` : hex`f8c69e91e17587c80001`;
   return swap.concat(word.toBytesLe(32));
@@ -321,6 +334,7 @@ export function cremaData(amountIn: Uint256, limit: Uint256, minOut: Uint256, aT
 // `sqrt_price_limit`. It carries no least out.
 export function invariantData(amountIn: Uint256, limit: Uint256, xToY: bool): bytes {
   const swap = xToY ? hex`f8c69e91e17587c801` : hex`f8c69e91e17587c800`;
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (1 << 64) | (limit << 72);
   return swap.concat(word.toBytesLe(25));
 }
@@ -1590,6 +1604,7 @@ export function raydiumClmmCpi(
   require(program.address ==
     0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e, "not a Raydium CLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   const data = swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -1655,6 +1670,7 @@ export function pancakeswapClmmCpi(
   require(program.address ==
     0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8, "not a PancakeSwap CLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   const data = swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -1721,6 +1737,7 @@ export function byrealCpi(
   require(program.address ==
     0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb, "not a Byreal pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   const data = swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -1786,6 +1803,7 @@ export function stabbleClmmCpi(
   require(program.address ==
     0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3, "not a Stabble CLMM pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
   const data = swapV2.concat(word.toBytesLe(32), hex`01`);
@@ -1859,6 +1877,7 @@ export function orcaWhirlpoolCpi(
   require(program.address ==
     0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9, "not an Orca whirlpool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   // Eleven accounts are the classic `swap`'s; `swap_v2` takes fifteen, and says it passes no
   // remaining-accounts info.
@@ -1933,6 +1952,7 @@ export function cropperCpi(
   require(program.address ==
     0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f, "not a Cropper pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
   const data = swap.concat(word.toBytesLe(32), aToB ? hex`0101` : hex`0100`);
@@ -2013,6 +2033,7 @@ export function defitunaCpi(
   require(program.address ==
     0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6, "not a DefiTuna pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
   const data = swap.concat(word.toBytesLe(32), aToB ? hex`010100` : hex`010000`);
@@ -2096,6 +2117,7 @@ export function cremaCpi(
   require(program.address ==
     0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6, "not a Crema pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = aToB ? hex`f8c69e91e17587c80101` : hex`f8c69e91e17587c80001`;
   const data = swap.concat(word.toBytesLe(32));
@@ -2207,6 +2229,7 @@ export function tryInvariantAtLimit(
   }
   const owned = pool.owner == 0xfc39066f804ec84d465acc0cafceb1debdfb9e4751e3c99ecb5463ac63cd89c9;
   require(owned && slot[0].address == pool.owner, "not an Invariant pool");
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   // Token X and Y, the liquidity and the price root: a pool with no liquidity at its price, or its
   // price already at or past the limit, has nothing to trade; an input that buys under one unit at
   // the price after the pool's fee (10^12 is all of it) buys nothing.
@@ -2261,6 +2284,7 @@ export function invariantCpi(
   require(program.address ==
     0xfc39066f804ec84d465acc0cafceb1debdfb9e4751e3c99ecb5463ac63cd89c9, "not an Invariant pool");
   const swap = xToY ? hex`f8c69e91e17587c801` : hex`f8c69e91e17587c800`;
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
   const word = (amountIn & 0xffffffffffffffff) | (1 << 64) | (limit << 72);
   const data = swap.concat(word.toBytesLe(25));
   const held = svm.sload(source, 64, 8).toLe();

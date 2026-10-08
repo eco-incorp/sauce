@@ -609,15 +609,15 @@ paysBase])` takes the CPI's accounts in the venue's own order, checks the progra
 `source` before and after, and returns what it paid (`debit` if more than `amountIn`). ITS DATA:
 `<venue>Data(amountIn, …)` (Orca: `orcaWhirlpoolData` for the classic `swap`, `orcaWhirlpoolV2Data`;
 Phoenix/OpenBook take the market's lot sizes) returns the instruction's bytes, checking only that a
-field can carry its value (`minOut past 64 bits`, Phoenix's `limit past 64 bits`, OpenBook's `limit
+field can carry its value (`minOut past 64 bits`, a sqrt price limit's `limit past 128 bits` — cut to its 16 bytes 2^128 would be 0, which the CL venues read as NO limit, reproduced on the real Raydium program by review — Phoenix's `limit past 64 bits`, OpenBook's `limit
 past its field`); the at-price and at-limit forms build their data with it, but `…Cpi` writes the
 same bytes INLINE (measured: calling `…Data` from `…Cpi` cost it ~2k CU — +8.7k vs +6.7k on DefiTuna
 — so b1aeaf48's routing was reverted for `…Cpi` in a later commit; Phoenix's alone stays on
 `phoenixData`, which measured 1.6k cheaper than its inline copy). Every form is held byte for byte
 to the recipes' templates by the at-limit e2e, so the two copies cannot drift unseen. `…Data` is the
 CU-minimal form (eco-incorp/sauce-recipes' served swaps: `svm.call(program, [accounts…],
-<venue>Data(…))`): +2.6–3.4k CU over the recipes' hand-built CPI on the CLMMs, `…Cpi` +6.2–9.3k,
-`try…AtLimit` ~+80–96k (measured in `svm-at-limit.e2e.test.ts`). The gap between `…Data` and `…Cpi`
+<venue>Data(…))`): +3.2–4.0k CU over the recipes' hand-built CPI on the CLMMs, `…Cpi` +6.8–9.9k,
+`try…AtLimit` ~+81–97k (measured in `svm-at-limit.e2e.test.ts`). The gap between `…Data` and `…Cpi`
 is MOSTLY THE ACCOUNT ARRAY (measured, DefiTuna's 14 accounts): a literal list written into
 `svm.call` costs ~100 CU, the same list passed to a function ~4.4k (~300 an account, built as an
 array first), which an `Account[]` parameter always forces — and `main` cannot take an `Account[]`.
@@ -646,9 +646,9 @@ is a missing slot. Each EXPORTED venue function checks its own program id, so a 
 signs a CPI into a program the caller names; only `trySwap`'s internal path relies on its one owner
 read. Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions
 (each venue's `…Data`, `cpi<Venue>` laying out a slot, `swap<Venue>`, `clmmLimit`/`clmmCan`,
-`settled`): a program carries only the venues it calls (`trySwap` ~5.8 KB, one venue's function
-~0.9–2.0 KB, its `…Cpi` ~0.3–0.6 KB, its `…Data` ~0.2–0.4 KB; the distributed swap, 7.7 KB, cooks in 920,363
-CU, 2.8% under its unshared 946,905). `compile.test.ts` pins its exports, each family's argument order, each venue's
+`settled`): a program carries only the venues it calls (`trySwap` ~6.1 KB, one venue's function
+~0.9–2.0 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the distributed swap, 8.0 KB, cooks in 925,760
+CU, 2.2% under its unshared 946,905). `compile.test.ts` pins its exports, each family's argument order, each venue's
 program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
 revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
 in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from

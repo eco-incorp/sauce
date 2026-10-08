@@ -354,7 +354,7 @@ reads the pool, because the authority signs the swap; `trySwap` requires the slo
 the pool and that owner to be one of the nine. These are the caller's accounts, so each reverts
 rather than skips: a slot naming another program, a pool of another venue (`not a Crema pool`, …)
 or of none (`not a supported venue's pool`), a pool that is not the pair, and a limit an order cannot
-carry (Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
+carry (a sqrt price limit past its 128 bits, which cut to its field would be no limit at all; Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
 itself as the pool is a missing slot, which a `try` form skips.
 
 A failed call into another program fails the whole Solana transaction and cannot be caught, so a
@@ -416,7 +416,7 @@ is the venue's to refuse, so skip the call.
 
 `<venue>Data` is that instruction's data alone, for a program that sends it with `svm.call` itself:
 it takes what the instruction carries and its direction, checks only that each field can carry its
-value (a floor past 64 bits, Phoenix's limit past 64 bits, OpenBook's price past 63 or `orders` past
+value (a floor past 64 bits, a sqrt price limit past 128 bits, Phoenix's limit past 64 bits, OpenBook's price past 63 or `orders` past
 255 revert), and returns the bytes. The program names the venue's program and reads whatever
 balances it wants. It is the cheapest form: an account list passed to a function, as `…Cpi` takes it,
 is built as an array first, and one written into `svm.call` is not.
@@ -563,8 +563,8 @@ const program = ROUTER_SVM_VENUES.defituna.program;
 ### Size and compute
 
 A program carries the venues it calls and no other: one venue's function at a price or at a limit
-is about 0.9 to 2.0 KB of program, its instruction alone about 0.3 to 0.6 KB, its data alone about
-0.2 to 0.4 KB, `trySwap` all nine about 5.8 KB. A program that knows its venue calls that venue's
+is about 0.9 to 2.0 KB of program, its instruction alone about 0.4 to 0.5 KB, its data alone about
+0.2 to 0.4 KB, `trySwap` all nine about 6.1 KB. A program that knows its venue calls that venue's
 function, and keeps `trySwap` for slots whose venue it learns as it runs. Past one transaction a
 program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
 is one `trySwap` call per pool.
@@ -581,21 +581,21 @@ measured on the same accounts, does not.
 
 | Venue (pool, way)                     | Venue CU | Hand-built CPI | `…Data` |  `…Cpi` | `try…AtLimit` | `try…` at a price |
 | ------------------------------------- | -------: | -------------: | ------: | ------: | ------------: | ----------------: |
-| Raydium CLMM (SOL/USDC, 0→1)          |   48,274 |        111,662 |  +2,585 |  +6,182 |       +96,071 |          +110,433 |
-| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        133,486 |  +2,585 |  +6,182 |       +96,071 |          +111,595 |
-| Byreal (USDC pool, 0→1)               |   72,927 |        136,281 |  +2,585 |  +6,182 |       +95,110 |          +112,088 |
-| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         84,749 |  +3,193 |  +8,980 |       +82,752 |          +108,898 |
-| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |         97,130 |  +3,353 |  +9,332 |       +84,450 |           skipped |
-| Cropper (SOL/USDC, B→A)               |   51,207 |        105,790 |  +3,353 |  +6,834 |       +80,955 |           +93,451 |
-| DefiTuna (SOL/USDC, A→B)              |   50,589 |        109,128 |  +3,176 |  +6,657 |       +79,515 |           +91,206 |
-| Crema (SOL/USDC, B→A)                 |   75,506 |        134,178 |  +2,975 |  +6,456 |       +82,758 |          +109,190 |
-| Phoenix (SOL/USDC, selling base)      |   22,557 |         88,125 |  +6,437 | +14,318 |       +61,360 |                   |
-| Invariant (USDC/USDT, X→Y)            |   62,133 |        119,300 |  +2,898 |  +6,379 |       +75,021 |                   |
-| Manifest (SOL/USDC, selling base)     |   13,208 |         68,780 |  +4,762 |  +8,127 |       +57,206 |                   |
-| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         92,145 | +14,965 | +21,219 |       +85,105 |                   |
+| Raydium CLMM (SOL/USDC, 0→1)          |   48,274 |        114,662 |  +3,185 |  +6,781 |       +97,269 |          +111,032 |
+| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        136,486 |  +3,185 |  +6,781 |       +97,270 |          +112,194 |
+| Byreal (USDC pool, 0→1)               |   72,927 |        139,281 |  +3,185 |  +6,781 |       +96,308 |          +112,687 |
+| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         87,749 |  +3,793 |  +9,579 |       +83,951 |          +109,498 |
+| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |        100,130 |  +3,953 |  +9,931 |       +85,649 |           skipped |
+| Cropper (SOL/USDC, B→A)               |   51,207 |        108,790 |  +3,953 |  +7,433 |       +82,154 |           +94,050 |
+| DefiTuna (SOL/USDC, A→B)              |   50,589 |        112,128 |  +3,776 |  +7,256 |       +80,714 |           +91,805 |
+| Crema (SOL/USDC, B→A)                 |   75,506 |        137,178 |  +3,575 |  +7,055 |       +83,957 |          +109,789 |
+| Phoenix (SOL/USDC, selling base)      |   22,729 |         91,297 |  +6,437 | +14,318 |       +61,360 |                   |
+| Invariant (USDC/USDT, X→Y)            |   62,133 |        122,300 |  +3,498 |  +6,978 |       +76,219 |                   |
+| Manifest (SOL/USDC, selling base)     |   13,097 |         71,669 |  +4,762 |  +8,127 |       +57,206 |                   |
+| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         95,145 | +14,965 | +21,219 |       +85,105 |                   |
 
-`…Data`'s few thousand units are its fields' packing and checks: the floor's 64-bit check, the
-direction, one `toBytesLe`. `…Cpi` adds the program's check, building its account list into an
+`…Data`'s few thousand units are its fields' packing and checks: the floor's 64-bit check and the
+limit's 128-bit one (about 600 units each), the direction, one `toBytesLe`. `…Cpi` adds the program's check, building its account list into an
 array, and the call. A book's data carries more: Phoenix's divides the input by its lot size, and
 OpenBook's word has six fields, two of them chosen by the price. `openbookV2LotsData`, its lots
 divided when the program is compiled, adds +11,070 where `openbookV2Data`, dividing, adds +14,965.

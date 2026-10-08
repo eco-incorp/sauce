@@ -564,10 +564,10 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
 
     // `…Data` and `…Cpi` on the same account list. A book's lot sizes are its market's.
     const market = BYTES.get(p.pool)!;
-    const value = (arg: string, minOut: bigint): bigint =>
+    const value = (arg: string, minOut: bigint, lim = limit): bigint =>
       ({
         amountIn,
-        limit,
+        limit: lim,
         ticks: 0n,
         priceLots: 0n,
         orders,
@@ -578,7 +578,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
       })[arg]!;
     // Compiled for the one trade: every argument but the amount written into the program, as the
     // template's own bytes carry them.
-    const instructionOnly = (name: string, args: string[], minOut: bigint) =>
+    const instructionOnly = (name: string, args: string[], minOut: bigint, lim = limit) =>
       cook(
         compiled(
           svmProgramCalling(
@@ -589,7 +589,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
                 .filter((arg) => arg !== "amountIn")
                 .map((arg) => [
                   arg,
-                  DIRECTIONS.has(arg) ? String(first === 1n) : String(value(arg, minOut)),
+                  DIRECTIONS.has(arg) ? String(first === 1n) : String(value(arg, minOut, lim)),
                 ]),
             ),
           ),
@@ -597,9 +597,10 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         { ...order, args: [amountIn], named: listed },
       );
     const fn = cpiName(t.venue);
-    const viaCpi = (minOut = floor) => instructionOnly(fn, svmCpiArguments(fn), minOut);
-    const viaData = (minOut = floor) =>
-      instructionOnly(dataName(t), svmDataArguments(dataName(t)), minOut);
+    const viaCpi = (minOut = floor, lim = limit) =>
+      instructionOnly(fn, svmCpiArguments(fn), minOut, lim);
+    const viaData = (minOut = floor, lim = limit) =>
+      instructionOnly(dataName(t), svmDataArguments(dataName(t)), minOut, lim);
     // OpenBook's data in lots, divided as a program compiled for the one trade divides them: the side
     // paid from the amount by its lot size, the other the most an order may take, each a literal but
     // the amount.
@@ -1003,6 +1004,42 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           past[past.length - 1] = 2n ** 64n;
           expect(failed(await w.viaTry({ args: past })).reason).toBe("minOut past 64 bits");
         }
+      },
+      120_000,
+    );
+  });
+
+  // A sqrt price limit past its 16-byte field reverts, every way and whichever way the price would
+  // move: cut to its field, 2^128 would be 0, which these venues read as no limit at all.
+  describe("a sqrt price limit past 128 bits reverts", () => {
+    it.each([
+      ["raydium-clmm-sol-usdc", "0to1"],
+      ["raydium-clmm-sol-usdc", "1to0"],
+      ["pancakeswap-clmm-sol-usdc", "1to0"],
+      ["byreal-usdc", "0to1"],
+      ["orca-whirlpool-sol-usdc", "aToB"],
+      ["orca-whirlpool-sol-usdc", "bToA"],
+      ["cropper-sol-usdc", "bToA"],
+      ["defituna-sol-usdc", "aToB"],
+      ["defituna-sol-usdc", "bToA"],
+      ["crema-sol-usdc", "bToA"],
+      ["invariant-usdc-usdt", "xToY"],
+      ["invariant-usdc-usdt", "yToX"],
+    ] as const)(
+      "%s %s: …Data, …Cpi and try…AtLimit",
+      async (name, direction) => {
+        const t = served(name, direction);
+        const w = ways(t, amountOf(pairOf(pool(name), direction)[0]));
+        const wide = 2n ** 128n;
+        expect(failed(await w.viaData(w.floor, wide)).reason).toBe("limit past 128 bits");
+        expect(failed(await w.viaCpi(w.floor, wide)).reason).toBe("limit past 128 bits");
+        const args = [...w.tryArgs];
+        args[1] = wide;
+        expect(failed(await w.viaTry({ args })).reason).toBe("limit past 128 bits");
+        // The widest limit the field carries is the venue's to take or refuse, not this one's.
+        args[1] = wide - 1n;
+        const widest = await w.viaTry({ args });
+        expect(widest.ok ? "" : widest.reason).not.toBe("limit past 128 bits");
       },
       120_000,
     );

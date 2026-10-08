@@ -299,7 +299,7 @@ function main(
 ```
 
 A program carries only the venues it calls: one venue's function is about 2.0 KB of program, and
-`trySwap` all nine, about 5.8 KB, so a program that knows its venue calls that venue's function and
+`trySwap` all nine, about 6.1 KB, so a program that knows its venue calls that venue's function and
 keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
 program is staged (`sauce-solana`). For one order over several pools under one price, use
 `sauce-solana-distributed-swap`.
