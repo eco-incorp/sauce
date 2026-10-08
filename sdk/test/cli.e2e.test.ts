@@ -351,7 +351,7 @@ describeEvm("sauce, sent to a chain", () => {
           "m",
         ),
       );
-      expect(ok.stdout).toContain(`  1 USDC: ${labelled} (the Pot) -> ${THIRD_RECIPIENT}`);
+      expect(ok.stdout).toMatch(/^ {2}\[\d\] Pot(?: 0x\w{4}…\w{4})? +-> 0x8888…8888 +1 USDC$/m);
       // Nothing moved: it was an eth_call.
       expect(await ethereum.balanceOf(usdc, THIRD_RECIPIENT)).toBe(0n);
       // The owner's keystore names the owner, read from its address field: no password, no --owner.
@@ -421,8 +421,13 @@ describeEvm("sauce, sent to a chain", () => {
         from: string;
         pot: string;
         leftInPot: unknown;
-        cook: { status: string; hash: Hex };
+        cook: { status: string; hash: Hex; explorer: string; trace: string };
       };
+      // Where a person opens it: the chain's explorer, and the trace on Phalcon.
+      expect([out.cook.explorer, out.cook.trace]).toEqual([
+        `https://etherscan.io/tx/${out.cook.hash}`,
+        `https://app.blocksec.com/phalcon/explorer/tx/eth/${out.cook.hash}`,
+      ]);
       expect(out).toMatchObject({
         from: KEYSTORE_OWNER,
         pot: labelled,
@@ -486,6 +491,19 @@ describeEvm("sauce, sent to a chain", () => {
         new RegExp(`^deployed Pot ${fresh} in 0x[0-9a-f]{64}: success`, "m"),
       );
       expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success, gas used \d+, block \d+$/m);
+      // Each sent transaction's explorer page and trace, under its line.
+      expect(run.stdout).toMatch(
+        new RegExp(
+          "^cook (0x[0-9a-f]{64}): success.*\n" +
+            " {2}explorer: https://etherscan\\.io/tx/\\1\n" +
+            " {2}trace \\(calls and balance changes, to open in a browser\\): " +
+            "https://app\\.blocksec\\.com/phalcon/explorer/tx/eth/\\1$",
+          "m",
+        ),
+      );
+      expect(run.stdout).toMatch(
+        /^deployed Pot 0x\w{40} in (0x[0-9a-f]{64}): success.*\n {2}explorer: \S+\/tx\/\1$/m,
+      );
       // What stays in the Pot comes right after what the cook cost, before what it moved.
       expect(run.stdout).toMatch(
         new RegExp(
@@ -494,7 +512,7 @@ describeEvm("sauce, sent to a chain", () => {
             "  9 USDC \\(it held 10 USDC before\\)\n" +
             "  9 USDT \\(it held 10 USDT before\\)\n" +
             "  Only another cook moves it out\\. .*\n" +
-            "Token transfers:$",
+            "What moved, in order:$",
           "m",
         ),
       );

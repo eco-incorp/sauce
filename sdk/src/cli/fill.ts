@@ -85,6 +85,7 @@ import {
   type FillStep,
   type IntentRecord,
 } from "./lifecycle.js";
+import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf } from "./receipt.js";
 import type { IntentStore } from "./store.js";
 import { requireSupported } from "./support.js";
@@ -809,15 +810,16 @@ function sentLines(done: SentFill): string[] {
   const lines = [
     `${head(fill)}${fill.plan.proves ? "filled, and its proof sent" : "filled"}, in ` +
       `${done.sent.length} transaction(s) on ${fill.target.destination.slug} from ${fill.plan.solver}:`,
-    ...done.sent.map(({ step, result }, index) => {
+    ...done.sent.flatMap(({ step, result }, index) => {
       const cost = costs[index];
 
-      return (
+      return [
         `  ${index + 1}. ${step.what}: ${result.hash}, block ${result.blockNumber}` +
-        (cost === undefined
-          ? `, gas used ${result.gasUsed}`
-          : `; ${costLine(cost, fill.target.destination, step.kind === "fulfill" ? "the route's native amount and the proof's fee" : "none")}`)
-      );
+          (cost === undefined
+            ? `, gas used ${result.gasUsed}`
+            : `; ${costLine(cost, fill.target.destination, step.kind === "fulfill" ? "the route's native amount and the proof's fee" : "none")}`),
+        ...linkLines(txLinks(fill.target.destination, result.hash), "     "),
+      ];
     }),
     `In all: ${formatUnits(
       costs.reduce((sum, cost) => sum + (cost?.total ?? 0n), 0n),
@@ -940,6 +942,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
           what: step.what,
           kind: step.kind,
           hash: result.hash,
+          ...txLinks(entry.fill.target.destination, result.hash),
           status: result.status,
           block: result.blockNumber.toString(),
           gasUsed: result.gasUsed.toString(),

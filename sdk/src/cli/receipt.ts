@@ -14,11 +14,15 @@ import {
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
+import { balanceReader } from "./chain.js";
 import {
   addressLabels,
   effectLines,
   effectsJson,
   effectsOf,
+  heldAround,
+  leftInPotJson,
+  leftInPotLines,
   nativeSymbol,
   type Effects,
 } from "./effects.js";
@@ -112,5 +116,61 @@ export function receiptReport(effects: Effects): {
         : line,
     ),
     json: effectsJson(effects),
+  };
+}
+
+/** What a landed cook did, for a person and for a program. */
+export interface CookReport {
+  /** What the Pot holds after the cook of the tokens it moved: the lines that lead the report. */
+  readonly left: readonly string[];
+  /** What moved, in order, by role, and each address's net change. */
+  readonly lines: readonly string[];
+  /** `leftInPot`: the same as `left`, for `--json`. */
+  readonly leftInPot: ReadonlyArray<Record<string, unknown>>;
+  /** The effects for `--json`: `moves` first. */
+  readonly effects: Record<string, unknown>;
+  readonly notes: readonly string[];
+}
+
+/**
+ * A landed cook's report, from its receipt: the moves its logs record, the sender as the `wallet`
+ * and `pot` as the `Pot`, and what the Pot holds after the cook of each token it moved, read at the
+ * cook's block. `wallet` names the wallet the leftovers are not in, as the report says it.
+ */
+export async function cookReport(
+  client: PublicClient,
+  chain: CanonicalChain,
+  receipt: TransactionReceipt,
+  parties: { readonly sender: Address; readonly pot: Address; readonly wallet: string },
+): Promise<CookReport> {
+  const effects = await receiptEffects(client, chain, receipt, [
+    [parties.sender, "you"],
+    [parties.pot, "the Pot"],
+  ]);
+  const report = receiptReport(effects);
+  const after = balanceReader(client, parties.pot, receipt.blockNumber);
+  const unread: string[] = [];
+  const held = await heldAround(
+    effects,
+    parties.pot,
+    async (token) => {
+      const balance = await after(token);
+      if (balance === undefined) unread.push(effects.tokens.get(token)?.symbol ?? token);
+
+      return balance;
+    },
+    "after",
+  );
+
+  return {
+    left: leftInPotLines(effects, held, parties.wallet),
+    lines: report.lines,
+    leftInPot: leftInPotJson(effects, held),
+    effects: report.json,
+    notes: unread.map(
+      (symbol) =>
+        `the Pot's ${symbol} balance could not be read, so what the cook left in the Pot ` +
+        "leaves it out",
+    ),
   };
 }

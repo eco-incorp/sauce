@@ -297,7 +297,18 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     );
     expect(run.stdout).toContain(`  2. the cook, from the owner ${OWNER}, gas used ${cookGas}\n`);
     expect(run.stdout).toContain("  the Pot holds 2 USDC: --assume-balance");
-    expect(run.stdout).toContain(`  1.5 USDC: ${pot} (the Pot) -> ${RECIPIENT}`);
+    // What moved, in order, each party by its role: the cook's value in, the Kitchen's fee out,
+    // then the payments.
+    expect(run.stdout).toMatch(
+      new RegExp(
+        "^What moved, in order:\n" +
+          ` {2}\\[1\\] wallet 0x5a0C…Beef -> Pot ${pot.slice(0, 6)}…${pot.slice(-4)} +0\\.000000000000001234 ETH  the cook's value\n` +
+          " {2}\\[2\\] Pot +-> Kitchen 0x\\w{4}…\\w{4} +0\\.000000000000001234 ETH  the Kitchen's fee\n" +
+          " {2}\\[3\\] Pot +-> 0x6666…6666 +1\\.5 USDC\n" +
+          " {2}\\[4\\] Pot +-> 0x6666…6666 +1\\.5 USDT$",
+        "m",
+      ),
+    );
     expect(run.stdout).toContain(`  ${pot} (the Pot): -1.5 USDC, -1.5 USDT`);
     expect(run.stdout).toContain(`  ${RECIPIENT}: +1.5 USDC, +1.5 USDT`);
     // What the cook leaves in the Pot leads, right after the headline: half a token of each.

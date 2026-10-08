@@ -17,12 +17,14 @@ import {
   getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
 } from "@solana/kit";
-import { getAddress, isAddress, type Address, type Hex } from "viem";
+import { getAddress, isAddress, toFunctionSelector, type Address, type Hex } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, revertReason, sendAndWait, simulate, type TxRequest } from "./chain.js";
+import { txLinks } from "./links.js";
 import { measureEvm, noPolicyNote, rehearsePlan, type SendGuard } from "./policy.js";
+import { cookReport } from "./receipt.js";
 import { sendPlannedSvm } from "./solana.js";
 import { HOT_WALLET } from "./wallet-commands.js";
 import type { Unlocked } from "./wallets.js";
@@ -195,7 +197,14 @@ interface SentEntry {
   readonly gasUsed?: string;
   readonly fee?: string;
   readonly reason?: string;
+  /** A cook's: what it left in the Pot, what moved, and both as lines to read. */
+  readonly leftInPot?: ReadonlyArray<Record<string, unknown>>;
+  readonly moves?: unknown;
+  readonly summary?: readonly string[];
 }
+
+/** `cook(address,bytes)`: a transaction that runs a program on the Pot it is sent to. */
+const COOK = toFunctionSelector("function cook(address engine, bytes program)");
 
 export interface PlanInput {
   readonly wallet: Unlocked;
@@ -255,7 +264,10 @@ export async function sendPlan(
       chain: chain.slug,
       chainId: chain.id,
       ok: failed === undefined && sent.length === transactions.length,
-      sent,
+      // Each one's explorer page and trace, for a person to open, beside its hash.
+      sent: sent.map((entry) =>
+        entry.hash === "" ? entry : { ...entry, ...txLinks(chain, entry.hash) },
+      ),
       policy: guard.policy?.path ?? null,
     },
     notes,
@@ -313,6 +325,17 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
       sent.push({ what, hash: "", status: "failed", reason: (error as Error).message });
       break;
     }
+    // A cook that landed: what moved, by role, and what it left in the Pot, from its receipt.
+    const report =
+      result.status === "success" &&
+      result.receipt !== undefined &&
+      request.data.toLowerCase().startsWith(COOK)
+        ? await cookReport(client, input.chain, result.receipt, {
+            sender: account.address,
+            pot: getAddress(request.to),
+            wallet: "the wallet",
+          })
+        : undefined;
     sent.push({
       what,
       hash: result.hash,
@@ -320,6 +343,13 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
       blockNumber: result.blockNumber.toString(),
       gasUsed: result.gasUsed.toString(),
       ...(result.reason === undefined ? {} : { reason: result.reason }),
+      ...(report === undefined
+        ? {}
+        : {
+            leftInPot: report.leftInPot,
+            moves: report.effects.moves,
+            summary: [...report.left, ...report.lines],
+          }),
     });
     if (result.status !== "success") break;
   }
