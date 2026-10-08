@@ -48,6 +48,50 @@ writes the program that installs them.
   everything the body did undone, or when the protocol reports that the request failed, handed why.
   With no `.catch`, the callback reverts and the body stays parked.
 
+## An oracle's answer: `@sauce/oracle`
+
+`Oracle.cre(...)` asks a [Chainlink CRE](https://docs.chain.link/cre) workflow for an answer
+computed off chain: code the workflow's owner deployed to Chainlink's network, which can fetch an
+API, read chains and compute, and whose DON agrees on the result. The body runs when the
+workflow's report reaches the Pot:
+
+```js
+import { Oracle } from "@sauce/oracle";
+
+function main(owner: Address, pair: bytes, limit: Uint256, recipient: Address, amount: Uint256) {
+  Oracle.cre({ owner, args: pair })
+    .then((report) => {
+      const [price] = abi.decode(report, ["Uint256"]);
+      require(price <= limit, "above the limit");
+      USDC.transfer(recipient, amount);
+    })
+    .catch((err) => {
+      log(err);
+    });
+}
+```
+
+- **The request** is a log from the Pot, `OracleRequest(bytes32 indexed id, address indexed owner,
+bytes args)`, which the workflow's EVM Log trigger listens for. `args` is what the workflow
+  reads.
+- **The answer** is a report whose payload is `abi.encode(bytes32 id, bool ok, bytes data)`,
+  delivered by Chainlink's KeystoneForwarder (`Chainlink.KeystoneForwarder`) through the Pot's
+  `onReport(bytes metadata, bytes report)`. An `ok` report runs the body with `data`; any other
+  runs `.catch` with `data`, the workflow's error.
+- **`owner` is required.** Any workflow's report can reach the forwarder, so the request is bound
+  to the workflow owner named in the report's metadata, and a report from another owner finds no
+  request.
+- **Installing** `@sauce/oracle` on a Pot registers the `onReport` handler and declares the Pot an
+  `IReceiver`, which the forwarder checks over ERC-165 before each delivery. It runs on Ethereum
+  and Base.
+- **The delivery's gas is the workflow's.** The forwarder runs the body in the report's
+  transaction: about 250,000 gas for a short body, plus what the body spends, in the workflow's
+  report write.
+
+Chainlink Functions, the request-and-callback product CRE replaces, no longer answers on mainnet:
+its routers still accept a request, and the LINK it holds stays locked until the request times
+out.
+
 ## Writing a package
 
 A package's request is a method on an object the program reads, returning a `Request` from
