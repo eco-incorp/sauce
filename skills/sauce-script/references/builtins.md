@@ -27,7 +27,7 @@ example program each, is `builtins.json`.
 10. [`evm`](#10-evm-evm) (EVM)
 11. [`svm`](#11-svm-svm) (SVM)
 12. [Methods on values, and account properties](#12-methods-on-values-and-account-properties)
-13. [Contract bindings and `.catch()`](#13-contract-bindings-and-catch-evm) (EVM)
+13. [Contract bindings, `.catch()` and `try`/`catch`](#13-contract-bindings-catch-and-trycatch-evm) (EVM)
 14. [Not supported, and what to write instead](#14-not-supported-and-what-to-write-instead)
 15. [Limits](#15-limits)
 
@@ -104,10 +104,10 @@ exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the
 | --------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | `1e18`                      | "not a valid integer literal"                                                                                 | `10 ** 18` or `1000000000000000000`     |
 | `1.5`                       | "`1.5` is not a valid 256-bit literal"                                                                        | integers in the smallest unit           |
-| `null`, `undefined`         | rejected                                                                                                      | `0` or a flag                           |
+| `null`                      | rejected                                                                                                      | `0` or a flag                           |
 | `` `text` ``, `` `a${b}` `` | rejected, with or without `${}`                                                                               | `"text"`, or bytes built with `.concat` |
 | a bad `hex`                 | "`hex`…`` is not a valid hex literal (expected an even number of `[0-9a-fA-F]` digits, optional `0x` prefix)" |                                         |
-| `[]` with no declared type  | "an array literal must have at least one element"                                                             | `let xs: Uint256[] = [];`               |
+| `let xs = [];`              | "an array literal must have at least one element"                                                             | `let xs: Uint256[] = [];`               |
 | `[1, true]`                 | "every element of an array literal must have the same type — …"                                               |                                         |
 
 ## 3. Operators
@@ -181,6 +181,37 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
   by value. A helper cannot replace an array parameter with a new array: "`<name>` cannot be reassigned a value
   of a different type — expected an element count known only at run time, found N element(s)".
 
+**Values that exist only while compiling**
+
+A `class`, an instance of one (`new C(…)`), an arrow function, `undefined`, and a `const` bound to an
+object or array literal are values the compiler holds. A call on one runs while the program
+compiles: only what it does at run time, such as a contract call, a storage write or a revert,
+reaches the program, where the call stands. This is how a library writes a builder as a class; a
+program rarely needs to.
+
+- A class is declared at the top level, `export`ed or not, with fields (an initializer each, or
+  none), a `constructor`, methods and `static` methods; `this` is the instance in a method and the
+  class in a `static` one, and a method that returns `this` chains. It cannot extend another class,
+  and getters, setters, private members and `static` fields are not supported.
+- An arrow function is called in place (`const twice = (x) => x * 2; twice(a)`), in the function it
+  was written in. A nested `function` declaration is not supported.
+- A method may take a rest parameter (`add(...items)`), filled only by a call the compiler runs:
+  `main` cannot take one. A `for (const x of items)` over such a list unrolls while compiling.
+- A field nothing has set, and an argument left out, is `undefined`, and `x === undefined` is decided
+  while compiling, as is `x instanceof C` (false for any run-time value). Where a run-time value is
+  needed `undefined` is an error: "`undefined` exists only while the program compiles, so it has no
+  run-time value here". `this.b || this.a` is `this.a` while `this.b` is unset.
+- An instance has a run-time value only through its class: its `valueOf()`, or its
+  `[Symbol.toPrimitive]` method, run while compiling with the hint `"default"` under `==`/`!=` and
+  `"number"` elsewhere. A class's `[Symbol.dispose]()` runs when the statement that made the
+  instance ends (a `const` holding one, at the end of its block).
+- A dotted path to nothing, `Monkey.Jump` with `Monkey` undeclared or a member a static object lacks,
+  reads as `0` under `==` and `!=`, so `if (Monkey.Jump != 0) { … }` is decided while compiling and
+  its other arm is never compiled; any other use is an error. A bare unknown name is always one.
+- `const xs = []` is an empty array of this kind; an empty array in a `let` needs a declared type (§2).
+- A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown
+  message.
+
 **`main`'s arguments**
 
 - `main`'s parameters are the program's runtime inputs. One compiled program serves every argument value.
@@ -238,7 +269,7 @@ builtin and cannot be a function name").
   - Reverts with `data` as the revert data. "`revert` takes at most 1 argument (an optional bytes
     payload), got 2"; "a revert payload requires a bytes value"
   - Example: `revert(code.toBytesBe(32));`
-- `throw data`
+- `throw data`, `throw new Error(data)`
   - Types: `data`: bytes
   - The same as `revert(data)`. "a `throw` payload requires a bytes value".
   - Example: `throw "below floor";`
@@ -460,6 +491,7 @@ equivalent.
   `evm.create3(initcode, salt, value?)` deploy from the Pot and return the address. Init code must
   be bytes: "evm.create's init code requires a bytes value". CREATE/CREATE2 return zero on failure;
   CREATE3 reverts. These are EVM-only.
+- An unknown name gives "`evm.nope` is not an evm builtin; `evm` is a reserved namespace root".
 
 ## 11. `svm` (SVM)
 
@@ -534,9 +566,6 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
     ("`length` is not a field of this tuple — …"). It cannot be assigned.
   - Example: `for (let i = 0; i < amounts.length; i++) { … }`
 
-**Call methods on a variable, not on a literal.** ``hex`a9`.concat(d)`` and `"ab".concat(d)` are rejected
-("calling anything other than a plain function name …"). Write ``const selector = hex`a9059cbb`; selector.concat(d)``.
-
 ### Account properties
 
 - `acct.address` → number, **Both**
@@ -559,7 +588,7 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
   using one where a number is expected, as in arithmetic, gives "…: expected a number, found an account". Use
   `acct.address` when you need its key.
 
-## 13. Contract bindings and `.catch()` (EVM)
+## 13. Contract bindings, `.catch()` and `try`/`catch` (EVM)
 
 **Bind an ABI** with `import ERC20 from "./erc20.abi.json"`, or with the compile option
 `inlineContracts: [["ERC20", abiJson]]`. Then call through it:
@@ -602,6 +631,11 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
     assign the enclosing function's variables. Works on bound contract calls and on `evm.call`,
     `evm.static` and `evm.delegate`.
   - Example: `ERC20.at(t).approve(spender, amount).catch(() => { approved = false; });`
+- `<call>.catch((e) => { … });`
+  - The same, with `e` the call's revert data as `bytes`: its first 256 bytes, or all of it when
+    it is shorter. That holds a selector and seven words, or an `Error(string)` whose message is up
+    to 188 bytes; a longer message arrives cut, and decoding it then reverts.
+  - Example: `ERC20.at(t).approve(spender, amount).catch((e) => { log(e); });`
 - `const v = <call>.catch(() => { return <constant>; });`
   - If the call fails, `v` is the constant. The call must return one value: a bound method with
     one output. A raw `evm.call`, `evm.static` or `evm.delegate` returns bytes, which no constant
@@ -614,17 +648,46 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
 
 Rules and errors:
 
-- The block takes no parameter: "a `.catch()` handler parameter (the caught error is not supported)".
+- The statement form takes at most one parameter, a plain name, unannotated ("a `.catch()` handler
+  with more than one parameter …"); the value form takes none ("a `.catch()` fallback value with a
+  parameter …").
 - Use a `{ … }` block, not `() => value`. Arrow functions are allowed nowhere else.
 - A `return`, or a `break`/`continue` leaving the block, is not allowed in the statement form ("a `return` in a
   `.catch()` handler …").
 - The value form needs exactly `return <constant>;`:
   - "a captured `.catch()` requires exactly `return <constant scalar>;` in its handler";
   - "the `.catch()` fallback must be a constant scalar that fits the declared ABI result width".
-- A long block can be too large ("a .catch() handler compiles to N bytes, over the 255-byte limit — shorten the handler"). Move the work into a
+- A long block can be too large ("a .catch() handler compiles to N bytes, over the 254-byte limit — shorten the handler"). Move the work into a
   function and call it.
 - On anything other than an external EVM call, the compiler rejects it ("a `.catch()` on something other than an
   external contract call …"). On SVM: "`.catch()` is not available on the svm target".
+
+### `try { } catch { }` (EVM)
+
+- `try { <one external call>; } catch { … }` is that call's `.catch(() => { … })`.
+- `try { <statements> } catch { … }` runs the statements in a frame of their own: what they do
+  stands when they finish, and is undone together, every write, when anything in them reverts — a
+  `require`, a `throw`, a call nothing catches. The `catch` block then runs in the function's own
+  frame, where it may read and assign its variables. The `try` block reads the code around it but
+  cannot assign it ("a `try` block runs in a frame of its own, so it cannot assign `…`"), and
+  neither block may `return`, nor `break` or `continue` a loop outside it.
+- `catch (e) { … }` names what the `try` reverted with: `bytes`, at most its first 256 bytes, as
+  for `.catch((e) => { … })`. There is no `finally`.
+
+```sauce chain=base
+function main(x: Uint256): Uint256 {
+  let reason = 0;
+  try {
+    evm.sstore(1, x);
+    require(x > 2, "small");
+  } catch (e) {
+    reason = crypto.keccak256(e);
+  }
+  return reason;
+}
+```
+
+- On SVM: "`try`/`catch` is not available on the svm target".
 
 ## 14. Not supported, and what to write instead
 
@@ -633,10 +696,10 @@ Rules and errors:
 | `switch`                                                         | `if` / `else if` chains                                                                                           |
 | `do { } while (…)`                                               | `while (true) { …; if (!cond) { break; } }`                                                                       |
 | `for (k in obj)`, `for await`                                    | an index loop or `for (const x of array)`                                                                         |
-| `try { } catch { }`, `throw new Error(…)`                        | `require(cond, "reason")`, `throw "reason"`; `.catch()` for a failing EVM call                                    |
-| arrow functions, function expressions, nested functions          | top-level `function` declarations (`.catch(() => { … })` is the one exception)                                    |
-| `class`, `enum`, `type` aliases, generics, `namespace`           | records, `interface`, constants                                                                                   |
-| `async function`, `await`                                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
+| `finally`                                                        | `try`/`catch` (§13) for what fails on EVM, and the code after it                                                  |
+| function expressions, nested `function` declarations             | top-level `function` declarations, or an arrow function (§4)                                                      |
+| `enum`, `type` aliases, generics, `namespace`                    | records, `interface`, constants                                                                                   |
+| `async function`, `await` used as a value                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
 | default parameters, rest parameters, destructuring parameters    | plain parameters                                                                                                  |
 | object destructuring `const { a } = t`                           | `const a = t.a;`                                                                                                  |
 | spread `[...xs]`, `f(...xs)`                                     | explicit elements, or a loop                                                                                      |
@@ -647,17 +710,19 @@ Rules and errors:
 | `i++` used as a value                                            | `i += 1` on its own line                                                                                          |
 | `t[0] = v` on a record                                           | `t.field = v`                                                                                                     |
 | template strings                                                 | `"text"`, or bytes built with `.concat`                                                                           |
-| `1e18`, `1.5`, `null`, `undefined`                               | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
+| `1e18`, `1.5`, `null`                                            | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
 | `xs.push(v)`, `console.log`, any JavaScript library              | `new Array(n)` with an index; `log(…)`                                                                            |
 | `Math.min`, `max`, `abs`, `pow`                                  | `if` or a ternary; `**`                                                                                           |
 | comparing bytes with `==`                                        | compare `crypto.keccak256` of each                                                                                |
 | `export default`, `export { … }`, `import * as X`                | `export function` / `export const`; named imports                                                                 |
-| a method on a literal (``hex`…`.concat(d)``)                     | bind the literal to a `const` first                                                                               |
 | sending value through a bound call                               | `evm.call(address, value, data)`                                                                                  |
 | labeled statements, labeled `break`/`continue`                   | a flag variable                                                                                                   |
 | computed object keys, object methods                             | plain named fields                                                                                                |
 
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
+
+`await x;` as a statement is JavaScript's: it is `x.then(() => { … })`, the statements after it
+the closure, for a value whose `then` takes one.
 
 ## 15. Limits
 

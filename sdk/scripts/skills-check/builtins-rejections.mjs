@@ -93,18 +93,18 @@ export const rejections = [
   },
   {
     quotes: ["not a valid integer literal"],
-    row: "`1e18`, `1.5`, `null`, `undefined`",
+    row: "`1e18`, `1.5`, `null`",
     targets: ["evm"],
     src: "function main(): Uint256 { return 1e18; }",
   },
   {
     quotes: ["`1.5` is not a valid 256-bit literal"],
-    row: "`1e18`, `1.5`, `null`, `undefined`",
+    row: "`1e18`, `1.5`, `null`",
     targets: ["evm"],
     src: "function main(): Uint256 { return 1.5; }",
   },
   {
-    row: "`1e18`, `1.5`, `null`, `undefined`",
+    row: "`1e18`, `1.5`, `null`",
     targets: ["evm"],
     src: "function main(): Uint256 { const x = null; return 0n; }",
   },
@@ -118,7 +118,14 @@ export const rejections = [
   {
     quotes: ["an array literal must have at least one element"],
     targets: ["evm"],
-    src: "function main(): Uint256 { const xs = []; return 0n; }",
+    src: "function main(): Uint256 { let xs = []; return 0n; }",
+  },
+  {
+    quotes: [
+      "`undefined` exists only while the program compiles, so it has no run-time value here",
+    ],
+    targets: ["evm"],
+    src: "function main(): Uint256 { return undefined; }",
   },
   {
     quotes: ["every element of an array literal must have the same type — …"],
@@ -260,7 +267,8 @@ export const rejections = [
   {
     quotes: ["`f` does not return on every path"],
     targets: ["evm"],
-    src: "function f(a: Uint256): Uint256 { if (a > 1n) { return 1n; } } function main(): Uint256 { return f(2n); }",
+    // Called with a value known only as it runs: a known one would decide the `if`.
+    src: "function f(a: Uint256): Uint256 { if (a > 1n) { return 1n; } } function main(x: Uint256): Uint256 { return f(x); }",
   },
   {
     quotes: [
@@ -361,37 +369,32 @@ export const rejections = [
     src: "function main(): Uint256 { const a = [1n]; const b = [...a]; return b[0]; }",
   },
   {
-    row: "arrow functions, function expressions, nested functions",
-    targets: ["evm"],
-    src: "function main(): Uint256 { const f = () => 1n; return 1n; }",
-  },
-  {
-    row: "arrow functions, function expressions, nested functions",
+    row: "function expressions, nested `function` declarations",
     targets: ["evm"],
     src: "function main(): Uint256 { function g(): Uint256 { return 1n; } return g(); }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "function expressions, nested `function` declarations",
     targets: ["evm"],
-    src: "class C { } function main(): Uint256 { return 0n; }",
+    src: "function main(): Uint256 { const g = function (): Uint256 { return 1n; }; return g(); }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "`enum`, `type` aliases, generics, `namespace`",
     targets: ["evm"],
     src: "enum E { A } function main(): Uint256 { return 0n; }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "`enum`, `type` aliases, generics, `namespace`",
     targets: ["evm"],
     src: "type T = Uint256; function main(): Uint256 { return 0n; }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "`enum`, `type` aliases, generics, `namespace`",
     targets: ["evm"],
     src: "function f<T>(a: Uint256): Uint256 { return a; } function main(): Uint256 { return 0n; }",
   },
   {
-    row: "`async function`, `await`",
+    row: "`async function`, `await` used as a value",
     targets: ["evm"],
     src: "function main(): Uint256 { const x = await 1n; return x; }",
   },
@@ -430,14 +433,9 @@ export const rejections = [
     src: "function main(): Uint256 { const t = { a: 1n }; for (const k in t) { } return 0n; }",
   },
   {
-    row: "`try { } catch { }`, `throw new Error(…)`",
+    row: "`finally`",
     targets: ["evm"],
-    src: "function main(): void { try { } catch (e) { } }",
-  },
-  {
-    row: "`try { } catch { }`, `throw new Error(…)`",
-    targets: ["evm"],
-    src: 'function main(): void { throw new Error("no"); }',
+    src: "function main(): void { try { evm.sstore(1n, 1n); } catch { } finally { } }",
   },
   {
     row: "labeled statements, labeled `break`/`continue`",
@@ -666,6 +664,11 @@ export const rejections = [
     src: "function main(s: Uint256): Uint256 { let x = evm.sstore(s, 1n); return 0n; }",
   },
   {
+    quotes: ["`evm.nope` is not an evm builtin; `evm` is a reserved namespace root"],
+    targets: ["evm"],
+    src: "function main(): Uint256 { return evm.nope(1n); }",
+  },
+  {
     quotes: ["evm.create's init code requires a bytes value"],
     targets: ["evm"],
     src: "function main(): Uint256 { return evm.create(1n); }",
@@ -730,7 +733,7 @@ export const rejections = [
   {
     quotes: ["a bytes method's receiver requires a bytes value"],
     targets: ["evm"],
-    src: "function main(): Uint256 { const xs = [1n, 2n]; const ys = xs.slice(0n, 1n); return 0n; }",
+    src: "function main(): Uint256 { let xs = [1n, 2n]; const ys = xs.slice(0n, 1n); return 0n; }",
   },
   {
     quotes: ["`.slice` takes exactly 2 arguments (start, end), got N"],
@@ -750,13 +753,7 @@ export const rejections = [
   {
     quotes: ["`length` is not a field of this tuple — …"],
     targets: ["evm"],
-    src: "function main(): Uint256 { const t = { a: 1n }; return t.length; }",
-  },
-  {
-    quotes: ["calling anything other than a plain function name …"],
-    row: "a method on a literal (``hex`…`.concat(d)``)",
-    targets: ["evm"],
-    src: "function main(d: bytes): bytes { return hex`a9`.concat(d); }",
+    src: "function main(): Uint256 { let t = { a: 1n }; return t.length; }",
   },
   {
     quotes: [
@@ -821,10 +818,26 @@ export const rejections = [
     src: "function main(t: Uint256, o: Uint256): Uint256 { return ERC20.at(t).balanceOf(o); }",
   },
   {
-    quotes: ["a `.catch()` handler parameter (the caught error is not supported)"],
+    quotes: ["a `.catch()` handler with more than one parameter …"],
     targets: ["evm"],
     contracts,
-    src: "function main(t: Uint256, s: Uint256): void { ERC20.at(t).approve(s, 5n).catch((e) => { }); }",
+    src: "function main(t: Uint256, s: Uint256): void { ERC20.at(t).approve(s, 5n).catch((e, f) => { }); }",
+  },
+  {
+    quotes: ["a `.catch()` fallback value with a parameter …"],
+    targets: ["evm"],
+    contracts,
+    src: "function main(t: Uint256, o: Uint256): Uint256 { return ERC20.at(t).balanceOf(o).catch((e) => { return 0n; }); }",
+  },
+  {
+    quotes: ["a `try` block runs in a frame of its own, so it cannot assign `…`"],
+    targets: ["evm"],
+    src: "function main(): Uint256 { let n = 0n; try { n = 1n; } catch { } return n; }",
+  },
+  {
+    quotes: ["`try`/`catch` is not available on the svm target"],
+    targets: ["svm"],
+    src: "function main(): void { try { require(false); } catch (e) { } }",
   },
   {
     quotes: ["a `return` in a `.catch()` handler …"],
@@ -853,7 +866,7 @@ export const rejections = [
   },
   {
     quotes: [
-      "a .catch() handler compiles to N bytes, over the 255-byte limit — shorten the handler",
+      "a .catch() handler compiles to N bytes, over the 254-byte limit — shorten the handler",
     ],
     targets: ["evm"],
     contracts,
