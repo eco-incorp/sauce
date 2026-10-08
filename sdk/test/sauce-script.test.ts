@@ -1,7 +1,7 @@
 /**
  * The SauceScript declarations an editor loads for a program file, and the plugin beside them,
  * through a real TypeScript language service set up as `sauce init`'s `programs/tsconfig.json`
- * sets it up: every program in the repository — those the package ships, the two an agent wrote
+ * sets it up: every program in the repository — those the package ships, the three an agent wrote
  * in a project of its own (copied unchanged into `fixtures/sauce-script/demo`), the fixtures — as
  * the repository's tsconfig.json lists them, checks with no error at all, and a real mistake in one
  * still does not.
@@ -37,6 +37,7 @@ const plugin = createRequire(import.meta.url)("../sauce-script/ts-plugin.cjs") a
   isFalsePositive(
     diagnostic: ts.Diagnostic,
     flatten: typeof ts.flattenDiagnosticMessageText,
+    typescript?: typeof ts,
   ): boolean;
 };
 
@@ -53,7 +54,7 @@ const programs = (dir: string): string[] =>
   });
 
 /** Every program in the repository, as its tsconfig.json — the project an editor opens them in —
- *  lists them: those the package ships (skills, docs, recipes), the agent's two, the fixtures. */
+ *  lists them: those the package ships (skills, docs, recipes), the agent's three, the fixtures. */
 const CORPUS = ts
   .getParsedCommandLineOfConfigFile(
     join(ROOT, "tsconfig.json"),
@@ -142,7 +143,7 @@ describe("SauceScript in an editor", () => {
     }
   });
 
-  it("checks every program in the repository, the agent's two among them, with no error", () => {
+  it("checks every program in the repository, the agent's three among them, with no error", () => {
     expect(CORPUS.length).toBeGreaterThanOrEqual(14);
     const checked = service(textOf(CORPUS));
     expect(CORPUS.flatMap((file) => report(checked, file))).toEqual([]);
@@ -153,11 +154,66 @@ describe("SauceScript in an editor", () => {
     const bare = service(textOf(CORPUS), false);
     const left = CORPUS.flatMap((file) => bare.getSemanticDiagnostics(file));
     expect(left.length).toBeGreaterThan(0);
-    // Each is a bigint index or a number beside a bigint — and the plugin says so of every one.
+    // Each is a bigint index, a number beside a bigint or an `await` with no `async` — and the
+    // plugin says so of every one.
     for (const diagnostic of left) {
-      expect([2538, 2365, 2367, 2322, 2345]).toContain(diagnostic.code);
-      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText)).toBe(true);
+      expect([2538, 2365, 2367, 2322, 2345, 1308]).toContain(diagnostic.code);
+      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText, ts)).toBe(true);
     }
+  });
+
+  it("takes an `await` in main's body, a body a call takes, a `try` or an `if` there, and nowhere else", () => {
+    const file = join(work, "awaited.sauce.ts");
+    const opened =
+      "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x44 })";
+    const codes = (body: string, withPlugin = true) =>
+      service({ [file]: body }, withPlugin)
+        .getSemanticDiagnostics(file)
+        .map((diagnostic) => diagnostic.code);
+    for (const body of [
+      `function main() {\n  await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`,
+      `function main() {\n  ${opened}.then(() => {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  });\n}\n`,
+      `function main() {\n  try {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  } catch (e) {\n    USDC.transfer(0x44, 1);\n  }\n}\n`,
+      `function main() {\n  if (USDC != 0) {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  }\n}\n`,
+      `function main() {\n  if (chainId == Ethereum) await ${opened};\n  else if (chainId == Base) {\n    await ${opened};\n  } else {\n    USDC.transfer(0x66, 1);\n  }\n}\n`,
+      `function main() {\n  try {\n    if (USDC != 0) {\n      await ${opened};\n    }\n  } catch (e) {}\n}\n`,
+      `function main() {\n  if (USDC != 0) {\n    try {\n      await ${opened};\n    } catch (e) {}\n  }\n}\n`,
+    ]) {
+      // TypeScript wants an `async` function around it; SauceScript has none.
+      expect(codes(body, false)).toContain(1308);
+      expect(codes(body)).toEqual([]);
+    }
+    // At a script's top level TypeScript takes it as it is.
+    expect(codes(`await ${opened};\nUSDC.transfer(0x66, 1);\n`, false)).not.toContain(1308);
+    // In another function, in an `if` or a `try` with a statement after it, in a handler or in a
+    // nested `try`, the compile refuses it, and TypeScript's error stays.
+    for (const body of [
+      `function pay() {\n  await ${opened};\n}\nfunction main() {\n  pay();\n}\n`,
+      `function main() {\n  if (USDC != 0) {\n    await ${opened};\n  }\n  USDC.transfer(0x66, 1);\n}\n`,
+      `function main() {\n  if (USDC != 0) await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`,
+      `function main() {\n  try {\n    await ${opened};\n  } catch (e) {}\n  USDC.transfer(0x66, 1);\n}\n`,
+      `function main() {\n  try {\n    USDC.transfer(0x66, 1);\n  } catch (e) {\n    await ${opened};\n  }\n}\n`,
+      `function main() {\n  try {\n    try {\n      await ${opened};\n    } catch (e) {}\n  } catch (e) {}\n}\n`,
+    ]) {
+      expect(codes(body)).toEqual([1308]);
+    }
+  });
+
+  it("types a chain's name as its id, beside its Portal and namespaces", () => {
+    const file = join(work, "chains.sauce.ts");
+    const files = {
+      [file]:
+        "function main(): Uint256 {\n" +
+        "  const factory = Ethereum.UniswapV3.Factory;\n" +
+        "  if (chainId == Ethereum) {\n" +
+        "    factory.getPool(Ethereum, Base, 500n);\n" +
+        "    return Ethereum;\n" +
+        "  }\n" +
+        "  return Base;\n" +
+        "}\n",
+    };
+    // Plain TypeScript: a bigint, with members.
+    expect(report(service(files, false), file)).toEqual([]);
   });
 
   it("takes an account beside a number for its address beside a number", () => {
@@ -291,6 +347,12 @@ describe("SauceScript in an editor", () => {
         "routerName",
         'import { uniswapV9 } from "@sauce/router";\nfunction main() { uniswapV9(); }\n',
         [2305, 2724],
+      ],
+      ["hop", "Base.hops({ send: { token: USDC, amount: 1n } }).then(() => {});\n", missing],
+      [
+        "then",
+        "Base.hop({ send: { token: USDC, amount: 1n }, refundee: 1n }).than(() => {});\n",
+        missing,
       ],
     ];
     for (const [name, body, codes] of cases) {

@@ -3,7 +3,7 @@
  *
  * SauceScript is a checked subset of TypeScript, and annotations are part of it — an unannotated
  * parameter is a number, so a helper that takes or returns an array, a record or bytes must say so.
- * The rewrites (`token-rewrite.ts`, `protocol-rewrite.ts`, `closure.ts`) run on
+ * The rewrites (`token-rewrite.ts`, `protocol-rewrite.ts`, `intent-sugar.ts`, `closure.ts`) run on
  * the source before the compiler does, so they have to parse whatever it accepts. A JavaScript
  * parser refused the first annotation it met.
  *
@@ -29,6 +29,10 @@ import { tsPlugin } from "@sveltejs/acorn-typescript";
 import type { AstNode } from "./ast-walk.js";
 
 const SauceParser = Parser.extend(tsPlugin());
+// `await` is SauceScript's wherever a statement stands, with no `async`: `await x; rest` is
+// `x.then(() => { rest })`, and the compiler decides where one may be. JavaScript reads one only in
+// an `async` function or at a module's top level, so this parser is told it may always await.
+Object.defineProperty(SauceParser.prototype, "canAwait", { get: () => true });
 
 /** `locations` is the plugin's requirement, not a rewrite's: every rewrite uses `start`/`end`. */
 const OPTIONS: Options = { ecmaVersion: "latest", sourceType: "module", locations: true };
