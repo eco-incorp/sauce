@@ -199,6 +199,23 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
     ],
   },
   "goonfi-v2": { takes: ["minOut"], data: ({ aToB, floor }) => [`01${bit(!aToB)}`, `${floor}00`] },
+  "meteora-dbc": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  trends: { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  heaven: { takes: ["minOut"], data: ({ aToB, floor }) => [aToB ? SELL : BUY, `${floor}00000000`] },
+  virtuals: {
+    takes: ["minOut"],
+    oneWay: "Virtuals' buy takes the tokens bought, not what to pay",
+    data: ({ floor }) => [SELL, floor],
+  },
+  "raydium-launchlab": {
+    takes: ["minOut"],
+    data: ({ aToB, floor }) => [
+      aToB ? "9527de9bd37c981a" : "faea0d7bd59c13ec",
+      floor + "00".repeat(8),
+    ],
+  },
+  "runner-rodeo": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  "scale-vmm": { takes: ["minOut"], data: ({ aToB, floor }) => [aToB ? BUY : SELL, floor] },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>
