@@ -63,13 +63,12 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
   const change = delivered - used;
   if (change > 0) {
     const paid = change - (change * solverBps) / 10000;
-    // A hop opened on a condition is written with `.then`: an `await` cannot stand in an `if`.
-    Ethereum.hop({
+    // An `await` in a branch of the `if` that ends the body: the rest of the branch runs there.
+    await Ethereum.hop({
       send: { token: USDC, amount: change }, // Base's: it funds this level
       receive: { token: USDC, amount: paid }, // Ethereum's
       refundee: refundTo,
-    }).then(() => {
-      USDC.transfer(borrower, paid); // Ethereum's USDC
     });
+    USDC.transfer(borrower, paid); // Ethereum's USDC
   }
 }

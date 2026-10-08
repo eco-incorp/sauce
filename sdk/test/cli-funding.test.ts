@@ -164,10 +164,10 @@ describe("sauce run --fund, refused before anything is sent", () => {
     "Ethereum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to })";
   it.each([
     [
-      "in an `if`",
+      "in an `if` with a statement after it",
       [`  if (amount > 1) {`, `    await ${hop};`, "  }"],
-      "an `await` inside an `if`",
-      "3:5",
+      "a statement after an `if` whose branches `await`",
+      "5:3",
     ],
     [
       "in a loop",
@@ -340,6 +340,8 @@ describe("the funding wrapper", () => {
       main("  try {", `    await ${hop};`, "  } catch (e) {}", "  USDC.transfer(to, 2);"),
       main("  try {", "    USDC.transfer(to, 1);", "  } catch (e) {", `    await ${hop};`, "  }"),
       `function helper(to: Address) {\n  await ${hop};\n}\n${main("  helper(to);")}`,
+      // A statement after an `if` whose branch awaits would run wherever the branch continued.
+      `function main(to: Address) {\n  if (to != 0) {\n    await ${hop};\n  }\n  USDC.transfer(to, 2);\n}\n`,
     ]) {
       expect(thenForm(source)).toBe(source);
     }
@@ -365,13 +367,16 @@ describe("the funding wrapper", () => {
     );
   });
 
-  it("an `await` is its `.then` form, byte for byte, in a `try` and nested in another", () => {
+  it("an `await` is its `.then` form, byte for byte, in a `try`, nested, and in an `if`'s branches", () => {
     const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
     const hop = (chain: string) =>
       `await ${chain}.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to, fee: 0 });`;
     for (const source of [
       `function main(to: Address, amount: Uint256) {\n  ${hop("Arbitrum")}\n  USDC.transfer(to, amount);\n  ${hop("Optimism")}\n  USDC.transfer(to, 1);\n}\n`,
       `function main(to: Address, amount: Uint256) {\n  try {\n    ${hop("Arbitrum")}\n    USDC.transfer(to, amount);\n    ${hop("Optimism")}\n    USDC.transfer(to, 1);\n  } catch (e) {\n    USDC.transfer(to, e.length);\n  }\n}\n`,
+      // In the branches of an `if` that ends the body: each branch's rest is its own `.then`.
+      `function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, 3);\n  if (amount > 1) {\n    ${hop("Arbitrum")}\n    USDC.transfer(to, amount);\n  } else if (amount == 1) {\n    ${hop("Optimism")}\n    USDC.transfer(to, 1);\n  } else {\n    USDC.transfer(to, 2);\n  }\n}\n`,
+      `function main(to: Address, amount: Uint256) {\n  try {\n    if (amount > 1) ${hop("Arbitrum")}\n  } catch (e) {\n    USDC.transfer(to, e.length);\n  }\n}\n`,
     ]) {
       const written = thenForm(source);
       expect(written).not.toMatch(/\bawait\b/);

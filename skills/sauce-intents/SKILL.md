@@ -599,11 +599,14 @@ function main(recipient: Address, refundTo: Address) {
 ```
 
 No `async` is needed. An `await` is a statement directly in `main`'s body, in the body of an
-intent, or in a `try` block there. Everything after it, to the end of that body, runs on its
-destination: names resolve there, values from before it are captured and cannot be assigned or
-declared again, and a `return` is the body's. An `await` inside an `if`, a loop or another block, in
-another function, or used as a value is a compile error, and so is `await` followed by `(`, `[` or a
-line break in `main` or a body, where it reads as a name: start the hop on the `await`'s line.
+intent, in a `try` block there, or in a branch of an `if` there that ends its body. Everything after
+it, to the end of that body (or of that branch), runs on its destination: names resolve there,
+values from before it are captured and cannot be assigned or declared again, and a `return` is the
+body's. A hop opened on a condition is `if (change > 0) { await Ethereum.hop({ … }); … }` with
+nothing after the `if`: a statement there would run wherever the branch taken continued, so it is a
+compile error. So is an `await` in a loop or another block, in another function, or used as a
+value, and `await` followed by `(`, `[` or a line break in `main` or a body, where it reads as a
+name: start the hop on the `await`'s line.
 
 A `try` around awaited hops handles each body, and what runs before them. The handler runs on
 whichever chain failed and resolves its names there. It is compiled once per chain, and

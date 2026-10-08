@@ -59,6 +59,11 @@ pnpm docs:check     # manual links and shape, README snippet, executable example
 pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
 
+`sdk/scripts/sizes/` holds the tools a compiler bump is held with, run by hand against a built tree
+(its README): every example and recipe's bytecode size against a baseline (`sizes.mjs`, `diff.mjs`),
+a hash of every output and refusal for proving a change alters none (`bytes.mjs`, `refusals.mjs`),
+and compile time (`times.mjs`, `ab.mjs`, `profile.mjs`, and recordings any build replays).
+
 `lint` and `format:check` gate every PR (`.github/workflows/lint.yml`) and both run over the
 WHOLE tree, so there is no backlog to work around — a new file has to be clean. Prettier and
 ESLint are pinned to exact versions rather than caret ranges: a formatter that drifts between
@@ -720,8 +725,9 @@ parameter drops it, as an arrow called in place does. A handler that reads `e` n
 the major that carries `CATCH_READS` (#553): the releases.json row of the compiler with #553 pairs
 with it. `await x; rest` is the compiler's
 `x.then(() => { rest })`, inside a `try` at every `await` with its `catch`, so a cascade is one
-`await` per hop; an `await` cannot stand in an `if`, a loop or another block, so a hop opened on a
-condition is written with `.then`.
+`await` per hop. An `await` may stand in the branches of an `if` that ends its body (each branch's
+rest is its own `.then`; a statement after such an `if` is refused), not in a loop or another block;
+`funding.ts#thenForm` reads them as the compiler does.
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
