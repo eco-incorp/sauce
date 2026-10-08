@@ -1,0 +1,8 @@
+{
+  "name": "sauce-compiler",
+  "version": "2.5.0",
+  "exports": {
+    ".": "./index.cjs",
+    "./ready": "./ready.cjs"
+  }
+}

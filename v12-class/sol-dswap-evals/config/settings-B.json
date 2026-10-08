@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/.env*)",
+      "Read(**/.secrets/**)",
+      "Read(**/sauce.config.json)",
+      "Read(//Users/er/Documents/Projects/sauce-sdk/**)",
+      "Read(**/node_modules/@eco-incorp/**)",
+      "Read(//Users/er/Documents/Projects/v12-class/**)",
+      "Read(//Users/er/Documents/Projects/sauce-agent-demo/**)",
+      "Bash(* .secrets/*)",
+      "Bash(* .env*)",
+      "Bash(* /Users/er/Documents/Projects/sauce-sdk*)",
+      "Bash(* /Users/er/Documents/Projects/sauce-agent-demo/*)",
+      "Bash(sauce *)",
+      "Bash(npx *)",
+      "Bash(pnpm *)",
+      "Bash(npm *)",
+      "Bash(yarn *)",
+      "Bash(bunx *)",
+      "Bash(node /Users/er/Documents/Projects/sauce-sdk*)",
+      "Bash(solana *)",
+      "Bash(solana-keygen *)",
+      "mcp__sauce__sauce_install_skills",
+      "Bash(cat *sauce.config.json*)",
+      "Bash(head *sauce.config.json*)",
+      "Bash(tail *sauce.config.json*)",
+      "Bash(jq *sauce.config.json*)",
+      "Bash(grep *sauce.config.json*)"
+    ]
+  }
+}

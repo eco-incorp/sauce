@@ -1,0 +1,137 @@
+{
+ "docs/examples/router-route.sauce.ts@base": [
+  1652
+ ],
+ "docs/examples/router-route.sauce.ts@ethereum": [
+  1652
+ ],
+ "docs/examples/router-swap.sauce.ts@ethereum": [
+  922
+ ],
+ "docs/examples/venue-where-deployed.sauce.ts@base": [
+  104
+ ],
+ "docs/examples/venue-where-deployed.sauce.ts@ethereum": [
+  104
+ ],
+ "docs/examples/venue-where-deployed.sauce.ts@solana": [
+  9
+ ],
+ "skills/sauce-chains/examples/holdings.sauce.ts@base": [
+  291
+ ],
+ "skills/sauce-chains/examples/holdings.sauce.ts@ethereum": [
+  291
+ ],
+ "skills/sauce-chains/examples/payout-solana.sauce.ts@solana": [
+  1208
+ ],
+ "skills/sauce-cli/examples/payout.sauce.ts@base": [
+  597
+ ],
+ "skills/sauce-cli/examples/payout.sauce.ts@ethereum": [
+  597
+ ],
+ "skills/sauce-distributed-swap/examples/distributed-swap.sauce.ts@base": [
+  2581
+ ],
+ "skills/sauce-examples/examples/aave-health.sauce.ts@base": [
+  927
+ ],
+ "skills/sauce-examples/examples/aave-health.sauce.ts@ethereum": [
+  927
+ ],
+ "skills/sauce-examples/examples/buy-stock.sauce.ts@ethereum": [
+  1057
+ ],
+ "skills/sauce-examples/examples/dca.sauce.ts@base": [
+  740
+ ],
+ "skills/sauce-examples/examples/dca.sauce.ts@ethereum": [
+  742
+ ],
+ "skills/sauce-examples/examples/eth-prices.sauce.ts@ethereum": [
+  744
+ ],
+ "skills/sauce-examples/examples/pay-stock.sauce.ts@solana": [
+  1200
+ ],
+ "skills/sauce-examples/examples/payroll.sauce.ts@base": [
+  991
+ ],
+ "skills/sauce-examples/examples/payroll.sauce.ts@ethereum": [
+  991
+ ],
+ "skills/sauce-examples/examples/rebalance.sauce.ts@base": [
+  1325
+ ],
+ "skills/sauce-examples/examples/rebalance.sauce.ts@ethereum": [
+  1327
+ ],
+ "skills/sauce-examples/examples/stop-loss.sauce.ts@ethereum": [
+  855
+ ],
+ "skills/sauce-examples/examples/supply-idle.sauce.ts@base": [
+  746
+ ],
+ "skills/sauce-examples/examples/supply-idle.sauce.ts@ethereum": [
+  746
+ ],
+ "skills/sauce-globals/examples/globals.sauce.ts@ethereum": [
+  809
+ ],
+ "skills/sauce-intents/examples/fund-by-transfer.sauce.ts@base": [
+  798
+ ],
+ "skills/sauce-intents/examples/fund-by-transfer.sauce.ts@ethereum": [
+  798
+ ],
+ "skills/sauce-protocols/examples/protocols.sauce.ts@base": [
+  498
+ ],
+ "skills/sauce-protocols/examples/protocols.sauce.ts@ethereum": [
+  498
+ ],
+ "skills/sauce-script/examples/twap.sauce.ts@base": [
+  230
+ ],
+ "skills/sauce-script/examples/twap.sauce.ts@ethereum": [
+  230
+ ],
+ "skills/sauce-solana/examples/solana.sauce.ts@solana": [
+  575
+ ],
+ "skills/sauce-solana/examples/token-2022.sauce.ts@solana": [
+  937
+ ],
+ "skills/sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts@solana": [
+  6390
+ ],
+ "skills/sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts@solana": [
+  6319
+ ],
+ "skills/sauce-swaps/examples/swap-leg.sauce.ts@base": [
+  591
+ ],
+ "skills/sauce-swaps/examples/swap-leg.sauce.ts@ethereum": [
+  591
+ ],
+ "sdk/src/recipes/cctp-split.sauce.ts@base": [
+  376
+ ],
+ "sdk/src/recipes/cctp-split.sauce.ts@ethereum": [
+  376
+ ],
+ "sdk/src/recipes/plain-transfer.sauce.ts@base": [
+  168
+ ],
+ "sdk/src/recipes/plain-transfer.sauce.ts@ethereum": [
+  168
+ ],
+ "sdk/src/recipes/settle.sauce.ts@base": [
+  435
+ ],
+ "sdk/src/recipes/settle.sauce.ts@ethereum": [
+  435
+ ]
+}

@@ -1,0 +1,1 @@
+Do a distributed swap on Solana: sell 500 USDC for SOL (or a pair you choose with real pools) across every venue that supports a price limit, never below 0.0084 SOL per USDC, and rehearse it with sauce simulate. It is a rehearsal only: use no keys and send nothing.

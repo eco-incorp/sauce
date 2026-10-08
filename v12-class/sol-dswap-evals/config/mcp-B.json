@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "sauce": {
+      "command": "node",
+      "args": [
+        "/Users/er/Documents/Projects/sauce-sdk/sdk/dist/cli/main.js",
+        "mcp",
+        "--config",
+        "/Users/er/Documents/Projects/sauce-agent-demo/sauce.config.json"
+      ]
+    }
+  }
+}

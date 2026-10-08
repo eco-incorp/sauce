@@ -1,0 +1,2579 @@
+{
+  "chain": "solana",
+  "tokens": [
+    {
+      "symbol": "USDC",
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "decimals": 6
+    },
+    {
+      "symbol": "WSOL",
+      "mint": "So11111111111111111111111111111111111111112",
+      "decimals": 9
+    }
+  ],
+  "sortedBy": "liquidity at the pool's price, the order books after",
+  "pools": [
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+      "fee": 400,
+      "liquidity": "853446928378409",
+      "sqrtPriceX64": "6324189096879901910",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.53582",
+          "taker": "117.58285",
+          "maxPrice": "117582855215367987"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085080444",
+          "taker": "0.0085114490",
+          "maxPrice": "8511449040959537951"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+          "vaultB": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+          "extra": "FoKYKtRpD25TKzBMndysKpgPqbj8AdLXjfpYHXn9PGTX",
+          "ticks": [
+            "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+            "FdtvWk8j5u1a64YK2Uxk9eXxKZJTwLHDGx8aJPbJyw2Q",
+            "8fV1MQYaRiW9qDWinzYfNa3FLs8PXSdPxoytiwrcyJPD"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+          "vaultB": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+          "extra": "FoKYKtRpD25TKzBMndysKpgPqbj8AdLXjfpYHXn9PGTX",
+          "ticks": [
+            "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+            "D3461zSTVPNdBFPRk2b6zpqQ93g2LW5Kw2potgMdxNJP",
+            "8NPFeBD52yqJWnsmBNma9qXXGEjXa6WatYcLMXjzSeyK"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+      "fee": 400,
+      "liquidity": "169995557769102",
+      "sqrtPriceX64": "6324267289753674988",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.53872",
+          "taker": "117.58576",
+          "maxPrice": "117585762844489604"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085078340",
+          "taker": "0.0085112385",
+          "maxPrice": "8511238572136612633"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+          "config": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+          "vaultA": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+          "vaultB": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+          "extra": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+          "ticks": [
+            "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+            "BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt",
+            "7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+          "config": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+          "vaultA": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+          "vaultB": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+          "extra": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+          "ticks": [
+            "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+            "2BZdCyhMaxmKTi15yWBHEzWpDM3J27xMeojxKU9Wou22",
+            "ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+      "fee": 100,
+      "liquidity": "22671252016327",
+      "sqrtPriceX64": "6323765728105082198",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.52008",
+          "taker": "117.53183",
+          "maxPrice": "117531839063783071"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085091837",
+          "taker": "0.0085100347",
+          "maxPrice": "8510034710349459813"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+          "config": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+          "vaultA": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+          "vaultB": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+          "extra": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+          "ticks": [
+            "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+            "2xmhJyp2uNmttg5VfMbiWfMSdWtrN4N9vLX4MTPuMZ4J",
+            "syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy"
+          ]
+        },
+        "WSOL": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+          "config": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+          "vaultA": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+          "vaultB": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+          "extra": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+          "ticks": [
+            "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+            "F2CPsFh4yKxDLmEnFRXk1hwb6QjjP22vWCfPTHgDpWkb",
+            "bjnDeH75Tk7UqoyZHMRx5svjR1ndzSxLuxnzoX3wYSr"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "4QU2NpRaqmKMvPSwVKQDeW4V6JFEKJdkzbzdauumD9qN",
+      "fee": 300,
+      "liquidity": "13468626430291",
+      "sqrtPriceX64": "6324057857807643979",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.53094",
+          "taker": "117.56621",
+          "maxPrice": "117566213799859036"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085083975",
+          "taker": "0.0085109508",
+          "maxPrice": "8510950874129793981"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "4QU2NpRaqmKMvPSwVKQDeW4V6JFEKJdkzbzdauumD9qN",
+          "config": "2zmg7259ahZkrSn6M3PEM7eFvEfBU8obgfVHT3AL9Qwu",
+          "vaultA": "8JL1ZnyMvd48AqF9YTCE4UnEV8dDydU2cYQSa6bzykYP",
+          "vaultB": "FVDSv2aymcXu5ubgFePqPmp24nrKiwpUFc21b2Kqh6gC",
+          "extra": "2h4rB9TSGFehKrvKzrMM4RrWqBefGV1STdpekc3cTyBy",
+          "ticks": [
+            "5QdSCSdfaH2WdwV2o85Pog4vfUpNrHhmXBTm7nwPnMwT",
+            "3F91JfcrbTqmdeWRpaAtPiF5GzxYsvin1o2t9NLogWE8",
+            "4DCtjgPdF51NKguLpzdDCqcL3qEv9DP9aQqtDBmte8EF"
+          ]
+        },
+        "WSOL": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "4QU2NpRaqmKMvPSwVKQDeW4V6JFEKJdkzbzdauumD9qN",
+          "config": "2zmg7259ahZkrSn6M3PEM7eFvEfBU8obgfVHT3AL9Qwu",
+          "vaultA": "8JL1ZnyMvd48AqF9YTCE4UnEV8dDydU2cYQSa6bzykYP",
+          "vaultB": "FVDSv2aymcXu5ubgFePqPmp24nrKiwpUFc21b2Kqh6gC",
+          "extra": "2h4rB9TSGFehKrvKzrMM4RrWqBefGV1STdpekc3cTyBy",
+          "ticks": [
+            "5QdSCSdfaH2WdwV2o85Pog4vfUpNrHhmXBTm7nwPnMwT",
+            "HPNbJ31H3bAh1tREVRmdAWvAjQkxMRUCvrsaLsnbLf52",
+            "EzZmxkVqxpsqozuQemzckuWpQ81cRNuAGv9ENaYxSTf5"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "83v8iPyZihDEjDdY8RdZddyZNyUtXngz69Lgo9Kt5d6d",
+      "fee": 100,
+      "liquidity": "4865725823539",
+      "sqrtPriceX64": "6323897522077039443",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.52498",
+          "taker": "117.53673",
+          "maxPrice": "117536738090717825"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085088290",
+          "taker": "0.0085096800",
+          "maxPrice": "8509680005174389281"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "83v8iPyZihDEjDdY8RdZddyZNyUtXngz69Lgo9Kt5d6d",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "D3CDPQLoa9jY1LXCkpUqd3JQDWz8DX1LDE1dhmJt9fq4",
+          "vaultB": "dwxR9YF7WwnJJu7bPC4UNcWFpcSsooH6fxbpoa3fTbJ",
+          "extra": "GwRSc3EPw2fCLJN7zWwcApXgHSrfmj9m4H5sfk1W2SUJ",
+          "ticks": [
+            "HVRWpyX2AWZN3DGJsoCtJkcVdZtZT6tPA3TLr1JXdCFx",
+            "5ryRrZntSEhYZooXXp6awUYVApi1uf2U32HYCCFGTSRN",
+            "FjvfgcRN6cuQpLPZLL6GxnMRhLw74i69Kh4TxQaDP8hU"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "83v8iPyZihDEjDdY8RdZddyZNyUtXngz69Lgo9Kt5d6d",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "D3CDPQLoa9jY1LXCkpUqd3JQDWz8DX1LDE1dhmJt9fq4",
+          "vaultB": "dwxR9YF7WwnJJu7bPC4UNcWFpcSsooH6fxbpoa3fTbJ",
+          "extra": "GwRSc3EPw2fCLJN7zWwcApXgHSrfmj9m4H5sfk1W2SUJ",
+          "ticks": [
+            "HVRWpyX2AWZN3DGJsoCtJkcVdZtZT6tPA3TLr1JXdCFx",
+            "BTYXZgPr7EHCfubEcQvgJSThXnCuaYXrLF8wHR1Xz4t9",
+            "7o6PEYqNG5E1xR1MmZm4aAnFj4yEVFKeHbXRaU337s82"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "CYbD9RaToYMtWKA7QZyoLahnHdWq553Vm62Lh6qWtuxq",
+      "fee": 200,
+      "liquidity": "2504536867694",
+      "sqrtPriceX64": "6323755604850317271",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.51970",
+          "taker": "117.54321",
+          "maxPrice": "117543218265183590"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085092109",
+          "taker": "0.0085109131",
+          "maxPrice": "8510913133032086145"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "CYbD9RaToYMtWKA7QZyoLahnHdWq553Vm62Lh6qWtuxq",
+          "config": "EdPxg8QaeFSrTYqdWJn6Kezwy9McWncTYueD9eMGCuzR",
+          "vaultA": "GviiXg2Xc1xCpyNY36r7h1EAy7uvse5UMkiiyHjRDU6Z",
+          "vaultB": "3bWPj5eepJm8CxUzk5MMFMN2CFJkntxKvbmy4zwwtpJd",
+          "extra": "AA5RaVvyGyZgtmAsJJHT5ZVBxVPtAXuYaMwfgeFJW4Mk",
+          "ticks": [
+            "7wwa1wgKQyuyGwTLd2cSniRDEadeHi9kni28DNeo25gX",
+            "GJvp3NbQejTJ8QwjYRmHU19Q8eMuSJLRQZmhMfPqr7M3",
+            "3svVQ92nnX8nffzfMdXt1soMK2J2LP5z84rEpKo36y3V"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "CYbD9RaToYMtWKA7QZyoLahnHdWq553Vm62Lh6qWtuxq",
+          "config": "EdPxg8QaeFSrTYqdWJn6Kezwy9McWncTYueD9eMGCuzR",
+          "vaultA": "GviiXg2Xc1xCpyNY36r7h1EAy7uvse5UMkiiyHjRDU6Z",
+          "vaultB": "3bWPj5eepJm8CxUzk5MMFMN2CFJkntxKvbmy4zwwtpJd",
+          "extra": "AA5RaVvyGyZgtmAsJJHT5ZVBxVPtAXuYaMwfgeFJW4Mk",
+          "ticks": [
+            "7wwa1wgKQyuyGwTLd2cSniRDEadeHi9kni28DNeo25gX",
+            "Ca4Z8T8Li16TGXYMd2RyRHmoeR4Cvun1AQGY59UAzEFJ",
+            "EwJzcdV51K8e6xetjKHqaw4rFBGwdMe4xa5rcF2ctTgx"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv",
+      "fee": 500,
+      "liquidity": "1546799391809",
+      "sqrtPriceX64": "6324555866133125928",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.54945",
+          "taker": "117.60825",
+          "maxPrice": "117608259500538186"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085070577",
+          "taker": "0.0085113133",
+          "maxPrice": "8511313361420266678"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv",
+          "config": "HfERMT5DRA6C1TAqecrJQFpmkf3wsWTMncqnj3RDg5aw",
+          "vaultA": "E2BcoCeJLTa27mAXDA4xwEq3pBUcyH6XXEHYk4KvKYTv",
+          "vaultB": "4d35yC7C8zhCDec7JbPptL9SEb4NUddKHxURgmvD8hfo",
+          "extra": "4fEjbMXTet3w8qhScPmT6X79ypagRydKLHPqcGsrhcmP",
+          "ticks": [
+            "9hzszBFvXSd1ReZxW939Zu4iKL9Wd5RFaQ7z8KMeDDN7",
+            "3oFwxfnruarKtfjREgULhoCEDbuNsuzx24vidJNd8vCK",
+            "6yCJBkKyvc79xspMPMNCvNUaPta3QJGUNedRnnm1MTTr"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv",
+          "config": "HfERMT5DRA6C1TAqecrJQFpmkf3wsWTMncqnj3RDg5aw",
+          "vaultA": "E2BcoCeJLTa27mAXDA4xwEq3pBUcyH6XXEHYk4KvKYTv",
+          "vaultB": "4d35yC7C8zhCDec7JbPptL9SEb4NUddKHxURgmvD8hfo",
+          "extra": "4fEjbMXTet3w8qhScPmT6X79ypagRydKLHPqcGsrhcmP",
+          "ticks": [
+            "9hzszBFvXSd1ReZxW939Zu4iKL9Wd5RFaQ7z8KMeDDN7",
+            "FWWN4jYTotWCFxZQftLUGnpXujz4MFH8Lc6BBGPFDVkT",
+            "8Zo3x55Q81YL8Bev6EPULCNmoGNtwCT58d1KswzRTvbQ"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "CiSQxEhiS1j7PVHy57LqmjFWL1N7ciYD45Enq5tSyfaN",
+      "fee": 8000,
+      "liquidity": "1545867355003",
+      "sqrtPriceX64": "6325889366736279685",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.59903",
+          "taker": "118.54740",
+          "maxPrice": "118547409286578541"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085034714",
+          "taker": "0.0085720478",
+          "maxPrice": "8572047881889134815"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "CiSQxEhiS1j7PVHy57LqmjFWL1N7ciYD45Enq5tSyfaN",
+          "config": "DQeN7dZyQvXKT7YwmgqyuC7AYFkwMoP7RwtucsDEdfYZ",
+          "vaultA": "GdFu3SmTMmUmSrdazErYbSSUAdoEVBH3ixjacFMc5MQe",
+          "vaultB": "AZvtizXQku7wDfC8QyxcFLeX1vyRVSjnurMFfi8HoVen",
+          "extra": "Ahc4tS1eHmub427i7P6wkNRmRtD8UoLiuHkQXEz6F8q6",
+          "ticks": [
+            "5DAQYrwDVEKn4KqgNFmF26tqrn3rjh2GxbMiVTBKjWtR",
+            "8K42hA1bu2SP6xxQUPNXe44pfmiaWp3SM4yiBBajDYRM",
+            "3FdK7pUCAEoJmDZ3LQePXrYKvFMnpxqMLe6kVwBqbxRh"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "CiSQxEhiS1j7PVHy57LqmjFWL1N7ciYD45Enq5tSyfaN",
+          "config": "DQeN7dZyQvXKT7YwmgqyuC7AYFkwMoP7RwtucsDEdfYZ",
+          "vaultA": "GdFu3SmTMmUmSrdazErYbSSUAdoEVBH3ixjacFMc5MQe",
+          "vaultB": "AZvtizXQku7wDfC8QyxcFLeX1vyRVSjnurMFfi8HoVen",
+          "extra": "Ahc4tS1eHmub427i7P6wkNRmRtD8UoLiuHkQXEz6F8q6",
+          "ticks": [
+            "5DAQYrwDVEKn4KqgNFmF26tqrn3rjh2GxbMiVTBKjWtR",
+            "3FdK7pUCAEoJmDZ3LQePXrYKvFMnpxqMLe6kVwBqbxRh",
+            "8K42hA1bu2SP6xxQUPNXe44pfmiaWp3SM4yiBBajDYRM"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "8sLbNZoA1cfnvMJLPfp98ZLAnFSYCFApfJKMbiXNLwxj",
+      "fee": 100,
+      "liquidity": "1422353445406",
+      "sqrtPriceX64": "6323346573177649886",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.50450",
+          "taker": "117.51625",
+          "maxPrice": "117516258974665305"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085103118",
+          "taker": "0.0085111629",
+          "maxPrice": "8511162955073546139"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "8sLbNZoA1cfnvMJLPfp98ZLAnFSYCFApfJKMbiXNLwxj",
+          "config": "9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x",
+          "vaultA": "6P4tvbzRY6Bh3MiWDHuLqyHywovsRwRpfskPvyeSoHsz",
+          "vaultB": "6mK4Pxs6GhwnessH7CvPivqDYauiHZmAdbEFDpXFk9zt",
+          "extra": "3MsJXVvievxAbsMsaT6TS4i6oMitD9jazucuq3X234tC",
+          "ticks": [
+            "HsKFtu7HRqdLpCdRVCSYVQS7MTwM4HE7UvwJ96jWVVY",
+            "CCWaYZ2UyMTYJCDkXGMkGZRE9M6rmBUfg7yHnrV6Nib1",
+            "8erbHjNK8R97rGn5Hi62bxuWaJwExVkkEuLYpHZAQJcs"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "8sLbNZoA1cfnvMJLPfp98ZLAnFSYCFApfJKMbiXNLwxj",
+          "config": "9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x",
+          "vaultA": "6P4tvbzRY6Bh3MiWDHuLqyHywovsRwRpfskPvyeSoHsz",
+          "vaultB": "6mK4Pxs6GhwnessH7CvPivqDYauiHZmAdbEFDpXFk9zt",
+          "extra": "3MsJXVvievxAbsMsaT6TS4i6oMitD9jazucuq3X234tC",
+          "ticks": [
+            "HsKFtu7HRqdLpCdRVCSYVQS7MTwM4HE7UvwJ96jWVVY",
+            "Eb7VtdkYbhhS3jVeN25dVNtbXkoGe4pQUZPdPJf3t6Bu",
+            "HUAnitdA1YmCoyZZoMqj17xf9aoeo3ePrvC5Qfuca6Gk"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "DefiTuna",
+      "program": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "pool": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+      "fee": 500,
+      "liquidity": "939050317914",
+      "sqrtPriceX64": "6324707616463020834",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.55509",
+          "taker": "117.61390",
+          "maxPrice": "117613903313847894"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085066494",
+          "taker": "0.0085109049",
+          "maxPrice": "8510904938076777299"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+          "pool": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+          "vaultB": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+          "extra": "11111111111111111111111111111111",
+          "ticks": [
+            "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+            "5EB33uqp5Lc6JKvdFwE3p7G5sYMwG26uCcKfjqconxdc",
+            "CSyeqvPvzDuL7PmuqjXiGC39Sh2cqcAyzwNrRrfqGQJF"
+          ]
+        },
+        "WSOL": {
+          "program": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+          "pool": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+          "vaultB": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+          "extra": "11111111111111111111111111111111",
+          "ticks": [
+            "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+            "4AyU4fjeHuxwN7j2QDF6HuGRBGYjnr3zuMvWHcjvfze5",
+            "BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "FpCMFDFGYotvufJ7HrFHsWEiiQCGbkLCtwHiDnh7o28Q",
+      "fee": 200,
+      "liquidity": "737686273709",
+      "sqrtPriceX64": "6323491805331566025",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.50990",
+          "taker": "117.53341",
+          "maxPrice": "117533411688335176"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085099209",
+          "taker": "0.0085116232",
+          "maxPrice": "8511623253860626117"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "FpCMFDFGYotvufJ7HrFHsWEiiQCGbkLCtwHiDnh7o28Q",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "6mQ8xEaHdTikyMvvMxUctYch6dUjnKgfoeib2msyMMi1",
+          "vaultB": "AQ36QRk3HAe6PHqBCtKTQnYKpt2kAagq9YoeTqUPMGHx",
+          "extra": "923j69hYbT5Set5kYfiQr1D8jPL6z15tbfTbVLSwUWJD",
+          "ticks": [
+            "4WtGU9HUssGgkuXJD8aMMfPxWzqXafdJvikzD5j2riUK",
+            "Am68GgBEgmExwnaaiefTHELeqhiQkzQdXLA3NYg2n6j8",
+            "6NZ5o1CvahNfph4a7MaeZfLbpZ4fZD3sh1Te1SUo6aVe"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "FpCMFDFGYotvufJ7HrFHsWEiiQCGbkLCtwHiDnh7o28Q",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "6mQ8xEaHdTikyMvvMxUctYch6dUjnKgfoeib2msyMMi1",
+          "vaultB": "AQ36QRk3HAe6PHqBCtKTQnYKpt2kAagq9YoeTqUPMGHx",
+          "extra": "923j69hYbT5Set5kYfiQr1D8jPL6z15tbfTbVLSwUWJD",
+          "ticks": [
+            "4WtGU9HUssGgkuXJD8aMMfPxWzqXafdJvikzD5j2riUK",
+            "Af3SYYgwvCE4bu58pMQUJgL8BShq5y7VuUMtdw2GxrXn",
+            "2A9neMejdY42C216L4cBFweXiLNXQFZAeNWMmkmBBUrv"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+      "fee": 500,
+      "liquidity": "707800035484",
+      "sqrtPriceX64": "6324758296002166457",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.55698",
+          "taker": "117.61578",
+          "maxPrice": "117615788189057810"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085065131",
+          "taker": "0.0085107685",
+          "maxPrice": "8510768544876691369"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "9RfZwn2Prux6QesG1Noo4HzMEBv3rPndJ2bN2Wwd6a7p",
+          "vaultB": "BVNo8ftg2LkkssnWT4ZWdtoFaevnfD6ExYeramwM27pe",
+          "extra": "6vK8gSiRHSnZzAa5JsvBF2ej1LrxpRX21Y185CzP4PeA",
+          "ticks": [
+            "DFBNSHRC7FstFMVbMVztU7d2wtr9eabTw8Db8UPxdrmM",
+            "H4AiZEK1wtLsXmzobDE5QpKPKbjJD8nWkUbQkZxt3DmV",
+            "pnTAe2rwLaHLDKWxT8pHha8CkU2nuJb4tKJ1hkDtnHZ"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "9RfZwn2Prux6QesG1Noo4HzMEBv3rPndJ2bN2Wwd6a7p",
+          "vaultB": "BVNo8ftg2LkkssnWT4ZWdtoFaevnfD6ExYeramwM27pe",
+          "extra": "6vK8gSiRHSnZzAa5JsvBF2ej1LrxpRX21Y185CzP4PeA",
+          "ticks": [
+            "DFBNSHRC7FstFMVbMVztU7d2wtr9eabTw8Db8UPxdrmM",
+            "8kAF6vFAdnX9GWBM7STfGjnULKLmED5moxnoxGgq89QF",
+            "Hty4rPfcu3LGjmLKRJymy4XGUS6i8n6eXesUs7H7PrDp"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "GqxUEcFw8GbfDPoWU6UG2ypvsM3aw3vZmiN4e1Nbv94G",
+      "fee": 10000,
+      "liquidity": "586013589180",
+      "sqrtPriceX64": "6337465254073840070",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "118.02981",
+          "taker": "119.22203",
+          "maxPrice": "119222038414429778"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084724353",
+          "taker": "0.0085580154",
+          "maxPrice": "8558015482509906849"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "GqxUEcFw8GbfDPoWU6UG2ypvsM3aw3vZmiN4e1Nbv94G",
+          "config": "A1BBtTYJd4i3xU8D6Tc2FzU6ZN4oXZWXKZnCxwbHXr8x",
+          "vaultA": "2axiY43XDskokskdtwCouZXFxXvqbK8WgDMkJR2fMoj1",
+          "vaultB": "3akY6KEFaDVDowFBkxS2iC7U8bgpUtpmAK1J2DgYNJw6",
+          "extra": "EeVXzDotby848gkusN8qZykJ4NiKFRopCanXkMTJeF2K",
+          "ticks": [
+            "3AY88tEvR6HUvg4PvzzvAbhH4sWiKLWTqWRjmb1Qy5Si",
+            "BZAdJPKP5G8p2hJFiMB917btt6MY1uRrN2PgPytSFVXa",
+            "B1F6eEcBXP7KvV7kxTcQ4mTXtMFJqChD5twJhM7nXzev"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "GqxUEcFw8GbfDPoWU6UG2ypvsM3aw3vZmiN4e1Nbv94G",
+          "config": "A1BBtTYJd4i3xU8D6Tc2FzU6ZN4oXZWXKZnCxwbHXr8x",
+          "vaultA": "2axiY43XDskokskdtwCouZXFxXvqbK8WgDMkJR2fMoj1",
+          "vaultB": "3akY6KEFaDVDowFBkxS2iC7U8bgpUtpmAK1J2DgYNJw6",
+          "extra": "EeVXzDotby848gkusN8qZykJ4NiKFRopCanXkMTJeF2K",
+          "ticks": [
+            "3AY88tEvR6HUvg4PvzzvAbhH4sWiKLWTqWRjmb1Qy5Si",
+            "A8g2XKRLj2dFPfAuQQHtPaD9HWRjDjKwYx3QQUXiCXnD",
+            "7nkfhijfD2D9G4HUnwxW6UY7dMbP1SsBZeQ3G5kkDu6z"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ",
+      "fee": 3000,
+      "liquidity": "403955414305",
+      "sqrtPriceX64": "6325614357001490101",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.58880",
+          "taker": "117.94263",
+          "maxPrice": "117942633207303712"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085042109",
+          "taker": "0.0085298003",
+          "maxPrice": "8529800302475898177"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "3YQm7ujtXWJU2e9jhp2QGHpnn1ShXn12QjvzMvDgabpX",
+          "vaultB": "2JTw1fE2wz1SymWUQ7UqpVtrTuKjcd6mWwYwUJUCh2rq",
+          "extra": "4GkRbcYg1VKsZropgai4dMf2Nj2PkXNLf43knFpavrSi",
+          "ticks": [
+            "CEstjhG1v4nUgvGDyFruYEbJ18X8XeN4sX1WFCLt4D5c",
+            "HoDhUt77EotPNLUfJuvCCLbmpiM1JR6WLqWxeDPR1xvK",
+            "81T5kNuPRkyVzhwbe2RpKR7wmQpGJ7RBkGPdTqyfa5vq"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "3YQm7ujtXWJU2e9jhp2QGHpnn1ShXn12QjvzMvDgabpX",
+          "vaultB": "2JTw1fE2wz1SymWUQ7UqpVtrTuKjcd6mWwYwUJUCh2rq",
+          "extra": "4GkRbcYg1VKsZropgai4dMf2Nj2PkXNLf43knFpavrSi",
+          "ticks": [
+            "CEstjhG1v4nUgvGDyFruYEbJ18X8XeN4sX1WFCLt4D5c",
+            "A2W6hiA2nf16iqtbZt9vX8FJbiXjv3DBUG3DgTja61HT",
+            "2Eh8HEeu45tCWxY6ruLLRN6VcTSD7bfshGj7bZA87Kne"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "CztrCcLhgfazkBchMW7wXQL37AWQdBP1tQWHBR249neh",
+      "fee": 6000,
+      "liquidity": "85306202310",
+      "sqrtPriceX64": "6318386586410680115",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.32024",
+          "taker": "118.02841",
+          "maxPrice": "118028410759612177"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085236784",
+          "taker": "0.0085751291",
+          "maxPrice": "8575129191465108148"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "CztrCcLhgfazkBchMW7wXQL37AWQdBP1tQWHBR249neh",
+          "config": "47Nq74YtwjVeTQF6KFKRKU4cY1Vd5AXBHpYRkubkDLZi",
+          "vaultA": "6rMqQGHdWDEnWVDaLdL2NhGX7kvos84nwSfXGwWexzC1",
+          "vaultB": "4mnSgkLCmJWn5igniQRMHLntwpNjN3k54QsvKZujk1wJ",
+          "extra": "Bc2y3udGsGEENH9wBMgywGEPnPdR5Dkjns81pEtZ3pU",
+          "ticks": [
+            "7mFaox5Hxuwus4d158UJdgsSWfNHUtQoN3Zk3AcrZvo9",
+            "628bLc9jpU4oK9RQhhJ1T4izDmqqzZnRA8XdgxZqUzmw",
+            "BfRHzbYwibzbYwc6GxYVSNukgMaVY39zyzoJQ1VFLmAQ"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "CztrCcLhgfazkBchMW7wXQL37AWQdBP1tQWHBR249neh",
+          "config": "47Nq74YtwjVeTQF6KFKRKU4cY1Vd5AXBHpYRkubkDLZi",
+          "vaultA": "6rMqQGHdWDEnWVDaLdL2NhGX7kvos84nwSfXGwWexzC1",
+          "vaultB": "4mnSgkLCmJWn5igniQRMHLntwpNjN3k54QsvKZujk1wJ",
+          "extra": "Bc2y3udGsGEENH9wBMgywGEPnPdR5Dkjns81pEtZ3pU",
+          "ticks": [
+            "7mFaox5Hxuwus4d158UJdgsSWfNHUtQoN3Zk3AcrZvo9",
+            "54SkDiysn6C4JJFu7qrJMjjsf7H27Pby27tENkvBu75u",
+            "AghqBNCXSnm8vSDwYC9F38SyfUWpNuNd8FxjXGVWKBHp"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "65shmpuYmxx5p7ggNCZbyrGLCXVqbBR1ZD5aAocRBUNG",
+      "fee": 2500,
+      "liquidity": "40388107985",
+      "sqrtPriceX64": "6057780980563124359",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "107.84193",
+          "taker": "108.11221",
+          "maxPrice": "108112219997294889"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0092728302",
+          "taker": "0.0092960704",
+          "maxPrice": "9296070441630437816"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "65shmpuYmxx5p7ggNCZbyrGLCXVqbBR1ZD5aAocRBUNG",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "59SNCy69mMZPgZytJsv4FkMQ59bCnEk17xuLnuY9fiiM",
+          "vaultB": "BVABXM3DZz4M2mGfPtmk8dGUqyWiwiVd2MU5vme4WLe5",
+          "extra": "FjUxBnbLJkc5juiPYyh1oEQbE9a6coknjgFfzh4rd3bp",
+          "ticks": [
+            "1425xYxzY5BrVSUzVuCg2Fif2dHhcV2U1LkTGkHVteGA",
+            "QMGe9xa26rg73oLtVGcGUyn8hfW8NjqKGaaUc3fpvgG",
+            "6h1nwm7wYVp2E5SM1ryTN7pajcxQR8BAHyK2sYV6zN59"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "65shmpuYmxx5p7ggNCZbyrGLCXVqbBR1ZD5aAocRBUNG",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "59SNCy69mMZPgZytJsv4FkMQ59bCnEk17xuLnuY9fiiM",
+          "vaultB": "BVABXM3DZz4M2mGfPtmk8dGUqyWiwiVd2MU5vme4WLe5",
+          "extra": "FjUxBnbLJkc5juiPYyh1oEQbE9a6coknjgFfzh4rd3bp",
+          "ticks": [
+            "1425xYxzY5BrVSUzVuCg2Fif2dHhcV2U1LkTGkHVteGA",
+            "5YEigfwqmkk93DjR38TYKhqYahsxWVmYBzaSE4CcR4Se",
+            "8JYWu3LzBo6J9fyQhVpdLBn7dsYZtGt83wFvLP3GQ7zF"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "5s7njN2X6k3trkibTKX6LJFu4PnybYhCuADP9LD2fhuP",
+      "fee": 2000,
+      "liquidity": "38900933789",
+      "sqrtPriceX64": "6328713900862630525",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.70407",
+          "taker": "117.93995",
+          "maxPrice": "117939950203520214"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084958829",
+          "taker": "0.0085129087",
+          "maxPrice": "8512908733195523994"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "5s7njN2X6k3trkibTKX6LJFu4PnybYhCuADP9LD2fhuP",
+          "config": "FMrUDGjEe1izXPbn8SZPNjMfB5JvvhVq5ymmpZDebB5R",
+          "vaultA": "66JX1N2dQKyts8Ceakmzv4wB4fsHVRWCYfBCM1ReuaBK",
+          "vaultB": "WWR1qBiszNxvMKxWFXg3HB9ymsy86z5gYktcsnZdFGu",
+          "extra": "CZ7yfxEfoLvn5MqnPJMLJnA2bwyzMrkYHbD5Ebr4qfPQ",
+          "ticks": [
+            "3gNWsosgXTQq9aYHQj4RfFssmtfeFfhSw6zr78ox8xBD",
+            "5LVWg3SjSn21mp9XoPBeF9NNgVKuudfFf7Rf4qdj92E9",
+            "Cy9RMBWaXWDjUmNKz1zgHs4kQEcyxvguf8R6XrkQqFJi"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "5s7njN2X6k3trkibTKX6LJFu4PnybYhCuADP9LD2fhuP",
+          "config": "FMrUDGjEe1izXPbn8SZPNjMfB5JvvhVq5ymmpZDebB5R",
+          "vaultA": "66JX1N2dQKyts8Ceakmzv4wB4fsHVRWCYfBCM1ReuaBK",
+          "vaultB": "WWR1qBiszNxvMKxWFXg3HB9ymsy86z5gYktcsnZdFGu",
+          "extra": "CZ7yfxEfoLvn5MqnPJMLJnA2bwyzMrkYHbD5Ebr4qfPQ",
+          "ticks": [
+            "3gNWsosgXTQq9aYHQj4RfFssmtfeFfhSw6zr78ox8xBD",
+            "BQigj8ksBTMzB4JFbek9JxmJN62r4Vkup84XDbzFv3zQ",
+            "Hz4WyHMm7QzwRhVGqDP5DxKwnaBuxn53XbJKXLk9o9Mw"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "DFVTutNYXD8z4T5cRdgpso1G3sZqQvMHWpW2N99E4DvE",
+      "fee": 10000,
+      "liquidity": "31664005488",
+      "sqrtPriceX64": "6342278264852252469",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "118.20916",
+          "taker": "119.40319",
+          "maxPrice": "119403194389752666"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084595811",
+          "taker": "0.0085450314",
+          "maxPrice": "8545031444273024381"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "DFVTutNYXD8z4T5cRdgpso1G3sZqQvMHWpW2N99E4DvE",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "GzUByABbMt5fC2W6tZmajQjchmpLZbSd2p5zvWwCrVve",
+          "vaultB": "AFvbujAMu8uExMRnvVnVwsB69YyVqY8HHct6jDsmeeEZ",
+          "extra": "A23sUQ5bYrqTFpeCF1vauriLyF96r1ju4S2GjdJAHMjE",
+          "ticks": [
+            "Fv1T8Rcbm1aDb3JtaqRYVdGS79hb66iamcTgTMdykzPh",
+            "66eQQoTQoPAiDpeoXYL1HtApfguAFRv2JbeSk8VHmVRg",
+            "6ew6ngTDSz6mneH4XBKBiRxT1eTbhZTLk9pghVQpMkut"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "DFVTutNYXD8z4T5cRdgpso1G3sZqQvMHWpW2N99E4DvE",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "GzUByABbMt5fC2W6tZmajQjchmpLZbSd2p5zvWwCrVve",
+          "vaultB": "AFvbujAMu8uExMRnvVnVwsB69YyVqY8HHct6jDsmeeEZ",
+          "extra": "A23sUQ5bYrqTFpeCF1vauriLyF96r1ju4S2GjdJAHMjE",
+          "ticks": [
+            "Fv1T8Rcbm1aDb3JtaqRYVdGS79hb66iamcTgTMdykzPh",
+            "BkttgJbmjUBvW8QWe3woiSy5sMZADYBJuiBnAdwDHcZo",
+            "DJ7FmbaHzLaTeZmvVv6SoU3L41mV8jruhDdWCkZuGbi7"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Crema",
+      "program": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "pool": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+      "fee": 2000,
+      "liquidity": "30743107419",
+      "sqrtPriceX64": "6414382971396983562",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "120.91225",
+          "taker": "121.15456",
+          "maxPrice": "121154565843793697"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0082704601",
+          "taker": "0.0082870342",
+          "maxPrice": "8287034211939477530"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+          "pool": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+          "config": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+          "vaultA": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+          "vaultB": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+          "extra": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+          "ticks": [
+            "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+            "5SroGZpjj5TCi9H5k2UfGpsxMXYos189V7uBkDFW2aQV",
+            "6hcX32PtyRsVxdsWZHCn6edt9bsxWHRP3TPkmcfmwJzT"
+          ]
+        },
+        "WSOL": {
+          "program": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+          "pool": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+          "config": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+          "vaultA": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+          "vaultB": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+          "extra": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+          "ticks": [
+            "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+            "GJVeGpgFfykzVkK3YiNt5jiu1xiWHacdiKmTxApApGGG",
+            "7kDjYVixL55tcQXAzkUsDtCqvYEyZkYecJCi2qAR97HH"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "2JtkunkYCRbe5YZuGU6kLFmNwN22Ba1pCicHoqW5Eqja",
+      "fee": 40000,
+      "liquidity": "17912399098",
+      "sqrtPriceX64": "6424151279526702129",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "121.28080",
+          "taker": "126.33417",
+          "maxPrice": "126334172716114501"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0082453278",
+          "taker": "0.0085888831",
+          "maxPrice": "8588883127312701181"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "2JtkunkYCRbe5YZuGU6kLFmNwN22Ba1pCicHoqW5Eqja",
+          "config": "6tBc3ABLaYTTWu94DiRD5PWi92HML34UpAQ8pPTYgudw",
+          "vaultA": "8jVh1u8RodyTm8RJ2xA1qQnNpTvQVSVYqbwm1hUkddsZ",
+          "vaultB": "D3v9aj4zqWtLD16Kyp6BpXDDRpZxtDwR95JjLQjQb2k4",
+          "extra": "EsGEeBn6T4cpRwQyzkZzjRHHeaiZUsjB9b5iwUVB1Zgp",
+          "ticks": [
+            "GGSae5jU2ERzKy2o8RUSy9L8M2xSr9UsFDBpktZ5FxkB",
+            "4PKrW5cijxC2zLh2Rti1FvtnuYtd8CcGbr1nggJE5QmX",
+            "AkrNHY86poKLhG142QxmhPYsxC1Y6o4gRP7vponvSJyU"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "2JtkunkYCRbe5YZuGU6kLFmNwN22Ba1pCicHoqW5Eqja",
+          "config": "6tBc3ABLaYTTWu94DiRD5PWi92HML34UpAQ8pPTYgudw",
+          "vaultA": "8jVh1u8RodyTm8RJ2xA1qQnNpTvQVSVYqbwm1hUkddsZ",
+          "vaultB": "D3v9aj4zqWtLD16Kyp6BpXDDRpZxtDwR95JjLQjQb2k4",
+          "extra": "EsGEeBn6T4cpRwQyzkZzjRHHeaiZUsjB9b5iwUVB1Zgp",
+          "ticks": [
+            "GGSae5jU2ERzKy2o8RUSy9L8M2xSr9UsFDBpktZ5FxkB",
+            "AkrNHY86poKLhG142QxmhPYsxC1Y6o4gRP7vponvSJyU",
+            "4PKrW5cijxC2zLh2Rti1FvtnuYtd8CcGbr1nggJE5QmX"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "4i1h1Uz8SFWVa2erTtD4rvbxmWgPLjQZEvZj9yZULce1",
+      "fee": 30000,
+      "liquidity": "17820370372",
+      "sqrtPriceX64": "6416935726134361474",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "121.00851",
+          "taker": "124.75104",
+          "maxPrice": "124751047032674630"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0082638812",
+          "taker": "0.0085194651",
+          "maxPrice": "8519465177760777172"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "4i1h1Uz8SFWVa2erTtD4rvbxmWgPLjQZEvZj9yZULce1",
+          "config": "CDpiwv9eLsRvvuzZEJ8CBtK14wdvkSnkub4vmGtzzdK8",
+          "vaultA": "FWoG8JZWZvZTZgSpTSSFHtGYfjRcgeWPsuoy3EZddGTE",
+          "vaultB": "8Zcem185UTnoBpy6eJbqpxqDSfAaCSS4JiSLeuXqSbkE",
+          "extra": "FQK1gQfBBLSiz96T9KP6QkniaBEWW6T8NqZ561PRmwHy",
+          "ticks": [
+            "5TMkMYFqdLAZR7xyLPYU5mon46H86W8tWF8CXSj4XhXQ",
+            "5JkyvZaNiosYH43h7NSvNfZSxVnri4HnEWVUPdRH2uvo",
+            "6nunRMp4mJm6eFVqeVx99uHNPKG4goRShf2wi7aDj6F7"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "4i1h1Uz8SFWVa2erTtD4rvbxmWgPLjQZEvZj9yZULce1",
+          "config": "CDpiwv9eLsRvvuzZEJ8CBtK14wdvkSnkub4vmGtzzdK8",
+          "vaultA": "FWoG8JZWZvZTZgSpTSSFHtGYfjRcgeWPsuoy3EZddGTE",
+          "vaultB": "8Zcem185UTnoBpy6eJbqpxqDSfAaCSS4JiSLeuXqSbkE",
+          "extra": "FQK1gQfBBLSiz96T9KP6QkniaBEWW6T8NqZ561PRmwHy",
+          "ticks": [
+            "5TMkMYFqdLAZR7xyLPYU5mon46H86W8tWF8CXSj4XhXQ",
+            "5JkyvZaNiosYH43h7NSvNfZSxVnri4HnEWVUPdRH2uvo",
+            "6nunRMp4mJm6eFVqeVx99uHNPKG4goRShf2wi7aDj6F7"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "7byw3sD4hNG5NTwTHFRfxyASJCHfed4i6FKVdtqXGtru",
+      "fee": 1500,
+      "liquidity": "9333622097",
+      "sqrtPriceX64": "6327791435205648291",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.66975",
+          "taker": "117.84652",
+          "maxPrice": "117846529793641893"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084983601",
+          "taker": "0.0085111268",
+          "maxPrice": "8511126846770101462"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "7byw3sD4hNG5NTwTHFRfxyASJCHfed4i6FKVdtqXGtru",
+          "config": "J8u7HvA1g1p2CdhBFdsnTxDzGkekRpdw4GrL9MKU2D3U",
+          "vaultA": "641BDZXi39dBQxm2sc5TsRXcazZq3rLjt55bng1R2t5q",
+          "vaultB": "2rfYWy8fce3YV7W2XxyDaZXaxfqhokTtJyLjni59F77x",
+          "extra": "G5CwPg2jDY6naspayDv2dKSFx3runBTaeYYPsTjrvkTv",
+          "ticks": [
+            "2Wjb9n1X8CX2nsbcxkDMrcr4yMKcZiobuQFzvbAhvNTZ",
+            "GGGX972pFNAWBwQ4aeZr3ZWBLxnnSD4boCCz1SDzmUFD",
+            "BNh7Yj4uPFVeHUhQZSnyHdkqQ5SFGqgbvNaVMTeFeNPh"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "7byw3sD4hNG5NTwTHFRfxyASJCHfed4i6FKVdtqXGtru",
+          "config": "J8u7HvA1g1p2CdhBFdsnTxDzGkekRpdw4GrL9MKU2D3U",
+          "vaultA": "641BDZXi39dBQxm2sc5TsRXcazZq3rLjt55bng1R2t5q",
+          "vaultB": "2rfYWy8fce3YV7W2XxyDaZXaxfqhokTtJyLjni59F77x",
+          "extra": "G5CwPg2jDY6naspayDv2dKSFx3runBTaeYYPsTjrvkTv",
+          "ticks": [
+            "GGGX972pFNAWBwQ4aeZr3ZWBLxnnSD4boCCz1SDzmUFD",
+            "2Wjb9n1X8CX2nsbcxkDMrcr4yMKcZiobuQFzvbAhvNTZ",
+            "BNh7Yj4uPFVeHUhQZSnyHdkqQ5SFGqgbvNaVMTeFeNPh"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "87Dia7JixTXFrXs7i5YHT1Z3dJFkd9KdaWquNcPsGPyT",
+      "fee": 1000,
+      "liquidity": "9311418126",
+      "sqrtPriceX64": "6326471207908233401",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.62066",
+          "taker": "117.73840",
+          "maxPrice": "117738402401694764"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085019074",
+          "taker": "0.0085104178",
+          "maxPrice": "8510417871871708448"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "87Dia7JixTXFrXs7i5YHT1Z3dJFkd9KdaWquNcPsGPyT",
+          "config": "DrdecJVzkaRsf1TQu1g7iFncaokikVTHqpzPjenjRySY",
+          "vaultA": "3otDXXscetLfK67fPkEpgt3EcTAGMPG4NSmqDrw24wct",
+          "vaultB": "9zA4Sg1z4Jm6M6CLmL9xeghQpJkC1E79KFy46oRJEhGN",
+          "extra": "6JKrD2JYLxak4LUnQZKnuBfj2UNsgug4iqAN973PqxBM",
+          "ticks": [
+            "EBCiB36NTaitNjFmd7va9d7LrmNwr3X1zTFfJ1qASdBh",
+            "77Q76s7tAfKkXpAfZGfy4XguxzEZK2t4QEFHZTzeppK9",
+            "6ydoU353cR1NaQJvGmzhcY5uasiFB4DP6jgbyqNqxHkA"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "87Dia7JixTXFrXs7i5YHT1Z3dJFkd9KdaWquNcPsGPyT",
+          "config": "DrdecJVzkaRsf1TQu1g7iFncaokikVTHqpzPjenjRySY",
+          "vaultA": "3otDXXscetLfK67fPkEpgt3EcTAGMPG4NSmqDrw24wct",
+          "vaultB": "9zA4Sg1z4Jm6M6CLmL9xeghQpJkC1E79KFy46oRJEhGN",
+          "extra": "6JKrD2JYLxak4LUnQZKnuBfj2UNsgug4iqAN973PqxBM",
+          "ticks": [
+            "EBCiB36NTaitNjFmd7va9d7LrmNwr3X1zTFfJ1qASdBh",
+            "2Tvoem48WwPoK8KUBgFnSLRt8XeuKLQMf2aYyC6627bS",
+            "3z6BJwAajUbU8jWCpqu9soHyT3znhE9W7cMiM3XSnuiw"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "21gTfxAnhUDjJGZJDkTXctGFKT8TeiXx6pN1CEg9K1uW",
+      "fee": 1600,
+      "liquidity": "9273661818",
+      "sqrtPriceX64": "6328487733457342601",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.69565",
+          "taker": "117.88427",
+          "maxPrice": "117884272577405673"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084964901",
+          "taker": "0.0085101063",
+          "maxPrice": "8510106348224700768"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "21gTfxAnhUDjJGZJDkTXctGFKT8TeiXx6pN1CEg9K1uW",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "yZCASCGkCK9y12GrEk5W56kCxLxeXirg5EuarxJj5Ca",
+          "vaultB": "5SLdQQUuikd55gkyu82xpiknfqEVH6SyNLABipGgMAbA",
+          "extra": "9RaLu1yfAuyLf9RgSwYSRKpm3qf7qb7XHYXv44ZxeJcz",
+          "ticks": [
+            "9sAqGpNK3mvzdczcm7TM3amqv5Bnvy5C3theRQJZAUje",
+            "4BD6JYAku2NyXj2uCLPCimVPhK8CNEdPJhrWYNdiWb5v",
+            "3nZR8F88FZijRxA6335iGMRQr5XQPftkTKpWXMUL7VcV"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "21gTfxAnhUDjJGZJDkTXctGFKT8TeiXx6pN1CEg9K1uW",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "yZCASCGkCK9y12GrEk5W56kCxLxeXirg5EuarxJj5Ca",
+          "vaultB": "5SLdQQUuikd55gkyu82xpiknfqEVH6SyNLABipGgMAbA",
+          "extra": "9RaLu1yfAuyLf9RgSwYSRKpm3qf7qb7XHYXv44ZxeJcz",
+          "ticks": [
+            "9sAqGpNK3mvzdczcm7TM3amqv5Bnvy5C3theRQJZAUje",
+            "L8GKm7hSB492TGCjuab3KkbmZaGMiJfpuJvzBdE9v4m",
+            "DkTnLBfQHvXmnHVFe2y7QJRZ6HPc3FjL7BMTMWRoHxoW"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "6MUjnGffYaqcHeqv4nNemUQVNMpJab3W2NV9bfPj576c",
+      "fee": 20000,
+      "liquidity": "5911022452",
+      "sqrtPriceX64": "6366656688835697690",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "119.11965",
+          "taker": "121.55066",
+          "maxPrice": "121550666098195217"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0083949203",
+          "taker": "0.0085662452",
+          "maxPrice": "8566245279292104526"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "6MUjnGffYaqcHeqv4nNemUQVNMpJab3W2NV9bfPj576c",
+          "config": "Gex2NJRS3jVLPfbzSFM5d5DRsNoL5ynnwT1TXoDEhanz",
+          "vaultA": "2P6xseti7bdTSkECNod9myYbY92WFAg4PUwYSkQUyUoD",
+          "vaultB": "1i3HWdz8Yphfy9jWizbSK2f6cX1em8ANU6xhHLfuzsE",
+          "extra": "6As3k6r8ruuuBT6ueci5ta9UrgjyT8W59qGeN43n6iao",
+          "ticks": [
+            "ESAGajgMyiRsj5NnWpLbRPFMjCGW9j84GBMJ6JWCgTxj",
+            "3Fz7EwVdgWQMUBkaaBkQcP5pWHZtTdZtQ7om8SXPNgpw",
+            "F8DnZd7SWRNNMpF7V6UZQeQdCWQLgX3ZdFYxUoixGwzq"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "6MUjnGffYaqcHeqv4nNemUQVNMpJab3W2NV9bfPj576c",
+          "config": "Gex2NJRS3jVLPfbzSFM5d5DRsNoL5ynnwT1TXoDEhanz",
+          "vaultA": "2P6xseti7bdTSkECNod9myYbY92WFAg4PUwYSkQUyUoD",
+          "vaultB": "1i3HWdz8Yphfy9jWizbSK2f6cX1em8ANU6xhHLfuzsE",
+          "extra": "6As3k6r8ruuuBT6ueci5ta9UrgjyT8W59qGeN43n6iao",
+          "ticks": [
+            "ESAGajgMyiRsj5NnWpLbRPFMjCGW9j84GBMJ6JWCgTxj",
+            "GmSBkBp3APk3BDcoQj3hWF2vKJsoiq1RY5VrNC6P2RC8",
+            "EiKq6vPZTmmWuxtg33452eKg4NhZMXsRY6BJ1cf9VZsB"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "4yTQ8Z4wCp6y7ca5ZkPBZ6haNLfXPUXjzVzbnvvqbQcn",
+      "fee": 800,
+      "liquidity": "5718571551",
+      "sqrtPriceX64": "6325690367220701751",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.59163",
+          "taker": "117.68577",
+          "maxPrice": "117685779903617594"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085040065",
+          "taker": "0.0085108151",
+          "maxPrice": "8510815179797787035"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "4yTQ8Z4wCp6y7ca5ZkPBZ6haNLfXPUXjzVzbnvvqbQcn",
+          "config": "9rrh2c8w15HExZnLFzcEgkvHg846TBBFEPUuFG7RMGmm",
+          "vaultA": "8XRdWeAQFaaXab1Qp3Vauf9AiH6DNsqQxBZ8LDbrU62M",
+          "vaultB": "J85JT1bn3DK2D6bg8sT2QwceoUJKin2XvT6eaZNUuRja",
+          "extra": "EosX5RrL21ZTBQfAeKTRA2j4A8ek2QZjSevJWb3WS62T",
+          "ticks": [
+            "GmWjEo3oNhuY4BVsYccwp5XsZgSceUJmVBaAFjmQyXnq",
+            "8ziFaCqViv7TMLg8hWMtZT3mBFPC9bKBULgtaqH6VmcK",
+            "DQx1cmFbXMgnMx38VbrB1Yst5NAJvgRM866KabUU4nub"
+          ]
+        },
+        "WSOL": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "4yTQ8Z4wCp6y7ca5ZkPBZ6haNLfXPUXjzVzbnvvqbQcn",
+          "config": "9rrh2c8w15HExZnLFzcEgkvHg846TBBFEPUuFG7RMGmm",
+          "vaultA": "8XRdWeAQFaaXab1Qp3Vauf9AiH6DNsqQxBZ8LDbrU62M",
+          "vaultB": "J85JT1bn3DK2D6bg8sT2QwceoUJKin2XvT6eaZNUuRja",
+          "extra": "EosX5RrL21ZTBQfAeKTRA2j4A8ek2QZjSevJWb3WS62T",
+          "ticks": [
+            "8ziFaCqViv7TMLg8hWMtZT3mBFPC9bKBULgtaqH6VmcK",
+            "GmWjEo3oNhuY4BVsYccwp5XsZgSceUJmVBaAFjmQyXnq",
+            "DQx1cmFbXMgnMx38VbrB1Yst5NAJvgRM866KabUU4nub"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "2SjLv6XwViJ17rq21N1y98LbMee1J4DXinP61rk9v2aK",
+      "fee": 4000,
+      "liquidity": "4977167295",
+      "sqrtPriceX64": "6325613063087898349",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.58875",
+          "taker": "118.06100",
+          "maxPrice": "118061001206591722"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085042143",
+          "taker": "0.0085383678",
+          "maxPrice": "8538367852075188523"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "2SjLv6XwViJ17rq21N1y98LbMee1J4DXinP61rk9v2aK",
+          "config": "Y6YhgJbt9FRk3JVjwdZtsioVCJwCKhy1hum8HMDYyB1",
+          "vaultA": "JCaVnigoFFAG9fhSvkFv64ZUtF1uumhitn5F2aHqpKem",
+          "vaultB": "GgRf74jDwe9mFKcXSnjcL6iPZGHw2Ddf5tWQxAWPGWKC",
+          "extra": "CqY713Ms9mF3LRbyGzWJmoEVNE837pqS5saYgfHcSQXu",
+          "ticks": [
+            "FwqDtjEhTafP2GXJvJLgMoxpeqPpFuwjZRzQE8iqazjU",
+            "A1FwFUCDUX74bUwGe8EuQnT9CNEgVURVEMWXS8b7h3hR",
+            "FazmKQD4vKduLaG49hb9nAkRij1avKcyesJNRqzbqL8d"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "2SjLv6XwViJ17rq21N1y98LbMee1J4DXinP61rk9v2aK",
+          "config": "Y6YhgJbt9FRk3JVjwdZtsioVCJwCKhy1hum8HMDYyB1",
+          "vaultA": "JCaVnigoFFAG9fhSvkFv64ZUtF1uumhitn5F2aHqpKem",
+          "vaultB": "GgRf74jDwe9mFKcXSnjcL6iPZGHw2Ddf5tWQxAWPGWKC",
+          "extra": "CqY713Ms9mF3LRbyGzWJmoEVNE837pqS5saYgfHcSQXu",
+          "ticks": [
+            "FwqDtjEhTafP2GXJvJLgMoxpeqPpFuwjZRzQE8iqazjU",
+            "Dk3ad6keuKut8ZmE6PMoT8mC2WuwJ3irSDE9TgMAwgZH",
+            "A1FwFUCDUX74bUwGe8EuQnT9CNEgVURVEMWXS8b7h3hR"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "7xuPLn8Bun4ZGHeD95xYLnPKReKtSe7zfVRzRJWJZVZW",
+      "fee": 20000,
+      "liquidity": "4062412275",
+      "sqrtPriceX64": "6376188272637000193",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "119.47659",
+          "taker": "121.91488",
+          "maxPrice": "121914887908849160"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0083698404",
+          "taker": "0.0085406535",
+          "maxPrice": "8540653545422306227"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "7xuPLn8Bun4ZGHeD95xYLnPKReKtSe7zfVRzRJWJZVZW",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "4Tc65a9zoJ5jr6mSNsucgwxnFrLiwAqqVGGJZuTkA2nh",
+          "vaultB": "8di8JTvQH7dUPaXYVgCX3SFcQkuZCAL9xz3XCpDaoYeF",
+          "extra": "Gza1Tp6riYNtGkpAhcVuKbBQVjqn6HQC7R7gQMjGQUsJ",
+          "ticks": [
+            "E6uPSHZrrY1T6zfxqsTpGneX26khQz2wbYDtX6NcqkgB",
+            "Gs6Fs1UPjySehWVhF883oZorbTAXjm3ETxBTkTdZAF53",
+            "29EPJF1btsqWyRc6ovdDCrXqTJUPCDyEQ2Zv2TGMMMsz"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "7xuPLn8Bun4ZGHeD95xYLnPKReKtSe7zfVRzRJWJZVZW",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "4Tc65a9zoJ5jr6mSNsucgwxnFrLiwAqqVGGJZuTkA2nh",
+          "vaultB": "8di8JTvQH7dUPaXYVgCX3SFcQkuZCAL9xz3XCpDaoYeF",
+          "extra": "Gza1Tp6riYNtGkpAhcVuKbBQVjqn6HQC7R7gQMjGQUsJ",
+          "ticks": [
+            "E6uPSHZrrY1T6zfxqsTpGneX26khQz2wbYDtX6NcqkgB",
+            "9buZT6bX5A1nqD2neuozEbaG2hDiYYBscVwHPhS7owgN",
+            "3MjNEMVYzCyBGFtTATah31eFxGhy7waKbi26ZYTwjxNo"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "3qMtQYbR6fvzm4jDgabVJmtuqKN6VgdqtPTza9wTb4Mo",
+      "fee": 2500,
+      "liquidity": "3956125338",
+      "sqrtPriceX64": "6329941888185615219",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.74975",
+          "taker": "118.04486",
+          "maxPrice": "118044864139464134"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084925868",
+          "taker": "0.0085138715",
+          "maxPrice": "8513871569274885399"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "3qMtQYbR6fvzm4jDgabVJmtuqKN6VgdqtPTza9wTb4Mo",
+          "config": "He4brjK7TRKiqJ8szpRmhuueDwC4837BFRRBmWfmjo14",
+          "vaultA": "4NvY5YjW9C34beuqt5hXMttvsaka4ESwC84gGjM1pUNi",
+          "vaultB": "ECgAtrvnqL91EfGxrvEQnPpNhgWZFGSgEbYUYTLLwJP4",
+          "extra": "26qnBH8u9vvhhzCWfSNeyXYWRNP5YUvR3fvNKh57e4z4",
+          "ticks": [
+            "H18AUBks5LBUd3SsttMYS19WQ4meoTcoJPqFZjAKn9Gg",
+            "7bpaCRx77TtdKpG2vc3CkpQBnTpXjnBUKs21AiTCQ5SP",
+            "8b2EkkvdAKUz2fFkwZKYYrbHG3GbgVNJtxADpNKGHFvB"
+          ]
+        },
+        "WSOL": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "3qMtQYbR6fvzm4jDgabVJmtuqKN6VgdqtPTza9wTb4Mo",
+          "config": "He4brjK7TRKiqJ8szpRmhuueDwC4837BFRRBmWfmjo14",
+          "vaultA": "4NvY5YjW9C34beuqt5hXMttvsaka4ESwC84gGjM1pUNi",
+          "vaultB": "ECgAtrvnqL91EfGxrvEQnPpNhgWZFGSgEbYUYTLLwJP4",
+          "extra": "26qnBH8u9vvhhzCWfSNeyXYWRNP5YUvR3fvNKh57e4z4",
+          "ticks": [
+            "H18AUBks5LBUd3SsttMYS19WQ4meoTcoJPqFZjAKn9Gg",
+            "8b2EkkvdAKUz2fFkwZKYYrbHG3GbgVNJtxADpNKGHFvB",
+            "7bpaCRx77TtdKpG2vc3CkpQBnTpXjnBUKs21AiTCQ5SP"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "6d4UYGAEs4Akq6py8Vb3Qv5PvMkecPLS1Z9bBCcip2R7",
+      "fee": 6500,
+      "liquidity": "2807160681",
+      "sqrtPriceX64": "6338226192022528985",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "118.05816",
+          "taker": "118.83056",
+          "maxPrice": "118830562009419531"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084704011",
+          "taker": "0.0085258189",
+          "maxPrice": "8525818950642954990"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "6d4UYGAEs4Akq6py8Vb3Qv5PvMkecPLS1Z9bBCcip2R7",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "6J7f2Hr1gNtwNGoYkHNnLWUqr3xTsMAwgwvHJWX3Uu4d",
+          "vaultB": "EGdM3e8ThMFvLr7qVQBJ5UiGngzzok2S7xsc3Paiyp39",
+          "extra": "6YGiTMWGguiA2BqVBj3mVQh7L7UevNDHVq8bjkom8xFR",
+          "ticks": [
+            "9b8ow9GgwLzWoob5eSdASQyAfVqZAKwsVvvQrU8pCDd",
+            "GzL4a8NnU1wGCpoHRu2mRjP7MoaPfDpGrGRdW4SYEb6y",
+            "8BLSKodSQWdr1EGUYx4eBFud3RBZDmJpBKL4t36mQWVm"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "6d4UYGAEs4Akq6py8Vb3Qv5PvMkecPLS1Z9bBCcip2R7",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "6J7f2Hr1gNtwNGoYkHNnLWUqr3xTsMAwgwvHJWX3Uu4d",
+          "vaultB": "EGdM3e8ThMFvLr7qVQBJ5UiGngzzok2S7xsc3Paiyp39",
+          "extra": "6YGiTMWGguiA2BqVBj3mVQh7L7UevNDHVq8bjkom8xFR",
+          "ticks": [
+            "9b8ow9GgwLzWoob5eSdASQyAfVqZAKwsVvvQrU8pCDd",
+            "5a23jTv16wk2TxU5n86HbKfJmhM6Qqx3siDxt5u1T9R2",
+            "3fqwMzqkNSbg8tKPEibFq8kjViXA6TFzdwjeqt8Y1Xmb"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "8VXj6uz61v8yAu7m9pVEYNYjJwjK7WfFbRCs3YyXY6Bb",
+      "fee": 200,
+      "liquidity": "2806041781",
+      "sqrtPriceX64": "6323981436805965534",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.52810",
+          "taker": "117.55161",
+          "maxPrice": "117551613747392685"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085086032",
+          "taker": "0.0085103052",
+          "maxPrice": "8510305287529045444"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "8VXj6uz61v8yAu7m9pVEYNYjJwjK7WfFbRCs3YyXY6Bb",
+          "config": "GcJVsj5MxokA4eRMUkB4cJHuZ6o9Y8MooXBViN5F1mYW",
+          "vaultA": "WTxS1YuXCUkP4JgLYwKxaCdBiw5fWrccKArUN8vam3C",
+          "vaultB": "7jQB1YjvQMn9pFCWwCZx3kPFRLAY3L9wz4atoAL2PWpZ",
+          "extra": "56TA5h1AVEYcFpugf7RnzFQXqHXT3byhvt1vreeZPsYW",
+          "ticks": [
+            "GT6Sbpj568GSmyejsJ3UQYXxnWEVTCkyRJ7h3vBwf8VV",
+            "9m9WTxUnQefCWPkDbrFCqvEUACeGK5gYHyvMX1faiVFY",
+            "4XNnTkBpUKkEDrocmbCpUoeU7Eq7fWMaUyPPiPjn2MQn"
+          ]
+        },
+        "WSOL": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "8VXj6uz61v8yAu7m9pVEYNYjJwjK7WfFbRCs3YyXY6Bb",
+          "config": "GcJVsj5MxokA4eRMUkB4cJHuZ6o9Y8MooXBViN5F1mYW",
+          "vaultA": "WTxS1YuXCUkP4JgLYwKxaCdBiw5fWrccKArUN8vam3C",
+          "vaultB": "7jQB1YjvQMn9pFCWwCZx3kPFRLAY3L9wz4atoAL2PWpZ",
+          "extra": "56TA5h1AVEYcFpugf7RnzFQXqHXT3byhvt1vreeZPsYW",
+          "ticks": [
+            "4XNnTkBpUKkEDrocmbCpUoeU7Eq7fWMaUyPPiPjn2MQn",
+            "BkMZicjeDRokVZM7nKRP2dsbz1AeBcuWjf68esutrHHA",
+            "GT6Sbpj568GSmyejsJ3UQYXxnWEVTCkyRJ7h3vBwf8VV"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "Ds33rQ1d4AXwxqyeXX6Pc3G4pFNr6iWb3dd8YfBBQMPr",
+      "fee": 500,
+      "liquidity": "1778935404",
+      "sqrtPriceX64": "6318244823661646631",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.31497",
+          "taker": "117.37366",
+          "maxPrice": "117373662664335863"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085240609",
+          "taker": "0.0085283250",
+          "maxPrice": "8528325075472557728"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "Ds33rQ1d4AXwxqyeXX6Pc3G4pFNr6iWb3dd8YfBBQMPr",
+          "config": "3XCQJQryqpDvvZBfGxR7CLAw5dpGJ9aa7kt1jRLdyxuZ",
+          "vaultA": "DA98dcjUpuUVvYHUqa3dQwPp4GhDLYxSexKQRe6WmUBL",
+          "vaultB": "FzyVjkeXofZTGoSR66dsrEhmZoJaVqpvq7F1sxytWub8",
+          "extra": "GaWU7rFzxH6r5mDngd3hBgJCTeK9JSFB4PDEwnUhAgRz",
+          "ticks": [
+            "Ah9gmGT49oQdpezpSRLp7gS5P1PAyGpJEBXhUv3MbQkb",
+            "7qpRG71iHkYDSbu6CFDsVMCXqNMVH33fQUuvPYYFE6DP",
+            "DhdGAHrqnN1s5uQxL42kzYhucqumb6WQws93xDfB3X3G"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "Ds33rQ1d4AXwxqyeXX6Pc3G4pFNr6iWb3dd8YfBBQMPr",
+          "config": "3XCQJQryqpDvvZBfGxR7CLAw5dpGJ9aa7kt1jRLdyxuZ",
+          "vaultA": "DA98dcjUpuUVvYHUqa3dQwPp4GhDLYxSexKQRe6WmUBL",
+          "vaultB": "FzyVjkeXofZTGoSR66dsrEhmZoJaVqpvq7F1sxytWub8",
+          "extra": "GaWU7rFzxH6r5mDngd3hBgJCTeK9JSFB4PDEwnUhAgRz",
+          "ticks": [
+            "Ah9gmGT49oQdpezpSRLp7gS5P1PAyGpJEBXhUv3MbQkb",
+            "DhdGAHrqnN1s5uQxL42kzYhucqumb6WQws93xDfB3X3G",
+            "3F2NeL2HDDWmBKjiF2w54PKHEiYg1S2Qn4HGNtKR5UzQ"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "BSddxwYW73as8852ZTHRH13pbZEmZ96NBjayc5mSVtkZ",
+      "fee": 100,
+      "liquidity": "1026380348",
+      "sqrtPriceX64": "6324981522498585617",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.56527",
+          "taker": "117.57703",
+          "maxPrice": "117577036274889507"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085059127",
+          "taker": "0.0085067634",
+          "maxPrice": "8506763409698306225"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "BSddxwYW73as8852ZTHRH13pbZEmZ96NBjayc5mSVtkZ",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "F4CAXDT5v7F7XpqPqKqPbBpj2uuncGHXsXg9xD3CCejA",
+          "vaultB": "BHqCWgG33QpPb17ryW5Hbfc4oP18UFcZ1GQdB5aAqu48",
+          "extra": "A4GJjZTtFc2TnwpAuEYDqcmnUSqruEkrEexocQ1b8hVp",
+          "ticks": [
+            "93u8nsxaTeMfzCN36q6HeyaubUKFMrmL2wPKeYvUHZQU",
+            "6AtrQyT7VAdX3KE7fxPxx9GGCNvQEjQBHcqfmHCLREBC",
+            "4EWAVuoKgRDpStBADhAwePyeRHmYCVZEyP3acfmPTjA5"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "BSddxwYW73as8852ZTHRH13pbZEmZ96NBjayc5mSVtkZ",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "F4CAXDT5v7F7XpqPqKqPbBpj2uuncGHXsXg9xD3CCejA",
+          "vaultB": "BHqCWgG33QpPb17ryW5Hbfc4oP18UFcZ1GQdB5aAqu48",
+          "extra": "A4GJjZTtFc2TnwpAuEYDqcmnUSqruEkrEexocQ1b8hVp",
+          "ticks": [
+            "HguvUisdT1aHjFoJQYAuqtD3d93uL1QvvMAajDFK3dZi",
+            "2cwp4s6EgmfLXFA2siHh2o38RLmbCzLNKtK54YQs5Sde",
+            "3jocSr5NKtdPeQBMxXSg5BYCqW8nLimZ6ih66yd2WV6D"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "V8pJDH4KjzWBg3buBsmzGQ9itzXincaL8zCbaJuobbE",
+      "fee": 2000,
+      "liquidity": "945819596",
+      "sqrtPriceX64": "6327587191377105190",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.66216",
+          "taker": "117.89795",
+          "maxPrice": "117897959924315409"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084989087",
+          "taker": "0.0085159406",
+          "maxPrice": "8515940672126285599"
+        }
+      ],
+      "slots": {},
+      "unfilled": {
+        "USDC": "it has 1 tick arrays near its price, and its swap takes three",
+        "WSOL": "it has 1 tick arrays near its price, and its swap takes three"
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "HSTnyz57adepabCQyfmMST5eKfAsi6prAN1Ch2St8J7P",
+      "fee": 1600,
+      "liquidity": "629676253",
+      "sqrtPriceX64": "6329176046200023462",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.72126",
+          "taker": "117.90991",
+          "maxPrice": "117909917143066457"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084946422",
+          "taker": "0.0085082554",
+          "maxPrice": "8508255460815777391"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "HSTnyz57adepabCQyfmMST5eKfAsi6prAN1Ch2St8J7P",
+          "config": "RPxHtdN5V7ajwkoG6NnwSBAeaX5k9giY37dpp98xTjD",
+          "vaultA": "FWKL5LNuCcdAMYTiFFdtzdPMxjndiLRuK8xUkpaMZ3ck",
+          "vaultB": "2p1xnxioD2rjrPpfFSn7y9g17nu8WjHWKnEY3eeRYkwh",
+          "extra": "AicL3Txb5HF1XnCPrfmywjVd4NgLJFuwMDDUHcV5dTTe",
+          "ticks": [
+            "Hxe4kudqvQaid9ZsV5YsViGrYPEGAF8b4wbzWJvGSw53",
+            "fUfT1szQmYd57SVJgEn2gQ9gUq7mopYRVTaFiFY4Mdt",
+            "BDqTYLHpehkyHmMmQVS49LvSLvnkptPoz8rvrvuMsXTC"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "HSTnyz57adepabCQyfmMST5eKfAsi6prAN1Ch2St8J7P",
+          "config": "RPxHtdN5V7ajwkoG6NnwSBAeaX5k9giY37dpp98xTjD",
+          "vaultA": "FWKL5LNuCcdAMYTiFFdtzdPMxjndiLRuK8xUkpaMZ3ck",
+          "vaultB": "2p1xnxioD2rjrPpfFSn7y9g17nu8WjHWKnEY3eeRYkwh",
+          "extra": "AicL3Txb5HF1XnCPrfmywjVd4NgLJFuwMDDUHcV5dTTe",
+          "ticks": [
+            "GKVzQP5mDCK16MWG2r1FgyV7pv3w1z14Q81FeA4yfZd",
+            "Hxe4kudqvQaid9ZsV5YsViGrYPEGAF8b4wbzWJvGSw53",
+            "fUfT1szQmYd57SVJgEn2gQ9gUq7mopYRVTaFiFY4Mdt"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "EXHyQxMSttcvLPwjENnXCPZ8GmLjJYHtNBnAkcFeFKMn",
+      "fee": 100,
+      "liquidity": "416842463",
+      "sqrtPriceX64": "6324898033723250447",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.56217",
+          "taker": "117.57393",
+          "maxPrice": "117573932298081360"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0085061372",
+          "taker": "0.0085069879",
+          "maxPrice": "8506987990060806577"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "EXHyQxMSttcvLPwjENnXCPZ8GmLjJYHtNBnAkcFeFKMn",
+          "config": "4BLNHtVe942GSs4teSZqGX24xwKNkqU7bGgNn3iUiUpw",
+          "vaultA": "G5uMMdPTeaafVVEnp3SLNLARarJXjHd5JaKuG3ojMPig",
+          "vaultB": "9PeQs7co3NtYnkV2CuWCSC6MXxwrMgHBX1E2qNEUj7MY",
+          "extra": "BidNmgznWp3ERbuemvdPANYmF2ePMHzGvbqjhMpRZYrn",
+          "ticks": [
+            "EixuZuv6oEAq3CDNC8XMUKhZs5LhJezzSQ93EkUUwrZV",
+            "8ZwGS7KJJUjpBbYJ1SZdEh7Cgs7ZfWzhvYpaRkr1koD4",
+            "8TWGnTwWTqXrHXBsDCegMUe9vu2weCVksSAwffNfFeLV"
+          ]
+        },
+        "WSOL": {
+          "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "pool": "EXHyQxMSttcvLPwjENnXCPZ8GmLjJYHtNBnAkcFeFKMn",
+          "config": "4BLNHtVe942GSs4teSZqGX24xwKNkqU7bGgNn3iUiUpw",
+          "vaultA": "G5uMMdPTeaafVVEnp3SLNLARarJXjHd5JaKuG3ojMPig",
+          "vaultB": "9PeQs7co3NtYnkV2CuWCSC6MXxwrMgHBX1E2qNEUj7MY",
+          "extra": "BidNmgznWp3ERbuemvdPANYmF2ePMHzGvbqjhMpRZYrn",
+          "ticks": [
+            "EixuZuv6oEAq3CDNC8XMUKhZs5LhJezzSQ93EkUUwrZV",
+            "8WTecm2xTbPxf26XdY9Gh8FqSbbm74dDxPGRFea13sta",
+            "9eDiF8pAgXsiSo79Z28Z5rYGmep4xmXgLc5bS3tCp2yy"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pool": "7d72TA4UhZ8yK4eWLyS351FLt4unTEYDpDsugoj2yLxy",
+      "fee": 4000,
+      "liquidity": "411559910",
+      "sqrtPriceX64": "6340437442691470703",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "118.14055",
+          "taker": "118.61501",
+          "maxPrice": "118615012935648950"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084644939",
+          "taker": "0.0084984879",
+          "maxPrice": "8498487942947486965"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "7d72TA4UhZ8yK4eWLyS351FLt4unTEYDpDsugoj2yLxy",
+          "config": "2G7HZiydoxtDqQU5SPsyc66nCGRUaP6H85FRKunKpmPs",
+          "vaultA": "EE4sfFijWcLE3a5GRpiTEhkgp8vmjJp9BnCsyQUXbjnq",
+          "vaultB": "8nEYuwfB9V7viEUkUzS3yjD5Hq15Tz8mVJ2iHBeYTbd6",
+          "extra": "AagVEgvuNjwt5eSHZv6t3wxiy9iQhYJymBMk7YWnrnDj",
+          "ticks": [
+            "HrpzePb9cuA9F5gmYvEQtuv49g19wKEuTimwpfdZ836v",
+            "F5SrbER8wH3YDaJK66PyZTSdqn9jFTeHLvEZzduoSaXL",
+            "HaLco4SiW6kQCBWxnom4BUywPfTEp6GchLnwzCLuLYML"
+          ]
+        },
+        "WSOL": {
+          "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "pool": "7d72TA4UhZ8yK4eWLyS351FLt4unTEYDpDsugoj2yLxy",
+          "config": "2G7HZiydoxtDqQU5SPsyc66nCGRUaP6H85FRKunKpmPs",
+          "vaultA": "EE4sfFijWcLE3a5GRpiTEhkgp8vmjJp9BnCsyQUXbjnq",
+          "vaultB": "8nEYuwfB9V7viEUkUzS3yjD5Hq15Tz8mVJ2iHBeYTbd6",
+          "extra": "AagVEgvuNjwt5eSHZv6t3wxiy9iQhYJymBMk7YWnrnDj",
+          "ticks": [
+            "HrpzePb9cuA9F5gmYvEQtuv49g19wKEuTimwpfdZ836v",
+            "F5SrbER8wH3YDaJK66PyZTSdqn9jFTeHLvEZzduoSaXL",
+            "HaLco4SiW6kQCBWxnom4BUywPfTEp6GchLnwzCLuLYML"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Stabble CLMM",
+      "program": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "pool": "Qiv197UKaJ3eDkxnAXzah3BoKLceCGNr3R4DtLhVyFN",
+      "fee": 50,
+      "liquidity": "320755846",
+      "sqrtPriceX64": "6436229699168368208",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "121.73728",
+          "taker": "121.74337",
+          "maxPrice": "121743375866099447"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0082144099",
+          "taker": "0.0082148207",
+          "maxPrice": "8214820727498710626"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "pool": "Qiv197UKaJ3eDkxnAXzah3BoKLceCGNr3R4DtLhVyFN",
+          "config": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+          "vaultA": "PAdTMAueTPpCaAAW6EozqmdsmQFRu87W9BfHYmu17vu",
+          "vaultB": "CaqWVcvDxuWV9BUXbs3jjCizACzpSys6QPyMUahVyJvK",
+          "extra": "9EdUVDqNDqQ8dCRaPj8FCzDfgzAmD8t6ziM8dgFuoNfY",
+          "ticks": [
+            "6BbNj54uHXgTGooJXQTJfDkFGh93wbV5ixNSyJwFDyLx",
+            "BvxtAppBdZSD6Yb9barVF6VVAWhBRR8RpcY6Re8nFHsP",
+            "AFZy9dYjQDHiaUdrdCuG5vzWKwspbLUYQx2US9NfSvRU"
+          ]
+        },
+        "WSOL": {
+          "program": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "pool": "Qiv197UKaJ3eDkxnAXzah3BoKLceCGNr3R4DtLhVyFN",
+          "config": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+          "vaultA": "PAdTMAueTPpCaAAW6EozqmdsmQFRu87W9BfHYmu17vu",
+          "vaultB": "CaqWVcvDxuWV9BUXbs3jjCizACzpSys6QPyMUahVyJvK",
+          "extra": "9EdUVDqNDqQ8dCRaPj8FCzDfgzAmD8t6ziM8dgFuoNfY",
+          "ticks": [
+            "6BbNj54uHXgTGooJXQTJfDkFGh93wbV5ixNSyJwFDyLx",
+            "BvxtAppBdZSD6Yb9barVF6VVAWhBRR8RpcY6Re8nFHsP",
+            "AFZy9dYjQDHiaUdrdCuG5vzWKwspbLUYQx2US9NfSvRU"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "Fhoc3somfu5MG3qQoTFMtQymGRdqQmRKLAvRWin5zeaR",
+      "fee": 6500,
+      "liquidity": "308312571",
+      "sqrtPriceX64": "6338069673351982712",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "118.05233",
+          "taker": "118.82469",
+          "maxPrice": "118824693183860304"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084708194",
+          "taker": "0.0085262400",
+          "maxPrice": "8526240046147855239"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "Fhoc3somfu5MG3qQoTFMtQymGRdqQmRKLAvRWin5zeaR",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "2m1juDBwcPmuDHjphE9XvkMYT9ihVW8j4BntqrJBk9Ru",
+          "vaultB": "7ov1WuVrqYzNuJZwgNj7e9uKABnYgfDYwKm4WR3pMjng",
+          "extra": "EgDs6per4j5D63tjYta1CXf2xaWNiT8tDBqp9G6E9huM",
+          "ticks": [
+            "HYJHHdkaV2RMciQfX6Geu9J7ZdcHbDSScm2Ye3tVQ4DU",
+            "F5s4WXQaMprmeQNPZkfUXhiJWL1g2TCERFbTHGZW5ub8",
+            "8UV9qjn8M7v2cPuFBQeCVr5fvDXdWAFaeaEYFUjksVA8"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "Fhoc3somfu5MG3qQoTFMtQymGRdqQmRKLAvRWin5zeaR",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "2m1juDBwcPmuDHjphE9XvkMYT9ihVW8j4BntqrJBk9Ru",
+          "vaultB": "7ov1WuVrqYzNuJZwgNj7e9uKABnYgfDYwKm4WR3pMjng",
+          "extra": "EgDs6per4j5D63tjYta1CXf2xaWNiT8tDBqp9G6E9huM",
+          "ticks": [
+            "HYJHHdkaV2RMciQfX6Geu9J7ZdcHbDSScm2Ye3tVQ4DU",
+            "3aHbULb24Cx353ZgDbvYxazKkbrr2fL8wj1S9XJPuu2L",
+            "2iUGDVcAvty9oFVVTrH83K9qkP754YnYXvXo3jc4zQkt"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Cropper",
+      "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "pool": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+      "fee": 200,
+      "liquidity": "110886558",
+      "sqrtPriceX64": "6330214012436125612",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.75987",
+          "taker": "117.78343",
+          "maxPrice": "117783433008823744"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084918567",
+          "taker": "0.0084935554",
+          "maxPrice": "8493555455775032828"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+          "pool": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+          "vaultB": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+          "extra": "BLGsJzPU8UngoHz481jbFeC7jBNHhYCH2YF6L2nXoZHs",
+          "ticks": [
+            "CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF",
+            "5zLmSAxN5dNQUeeFgnk55f3xViyDCrbbDL5yr79AM9NH",
+            "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG"
+          ]
+        },
+        "WSOL": {
+          "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+          "pool": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+          "vaultB": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+          "extra": "BLGsJzPU8UngoHz481jbFeC7jBNHhYCH2YF6L2nXoZHs",
+          "ticks": [
+            "CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF",
+            "A6CwrDwRtwp84fBzgEWjbTgNZFd7XfExfGAWxiKLBvsx",
+            "7BuLVosJJNCTL5Mi3v9KJUtqTBXkKbUCkRAELaK66caz"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "CWjGo5jkduSW5LN5rxgiQ18vGnJJEKWPCXkpJGxKSQTH",
+      "fee": 10000,
+      "liquidity": "42467916",
+      "sqrtPriceX64": "6357105312733852683",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "118.76250",
+          "taker": "119.96213",
+          "maxPrice": "119962131173370233"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084201655",
+          "taker": "0.0085052177",
+          "maxPrice": "8505217776871013696"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "CWjGo5jkduSW5LN5rxgiQ18vGnJJEKWPCXkpJGxKSQTH",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "7vZL5JCARrV6wsu5copTzCEUrdw22dSqpezHfHDUTCHe",
+          "vaultB": "6G5HbAe8z4WsxbkaJw7MQ2J51iQvc5Av14n6WUdmfXR3",
+          "extra": "2Nxm2RbonDrMcdKg5sBWbWCUcoXwW7o6dtFzzL7Uipia",
+          "ticks": [
+            "4m9t2iYHKnqtJ86MuAooMYVBxJVZwjBc4WywrQCTcsqe",
+            "DEKNC3hhXhnrrfG9Gw6LGiUZ5TMyzsJSkBqt3AWNYiiv",
+            "AhQsHEP7u7JdD96e9ReA1o3Ts4hz5cNHrPJZxw26pR2t"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "CWjGo5jkduSW5LN5rxgiQ18vGnJJEKWPCXkpJGxKSQTH",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "7vZL5JCARrV6wsu5copTzCEUrdw22dSqpezHfHDUTCHe",
+          "vaultB": "6G5HbAe8z4WsxbkaJw7MQ2J51iQvc5Av14n6WUdmfXR3",
+          "extra": "2Nxm2RbonDrMcdKg5sBWbWCUcoXwW7o6dtFzzL7Uipia",
+          "ticks": [
+            "6Bn4162ua2RhVVbiuMhsNtF7GPUJSaEyNGkAj81fU1jf",
+            "JB5NaFcDNLnvz2WTDrfBC7c7nBcrp9P6zYFXFS55sqt2",
+            "2qMWEJbNVYjc3hcJeoJcauvHUZmikeNQMt8xgByta3jS"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pool": "HhRA2S8LrDFi8cWNXhCSXre31RgLkTFMj7bM1FK99CaZ",
+      "fee": 1800,
+      "liquidity": "12874329",
+      "sqrtPriceX64": "6331689534944338187",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "117.81478",
+          "taker": "118.02722",
+          "maxPrice": "118027229513455779"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0084878993",
+          "taker": "0.0085032051",
+          "maxPrice": "8503205129170505190"
+        }
+      ],
+      "slots": {},
+      "unfilled": {
+        "USDC": "it has 0 tick arrays near its price, and its swap takes three",
+        "WSOL": "it has 0 tick arrays near its price, and its swap takes three"
+      }
+    },
+    {
+      "venue": "Cropper",
+      "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "pool": "EYTX9MjrHWQHfByYLCrbUDVxo2vxrEqFHJXLrBJamAdG",
+      "fee": 1600,
+      "liquidity": "4986777",
+      "sqrtPriceX64": "6435860181941552518",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "121.72331",
+          "taker": "121.91838",
+          "maxPrice": "121918380128930131"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0082153532",
+          "taker": "0.0082285189",
+          "maxPrice": "8228518910404870901"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+          "pool": "EYTX9MjrHWQHfByYLCrbUDVxo2vxrEqFHJXLrBJamAdG",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "6BoSKQe7TW4U8kNS6WQcfUemUa8rJg9pKHtzHnZ2qdDk",
+          "vaultB": "Fk4Xm9JSc5nwnLmWZus5yJ8WAWbKwdqx4a6UT9GzDPy2",
+          "extra": "4Qxs6HuuniQ3pX94hhEkxSpvAPXvrqWmqV7C5XJU9xP9",
+          "ticks": [
+            "J9e7PfW4PbeskduXC4bEidedkQ58ZBwaJVELSge7Y6p3",
+            "GKTboTKG7TQmsmBnnX5xgvmN4UbzXJ92PhBuyAWXEXSS",
+            "ASYKx8jUsoM3FpUQwSPrXcMFaT5xWgvAjqJGTwdvXy77"
+          ]
+        },
+        "WSOL": {
+          "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+          "pool": "EYTX9MjrHWQHfByYLCrbUDVxo2vxrEqFHJXLrBJamAdG",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "6BoSKQe7TW4U8kNS6WQcfUemUa8rJg9pKHtzHnZ2qdDk",
+          "vaultB": "Fk4Xm9JSc5nwnLmWZus5yJ8WAWbKwdqx4a6UT9GzDPy2",
+          "extra": "4Qxs6HuuniQ3pX94hhEkxSpvAPXvrqWmqV7C5XJU9xP9",
+          "ticks": [
+            "J9e7PfW4PbeskduXC4bEidedkQ58ZBwaJVELSge7Y6p3",
+            "21QgGnQeojCfeMgaXjmcbtzipJFzFxq3UsCSvAkQyGFA",
+            "CvLpNmTA1RLSLcCMMt7GRex2KwL2ZM6AMpmeQkoAA2Z1"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "3PRT79bw3hoMd9S4uC8mPTKvJVgqGa2NuS7ZLX92RFNn",
+      "fee": 0,
+      "liquidity": "301845",
+      "sqrtPriceX64": "6413406540769177361",
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "120.87544",
+          "taker": "120.87544",
+          "maxPrice": "120875447732904316"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.0082729786",
+          "taker": "0.0082729786",
+          "maxPrice": "8272978663207741691"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "3PRT79bw3hoMd9S4uC8mPTKvJVgqGa2NuS7ZLX92RFNn",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "C3qqUF7Y8D6Cj2RFg1jwjw5Yv3eyx365BUCfBAqWfVij",
+          "vaultB": "Gfji6WbfJq9UwKucC3A6Vo4D3vtcqqQJpRzu4n3uKA3U",
+          "extra": "FtidQBu8UfgGQ58mwdpdKLRaTaPZ1RTKbBwx1eAB9jJe",
+          "ticks": [
+            "FtRFPmMgUZGYFqq6dGkeLEE4vfafwh3HQELGURfXRvBh",
+            "6dc6z4ukvV29ZCbi3zeWVX5nFoCtwAKrwCmouuDPHnfM",
+            "93ydCtm11hyfd7Co9uNo2VKQ78yEh2beEcnCgC2GR3MP"
+          ]
+        },
+        "WSOL": {
+          "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "pool": "3PRT79bw3hoMd9S4uC8mPTKvJVgqGa2NuS7ZLX92RFNn",
+          "config": "11111111111111111111111111111111",
+          "vaultA": "C3qqUF7Y8D6Cj2RFg1jwjw5Yv3eyx365BUCfBAqWfVij",
+          "vaultB": "Gfji6WbfJq9UwKucC3A6Vo4D3vtcqqQJpRzu4n3uKA3U",
+          "extra": "FtidQBu8UfgGQ58mwdpdKLRaTaPZ1RTKbBwx1eAB9jJe",
+          "ticks": [
+            "2J5tNpxPdJBjbYgJFd5JQmeBnodoPL4uVSGyQn2bcJU7",
+            "7c5eEqdFa5zR2F2aaTmeBhjVPu8uGKEtkCLJTDM1Sh5g",
+            "9egRMN5uk69Ezgg5vJ6s8mYjeRAuEHCmdMS1mz3481VA"
+          ]
+        }
+      }
+    },
+    {
+      "venue": "Phoenix",
+      "program": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+      "pool": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+      "fee": 200,
+      "sides": [
+        {
+          "pay": "USDC",
+          "buy": "WSOL",
+          "mid": "128.999",
+          "taker": "129.02479",
+          "maxPrice": "129024799800000000"
+        },
+        {
+          "pay": "WSOL",
+          "buy": "USDC",
+          "mid": "0.010573171",
+          "taker": "0.010575286",
+          "maxPrice": "10575286691633466206"
+        }
+      ],
+      "slots": {
+        "USDC": {
+          "program": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+          "pool": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+          "config": "7aDTsspkQNGKmrexAN7FLx9oxU3iPczSSvHNggyuqYkR",
+          "vaultA": "8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG",
+          "vaultB": "3HSYXeGc3LjEPCuzoNDjQN37F1ebsSiR4CqXVqQCdekZ",
+          "extra": "11111111111111111111111111111111",
+          "ticks": [
+            "11111111111111111111111111111111",
+            "11111111111111111111111111111111",
+            "11111111111111111111111111111111"
+          ]
+        },
+        "WSOL": {
+          "program": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+          "pool": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+          "config": "7aDTsspkQNGKmrexAN7FLx9oxU3iPczSSvHNggyuqYkR",
+          "vaultA": "8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG",
+          "vaultB": "3HSYXeGc3LjEPCuzoNDjQN37F1ebsSiR4CqXVqQCdekZ",
+          "extra": "11111111111111111111111111111111",
+          "ticks": [
+            "11111111111111111111111111111111",
+            "11111111111111111111111111111111",
+            "11111111111111111111111111111111"
+          ]
+        }
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "venue": "Raydium CLMM",
+      "pool": "3tD34VtprDSkYCnATtQLCiVgTkECU3d12KtjupeR6N2X",
+      "why": "swaps are switched off"
+    },
+    {
+      "venue": "Raydium CLMM",
+      "pool": "7PLpcezEnTV2xXU6eL3j4kLi9MJJFUngsWQvUNKyjE2V",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "2ocvtpRA36t6N1sN9oV8BXTZL8pA7zotrvHR4ffcvAGs",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "63uDxJFZj5C9u2KBVFBDw2H9vNk6jdDivRUb4nuP6Y28",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "6fyj9KTzzgGHCz33MXKpv4SHqHejQ46MEqPonD9Gt9bM",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "7SuU3ZXnkfL7tRbg22pJ8Y1aV4a1rirP39h9cCb6AWnU",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "ApvQ5kFSEaaDU9cUncmNG7eKYWWv3tQXwqRnQYfUzBeR",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "FoLNRmuV4Uy2C4ZK1sjJ17gwqDHtM9RqRxQbxGpi38de",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "Gj1dR9iK6AbmfDeHViHp6TESc7q6jwXhJCM2EMqxDBAg",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "pool": "H3BKR5oQj69FUkoQt7c2ziF6jYb2p9HHUBcipLPADMSd",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Byreal",
+      "pool": "9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq",
+      "why": "its fee is more than one rate (a pool rate, decay, imbalance or dynamic fee)"
+    },
+    {
+      "venue": "Stabble CLMM",
+      "pool": "BH6zpxtYjY4AtJduxJk1mkRH2XpDZSbQRjPNfQGSnSXv",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Stabble CLMM",
+      "pool": "E5bhsR1Uubjd1dzJdZiknPqA6ReJj6ndKPN56swnXtA2",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "2jZ6KxhLVMVVhTXBGTBJkq7bSbYGwsZBvnXDmnh7FtfS",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "3gijXbxxVZNU9ZpMeL8xbGgfgVAoMNAgcEDwaZriKV6B",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "3zuTWugg7FqY5Ku9PurRaYgMMLkXWa4ciLGCcPrSq1aS",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "4HppGTweoGQ8ZZ6UcCgwJKfi5mJD9Dqwy6htCpnbfBLW",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "5hCDEXRCn5YsyP1ydgbnaXT3QN6AAkfshfRkXRQypzr6",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "9H8ps32HsEZAa83PH8KvZdyPLoXaCyPmcshbAr79iLDx",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "9VuCJupdVXC1kKijULJQ2GPKPvk2kSMHtgvwDuQq3TDo",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "BqbJRBmGpduPoxjA3F2TGTyg8h3W6n9jajU9injPPyPL",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "C7AD8EHcbKvFL3zw2z4YKKn1ZMTCYqkThZGtY3hPajsd",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "CCycTBsvf1hPtZMwoy9jzhpt33baaKAZ7FLk5frEUisp",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "CHTpQ1ba3yWQLr97ffj1xKYRpJPD31cExuxpETYHTiwF",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "CrD1GoH1E2K1Qj94CQCG75PYkJRGrvcG9GucU3DpXjj3",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "DKMMKjqt5fWSQx2zKPy5QKVNLgtL74d4PbxoDGuCH1rU",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "Esvfxt3jMDdtTZqLF1fqRhDjzM8Bpr7fZxJMrK69PB7e",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "GH4yAcfbJoPW1EDnUdrQFVtcuL5urCwBntKAa9BfRf3u",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "GYybFdpbvGA9MGPAfj6JLuNbCkc615CiPSRNSaGz8bcG",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "pool": "H3f4q1Y7mo7qwL5rKFpbesmJ8nKjkFPR6xWtYXGKCKqK",
+      "why": "an adaptive fee, which rises with volatility"
+    },
+    {
+      "venue": "Cropper",
+      "pool": "2Rm9QD1EBAqSi742MDJczJq3QkMoxk6VQradbdwG1pPW",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Cropper",
+      "pool": "3kyVVxbnEASKjLQB3wyPUc55VEGJWNeWZKf6Uv79YeuD",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "DefiTuna",
+      "pool": "GVMpm2tQm5qUJAma9qeBoNDJdKrN4etGTtDQLW5o1y9u",
+      "why": "no liquidity at its price"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "8xNA3yHfDLuhvPn7SVRZTa5Ywu1EdiNFExpugRgAhqTS",
+      "why": "no offers on its book"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "9ZrHFqT4VzEx1tWBFodNam4XwuBkZ7fQHJAECBeD2Rhk",
+      "why": "no offers on its book"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "B3RxHV5ty2XZaqijYtkxd6YoXFSCLb7qLXZRHv2nj6Us",
+      "why": "not open for taking (post-only, paused or closed)"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "CUVsjkjKQC2BiDWhReWgKSGSGBVrmhpkYWh8wkJVAkiK",
+      "why": "no offers on its book"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "CXe6keWEpMVR8Wid8X2c7zXSdabdd7tXJ6GD4d1SWzsq",
+      "why": "no offers on its book"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "Fcvv5xkosUjGEZBpVpDbJwtT7vYbTggyNs52cRaUyD1d",
+      "why": "no offers on its book"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "FyGSgX3a63XibA6xudSwQhnfmeP5xJxfJXFLyFHGGSvD",
+      "why": "not open for taking (post-only, paused or closed)"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "HUaSnNPwGZv18W7XynTfrgTAUWSMMHsdGXXLaEQbnKJz",
+      "why": "no offers on its book"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "2k27E1d8GKjaD5DgJyjy8qzbR8GtSw9ZKSfDmNUVnUYK",
+      "why": "every offer on its book costs more than half as much again as the pair's price at its deepest pool"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "9xKVNAgePuLmV4YGCtACLnUwvXhhLQ1bXdiJBvM1HpCQ",
+      "why": "every offer on its book costs more than half as much again as the pair's price at its deepest pool"
+    },
+    {
+      "venue": "Phoenix",
+      "pool": "B8a4RCvFaG9AFsatCZLpGLkbCPytyr9K6jSZWLQZDjg1",
+      "why": "every offer on its book costs more than half as much again as the pair's price at its deepest pool"
+    }
+  ],
+  "checked": [
+    {
+      "venue": "Raydium CLMM",
+      "program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "pools": 20
+    },
+    {
+      "venue": "PancakeSwap CLMM",
+      "program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "pools": 15
+    },
+    {
+      "venue": "Byreal",
+      "program": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "pools": 1
+    },
+    {
+      "venue": "Stabble CLMM",
+      "program": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "pools": 3
+    },
+    {
+      "venue": "Orca Whirlpools",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pools": 31
+    },
+    {
+      "venue": "Cropper",
+      "program": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "pools": 4
+    },
+    {
+      "venue": "DefiTuna",
+      "program": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "pools": 2
+    },
+    {
+      "venue": "Crema",
+      "program": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "pools": 1
+    },
+    {
+      "venue": "Phoenix",
+      "program": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+      "pools": 12
+    }
+  ]
+}
