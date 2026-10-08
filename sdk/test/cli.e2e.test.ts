@@ -420,6 +420,7 @@ describeEvm("sauce, sent to a chain", () => {
       const out = JSON.parse(run.stdout) as {
         from: string;
         pot: string;
+        leftInPot: unknown;
         cook: { status: string; hash: Hex };
       };
       expect(out).toMatchObject({
@@ -427,6 +428,18 @@ describeEvm("sauce, sent to a chain", () => {
         pot: labelled,
         cook: { status: "success" },
       });
+      // What the Pot holds after the cook of what it moved, read at the cook's block: 9 of the 10
+      // it held of each, which stay in the Pot.
+      expect(out.leftInPot).toEqual(
+        [usdc, usdt].map((token, index) => ({
+          token,
+          symbol: ["USDC", "USDT"][index],
+          decimals: 6,
+          amount: (FUNDED - AMOUNT).toString(),
+          formatted: "9",
+          before: FUNDED.toString(),
+        })),
+      );
       const receipt = await ethereum.publicClient.getTransactionReceipt({ hash: out.cook.hash });
       expect(receipt.from).toBe(KEYSTORE_OWNER.toLowerCase());
       expect(await ethereum.balanceOf(usdc, THIRD_RECIPIENT)).toBe(AMOUNT);
@@ -473,6 +486,18 @@ describeEvm("sauce, sent to a chain", () => {
         new RegExp(`^deployed Pot ${fresh} in 0x[0-9a-f]{64}: success`, "m"),
       );
       expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success, gas used \d+, block \d+$/m);
+      // What stays in the Pot comes right after what the cook cost, before what it moved.
+      expect(run.stdout).toMatch(
+        new RegExp(
+          "^cost .*\n" +
+            "Left in the Pot, not in your wallet:\n" +
+            "  9 USDC \\(it held 10 USDC before\\)\n" +
+            "  9 USDT \\(it held 10 USDT before\\)\n" +
+            "  Only another cook moves it out\\. .*\n" +
+            "Token transfers:$",
+          "m",
+        ),
+      );
       expect(await potOwner(ethereum, fresh)).toBe(RAW_OWNER);
       expect(await ethereum.balanceOf(usdc, fresh)).toBe(FUNDED - AMOUNT);
     }, 60_000);

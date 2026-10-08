@@ -209,6 +209,34 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       ),
       "the transfer the cook made",
     );
+    // What stays in the Pot comes first, and a note says so, for the user to be told.
+    assert.deepEqual(Object.keys(out).slice(0, 2), ["ok", "leftInPot"]);
+    assert.deepEqual(out.leftInPot, [
+      {
+        token: usdc,
+        symbol: "USDC",
+        decimals: 6,
+        amount: "500000",
+        formatted: "0.5",
+        before: "2000000",
+      },
+    ]);
+    const notes = (out.notes ?? []) as string[];
+    assert.ok(
+      notes.includes(
+        "After this cook the Pot holds 0.5 USDC of what it moved (leftInPot), not the owner's " +
+          "wallet: only another cook moves it out. Tell the user before building the " +
+          "transaction. For it to end in their wallet, the program must send it there, or name " +
+          "the wallet as the recipient of the call that produces it.",
+      ),
+      notes.join("\n"),
+    );
+    // Spending all of it leaves the Pot nothing: an empty leftInPot, and no note.
+    const spent = ok(
+      await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, assumeBalance: ["USDC:1.5"] }),
+    );
+    assert.deepEqual(spent.leftInPot, []);
+    assert.ok(!((spent.notes ?? []) as string[]).some((note) => note.includes("leftInPot")));
     // A rehearsal: nothing landed.
     assert.equal(await local.publicClient.getCode({ address: pot }), undefined);
     assert.equal(await local.balanceOf(usdc, RECIPIENT), 0n);
@@ -344,7 +372,9 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       "chain",
       "gas",
       "gasKind",
+      "leftInPot",
       "nativeTransfers",
+      "notes",
       "ok",
       // main declares no return type: its raw return data, empty here.
       "returns",
@@ -354,7 +384,14 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     ]);
     assert.equal(summary.returns, "0x");
     // What it keeps is the full result's, field for field; the state overrides and logs are not.
-    for (const field of ["ok", "block", "transfers", "balanceChanges", "transactions"]) {
+    for (const field of [
+      "ok",
+      "leftInPot",
+      "block",
+      "transfers",
+      "balanceChanges",
+      "transactions",
+    ]) {
       assert.deepEqual(summary[field], full[field], field);
     }
     assert.ok(full.assumed !== undefined && full.otherLogs !== undefined);

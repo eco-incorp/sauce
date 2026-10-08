@@ -940,6 +940,19 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         expect.objectContaining({ account: ownerTslax, delta: "400", symbol: "TSLAx" }),
       ]),
     );
+    // What stays in the Pot's token account leads the result: 600 of the 1,000 base units.
+    expect(Object.keys(out).slice(0, 2)).toEqual(["ok", "leftInPot"]);
+    expect(out.leftInPot).toEqual([
+      {
+        account: potTslax,
+        mint,
+        symbol: "TSLAx",
+        amount: "600",
+        decimals: 8,
+        formatted: "0.000006",
+        before: "1000",
+      },
+    ]);
 
     // `sauce pot` lists the Pot's account for each registered mint but the stocks, over a thousand.
     const status = await sauce(
