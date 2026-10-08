@@ -32,7 +32,7 @@ import { chainDefines } from "../src/routes/ambient.js";
 import { encodeRoute } from "../src/routes/encode.js";
 import { decodeEntryArguments, encodeEntryArguments } from "../src/routes/entry.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
-import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
+import { contractAddressOn } from "../src/routes/chain-module.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { sourceGlobals } from "../src/routes/source-globals.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
@@ -91,7 +91,7 @@ const file = (name: string, text: string): string => {
 // ---------------------------------------------------------------------------------------------
 
 describe("sourceGlobals: the names a program on a chain may use", () => {
-  it("lists exactly the namespaces and contracts the accessor rewrite resolves, at its addresses", () => {
+  it("lists exactly the namespaces and contracts the chain's module gives addresses, at those addresses", () => {
     for (const slug of ["ethereum", "base", "arbitrum"]) {
       const chain = requireChain(slug);
       const listed = new Map<string, string>();
@@ -107,19 +107,12 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
           ns.kind === "protocol" ? [...ns.contracts.keys()] : [...ns.contractOwners.keys()];
         for (const name of names) {
           const reference = `${key}.${name}`;
-          let rewritten: string | undefined;
-          try {
-            rewritten = rewriteProtocolAccessors(
-              `function main() { const a = ${reference}; }`,
-              chain,
-            ).source;
-          } catch {
-            rewritten = undefined;
-          }
+          // The address a program reads it as, where the chain's module gives it one.
+          const declared = contractAddressOn(chain, key, name);
           const address = listed.get(reference);
           // Listed if and only if a program may write it, and at the address it compiles to.
-          expect([reference, rewritten !== undefined]).toEqual([reference, address !== undefined]);
-          if (address !== undefined) expect(rewritten).toContain(`${BigInt(address)}n`);
+          expect([reference, declared !== undefined]).toEqual([reference, address !== undefined]);
+          if (address !== undefined) expect(BigInt(declared!)).toBe(BigInt(address));
         }
       }
     }
