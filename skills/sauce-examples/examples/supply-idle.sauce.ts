@@ -4,6 +4,8 @@
 // its gas and is skipped. The aToken's address is read from the pool, through the reads the
 // registry's Aave V3 ABI does not declare, in AaveV3Reads.json beside this file. Returns what it
 // supplied or withdrew, and the USDC liquid and supplied after.
+// The Aave position is the Pot's on purpose (supplied for the Pot): a later run withdraws from it,
+// which it could not if the aTokens were in the wallet.
 //
 //   sauce run supply-idle.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <reserve> <minMove>

@@ -18,6 +18,7 @@ import { CliError, UsageError } from "./args.js";
 import { connect, sendAndWait, type Sent } from "./chain.js";
 import { unapproved, type Approver, type CommandOutput } from "./commands.js";
 import { addressLabels, effectLines, effectsJson, effectsOf, nativeSymbol } from "./effects.js";
+import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, type Cost } from "./receipt.js";
 import {
   buildCancel,
@@ -324,24 +325,31 @@ const costOfSent = (sent: Extract<SentTx, { result: Sent }>): Cost | undefined =
     ? undefined
     : costOf(sent.result.receipt, BigInt(sent.tx.value));
 
-const sentLine = (sent: SentTx): string => {
+/** Where a person opens a sent transaction: its explorer page and its trace. */
+const linksOf = (sent: SentTx) =>
+  txLinks(requireChain(sent.tx.chainId), "svm" in sent ? sent.svm.signature : sent.result.hash);
+
+/** A sent transaction's line, then its links. */
+const sentLines = (sent: SentTx): string[] => {
   if ("svm" in sent) {
-    return (
+    return [
       `${sent.tx.what}: ${sent.svm.signature} on ${sent.tx.chain}, slot ${sent.svm.slot ?? "?"}` +
-      (sent.svm.fee === undefined ? "" : `; fee ${formatUnits(sent.svm.fee, 9)} SOL`) +
-      (BigInt(sent.tx.value) > 0n
-        ? `, and ${formatUnits(BigInt(sent.tx.value), 9)} SOL the IGP's gas and rent`
-        : "")
-    );
+        (sent.svm.fee === undefined ? "" : `; fee ${formatUnits(sent.svm.fee, 9)} SOL`) +
+        (BigInt(sent.tx.value) > 0n
+          ? `, and ${formatUnits(BigInt(sent.tx.value), 9)} SOL the IGP's gas and rent`
+          : ""),
+      ...linkLines(linksOf(sent)),
+    ];
   }
   const cost = costOfSent(sent);
 
-  return (
+  return [
     `${sent.tx.what}: ${sent.result.hash} on ${sent.tx.chain}, block ${sent.result.blockNumber}` +
-    (cost === undefined
-      ? `, gas used ${sent.result.gasUsed}`
-      : `; ${costLine(cost, requireChain(sent.tx.chainId), BigInt(sent.tx.value) > 0n ? "the prover's fee" : "none")}`)
-  );
+      (cost === undefined
+        ? `, gas used ${sent.result.gasUsed}`
+        : `; ${costLine(cost, requireChain(sent.tx.chainId), BigInt(sent.tx.value) > 0n ? "the prover's fee" : "none")}`),
+    ...linkLines(linksOf(sent)),
+  ];
 };
 
 const sentJson = (sent: SentTx) =>
@@ -349,6 +357,7 @@ const sentJson = (sent: SentTx) =>
     ? {
         ...sent.tx,
         signature: sent.svm.signature,
+        ...linksOf(sent),
         slot: (sent.svm.slot ?? 0n).toString(),
         ...(sent.svm.fee === undefined ? {} : { fee: sent.svm.fee.toString() }),
         ...(sent.svm.computeUnits === undefined
@@ -358,6 +367,7 @@ const sentJson = (sent: SentTx) =>
     : {
         ...sent.tx,
         hash: sent.result.hash,
+        ...linksOf(sent),
         status: sent.result.status,
         block: sent.result.blockNumber.toString(),
         gasUsed: sent.result.gasUsed.toString(),
@@ -440,7 +450,7 @@ export async function proveCommand(
   return {
     text: [
       ...shown,
-      sentLine(sent!),
+      ...sentLines(sent!),
       ...messages.map(
         (message) =>
           `The proof travels to ${source} as Hyperlane message ${message.id} (dispatched by ` +
@@ -496,7 +506,7 @@ export async function claimCommand(
 
   return {
     text: [
-      sentLine(sent),
+      ...sentLines(sent),
       ...plan.claims.flatMap((claim) => [
         `Claimed ${claim.intentHash} for ${claim.claimant}:`,
         ...claim.moves.map((move) => `  ${moveText(move)}`),
@@ -550,7 +560,7 @@ export async function refundCommand(
       [plan.refundee, "the creator"],
     ]);
     texts.push(
-      sentLine(sent),
+      ...sentLines(sent),
       `Refunded ${target.record.intentHash} to its creator ${plan.refundee}:`,
       ...plan.moves.map((move) => `  ${moveText(move)}`),
       ...effectLines(effects),
@@ -624,7 +634,7 @@ export async function cancelCommand(
       remember(context, [target.record], "proving", sent!, { message: message.id });
     }
     texts.push(
-      sentLine(sent!),
+      ...sentLines(sent!),
       `Cancelled ${target.record.intentHash} on ${target.record.destination.chain}: no solver can fill it now.`,
       ...messages.map(
         (message) =>

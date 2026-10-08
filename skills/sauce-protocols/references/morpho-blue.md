@@ -21,17 +21,19 @@ Minimal and gas-efficient lending primitive with permissionless market creation.
 
 ## In a Sauce program
 
-Supply the loan asset to a market given as `main`'s input:
+Supply the loan asset to a market given as `main`'s input, for `onBehalf`: the user's wallet, or
+the Pot (`ctx.self()`) to keep the position there. Morpho keeps the position in its own books, not
+as a token, so it shows in no token balance:
 
 ```sauce chain=base,ethereum
 function main(
   market: { loanToken: Address, collateralToken: Address, oracle: Address, irm: Address, lltv: Uint256 },
-  assets: Uint256
+  assets: Uint256,
+  onBehalf: Address
 ) {
-  const self = ctx.self();
   Token(market.loanToken).approve(MorphoBlue.Morpho, assets);
   const empty = hex``;
-  MorphoBlue.Morpho.supply(market, assets, 0, self, empty);
+  MorphoBlue.Morpho.supply(market, assets, 0, onBehalf, empty);
 }
 ```
 

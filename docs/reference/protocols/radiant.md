@@ -37,7 +37,7 @@ function main(
 }
 ```
 
-- `onBehalfOf`: Address that receives rTokens (use msg.sender for self)
+- `onBehalfOf`: Address receiving the rTokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
 - Requires ERC-20 approval to the LendingPool
 
 ### withdraw

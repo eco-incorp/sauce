@@ -185,8 +185,8 @@ extension, and running through the Kitchen or the engine.
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
 `base`, `solana`). Every other chain is a **preview chain**: a program compiles for it and
 `sauce simulate` rehearses it there, but the `sauce` command and the MCP server build and send no
-transaction on it (`sauce tx`, `sauce run`, `sauce pot --deploy`, `sauce intent publish` and the
-intent steps are refused, naming the supported chains and linking the chain's request).
+transaction on it (`sauce tx`, `sauce run`, `sauce pot --deploy` and the intent steps are refused,
+naming the supported chains and linking the chain's request).
 [references/index.md](references/index.md) has a Support column, and each chain's file says which
 it is at the top.
 

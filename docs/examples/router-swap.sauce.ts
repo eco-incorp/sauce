@@ -2,8 +2,9 @@ import { curve, uniswapV2 } from "@sauce/router";
 import { balanceOf } from "@sauce/token";
 
 // Ethereum: sell every WETH the Pot holds on Uniswap V2, then the USDC that returns for USDT in
-// Curve's 3pool, and keep it. The tokens, the factory and the pool are the registry's names; the
-// amounts are only known when this runs.
+// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `ctx.self()`, so a later
+// cook spends it (pass the wallet instead to deliver it). The tokens, the factory and the pool are
+// the registry's names; the amounts are only known when this runs.
 //
 //   sauce run router-swap.sauce.ts --chain ethereum --keystore <keystore> --args <minOut>
 //
