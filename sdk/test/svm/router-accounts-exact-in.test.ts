@@ -52,7 +52,24 @@ const FIRST: Record<string, boolean> = {
   "1": false,
   baseIn: true,
   quoteIn: false,
+  orcaToXorca: true,
+  delegate: true,
+  undelegate: false,
+  assetToLp: true,
+  lpToAsset: false,
+  redeem: false,
+  lstToSol: true,
+  issue0: true,
+  redeem0: false,
 };
+
+/** A vector whose direction's name says the other way: Helium's redemption pays its supply token,
+ *  the pool's first. */
+const PAYS_FIRST: Record<string, boolean> = { "helium-treasury:Aon7:redeem": true };
+
+/** The venues whose program requires the authority writable where the recipes' instruction leaves it
+ *  read-only: their signer also pays the transaction's fee, which writes it anyway; a Pot does not. */
+const WRITES_AUTHORITY = new Set(["vault-liquid-unstake"]);
 
 const flip = (aToB: boolean, a: string, b: string): [string, string] => (aToB ? [a, b] : [b, a]);
 
@@ -544,6 +561,129 @@ ROLES.scaleVmm = () => ({
   ammConfig: "ammConfig",
   beneficiary0: "ben0",
 });
+ROLES.xorca = () => ({
+  vault: "vault",
+  mintB: "xorcaMint",
+  pool: "state",
+  mintA: "orcaMint",
+  tokenProgram: "tokenProgram",
+});
+ROLES.solayer = () => ({
+  pool: "pool",
+  receiptMint: "receiptMint",
+  vault: "vault",
+  lstMint: "lstMint",
+  tokenProgram: "token-program",
+});
+ROLES.voltr = () => ({
+  protocol: "protocol",
+  pool: "vault",
+  mintA: "assetMint",
+  mintB: "lpMint",
+  idleAccount: "idleAta",
+  idleAuthority: "idleAuth",
+  lpMintAuthority: "lpMintAuth",
+  tokenProgramA: "assetTokenProgram",
+  tokenProgramB: "lpTokenProgram",
+  systemProgram: "systemProgram",
+});
+ROLES.vaultLiquidUnstake = () => ({
+  globalPool: "globalPool",
+  poolLstAccount: "poolLstAta",
+  mintA: "mint",
+  stakePool: "stakePool",
+  pool: "lstInfo",
+  solVault: "solVault",
+  feeAccount: "feeAccount",
+  inventorySummary: "invSummary",
+  tokenProgram: "tokenProgram",
+  systemProgram: "systemProgram",
+});
+ROLES.hyloStabilityPool = () => ({
+  pool: "poolConfig",
+  hylo: "hylo",
+  mintA: "stablecoinMint",
+  poolAuthority: "poolAuth",
+  stablecoinPool: "stablecoinPool",
+  lpTokenAuthority: "lpTokenAuth",
+  mintB: "lpTokenMint",
+  feeAuthority: "feeAuth",
+  feeVault: "feeVault",
+  tokenProgram: "tokenProgram",
+  eventAuthority: "eventAuthority",
+  program: "program",
+});
+ROLES.huma = () => ({
+  humaConfig: "huma-config",
+  poolConfig: "pool-config",
+  poolState: "pool-state",
+  pool: "mode-config",
+  mintB: "mode-mint",
+  poolAuthority: "pool-authority",
+  mintA: "underlying-mint",
+  poolUnderlying: "pool-underlying",
+  tokenProgramA: "underlying-token-program",
+  tokenProgramB: "mode-token-program",
+});
+ROLES.heliumTreasury = () => ({
+  pool: "mgmt",
+  mintB: "treasuryMint",
+  mintA: "supplyMint",
+  treasury: "treasury",
+  circuitBreaker: "cb",
+  circuitBreakerProgram: "cbProgram",
+  tokenProgram: "tokenProgram",
+});
+ROLES.jupiterLendEarn = () => ({
+  mintA: "mint",
+  lendingAdmin: "lendingAdmin",
+  pool: "lending",
+  mintB: "fTokenMint",
+  reserve: "reserve",
+  supplyPosition: "supplyPosition",
+  rateModel: "rateModel",
+  vault: "vault",
+  claimAccount: "claimAccountNone",
+  liquidity: "liquidity",
+  liquidityProgram: "liquidityProgram",
+  rewardsRateModel: "rewardsRateModel",
+  tokenProgram: "tokenProgram",
+  associatedTokenProgram: "associatedTokenProgram",
+  systemProgram: "systemProgram",
+});
+ROLES.hylo = () => ({
+  hylo: "hylo",
+  pool: "pair",
+  stablecoinAuthority: "stablecoinAuth",
+  usdcVaultAuthority: "usdcVaultAuth",
+  usdcFeeAuthority: "usdcFeeAuth",
+  stablecoinFeeAuthority: "stablecoinFeeAuth",
+  vault: "vault",
+  usdcFeeVault: "usdcFeeVault",
+  stablecoinFeeVault: "stablecoinFeeVault",
+  mintB: "stablecoinMint",
+  mintA: "usdcMint",
+  pyth: "pyth",
+  tokenProgram: "tokenProgram",
+  eventAuthority: "eventAuthority",
+  program: "program",
+});
+ROLES.carrot = () => ({
+  pool: "vault",
+  mintB: "crtMint",
+  mintA: "assetMint",
+  assetVault: "ata0",
+  systemProgram: "systemProgram",
+  tokenProgramA: "assetTokenProgram",
+  tokenProgramB: "sharesTokenProgram",
+  logProgram: "logProgram",
+  assetAccount0: "ata0",
+  oracle0: "oracle0",
+  assetAccount1: "ata1",
+  oracle1: "oracle1",
+  assetAccount2: "ata2",
+  oracle2: "oracle2",
+});
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -592,6 +732,16 @@ const FAMILY: Record<string, string> = {
   "raydium-launchlab": "raydiumLaunchlab",
   "runner-rodeo": "runnerRodeo",
   "scale-vmm": "scaleVmm",
+  xorca: "xorca",
+  solayer: "solayer",
+  voltr: "voltr",
+  "vault-liquid-unstake": "vaultLiquidUnstake",
+  "hylo-stability-pool": "hyloStabilityPool",
+  huma: "huma",
+  "helium-treasury": "heliumTreasury",
+  "jupiter-lend-earn": "jupiterLendEarn",
+  hylo: "hylo",
+  carrot: "carrot",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */
@@ -619,7 +769,7 @@ describe("routerSvmAccountOrder: the exact-input venues, as sauce-recipes builds
   });
 
   it.each(CASES)("%s: account for account, writable and signer", (key, vector) => {
-    const aToB = FIRST[key.split(":").pop()!];
+    const aToB = PAYS_FIRST[key] ?? FIRST[key.split(":").pop()!];
     expect(aToB).toBeDefined();
     const options: RouterSvmAccountOptions = {
       aToB: aToB!,
@@ -645,7 +795,7 @@ describe("routerSvmAccountOrder: the exact-input venues, as sauce-recipes builds
     expect(built.map((a) => ({ ref: a.ref, writable: a.writable, signer: a.signer }))).toEqual(
       vector.accounts.map((a) => ({
         ref: valueOf(a),
-        writable: a.writable === true,
+        writable: a.writable === true || (a.user === "owner" && WRITES_AUTHORITY.has(vector.venue)),
         signer: a.signer === true,
       })),
     );

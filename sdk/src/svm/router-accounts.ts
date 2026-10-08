@@ -318,6 +318,56 @@ export const ROUTER_SVM_VENUES = {
     data: "scaleVmmData",
     cpi: "scaleVmmCpi",
   },
+  xorca: {
+    program: "StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT",
+    data: "xorcaData",
+    cpi: "xorcaCpi",
+  },
+  solayer: {
+    program: "endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT",
+    data: "solayerData",
+    cpi: "solayerCpi",
+  },
+  voltr: {
+    program: "vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8",
+    data: "voltrData",
+    cpi: "voltrCpi",
+  },
+  "vault-liquid-unstake": {
+    program: "2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo",
+    data: "vaultLiquidUnstakeData",
+    cpi: "vaultLiquidUnstakeCpi",
+  },
+  "hylo-stability-pool": {
+    program: "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
+    data: "hyloStabilityPoolData",
+    cpi: "hyloStabilityPoolCpi",
+  },
+  huma: {
+    program: "HumaXepHnjaRCpjYTokxY4UtaJcmx41prQ8cxGmFC5fn",
+    data: "humaData",
+    cpi: "humaCpi",
+  },
+  "helium-treasury": {
+    program: "treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5",
+    data: "heliumTreasuryData",
+    cpi: "heliumTreasuryCpi",
+  },
+  "jupiter-lend-earn": {
+    program: "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9",
+    data: "jupiterLendEarnData",
+    cpi: "jupiterLendEarnCpi",
+  },
+  hylo: {
+    program: "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
+    data: "hyloData",
+    cpi: "hyloCpi",
+  },
+  carrot: {
+    program: "CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s",
+    data: "carrotData",
+    cpi: "carrotCpi",
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -366,6 +416,9 @@ export interface RouterSvmAccountOptions {
   /** Scale AMM and Scale vMM: how many fee beneficiaries the pool pays, each a token account at the
    *  end; 1 when absent. */
   readonly beneficiaries?: number;
+  /** Carrot: how many assets its vault holds, each an account and an oracle at the end; 3 when
+   *  absent. */
+  readonly assets?: number;
   /** Meteora DLMM: how many bin arrays the swap crosses, from the active bin's onwards in the trade's
    *  direction; 3 when absent. */
   readonly binArrays?: number;
@@ -400,6 +453,9 @@ export function routerSvmAccountOrder(
   }
   if (options.binArrays !== undefined && venue !== "meteora-dlmm") {
     throw new Error(`binArrays is Meteora DLMM's alone, not ${venue}'s`);
+  }
+  if (options.assets !== undefined && venue !== "carrot") {
+    throw new Error(`assets is Carrot's alone, not ${venue}'s`);
   }
   if (isExactInVenue(venue)) return exactInAccountOrder(venue, options);
   const { aToB } = options;
@@ -637,6 +693,16 @@ const EXACT_IN_VENUES = [
   "raydium-launchlab",
   "runner-rodeo",
   "scale-vmm",
+  "xorca",
+  "solayer",
+  "voltr",
+  "vault-liquid-unstake",
+  "hylo-stability-pool",
+  "huma",
+  "helium-treasury",
+  "jupiter-lend-earn",
+  "hylo",
+  "carrot",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1257,6 +1323,202 @@ function exactInAccountOrder(
         w("ammVaultB"),
         r("ammConfig"),
         ...Array.from({ length: count }, (_, i) => w(`beneficiary${i}`)),
+      ];
+    }
+    case "xorca":
+      if (!aToB) throw new Error("xORCA only stakes");
+      return [
+        PAYER,
+        w("vault"),
+        w("source"),
+        w("recipient"),
+        w("mintB"),
+        r("pool"),
+        r("mintA"),
+        r("tokenProgram"),
+      ];
+    case "solayer":
+      return [
+        AUTHORITY,
+        r("pool"),
+        w("receiptMint"),
+        w("vault"),
+        r("lstMint"),
+        ownerA,
+        ownerB,
+        r("tokenProgram"),
+      ];
+    case "voltr":
+      // A withdrawal writes the idle authority and takes no LP mint authority.
+      return [
+        AUTHORITY,
+        r("protocol"),
+        w("pool"),
+        r("mintA"),
+        w("mintB"),
+        w("source"),
+        w("idleAccount"),
+        aToB ? r("idleAuthority") : w("idleAuthority"),
+        w("recipient"),
+        ...(aToB ? [r("lpMintAuthority")] : []),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("systemProgram"),
+      ];
+    case "vault-liquid-unstake":
+      if (!aToB) throw new Error("the liquid-unstake vault only unstakes");
+      // The program requires the authority writable.
+      return [
+        w("globalPool"),
+        w("poolLstAccount"),
+        PAYER,
+        w("source"),
+        w("recipient"),
+        r("mintA"),
+        r("stakePool"),
+        w("pool"),
+        w("solVault"),
+        w("feeAccount"),
+        w("inventorySummary"),
+        r("tokenProgram"),
+        r("systemProgram"),
+      ];
+    case "hylo-stability-pool":
+      return aToB
+        ? [
+            PAYER,
+            r("pool"),
+            r("hylo"),
+            r("mintA"),
+            w("source"),
+            w("recipient"),
+            r("poolAuthority"),
+            w("stablecoinPool"),
+            r("lpTokenAuthority"),
+            w("mintB"),
+            r("tokenProgram"),
+            r("eventAuthority"),
+            r("program"),
+          ]
+        : [
+            PAYER,
+            w("pool"),
+            r("hylo"),
+            r("mintA"),
+            w("recipient"),
+            r("feeAuthority"),
+            w("feeVault"),
+            w("source"),
+            r("poolAuthority"),
+            w("stablecoinPool"),
+            w("mintB"),
+            r("tokenProgram"),
+            r("eventAuthority"),
+            r("program"),
+          ];
+    case "huma":
+      if (!aToB) throw new Error("Huma only deposits here");
+      return [
+        AUTHORITY,
+        r("humaConfig"),
+        r("poolConfig"),
+        w("poolState"),
+        r("pool"),
+        w("mintB"),
+        r("poolAuthority"),
+        r("mintA"),
+        w("poolUnderlying"),
+        w("source"),
+        w("recipient"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+      ];
+    case "helium-treasury":
+      if (!aToB) throw new Error("Helium's treasury only redeems");
+      return [
+        r("pool"),
+        r("mintB"),
+        w("mintA"),
+        w("treasury"),
+        w("circuitBreaker"),
+        w("source"),
+        w("recipient"),
+        AUTHORITY,
+        r("circuitBreakerProgram"),
+        r("tokenProgram"),
+      ];
+    case "jupiter-lend-earn": {
+      const lending = [w("mintB"), w("reserve"), w("supplyPosition"), r("rateModel"), w("vault")];
+      const tail = [
+        w("liquidity"),
+        r("liquidityProgram"),
+        r("rewardsRateModel"),
+        r("tokenProgram"),
+        r("associatedTokenProgram"),
+        r("systemProgram"),
+      ];
+      return aToB
+        ? [
+            PAYER,
+            w("source"),
+            w("recipient"),
+            r("mintA"),
+            r("lendingAdmin"),
+            w("pool"),
+            ...lending,
+            ...tail,
+          ]
+        : [
+            PAYER,
+            w("source"),
+            w("recipient"),
+            r("lendingAdmin"),
+            w("pool"),
+            r("mintA"),
+            ...lending,
+            r("claimAccount"),
+            ...tail,
+          ];
+    }
+    case "hylo":
+      // Token A is USDC, B hyUSD; the authority's hyUSD account comes first.
+      return [
+        AUTHORITY,
+        r("hylo"),
+        w("pool"),
+        r("stablecoinAuthority"),
+        r("usdcVaultAuthority"),
+        r("usdcFeeAuthority"),
+        r("stablecoinFeeAuthority"),
+        w("vault"),
+        w("usdcFeeVault"),
+        w("stablecoinFeeVault"),
+        ownerB,
+        ownerA,
+        w("mintB"),
+        r("mintA"),
+        r("pyth"),
+        r("tokenProgram"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "carrot": {
+      const count = options.assets ?? 3;
+      if (!Number.isInteger(count) || count < 1) throw new Error(`assets is a count, not ${count}`);
+      // Token A is the asset paid or bought, B CRT; the authority's CRT account comes first.
+      return [
+        w("pool"),
+        w("mintB"),
+        ownerB,
+        r("mintA"),
+        w("assetVault"),
+        ownerA,
+        PAYER,
+        r("systemProgram"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("logProgram"),
+        ...Array.from({ length: count }, (_, i) => [w(`assetAccount${i}`), r(`oracle${i}`)]).flat(),
       ];
     }
     default: {

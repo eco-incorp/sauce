@@ -6780,3 +6780,925 @@ export function scaleVmmCpi(
   require(held - left <= amountIn, "debit");
   return held - left;
 }
+
+// Liquid staking, lending and vault tokens: a deposit of the underlying token for the venue's own, or
+// a withdrawal back, at the venue's own rate. A native-SOL stake pool (Sanctum's SPL stake pools,
+// whose deposit takes the authority's own lamports) is not here: a Pot holds no native SOL it can
+// pay out.
+
+// xORCA, StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT: `stake`, ORCA for xORCA at the vault's rate; it
+// only stakes. The slot is `[program, state, vault, xorcaMint]`. The swap writes the authority, so it
+// has to be attached writable.
+function swapXorca(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x06a1d5e7ca99ec0b8eed2daf06b98892ae05fccb112a2eaf1b6fae785e76a23c, "not an xORCA stake");
+  require(svm.sload(slot[2], 0, 32).toBe() == trader[2].address, "xORCA only stakes ORCA");
+  svm.call(
+    program,
+    [trader[0], slot[2], trader[1], recipient, slot[3], slot[1], trader[2], trader[4]],
+    xorcaData(amountIn),
+  );
+}
+
+// xORCA's `stake` of `amountIn` of ORCA. It carries no least out.
+export function xorcaData(amountIn: Uint256): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const stake = hex`00`;
+  return stake.concat(word.toBytesLe(8));
+}
+
+export function xorca(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapXorca(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips nothing past a missing slot and no input: the stake mints what it is paid for.
+export function tryXorca(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0x06a1d5e7ca99ec0b8eed2daf06b98892ae05fccb112a2eaf1b6fae785e76a23c &&
+    pool.owner ==
+      0x06a1d5e7ca99ec0b8eed2daf06b98892ae05fccb112a2eaf1b6fae785e76a23c, "not an xORCA stake");
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapXorca(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority (writable), the vault, the authority's ORCA and xORCA token accounts (the
+// ORCA one paying), the xORCA mint, the state, the ORCA mint, and SPL Token.
+export function xorcaCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x06a1d5e7ca99ec0b8eed2daf06b98892ae05fccb112a2eaf1b6fae785e76a23c, "not an xORCA stake");
+  const word = amountIn & 0xffffffffffffffff;
+  const stake = hex`00`;
+  const data = stake.concat(word.toBytesLe(8));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Solayer, endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT: `delegate`, a liquid-staking token for the
+// pool's receipt token one for one, and `undelegate` back. The slot is `[program, pool, receiptMint,
+// vault, lstMint]`.
+function swapSolayer(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x09ae16c7e609a24396439f544af597a122cab0f5cf7348a968565ff9e88fb5d0, "not a Solayer pool");
+  const delegates = slot[4].address == trader[2].address;
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[1],
+      slot[2],
+      slot[3],
+      slot[4],
+      delegates ? trader[1] : recipient,
+      delegates ? recipient : trader[1],
+      trader[4],
+    ],
+    solayerData(amountIn, delegates),
+  );
+}
+
+// Solayer's `delegate` of `amountIn` of the staking token (`aToB`) or `undelegate` of the receipt
+// token. It carries no least out.
+export function solayerData(amountIn: Uint256, aToB: bool): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const delegate = hex`fe00de2891766e14`;
+  const undelegate = hex`d511d75105727c4e`;
+  const ix = aToB ? delegate : undelegate;
+  return ix.concat(word.toBytesLe(8));
+}
+
+export function solayer(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapSolayer(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an undelegation the vault holds nothing for.
+export function trySolayer(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0x09ae16c7e609a24396439f544af597a122cab0f5cf7348a968565ff9e88fb5d0 &&
+    pool.owner ==
+      0x09ae16c7e609a24396439f544af597a122cab0f5cf7348a968565ff9e88fb5d0, "not a Solayer pool");
+  if (slot[4].address != trader[2].address && svm.sload(slot[3], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapSolayer(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority, the pool, the receipt mint, the vault, the staking token's mint, the
+// authority's staking-token and receipt-token accounts (the paying one among them), and SPL Token. It
+// delegates when `aToB`.
+export function solayerCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0x09ae16c7e609a24396439f544af597a122cab0f5cf7348a968565ff9e88fb5d0, "not a Solayer pool");
+  const word = amountIn & 0xffffffffffffffff;
+  const delegate = hex`fe00de2891766e14`;
+  const undelegate = hex`d511d75105727c4e`;
+  const ix = aToB ? delegate : undelegate;
+  const data = ix.concat(word.toBytesLe(8));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Voltr, vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8: a vault's `deposit_vault` of its asset for LP
+// tokens and `request_and_withdraw_vault` back. The slot is `[program, vault, protocol, lpMint,
+// idleAta, idleAuthority, lpMintAuthority, systemProgram]`. The swap requires the authority's
+// associated token accounts, and a withdrawal writes the idle authority.
+function swapVoltr(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x0db4588c00282e3906bc90f790d4706811e8cc24b29cca991b4d70db3aa58d39, "not a Voltr vault");
+  const lpMint = slot[3];
+  const deposits = lpMint.address != trader[2].address;
+  const asset = deposits ? trader[2] : trader[3];
+  const assetProgram = asset.owner == trader[5].address ? trader[5] : trader[4];
+  const lpProgram = lpMint.owner == trader[5].address ? trader[5] : trader[4];
+  if (deposits) {
+    svm.call(
+      program,
+      [
+        trader[0],
+        slot[2],
+        slot[1],
+        asset,
+        lpMint,
+        trader[1],
+        slot[4],
+        slot[5],
+        recipient,
+        slot[6],
+        assetProgram,
+        lpProgram,
+        slot[7],
+      ],
+      voltrData(amountIn, true),
+    );
+  } else {
+    svm.call(
+      program,
+      [
+        trader[0],
+        slot[2],
+        slot[1],
+        asset,
+        lpMint,
+        trader[1],
+        slot[4],
+        slot[5],
+        recipient,
+        assetProgram,
+        lpProgram,
+        slot[7],
+      ],
+      voltrData(amountIn, false),
+    );
+  }
+}
+
+// Voltr's `deposit_vault` of `amountIn` of the asset (`aToB`) or `request_and_withdraw_vault` of
+// `amountIn` of LP tokens. It carries no least out.
+export function voltrData(amountIn: Uint256, aToB: bool): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`7ee015ffe4357521`;
+  const withdraw = hex`dd3873a880dcebf5`;
+  // A withdrawal names its amount in LP tokens, not all of them.
+  const inLp = hex`0100`;
+  return aToB ? deposit.concat(word.toBytesLe(8)) : withdraw.concat(word.toBytesLe(8), inLp);
+}
+
+export function voltr(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapVoltr(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips a withdrawal its idle account holds nothing for.
+export function tryVoltr(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0x0db4588c00282e3906bc90f790d4706811e8cc24b29cca991b4d70db3aa58d39 &&
+    pool.owner ==
+      0x0db4588c00282e3906bc90f790d4706811e8cc24b29cca991b4d70db3aa58d39, "not a Voltr vault");
+  if (slot[3].address == trader[2].address && svm.sload(slot[4], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapVoltr(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: a deposit's (`aToB`) the authority, the protocol, the vault, the asset and LP mints,
+// the authority's asset account, the vault's idle account and its authority, the authority's LP
+// account, the LP mint's authority, the two mints' token programs and the System program; a
+// withdrawal's the same with the LP account paying and the asset one receiving, and no LP mint
+// authority.
+export function voltrCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0x0db4588c00282e3906bc90f790d4706811e8cc24b29cca991b4d70db3aa58d39, "not a Voltr vault");
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`7ee015ffe4357521`;
+  const withdraw = hex`dd3873a880dcebf5`;
+  // A withdrawal names its amount in LP tokens, not all of them.
+  const inLp = hex`0100`;
+  const data = aToB ? deposit.concat(word.toBytesLe(8)) : withdraw.concat(word.toBytesLe(8), inLp);
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// The liquid-unstake vault, 2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo: `liquid_unstake`, a liquid
+// staking token for wrapped SOL at its stake pool's rate less a fee; it only unstakes. The slot is
+// `[program, lstInfo, globalPool, poolLstAccount, stakePool, solVault, feeAccount,
+// inventorySummary, systemProgram]`. The wrapped SOL lands in a native wrapped-SOL account.
+function swapVaultLiquidUnstake(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x1b87b0eb9e6114a494016f2c1359dd21ace512413838ac59b308e05d7d53d54e, "not a liquid-unstake vault");
+  svm.call(
+    program,
+    [
+      slot[2],
+      slot[3],
+      trader[0],
+      trader[1],
+      recipient,
+      trader[2],
+      slot[4],
+      slot[1],
+      slot[5],
+      slot[6],
+      slot[7],
+      trader[4],
+      slot[8],
+    ],
+    vaultLiquidUnstakeData(amountIn),
+  );
+}
+
+// The liquid-unstake vault's `liquid_unstake` of `amountIn` of the staking token. It carries no
+// least out.
+export function vaultLiquidUnstakeData(amountIn: Uint256): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const unstake = hex`64034fd1bf9db40b`;
+  return unstake.concat(word.toBytesLe(9));
+}
+
+export function vaultLiquidUnstake(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapVaultLiquidUnstake(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips nothing past a missing slot and no input.
+export function tryVaultLiquidUnstake(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0x1b87b0eb9e6114a494016f2c1359dd21ace512413838ac59b308e05d7d53d54e &&
+    pool.owner ==
+      0x1b87b0eb9e6114a494016f2c1359dd21ace512413838ac59b308e05d7d53d54e, "not a liquid-unstake vault");
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapVaultLiquidUnstake(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the global pool, its staking-token account, the authority, the authority's staking-token
+// and wrapped-SOL accounts, the staking token's mint, its stake pool, its info account, the SOL
+// vault, the fee account, the inventory summary, SPL Token and the System program.
+export function vaultLiquidUnstakeCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x1b87b0eb9e6114a494016f2c1359dd21ace512413838ac59b308e05d7d53d54e, "not a liquid-unstake vault");
+  const word = amountIn & 0xffffffffffffffff;
+  const unstake = hex`64034fd1bf9db40b`;
+  const data = unstake.concat(word.toBytesLe(9));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Hylo's stability pool, HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ: `user_deposit`, hyUSD for its LP
+// token, and `user_withdraw` back. The slot is `[program, poolConfig, hylo, stablecoinPool,
+// poolAuthority, lpTokenAuthority, lpTokenMint, feeAuthority, feeVault, eventAuthority]`. The swap
+// writes the authority, so it has to be attached writable, and a withdrawal writes the pool config.
+function swapHyloStabilityPool(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0xfc4c91c8b89aa379a494b13a608015253d4e3818339a9bf4ec207f88279671e1, "not a Hylo stability pool");
+  const lpMint = slot[6];
+  const deposits = lpMint.address != trader[2].address;
+  if (deposits) {
+    svm.call(
+      program,
+      [
+        trader[0],
+        slot[1],
+        slot[2],
+        trader[2],
+        trader[1],
+        recipient,
+        slot[4],
+        slot[3],
+        slot[5],
+        lpMint,
+        trader[4],
+        slot[9],
+        program,
+      ],
+      hyloStabilityPoolData(amountIn, true),
+    );
+  } else {
+    svm.call(
+      program,
+      [
+        trader[0],
+        slot[1],
+        slot[2],
+        trader[3],
+        recipient,
+        slot[7],
+        slot[8],
+        trader[1],
+        slot[4],
+        slot[3],
+        lpMint,
+        trader[4],
+        slot[9],
+        program,
+      ],
+      hyloStabilityPoolData(amountIn, false),
+    );
+  }
+}
+
+// Hylo's stability pool's `user_deposit` of `amountIn` of hyUSD (`aToB`) or `user_withdraw` of
+// `amountIn` of its LP token. It carries no least out.
+export function hyloStabilityPoolData(amountIn: Uint256, aToB: bool): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`bac68ce981276299`;
+  const withdraw = hex`35fe1af277ed4921`;
+  // No slippage configuration.
+  const ix = aToB ? deposit : withdraw;
+  return ix.concat(word.toBytesLe(9));
+}
+
+export function hyloStabilityPool(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHyloStabilityPool(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips nothing past a missing slot and no input.
+export function tryHyloStabilityPool(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0xfc4c91c8b89aa379a494b13a608015253d4e3818339a9bf4ec207f88279671e1 &&
+    pool.owner ==
+      0xfc4c91c8b89aa379a494b13a608015253d4e3818339a9bf4ec207f88279671e1, "not a Hylo stability pool");
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHyloStabilityPool(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: a deposit's (`aToB`) the authority (writable), the pool config, Hylo, the hyUSD mint,
+// the authority's hyUSD and LP accounts, the pool authority, the stablecoin pool, the LP token's
+// authority and mint, SPL Token, the event authority and the program itself; a withdrawal's the
+// authority, the pool config (writable), Hylo, the hyUSD mint, the authority's hyUSD account, the fee
+// authority and vault, the authority's LP account, the pool authority, the stablecoin pool, the LP
+// mint, SPL Token, the event authority and the program itself.
+export function hyloStabilityPoolCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0xfc4c91c8b89aa379a494b13a608015253d4e3818339a9bf4ec207f88279671e1, "not a Hylo stability pool");
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`bac68ce981276299`;
+  const withdraw = hex`35fe1af277ed4921`;
+  // No slippage configuration.
+  const ix = aToB ? deposit : withdraw;
+  const data = ix.concat(word.toBytesLe(9));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Huma, HumaXepHnjaRCpjYTokxY4UtaJcmx41prQ8cxGmFC5fn: `deposit` of a pool's underlying token for a
+// mode's token, with no commitment; it only deposits (a withdrawal needs the lender's own accounts
+// created first). The slot is `[program, modeConfig, humaConfig, poolConfig, poolState, modeMint,
+// poolAuthority, poolUnderlying]`.
+function swapHuma(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0xfb3f98f4db5c033579af051e753d17fc7b249475dd0525b72a2cc5719ad077b1, "not a Huma pool");
+  require(slot[5].address == trader[3].address, "Huma only deposits");
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[2],
+      slot[3],
+      slot[4],
+      slot[1],
+      slot[5],
+      slot[6],
+      trader[2],
+      slot[7],
+      trader[1],
+      recipient,
+      trader[2].owner == trader[5].address ? trader[5] : trader[4],
+      slot[5].owner == trader[5].address ? trader[5] : trader[4],
+    ],
+    humaData(amountIn),
+  );
+}
+
+// Huma's `deposit` of `amountIn` of the underlying token, with no commitment. It carries no least
+// out.
+export function humaData(amountIn: Uint256): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`f223c68952e1f2b6`;
+  // The deposit's commitment, the string "NO_COMMITMENT", then no referral.
+  const commitment = hex`0d0000004e4f5f434f4d4d49544d454e5400`;
+  return deposit.concat(word.toBytesLe(8), commitment);
+}
+
+export function huma(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHuma(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips nothing past a missing slot and no input.
+export function tryHuma(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0xfb3f98f4db5c033579af051e753d17fc7b249475dd0525b72a2cc5719ad077b1 &&
+    pool.owner ==
+      0xfb3f98f4db5c033579af051e753d17fc7b249475dd0525b72a2cc5719ad077b1, "not a Huma pool");
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHuma(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority, the Huma config, the pool config, the pool state, the mode config, the
+// mode's mint, the pool authority, the underlying mint, the pool's underlying account, the
+// authority's underlying and mode-token accounts (the underlying one paying), and the two mints'
+// token programs.
+export function humaCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+): Uint256 {
+  require(program.address ==
+    0xfb3f98f4db5c033579af051e753d17fc7b249475dd0525b72a2cc5719ad077b1, "not a Huma pool");
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`f223c68952e1f2b6`;
+  // The deposit's commitment, the string "NO_COMMITMENT", then no referral.
+  const commitment = hex`0d0000004e4f5f434f4d4d49544d454e5400`;
+  const data = deposit.concat(word.toBytesLe(8), commitment);
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Helium's treasury management, treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5: `redeem_v0`, a subnetwork
+// token for HNT along the treasury's curve, behind its circuit breaker; it only redeems. The slot is
+// `[program, management, supplyMint, treasury, circuitBreaker, circuitBreakerProgram]`.
+function swapHeliumTreasury(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x0d48c2241255418477a5e5cde6f783f54df82234ddf5509d2643ed3de2e060f2, "not a Helium treasury");
+  require(slot[2].address == trader[2].address, "the treasury only redeems its supply token");
+  svm.call(
+    program,
+    [
+      slot[1],
+      trader[3],
+      slot[2],
+      slot[3],
+      slot[4],
+      trader[1],
+      recipient,
+      trader[0],
+      slot[5],
+      trader[4],
+    ],
+    heliumTreasuryData(amountIn, minOut),
+  );
+}
+
+// Helium's `redeem_v0` of `amountIn` of the supply token, `minOut` its least out.
+export function heliumTreasuryData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const redeem = hex`eb7fab8b774deb76`;
+  return redeem.concat(word.toBytesLe(16));
+}
+
+export function heliumTreasury(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHeliumTreasury(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty treasury.
+export function tryHeliumTreasury(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0x0d48c2241255418477a5e5cde6f783f54df82234ddf5509d2643ed3de2e060f2 &&
+    pool.owner ==
+      0x0d48c2241255418477a5e5cde6f783f54df82234ddf5509d2643ed3de2e060f2, "not a Helium treasury");
+  if (svm.sload(slot[3], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHeliumTreasury(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the treasury management, the treasury's mint, the supply mint, the treasury, the circuit
+// breaker, the authority's supply and treasury token accounts (the supply one paying), the
+// authority, the circuit breaker program, and SPL Token.
+export function heliumTreasuryCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x0d48c2241255418477a5e5cde6f783f54df82234ddf5509d2643ed3de2e060f2, "not a Helium treasury");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const redeem = hex`eb7fab8b774deb76`;
+  const data = redeem.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Jupiter Lend Earn, jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9: `deposit` of an asset for its fToken
+// and `redeem` back, through the Jupiter Lend liquidity program. Its swap takes more accounts than a
+// function can list, so it has only its `Cpi` and `Data` forms.
+// Jupiter Lend Earn's `deposit` of `amountIn` of the asset (`aToB`) or `redeem` of `amountIn` of the
+// fToken. It carries no least out.
+export function jupiterLendEarnData(amountIn: Uint256, aToB: bool): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`f223c68952e1f2b6`;
+  const redeem = hex`b80c569546c461e1`;
+  const ix = aToB ? deposit : redeem;
+  return ix.concat(word.toBytesLe(8));
+}
+
+// `accounts`: a deposit's (`aToB`) the authority (writable), its asset and fToken accounts, the
+// asset's mint, the lending admin, the lending, the fToken mint, the reserve, the supply position,
+// the rate model, the vault, the liquidity, the liquidity program, the rewards rate model, SPL Token,
+// the Associated Token program and the System program; a redemption's the authority, its fToken and
+// asset accounts, the lending admin, the lending, the asset's mint, the fToken mint, the reserve, the
+// supply position, the rate model, the vault, the claim account, the liquidity, the liquidity
+// program, the rewards rate model, SPL Token, the Associated Token program and the System program.
+export function jupiterLendEarnCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0x0afe1b912e485e95fd15eb2937dffc4b37a316d0a63812ff02ba49b4c6c18d1e, "not a Jupiter Lend vault");
+  const word = amountIn & 0xffffffffffffffff;
+  const deposit = hex`f223c68952e1f2b6`;
+  const redeem = hex`b80c569546c461e1`;
+  const ix = aToB ? deposit : redeem;
+  const data = ix.concat(word.toBytesLe(8));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Hylo's exchange, HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn: `mint_stablecoin`, USDC for hyUSD, and
+// `redeem_stablecoin` back. Its swap takes more accounts than a function can list, so it has only its
+// `Cpi` and `Data` forms.
+// Hylo's `mint_stablecoin` with `amountIn` of USDC (`aToB`) or `redeem_stablecoin` of `amountIn` of
+// hyUSD. It carries no least out.
+export function hyloData(amountIn: Uint256, aToB: bool): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const mint = hex`0e0ea31ae0b69f9b`;
+  const redeem = hex`aaed62683c5248a1`;
+  // No slippage configuration.
+  const ix = aToB ? mint : redeem;
+  return ix.concat(word.toBytesLe(9));
+}
+
+// `accounts`: the authority, Hylo, the pair, the hyUSD authority, the USDC vault's and fee's
+// authorities, the hyUSD fee authority, the USDC vault, the USDC and hyUSD fee vaults, the
+// authority's hyUSD and USDC accounts (the paying one among them), the hyUSD mint, the USDC mint,
+// the Pyth price, SPL Token, the event authority and the program itself. It mints when `aToB`.
+export function hyloCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0xf5bb48a004743086c5a498bde9db1b7cc94167f33a528c5a0d965328df9e7c21, "not a Hylo exchange");
+  const word = amountIn & 0xffffffffffffffff;
+  const mint = hex`0e0ea31ae0b69f9b`;
+  const redeem = hex`aaed62683c5248a1`;
+  // No slippage configuration.
+  const ix = aToB ? mint : redeem;
+  const data = ix.concat(word.toBytesLe(9));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Carrot, CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s: `issue`, one of its vault's assets for CRT, and
+// `redeem` back, logged through its log program. Its swap takes more accounts than a function can
+// list, so it has only its `Cpi` and `Data` forms.
+// Carrot's `issue` of CRT for `amountIn` of an asset (`aToB`) or `redeem` of `amountIn` of CRT. It
+// carries no least out.
+export function carrotData(amountIn: Uint256, aToB: bool): bytes {
+  const word = amountIn & 0xffffffffffffffff;
+  const issue = hex`be0162d65163def7`;
+  const redeem = hex`b80c569546c461e1`;
+  const ix = aToB ? issue : redeem;
+  return ix.concat(word.toBytesLe(8));
+}
+
+// `accounts`: the vault, the CRT mint, the authority's CRT account, the asset's mint, the vault's
+// account for it, the authority's asset account, the authority (writable), the System program, the
+// asset's and CRT's token programs, the log program, then each of the vault's assets' account and
+// oracle. It issues when `aToB`.
+export function carrotCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0xac1d192f4e13005a44f45897e38e0e80a8eb79a15a33a3f88d0ef226aa441c70, "not a Carrot vault");
+  const word = amountIn & 0xffffffffffffffff;
+  const issue = hex`be0162d65163def7`;
+  const redeem = hex`b80c569546c461e1`;
+  const ix = aToB ? issue : redeem;
+  const data = ix.concat(word.toBytesLe(8));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}

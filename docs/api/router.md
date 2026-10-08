@@ -657,13 +657,15 @@ raydiumCpSwapData(amountIn, minOut): bytes
   venue's listed below. Otherwise it is `<venue>`.
 
 `minOut` in `…Data` and `…Cpi` is the venue's own least out, written as given; a venue whose swap
-carries none takes no `minOut` there (Bonkswap, Guacswap, the Saber decimal wrapper). Where the data
-says the direction, they take it as their last argument: `aToB` paying the pool's first token
-(token 0 or A, the decimal wrapper's underlying token, Scale AMM's buy), `paysBase` the base token
-(Aldrin, MetaDAO futarchy, PumpSwap's sell), `xToY` token X (Bonkswap, Guacswap). Perena's take the
-two tokens' indices among the pool's ten, `perenaData(amountIn, inIndex, outIndex, minOut)`. A
-`minOut` past 64 bits, a Perena index past its byte or a Deriverse instrument id past 32 bits
-reverts; `amountIn` is written as its low 64 bits.
+carries none takes no `minOut` there (Bonkswap, Guacswap, the Saber decimal wrapper, and the staking
+and vault venues but Helium's treasury). Where the data says the direction, they take it as their
+last argument: `aToB` paying the pool's first token (token 0 or A, the decimal wrapper's underlying
+token, Scale AMM's buy), `paysBase` the base token (Aldrin, MetaDAO futarchy, PumpSwap's sell),
+`xToY` token X (Bonkswap, Guacswap). At the staking and vault venues that swap both ways, `aToB` is
+the stake or deposit, and a venue that swaps one way takes no direction. Perena's take the two
+tokens' indices among the pool's ten, `perenaData(amountIn, inIndex, outIndex, minOut)`. A `minOut`
+past 64 bits, a Perena index past its byte or a Deriverse instrument id past 32 bits reverts;
+`amountIn` is written as its low 64 bits.
 
 **The account order is the SDK's.** `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder(venue,
 { aToB })` names each account of a venue's swap in order, with whether the instruction writes it and
@@ -759,7 +761,19 @@ it is missing, the authority paying its rent, which a Pot cannot: create it firs
 native SOL on the authority (pump.fun's bonding curve, Boop, Moonit) is not here, since a Pot holds
 no native SOL it can pay out.
 
-Nine venues take more accounts in their swap than a function can list. A function other than
+xORCA, Solayer, Voltr, the liquid-unstake vault, Hylo's stability pool, Huma and Helium's treasury
+stake, deposit, unstake or redeem: each swaps a token for its receipt, or a receipt back, at the
+venue's own rate. xORCA only stakes ORCA, the liquid-unstake vault only unstakes a liquid staking
+token for wrapped SOL, Huma only deposits (with no commitment; a withdrawal needs the lender's own
+accounts created first), and Helium's treasury only redeems a subnetwork token for HNT, behind its
+circuit breaker. xORCA, the liquid-unstake vault and Hylo's stability pool write the authority, so
+it is attached writable. Voltr requires the authority's associated token accounts, and its
+withdrawal writes the idle authority; a withdrawal from Hylo's stability pool writes the pool
+config. The liquid-unstake vault pays wrapped SOL into a native wrapped-SOL account. A Sanctum stake
+pool's deposit takes native SOL from the authority, which a Pot cannot pay, so the Sanctum stake
+pools are not here.
+
+Twelve venues take more accounts in their swap than a function can list. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
 forms, on the list the caller's `main` builds:
 
@@ -774,15 +788,23 @@ forms, on the list the caller's `main` builds:
 | `raydiumLaunchlab` | Raydium LaunchLab | `LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj`  |
 | `runnerRodeo`      | Runner Rodeo      | `runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA`  |
 | `scaleVmm`         | Scale vMM         | `SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa`  |
+| `jupiterLendEarn`  | Jupiter Lend Earn | `jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9`  |
+| `hylo`             | Hylo              | `HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn` |
+| `carrot`           | Carrot            | `CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s` |
 
 A PumpSwap buy takes the authority's volume accumulator, and it has to exist already. A Pot can't
 pay to create it, because the System program won't move lamports out of an account that holds data.
 PumpSwap's `init_user_volume_accumulator` takes any payer. Bonkswap and Guacswap require the paying
-and receiving accounts to be the authority's associated token accounts. PumpSwap, Bonkswap,
-Guacswap and Scale AMM write the authority, so it is attached writable. Scale AMM takes one account
-per fee beneficiary. A Meteora DLMM swap crosses bins only as far as the bin arrays its list ends
-with, from the active bin onwards in the trade's direction, and a Saros DLMM swap only within the
-two bin arrays around its active bin; a trade too large for them fails.
+and receiving accounts to be the authority's associated token accounts. PumpSwap, Bonkswap, Guacswap
+and Scale AMM write the authority, so it is attached writable. Scale AMM takes one account per fee
+beneficiary. A Meteora DLMM swap crosses bins only as far as the bin arrays its list ends with, from
+the active bin onwards in the trade's direction, and a Saros DLMM swap only within the two bin
+arrays around its active bin; a trade too large for them fails. Jupiter Lend Earn deposits an asset
+for its fToken and redeems it back, through the Jupiter Lend liquidity program, and writes the
+authority. Hylo mints hyUSD for USDC and redeems it back, at its Pyth price. Carrot issues CRT for
+one of its vault's assets and redeems it back; its list ends with each of the vault's assets'
+account and oracle, `assets` of them, and it writes the authority and requires the authority's
+associated token accounts.
 
 **A swap spends exactly `amountIn`**, with three exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference
@@ -792,8 +814,9 @@ Dexlab mint with a transfer fee keeps the fee out of what the pool receives.
 **`minOut`** goes into the venue's own floor where its swap takes one, so the venue refuses less
 itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` and `try<Venue>` (Denali's and
 Hadron's as given there too, 0 included), which also hold what the recipient received to `minOut`
-and to at least 1. The Saber decimal wrapper, Bonkswap, Guacswap, TaurusFi, Riptide and Flint have
-no floor of their own; for these, a `Data` or `Cpi` caller enforces the floor itself.
+and to at least 1. The Saber decimal wrapper, Bonkswap, Guacswap, TaurusFi, Riptide, Flint and the
+staking and vault venues but Helium's treasury have no floor of their own; for these, a `Data` or
+`Cpi` caller enforces the floor itself.
 
 **What each `try` form skips** before the swap:
 
@@ -813,7 +836,10 @@ no floor of their own; for these, a `Data` or `Cpi` caller enforces the floor it
 - the Saber decimal wrapper form skips a withdrawal the vault cannot pay;
 - the SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2
   forms skip an empty side;
-- the Meteora DBC, Trends, Heaven and Virtuals forms skip an empty side.
+- the Meteora DBC, Trends, Heaven and Virtuals forms skip an empty side;
+- the Solayer form skips an undelegation from an empty vault, and the Voltr form a withdrawal from
+  an empty idle account;
+- the Helium treasury form skips an empty treasury.
 
 "Dust" is an input too small to buy one unit at the pool's price after its fee. It is estimated from
 the vaults' balances. A venue's own refusal that the checks don't foresee still fails the
@@ -875,6 +901,16 @@ because an account list passed to a function is built as an array first, where o
 | Raydium LaunchLab                 |  16,392 |        21,282 |       26,242 |           |              |        46,034 |
 | Runner Rodeo                      |  14,874 |        18,154 |       22,302 |           |              |        51,904 |
 | Scale vMM                         |  17,623 |        22,390 |       27,350 |           |              |        46,619 |
+| xORCA                             |  12,136 |        13,413 |       17,009 |    33,226 |       38,266 |         6,042 |
+| Solayer                           |  12,135 |        14,695 |       19,191 |    35,048 |       42,492 |        18,969 |
+| Voltr                             |  14,339 |        16,987 |       22,555 |    48,286 |       55,720 |        36,677 |
+| Liquid-unstake vault              |  14,720 |        15,580 |       19,320 |    44,510 |       49,550 |        55,605 |
+| Hylo stability pool               |  12,721 |        14,864 |       19,504 |    42,224 |       47,264 |        34,084 |
+| Huma                              |  14,875 |        16,152 |       19,892 |    48,987 |       54,027 |        39,425 |
+| Helium treasury                   |  13,387 |        16,667 |       20,815 |    38,794 |       45,870 |       120,225 |
+| Jupiter Lend Earn                 |  16,776 |        19,336 |       23,976 |           |              |        47,871 |
+| Hylo                              |  10,573 |        12,716 |       17,356 |           |              |        65,961 |
+| Carrot                            |  16,187 |        18,747 |       23,387 |           |              |       232,557 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own

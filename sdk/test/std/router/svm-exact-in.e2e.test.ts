@@ -124,6 +124,10 @@ interface Venue {
   clock: bigint;
   /** The Clock's slot, for a venue that checks its quote's slot against it. */
   atSlot?: bigint;
+  /** The Clock's epoch and its first second, for a venue that checks its epoch. */
+  atEpoch?: { epoch: bigint; start: bigint };
+  /** Accounts the slot attaches writable that one direction's swap does not write. */
+  writableOneWay?: string[];
   slot: (harness: EngineHarness) => SlotAccount[];
   cases: (harness: EngineHarness) => Case[];
   /** Accounts the swap writes that the fixture does not carry, placed before the state is frozen. */
@@ -1576,6 +1580,272 @@ const VENUES: Venue[] = [
       },
     ],
   },
+  {
+    name: "Xorca",
+    programs: ["xorca"],
+    dirs: ["xorca"],
+    clock: 1_783_123_200n,
+    slot: () => [
+      r("StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT"),
+      r(VECTORS["xorca:CSqK:orcaToXorca"]!.accounts[5]!.address!),
+      w(VECTORS["xorca:CSqK:orcaToXorca"]!.accounts[1]!.address!),
+      w(VECTORS["xorca:CSqK:orcaToXorca"]!.accounts[4]!.address!),
+    ],
+    cases: () => [
+      {
+        vector: "xorca:CSqK:orcaToXorca",
+        pay: VECTORS["xorca:CSqK:orcaToXorca"]!.pay as Address,
+        buy: VECTORS["xorca:CSqK:orcaToXorca"]!.buy as Address,
+        amountIn: 1_000_000_000n,
+        received: 640_440_724n,
+        authorityWritable: true,
+      },
+    ],
+  },
+  {
+    name: "Solayer",
+    programs: ["solayer"],
+    dirs: ["solayer"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const c = cfg("solayer:HBkJ:delegate");
+      return [
+        r("endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT"),
+        r(c.pool!),
+        w(c.receiptMint!),
+        w(c.vault!),
+        r(c.lstMint!),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "solayer:HBkJ:delegate",
+        dir: true,
+        pay: cfg("solayer:HBkJ:delegate").lstMint as Address,
+        buy: cfg("solayer:HBkJ:delegate").receiptMint as Address,
+        amountIn: 1_000_000_000n,
+        received: 1_000_000_000n,
+      },
+    ],
+  },
+  {
+    name: "Solayer",
+    programs: ["solayer"],
+    dirs: ["solayer-dir1"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const c = cfg("solayer:745m:undelegate");
+      return [
+        r("endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT"),
+        r(c.pool!),
+        w(c.receiptMint!),
+        w(c.vault!),
+        r(c.lstMint!),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "solayer:745m:undelegate",
+        dir: false,
+        pay: cfg("solayer:745m:undelegate").receiptMint as Address,
+        buy: cfg("solayer:745m:undelegate").lstMint as Address,
+        amountIn: 1_000_000n,
+        received: 1_000_000n,
+      },
+    ],
+    skips: [
+      {
+        why: "an undelegation the vault holds nothing for",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Voltr",
+    programs: ["voltr"],
+    dirs: ["voltr"],
+    // After the vault's last update: a withdrawal before it overflows the vault's profit unlock.
+    clock: 1_785_538_883n,
+    writableOneWay: [cfg("voltr:Gj8k:assetToLp").vaultAssetIdleAuth!],
+    slot: () => {
+      const c = cfg("voltr:Gj8k:assetToLp");
+      return [
+        r("vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8"),
+        w(c.pool!),
+        r(c.protocol!),
+        w(c.lpMint!),
+        w(c.vaultAssetIdleAta!),
+        w(c.vaultAssetIdleAuth!),
+        r(c.vaultLpMintAuth!),
+        r(SYSTEM),
+      ];
+    },
+    cases: () => {
+      const c = cfg("voltr:Gj8k:assetToLp");
+      return [
+        {
+          vector: "voltr:Gj8k:assetToLp",
+          dir: true,
+          pay: c.assetMint as Address,
+          buy: c.lpMint as Address,
+          amountIn: 1_000_000_000n,
+          received: 998_316_684n,
+          ata: true,
+        },
+        {
+          vector: "voltr:Gj8k:lpToAsset",
+          dir: false,
+          pay: c.lpMint as Address,
+          buy: c.assetMint as Address,
+          amountIn: 998_316_684n,
+          ata: true,
+        },
+      ];
+    },
+  },
+  {
+    name: "VaultLiquidUnstake",
+    programs: ["vault-liquid-unstake"],
+    dirs: ["vault-liquid-unstake-current"],
+    clock: 1_789_826_554n,
+    atSlot: 448_428_891n,
+    atEpoch: { epoch: 1038n, start: 1_789_823_115n },
+    slot: () => {
+      const k = "vault-liquid-unstake:BanC:lstToSol";
+      return [
+        r("2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo"),
+        w(VECTORS["vault-liquid-unstake:BanC:lstToSol"]!.accounts[7]!.address!),
+        w(VECTORS[k]!.accounts[0]!.address!),
+        w(VECTORS[k]!.accounts[1]!.address!),
+        r(VECTORS[k]!.accounts[6]!.address!),
+        w(VECTORS[k]!.accounts[8]!.address!),
+        w(VECTORS[k]!.accounts[9]!.address!),
+        w(VECTORS[k]!.accounts[10]!.address!),
+        r(SYSTEM),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "vault-liquid-unstake:BanC:lstToSol",
+        pay: VECTORS["vault-liquid-unstake:BanC:lstToSol"]!.pay as Address,
+        buy: WSOL,
+        amountIn: 1_000_000_000n,
+        native: true,
+        authorityWritable: true,
+      },
+    ],
+  },
+  {
+    name: "HyloStabilityPool",
+    programs: ["hylo-stability-pool"],
+    dirs: ["hylo-stability-pool"],
+    clock: 1_753_900_000n,
+    atSlot: 200_000_000n,
+    atEpoch: { epoch: 1010n, start: 1_753_900_000n },
+    writableOneWay: [VECTORS["hylo-stability-pool:2jk7:deposit"]!.accounts[1]!.address!],
+    slot: () => {
+      const d = VECTORS["hylo-stability-pool:2jk7:deposit"]!.accounts;
+      const x = VECTORS["hylo-stability-pool:2jk7:withdraw"]!.accounts;
+      return [
+        r("HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ"),
+        w(d[1]!.address!),
+        r(d[2]!.address!),
+        w(d[7]!.address!),
+        r(d[6]!.address!),
+        r(d[8]!.address!),
+        w(d[9]!.address!),
+        r(x[5]!.address!),
+        w(x[6]!.address!),
+        r(d[11]!.address!),
+      ];
+    },
+    cases: () => {
+      const v = VECTORS["hylo-stability-pool:2jk7:deposit"]!;
+      return [
+        {
+          vector: "hylo-stability-pool:2jk7:deposit",
+          dir: true,
+          pay: v.pay as Address,
+          buy: v.buy as Address,
+          amountIn: 10_000_000n,
+          authorityWritable: true,
+        },
+        {
+          vector: "hylo-stability-pool:2jk7:withdraw",
+          dir: false,
+          pay: v.buy as Address,
+          buy: v.pay as Address,
+          amountIn: 5_000_000n,
+          authorityWritable: true,
+        },
+      ];
+    },
+  },
+  {
+    name: "Huma",
+    programs: ["huma"],
+    dirs: ["huma-swap", "pumpswap"],
+    clock: 1_785_542_609n,
+    slot: () => {
+      const c = cfg("huma:3Fho:deposit");
+      return [
+        r("HumaXepHnjaRCpjYTokxY4UtaJcmx41prQ8cxGmFC5fn"),
+        r(c.modeConfig!),
+        r(c.humaConfig!),
+        r(c.poolConfigAccount!),
+        w(c.poolState!),
+        w(c.modeMint!),
+        r(c.poolAuthority!),
+        w(c.poolUnderlyingToken!),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "huma:3Fho:deposit",
+        pay: USDC,
+        buy: cfg("huma:3Fho:deposit").modeMint as Address,
+        amountIn: 1_000_000_000n,
+        received: 891_762_225n,
+      },
+    ],
+  },
+  {
+    name: "HeliumTreasury",
+    programs: ["helium-treasury", "helium-circuit-breaker"],
+    dirs: ["helium-treasury"],
+    clock: 1_785_600_000n,
+    floor: 0n,
+    slot: () => {
+      const c = cfg("helium-treasury:Aon7:redeem");
+      return [
+        r("treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5"),
+        r(c.pool!),
+        w(c.supplyMint!),
+        w(c.treasury!),
+        w(c.circuitBreaker!),
+        r(VECTORS["helium-treasury:Aon7:redeem"]!.accounts[8]!.address!),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "helium-treasury:Aon7:redeem",
+        pay: cfg("helium-treasury:Aon7:redeem").supplyMint as Address,
+        buy: cfg("helium-treasury:Aon7:redeem").treasuryMint as Address,
+        amountIn: 1_000_000_000n,
+        received: 13_380_487n,
+      },
+    ],
+    skips: [
+      {
+        why: "an empty treasury",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
 ];
 
 let stabbleBeneficiaryA: Address;
@@ -1670,6 +1940,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           venue.dirs,
           venue.programs.map((name) => [venueProgramId(name), `${name}.so.gz`]),
           venue.atSlot,
+          venue.atEpoch,
         );
         freeze(harness, venue.fabricate?.(harness) ?? []);
         slot = venue.slot(harness);
@@ -1784,7 +2055,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           // The venue writes exactly the accounts the recipes attach writable.
           if (vector !== undefined)
             for (const account of vector.accounts)
-              if (account.address !== undefined)
+              if (account.address !== undefined && !venue.writableOneWay?.includes(account.address))
                 expect({
                   account: account.address,
                   writable: writable.has(account.address),
@@ -1924,6 +2195,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
     programs: string[];
     dirs: string[];
     clock: bigint;
+    atSlot?: bigint;
     fabricate?: (harness: EngineHarness) => Address[];
     /** Transactions to send before the state is frozen, and the accounts they create. */
     prepare?: (harness: EngineHarness) => Promise<Address[]>;
@@ -2239,6 +2511,90 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         },
       ],
     },
+    {
+      name: "jupiterLendEarn",
+      programs: ["jupiter-lend-earn", "jupiter-lend-liquidity"],
+      dirs: ["jupiter-lend-earn"],
+      clock: 1_786_004_870n,
+      cases: [
+        {
+          vector: "jupiter-lend-earn:2vVY:deposit",
+          dir: true,
+          pay: USDC,
+          buy: cfg("jupiter-lend-earn:2vVY:deposit").fTokenMint as Address,
+          amountIn: 1_000_000n,
+          received: 948_311n,
+        },
+        {
+          vector: "jupiter-lend-earn:2vVY:redeem",
+          dir: false,
+          pay: cfg("jupiter-lend-earn:2vVY:deposit").fTokenMint as Address,
+          buy: USDC,
+          amountIn: 948_311n,
+        },
+      ],
+    },
+    {
+      name: "hylo",
+      programs: ["hylo"],
+      dirs: ["hylo-live"],
+      clock: 1_790_851_150n,
+      atSlot: 452_263_170n,
+      cases: [
+        {
+          vector: "hylo:CMNP:aToB",
+          dir: true,
+          pay: USDC,
+          buy: VECTORS["hylo:CMNP:aToB"]!.buy as Address,
+          amountIn: 1_000_000n,
+          received: 1_000_000n,
+        },
+      ],
+    },
+    {
+      name: "hylo",
+      programs: ["hylo"],
+      dirs: ["hylo-current"],
+      clock: 1_789_829_516n,
+      atSlot: 448_439_986n,
+      cases: [
+        {
+          vector: "hylo:CMNP:bToA",
+          dir: false,
+          pay: VECTORS["hylo:CMNP:bToA"]!.pay as Address,
+          buy: USDC,
+          amountIn: 10_000n,
+          received: 9_980n,
+        },
+      ],
+    },
+    {
+      name: "carrot",
+      programs: ["carrot", "carrot-log"],
+      dirs: ["carrot-swap", "pumpswap"],
+      clock: 1_785_541_744n,
+      cases: [
+        {
+          vector: "carrot:FfCR:issue0",
+          dir: true,
+          pay: USDC,
+          buy: VECTORS["carrot:FfCR:issue0"]!.buy as Address,
+          amountIn: 100_000n,
+          received: 1_735_386n,
+          ata: true,
+          buyProgram: TOKEN_2022,
+        },
+        {
+          vector: "carrot:FfCR:redeem0",
+          dir: false,
+          pay: VECTORS["carrot:FfCR:issue0"]!.buy as Address,
+          buy: USDC,
+          amountIn: 1_735_386n,
+          ata: true,
+          payProgram: TOKEN_2022,
+        },
+      ],
+    },
   ];
 
   describe.each(CPI_VENUES)("$name", (venue) => {
@@ -2249,6 +2605,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         venue.clock,
         venue.dirs,
         venue.programs.map((name) => [venueProgramId(name), `${name}.so.gz`]),
+        venue.atSlot,
       );
       freeze(harness, [
         ...(venue.fabricate?.(harness) ?? []),

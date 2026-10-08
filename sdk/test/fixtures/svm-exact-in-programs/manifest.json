@@ -294,6 +294,84 @@
       "programId": "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
       "file": "chainlink-store.so.gz",
       "sha256": "5f75e15df538fd4262080d2ef1e79fe14fd8e678aebdf22ab2062c9953e9a3b0"
+    },
+    {
+      "name": "xorca",
+      "programId": "StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT",
+      "file": "xorca.so.gz",
+      "sha256": "44d5ac6e34b4584890c44d72ea3f9af5ab2f8fcf2874a5f3a78ab6bc264f786b"
+    },
+    {
+      "name": "solayer",
+      "programId": "endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT",
+      "file": "solayer.so.gz",
+      "sha256": "1b70882d2db431a194b192b6dd1377b75606e83b87ca4daadba1e254bf65e992"
+    },
+    {
+      "name": "voltr",
+      "programId": "vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8",
+      "file": "voltr.so.gz",
+      "sha256": "bf1c1831b3d6350f4340badb942bd2e7bfaca4aa89276cb65e8480aa30d44c56"
+    },
+    {
+      "name": "jupiter-lend-earn",
+      "programId": "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9",
+      "file": "jupiter-lend-earn.so.gz",
+      "sha256": "ff22d78619055ea05ebee369cab72f07656efb209974c2bbf2ce384afd91386c"
+    },
+    {
+      "name": "jupiter-lend-liquidity",
+      "programId": "jupeiUmn818Jg1ekPURTpr4mFo29p46vygyykFJ3wZC",
+      "file": "jupiter-lend-liquidity.so.gz",
+      "sha256": "f7be679179291c719b204eb031cc134fe94a5299cd4bfdf705ba632863cffafe"
+    },
+    {
+      "name": "vault-liquid-unstake",
+      "programId": "2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo",
+      "file": "vault-liquid-unstake.so.gz",
+      "sha256": "e6baece94a5b408494967052d01c9f7457645a21756e18bc44ce49e477a6da99"
+    },
+    {
+      "name": "hylo",
+      "programId": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
+      "file": "hylo.so.gz",
+      "sha256": "c745eb73d5dfa951a6317bcd5ceef1e540f7367ff7165d12596835d0488f5719"
+    },
+    {
+      "name": "hylo-stability-pool",
+      "programId": "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
+      "file": "hylo-stability-pool.so.gz",
+      "sha256": "0fc5ee1613b9f3e8aeeceee25a3cd53d3fb586d22f5a6d598a10b3e74d5e5976"
+    },
+    {
+      "name": "carrot",
+      "programId": "CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s",
+      "file": "carrot.so.gz",
+      "sha256": "cd5d623d7651442f92a8bd9f614814b255a4d253c351bfa783425fe57ca41791"
+    },
+    {
+      "name": "carrot-log",
+      "programId": "7Mc3vSdRWoThArpni6t5W4XjvQf4BuMny1uC8b6VBn48",
+      "file": "carrot-log.so.gz",
+      "sha256": "7a90662403f801007a5059de6d46477e69fce12503d2ef39d4647986b848dbd5"
+    },
+    {
+      "name": "huma",
+      "programId": "HumaXepHnjaRCpjYTokxY4UtaJcmx41prQ8cxGmFC5fn",
+      "file": "huma.so.gz",
+      "sha256": "c74e82486deee0ae0a4dadc2df39c8e5c77b6e31b087664b2d9ac2d3594c7d8d"
+    },
+    {
+      "name": "helium-treasury",
+      "programId": "treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5",
+      "file": "helium-treasury.so.gz",
+      "sha256": "b7569880426f864b9a23bb4efead42019c562fa38d68a67d2be12cbecddb4649"
+    },
+    {
+      "name": "helium-circuit-breaker",
+      "programId": "circAbx64bbsscPbQzZAUvuXpHqrCe6fLMzc2uKXz9g",
+      "file": "helium-circuit-breaker.so.gz",
+      "sha256": "e07a3891c3ee5394810941db5ce56e480eb545a882e6a8b450f074c0c16e50c3"
     }
   ]
 }

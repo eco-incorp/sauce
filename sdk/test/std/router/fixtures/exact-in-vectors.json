@@ -7892,6 +7892,1409 @@
           "writable": true
         }
       ]
+    },
+    "xorca:CSqK:orcaToXorca": {
+      "venue": "xorca",
+      "pool": "CSqKhyW1cpdyjheAx5HXx4ibcnYrzpL5JywEMAkZixBK",
+      "direction": "orcaToXorca",
+      "cfg": {
+        "venue": "xorca",
+        "pool": "CSqKhyW1cpdyjheAx5HXx4ibcnYrzpL5JywEMAkZixBK",
+        "direction": "orcaToXorca"
+      },
+      "pay": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+      "buy": "xorcaYqbXUNz3474ubUMJAdu2xgPsew3rUCe5ughT3N",
+      "program": "StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT",
+      "prefix": "00",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "Ce5j11WAsSzM3nkzrw4Kw6v6ic3nbyqpv5eywjYKeKc5",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "xorcaYqbXUNz3474ubUMJAdu2xgPsew3rUCe5ughT3N",
+          "role": "s0:xorcaMint",
+          "writable": true
+        },
+        {
+          "address": "CSqKhyW1cpdyjheAx5HXx4ibcnYrzpL5JywEMAkZixBK",
+          "role": "s0:state"
+        },
+        {
+          "address": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+          "role": "s0:orcaMint"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        }
+      ]
+    },
+    "solayer:HBkJ:delegate": {
+      "venue": "solayer",
+      "pool": "HBkJwH6rjUUBK1wNhBuYgo9Wnk1iCx2phduyxWCQj6uk",
+      "direction": "delegate",
+      "cfg": {
+        "venue": "solayer",
+        "pool": "HBkJwH6rjUUBK1wNhBuYgo9Wnk1iCx2phduyxWCQj6uk",
+        "direction": "delegate",
+        "authority": "J7PV7jyucZnmCBUqEzKTuApS55upFcq41F1vD3mn3ksZ",
+        "receiptMint": "sonickAJFiVLcYXx25X9vpF293udaWqDMUCiGtk7dg2",
+        "lstMint": "sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh",
+        "vault": "Bc7hj6aFhBRihZ8dYp8qXWbuDBXYMya4dzFGmHezLnB7",
+        "name": "Sonic"
+      },
+      "pay": "sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh",
+      "buy": "sonickAJFiVLcYXx25X9vpF293udaWqDMUCiGtk7dg2",
+      "program": "endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT",
+      "prefix": "fe00de2891766e14",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "HBkJwH6rjUUBK1wNhBuYgo9Wnk1iCx2phduyxWCQj6uk",
+          "role": "s0:pool"
+        },
+        {
+          "address": "sonickAJFiVLcYXx25X9vpF293udaWqDMUCiGtk7dg2",
+          "role": "s0:receiptMint",
+          "writable": true
+        },
+        {
+          "address": "Bc7hj6aFhBRihZ8dYp8qXWbuDBXYMya4dzFGmHezLnB7",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh",
+          "role": "s0:lstMint"
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "token-program"
+        }
+      ]
+    },
+    "solayer:745m:undelegate": {
+      "venue": "solayer",
+      "pool": "745mkVyUsYe6FrSujnKQGiaLVAS6ac19dmU5XfNRzbwE",
+      "direction": "undelegate",
+      "cfg": {
+        "venue": "solayer",
+        "pool": "745mkVyUsYe6FrSujnKQGiaLVAS6ac19dmU5XfNRzbwE",
+        "direction": "undelegate",
+        "authority": "JDQAXe6W43pqSMNdpYw6P4CjRksm4Q9aJusJHZy4txGw",
+        "receiptMint": "hash4eTHsuZakZiHg5vfQwFtBaEhhC9SXRYsZm4Br7k",
+        "lstMint": "sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh",
+        "vault": "C13xXCPiN7z7trYCP8fszRmxHDR7L8MQ7r2LWmBDQRXo",
+        "name": "Hashkey Cloud AVS"
+      },
+      "pay": "hash4eTHsuZakZiHg5vfQwFtBaEhhC9SXRYsZm4Br7k",
+      "buy": "sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh",
+      "program": "endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT",
+      "prefix": "d511d75105727c4e",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "745mkVyUsYe6FrSujnKQGiaLVAS6ac19dmU5XfNRzbwE",
+          "role": "s0:pool"
+        },
+        {
+          "address": "hash4eTHsuZakZiHg5vfQwFtBaEhhC9SXRYsZm4Br7k",
+          "role": "s0:receiptMint",
+          "writable": true
+        },
+        {
+          "address": "C13xXCPiN7z7trYCP8fszRmxHDR7L8MQ7r2LWmBDQRXo",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh",
+          "role": "s0:lstMint"
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "token-program"
+        }
+      ]
+    },
+    "voltr:Gj8k:assetToLp": {
+      "venue": "voltr",
+      "pool": "Gj8kURFs8fK3GhiX5Yc6H1HQKSpEvLHeDRZsP6Y2D1je",
+      "direction": "assetToLp",
+      "cfg": {
+        "venue": "voltr",
+        "pool": "Gj8kURFs8fK3GhiX5Yc6H1HQKSpEvLHeDRZsP6Y2D1je",
+        "direction": "assetToLp",
+        "assetMint": "HUBsveNpjo5pWqNkH57QzxjQASdTVXcSK7bVKTSZtcSX",
+        "lpMint": "CJEYakpjmKBvvUzAn3HJSs9vtijnv472T8YJEV3WzToF",
+        "protocol": "4sycXz9Xwevedo6eiXR8QEhY8yrQrkNS4G1deY9tAD2Y",
+        "vaultAssetIdleAuth": "HEEZLWCUo8EdMphPWkaPCvKvxDhurLAHqeYBNPFSa8uZ",
+        "vaultAssetIdleAta": "GmLz8MJEPMr7deheLQhfTTB6KpBgtj5kAFTdjWc2RReh",
+        "vaultLpMintAuth": "CCfCtjTAi95KHRtcFF4oRuZNrxhVRay4XHmfhpgUfAn7",
+        "assetDecimals": 9,
+        "lpDecimals": 9
+      },
+      "pay": "HUBsveNpjo5pWqNkH57QzxjQASdTVXcSK7bVKTSZtcSX",
+      "buy": "CJEYakpjmKBvvUzAn3HJSs9vtijnv472T8YJEV3WzToF",
+      "program": "vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8",
+      "prefix": "7ee015ffe4357521",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "4sycXz9Xwevedo6eiXR8QEhY8yrQrkNS4G1deY9tAD2Y",
+          "role": "s0:protocol"
+        },
+        {
+          "address": "Gj8kURFs8fK3GhiX5Yc6H1HQKSpEvLHeDRZsP6Y2D1je",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "HUBsveNpjo5pWqNkH57QzxjQASdTVXcSK7bVKTSZtcSX",
+          "role": "s0:assetMint"
+        },
+        {
+          "address": "CJEYakpjmKBvvUzAn3HJSs9vtijnv472T8YJEV3WzToF",
+          "role": "s0:lpMint",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "GmLz8MJEPMr7deheLQhfTTB6KpBgtj5kAFTdjWc2RReh",
+          "role": "s0:idleAta",
+          "writable": true
+        },
+        {
+          "address": "HEEZLWCUo8EdMphPWkaPCvKvxDhurLAHqeYBNPFSa8uZ",
+          "role": "s0:idleAuth"
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "CCfCtjTAi95KHRtcFF4oRuZNrxhVRay4XHmfhpgUfAn7",
+          "role": "s0:lpMintAuth"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:assetTokenProgram"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:lpTokenProgram"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": "s0:systemProgram"
+        }
+      ]
+    },
+    "voltr:Gj8k:lpToAsset": {
+      "venue": "voltr",
+      "pool": "Gj8kURFs8fK3GhiX5Yc6H1HQKSpEvLHeDRZsP6Y2D1je",
+      "direction": "lpToAsset",
+      "cfg": {
+        "venue": "voltr",
+        "pool": "Gj8kURFs8fK3GhiX5Yc6H1HQKSpEvLHeDRZsP6Y2D1je",
+        "direction": "lpToAsset",
+        "assetMint": "HUBsveNpjo5pWqNkH57QzxjQASdTVXcSK7bVKTSZtcSX",
+        "lpMint": "CJEYakpjmKBvvUzAn3HJSs9vtijnv472T8YJEV3WzToF",
+        "protocol": "4sycXz9Xwevedo6eiXR8QEhY8yrQrkNS4G1deY9tAD2Y",
+        "vaultAssetIdleAuth": "HEEZLWCUo8EdMphPWkaPCvKvxDhurLAHqeYBNPFSa8uZ",
+        "vaultAssetIdleAta": "GmLz8MJEPMr7deheLQhfTTB6KpBgtj5kAFTdjWc2RReh",
+        "vaultLpMintAuth": "CCfCtjTAi95KHRtcFF4oRuZNrxhVRay4XHmfhpgUfAn7",
+        "assetDecimals": 9,
+        "lpDecimals": 9
+      },
+      "pay": "CJEYakpjmKBvvUzAn3HJSs9vtijnv472T8YJEV3WzToF",
+      "buy": "HUBsveNpjo5pWqNkH57QzxjQASdTVXcSK7bVKTSZtcSX",
+      "program": "vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8",
+      "prefix": "dd3873a880dcebf5",
+      "suffix": "0100",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "4sycXz9Xwevedo6eiXR8QEhY8yrQrkNS4G1deY9tAD2Y",
+          "role": "s0:protocol"
+        },
+        {
+          "address": "Gj8kURFs8fK3GhiX5Yc6H1HQKSpEvLHeDRZsP6Y2D1je",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "HUBsveNpjo5pWqNkH57QzxjQASdTVXcSK7bVKTSZtcSX",
+          "role": "s0:assetMint"
+        },
+        {
+          "address": "CJEYakpjmKBvvUzAn3HJSs9vtijnv472T8YJEV3WzToF",
+          "role": "s0:lpMint",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "GmLz8MJEPMr7deheLQhfTTB6KpBgtj5kAFTdjWc2RReh",
+          "role": "s0:idleAta",
+          "writable": true
+        },
+        {
+          "address": "HEEZLWCUo8EdMphPWkaPCvKvxDhurLAHqeYBNPFSa8uZ",
+          "role": "s0:idleAuth",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:assetTokenProgram"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:lpTokenProgram"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": "s0:systemProgram"
+        }
+      ]
+    },
+    "jupiter-lend-earn:2vVY:deposit": {
+      "venue": "jupiter-lend-earn",
+      "pool": "2vVYHYM8VYnvZqQWpTJSj8o8DBf1wM8pVs3bsTgYZiqJ",
+      "direction": "deposit",
+      "cfg": {
+        "venue": "jupiter-lend-earn",
+        "pool": "2vVYHYM8VYnvZqQWpTJSj8o8DBf1wM8pVs3bsTgYZiqJ",
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "fTokenMint": "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D",
+        "rewardsRateModel": "5xSPBiD3TibamAnwHDhZABdB4z4F9dcj5PnbteroBTTd",
+        "rateModel": "5pjzT5dFTsXcwixoab1QDLvZQvpYJxJeBphkyfHGn688",
+        "liquidityReserve": "94vK29npVbyRHXH63rRcTiSr26SFhrQTzbpNJuhQEDu",
+        "supplyPositionOnLiquidity": "Hf9gtkM4dpVBahVSzEXSVCAPpKzBsBcns3s8As3z77oF",
+        "vault": "BmkUoKMFYBxNSzWXyUjyMJjMAaVz4d8ZnxwwmhDCUXFB",
+        "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "direction": "deposit"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D",
+      "program": "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9",
+      "prefix": "f223c68952e1f2b6",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mint"
+        },
+        {
+          "address": "5nmGjA4s7ATzpBQXC5RNceRpaJ7pYw2wKsNBWyuSAZV6",
+          "role": "s0:lendingAdmin"
+        },
+        {
+          "address": "2vVYHYM8VYnvZqQWpTJSj8o8DBf1wM8pVs3bsTgYZiqJ",
+          "role": "s0:lending",
+          "writable": true
+        },
+        {
+          "address": "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D",
+          "role": "s0:fTokenMint",
+          "writable": true
+        },
+        {
+          "address": "94vK29npVbyRHXH63rRcTiSr26SFhrQTzbpNJuhQEDu",
+          "role": "s0:reserve",
+          "writable": true
+        },
+        {
+          "address": "Hf9gtkM4dpVBahVSzEXSVCAPpKzBsBcns3s8As3z77oF",
+          "role": "s0:supplyPosition",
+          "writable": true
+        },
+        {
+          "address": "5pjzT5dFTsXcwixoab1QDLvZQvpYJxJeBphkyfHGn688",
+          "role": "s0:rateModel"
+        },
+        {
+          "address": "BmkUoKMFYBxNSzWXyUjyMJjMAaVz4d8ZnxwwmhDCUXFB",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "7s1da8DduuBFqGra5bJBjpnvL5E9mGzCuMk1Qkh4or2Z",
+          "role": "s0:liquidity",
+          "writable": true
+        },
+        {
+          "address": "jupeiUmn818Jg1ekPURTpr4mFo29p46vygyykFJ3wZC",
+          "role": "s0:liquidityProgram"
+        },
+        {
+          "address": "5xSPBiD3TibamAnwHDhZABdB4z4F9dcj5PnbteroBTTd",
+          "role": "s0:rewardsRateModel"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "role": "s0:associatedTokenProgram"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": "s0:systemProgram"
+        }
+      ]
+    },
+    "jupiter-lend-earn:2vVY:redeem": {
+      "venue": "jupiter-lend-earn",
+      "pool": "2vVYHYM8VYnvZqQWpTJSj8o8DBf1wM8pVs3bsTgYZiqJ",
+      "direction": "redeem",
+      "cfg": {
+        "venue": "jupiter-lend-earn",
+        "pool": "2vVYHYM8VYnvZqQWpTJSj8o8DBf1wM8pVs3bsTgYZiqJ",
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "fTokenMint": "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D",
+        "rewardsRateModel": "5xSPBiD3TibamAnwHDhZABdB4z4F9dcj5PnbteroBTTd",
+        "rateModel": "5pjzT5dFTsXcwixoab1QDLvZQvpYJxJeBphkyfHGn688",
+        "liquidityReserve": "94vK29npVbyRHXH63rRcTiSr26SFhrQTzbpNJuhQEDu",
+        "supplyPositionOnLiquidity": "Hf9gtkM4dpVBahVSzEXSVCAPpKzBsBcns3s8As3z77oF",
+        "vault": "BmkUoKMFYBxNSzWXyUjyMJjMAaVz4d8ZnxwwmhDCUXFB",
+        "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "direction": "redeem"
+      },
+      "pay": "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9",
+      "prefix": "b80c569546c461e1",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "5nmGjA4s7ATzpBQXC5RNceRpaJ7pYw2wKsNBWyuSAZV6",
+          "role": "s0:lendingAdmin"
+        },
+        {
+          "address": "2vVYHYM8VYnvZqQWpTJSj8o8DBf1wM8pVs3bsTgYZiqJ",
+          "role": "s0:lending",
+          "writable": true
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:mint"
+        },
+        {
+          "address": "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D",
+          "role": "s0:fTokenMint",
+          "writable": true
+        },
+        {
+          "address": "94vK29npVbyRHXH63rRcTiSr26SFhrQTzbpNJuhQEDu",
+          "role": "s0:reserve",
+          "writable": true
+        },
+        {
+          "address": "Hf9gtkM4dpVBahVSzEXSVCAPpKzBsBcns3s8As3z77oF",
+          "role": "s0:supplyPosition",
+          "writable": true
+        },
+        {
+          "address": "5pjzT5dFTsXcwixoab1QDLvZQvpYJxJeBphkyfHGn688",
+          "role": "s0:rateModel"
+        },
+        {
+          "address": "BmkUoKMFYBxNSzWXyUjyMJjMAaVz4d8ZnxwwmhDCUXFB",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9",
+          "role": "s0:claimAccountNone"
+        },
+        {
+          "address": "7s1da8DduuBFqGra5bJBjpnvL5E9mGzCuMk1Qkh4or2Z",
+          "role": "s0:liquidity",
+          "writable": true
+        },
+        {
+          "address": "jupeiUmn818Jg1ekPURTpr4mFo29p46vygyykFJ3wZC",
+          "role": "s0:liquidityProgram"
+        },
+        {
+          "address": "5xSPBiD3TibamAnwHDhZABdB4z4F9dcj5PnbteroBTTd",
+          "role": "s0:rewardsRateModel"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "role": "s0:associatedTokenProgram"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": "s0:systemProgram"
+        }
+      ]
+    },
+    "vault-liquid-unstake:BanC:lstToSol": {
+      "venue": "vault-liquid-unstake",
+      "pool": "BanCwefGRK7DtAieu4qKziBn3B9JvtzDdfX3qWP8SLAJ",
+      "direction": null,
+      "cfg": {
+        "venue": "vault-liquid-unstake",
+        "pool": "BanCwefGRK7DtAieu4qKziBn3B9JvtzDdfX3qWP8SLAJ",
+        "mint": "phaseZSfPxTDBpiVb96H4XFSD8xHeHxZre5HerehBJG",
+        "stakePool": "phasejkG1akKgqkLvfWzWY17evnH6mSWznnUspmpyeG",
+        "poolLstAta": "5MrEdRshEUUeFKUyXAjDhFHawbAoJukWGPLrtMUF5Vsw"
+      },
+      "pay": "phaseZSfPxTDBpiVb96H4XFSD8xHeHxZre5HerehBJG",
+      "buy": "So11111111111111111111111111111111111111112",
+      "program": "2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo",
+      "prefix": "64034fd1bf9db40b",
+      "suffix": "00",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "9nyw5jxhzuSs88HxKJyDCsWBZMhxj2uNXsFcyHF5KBAb",
+          "role": "s0:globalPool",
+          "writable": true
+        },
+        {
+          "address": "5MrEdRshEUUeFKUyXAjDhFHawbAoJukWGPLrtMUF5Vsw",
+          "role": "s0:poolLstAta",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "phaseZSfPxTDBpiVb96H4XFSD8xHeHxZre5HerehBJG",
+          "role": "s0:mint"
+        },
+        {
+          "address": "phasejkG1akKgqkLvfWzWY17evnH6mSWznnUspmpyeG",
+          "role": "s0:stakePool"
+        },
+        {
+          "address": "BanCwefGRK7DtAieu4qKziBn3B9JvtzDdfX3qWP8SLAJ",
+          "role": "s0:lstInfo",
+          "writable": true
+        },
+        {
+          "address": "6RLKARrt6oPCyuMCdYdUHmJxd4wUa6ZeyiC8VSMcYxRv",
+          "role": "s0:solVault",
+          "writable": true
+        },
+        {
+          "address": "F3yy3FVpwq9MV321AzALFcDWZp9XBBHbMas3t4AtEtCW",
+          "role": "s0:feeAccount",
+          "writable": true
+        },
+        {
+          "address": "8baArWS1aoaBMK8sAPrWcsoXHxnNTAVTcrUWxnRPg2Jk",
+          "role": "s0:invSummary",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": "s0:systemProgram"
+        }
+      ]
+    },
+    "hylo:CMNP:aToB": {
+      "venue": "hylo",
+      "pool": "CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS",
+      "direction": "aToB",
+      "cfg": {
+        "venue": "hylo",
+        "pool": "CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS",
+        "direction": "aToB"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+      "program": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
+      "prefix": "0e0ea31ae0b69f9b",
+      "suffix": "00",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "9cd2sAfbBvKs4SX9YKo4dcjwP3TgTVQ8dT5koshGcDND",
+          "role": "s0:hylo"
+        },
+        {
+          "address": "CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS",
+          "role": "s0:pair",
+          "writable": true
+        },
+        {
+          "address": "CfuSViqf6wvUKEprLhtuCsSanvfAsMbDmkAW92FP95qe",
+          "role": "s0:stablecoinAuth"
+        },
+        {
+          "address": "FVVUPkXtkiwYz8epMSGMgNwZNVKcyyWfN9iQSJ9z5SX4",
+          "role": "s0:usdcVaultAuth"
+        },
+        {
+          "address": "39ACqviD7R5XyGBcwwV1YVru4uvSmz5Pgt7S9RxPRPkL",
+          "role": "s0:usdcFeeAuth"
+        },
+        {
+          "address": "3HT6dD6APJh89XJs9rkn3BmsvkXE9jPG9dWJmUjWu6TS",
+          "role": "s0:stablecoinFeeAuth"
+        },
+        {
+          "address": "5ykRvDpEXwKEdoE6yfZ45zeuZ62CcRQRUoZoye4tTJd7",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "Bz6Xsr7vTo2oSFxjmJVpoC4bVNGVpP5egbdVk4Jeu1JZ",
+          "role": "s0:usdcFeeVault",
+          "writable": true
+        },
+        {
+          "address": "Hh8N3Fdauxgq1jjcKdzGBR3D8cdkpLZrFEVumL1tYQLp",
+          "role": "s0:stablecoinFeeVault",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+          "role": "s0:stablecoinMint",
+          "writable": true
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:usdcMint"
+        },
+        {
+          "address": "6HAuqASbHEh4w4REJEUUUCginTLfj1kwCh215ZLtMkrT",
+          "role": "s0:pyth"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        },
+        {
+          "address": "4VzpNE51Be5vD5Yg8MC3z6TVHq5gGbLJptjv18QbD6WP",
+          "role": "s0:eventAuthority"
+        },
+        {
+          "address": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
+          "role": "s0:program"
+        }
+      ]
+    },
+    "hylo:CMNP:bToA": {
+      "venue": "hylo",
+      "pool": "CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS",
+      "direction": "bToA",
+      "cfg": {
+        "venue": "hylo",
+        "pool": "CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS",
+        "direction": "bToA"
+      },
+      "pay": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
+      "prefix": "aaed62683c5248a1",
+      "suffix": "00",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "9cd2sAfbBvKs4SX9YKo4dcjwP3TgTVQ8dT5koshGcDND",
+          "role": "s0:hylo"
+        },
+        {
+          "address": "CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS",
+          "role": "s0:pair",
+          "writable": true
+        },
+        {
+          "address": "CfuSViqf6wvUKEprLhtuCsSanvfAsMbDmkAW92FP95qe",
+          "role": "s0:stablecoinAuth"
+        },
+        {
+          "address": "FVVUPkXtkiwYz8epMSGMgNwZNVKcyyWfN9iQSJ9z5SX4",
+          "role": "s0:usdcVaultAuth"
+        },
+        {
+          "address": "39ACqviD7R5XyGBcwwV1YVru4uvSmz5Pgt7S9RxPRPkL",
+          "role": "s0:usdcFeeAuth"
+        },
+        {
+          "address": "3HT6dD6APJh89XJs9rkn3BmsvkXE9jPG9dWJmUjWu6TS",
+          "role": "s0:stablecoinFeeAuth"
+        },
+        {
+          "address": "5ykRvDpEXwKEdoE6yfZ45zeuZ62CcRQRUoZoye4tTJd7",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "Bz6Xsr7vTo2oSFxjmJVpoC4bVNGVpP5egbdVk4Jeu1JZ",
+          "role": "s0:usdcFeeVault",
+          "writable": true
+        },
+        {
+          "address": "Hh8N3Fdauxgq1jjcKdzGBR3D8cdkpLZrFEVumL1tYQLp",
+          "role": "s0:stablecoinFeeVault",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+          "role": "s0:stablecoinMint",
+          "writable": true
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:usdcMint"
+        },
+        {
+          "address": "6HAuqASbHEh4w4REJEUUUCginTLfj1kwCh215ZLtMkrT",
+          "role": "s0:pyth"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        },
+        {
+          "address": "4VzpNE51Be5vD5Yg8MC3z6TVHq5gGbLJptjv18QbD6WP",
+          "role": "s0:eventAuthority"
+        },
+        {
+          "address": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
+          "role": "s0:program"
+        }
+      ]
+    },
+    "hylo-stability-pool:2jk7:deposit": {
+      "venue": "hylo-stability-pool",
+      "pool": "2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar",
+      "direction": "deposit",
+      "cfg": {
+        "venue": "hylo-stability-pool",
+        "pool": "2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar",
+        "direction": "deposit"
+      },
+      "pay": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+      "buy": "HnnGv3HrSqjRpgdFmx7vQGjntNEoex1SU4e9Lxcxuihz",
+      "program": "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
+      "prefix": "bac68ce981276299",
+      "suffix": "00",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar",
+          "role": "s0:poolConfig"
+        },
+        {
+          "address": "9cd2sAfbBvKs4SX9YKo4dcjwP3TgTVQ8dT5koshGcDND",
+          "role": "s0:hylo"
+        },
+        {
+          "address": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+          "role": "s0:stablecoinMint"
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "5YrRAQag9BbJkauDtJkd1vsTquXT6N46oU8rJ66GDxHd",
+          "role": "s0:poolAuth"
+        },
+        {
+          "address": "EqozKyMj7FVnLHc2cJj3VC25aBr4AhVh1cGM2WDajGe9",
+          "role": "s0:stablecoinPool",
+          "writable": true
+        },
+        {
+          "address": "5YWerkcqAXTSCzKC1X52BXtfv2aoNCB6wzv7wEXuGWpq",
+          "role": "s0:lpTokenAuth"
+        },
+        {
+          "address": "HnnGv3HrSqjRpgdFmx7vQGjntNEoex1SU4e9Lxcxuihz",
+          "role": "s0:lpTokenMint",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        },
+        {
+          "address": "8fjUWoZTb8ox8JFRJTb7WznL1V8oJT9o21kQKHJzbTS8",
+          "role": "s0:eventAuthority"
+        },
+        {
+          "address": "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
+          "role": "s0:program"
+        }
+      ]
+    },
+    "hylo-stability-pool:2jk7:withdraw": {
+      "venue": "hylo-stability-pool",
+      "pool": "2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar",
+      "direction": "withdraw",
+      "cfg": {
+        "venue": "hylo-stability-pool",
+        "pool": "2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar",
+        "direction": "withdraw"
+      },
+      "pay": "HnnGv3HrSqjRpgdFmx7vQGjntNEoex1SU4e9Lxcxuihz",
+      "buy": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+      "program": "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
+      "prefix": "35fe1af277ed4921",
+      "suffix": "00",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar",
+          "role": "s0:poolConfig",
+          "writable": true
+        },
+        {
+          "address": "9cd2sAfbBvKs4SX9YKo4dcjwP3TgTVQ8dT5koshGcDND",
+          "role": "s0:hylo"
+        },
+        {
+          "address": "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+          "role": "s0:stablecoinMint"
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "3HT6dD6APJh89XJs9rkn3BmsvkXE9jPG9dWJmUjWu6TS",
+          "role": "s0:feeAuth"
+        },
+        {
+          "address": "Hh8N3Fdauxgq1jjcKdzGBR3D8cdkpLZrFEVumL1tYQLp",
+          "role": "s0:feeVault",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "5YrRAQag9BbJkauDtJkd1vsTquXT6N46oU8rJ66GDxHd",
+          "role": "s0:poolAuth"
+        },
+        {
+          "address": "EqozKyMj7FVnLHc2cJj3VC25aBr4AhVh1cGM2WDajGe9",
+          "role": "s0:stablecoinPool",
+          "writable": true
+        },
+        {
+          "address": "HnnGv3HrSqjRpgdFmx7vQGjntNEoex1SU4e9Lxcxuihz",
+          "role": "s0:lpTokenMint",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        },
+        {
+          "address": "8fjUWoZTb8ox8JFRJTb7WznL1V8oJT9o21kQKHJzbTS8",
+          "role": "s0:eventAuthority"
+        },
+        {
+          "address": "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
+          "role": "s0:program"
+        }
+      ]
+    },
+    "carrot:FfCR:issue0": {
+      "venue": "carrot",
+      "pool": "FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ",
+      "direction": "issue:0",
+      "cfg": {
+        "venue": "carrot",
+        "pool": "FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ",
+        "sharesMint": "CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s",
+        "redemptionFeeBps": "1",
+        "assets": [
+          {
+            "assetId": 0,
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "decimals": 6,
+            "ata": "Gfedc4JEmMahEMBJXcXfLHWgNs9d7UzLPq1tkba5S11U",
+            "oracle": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+            "priceOffset": 73,
+            "scale": "10000",
+            "priceSnapshot": "99981132",
+            "publishTime": "1785541739"
+          },
+          {
+            "assetId": 1,
+            "mint": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+            "decimals": 6,
+            "ata": "Hpxgqa8dvk2jSfNgTfdYncxSE2YY2c52TTzPaH1V98RW",
+            "oracle": "HT2PLQBcG5EiCcNSaMHAjSgd9F98ecpATbk4Sk5oYuM",
+            "priceOffset": 73,
+            "scale": "10000",
+            "priceSnapshot": "99895537",
+            "publishTime": "1785541739"
+          },
+          {
+            "assetId": 2,
+            "mint": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+            "decimals": 6,
+            "ata": "4cugtfkFydmoPe9CZJ4wFZzDUEmGJFNaThvumYABTFDS",
+            "oracle": "9zXQxpYH3kYhtoybmZfUNNCRVuud7fY9jswTg1hLyT8k",
+            "priceOffset": 73,
+            "scale": "10000",
+            "priceSnapshot": "100003620",
+            "publishTime": "1785541717"
+          }
+        ],
+        "direction": "issue:0"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s",
+      "program": "CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s",
+      "prefix": "be0162d65163def7",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s",
+          "role": "s0:crtMint",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:assetMint"
+        },
+        {
+          "address": "Gfedc4JEmMahEMBJXcXfLHWgNs9d7UzLPq1tkba5S11U",
+          "role": "s0:ata0",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": "s0:systemProgram"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:assetTokenProgram"
+        },
+        {
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "role": "s0:sharesTokenProgram"
+        },
+        {
+          "address": "7Mc3vSdRWoThArpni6t5W4XjvQf4BuMny1uC8b6VBn48",
+          "role": "s0:logProgram"
+        },
+        {
+          "address": "Gfedc4JEmMahEMBJXcXfLHWgNs9d7UzLPq1tkba5S11U",
+          "role": "s0:ata0",
+          "writable": true
+        },
+        {
+          "address": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+          "role": "s0:oracle0"
+        },
+        {
+          "address": "Hpxgqa8dvk2jSfNgTfdYncxSE2YY2c52TTzPaH1V98RW",
+          "role": "s0:ata1",
+          "writable": true
+        },
+        {
+          "address": "HT2PLQBcG5EiCcNSaMHAjSgd9F98ecpATbk4Sk5oYuM",
+          "role": "s0:oracle1"
+        },
+        {
+          "address": "4cugtfkFydmoPe9CZJ4wFZzDUEmGJFNaThvumYABTFDS",
+          "role": "s0:ata2",
+          "writable": true
+        },
+        {
+          "address": "9zXQxpYH3kYhtoybmZfUNNCRVuud7fY9jswTg1hLyT8k",
+          "role": "s0:oracle2"
+        }
+      ]
+    },
+    "carrot:FfCR:redeem0": {
+      "venue": "carrot",
+      "pool": "FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ",
+      "direction": "redeem:0",
+      "cfg": {
+        "venue": "carrot",
+        "pool": "FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ",
+        "sharesMint": "CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s",
+        "redemptionFeeBps": "1",
+        "assets": [
+          {
+            "assetId": 0,
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "decimals": 6,
+            "ata": "Gfedc4JEmMahEMBJXcXfLHWgNs9d7UzLPq1tkba5S11U",
+            "oracle": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+            "priceOffset": 73,
+            "scale": "10000",
+            "priceSnapshot": "99981132",
+            "publishTime": "1785541739"
+          },
+          {
+            "assetId": 1,
+            "mint": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+            "decimals": 6,
+            "ata": "Hpxgqa8dvk2jSfNgTfdYncxSE2YY2c52TTzPaH1V98RW",
+            "oracle": "HT2PLQBcG5EiCcNSaMHAjSgd9F98ecpATbk4Sk5oYuM",
+            "priceOffset": 73,
+            "scale": "10000",
+            "priceSnapshot": "99895537",
+            "publishTime": "1785541739"
+          },
+          {
+            "assetId": 2,
+            "mint": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+            "decimals": 6,
+            "ata": "4cugtfkFydmoPe9CZJ4wFZzDUEmGJFNaThvumYABTFDS",
+            "oracle": "9zXQxpYH3kYhtoybmZfUNNCRVuud7fY9jswTg1hLyT8k",
+            "priceOffset": 73,
+            "scale": "10000",
+            "priceSnapshot": "100003620",
+            "publishTime": "1785541717"
+          }
+        ],
+        "direction": "redeem:0"
+      },
+      "pay": "CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s",
+      "prefix": "b80c569546c461e1",
+      "suffix": "",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ",
+          "role": "s0:vault",
+          "writable": true
+        },
+        {
+          "address": "CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s",
+          "role": "s0:crtMint",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:assetMint"
+        },
+        {
+          "address": "Gfedc4JEmMahEMBJXcXfLHWgNs9d7UzLPq1tkba5S11U",
+          "role": "s0:ata0",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": "s0:systemProgram"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:assetTokenProgram"
+        },
+        {
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "role": "s0:sharesTokenProgram"
+        },
+        {
+          "address": "7Mc3vSdRWoThArpni6t5W4XjvQf4BuMny1uC8b6VBn48",
+          "role": "s0:logProgram"
+        },
+        {
+          "address": "Gfedc4JEmMahEMBJXcXfLHWgNs9d7UzLPq1tkba5S11U",
+          "role": "s0:ata0",
+          "writable": true
+        },
+        {
+          "address": "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+          "role": "s0:oracle0"
+        },
+        {
+          "address": "Hpxgqa8dvk2jSfNgTfdYncxSE2YY2c52TTzPaH1V98RW",
+          "role": "s0:ata1",
+          "writable": true
+        },
+        {
+          "address": "HT2PLQBcG5EiCcNSaMHAjSgd9F98ecpATbk4Sk5oYuM",
+          "role": "s0:oracle1"
+        },
+        {
+          "address": "4cugtfkFydmoPe9CZJ4wFZzDUEmGJFNaThvumYABTFDS",
+          "role": "s0:ata2",
+          "writable": true
+        },
+        {
+          "address": "9zXQxpYH3kYhtoybmZfUNNCRVuud7fY9jswTg1hLyT8k",
+          "role": "s0:oracle2"
+        }
+      ]
+    },
+    "huma:3Fho:deposit": {
+      "venue": "huma",
+      "pool": "3FhoMDyKzQqxtGxnz9DfysfoGQKvgDnSFjoDGgguDCQN",
+      "direction": "deposit",
+      "cfg": {
+        "venue": "huma",
+        "pool": "3FhoMDyKzQqxtGxnz9DfysfoGQKvgDnSFjoDGgguDCQN",
+        "direction": "deposit",
+        "modeConfig": "3FhoMDyKzQqxtGxnz9DfysfoGQKvgDnSFjoDGgguDCQN",
+        "poolConfigAccount": "28hFhD21Nka3stL27a8zZ4nRLgaDVxRYwJgeEVgeakzS",
+        "poolState": "iFgP2EbzHUZzMjqbjaagJQ8zmn6as3Hw95aVUKm67od",
+        "modeMint": "59obFNBzyTBGowrkif5uK7ojS58vsuWz3ZCvg6tfZAGw",
+        "poolAuthority": "9936VFvgRmW1STvdgeyPQaKHDx5DwBtbhZkT3HcdL3QK",
+        "poolUnderlyingToken": "6Xh2Jg9sWJE16VQGppJFTHvQ8Vii3ABUvUF8Pwcwy7Vq",
+        "underlyingMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "humaConfig": "Fh2WKYCJfota6k76gDGnhTELUuhPa7FHQvVza4cE11ja",
+        "poolOwnerTreasuryUnderlyingToken": "2TwuSak9zCfwDj4B2NtnfT82PNJbw5CQtPGe3aa1obon",
+        "modeAssetsOffset": 30,
+        "liquidAssetsDeployedOffset": 1098,
+        "disbursementReserveOffset": 10,
+        "liquidityCap": "300000000000000",
+        "minDepositAmount": "1000000",
+        "reserveLimit": "100000000000",
+        "feeTiers": [
+          {
+            "ltBps": "500",
+            "feeBps": "10000"
+          },
+          {
+            "ltBps": "600",
+            "feeBps": "180"
+          },
+          {
+            "ltBps": "800",
+            "feeBps": "150"
+          },
+          {
+            "ltBps": "1000",
+            "feeBps": "100"
+          },
+          {
+            "ltBps": "1200",
+            "feeBps": "75"
+          },
+          {
+            "ltBps": "1500",
+            "feeBps": "30"
+          },
+          {
+            "ltBps": "2000",
+            "feeBps": "20"
+          },
+          {
+            "ltBps": "10000",
+            "feeBps": "5"
+          }
+        ],
+        "liquidityDeploymentConfig": "9GHuU98sbhg4afFFP54oeL7hJJC6aNPDwhP1T6JBS9y4",
+        "liquidityDeploymentState": "6NTQ6KEkomCrZJqkh6CXEoqMuqhNWXhx3UzCARFkVuh6"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "59obFNBzyTBGowrkif5uK7ojS58vsuWz3ZCvg6tfZAGw",
+      "program": "HumaXepHnjaRCpjYTokxY4UtaJcmx41prQ8cxGmFC5fn",
+      "prefix": "f223c68952e1f2b6",
+      "suffix": "0d0000004e4f5f434f4d4d49544d454e5400",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "Fh2WKYCJfota6k76gDGnhTELUuhPa7FHQvVza4cE11ja",
+          "role": "s0:huma-config"
+        },
+        {
+          "address": "28hFhD21Nka3stL27a8zZ4nRLgaDVxRYwJgeEVgeakzS",
+          "role": "s0:pool-config"
+        },
+        {
+          "address": "iFgP2EbzHUZzMjqbjaagJQ8zmn6as3Hw95aVUKm67od",
+          "role": "s0:pool-state",
+          "writable": true
+        },
+        {
+          "address": "3FhoMDyKzQqxtGxnz9DfysfoGQKvgDnSFjoDGgguDCQN",
+          "role": "s0:mode-config"
+        },
+        {
+          "address": "59obFNBzyTBGowrkif5uK7ojS58vsuWz3ZCvg6tfZAGw",
+          "role": "s0:mode-mint",
+          "writable": true
+        },
+        {
+          "address": "9936VFvgRmW1STvdgeyPQaKHDx5DwBtbhZkT3HcdL3QK",
+          "role": "s0:pool-authority"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": "s0:underlying-mint"
+        },
+        {
+          "address": "6Xh2Jg9sWJE16VQGppJFTHvQ8Vii3ABUvUF8Pwcwy7Vq",
+          "role": "s0:pool-underlying",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:underlying-token-program"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:mode-token-program"
+        }
+      ]
+    },
+    "helium-treasury:Aon7:redeem": {
+      "venue": "helium-treasury",
+      "pool": "Aon7sbdvCGuXQJW8BEiDDWzsSvoycTL9v3L1S4GWhxNK",
+      "direction": null,
+      "cfg": {
+        "venue": "helium-treasury",
+        "pool": "Aon7sbdvCGuXQJW8BEiDDWzsSvoycTL9v3L1S4GWhxNK",
+        "treasuryMint": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+        "supplyMint": "mb1eu7TzEc71KxDpsmsKoucSSuuoGLv1drys1oP2jh6",
+        "treasury": "BUCbfE1pbjUYrdw39kFWHqE3GuvwNVpN4gpWkmugQCpR",
+        "circuitBreaker": "AguTdjmW5SkhepT9qsKsj29SEqiVKsJchsap6Kma9i98",
+        "thresholdType": 0,
+        "threshold": "3689348814741910323",
+        "freezeUnixTime": "9223372036854775807"
+      },
+      "pay": "mb1eu7TzEc71KxDpsmsKoucSSuuoGLv1drys1oP2jh6",
+      "buy": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+      "program": "treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5",
+      "prefix": "eb7fab8b774deb76",
+      "suffix": "0000000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "Aon7sbdvCGuXQJW8BEiDDWzsSvoycTL9v3L1S4GWhxNK",
+          "role": "s0:mgmt"
+        },
+        {
+          "address": "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+          "role": "s0:treasuryMint"
+        },
+        {
+          "address": "mb1eu7TzEc71KxDpsmsKoucSSuuoGLv1drys1oP2jh6",
+          "role": "s0:supplyMint",
+          "writable": true
+        },
+        {
+          "address": "BUCbfE1pbjUYrdw39kFWHqE3GuvwNVpN4gpWkmugQCpR",
+          "role": "s0:treasury",
+          "writable": true
+        },
+        {
+          "address": "AguTdjmW5SkhepT9qsKsj29SEqiVKsJchsap6Kma9i98",
+          "role": "s0:cb",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "circAbx64bbsscPbQzZAUvuXpHqrCe6fLMzc2uKXz9g",
+          "role": "s0:cbProgram"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": "s0:tokenProgram"
+        }
+      ]
     }
   }
 }
