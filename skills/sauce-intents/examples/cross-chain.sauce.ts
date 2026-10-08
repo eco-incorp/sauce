@@ -26,7 +26,7 @@ function main(beneficiary: Address, refundTo: Address) {
   const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
 
   await Ethereum.hop({
-    reward: { token: USDC, amount },
+    send: { token: USDC, amount },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   });

@@ -31,7 +31,7 @@ const salt = `0x${"5a".repeat(32)}` as const;
 
 const built = Base.hop({
   source: "ethereum",
-  reward: { token: usdcOn(Ethereum.chain), amount: REWARD },
+  send: { token: usdcOn(Ethereum.chain), amount: REWARD },
   receive: { token: baseUsdc, amount: AMOUNT },
   refundee: creator,
   deadline: openedAt + routes.DEFAULT_FILL_WINDOW,
@@ -44,7 +44,7 @@ const built = Base.hop({
   // Opened, funded in Base's USDC and published on Base, in that same fill: its deadlines count
   // from then. Every intent a program opens names its refundee.
   Ethereum.hop({
-    reward: { token: USDC, amount: 1_000_000n },
+    send: { token: USDC, amount: 1_000_000n },
     receive: { token: USDC, amount: payout },
     refundee: 0x4444444444444444444444444444444444444444n,
     salt: 0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5an,

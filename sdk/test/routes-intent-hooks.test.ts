@@ -65,7 +65,7 @@ const compile = (program: string, options: Parameters<typeof compileSauceProgram
 /** A hop to Arbitrum delivering 1 USDC to a program, with `hooks` among its fields. */
 const hop = (hooks: string, signature = "main()") => `function ${signature} {
   Arbitrum.hop({
-    reward: { token: USDC, amount: 1010000 },
+    send: { token: USDC, amount: 1010000 },
     receive: { token: USDC, amount: 1000000 },
     refundee: ${CREATOR},${hooks}
   }).then(() => {
@@ -137,7 +137,7 @@ describe("what a hook refuses, where it is written", () => {
 
   it("names the hooks among the fields a hop takes", () => {
     expect(refusal("\n    hooks: [],").message).toMatch(
-      "its fields are reward, receive, refundee, deadline, rewardDeadline, prover, salt, fee, " +
+      "its fields are send, receive, refundee, deadline, rewardDeadline, prover, salt, fee, " +
         "before and after",
     );
   });
@@ -146,7 +146,7 @@ describe("what a hook refuses, where it is written", () => {
 describe("`await` of a hop with hooks", () => {
   it("is its `.then`, byte for byte", () => {
     const fields = `{
-    reward: { token: USDC, amount: 1010000 },
+    send: { token: USDC, amount: 1010000 },
     receive: { token: USDC, amount: 1000000 },
     refundee: ${CREATOR},
     before: [() => Permit2.approve(USDC, spender, 5, 0), () => evm.call(spender, 7, hex\`abcd\`)],
@@ -336,7 +336,7 @@ ${hop(`
       compile(`function main() {
   const held = USDC.balanceOf(ctx.self());
   Arbitrum.hop({
-    reward: { token: USDC, amount: 1010000 },
+    send: { token: USDC, amount: 1010000 },
     refundee: ${CREATOR},
     before: [() => Permit2.approve(USDC, ${SPENDER}, held / 2, 0)],
   }).then(() => {});
@@ -359,7 +359,7 @@ describe("on the host", () => {
     const options = { intents: INTENTS } as const;
     const built = Base.hop({
       source: Ethereum,
-      reward: { token: `0x${"11".repeat(20)}`, amount: 1_010_000n },
+      send: { token: `0x${"11".repeat(20)}`, amount: 1_010_000n },
       refundee: CREATOR,
       before: [() => evm.call(0x7777777777777777777777777777777777777777n, 7n, hex`abcd`)],
       after: [`Permit2.approve(USDC, ${SPENDER}, 5, 0)`],

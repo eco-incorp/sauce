@@ -2,7 +2,7 @@
  * Portal calls as SauceScript templates.
  *
  * These are the low-level form. A program does not normally write them:
- * `await Chain.hop({ reward, refundee })` lowers to the same calls with the addresses, encoding
+ * `await Chain.hop({ send, refundee })` lowers to the same calls with the addresses, encoding
  * and approvals filled in (`std/intents/intents.evm.js`). They are here because a
  * registered protocol describes what its contract can be asked to do, and because reading them is
  * the quickest way to see what the sugar actually produces.

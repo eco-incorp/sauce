@@ -44,7 +44,7 @@ const PAY = [
   "",
 ].join("\n");
 const INTENT = [
-  `Base.hop({ reward: [{ token: USDC, amount: 7 }], receive: { token: USDC, amount: 5 }, refundee: ${NOBODY} })`,
+  `Base.hop({ send: [{ token: USDC, amount: 7 }], receive: { token: USDC, amount: 5 }, refundee: ${NOBODY} })`,
   "  .then(() => {",
   "    USDC.transfer(RECIPIENT, 5);",
   "  });",
@@ -86,7 +86,7 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
 
 /** An intent whose body is a program, so it cooks on the destination's shared intent Pot. */
 const COOKED = [
-  `Base.hop({ reward: { token: USDC, amount: 7 }, receive: { token: Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913), amount: 5 }, refundee: ${NOBODY} })`,
+  `Base.hop({ send: { token: USDC, amount: 7 }, receive: { token: Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913), amount: 5 }, refundee: ${NOBODY} })`,
   "  .then(() => {",
   "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913).balanceOf(ctx.self());",
   "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913).transfer(RECIPIENT, got);",

@@ -13,10 +13,10 @@
  */
 export const CASCADE_BODY = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Ethereum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: RECIPIENT })
+  Ethereum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: RECIPIENT })
     .then(() => {
       const arrived = USDC.balanceOf(ctx.self());
-      Base.hop({ reward: { token: USDC, amount: arrived }, receive: { token: USDC, amount: arrived }, refundee: RECIPIENT })
+      Base.hop({ send: { token: USDC, amount: arrived }, receive: { token: USDC, amount: arrived }, refundee: RECIPIENT })
         .then(() => {
           USDC.transfer(RECIPIENT, arrived);
         });
@@ -35,7 +35,7 @@ export const BODY_TO_ARBITRUM = `function main() {
     throw "cross-chain-intent: nothing to forward";
   }
 
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: RECIPIENT })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: RECIPIENT })
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
     });

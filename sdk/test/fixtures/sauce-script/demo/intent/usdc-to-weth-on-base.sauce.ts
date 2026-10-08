@@ -3,8 +3,8 @@
 // price limit (Uniswap V3, PancakeSwap V3, the three Aerodrome Slipstream factories, hookless
 // Uniswap V4), cheapest first, one exact-input swap per pool, never paying more at the margin than
 // the price `sqrtPriceLimitX96` encodes, LP fee included. It checks `minOut`, sends the WETH to
-// `recipient` and returns every unsold USDC to `refundTo`. The solver earns `reward` of Arbitrum
-// USDC, escrowed when the intent is published. The gap between `reward` (paid on Arbitrum) and
+// `recipient` and returns every unsold USDC to `refundTo`. The solver earns `send` of Arbitrum
+// USDC, escrowed when the intent is published. The gap between `send` (paid on Arbitrum) and
 // `amountIn` (brought on Base) is the solver's margin.
 //
 // Nothing is measured on chain, so it is published from a wallet, with no Pot on Arbitrum, and
@@ -16,7 +16,7 @@
 //     --intent-execution-fee <Base Kitchen fee in wei> \
 //     --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>
 //
-// `--chain arbitrum` is the source: `USDC` in `reward` is Arbitrum's USDC. Inside `.then(...)`
+// `--chain arbitrum` is the source: `USDC` in `send` is Arbitrum's USDC. Inside `.then(...)`
 // the body runs on Base: `UniswapV3.Factory` and `UniswapV4.PoolManager` are Base's, and every other
 // Base address is a literal from the package's registry (tokens, pancakeswap-v3,
 // aerodrome-slipstream).
@@ -43,7 +43,7 @@ function main(
   refundTo: Address,
 ) {
   Base.hop({
-    reward: { token: USDC, amount: reward },
+    send: { token: USDC, amount: reward },
     receive: { token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: amountIn },
     refundee: refundTo,
   })

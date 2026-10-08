@@ -7,14 +7,14 @@ runs on. In SauceScript the hops read top to bottom, each `await` the next:
 
 ```js
 await Base.hop({
-  reward: { token: USDC, amount: reward },
+  send: { token: USDC, amount: reward },
   receive: { token: USDC, amount: delivered },
   refundee: refundTo,
 });
 // On Base, in the fill of the first intent:
 const payout = delivered - delivered / 1000;
 await Ethereum.hop({
-  reward: { token: USDC, amount: delivered },
+  send: { token: USDC, amount: delivered },
   receive: { token: USDC, amount: payout },
   refundee: refundTo,
 });
@@ -45,7 +45,7 @@ const executionFee = 1_000n; // Base's Kitchen fee: read it with destinationExec
 
 const built = Base.hop({
   source: "ethereum",
-  reward: { token: usdc(Ethereum.chain), amount: 1_010_000n },
+  send: { token: usdc(Ethereum.chain), amount: 1_010_000n },
   // What the solver brings to Base. It arrives at the Executor, which moves it into the Pot.
   receive: { token: usdc(Base.chain), amount: 1_000_000n },
   refundee: "0x4444444444444444444444444444444444444444",
@@ -57,7 +57,7 @@ const built = Base.hop({
   // Opened, funded in Base's USDC and published on Base, in that same fill. Every intent a
   // program opens names its refundee.
   Ethereum.hop({
-    reward: { token: USDC, amount: 1_000_000n },
+    send: { token: USDC, amount: 1_000_000n },
     receive: { token: USDC, amount: payout },
     refundee: 0x4444444444444444444444444444444444444444n,
     fee: 1_000n, // Ethereum's Kitchen fee, which this body's cook pays.
@@ -102,14 +102,14 @@ into the Pot itself:
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
   await Base.hop({
-    reward: { token: USDC, amount: reward },
+    send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   });
   // On Base, in the fill of the outer intent.
   const payout = delivered - delivered / 1000;
   await Ethereum.hop({
-    reward: { token: USDC, amount: delivered },
+    send: { token: USDC, amount: delivered },
     receive: { token: USDC, amount: payout },
     refundee: refundTo, // every intent a program opens names its refundee
   });
@@ -142,9 +142,9 @@ that chain's:
 
 | Part                                                    | Runs on                         | `USDC` is  |
 | ------------------------------------------------------- | ------------------------------- | ---------- |
-| The outer `reward`                                      | Ethereum, which escrows it      | Ethereum's |
+| The outer `send`                                        | Ethereum, which escrows it      | Ethereum's |
 | The outer body, and what its solver delivers, `receive` | Base, the outer destination     | Base's     |
-| The inner `reward`                                      | Base: the outer body funds it   | Base's     |
+| The inner `send`                                        | Base: the outer body funds it   | Base's     |
 | The inner body and its `receive`                        | Ethereum, the inner destination | Ethereum's |
 
 A body and its delivery resolve on their destination; a reward resolves on the chain whose program
@@ -213,7 +213,7 @@ function main(
   refundTo: Address,
 ) {
   await Base.hop({
-    reward: { token: USDC, amount: reward },
+    send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   });
@@ -222,7 +222,7 @@ function main(
   const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
   const payout = bought - bought / 1000;
   await Ethereum.hop({
-    reward: { token: WETH, amount: bought },
+    send: { token: WETH, amount: bought },
     receive: { token: WETH, amount: payout },
     refundee: refundTo,
   });
@@ -301,21 +301,21 @@ is published like the file above, by a cook on your Pot on Ethereum
 // Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
   await Base.hop({
-    reward: { token: USDC, amount: reward },
+    send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   });
   // On Base, in the fill of the first hop.
   const second = delivered - delivered / 1000;
   await Ethereum.hop({
-    reward: { token: USDC, amount: delivered },
+    send: { token: USDC, amount: delivered },
     receive: { token: USDC, amount: second },
     refundee: refundTo,
   });
   // On Ethereum, in the fill of the second.
   const third = second - second / 1000;
   await Base.hop({
-    reward: { token: USDC, amount: second },
+    send: { token: USDC, amount: second },
     receive: { token: USDC, amount: third },
     refundee: refundTo,
   });

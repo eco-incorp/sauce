@@ -24,7 +24,7 @@ const INTENTS = {
   openedAt: 2_000_000_000n,
   salt: `0x${"5a".repeat(32)}`,
 } as const;
-const opened = `Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: ${AT} })`;
+const opened = `Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: ${AT} })`;
 
 /** The program and the body it compiles for each intent it opens. */
 const same = (a: CompiledSauceProgram, b: CompiledSauceProgram): void => {
@@ -62,7 +62,7 @@ describe("an ABI binding given in `contracts`", () => {
       given(`${opened}.then(() => { Grid.at(${AT}).poke(1); });`),
     );
     const nested = `${opened}.then(() => {
-    Optimism.hop({ reward: { token: USDC, amount: 1 }, refundee: ${AT} })
+    Optimism.hop({ send: { token: USDC, amount: 1 }, refundee: ${AT} })
       .then(() => { Grid.at(${AT}).poke(2); });
   });`;
     same(given(nested), imported(nested));

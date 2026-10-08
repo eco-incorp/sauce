@@ -1346,8 +1346,12 @@ const CREATE: FlagSpecs = {
   token: { type: "string", value: "<symbol|address>", help: "…the token delivered there" },
   amount: { type: "string", value: "<n>", help: "…how much, in whole units" },
   recipient: { type: "string", value: "<address>", help: "…to whom (default: the signer)" },
-  "reward-token": { type: "string", value: "<symbol|address>", help: "…the reward's token" },
-  reward: { type: "string", value: "<n>", help: "…the reward, in whole units" },
+  "reward-token": {
+    type: "string",
+    value: "<symbol|address>",
+    help: "…the token it sends, the solver's reward",
+  },
+  reward: { type: "string", value: "<n>", help: "…how much it sends, in whole units" },
   prover: { type: "string", value: "<role|address>", help: "…the prover (HyperProver)" },
   "fill-deadline": {
     type: "string",
@@ -1839,7 +1843,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "from the Pot into its vault (or through publishAndFund, --intent-fund-via), then is",
       "published. --fund TOKEN:amount pulls the reward into the Pot in the same cook, as `sauce run",
       "--fund` does (Permit2 by default; --fund-mode, --sweep). Every hop names its refundee in",
-      "the file, `hop({ reward, refundee })`: no default is safe on a Pot.",
+      "the file, `hop({ send, refundee })`: no default is safe on a Pot.",
       "",
       "Each intent's hash and record are read from the Portal's IntentPublished log: from the",
       "rehearsal with --dry-run, and from the receipt once sent, which the store keeps (--store).",

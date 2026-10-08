@@ -100,7 +100,7 @@ describe("Arc: intents", () => {
   it("Base -> Arc: the body compiles for Arc and cooks on the shared Pot through its Portal", () => {
     const intent = Arc.hop({
       source: Base,
-      reward: { token: BASE_USDC, amount },
+      send: { token: BASE_USDC, amount },
       receive: { token: ARC_USDC, amount },
       refundee: CREATOR,
       prover: ecoRoutesProver("base", "arc"),
@@ -128,8 +128,8 @@ describe("Arc: intents", () => {
   });
 
   it("Arc -> Base: a native reward, or Arc's USDC as a token, opens from Arc", () => {
-    const open = (reward: routes.HopReward) =>
-      Base.hop({ source: Arc, reward, refundee: CREATOR, fee: 1n }).then(() => {});
+    const open = (send: routes.HopSend) =>
+      Base.hop({ source: Arc, send, refundee: CREATOR, fee: 1n }).then(() => {});
     expect(open({ native: 10n ** 18n }).program.chain).toBe(requireChain("arc"));
     expect(open({ token: ARC_USDC, amount }).program.chain).toBe(requireChain("arc"));
   });
@@ -153,7 +153,7 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
     destination
       .hop({
         source,
-        reward: [{ native: oneUsdcNative }, { token, amount }],
+        send: [{ native: oneUsdcNative }, { token, amount }],
         refundee: CREATOR,
         fee: 1n,
       })
@@ -163,7 +163,7 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
   const program = (destination: string) => `
     function main() {
       const amount = USDC.balanceOf(ctx.self());
-      ${destination}.hop({ reward: [{ token: USDC, amount }, { native: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+      ${destination}.hop({ send: [{ token: USDC, amount }, { native: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
         USDC.transfer(RECIPIENT, amount);
       });
     }

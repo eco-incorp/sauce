@@ -24,7 +24,7 @@ function main(
   refundTo: Address,
 ) {
   await Base.hop({
-    reward: { token: USDC, amount: reward },
+    send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   });
@@ -33,7 +33,7 @@ function main(
   const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
   const payout = bought - bought / 1000;
   await Ethereum.hop({
-    reward: { token: WETH, amount: bought },
+    send: { token: WETH, amount: bought },
     receive: { token: WETH, amount: payout },
     refundee: refundTo,
   });

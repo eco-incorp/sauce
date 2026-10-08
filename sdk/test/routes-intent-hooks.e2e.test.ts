@@ -186,7 +186,7 @@ describeEvm("hooks, made by the Portal's Executor", () => {
   /** A hop to Base delivering `AMOUNT` USDC to a body that pays it on, with `hooks`. */
   const hop = (hooks: string, extra = "") => `function main() {
   Base.hop({
-    reward: { token: USDC, amount: 1 },
+    send: { token: USDC, amount: 1 },
     receive: { token: USDC, amount: ${AMOUNT} },
     refundee: ${CREATOR},${hooks}
   }).then(() => {
@@ -238,7 +238,7 @@ describeEvm("hooks, made by the Portal's Executor", () => {
     const intent = await publish(`function main() {
   const held = USDC.balanceOf(ctx.self());
   Base.hop({
-    reward: { token: USDC, amount: 1 },
+    send: { token: USDC, amount: 1 },
     refundee: ${CREATOR},
     before: [() => Permit2.approve(USDC, SPENDER, held / 2, 0)],
   }).then(() => {});
@@ -312,7 +312,7 @@ describeEvm("hooks, made by the Portal's Executor", () => {
       publish(
         `function main() {
   Base.hop({
-    reward: { token: USDC, amount: 1 },
+    send: { token: USDC, amount: 1 },
     refundee: ${CREATOR},
     before: [${approvals}],
   }).then(() => {});

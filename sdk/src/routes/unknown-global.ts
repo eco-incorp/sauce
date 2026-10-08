@@ -315,7 +315,7 @@ export function chainCalledError(cause: unknown): Error | undefined {
 
   return new Error(
     `compileSauceRoute: \`${name}\` is a chain id, not a function: an intent opens with ` +
-      `\`await ${name}.hop({ reward, receive, refundee })\`. The compiler ` +
+      `\`await ${name}.hop({ send, receive, refundee })\`. The compiler ` +
       `reported: ${headline(cause) ?? `\`${name}\` is not a function`}`,
     { cause },
   );

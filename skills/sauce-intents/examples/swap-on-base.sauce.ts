@@ -57,7 +57,7 @@ function main(
   refundTo: Address,
 ) {
   await Base.hop({
-    reward: { token: WETH, amount: reward },
+    send: { token: WETH, amount: reward },
     receive: { token: WETH, amount: amountIn },
     refundee: refundTo,
   });

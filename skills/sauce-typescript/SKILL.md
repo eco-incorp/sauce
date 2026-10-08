@@ -168,7 +168,7 @@ a recorded address, not proof of live code on the chain.
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
   its deploy; the intents runner builds a rehearsal with them. In TypeScript,
-  `Base.hop({ source: Ethereum, reward, receive, refundee: owner, fee, compile: options }).then(body)`
+  `Base.hop({ source: Ethereum, send, receive, refundee: owner, fee, compile: options }).then(body)`
   writes the statement a program opens that intent with, compiles it for the source chain and
   returns `{ source, program, cook(target, value), intents(logs) }`: the same program the
   statement compiles to in a file, taking the fields a program's hop takes; there `source` is
@@ -184,7 +184,7 @@ a recorded address, not proof of live code on the chain.
   `routes.predictIntentVault`. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`
   and `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
 - **Nested intents** are written in the program: a body that opens the next intent with
-  `await Chain.hop({ reward, receive, refundee })`, or `Chain.hop({ … }).then(() => { ... })`
+  `await Chain.hop({ send, receive, refundee })`, or `Chain.hop({ … }).then(() => { ... })`
   (`sauce-intents`, Cascades). In a typed closure the chain is the imported export, whose `hop`
   typechecks there, its fields included. `routes.compileSauceProgram`
   lists each intent's body in `.bodies`, its destination and its program. The intents themselves

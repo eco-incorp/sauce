@@ -10,7 +10,7 @@
  * import { Base, Ethereum } from "@eco-incorp/sauce";
  * const intent = Base.hop({
  *   source: Ethereum,
- *   reward: { token, amount: 1_010_000n },
+ *   send: { token, amount: 1_010_000n },
  *   receive: { token: usdcBase, amount: 1_000_000n },
  *   refundee: owner,
  *   fee: kitchenFee,
@@ -164,8 +164,8 @@ export type {
   HopDelivery,
   HopHook,
   HopOpened,
-  HopReward,
-  HopRewardItem,
+  HopSend,
+  HopSendItem,
   HopTokenAmount,
   HostHop,
   HostIntent,

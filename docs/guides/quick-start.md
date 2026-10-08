@@ -32,7 +32,7 @@ const kitchenFee = 1_000n; // Fixture: read each Kitchen's fee with destinationE
 
 const built = Base.hop({
   source: Ethereum,
-  reward: { token: Ethereum.USDC.address, amount: 10_000n },
+  send: { token: Ethereum.USDC.address, amount: 10_000n },
   refundee: owner,
   fee: kitchenFee,
 }).then(() => {
@@ -43,9 +43,9 @@ const cook = built.cook({ owner }, kitchenFee); // { to, data, value }, from you
 console.log(`${built.program.bytecode.length} bytes, cooked on ${cook.to}`);
 ```
 
-`Base.hop` names the **destination**, the chain the body runs on; `reward` is what the solver earns
-and `source` the **source**, where it is escrowed and the intent is published. `receive` would name
-what a solver delivers on Base for the body to use: nothing, here. `.then(...)` writes the statement
+`Base.hop` names the **destination**, the chain the body runs on; `send` is what leaves the
+**source**, `source`, where it is escrowed for the solver and the intent is published. `receive`
+would name what a solver delivers on Base for the body to use: nothing, here. `.then(...)` writes the statement
 a Sauce program opens that intent with, `Base.hop({ … }).then(() => { … })`, and compiles it for
 Ethereum: the intent is the same one a program in a file opens. That one expression does what an intent otherwise takes by
 hand:
@@ -98,7 +98,7 @@ take the remainder out inside the same fulfillment. Every cook also pays the Kit
 ## Deliver assets and fund the reward
 
 The destination assets and the source reward are separate things. What `receive` names arrives at
-the Portal's Executor, and the intent moves it into the Pot before the body runs. What `reward`
+the Portal's Executor, and the intent moves it into the Pot before the body runs. What `send`
 names is paid into the intent's vault on the source chain, which escrows it.
 
 [first-intent.ts](../examples/first-intent.ts) builds both sides and the cook that publishes them.

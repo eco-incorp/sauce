@@ -641,9 +641,9 @@ const CHAIN_NOTES = {
     "  native coin are refused for Arc.",
     "- Native value sent to the zero address, to or from a blocklisted address, or to a",
     "  self-destructed account reverts, also when a contract forwards it.",
-    "- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one",
-    "  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is",
-    "  built. Fold the two into one amount.",
+    "- A hop's `send`, the intent's reward, offers native value or `USDC`, not both: Arc's Portal",
+    "  takes them for one asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a",
+    "  `send` when it is built. Fold the two into one amount.",
   ],
   base: [
     "Base's own documentation: `eth_call` and `eth_estimateGas` against the `pending` block tag see",
@@ -913,7 +913,7 @@ function renderGlobals(data) {
     "",
     "A chain name is its chain id, so `chainId == Ethereum` is decided while compiling and a program",
     "keeps only the branch of the chain it is compiled for. It opens an intent from inside a program",
-    "(`await Ethereum.hop({ reward, receive, refundee })`) and qualifies a contract",
+    "(`await Ethereum.hop({ send, receive, refundee })`) and qualifies a contract",
     "address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains",
     "to take intents; each line says whether its chain does. Each line also says whether the initial",
     "release supports the chain: a program compiles and simulates on every chain, and its transactions",
@@ -1722,7 +1722,7 @@ const INTENT_DEFAULTS_SKILL = "sauce-intents/references/defaults.md";
 const INTENT_DEFAULTS_DOCS = "intent-defaults.md";
 
 /**
- * What each of a hop's fields is when it is left out — `await Chain.hop({ reward, receive,
+ * What each of a hop's fields is when it is left out — `await Chain.hop({ send, receive,
  * refundee, … })` — and why, as one table both audiences read. From the SDK's constants, so a
  * changed window changes both.
  */
@@ -1735,20 +1735,20 @@ function renderIntentDefaults(data) {
     "",
     "# Intent defaults",
     "",
-    "An intent opened with `await Chain.hop({ reward, receive, refundee })` may give each of these",
+    "An intent opened with `await Chain.hop({ send, receive, refundee })` may give each of these",
     "fields in the same object. Left out, each but the refundee is what Eco's Portal app gives an",
     "intent:",
     "",
     "| Field | Sets | Left out |",
     "| --- | --- | --- |",
-    "| `refundee` | The refund address: who may reclaim an unearned reward, where an unfilled intent's reward goes | Required on every intent, at any depth |",
+    "| `refundee` | The refund address: who may reclaim what was sent, unearned, where an unfilled intent's `send` goes | Required on every intent, at any depth |",
     "| `receive` | What the solver delivers on the destination, for the body: `{ token, amount }` or a list | Nothing delivered |",
     `| \`deadline\` | The last second the intent may be filled, Unix seconds | ${fill} seconds (${Number(fill) / 60} minutes) after the intent opens, the window Eco's solver quotes |`,
-    `| \`rewardDeadline\` | From when an unproven reward may be refunded to the refundee | ${refund} seconds (${days} days) after the fill deadline: Eco's solver fills no intent whose reward is refundable sooner |`,
+    `| \`rewardDeadline\` | From when what was sent, if no fill is proven, may be refunded to the refundee (the Portal reward's deadline) | ${refund} seconds (${days} days) after the fill deadline: Eco's solver fills no intent whose reward is refundable sooner |`,
     "| `prover` | The source chain's prover, which accepts the proof of the fill | The one the registry records on both chains, the HyperProver first |",
     "| `salt` | The route's salt: two otherwise identical intents differ by it | 32 random bytes, as Eco's app picks, mixed with how many intents the transaction has opened, so two intents built alike are two, in one program or in two |",
     "| `fee` | The destination Kitchen's fee, in wei, that the body's cook pays | That Kitchen's fee, read from it when the intent is built, for each destination |",
-    "| `{ native: amount }` in `reward` | Native coin in the reward, in wei | None |",
+    "| `{ native: amount }` in `send` | Native coin sent, in wei | None |",
     "",
     "**The refundee has no default.** An intent is published by a program a Pot runs, and the Pot may",
     "be shared, so a refund there could go to anyone: every intent, the one a file opens itself and",

@@ -70,6 +70,7 @@ export const DEV_TOPICS: ReadonlyArray<{
       "routes",
       "openroute",
       "reward",
+      "send",
       "portal",
       "crosschain",
       "nest",
