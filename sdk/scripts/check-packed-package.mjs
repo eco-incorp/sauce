@@ -213,14 +213,16 @@ try {
 
     // @sauce/router's Solana account orders ship through ./svm, for a code generator to import at
     // codegen time (eco-incorp/sauce-recipes' does) rather than keep its own copy.
-    const { routerSvmAccounts, ROUTER_SVM_VENUES } = await import('${name}/svm');
+    const { routerSvmAccounts, routerSvmDataTemplate, ROUTER_SVM_VENUES } = await import('${name}/svm');
     const defituna = ['tokenProgramA', 'tokenProgramB', 'memo', 'authority', 'pool', 'mintA', 'mintB',
       'source', 'recipient', 'vaultA', 'vaultB', 'tickArray0', 'tickArray1', 'tickArray2'];
     const listed = routerSvmAccounts('defituna', { aToB: true },
       Object.fromEntries(defituna.map((role) => [role, role])));
     assert.deepEqual(listed.map((account) => account.ref), defituna, 'routerSvmAccounts orders DefiTuna');
     assert.equal(ROUTER_SVM_VENUES.defituna.data, 'defitunaData');
-    console.log('Clean package install: the Solana router account orders resolve through ./svm');
+    const written = routerSvmDataTemplate('defituna', { aToB: true, minOut: 1n });
+    assert.equal(Buffer.from(written.prefix).toString('hex'), 'f8c69e91e17587c8', 'routerSvmDataTemplate writes DefiTuna');
+    console.log('Clean package install: the Solana router account orders and data templates resolve through ./svm');
     ${
       shipsEngine
         ? `

@@ -227,11 +227,14 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
 // `<venue>Data` is a swap's instruction data alone, the encoding the `try` forms send: a caller
 // that keeps the venue's accounts and program itself (`@eco-incorp/sauce/svm`'s
 // `routerSvmAccountOrder` names them in order) calls `svm.call(program, [accounts…], <venue>Data(…))`,
-// the cheapest way to send it. The data is a few fixed bytes around little-endian integers, packed
-// into one word and written with one `toBytesLe`, the dearest step of building it, so each field takes
-// the low bytes `toBytesLe` would write for it alone: an amount its low 8. A `minOut` past 64 bits
-// and a limit past 128, which their fields cannot carry, revert: cut to its field, a limit of 2^128
-// would be 0, which most of these venues read as no limit at all.
+// the cheapest way to send it on chain. A program that knows every field but the amount when it is
+// generated can have `@eco-incorp/sauce/svm`'s `routerSvmDataTemplate` write the same bytes around
+// the amount in TypeScript, where its checks run once and cost nothing on chain: the compiler does
+// not fold a check here away for a literal argument. The data is a few fixed bytes around
+// little-endian integers, packed into one word and written with one `toBytesLe`, the dearest step of
+// building it, so each field takes the low bytes `toBytesLe` would write for it alone: an amount its
+// low 8. A `minOut` past 64 bits and a limit past 128, which their fields cannot carry, revert: cut
+// to its field, a limit of 2^128 would be 0, which most of these venues read as no limit at all.
 
 // Raydium CLMM's `swap_v2`: exact input of `amountIn`, `minOut` its least out, `limit` its
 // `sqrt_price_limit_x64`. The direction is the accounts'.
@@ -343,10 +346,13 @@ export function invariantData(amountIn: Uint256, limit: Uint256, xToY: bool): by
 // when `paysBase`.
 export function manifestData(amountIn: Uint256, minOut: Uint256, paysBase: bool): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const swap = hex`04`;
+  // One word: the tag (4) and the flags (`is_base_in`, `is_exact_in`) a literal each way, the amount
+  // and the floor between them.
   const word =
-    (amountIn & 0xffffffffffffffff) | (minOut << 64) | ((paysBase ? 1 : 0) << 128) | (1 << 136);
-  return swap.concat(word.toBytesLe(18));
+    (paysBase ? 0x1010000000000000000000000000000000004 : 0x1000000000000000000000000000000000004) |
+    ((amountIn & 0xffffffffffffffff) << 8) |
+    (minOut << 72);
+  return word.toBytesLe(19);
 }
 
 // Phoenix's `Swap`: an immediate-or-cancel order for every lot of `amountIn`, in `lot`, the market's
@@ -404,15 +410,19 @@ export function openbookV2LotsData(
   orders: Uint256,
   paysBase: bool,
 ): bytes {
-  require(priceLots <= 0x7fffffffffffffff && orders <= 255, "limit past its field");
+  require((priceLots | baseLots | quoteLots) <= 0x7fffffffffffffff &&
+    orders <= 255, "limit past its field");
+  // A market order's price is 1 and its type 3; an order at a price is immediate-or-cancel, type 1.
+  const order =
+    priceLots == 0
+      ? 0x300000000000000000000000000000000000000000000000100
+      : (priceLots << 8) | 0x100000000000000000000000000000000000000000000000000;
   const take = hex`032c47031ac7cb55`;
   const word =
-    (paysBase ? 1 : 0) |
-    ((priceLots == 0 ? 1 : priceLots) << 8) |
-    ((baseLots & 0xffffffffffffffff) << 72) |
-    ((quoteLots & 0xffffffffffffffff) << 136) |
-    ((priceLots == 0 ? 3 : 1) << 200) |
-    (orders << 208);
+    order |
+    (paysBase ? (orders << 208) | 1 : orders << 208) |
+    (baseLots << 72) |
+    (quoteLots << 136);
   return take.concat(word.toBytesLe(27));
 }
 
@@ -2351,10 +2361,11 @@ export function manifestCpi(
   require(program.address ==
     0x0537a47738da25a988f964d99ba43a88cf1187395b6acf1483f570228d8002b2, "not a Manifest market");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const swap = hex`04`;
   const word =
-    (amountIn & 0xffffffffffffffff) | (minOut << 64) | ((paysBase ? 1 : 0) << 128) | (1 << 136);
-  const data = swap.concat(word.toBytesLe(18));
+    (paysBase ? 0x1010000000000000000000000000000000004 : 0x1000000000000000000000000000000000004) |
+    ((amountIn & 0xffffffffffffffff) << 8) |
+    (minOut << 72);
+  const data = word.toBytesLe(19);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2436,7 +2447,6 @@ export function openbookV2Cpi(
 ): Uint256 {
   require(program.address ==
     0x0bfebfbdfbabfad0b46571bf958c1eb824787bb0994bb1846b2978071e1799be, "not an OpenBook v2 market");
-  require(priceLots <= 0x7fffffffffffffff && orders <= 255, "limit past its field");
   // The market is the instruction's third account: its lot sizes size the order, and the side not
   // paid is unbounded.
   const market = accounts[2];
@@ -2445,14 +2455,18 @@ export function openbookV2Cpi(
   const most = 0x7fffffffffffffff;
   const baseLots = paysBase ? amountIn / baseLot : most / baseLot;
   const quoteLots = paysBase ? most / quoteLot : amountIn / quoteLot;
+  require((priceLots | baseLots | quoteLots) <= 0x7fffffffffffffff &&
+    orders <= 255, "limit past its field");
+  const order =
+    priceLots == 0
+      ? 0x300000000000000000000000000000000000000000000000100
+      : (priceLots << 8) | 0x100000000000000000000000000000000000000000000000000;
   const take = hex`032c47031ac7cb55`;
   const word =
-    (paysBase ? 1 : 0) |
-    ((priceLots == 0 ? 1 : priceLots) << 8) |
-    ((baseLots & 0xffffffffffffffff) << 72) |
-    ((quoteLots & 0xffffffffffffffff) << 136) |
-    ((priceLots == 0 ? 3 : 1) << 200) |
-    (orders << 208);
+    order |
+    (paysBase ? (orders << 208) | 1 : orders << 208) |
+    (baseLots << 72) |
+    (quoteLots << 136);
   const data = take.concat(word.toBytesLe(27));
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);

@@ -416,7 +416,7 @@ is the venue's to refuse, so skip the call.
 
 `<venue>Data` is that instruction's data alone, for a program that sends it with `svm.call` itself:
 it takes what the instruction carries and its direction, checks only that each field can carry its
-value (a floor past 64 bits, a sqrt price limit past 128 bits, Phoenix's limit past 64 bits, OpenBook's price past 63 or `orders` past
+value (a floor past 64 bits, a sqrt price limit past 128 bits, Phoenix's limit past 64 bits, OpenBook's price or lots past 63 or `orders` past
 255 revert), and returns the bytes. The program names the venue's program and reads whatever
 balances it wants. It is the cheapest form: an account list passed to a function, as `…Cpi` takes it,
 is built as an array first, and one written into `svm.call` is not.
@@ -560,6 +560,29 @@ const accounts = routerSvmAccounts(
 const program = ROUTER_SVM_VENUES.defituna.program;
 ```
 
+The data, too, can be written when the program is generated. The checks `<venue>Data` makes on every
+swap (a floor past 64 bits, a sqrt price limit past 128, a book's price or order count past its
+field) cost a few hundred compute units each, and the compiler does not fold them away for a literal
+argument: a program passing its limit as a literal still runs them. `routerSvmDataTemplate(venue,
+options)` makes them once, in TypeScript, throwing for a field past its slot, and returns the bytes
+around the amount, so the program writes `prefix ‖ u64le(amountIn ÷ divisor) ‖ suffix` and pays
+nothing for the encoding beyond the concatenation. Its bytes are `<venue>Data`'s for the same
+fields; its options are the account order's direction and Orca's `v2`, then the fields the venue's
+instruction carries (`limit`, `minOut`; Phoenix `ticks` and the paid token's `lot`; OpenBook
+`priceLots`, `orders`, `baseLot` and `quoteLot`).
+
+```ts
+import { routerSvmDataTemplate } from "@eco-incorp/sauce/svm";
+
+const { prefix, suffix, divisor } = routerSvmDataTemplate("defituna", {
+  aToB: true,
+  limit: sqrtLimitX64,
+  minOut,
+});
+// The program: prefix.concat((amountIn / divisor).toBytesLe(8), suffix), prefix and suffix as hex
+// literals.
+```
+
 ### Size and compute
 
 A program carries the venues it calls and no other: one venue's function at a price or at a limit
@@ -591,14 +614,15 @@ measured on the same accounts, does not.
 | Crema (SOL/USDC, B→A)                 |   75,506 |        137,178 |  +3,575 |  +7,055 |       +83,957 |          +109,789 |
 | Phoenix (SOL/USDC, selling base)      |   22,729 |         91,297 |  +6,437 | +14,318 |       +61,360 |                   |
 | Invariant (USDC/USDT, X→Y)            |   62,133 |        122,300 |  +3,498 |  +6,978 |       +76,219 |                   |
-| Manifest (SOL/USDC, selling base)     |   13,097 |         71,669 |  +4,762 |  +8,127 |       +57,206 |                   |
-| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         95,145 | +14,965 | +21,219 |       +85,105 |                   |
+| Manifest (SOL/USDC, selling base)     |   13,122 |         68,694 |  +2,967 |  +6,563 |       +55,410 |                   |
+| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         92,145 | +12,068 | +17,830 |       +82,208 |                   |
 
 `…Data`'s few thousand units are its fields' packing and checks: the floor's 64-bit check and the
 limit's 128-bit one (about 600 units each), the direction, one `toBytesLe`. `…Cpi` adds the program's check, building its account list into an
 array, and the call. A book's data carries more: Phoenix's divides the input by its lot size, and
 OpenBook's word has six fields, two of them chosen by the price. `openbookV2LotsData`, its lots
-divided when the program is compiled, adds +11,070 where `openbookV2Data`, dividing, adds +14,965.
+divided when the program is compiled, adds +8,173 where `openbookV2Data`, dividing, adds +12,068.
+`routerSvmDataTemplate`'s bytes add nothing: they are the hand-built CPI's.
 The `try` forms pay for reading the slot: the pool's owner, its state for the skips, and every
 account they lay out.
 

@@ -628,7 +628,13 @@ venue's data is ONE packed word written with one `toBytesLe`, each field its low
 instruction account in order with its writable/signer flags, `routerSvmAccounts(…, refs)` builds the
 list from a value per name, and `ROUTER_SVM_VENUES` gives each venue's program and `…Data`/`…Cpi`
 names (`sdk/src/svm/router-accounts.ts`; `test/svm/router-accounts.test.ts` holds it account for
-account and flag for flag to the recipes' templates). A slot's accounts past its nine (`more`): Raydium-layout pools' tick-array bitmap
+account and flag for flag to the recipes' templates). `routerSvmDataTemplate(venue, options)`
+(`sdk/src/svm/router-data.ts`) writes the data around the amount in TypeScript —
+`prefix ‖ u64le(amountIn / divisor) ‖ suffix`, the recipes' own template shape, zero on-chain
+encoding cost — and throws at codegen for a field past its slot, because the compiler does NOT
+fold `…Data`'s range checks for a literal argument (measured: the guard and its reason string stay
+in the bytecode and cost ~600 CU each, even for a literal, even for an always-failing 2^128 limit;
+`test/svm/router-data.test.ts` holds its bytes to every template). A slot's accounts past its nine (`more`): Raydium-layout pools' tick-array bitmap
 extension (17 accounts, more values than a function holds, so that list is FILLED IN PLACE from a
 literal of one repeated value — a literal of 17 distinct values does not compile in a non-`main`
 function), Invariant's program authority, OpenBook's oracles; Crema and Invariant pass their slot's
