@@ -1,0 +1,58 @@
+{
+  "$comment": "LayerZero's EndpointV2 quote, as the registry declares it (protocols/layerzero/LayerZeroEndpointV2ABI.json, evidenced on every chain the registry lists): the fee a send of the same parameters must pay. LayerZero-v2 protocol/contracts/EndpointV2.sol.",
+  "abi": [
+    {
+      "name": "quote",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "dstEid",
+              "type": "uint32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "message",
+              "type": "bytes"
+            },
+            {
+              "name": "options",
+              "type": "bytes"
+            },
+            {
+              "name": "payInLzToken",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "_sender",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "fee",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nativeFee",
+              "type": "uint256"
+            },
+            {
+              "name": "lzTokenFee",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

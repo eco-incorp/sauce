@@ -1,0 +1,34 @@
+{
+  "$comment": "The MetalayerRouter's quoteDispatch with hook metadata, as the registry declares it (protocols/metalayer/MetalayerRouterABI.json, evidenced on every chain the registry lists): the fee a dispatch must send, quoted as eco-routes' MetaProver quotes it. @metalayer/contracts src/MetalayerRouter.sol.",
+  "abi": [
+    {
+      "type": "function",
+      "name": "quoteDispatch",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "recipientAddress",
+          "type": "bytes32"
+        },
+        {
+          "name": "messageBody",
+          "type": "bytes"
+        },
+        {
+          "name": "defaultHookMetadata",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "fee",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}
