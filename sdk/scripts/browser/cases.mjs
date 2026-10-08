@@ -44,9 +44,9 @@ export function beforeReady() {
 export async function run(source) {
   await ready(source);
 
-  // The README's route example, verbatim: `Base(() => { USDC.approve(...) }, options).reward(...)`.
-  // Imported only now, because building the route compiles it.
-  const { built } = await import("./readme-route.mjs");
+  // The README's program example, verbatim: `routes.compileSauceProgram("base", ...)`.
+  // Imported only now, because importing it compiles the program.
+  const { program, args } = await import("./readme-route.mjs");
 
   // A raw compile with compact entry arguments, on both targets, round-tripped through the codec.
   const raw = {};
@@ -140,8 +140,8 @@ export async function run(source) {
 
   return {
     readme: {
-      bytecode: built.compiled.bytecode.map(hex),
-      intentHash: built.hash().intentHash,
+      bytecode: hex(program.bytecode),
+      args: hex(args),
     },
     raw,
     settle: hex(settle.bytecode),
