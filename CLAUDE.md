@@ -678,9 +678,9 @@ tokens, and `HERE` this level's defaults (`intents`, the source Portal). The `In
 config and its steps record and return it: `then(body)`, then `catch(handler)`; a step out of place
 is refused in the class's words. Room is left for `before`/`after` hook fields (SDK #92): the class
 already assembles raw route calls before the delivery and after the cook. A field the hop does not
-take is IGNORED: nothing enumerates a static object's keys while compiling (no `for…in`,
-`Object.keys` or object destructuring; reported to the lead), so the editor declarations
-(`SauceHopConfig`) and the TypeScript builder are what refuse one. Nothing is emitted until the
+take is refused by name, the class reading the config's keys while compiling (`Object.keys`), as
+the editor declarations (`SauceHopConfig`) and the TypeScript builder refuse it;
+`routes-intent-portal.test.ts` holds the class's list to `HOP_FIELDS`. Nothing is emitted until the
 statement ends: the compiler calls
 `[Symbol.dispose]()` on an expression statement's static object (and on a `const` holding one, at
 the end of its block), which builds the intent as ONE inline literal — encoded by the engine's
@@ -704,9 +704,12 @@ The route moves the delivery's tokens to the Pot and calls `cook(engine, code �
 destination Kitchen's fee as `route.nativeAmount` (the hop's `fee`, else `intents.executionFee`, a
 bigint or a function of the destination; the CLI reads each destination's Kitchen). No `receive`
 delivers nothing; `receive: { token: USDC, amount }` is the destination's token of THAT SYMBOL,
-re-resolved there (only the tokens: every other value is computed on the source), and a token only
-the destination has is written `Token(0x…)` until the compiler can hand a call it runs an unknown
-bare name. `.catch(handler)` makes the body and its handler one destination program,
+re-resolved there (only the tokens: every other value is computed on the source; the destination's
+table holds the symbols the source chain has), and a token only the destination has is its bare name
+(`receive: { token: USDT0 }` from Base): a name nothing declares, passed to a call, is a name value,
+which the class reads on the destination with `nameOf` and `globalIn(chainId, name)`; one the
+destination lacks too is the chain's refusal (`unknown-global.ts`, the compiler's
+`GlobalInMissing`). `.catch(handler)` makes the body and its handler one destination program,
 `intents.evm.js#_run`: `() => { try { body(); } catch (e) { handler(e); } }`, byte for byte the
 `try` a program would write (EVM only); `e` is the body's revert data, and a handler that names no
 parameter drops it, as an arrow called in place does. A handler that reads `e` needs v12-evm 2.0.0,
@@ -757,7 +760,9 @@ diagnostics and the defines report.
 (`transfer`/`approve`/`transferFrom`) is the `@sauce/token` function of the same name with the token
 first, and a READ (`USDC.balanceOf(holder)`, `self.USDC`) the typed `ERC20.at(token).balanceOf(holder)`
 written where it is used (through `@sauce/names`' copy of the library's ERC-20 ABI), as a program
-written by hand compiles it, not a call into the library's `balanceOf`, which adds a frame. So a
+written by hand compiles it, not a call into the library's `balanceOf`, which adds a frame.
+`self.USDC` is a class getter of `self` (one per token, written by `chain-module.ts`), so it reads
+the balance where it is written, once: a `const` holding it keeps that value through a transfer. So a
 write has ONE implementation however it is spelled, the library's SafeERC20 one, and returns
 nothing. `Token` is
 EVM-only: on Solana a symbol is the mint's key, a plain word for the `@sauce/token` SVM functions,

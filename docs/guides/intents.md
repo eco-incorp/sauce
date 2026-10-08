@@ -354,8 +354,10 @@ a body on another chain sees that chain's own.
 In `receive` only the tokens are the destination's, each symbol looked up again there by its
 name; every other value in it, an amount included, is computed on the chain the program runs on,
 where the intent opens. So `USDC` delivers Arbitrum's USDC, and `chainId` in an amount is the
-enclosing chain's. A token the enclosing chain has no symbol for is written
-`Token(<address on the destination>)`, which is used as written.
+enclosing chain's. A token only the destination has is named by its symbol all the same: from
+Base, which has no USDT0, `receive: { token: USDT0, amount }` delivers Arbitrum's USDT0, and a
+symbol neither chain has is refused, naming the destination. An address is used as written:
+`Token(<address on the destination>)`.
 
 A literal address means that address wherever it appears, and so does a compile-time define whose
 name no chain uses, such as `RECIPIENT`. A define or a `tokens` override under a chain-scoped name —

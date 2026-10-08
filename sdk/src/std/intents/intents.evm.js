@@ -121,6 +121,27 @@ export class Intent {
         "`hop(...)` takes one object: `hop({ reward: { token, amount }, receive: { token, amount }, refundee })`",
       );
     }
+    // A field the hop does not take is a mistake, said by its name, as the editor's declarations say
+    // it (`routes/intent-syntax.ts#HOP_FIELDS`, which the SDK's tests hold to this list).
+    const fields = {
+      reward: true,
+      receive: true,
+      refundee: true,
+      deadline: true,
+      rewardDeadline: true,
+      prover: true,
+      salt: true,
+      fee: true,
+    };
+    for (const key of Object.keys(config)) {
+      if (fields[key] === undefined) {
+        throw new Error(
+          "a hop takes no `" +
+            key +
+            "`: its fields are reward, receive, refundee, deadline, rewardDeadline, prover, salt and fee",
+        );
+      }
+    }
     this._destination = destination;
     this._here = level.fields;
     this._config = config;
@@ -362,6 +383,12 @@ export class Intent {
     }
     if (item.token === undefined || item.amount === undefined) {
       throw new Error("each item of a hop's `receive` is `{ token, amount }`");
+    }
+    // A name this chain does not declare (`USDT0`, where only the destination has it) is the
+    // destination's token of that name.
+    if (nameOf(item.token) !== undefined) {
+      tokens.add({ token: globalIn(this._destination.chainId, item.token), amount: item.amount });
+      return;
     }
     // An address, or a `Token(address)`, is used as written; a token the registry names is the
     // destination's token of its symbol.

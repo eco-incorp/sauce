@@ -27,14 +27,29 @@ const UNKNOWN_CODES: ReadonlySet<string> = new Set([
   "UnresolvedCall",
   "UnknownMember",
   "StaticAtRunTime",
+  "GlobalInMissing",
 ]);
 
 /** The part of a diagnostic this reads. */
 interface Located {
   readonly path?: string;
   readonly code?: string;
+  readonly message?: string;
   readonly start: { readonly offset: number };
   readonly end: { readonly offset: number };
+}
+
+/** Where a name the compiler reports is written: the start of a diagnostic's span, or, for a name a
+ *  hop's delivery read on its destination that the destination lacks (`globalIn`), whose span is
+ *  the hop, the name itself within it. */
+function nameAt(source: string, d: Located): number | undefined {
+  if (d.code !== "GlobalInMissing") return d.start.offset;
+  const name = /global `([A-Za-z_$][\w$]*)`/.exec(d.message ?? "")?.[1];
+  const span = source.slice(d.start.offset, d.end.offset);
+  for (const word of span.matchAll(/[A-Za-z_$][\w$]*/g)) {
+    if (word[0] === name && span[word.index - 1] !== ".") return d.start.offset + word.index;
+  }
+  return undefined;
 }
 
 /** Optimal string alignment distance: edits, with an adjacent swap counting as one. Three rolling
@@ -131,12 +146,12 @@ export function unknownGlobalError(
   const refusal = diagnostics
     .filter((d) => d.path === entry && d.code !== undefined && UNKNOWN_CODES.has(d.code))
     .map((d) => {
-      // The name as written, from where the span starts: a dotted path, the root alone included.
-      const dotted = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/.exec(
-        source.slice(d.start.offset),
-      )?.[0];
+      const at = nameAt(source, d);
+      if (at === undefined) return undefined;
+      // The name as written, from where it starts: a dotted path, the root alone included.
+      const dotted = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/.exec(source.slice(at))?.[0];
       // Worded for the chain the code it is in runs on: an intent's body is its destination's.
-      const on = chainAt(source, d.start.offset, chain);
+      const on = chainAt(source, at, chain);
       return dotted === undefined
         ? undefined
         : absentNameError(dotted, on, on.id === chain.id ? tokenList : undefined, options);

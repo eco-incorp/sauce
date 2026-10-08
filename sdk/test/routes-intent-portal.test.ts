@@ -161,9 +161,8 @@ describe("the intents a program opens, as compiled", () => {
     expect(bytes(INTENTS)).toBe(bytes(INTENTS));
   });
 
-  // Pending the compiler's bare names passed to a call it runs (the v12 #557 port): Base has no
-  // USDT0, and the class reads the symbol on the destination, where `Token(<address>)` works today.
-  it.failing("a delivery token only the destination has, by its bare symbol", () => {
+  // Base has no USDT0: the class reads the name on the destination, as `Token(<address>)` gives it.
+  it("a delivery token only the destination has, by its bare symbol", () => {
     const usdt0 = hex(registryTokenAddress(requireChain("arbitrum"), "USDT0")!);
     const program = (token: string) => `function main(amount: Uint256) {
   Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: ${token}, amount }, refundee: ${CREATOR}, fee: 0 })
@@ -811,6 +810,14 @@ describe("the syntax as data", () => {
     const read = new Set([...source.matchAll(/\bconfig\.(\w+)/g)].map((match) => match[1]!));
     read.delete("length");
     expect([...read].sort()).toEqual(Object.keys(HOP_FIELDS).sort());
+    // The fields the class takes, which it refuses any other than, and names in the refusal.
+    const taken = /const fields = \{([^}]*)\}/.exec(source)![1]!;
+    expect([...taken.matchAll(/(\w+): true/g)].map((match) => match[1])).toEqual(
+      Object.keys(HOP_FIELDS),
+    );
+    expect(source).toContain(
+      `its fields are ${Object.keys(HOP_FIELDS).slice(0, -1).join(", ")} and ${Object.keys(HOP_FIELDS).at(-1)}`,
+    );
     for (const stage of Object.values(HOP_STAGES)) {
       for (const step of Object.keys(stage.steps)) {
         expect(source).toMatch(new RegExp(`^  ${step}\\(`, "m"));
@@ -828,13 +835,12 @@ describe("what the lowering refuses", () => {
 
   it("refuses the refund address under its old name: the field is `refundee`", () => {
     expect(refused(`${hop(`reward: ${item}, creator: ${CREATOR}`)}${then};`)).toThrow(
-      /a hop needs a `refundee`/,
+      /a hop takes no `creator`: its fields are .*\brefundee\b/,
     );
+    expect(refused(`${hop(`reward: ${item}`)}${then};`)).toThrow(/a hop needs a `refundee`/);
   });
 
-  // Pending the compiler's `Object.keys` of a static object (v12 #557): until then a field the hop
-  // does not take is ignored here, and refused by the editor's declarations and the host builder.
-  it.failing("refuses a field the hop does not take, naming it", () => {
+  it("refuses a field the hop does not take, naming it", () => {
     expect(refused(`${hop(`${whole}, recieve: ${item}`)}${then};`)).toThrow(/`recieve`/);
   });
 

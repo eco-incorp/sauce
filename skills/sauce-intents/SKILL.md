@@ -254,9 +254,11 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
 - **In `receive` only the tokens are the destination's, each symbol looked up again there by its
   name; every other value in it, an amount included, is computed on the source chain, where the
   intent opens.** So `USDC` delivers the destination's USDC, while `chainId` in an amount is the
-  source's; a token the source chain has no symbol for is written
-  `Token(<address on the destination>)`, which is used as written. A token in the reward is the
-  source chain's, by symbol or by `Token(<address>)`.
+  source's. A token only the destination has is named by its symbol all the same
+  (`receive: { token: USDT0, amount }` from Base, which has no USDT0, is the destination's USDT0);
+  a symbol neither chain has is refused, naming the destination. An address is used as written:
+  `Token(<address on the destination>)`. A token in the reward is the source chain's, by symbol or
+  by `Token(<address>)`.
 
 ## Publishing and funding
 
