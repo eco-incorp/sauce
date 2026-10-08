@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/async",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript's async core: a request now, a callback later, and the `.then` body run when it lands, as the same Private Pot. `Request` is the class `.then` folds on, which every protocol package's request returns; `park`/`take` store a continuation per key, taken once; `run` runs one inside the handler's cook; `requireCaller`/`requireSelf` are a handler's checks; `install` registers a handler on the Pot. `main` names the NEUTRAL BASE the compiler suffixes per target (async.evm.js); there is no SVM arm, because the handlers a callback lands on are a Private Pot's Router's.",
+  "main": "async.js"
+}

@@ -110,6 +110,13 @@ export type {
 } from "./sauce-route.js";
 export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
+export {
+  compileHandlers,
+  handlersInstallSource,
+  packageHandlerDeclarations,
+  packageHandlers,
+} from "./handlers.js";
+export type { CompiledHandler, HandlerDeclaration } from "./handlers.js";
 
 export {
   ECO_ROUTES_VAULT_PROXY_CREATION_CODE,

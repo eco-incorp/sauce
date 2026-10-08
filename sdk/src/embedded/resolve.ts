@@ -28,6 +28,7 @@ const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/router": "router",
   "@sauce/hop": "hop",
   "@sauce/names": "names",
+  "@sauce/async": "async",
 };
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */
@@ -113,4 +114,17 @@ export function resolveSdkPackage(specifier: string): string | undefined {
         : "index.js";
 
   return `${SDK_STD_ROOT}/${normalize(`${dir}/${entry}`)}`;
+}
+
+/**
+ * The text of `path`, a file of the standard-library package `specifier` (`@sauce/random`,
+ * `handlers/vrf.js`), or `undefined` when the package or the file is not the SDK's. `path` is
+ * relative to the package's directory and cannot leave it.
+ */
+export function sdkPackageFile(specifier: string, path: string): string | undefined {
+  const dir = STD_PACKAGES[specifier];
+  const file = normalize(path);
+  if (dir === undefined || file === undefined || file === "") return undefined;
+
+  return STD_SOURCES[`${dir}/${file}`];
 }
