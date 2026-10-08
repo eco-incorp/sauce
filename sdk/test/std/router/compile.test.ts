@@ -800,6 +800,17 @@ describe("@sauce/router (SVM): the reasons the exact-input functions revert with
     },
   );
 
+  it.each(["deriverse", "tryDeriverse", "deriverseCpi", "deriverseData"])(
+    "%s refuses an instrument id past 32 bits, which cut to them would name another instrument",
+    (name) => {
+      const source = /(Cpi|Data)$/.test(name)
+        ? svmProgramCalling(name, 3)
+        : svmExactInProgramCalling(name, SVM_EXACT_IN.deriverse!);
+      const code = hex(compileStdRouter(source, "svm").bytecode);
+      expect(code).toContain(Buffer.from("instrId past 32 bits").toString("hex"));
+    },
+  );
+
   it.each(SVM_DATA_FUNCTIONS)("%s checks nothing but its floor's width", (name) => {
     const source = svmProgramCalling(name, 3);
     expect(venue(source)).toBe(false);

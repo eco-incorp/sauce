@@ -5972,11 +5972,12 @@ export function deriverseData(
   paysBase: bool,
 ): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(instrId <= 0xffffffff, "instrId past 32 bits");
   // The instruction, the side (1 buys the asset), the instrument, no price, the amount, the floor.
   const word =
     0x1a |
     ((paysBase ? 0 : 1) << 8) |
-    ((instrId & 0xffffffff) << 32) |
+    (instrId << 32) |
     ((amountIn & 0xffffffffffffffff) << 128) |
     (minOut << 192);
   return word.toBytesLe(32);
@@ -6038,11 +6039,12 @@ export function deriverseCpi(
   require(program.address ==
     0xb89258789c952e0f14bdab2a705585135da2b43447b210b4754cd2c15d2110a0, "not a Deriverse pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require(instrId <= 0xffffffff, "instrId past 32 bits");
   // The instruction, the side (1 buys the asset), the instrument, no price, the amount, the floor.
   const word =
     0x1a |
     ((paysBase ? 0 : 1) << 8) |
-    ((instrId & 0xffffffff) << 32) |
+    (instrId << 32) |
     ((amountIn & 0xffffffffffffffff) << 128) |
     (minOut << 192);
   const data = word.toBytesLe(32);

@@ -1701,14 +1701,21 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             ),
           ),
         ).toMatch(/^not an? /);
-        // A field past its slot, which cut to it would name another token: refused before the call.
-        if (svmExactInArguments(`${base}Cpi`)!.includes("inIndex"))
+        // A field past its slot, which cut to it would name another token or instrument: refused
+        // before the call.
+        const args = svmExactInArguments(`${base}Cpi`)!;
+        const wide = args.includes("inIndex")
+          ? { field: "inIndex", value: "256", reason: "index past its byte" }
+          : args.includes("instrId")
+            ? { field: "instrId", value: String(1n << 32n), reason: "instrId past 32 bits" }
+            : undefined;
+        if (wide !== undefined)
           for (const form of ["Cpi", "Data"] as const)
             expect(
               refused(
                 await cook(
                   harness,
-                  instruction(form, base, 1, { ...baked, inIndex: "256" }),
+                  instruction(form, base, 1, { ...baked, [wide.field]: wide.value }),
                   {
                     ...trade,
                     minOut: 1n,
@@ -1718,7 +1725,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
                   slot[0]!.address,
                 ),
               ),
-            ).toBe("index past its byte");
+            ).toBe(wide.reason);
       }, 300_000);
     },
   );

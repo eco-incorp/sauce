@@ -194,4 +194,19 @@ describe("routerSvmDataTemplate at an exact input: what it refuses when the prog
       "raydium-cp-swap's swap takes no inIndex",
     );
   });
+
+  it("Deriverse's instrument id, 32 bits, and required", () => {
+    const most = routerSvmDataTemplate("deriverse", {
+      aToB: true,
+      instrId: (1n << 32n) - 1n,
+    });
+    expect(hex(most.prefix)).toBe(`1a000000ffffffff${"00".repeat(8)}`);
+    pastItsSlot(
+      () => routerSvmDataTemplate("deriverse", { aToB: true, instrId: 1n << 32n }),
+      `deriverse: instrId ${1n << 32n} is past its 32 bits`,
+    );
+    expect(() => routerSvmDataTemplate("deriverse", { aToB: true })).toThrow(
+      "deriverse's swap takes its instrId",
+    );
+  });
 });
