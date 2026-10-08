@@ -41,10 +41,12 @@
 // WHAT A CONTINUATION IS. `program(body, chainId)` compiles the body as a program for this chain:
 // its bytecode and the run-time values it reads from the program around it, encoded as its
 // arguments, `code ++ args`. That is what is parked, so the values a body reads are the ones they
-// had when the request was made. What the callback delivers reaches it through `run`, which appends
-// it after those arguments and its length after it; `received()` reads it back from the end of the
-// program's input (`ctx.msgData()`), and the request's `deliver` decodes it into the body's
-// parameters.
+// had when the request was made. What the callback delivers reaches it through `run`, which holds it
+// in transient storage (EIP-1153) while the continuation runs; `received()` reads it back, and the
+// request's `deliver` decodes it into the body's parameters. Transient storage, and not the
+// program's input, because a continuation with a `.catch` runs its body in a `try` block, a frame of
+// its own whose input is the block's: transient storage is the Pot's in every frame of the
+// transaction.
 //
 // The calls are written out, selector and arguments, as the Pot and its Router declare them:
 // `inFlightEngine()` (0x9fd004e1) and `setHandler(bytes4,address,bytes,bool)` (0xeb45e5d0). The
@@ -55,6 +57,10 @@
 // A key's slot is `keccak256(abi.encode(key, namespace))`, a Solidity `mapping(bytes32 => address)`
 // at that location, holding the address of the contract the continuation was deployed as.
 const SAUCE_ASYNC_NAMESPACE = 0x4dfff1aabf079bde1221d3a9fbfbe12f9d81161876e97fa9b85215e9f7a8b300;
+
+// The transient-storage slot (EIP-1153) where `run` holds what a callback delivered while the
+// continuation runs: its length, and its words in the slots after it. keccak256("sauce.async.received").
+const SAUCE_ASYNC_RECEIVED = 0xe0834bde068556530c4cc9d3e560d8055ab88b322f2d933c8fac9a037dbe690e;
 
 // The engine the Pot's cook in flight runs: the one a continuation runs on.
 function inFlightEngine(): Address {
@@ -105,14 +111,27 @@ export function take(key: Uint256): bytes {
 // authenticated its caller: the program runs with everything the Pot holds.
 export function run(program: bytes, input: bytes): bytes {
   const length = input.length;
-  return evm.delegate(inFlightEngine(), program.concat(input).concat(length.toBytesBe(32)));
+  evm.tstore(SAUCE_ASYNC_RECEIVED, length);
+  // Whole words: the last one padded with zeros.
+  const padded = input.concat(hex`00000000000000000000000000000000000000000000000000000000000000`);
+  for (let i = 0; i * 32 < length; i += 1) {
+    const [word] = abi.decode(padded.slice(i * 32, i * 32 + 32), ["Uint256"]);
+    evm.tstore(SAUCE_ASYNC_RECEIVED + 1 + i, word);
+  }
+  const out = evm.delegate(inFlightEngine(), program);
+  evm.tstore(SAUCE_ASYNC_RECEIVED, 0);
+  return out;
 }
 
-// In a program `run` is running: the `input` it was handed.
+// In a program `run` is running: the `input` it was handed. Empty anywhere else.
 export function received(): bytes {
-  const data = ctx.msgData();
-  const [length] = abi.decode(data.slice(data.length - 32, data.length), ["Uint256"]);
-  return data.slice(data.length - 32 - length, data.length - 32);
+  const length = evm.tload(SAUCE_ASYNC_RECEIVED);
+  let out = hex``;
+  for (let i = 0; i * 32 < length; i += 1) {
+    const word = evm.tload(SAUCE_ASYNC_RECEIVED + 1 + i);
+    out = out.concat(word.toBytesBe(32));
+  }
+  return out.slice(0, length);
 }
 
 // The call came from `expected`: a handler's first check, on its `caller`. Anyone can send the Pot

@@ -54,6 +54,12 @@ describe("what the library writes out by hand", () => {
     );
   });
 
+  it("its transient slot for what a callback delivered is keccak256 of its name", () => {
+    expect(SOURCE).toContain(
+      `const SAUCE_ASYNC_RECEIVED = ${keccak256(toHex("sauce.async.received"))};`,
+    );
+  });
+
   it.each(["inFlightEngine()", "setHandler(bytes4,address,bytes,bool)"])(
     "%s's selector is derived from its signature, and in the bytecode of `install`",
     (signature) => {

@@ -227,7 +227,8 @@ It holds no references or examples of its own.
 
 The language: the two program forms (`main(...)` with runtime arguments, or top-level statements
 with defines), the file's header, values, calling a contract, helpers, atomic failure and `.catch`,
-what a program costs, and compile errors.
+waiting for a protocol's callback (`.then` on a request, the handlers a Private Pot installs), what
+a program costs, and compile errors.
 
 - **Holds** the language reference,
   [references/builtins.md](../sauce-script/references/builtins.md): every type, operator,
