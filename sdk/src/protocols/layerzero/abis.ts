@@ -65,4 +65,11 @@ export const LayerZeroEndpointV2ABI = [
       },
     ],
   },
+  {
+    name: "eid",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+  },
 ] as const;

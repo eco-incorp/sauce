@@ -109,6 +109,7 @@ address.
 | [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0xA4072583658Fae592A3506A42431cb6316a8d40b` | `Lifi.LiFiDiamond` |
 | [Morpho Blue](../../sauce-protocols/references/registry/morpho-blue.md) | morpho | `0x34CD04070dD72b14E241112F6d83812Df5Af7fCD` | `MorphoBlue.Morpho` |
 | [Permit2](../../sauce-protocols/references/registry/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
+| [Polymer](../../sauce-protocols/references/registry/polymer.md) | crossL2ProverV2 | `0x95ccEAE71605c5d97A0AC0EA13013b058729d075` | `Polymer.CrossL2ProverV2` |
 | [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
 | [Safe](../../sauce-protocols/references/registry/safe.md) | safeV141 | `0x41675C099F32341bf84BFc5382aF534df5C7461a` | `Safe.SafeV141` |
 | [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |

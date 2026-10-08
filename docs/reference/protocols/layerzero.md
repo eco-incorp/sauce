@@ -92,3 +92,4 @@ function main() {
 
 - `send((uint32 dstEid, bytes32 receiver, bytes message, bytes options, bool payInLzToken) _params, address _refundAddress) payable returns ((bytes32 guid, uint64 nonce, (uint256 nativeFee, uint256 lzTokenFee) fee) receipt)`
 - `quote((uint32 dstEid, bytes32 receiver, bytes message, bytes options, bool payInLzToken) _params, address _sender) view returns ((uint256 nativeFee, uint256 lzTokenFee) fee)`
+- `eid() view returns (uint32)`

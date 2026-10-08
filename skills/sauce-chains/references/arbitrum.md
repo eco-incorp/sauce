@@ -111,6 +111,7 @@ address.
 | [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Router | `0x5c3b380e5Aeec389d1014Da3Eb372FA2C9e0fc76` | `Maverick.V2Router` |
+| [Metalayer](../../sauce-protocols/references/registry/metalayer.md) | router | `0x09cE71C24EE2098e351C0cF2dC6431B414d247f3` | `Metalayer.Router` |
 | [MUX Protocol](../../sauce-protocols/references/registry/mux-protocol.md) | liquidityPool | `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633` | `MuxProtocol.LiquidityPool` |
 | [MUX Protocol](../../sauce-protocols/references/registry/mux-protocol.md) | orderBook | `0xa19fD5aB6C8DCffa2A295F78a5Bb4aC543AAF5e3` | `MuxProtocol.OrderBook` |
 | [1inch](../../sauce-protocols/references/registry/oneinch.md) | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` | `Oneinch.AggregationRouterV6` |
@@ -124,6 +125,7 @@ address.
 | [ParaSwap](../../sauce-protocols/references/registry/paraswap.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Pendle](../../sauce-protocols/references/registry/pendle.md) | router | `0x888888888889758F76e7103c6CbF23ABbF58F946` | `Pendle.Router` |
 | [Permit2](../../sauce-protocols/references/registry/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
+| [Polymer](../../sauce-protocols/references/registry/polymer.md) | crossL2ProverV2 | `0x95ccEAE71605c5d97A0AC0EA13013b058729d075` | `Polymer.CrossL2ProverV2` |
 | [Premia](../../sauce-protocols/references/registry/premia.md) | poolFactory | `0xAE4fB6622F25f397587F11638dA8CE88C27b5645` | `Premia.PoolFactory` |
 | [Radiant](../../sauce-protocols/references/registry/radiant.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool` |
 | [Ramses](../../sauce-protocols/references/registry/ramses.md) | router | `0xAAA87963EFeB6f7E0a2711F397663105Acb1805e` | `Ramses.Router` |

@@ -119,6 +119,18 @@
           ]
         }
       ]
+    },
+    {
+      "name": "eid",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
     }
   ]
 }
