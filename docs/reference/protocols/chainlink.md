@@ -37,6 +37,29 @@ function main(feedAddress: Address): {
 }
 ```
 
+## CRE: a workflow's report, delivered to a contract
+
+- Chainlink's Runtime Environment (CRE) runs **workflows**: code an owner deploys to Chainlink's
+  network, triggered by a cron schedule, an HTTP request or an on-chain log, which fetches APIs and
+  reads chains, reaches consensus across a DON, and writes a signed **report** on chain.
+- A report reaches a contract through the **KeystoneForwarder** (`Chainlink.KeystoneForwarder` in a
+  program, on Ethereum and Base). The forwarder checks the DON's signatures, asks the receiver over
+  ERC-165 whether it supports `IReceiver` (three static calls of 30,000 gas each), and calls its
+  `onReport(bytes metadata, bytes report)`.
+- `metadata` is 64 bytes: the workflow id (32), the workflow name (10), the **workflow owner** (20)
+  and the report id (2). `report` is whatever the workflow encoded.
+- The forwarder authenticates the DON, not the workflow: any workflow's report can reach any
+  receiver. A receiver checks the workflow owner in `metadata`, and the name or id where it pins
+  one.
+- A report is attempted once per receiver, workflow execution and report id. When `onReport`
+  reverts, the DON may retry it. A receiver that fails the ERC-165 check is marked invalid for that
+  report, and it is never delivered.
+- Chainlink Functions, the older request-and-callback product (a consumer called the Functions
+  router's `sendRequest` with inline JavaScript and was called back with `handleOracleFulfillment`),
+  no longer answers on mainnet: its routers still accept a request, and its LINK stays locked until
+  the request times out. CRE replaces it: an EVM Log trigger takes the place of `sendRequest`, and
+  `onReport` the place of the callback.
+
 ## Notes
 
 - Price feeds return answer in int256 with feed-specific decimals (usually 8 for USD pairs)
