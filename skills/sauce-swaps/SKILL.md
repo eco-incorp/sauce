@@ -310,6 +310,53 @@ keeps `trySwap` for slots whose venue it learns as it runs. Either is past one t
 program is staged (`sauce-solana`). For one order over several pools under one price, use
 `sauce-solana-distributed-swap`.
 
+## Exact input on Solana
+
+Every other Solana venue `@sauce/router` serves swaps exactly `amountIn`, with no price limit: the
+venue takes the whole input or the transaction fails. Each has four functions:
+
+```text
+raydiumCpSwapData(amountIn, minOut): bytes
+raydiumCpSwapCpi(program, accounts, source, amountIn, minOut): Uint256
+raydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
+tryRaydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
+```
+
+The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `tokenSwapV1`,
+`orcaV1`, `penguin`, `stepn`, `saros`, `fluxbeam`, `dexlab`, `meteoraDammV2`, `meteoraDammV1`,
+`aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
+`mercurial`, `perena` and `metadaoFutarchy`.
+
+- **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:
+  `svm.call(program, [accounts…], raydiumCpSwapData(amountIn, minOut))`. It is the cheapest form.
+  `minOut` is the venue's own least out, written as given. Where the data says the direction it is
+  the last argument (`aToB`, `paysBase` or `xToY`); Perena's take the two tokens' indices too.
+- **`<venue>Cpi`** sends that data on `accounts`, the venue's own account list in its order, and
+  returns what `source` paid.
+- **The account order is the SDK's**: `routerSvmAccountOrder(venue, { aToB })` and
+  `routerSvmAccounts(venue, { aToB }, refs)` from `@eco-incorp/sauce/svm` name and build it, and
+  `ROUTER_SVM_VENUES` gives each venue's program and functions by the recipes' venue names. A
+  program compiled for one trade builds its accounts from them and never writes a venue's order
+  itself.
+- **`slot`** is the venue's own accounts, its program first and the pool second, then the rest in
+  the order the venue's comment in the library gives. A pool's accounts for each token, such as
+  its vaults, come in the pool's own order, and the function reads which one is paid from
+  `payMint`.
+- **`trader`** and **`recipient`** are the limit functions' own. The plain form returns what the
+  recipient received, held to `minOut` and at least 1.
+- **`try<Venue>`** returns `0` having moved nothing for a missing slot (the System program as its
+  pool), no input, and what the venue refuses that it can see first (swaps switched off, an empty
+  side, dust).
+
+Measured on the released engine, a venue's `Data` form costs about 3,300 compute units more than
+its data written by hand, its `Cpi` form about 7,500 more, and the slot forms about 1,400 more for
+each account they read out of `slot` or `trader`.
+
+A function cannot list more than sixteen accounts. `scaleAmm`, `pumpswap`, `bonkswap` and
+`guacswap` swap with more, so they have only their `Cpi` and `Data` forms: `scaleAmmCpi`,
+`pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `scaleAmmData`, `pumpswapData`, `bonkswapData` and
+`guacswapData`.
+
 ## Example
 
 [examples/swaps.mts](examples/swaps.mts) compiles the leg and pins the library's functions, the

@@ -193,7 +193,8 @@ export const svmArguments = (name: string): string[] =>
 /** An instruction-only `…Cpi` function's arguments after `program`, `accounts` and `source`, by
  *  venue: what its instruction carries, and its direction. */
 export const svmCpiArguments = (name: string): string[] =>
-  /^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm)Cpi$/.test(name)
+  svmExactInArguments(name) ??
+  (/^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm)Cpi$/.test(name)
     ? ["amountIn", "limit", "minOut"]
     : /^(orcaWhirlpool|cropper|defituna|crema)Cpi$/.test(name)
       ? ["amountIn", "limit", "minOut", "aToB"]
@@ -203,7 +204,7 @@ export const svmCpiArguments = (name: string): string[] =>
           ? ["amountIn", "limit", "xToY"]
           : name === "manifestCpi"
             ? ["amountIn", "minOut", "paysBase"]
-            : ["amountIn", "priceLots", "orders", "paysBase"];
+            : ["amountIn", "priceLots", "orders", "paysBase"]);
 /** A `…Data` function's arguments, by venue: what its instruction carries, and its direction. */
 export const svmDataArguments = (name: string): string[] =>
   name === "phoenixData"
@@ -276,5 +277,155 @@ export const svmProgramCalling = (
     `import { ${name} } from "@sauce/router";\n` +
     `function main(\n${accounts}\n${args.map((arg) => `  ${arg}: Uint256,`).join("\n")}\n): Uint256 {\n` +
     `  return ${name}([${slot.join(", ")}], [${SVM_TRADER.join(", ")}], ${args.join(", ")}, recipient);\n}\n`
+  );
+};
+
+/**
+ * The SVM arm's exact-input venues with a slot, by the base name of their three functions
+ * (`<venue>`, `try<Venue>`, `<venue>Cpi`), with the number of accounts each one's slot takes.
+ */
+export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
+  raydiumCpSwap: 7,
+  gamma: 7,
+  raydiumAmmV4: 5,
+  orcaLegacyTokenSwap: 7,
+  tokenSwapV1: 7,
+  orcaV1: 7,
+  penguin: 7,
+  stepn: 7,
+  saros: 7,
+  fluxbeam: 7,
+  dexlab: 7,
+  meteoraDammV2: 6,
+  meteoraDammV1: 13,
+  aldrin: 7,
+  omnipair: 7,
+  saber: 7,
+  saberDecimalsWrapper: 4,
+  stabbleStableSwap: 10,
+  stabbleWeightedSwap: 10,
+  mercurial: 5,
+  perena: 5,
+  metadaoFutarchy: 5,
+};
+
+/** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form
+ *  alone. */
+export const SVM_CPI_ONLY = ["scaleAmm", "pumpswap", "bonkswap", "guacswap"] as const;
+
+const capitalized = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
+
+/** Every exact-input function taking a slot, with the number of accounts its slot takes. */
+export const SVM_EXACT_IN_FUNCTIONS: readonly [string, number][] = Object.entries(
+  SVM_EXACT_IN,
+).flatMap(([base, slot]) => [
+  [base, slot],
+  [`try${capitalized(base)}`, slot],
+]);
+
+/** Every exact-input `Cpi` form. */
+export const SVM_CPI_FUNCTIONS: readonly string[] = [
+  ...Object.keys(SVM_EXACT_IN),
+  ...SVM_CPI_ONLY,
+].map((base) => `${base}Cpi`);
+
+const svmAccounts = (names: readonly string[]): string =>
+  names
+    .map((account) => `  ${account}: ${account === "authority" ? "Account<Signer>" : "Account"},`)
+    .join("\n");
+
+/**
+ * A Solana program that calls the exact-input function `name` once on a slot of `slotLength`
+ * accounts: the slot, the trader's seven and the recipient as `main`'s accounts, the amount and the
+ * floor as its arguments. With `name` empty, the same program calling nothing: the base a function's
+ * compute units are measured over.
+ */
+export const svmExactInProgramCalling = (name: string, slotLength: number): string => {
+  const slot = Array.from({ length: slotLength }, (_, i) => `s${i}`);
+  const head =
+    `function main(\n${svmAccounts([...slot, ...SVM_TRADER, "recipient"])}\n` +
+    `  amountIn: Uint256,\n  minOut: Uint256,\n): Uint256 {\n`;
+  if (name === "") return `${head}  return 0;\n}\n`;
+  return (
+    `import { ${name} } from "@sauce/router";\n${head}` +
+    `  return ${name}([${slot.join(", ")}], [${SVM_TRADER.join(", ")}], amountIn, minOut, recipient);\n}\n`
+  );
+};
+
+/** The exact-input venues' `…Cpi` and `…Data` arguments past `amountIn`, where they are not just
+ *  `minOut`: what the instruction carries, its floor (none where it carries none), and the direction
+ *  where the data says it. */
+export const SVM_EXACT_IN_ARGUMENTS: Readonly<Record<string, readonly string[]>> = {
+  aldrin: ["minOut", "paysBase"],
+  saberDecimalsWrapper: ["aToB"],
+  perena: ["inIndex", "outIndex", "minOut"],
+  metadaoFutarchy: ["minOut", "paysBase"],
+  scaleAmm: ["minOut", "aToB"],
+  pumpswap: ["minOut", "paysBase"],
+  bonkswap: ["xToY"],
+  guacswap: ["xToY"],
+};
+
+/** An exact-input venue's `…Cpi` or `…Data` arguments, `amountIn` first; undefined for any other
+ *  function. */
+export const svmExactInArguments = (name: string): string[] | undefined => {
+  const base = name.replace(/(Cpi|Data)$/, "");
+  if (
+    base === name ||
+    !(base in SVM_EXACT_IN || (SVM_CPI_ONLY as readonly string[]).includes(base))
+  )
+    return undefined;
+  return ["amountIn", ...(SVM_EXACT_IN_ARGUMENTS[base] ?? ["minOut"])];
+};
+
+/** Every exact-input `Data` form. */
+export const SVM_DATA_FUNCTIONS: readonly string[] = [
+  ...Object.keys(SVM_EXACT_IN),
+  ...SVM_CPI_ONLY,
+].map((base) => `${base}Data`);
+
+/**
+ * A Solana program that sends an exact-input venue's instruction once: the venue's program, a list
+ * of `length` accounts and the paying account as `main`'s accounts; `amountIn` and the arguments
+ * `baked` does not write as literals as `main`'s. `form` is `name`'s `Cpi` (returning what it
+ * returns), its `Data` (sending the data itself, returning what `source` paid), `hand` (the data
+ * written by hand around the amount, `baked.prefix` then `baked.suffix`, as a code generator's
+ * template does) or `none` (nothing: the base the others' compute units are measured over).
+ */
+export const svmInstructionProgram = (
+  form: "Cpi" | "Data" | "hand" | "none",
+  name: string,
+  length: number,
+  baked: Readonly<Record<string, string>> = {},
+): string => {
+  const list = Array.from({ length }, (_, i) => `a${i}`);
+  const all =
+    form === "Cpi" || form === "Data" ? svmExactInArguments(`${name}${form}`)! : ["amountIn"];
+  const args = all.filter((arg) => !Object.hasOwn(baked, arg));
+  const head =
+    (form === "Cpi" || form === "Data"
+      ? `import { ${name}${form} } from "@sauce/router";
+`
+      : "") +
+    `function main(\n${svmAccounts(["program", ...list, "source"])}\n` +
+    args.map((arg) => `  ${arg}: Uint256,\n`).join("") +
+    `): Uint256 {\n`;
+  const call = all
+    .map((arg) => baked[arg] ?? (DIRECTIONS.has(arg) ? `${arg} != 0` : arg))
+    .join(", ");
+  const send = (data: string) =>
+    `  const data = ${data};\n` +
+    `  const held = svm.sload(source, 64, 8).toLe();\n` +
+    `  svm.call(program, [${list.join(", ")}], data);\n` +
+    `  return held - svm.sload(source, 64, 8).toLe();\n}\n`;
+  if (form === "none") return `${head}  return 0;\n}\n`;
+  if (form === "Cpi")
+    return `${head}  return ${name}Cpi(program, [${list.join(", ")}], source, ${call});\n}\n`;
+  if (form === "Data") return head + send(`${name}Data(${call})`);
+  const suffix = baked.suffix ? `, hex\`${baked.suffix}\`` : "";
+  return (
+    head +
+    `  const prefix = hex\`${baked.prefix}\`;\n` +
+    send(`prefix.concat(amountIn.toBytesLe(8)${suffix})`)
   );
 };

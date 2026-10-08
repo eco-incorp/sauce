@@ -35,8 +35,9 @@ compiles this one.
 
 It is the one implementation of a swap at these venues: an action such as `uniswapV2Swap` is a
 call into it, so a JSON action program and a hand-written program trade a venue through the same
-code. On Solana the library is a different set of functions, one per venue whose swap stops at a
-price limit; see [On Solana](#on-solana).
+code. On Solana the library is a different set of functions: one per venue whose swap stops at a
+price limit, see [On Solana](#on-solana), and one per venue that swaps an exact input, see
+[Exact input on Solana](#exact-input-on-solana).
 
 ## Functions
 
@@ -634,3 +635,187 @@ with the ticks a swap crosses; the venue's does. To the window's edge, with more
 window holds, Raydium CLMM's SOL/USDC swap crosses 6 ticks for 64,198 units of its own, PancakeSwap's
 57 for 105,004, Crema's 1,423 for 122,377, and each form costs what it cost for ten tokens past
 that.
+
+## Exact input on Solana
+
+The Solana arm's other functions swap exactly `amountIn` at one pool, with no price limit: the venue
+takes the whole input, or the transaction fails. Each venue has four functions:
+
+```text
+raydiumCpSwap(slot: Account[], trader: Account[], amountIn, minOut, recipient: Account): Uint256
+tryRaydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
+raydiumCpSwapCpi(program: Account, accounts: Account[], source: Account, amountIn, minOut): Uint256
+raydiumCpSwapData(amountIn, minOut): bytes
+```
+
+- **`<venue>Data`** is the venue's instruction data, and nothing else. The caller sends it itself,
+  `svm.call(program, [accounts…], raydiumCpSwapData(amountIn, minOut))`, and reads what it wants.
+  It is the cheapest form, and the one a program compiled for one trade should use.
+- **`<venue>Cpi`** sends that data on `accounts`, the instruction's own accounts in the venue's
+  order. It checks only the program, reads only `source`, and returns what `source` paid.
+- **`<venue>`** swaps on a slot and returns what the recipient received, held to `minOut` and at
+  least 1. It reverts below that.
+- **`try<Venue>`** first checks what it can see before the swap. It returns `0`, having moved
+  nothing, for a missing slot (the System program as its pool), no input, and each refusal of the
+  venue's listed below. Otherwise it is `<venue>`.
+
+`minOut` in `…Data` and `…Cpi` is the venue's own least out, written as given; a venue whose swap
+carries none takes no `minOut` there (Bonkswap, Guacswap, the Saber decimal wrapper). Where the data
+says the direction, they take it as their last argument: `aToB` paying the pool's first token
+(token 0 or A, the decimal wrapper's underlying token, Scale AMM's buy), `paysBase` the base token
+(Aldrin, MetaDAO futarchy, PumpSwap's sell), `xToY` token X (Bonkswap, Guacswap). Perena's take the
+two tokens' indices among the pool's ten, `perenaData(amountIn, inIndex, outIndex, minOut)`. A
+`minOut` past 64 bits, or a Perena index past its byte, reverts; `amountIn` is written as its
+low 64 bits.
+
+**The account order is the SDK's.** `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder(venue,
+{ aToB })` names each account of a venue's swap in order, with whether the instruction writes it and
+whether it signs, and `routerSvmAccounts(venue, { aToB }, refs)` builds the list from a value for
+each name, an address or a placeholder a code generator resolves later. `ROUTER_SVM_VENUES` keys
+the venues by the recipes' names (`raydium-cp-swap`, `meteora-damm-v1-cp`, …) and gives each one's
+program and its `…Data` and `…Cpi` functions. Names are the pool's: `vaultA`, `mintA` and
+`tokenProgramA` are the pool's first token's whatever the direction; `source` is the paying token
+account, `recipient` the one the output lands in, `authority` the account that signs (the Pot).
+PumpSwap takes `poolV2` for a pool with a coin creator, and Scale AMM `beneficiaries`, the number
+of its fee beneficiaries.
+
+**So is the data.** `routerSvmDataTemplate(venue, options)` writes an exact-input venue's data
+around the amount when the program is generated, as it does a limit venue's: `prefix ‖
+u64le(amountIn) ‖ suffix`, its divisor 1, the bytes `<venue>Data` writes for the same fields. Its
+options are the account order's `aToB`, `minOut` where the swap carries a floor, and Perena's
+`inIndex` and `outIndex`. It throws a RangeError for a floor past 64 bits or an index past its
+byte, and refuses an option the venue's swap does not carry and the way a one-way venue does not
+swap, as its account order does. The program pays for none of it: those bytes cost what the
+recipes' hand-built data does, the "by hand" column below.
+
+`trader` and `recipient` are the same as the limit functions take, `[authority, source, payMint,
+buyMint, tokenProgram, token2022, memo]`, with the recipient the token account the output lands in.
+`slot` is the venue's own accounts: its program first, the pool second, then the rest in the
+venue's order below. Where a pool keeps an account per token, such as its two vaults, the slot
+carries both in the **pool's** order. The function works out which one is paid from `payMint`, so
+one slot serves both directions. Each token's program is the one that owns its mint.
+
+| Functions              | Venue                 | Program                                        | Slot after `[program, pool]`                                                                                                         |
+| ---------------------- | --------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `raydiumCpSwap`        | Raydium CP-Swap       | `CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C` | `authority, ammConfig, vault0, vault1, observation`                                                                                  |
+| `gamma`                | Gamma                 | `GAMMA7meSFWaBXF25oSUgmGRwaW6sCMFLmBNiMSdbHVT` | `authority, ammConfig, vault0, vault1, observation`                                                                                  |
+| `raydiumAmmV4`         | Raydium AMM v4        | `675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8` | `authority, coinVault, pcVault`                                                                                                      |
+| `orcaLegacyTokenSwap`  | Orca legacy pools     | `9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP` | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `tokenSwapV1`          | SPL Token Swap        | `SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8`  | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `orcaV1`               | Orca v1               | `DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1` | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `penguin`              | Penguin               | `PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP`  | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `stepn`                | STEPN (Dooar)         | `Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j` | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `saros`                | Saros                 | `SSwapUtytfBdBn1b9NUGG6foMVPtcWgpRU32HToDUZr`  | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `fluxbeam`             | Fluxbeam              | `FLUXubRmkEi2q6K3Y9kBPg9248ggaZVsoSFhtJHSrm1X` | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `dexlab`               | Dexlab                | `DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N` | `authority, vaultA, vaultB, poolMint, poolFeeAccount`                                                                                |
+| `meteoraDammV2`        | Meteora DAMM v2       | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`  | `authority, vaultA, vaultB, eventAuthority`                                                                                          |
+| `meteoraDammV1`        | Meteora DAMM v1       | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` | `aVault, bVault, aTokenVault, bTokenVault, aVaultLpMint, bVaultLpMint, aVaultLp, bVaultLp, protocolFeeA, protocolFeeB, vaultProgram` |
+| `aldrin`               | Aldrin                | `AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6` | `poolSigner, poolMint, baseVault, quoteVault, feeAccount`                                                                            |
+| `omnipair`             | Omnipair              | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE`  | `rateModel, futarchyAuthority, vault0, vault1, eventAuthority`                                                                       |
+| `saber`                | Saber                 | `SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ`  | `authority, vaultA, vaultB, adminFeeA, adminFeeB`                                                                                    |
+| `saberDecimalsWrapper` | Saber decimal wrapper | `DecZY86MU5Gj7kppfUCEmd4LbXXuyZH1yHaP2NTqdiZB` | `wrapperMint, underlyingVault` (the wrapper as the pool)                                                                             |
+| `stabbleStableSwap`    | Stabble stable swap   | `swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ`  | `withdrawAuthority, vault, vaultAuthority, vaultProgram, vaultTokenA, vaultTokenB, beneficiaryTokenA, beneficiaryTokenB`             |
+| `stabbleWeightedSwap`  | Stabble weighted swap | `swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW`  | `withdrawAuthority, vault, vaultAuthority, vaultProgram, vaultTokenA, vaultTokenB, beneficiaryTokenA, beneficiaryTokenB`             |
+| `mercurial`            | Mercurial             | `MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky`  | `authority, vault0, vault1` (a two-token pool; `mercurialCpi` takes any)                                                             |
+| `perena`               | Perena (Numéraire)    | `NUMERUNsFCP3kuNmWZuXtm1AaQCPj9uw6Guv2Ekoi5P`  | `numeraireConfig, vaultA, vaultB` (the two tokens traded)                                                                            |
+| `metadaoFutarchy`      | MetaDAO futarchy      | `FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq` | `baseVault, quoteVault, eventAuthority` (the DAO as the pool)                                                                        |
+
+Each row names four functions: the one listed, its `try` form, its `Cpi` form and its `Data`
+form. Raydium CP-Swap
+and Gamma require token 0 to be the lower-key mint. A Stabble pool's `vaultTokenA` and `vaultTokenB`
+are the vault's accounts for the two tokens traded, in either order. Each beneficiary account is the
+vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direction from the paying
+and receiving accounts themselves. Perena finds each mint's index among the pool's ten tokens, and
+writes both mints, so they are attached writable.
+
+Four venues take more accounts in their swap than a function can list. A function other than
+`main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
+forms, on the list the caller's `main` builds:
+
+| Functions  | Venue     | Program                                        |
+| ---------- | --------- | ---------------------------------------------- |
+| `scaleAmm` | Scale AMM | `SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA`  |
+| `pumpswap` | PumpSwap  | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
+| `bonkswap` | Bonkswap  | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
+| `guacswap` | Guacswap  | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
+
+A PumpSwap buy takes the authority's volume accumulator, and it has to exist already. A Pot can't
+pay to create it, because the System program won't move lamports out of an account that holds data.
+PumpSwap's `init_user_volume_accumulator` takes any payer. Bonkswap and Guacswap require the paying
+and receiving accounts to be the authority's associated token accounts. PumpSwap, Bonkswap,
+Guacswap and Scale AMM write the authority, so it is attached writable. Scale AMM takes one account
+per fee beneficiary.
+
+**A swap spends exactly `amountIn`**, with three exceptions. The Token Swap program and its forks,
+Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference
+is a few units, and it stays in `source`; a `Cpi` form returns what was actually paid. A Fluxbeam or
+Dexlab mint with a transfer fee keeps the fee out of what the pool receives.
+
+**`minOut`** goes into the venue's own floor where its swap takes one, so the venue refuses less
+itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` and `try<Venue>`, which also hold
+what the recipient received to `minOut` and to at least 1. The Saber decimal wrapper, Bonkswap and
+Guacswap have no floor of their own; for these, a `Data` or `Cpi` caller enforces the floor itself.
+
+**What each `try` form skips** before the swap:
+
+- the Raydium CP-Swap and Gamma forms skip swaps switched off, a pool not open yet, an empty side,
+  and dust;
+- the Raydium AMM v4 form skips a pool that does not swap (a status other than 1, 6 or 7, or 7
+  before its open time), an empty side, and dust;
+- the Token Swap forms, Fluxbeam and Dexlab skip an uninitialized pool, an empty side, and dust;
+- the Meteora DAMM v2 form skips a disabled pool, and a pool with no liquidity;
+- the Meteora DAMM v1 form skips a disabled pool;
+- the Aldrin and Omnipair forms skip an empty side, and dust;
+- the Saber form skips a paused pool and an empty side;
+- the Stabble forms skip an inactive pool and an empty side;
+- the Mercurial form skips an empty side;
+- the Perena form skips a paused pool and an empty side;
+- the MetaDAO futarchy form skips a DAO not in its spot state, and an empty side;
+- the Saber decimal wrapper form skips a withdrawal the vault cannot pay.
+
+"Dust" is an input too small to buy one unit at the pool's price after its fee. It is estimated from
+the vaults' balances. A venue's own refusal that the checks don't foresee still fails the
+transaction.
+
+Every form but `…Data` requires the program to be its venue's before the authority signs into it.
+It reverts naming the venue (`not a Raydium CP pool`, …). Each refuses a `minOut` past the venues' 64
+bits (`minOut past 64 bits`). A pool of another venue, or one that isn't the pair, is the venue's own
+to refuse.
+
+**Compute.** Measured on the released engine (v12-svm 1.3.0; its devnet and mainnet builds measure
+the same), each against an empty program with the same accounts, with the venue's own units
+excluded. "By hand" is the recipes' template: the venue's data written around the amount
+(`prefix.concat(amount.toBytesLe(8), suffix)`) and sent with `svm.call` on `main`'s own accounts.
+`…Data` costs about 3,300 units more, the call into it and its packed word; `…Cpi` about 7,500 more,
+because an account list passed to a function is built as an array first, where one written into
+`svm.call` is not. A `<venue>` or `try<Venue>` function reads its accounts out of `slot` and
+`trader`, and each account it hands the venue costs about 1,400 units more than one of `main`'s own:
+
+| Venue                             | By hand | `<venue>Data` | `<venue>Cpi` | `<venue>` | `try<Venue>` |   Venue's own |
+| --------------------------------- | ------: | ------------: | -----------: | --------: | -----------: | ------------: |
+| Raydium CP-Swap                   |  14,745 |        18,025 |       22,173 |    50,980 |       71,691 |        24,285 |
+| Gamma                             |  14,745 |        18,025 |       22,173 |    50,980 |       71,289 |        67,050 |
+| Raydium AMM v4                    |  12,528 |        15,808 |       19,812 |    33,601 |       55,433 |        15,538 |
+| Orca legacy (constant product)    |  13,382 |        16,662 |       20,810 |    42,588 |       58,501 |        44,359 |
+| SPL Token Swap and its forks      |  13,382 |        16,662 |       20,816 |    42,588 |       58,501 | 22,461–49,511 |
+| Fluxbeam                          |  15,196 |        18,476 |       22,630 |    59,492 |       75,408 |        68,950 |
+| Dexlab                            |  15,180 |        18,460 |       22,614 |    59,665 |       75,581 |        57,377 |
+| Meteora DAMM v2                   |  14,916 |        18,196 |       22,344 |    55,402 |       62,969 |        13,782 |
+| Meteora DAMM v1 (stable)          |  15,728 |        19,008 |       23,156 |    54,110 |       59,153 |       104,290 |
+| Aldrin                            |  13,382 |        18,051 |       22,089 |    44,469 |       56,902 |        48,184 |
+| Omnipair                          |  13,056 |        16,336 |       20,484 |    49,120 |       61,550 |        39,456 |
+| Saber                             |  12,953 |        16,233 |       20,381 |    39,447 |       50,463 |        40,129 |
+| Saber decimal wrapper             |  11,713 |        14,361 |       18,625 |    29,414 |       34,838 |        14,209 |
+| Stabble stable and weighted swaps |  14,277 |        17,557 |       21,705 |    48,232 |       59,967 | 29,883–83,821 |
+| Mercurial                         |  12,526 |        15,806 |       19,810 |    33,831 |       41,470 |        73,205 |
+| Perena                            |  13,956 |        19,759 |       23,675 |    55,146 |       66,668 |       159,473 |
+| MetaDAO futarchy                  |   9,250 |        14,262 |       18,294 |    36,975 |       48,172 |        43,808 |
+| Scale AMM                         |  15,660 |        20,427 |       25,387 |           |              |        43,890 |
+| PumpSwap                          |  17,945 |        22,800 |       28,688 |           |              |        73,361 |
+| Bonkswap                          |  16,985 |        20,173 |       24,813 |           |              | 56,094–68,094 |
+| Guacswap                          |  16,985 |        19,981 |       24,621 |           |              | 64,613–70,631 |
+
+Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
+about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own
+units move between runs with the accounts' addresses, by up to about 12,000 for Bonkswap; the
+library's do not. A function is about 300 to 900 bytes of program.

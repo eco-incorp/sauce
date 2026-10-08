@@ -668,6 +668,35 @@ an adaptive-fee Orca pool and the Raydium-layout pools' bitmap extensions throug
 pool it adds records its own `slot`); `restoreVenues` gives a kept wrapped-SOL token account that
 recorded no lamports its amount on top of rent, as the token program expects.
 
+The SVM arm's EXACT INPUT section (the end of `router.svm.js`) is the rest of the Solana venues, in
+four forms each, as the limit venues' instruction forms are: `<venue>Data(amountIn, …, minOut,
+<direction>)` (the instruction's data alone; the caller sends it), `<venue>Cpi(program, accounts,
+source, amountIn, …, minOut, <direction>)` (the data inline, sent on the caller's list, returning
+what `source` paid), and `<venue>`/`try<Venue>(slot, trader, amountIn, minOut, recipient)`, which
+read the direction from the slot and build their data with `<venue>Data`. In `…Data`/`…Cpi`
+`minOut` is written as given and the direction (`aToB`/`paysBase`/`xToY`) is a literal argument
+where the data says it; the slot forms write `minOut` at least 1. Every exact-in venue is in
+`sdk/src/svm/router-accounts.ts` (`ROUTER_SVM_VENUES` by the recipes' venue names,
+`routerSvmAccountOrder`/`routerSvmAccounts`), tested account by account against the recipes'
+instructions (`test/svm/router-accounts-exact-in.test.ts`), and in `router-data.ts`'s `EXACT_IN`
+table (`routerSvmDataTemplate`: `prefix ‖ u64le(amountIn) ‖ suffix`, divisor 1, its options the
+account order's `aToB`, `minOut` and the venue's own fields), held byte for byte to every vector
+(`test/svm/router-data-exact-in.test.ts`). Two compiler facts shape it, both
+measured on compiler 2.5.0 and the released engine: a function other than `main` cannot build an
+account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
+Array(n)` holds only numbers, a function cannot return accounts, and account arrays cannot be
+concatenated), so a venue whose swap takes more accounts has only its `Cpi` and `Data` forms; and
+each account read out of an array argument and passed to `svm.call` costs ~1.4k compute units more
+than one of `main`'s own parameters. `svm-exact-in.e2e.test.ts` runs every form, and the recipes'
+template by hand, on the venue's own mainnet program (`test/fixtures/svm-exact-in-programs/`,
+gzipped `solana program dump`s with their sha256 in `manifest.json`) and pool accounts, both
+directions, and holds each instruction to the one sauce-recipes builds
+(`fixtures/exact-in-vectors.json`, generated there by `resolveSvmSpecSlot` and the ladder's
+`buildSwapV2`, each account with the recipes' role) and each trade to the recipes' real-program
+pins; it logs each form's compute units. A Pot cannot create a PumpSwap buy's volume accumulator
+(the System program moves no lamports out of an account with data), so the suite creates it first
+with another payer.
+
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
 exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route body opened that

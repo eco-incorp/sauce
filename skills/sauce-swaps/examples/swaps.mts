@@ -145,7 +145,12 @@ console.log(`@sauce/router: ${Object.keys(LIBRARY).join(", ")}`);
 // price and at its own limit, its instruction alone and its instruction's data (Orca's two); and
 // `trySwap`/`swap`. Each family takes the arguments the skill gives.
 const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
-const solana = skill.slice(skill.indexOf("## On Solana"), skill.indexOf("## Example"));
+const section = (heading: string): string => {
+  const start = skill.indexOf(`## ${heading}`);
+  return skill.slice(start, skill.indexOf("\n## ", start + 1));
+};
+const solana = section("On Solana");
+const exact = section("Exact input on Solana");
 const svmArm = resolveSdkModule(entry.replace(/\.js$/, ".svm.js"));
 if (svmArm === undefined) throw new Error("@sauce/router has an SVM arm");
 const svmText = new TextDecoder().decode(svmArm);
@@ -168,15 +173,21 @@ const data = [
   "orcaWhirlpoolV2Data",
   "openbookV2LotsData",
 ];
+const limit = new Set([
+  ...priced,
+  ...priced.map(plainOf),
+  ...atLimit,
+  ...atLimit.map(plainOf),
+  ...cpi,
+  ...data,
+]);
 check(
   svmExports
-    .map((m) => m[1])
+    .map((m) => m[1]!)
+    .filter((name) => limit.has(name))
     .sort()
-    .join() ===
-    [...priced, ...priced.map(plainOf), ...atLimit, ...atLimit.map(plainOf), ...cpi, ...data]
-      .sort()
-      .join(),
-  "the SVM arm exports those, their plain forms and each venue's instruction alone and its data, and nothing else",
+    .join() === [...limit].sort().join(),
+  "the SVM arm exports those, their plain forms and each venue's instruction alone and its data",
 );
 const signature = "slot, trader, amountIn, maxPrice, minOut, recipient";
 check(solana.includes(`trySwap(${signature}): Uint256`), "the skill gives trySwap's arguments");
@@ -192,7 +203,7 @@ const argsOf = (args: string) =>
     .map((p) => p.trim().split(":")[0]!.trim())
     .filter(Boolean)
     .join(", ");
-for (const [, name, args] of svmExports) {
+for (const [, name, args] of svmExports.filter((m) => limit.has(m[1]!))) {
   const want = name!.endsWith("Data")
     ? /^(amountIn|baseLots, quoteLots)\b/
     : name!.endsWith("Cpi")
@@ -202,6 +213,44 @@ for (const [, name, args] of svmExports) {
         : new RegExp(`^${signature}$`);
   check(want.test(argsOf(args!)), `${name}(${argsOf(args!)})`);
 }
+// The exact-input venues: each one the skill names exported plain, as `try`, as `Cpi` and as `Data`,
+// the ones it names with `Cpi` and `Data` forms alone as those, and nothing else.
+const listed = exact.slice(
+  exact.indexOf("The venues:"),
+  exact.indexOf("\n\n", exact.indexOf("The venues:")),
+);
+const venues = [...listed.matchAll(/`([a-z]\w+)`/g)].map((m) => m[1]!);
+const instructionOnly = [...exact.matchAll(/`(\w+(?:Cpi|Data))`/g)]
+  .map((m) => m[1]!)
+  .filter((name) => !name.startsWith("raydiumCpSwap"));
+const capital = (name: string) => name.charAt(0).toUpperCase() + name.slice(1);
+check(
+  svmExports
+    .map((m) => m[1]!)
+    .filter((name) => !limit.has(name))
+    .sort()
+    .join() ===
+    [...venues.flatMap((v) => [v, `try${capital(v)}`, `${v}Cpi`, `${v}Data`]), ...instructionOnly]
+      .sort()
+      .join(),
+  "the SVM arm exports the exact-input venues' four forms, and the Cpi-only venues' two",
+);
+const exactSignature = "slot, trader, amountIn, minOut, recipient";
+check(
+  exact.includes(`raydiumCpSwap(${exactSignature}): Uint256`) &&
+    exact.includes("raydiumCpSwapCpi(program, accounts, source, amountIn, minOut): Uint256") &&
+    exact.includes("raydiumCpSwapData(amountIn, minOut): bytes"),
+  "the skill gives the exact-input forms' arguments",
+);
+for (const [, name, args] of svmExports.filter((m) => !limit.has(m[1]!)))
+  check(
+    name!.endsWith("Data")
+      ? /^amountIn\b/.test(argsOf(args!))
+      : name!.endsWith("Cpi")
+        ? /^program, accounts, source, amountIn\b/.test(argsOf(args!))
+        : argsOf(args!) === exactSignature,
+    `${name}'s arguments`,
+  );
 // What a program carries: one venue's function, or all nine through trySwap.
 const block = /```sauce chain=solana\n([\s\S]*?)```/.exec(solana)![1]!;
 const one = routes.compileSauceProgram("solana", block).bytecode.length;
@@ -214,3 +263,6 @@ check(
   `one venue's function is ${one} bytes of program, trySwap ${all}`,
 );
 console.log(`@sauce/router on Solana: ${named.join(", ")}; ${one} and ${all} bytes`);
+console.log(
+  `@sauce/router exact input on Solana: ${venues.length} venues in four forms, ${instructionOnly.join(", ")}`,
+);
