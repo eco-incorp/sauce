@@ -117,10 +117,14 @@ import {
   accountsNow,
   messageAccounts,
   movedBy,
+  svmLeftInPot,
+  svmLeftInPotJson,
+  svmLeftInPotLines,
   svmMovedJson,
   svmMovedLines,
   writableAccounts,
 } from "./svm-effects.js";
+import { linkLines, txLinks } from "./links.js";
 
 /** The released programs, from the release record the SDK ships. */
 const kitchen = (): Address => address(v12SvmKitchenProgramId());
@@ -1445,12 +1449,15 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
           input.owner,
         )
       : undefined;
+  // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
+  const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
   const missing = await missingAccounts(prepared.rpc, input.rpcUrl, prepared.given);
   // What main returned: the engine's return data, read as the type main declares.
   const returns = result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
   const returnType = mainReturnType(input.text);
   const json = {
     ok: result.ok,
+    ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
     chain: "solana",
     via: prepared.via,
     owner: input.owner,
@@ -1497,6 +1504,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
         ...(returns === undefined || returnType === undefined
           ? []
           : [returnedLine(returnType, returns, input.chain)]),
+        ...(left === undefined ? [] : svmLeftInPotLines(left, "the owner's wallet")),
         ...how,
         ...(moved === undefined ? [] : svmMovedLines(moved)),
       ].join("\n"),
@@ -1721,6 +1729,8 @@ async function stagedRehearsal(
   const moved = failed
     ? undefined
     : await movedBy(prepared.rpc, input.chain, tracked, before, after, labels, owner);
+  // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
+  const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
   // What main returned stands even when the transaction then fails on its own (a rent check, say):
   // only a failed instruction undoes the program's return.
   const instructionFailed =
@@ -1739,6 +1749,7 @@ async function stagedRehearsal(
   const staged = `${bytecode.length}-byte`;
   const json = {
     ok: !failed,
+    ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
     chain: "solana",
     via: prepared.via,
     owner,
@@ -1791,6 +1802,7 @@ async function stagedRehearsal(
         ...(returns === undefined || returnType === undefined
           ? []
           : [returnedLine(returnType, returns, input.chain)]),
+        ...(left === undefined ? [] : svmLeftInPotLines(left, "the owner's wallet")),
         ...how,
         ...(moved === undefined ? [] : svmMovedLines(moved)),
       ].join("\n"),
@@ -2058,8 +2070,15 @@ const sentLine = (what: string, sent: SvmSent): string =>
   (sent.computeUnits === undefined ? "" : `, ${sent.computeUnits} compute units`) +
   (sent.reason === undefined ? "" : `, ${sent.reason}`);
 
+/** A sent transaction's line, then where a person opens it: Solscan, and its trace. */
+const sentLines = (what: string, sent: SvmSent): string[] => [
+  sentLine(what, sent),
+  ...linkLines(txLinks(requireChain("solana"), sent.signature)),
+];
+
 const sentJson = (sent: SvmSent): Record<string, unknown> => ({
   signature: sent.signature,
+  ...txLinks(requireChain("solana"), sent.signature),
   status: sent.ok ? "success" : "failed",
   ...(sent.computeUnits === undefined ? {} : { computeUnits: sent.computeUnits.toString() }),
   ...(sent.reason === undefined ? {} : { reason: sent.reason, logs: sent.logs }),
@@ -2244,7 +2263,27 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       return wouldFail(error, staged, tables);
     }
   }
+  // What the cook moves: every account it may write, read before it is sent and once it lands.
+  const tracked = writableAccounts(transaction, table?.tables ?? prepared.lookupTables);
+  const before = await accountsNow(prepared.rpc, tracked).catch(() => undefined);
   const cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
+  const after =
+    cook.ok && before !== undefined
+      ? await accountsNow(prepared.rpc, tracked).catch(() => undefined)
+      : undefined;
+  const moved =
+    before === undefined || after === undefined
+      ? undefined
+      : await movedBy(
+          prepared.rpc,
+          input.chain,
+          tracked,
+          before,
+          after,
+          await accountLabels(input, prepared.pot, prepared.given),
+          input.owner,
+        );
+  const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
   // The cook has landed (or failed) by now: whatever happens to the buffer, it is reported.
   const closed =
     staged === undefined
@@ -2253,10 +2292,10 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
 
   return {
     text: [
-      ...(created === undefined ? [] : [sentLine(`created Pot ${prepared.pot} in`, created)]),
+      ...(created === undefined ? [] : sentLines(`created Pot ${prepared.pot} in`, created)),
       ...(accountsMade === undefined
         ? []
-        : [sentLine(`created ${accountsMade.made.join("; ")} in`, accountsMade.sent)]),
+        : sentLines(`created ${accountsMade.made.join("; ")} in`, accountsMade.sent)),
       ...(staged === undefined
         ? []
         : [
@@ -2269,12 +2308,14 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
               `${table.sent.length} transactions; a later cook naming them reuses it with ` +
               `--lookup-table ${table.address}`,
           ]),
-      sentLine(direct ? "cook (direct to the engine)" : "cook", cook),
+      ...sentLines(direct ? "cook (direct to the engine)" : "cook", cook),
       ...(cook.ok ? [`execution fee: ${prepared.fee} lamports`] : []),
+      ...(left === undefined ? [] : svmLeftInPotLines(left, "your wallet")),
+      ...(moved === undefined ? [] : svmMovedLines(moved)),
       ...(cook.ok ? [] : ["Program logs:", ...cook.logs.map((line) => `  ${line}`)]),
       ...(closed?.sent === undefined || closed.open !== undefined
         ? []
-        : [sentLine("closed the code buffer in", closed.sent)]),
+        : sentLines("closed the code buffer in", closed.sent)),
     ].join("\n"),
     ...(closed?.open === undefined ? {} : { notes: [`warning: ${closed.open}`] }),
     json: {
@@ -2306,7 +2347,8 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
               transactions: table.sent.map((step) => step.signature),
             },
           }),
-      cook: sentJson(cook),
+      ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
+      cook: { ...sentJson(cook), ...(moved === undefined ? {} : svmMovedJson(moved)) },
       ...(closed?.sent === undefined ? {} : { closeCodeBuffer: sentJson(closed.sent) }),
       ...(closed?.open === undefined ? {} : { warning: closed.open }),
     },
@@ -2573,7 +2615,7 @@ export async function svmPotDeployCommand(
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    notes: [sentLine(`created Pot ${pot} in`, sent)],
+    notes: sentLines(`created Pot ${pot} in`, sent).map((line) => line.trim()),
     ...(sent.ok ? {} : { exitCode: 1 }),
   };
 }

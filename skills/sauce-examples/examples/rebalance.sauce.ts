@@ -4,6 +4,8 @@
 // trade, so a thin pool fills part of it and the rest waits for the next run. Inside the band it
 // trades nothing. Returns the WETH share before and after, whether WETH was sold or bought, and
 // the amounts in and out.
+// Both tokens stay in the Pot on purpose: it rebalances the Pot's own holdings, so each swap's
+// recipient is the Pot.
 //
 //   sauce run rebalance.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <targetBps> <bandBps> <maxSlippageBps>

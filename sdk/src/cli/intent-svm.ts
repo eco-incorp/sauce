@@ -20,6 +20,7 @@ import { svmTokenRows } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { unapproved, type CommandOutput } from "./commands.js";
 import type { LifecycleContext, Target } from "./intent-commands.js";
+import { linkLines, txLinks } from "./links.js";
 import { buildFill, buildProve } from "./lifecycle.js";
 import { rehearseSvm, tokenAccountAmount, type SvmTxJson } from "./lifecycle-svm.js";
 import { sendPlannedSvm, type SvmSent } from "./solana.js";
@@ -191,13 +192,18 @@ export async function svmFillCommand(
     const lines = [
       ...(context.approver.auto ? [...head, ...rehearsed, ""] : []),
       `Filled ${record.intentHash} on ${chain.slug}: ${sent.signature}, slot ${sent.slot ?? "?"}`,
+      ...linkLines(txLinks(chain, sent.signature)),
     ];
     const entry: Record<string, unknown> = {
       intentHash: record.intentHash,
       ok: true,
       sent: true,
       solver,
-      fill: { signature: sent.signature, slot: (sent.slot ?? 0n).toString() },
+      fill: {
+        signature: sent.signature,
+        ...txLinks(chain, sent.signature),
+        slot: (sent.slot ?? 0n).toString(),
+      },
     };
     if (fill.proves) {
       // The proof, built now that the fill is recorded, and rehearsed: its gas is the IGP's quote.
@@ -237,8 +243,10 @@ export async function svmFillCommand(
                 ? ""
                 : `; the proof travels to ${record.source.chain} as Hyperlane message ${message} (dispatched by the Mailbox ${SOLANA_HYPERLANE.mailbox})`),
           );
+          lines.push(...linkLines(txLinks(chain, proven.signature)));
           entry.proof = {
             signature: proven.signature,
+            ...txLinks(chain, proven.signature),
             slot: (proven.slot ?? 0n).toString(),
             ...(message === undefined ? {} : { message }),
           };

@@ -373,6 +373,7 @@ const SUMMARY_FIELDS = [
   "error",
   "expectRevert",
   "asExpected",
+  "leftInPot",
   "chain",
   "block",
   "stage",
@@ -398,6 +399,38 @@ export function simulateSummary(json: Record<string, unknown>): Record<string, u
     ...SUMMARY_FIELDS.filter((field) => field in json).map((field) => [field, json[field]]),
     ...("returns" in json && !("returnType" in json) ? [["returns", json.returns]] : []),
   ]);
+}
+
+/**
+ * What a rehearsal says of what the cook leaves in the Pot (`leftInPot`), as a note to pass on:
+ * the outcome a person looks for in their wallet and does not find there. None when it leaves the
+ * Pot nothing.
+ */
+export function leftInPotNote(json: Record<string, unknown>): string | undefined {
+  const left = json.leftInPot as
+    | ReadonlyArray<{
+        token?: string;
+        mint?: string;
+        symbol?: string;
+        amount: string;
+        formatted?: string;
+      }>
+    | undefined;
+  if (left === undefined || left.length === 0) return undefined;
+  const amounts = left.map((each) => {
+    const unit = each.symbol ?? each.token ?? each.mint;
+
+    return each.formatted === undefined
+      ? `${each.amount} ${unit} (base units)`
+      : `${each.formatted} ${unit}`;
+  });
+
+  return (
+    `After this cook the Pot holds ${amounts.join(", ")} of what it moved (leftInPot), not the ` +
+    "owner's wallet: only another cook moves it out. Tell the user before building the " +
+    "transaction. For it to end in their wallet, the program must send it there, or name the " +
+    "wallet as the recipient of the call that produces it."
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1860,7 +1893,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "says which), on a Pot that need not be deployed yet — the rehearsal deploys it first, " +
         "and `transactions` gives each transaction's gas (Kitchen.deployPot, then the cook). " +
         "Returns ok, gas, what main returns, the ERC-20 transfers and approvals, native " +
-        "transfers and each address's net balance change. A cook that reverts is an ERROR " +
+        "transfers and each address's net balance change, and first `leftInPot`: what the Pot " +
+        "holds after the cook of the tokens it moved, which stays in the Pot, not the owner's " +
+        "wallet, until another cook moves it (empty when it leaves nothing; a note says so " +
+        "otherwise, to tell the user). A cook that reverts is an ERROR " +
         "result, led by reverted: true and error (the decoded reason), with ok: false and the " +
         "`stage` it reverts at: it did not work. expectRevert holds a rehearsal of a guard to " +
         "its revert instead (ok, and asExpected, only when it reverts with that reason). " +
@@ -1870,10 +1906,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "state (sauce_pools' block, to rehearse on the prices a limit was taken from). " +
         "`scenarios` rehearses one program several times — each its own args, defines and " +
         "balances, all at one block — with one result each. summary returns only what decides " +
-        "a trade: ok or the reason, what main returns, balance changes, transfers, each " +
-        "transaction's gas and the block. Solana: the Kitchen cook simulated from the owner (a " +
+        "a trade: ok or the reason, what main returns, leftInPot, balance changes, transfers, " +
+        "each transaction's gas and the block. Solana: the Kitchen cook simulated from the owner (a " +
         "missing Pot created first), or via engine the engine's own paid cook with no Pot: " +
-        "compute units, the fee, or the reason and the program logs; a cook too large for one " +
+        "compute units, the fee, each token account's change and `leftInPot` (the Pot's token " +
+        "accounts left holding something), or the reason and the program logs; a cook too large for one " +
         "transaction, or given assumeBalance, in a local copy of the accounts it names (`path`), " +
         "its program staged as sauce run stages it. `sourceSha256` is the " +
         "sha256 of the program's text. Nothing is signed or sent.",
@@ -1924,9 +1961,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .boolean()
           .optional()
           .describe(
-            "Return only ok or the revert reason, what main returns (decoded), balance changes, " +
-              "transfers, each transaction's gas and the block: none of the state overrides, " +
-              "approvals or other logs.",
+            "Return only ok or the revert reason, what main returns (decoded), what stays in " +
+              "the Pot (leftInPot), balance changes, transfers, each transaction's gas and the " +
+              "block: none of the state overrides, approvals or other logs.",
           ),
       },
       output: {
@@ -1936,6 +1973,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         expectRevert: z.string().optional(),
         asExpected: z.boolean().optional(),
         sourceSha256: z.string(),
+        leftInPot: z.array(z.looseObject({ amount: z.string(), before: z.string() })).optional(),
         scenarios: z.array(z.looseObject({ ok: z.boolean() })).optional(),
       },
       annotations: READS_CHAIN,
@@ -1956,8 +1994,16 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         snapshot?: ForkSnapshot,
       ): Promise<ToolOutput> => {
         const expected = each.expectRevert ?? args.expectRevert;
-        const held = (output: CommandOutput) =>
-          fromCommand(expected === undefined ? output : expectingRevert(output, expected));
+        const held = (output: CommandOutput): ToolOutput => {
+          const result = fromCommand(
+            expected === undefined ? output : expectingRevert(output, expected),
+          );
+          const left = leftInPotNote(result.json);
+
+          return left === undefined
+            ? result
+            : { ...result, notes: [...(result.notes ?? []), left] };
+        };
         const scenario = {
           ...args,
           ...(each.args === undefined ? {} : { args: each.args }),

@@ -4,6 +4,8 @@
 // price less `maxSlippageBps`, after the pool's fee. Between the two it sells nothing and does not
 // fail; what the pool cannot take at that price stays in the Pot, with the USDC. Returns the
 // oracle's price, whether it triggered, and the WETH sold and USDC received.
+// The USDC received stays in the Pot on purpose (the swap's recipient is the Pot), beside any WETH
+// left; a later cook sends it to the wallet.
 //
 //   sauce run stop-loss.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <stop> <takeProfit> <maxSlippageBps> <maxAge>

@@ -193,7 +193,8 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "OFF_ORDER_PRICE",
   "OFF_ORDER_SEQ",
   "OFF_ORDER_SIZE",
-  "OFF_POOL_RESERVE",
+  "OFF_POOL_CAP_BAL",
+  "OFF_POOL_MIN_SWAP_AMOUNT",
   "OFF_POSITION_AMOUNT",
   "OFF_POSITION_CEILING",
   "OFF_PYTH_PRICE",
@@ -599,8 +600,8 @@ const CONSUMER_UNION_TYPES: readonly string[] = [
 ];
 
 describe("consumer-union barrel surface (sauce-recipes)", () => {
-  it("pins the expected counts (436 values, 100 types) so a future edit is deliberate", () => {
-    expect(CONSUMER_UNION_VALUES.length).toBe(436);
+  it("pins the expected counts (437 values, 100 types) so a future edit is deliberate", () => {
+    expect(CONSUMER_UNION_VALUES.length).toBe(437);
     expect(CONSUMER_UNION_TYPES.length).toBe(100);
   });
 

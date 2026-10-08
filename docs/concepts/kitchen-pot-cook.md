@@ -84,6 +84,37 @@ function main(recipient: Address, floor: Uint256) {
 with different values. A pool that calls back in the middle of a swap reaches the Pot again, and the
 Pot hands that callback to its Router: [A Pot's Router](architecture.md#a-pots-router) explains it.
 
+## Where a program's results end
+
+What a cook produces lands where the program sends it, and a call that credits its caller credits
+the Pot. A swap with no other recipient, a lending market's receipt tokens supplied for
+`ctx.self()` (Aave's aTokens, with `onBehalfOf` the Pot), a vault's shares minted to the Pot: all
+stay in the Pot. They are yours, but they are not in your wallet, a wallet app does not show them,
+and only another cook moves them out. Decide, before writing the program, whether each result
+should end in your wallet or stay in the Pot. To deliver it, the program sends it to the wallet, or
+names the wallet as the call's beneficiary (`onBehalfOf`, `receiver`, `recipient`, `to`), a `main`
+parameter. Keeping a position in the Pot is a choice too: a later cook can then withdraw it or
+borrow against it without the wallet moving anything back first.
+
+The `sauce` command says which it was, before and after. A rehearsal (`sauce simulate`) and a sent
+cook (`sauce run`) lead with what the Pot holds after the cook of each token the cook moved, with
+what it held before; a cook that leaves the Pot nothing prints none:
+
+```text
+The cook succeeds from 0x0305…262A: gas used 268566 for the cook, after the Pot's deploy (1. below), returns 0x
+Left in the Pot, not in the owner's wallet:
+  0.999999 aBasUSDC
+  Only another cook moves it out. To end in a wallet, the program must send it there, or name the wallet as the recipient of the call that produces it.
+```
+
+`--json` gives it as `leftInPot`, first after `ok`. It counts tokens: a position a protocol keeps in
+its own books, with no token for it, shows in no balance. Below it, what moved is listed in order,
+each party by its role (`wallet`, `Pot`, `Kitchen`, a registry name, a token's symbol, `mint` and
+`burn`). Before sending, review three things together: the final program, the arguments it is
+called with, and what the rehearsal says will happen, meaning what leaves your wallet, what arrives
+where, and what stays in the Pot. A sent transaction prints its explorer page and its trace on
+BlockSec's Phalcon explorer (its calls and balance changes), to open in a browser.
+
 ## Who can do what
 
 |                     | Can                                              | Cannot                                                                 |

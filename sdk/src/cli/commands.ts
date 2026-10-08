@@ -53,7 +53,8 @@ import {
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
-import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
+import { linkLines, txLinks } from "./links.js";
+import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
@@ -581,8 +582,15 @@ const sentText = (what: string, sent: Sent): string =>
   `${what} ${sent.hash}: ${sent.status}, gas used ${sent.gasUsed}, block ${sent.blockNumber}` +
   (sent.reason === undefined ? "" : `, reverted: ${sent.reason}`);
 
-const sentJson = (sent: Sent): Record<string, unknown> => ({
+/** A sent transaction's line, then where a person opens it: its explorer page and its trace. */
+const sentLines = (what: string, sent: Sent, chain: CanonicalChain): string[] => [
+  sentText(what, sent),
+  ...linkLines(txLinks(chain, sent.hash)),
+];
+
+const sentJson = (sent: Sent, chain: CanonicalChain): Record<string, unknown> => ({
   hash: sent.hash,
+  ...txLinks(chain, sent.hash),
   status: sent.status,
   gasUsed: sent.gasUsed.toString(),
   blockNumber: sent.blockNumber.toString(),
@@ -708,39 +716,55 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const notes = [...(funding?.notes ?? []), ...stored];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
-  const effects =
+  const report =
     sent.receipt === undefined || sent.status !== "success"
       ? undefined
-      : receiptReport(
-          await receiptEffects(client, input.chain, sent.receipt, [
-            [signer, "you"],
-            [cook.pot, "the Pot"],
-          ]),
-        );
+      : // The cook was sent: a failure to read its receipt back is a note, never the result.
+        await cookReport(client, input.chain, sent.receipt, {
+          sender: signer,
+          pot: cook.pot,
+          wallet: "your wallet",
+        }).catch((error: unknown) => {
+          notes.push(
+            `what the cook moved could not be read back: ${(error as { shortMessage?: string }).shortMessage ?? "the endpoint failed"}`,
+          );
+
+          return undefined;
+        });
+  notes.push(...(report?.notes ?? []));
 
   return {
     text: [
-      ...(deployed === undefined ? [] : [sentText(`deployed Pot ${cook.pot} in`, deployed)]),
-      ...(funding?.sent ?? []).map((step) => sentText(step.what, step.sent)),
-      sentText("cook", sent),
+      ...(deployed === undefined
+        ? []
+        : sentLines(`deployed Pot ${cook.pot} in`, deployed, input.chain)),
+      ...(funding?.sent ?? []).flatMap((step) => sentLines(step.what, step.sent, input.chain)),
+      ...sentLines("cook", sent, input.chain),
       ...(cost === undefined
         ? []
         : [costLine(cost, input.chain, "the Kitchen's fee and any native the program spends")]),
-      ...(effects?.lines ?? []),
+      ...(report?.left ?? []),
+      ...(report?.lines ?? []),
     ].join("\n"),
     json: {
       chain: input.chain.slug,
       from: signer,
       pot: cook.pot,
       value: value.toString(),
-      ...(deployed === undefined ? {} : { deployPot: sentJson(deployed) }),
+      ...(report === undefined ? {} : { leftInPot: report.leftInPot }),
+      ...(deployed === undefined ? {} : { deployPot: sentJson(deployed, input.chain) }),
       ...(funding === undefined
         ? {}
-        : { funding: funding.sent.map((step) => ({ what: step.what, ...sentJson(step.sent) })) }),
+        : {
+            funding: funding.sent.map((step) => ({
+              what: step.what,
+              ...sentJson(step.sent, input.chain),
+            })),
+          }),
       cook: {
-        ...sentJson(sent),
+        ...sentJson(sent, input.chain),
         ...(cost === undefined ? {} : { cost: costJson(cost) }),
-        ...(effects === undefined ? {} : { effects: effects.json }),
+        ...(report === undefined ? {} : { effects: report.effects }),
       },
     },
     ...(notes.length === 0 ? {} : { notes }),
@@ -897,14 +921,14 @@ export async function potDeployCommand(
     ...predicted.json,
     deployed: sent.status === "success",
     sender,
-    deployPot: sentJson(sent),
+    deployPot: sentJson(sent, input.chain),
   };
 
   return {
     text: JSON.stringify(json, null, 2),
     json,
     notes: [
-      sentText(`deployed Pot ${pot} in`, sent),
+      ...sentLines(`deployed Pot ${pot} in`, sent, input.chain).map((line) => line.trim()),
       ...(getAddress(input.owner) === sender
         ? []
         : [

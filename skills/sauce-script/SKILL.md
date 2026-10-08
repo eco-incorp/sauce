@@ -77,12 +77,14 @@ function afterFee(amount: Uint256): Uint256 {
   return amount - amount / 1000;
 }
 
-// Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot itself.
+// Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot's owner: in a cook on the
+// owner's Pot, `ctx.msgSender()` is the owner who sent it, so the aTokens land in their wallet.
+// `ctx.self()` there would keep them in the Pot.
 const held = USDC.balanceOf(ctx.self());
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
 USDC.approve(AaveV3.Pool, supplied);
-AaveV3.Pool.supply(USDC, supplied, ctx.self(), 0);
+AaveV3.Pool.supply(USDC, supplied, ctx.msgSender(), 0);
 ```
 
 A `const` at the top of a script is the script's own local: a helper cannot read it (pass it in).
@@ -222,6 +224,24 @@ function main(vault: Address, shares: Uint256): Uint256 {
 }
 ```
 
+**Who receives what a call produces.** Many calls name a beneficiary: a lending market's
+`onBehalfOf` (who gets the aTokens), a vault's `receiver`, a swap's `recipient`, a bridge's `to`.
+Every call comes from the Pot, so `ctx.self()` there, or a call that credits its caller, leaves the
+output in the Pot: it is the owner's, but not in their wallet, and only another cook moves it.
+Ask the user whether it should end in their wallet or stay in the Pot, and write it that way, the
+wallet a `main` parameter. In a cook on the user's own Pot, `ctx.msgSender()` is its owner, the
+wallet that sent the cook; in an intent's body it is not (the body runs on a Pot the intent's
+solvers share), so there the wallet is always a parameter:
+
+```sauce chain=base,ethereum
+// Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
+// user's wallet, or the Pot itself (`ctx.self()`) when the user keeps the position there.
+function main(onBehalfOf: Address, amount: Uint256) {
+  USDC.approve(AaveV3.Pool, amount);
+  AaveV3.Pool.supply(USDC, amount, onBehalfOf, 0);
+}
+```
+
 ## Functions
 
 - **Call what exists directly.** Typed bindings, namespaces and library functions are called as
@@ -320,10 +340,10 @@ enclosing function.
 ```sauce chain=base
 import { ISauceRouter } from "./artifacts/ISauceRouter.json";
 
-function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256) {
+function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256, recipient: Address) {
   let filled = true;
   ISauceRouter.at(ctx.self())
-    .swapV3(pool, WETH, WETH < USDC, amount, sqrtPriceLimitX96, ctx.self())
+    .swapV3(pool, WETH, WETH < USDC, amount, sqrtPriceLimitX96, recipient)
     .catch(() => {
       filled = false;
     });

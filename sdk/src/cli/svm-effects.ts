@@ -20,6 +20,7 @@ import { bytesToHex, formatUnits } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { sourceGlobals } from "../routes/source-globals.js";
 import type { SimulatedAccount } from "../svm/index.js";
+import { POT_HOLDS } from "./effects.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -298,6 +299,48 @@ export function svmMovedLines(moved: SvmMoved): string[] {
 
   return lines;
 }
+
+/** The Pot's token accounts the cook changed and leaves holding something: what the cook leaves in
+ *  the Pot, not in the owner's wallet. */
+export const svmLeftInPot = (moved: SvmMoved, pot: Address): TokenChange[] =>
+  moved.tokens.filter((change) => change.owner === pot && change.after > 0n);
+
+const amountOf = (change: TokenChange, amount: bigint): string =>
+  change.decimals === undefined
+    ? `${amount} ${change.symbol ?? `of mint ${change.mint}`} (base units)`
+    : `${formatUnits(amount, change.decimals)} ${change.symbol ?? `of mint ${change.mint}`}`;
+
+/**
+ * What the cook leaves in the Pot, for a person: the lines that lead the report, so nobody looks
+ * for it in their wallet. None for a cook that leaves the Pot nothing.
+ */
+export function svmLeftInPotLines(left: readonly TokenChange[], wallet: string): string[] {
+  if (left.length === 0) return [];
+
+  return [
+    `Left in the Pot, not in ${wallet}:`,
+    ...left.map(
+      (change) =>
+        `  ${amountOf(change, change.after)}, in ${change.account}` +
+        (change.before === 0n ? "" : ` (it held ${amountOf(change, change.before)} before)`),
+    ),
+    `  ${POT_HOLDS}`,
+  ];
+}
+
+/** What the cook leaves in the Pot, for a program (`leftInPot`): each token account of the Pot's
+ *  that ends holding something, with what it held before. */
+export const svmLeftInPotJson = (left: readonly TokenChange[]): Array<Record<string, unknown>> =>
+  left.map((change) => ({
+    account: change.account,
+    mint: change.mint,
+    ...(change.symbol === undefined ? {} : { symbol: change.symbol }),
+    amount: change.after.toString(),
+    ...(change.decimals === undefined
+      ? {}
+      : { decimals: change.decimals, formatted: formatUnits(change.after, change.decimals) }),
+    before: change.before.toString(),
+  }));
 
 /** What moved, for a program: amounts in base units as decimal strings. */
 export function svmMovedJson(moved: SvmMoved): Record<string, unknown> {
