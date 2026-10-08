@@ -543,6 +543,44 @@ export interface SauceIntentNative {
 
 ${renderHop()}
 
+/** What a chain's \`remote\` takes beside its body. Each left out has its default. */
+export interface SauceRemoteOptions {
+  /**
+   * The bridge the message goes over, which both chains must have. Left out, the first of
+   * Hyperlane, LayerZero, Metalayer and Polymer both chains have.
+   */
+  readonly via?: "hyperlane" | "layerzero" | "metalayer" | "polymer";
+  /** The gas the destination Pot's handler is given, which a relayed bridge prices. 500,000 when left out. */
+  readonly gas?: bigint | number;
+  /** The same for the way back, after a \`.then\` or a \`.catch\`. 500,000 when left out. */
+  readonly replyGas?: bigint | number;
+}
+
+/**
+ * A remote message: its body runs on the chain, as the same Pot. Nothing comes back unless it
+ * has a \`.then\` or a \`.catch\`; \`await\` it, and the code after it runs back here once the body
+ * ran there.
+ */
+export interface SauceRemote {
+  /**
+   * What runs back here with what the body returned, the bytes its program answered. It is never
+   * invoked here: it is compiled for this chain and travels there and back with the message.
+   */
+  then(continuation: (result: SauceBytes) => void): SauceRemoteThen;
+  /** What runs back here, with what the body reverted with (at most its first 256 bytes). */
+  catch(handler: (e: SauceBytes) => void): void;
+}
+
+/** A remote message with its \`.then\`. */
+export interface SauceRemoteThen {
+  /**
+   * What runs back here when the body reverts there, with what it reverted with (at most its first
+   * 256 bytes), and in place of the \`.then\` when that reverts. Without it, a body that reverts
+   * reverts the delivery, which the bridge can retry.
+   */
+  catch(handler: (e: SauceBytes) => void): void;
+}
+
 /**
  * A chain in compiled source: \`hop\` opens an intent whose body runs there,
  * \`await Ethereum.hop({ send: { token, amount }, refundee })\`, and \`Portal\` is its eco-routes
@@ -554,6 +592,11 @@ ${renderHop()}
 export interface SauceIntentChain {
   /** Opens an intent whose body runs on this chain. */
   hop(config: SauceHopConfig): SauceHop;
+  /**
+   * Sends \`body\` to the same Private Pot on this chain over a bridge, to run there:
+   * \`Base.remote(() => { … }).then((result) => { … })\`.
+   */
+  remote(body: () => unknown, options?: SauceRemoteOptions): SauceRemote;
   /** This chain's eco-routes Portal, the contract: for a low-level call, never to open an intent. */
   readonly Portal: SauceContract<EcoRoutesPortalMethods>;
 }
