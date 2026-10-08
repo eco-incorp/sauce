@@ -13,6 +13,8 @@ Single-asset lending protocol (Comet) with isolated markets per base asset. Each
 ## Pitfalls for a program
 
 - Approve the Comet before `supply`.
+- `supply(asset, amount)` credits its caller, the Pot: the position is then the Pot's, not the
+  user's wallet's. `supplyTo(dst, asset, amount)` credits `dst`; ask the user which they want.
 - Supplying the base asset while you have a borrow repays the borrow first.
 - Withdrawing more base asset than you supplied **borrows** the rest, if your collateral allows:
   check `balanceOf` and `borrowBalanceOf` before and after.
@@ -21,15 +23,15 @@ Single-asset lending protocol (Comet) with isolated markets per base asset. Each
 
 ## In a Sauce program
 
-Supply the Pot's USDC to the USDC market and check it was credited:
+Supply the Pot's USDC to the USDC market for `onBehalfOf` (the user's wallet, or `ctx.self()` to
+keep the position in the Pot) and check it was credited:
 
 ```sauce chain=base,arbitrum
-function main(amount: Uint256) {
-  const self = ctx.self();
-  const before = CompoundV3.CUSDCv3.balanceOf(self);
+function main(onBehalfOf: Address, amount: Uint256) {
+  const before = CompoundV3.CUSDCv3.balanceOf(onBehalfOf);
   USDC.approve(CompoundV3.CUSDCv3, amount);
-  CompoundV3.CUSDCv3.supply(USDC, amount);
-  require(CompoundV3.CUSDCv3.balanceOf(self) > before, "supply not credited");
+  CompoundV3.CUSDCv3.supplyTo(onBehalfOf, USDC, amount);
+  require(CompoundV3.CUSDCv3.balanceOf(onBehalfOf) > before, "supply not credited");
 }
 ```
 

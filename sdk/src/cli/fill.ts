@@ -72,6 +72,7 @@ import {
   effectsJson,
   effectsOf,
   formatAmount,
+  heldAround,
   labelled,
   nativeSymbol,
   type Effects,
@@ -84,6 +85,7 @@ import {
   type FillStep,
   type IntentRecord,
 } from "./lifecycle.js";
+import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf } from "./receipt.js";
 import type { IntentStore } from "./store.js";
 import { requireSupported } from "./support.js";
@@ -511,37 +513,26 @@ async function leftBehind(
   effects: Effects,
   holders: readonly Address[],
 ): Promise<Left[]> {
-  const pairs = holders.flatMap((holder) => {
-    const tokens = new Set<Address | "native">();
-    for (const move of [...effects.transfers, ...(effects.native ?? [])]) {
-      if (move.from === holder || move.to === holder) tokens.add(move.token);
-    }
-
-    return [...tokens].map((token) => ({ holder, token }));
-  });
-
-  // Every balance at once: they are independent reads of the state before the fill.
-  return Promise.all(
-    pairs.map(async ({ holder, token }) => {
-      const before =
-        token === "native"
-          ? await read("a balance", () => client.getBalance({ address: holder }))
-          : await read("a token balance", () =>
-              client.readContract({
-                address: token,
-                abi: ERC20,
-                functionName: "balanceOf",
-                args: [holder],
-              }),
-            );
-      const delta =
-        effects.changes
-          .find((change) => change.address === holder)
-          ?.deltas.find((entry) => entry.token === token)?.amount ?? 0n;
-
-      return { holder, token, before, after: before + delta };
-    }),
+  const held = await Promise.all(
+    holders.map(async (holder) =>
+      (
+        await heldAround(effects, holder, (token) =>
+          token === "native"
+            ? read("a balance", () => client.getBalance({ address: holder }))
+            : read("a token balance", () =>
+                client.readContract({
+                  address: token,
+                  abi: ERC20,
+                  functionName: "balanceOf",
+                  args: [holder],
+                }),
+              ),
+        )
+      ).map((each) => ({ holder, ...each })),
+    ),
   );
+
+  return held.flat();
 }
 
 const assumedText = (balance: Assumed): string =>
@@ -819,15 +810,16 @@ function sentLines(done: SentFill): string[] {
   const lines = [
     `${head(fill)}${fill.plan.proves ? "filled, and its proof sent" : "filled"}, in ` +
       `${done.sent.length} transaction(s) on ${fill.target.destination.slug} from ${fill.plan.solver}:`,
-    ...done.sent.map(({ step, result }, index) => {
+    ...done.sent.flatMap(({ step, result }, index) => {
       const cost = costs[index];
 
-      return (
+      return [
         `  ${index + 1}. ${step.what}: ${result.hash}, block ${result.blockNumber}` +
-        (cost === undefined
-          ? `, gas used ${result.gasUsed}`
-          : `; ${costLine(cost, fill.target.destination, step.kind === "fulfill" ? "the route's native amount and the proof's fee" : "none")}`)
-      );
+          (cost === undefined
+            ? `, gas used ${result.gasUsed}`
+            : `; ${costLine(cost, fill.target.destination, step.kind === "fulfill" ? "the route's native amount and the proof's fee" : "none")}`),
+        ...linkLines(txLinks(fill.target.destination, result.hash), "     "),
+      ];
     }),
     `In all: ${formatUnits(
       costs.reduce((sum, cost) => sum + (cost?.total ?? 0n), 0n),
@@ -950,6 +942,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
           what: step.what,
           kind: step.kind,
           hash: result.hash,
+          ...txLinks(entry.fill.target.destination, result.hash),
           status: result.status,
           block: result.blockNumber.toString(),
           gasUsed: result.gasUsed.toString(),

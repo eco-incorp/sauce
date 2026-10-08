@@ -126,7 +126,19 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     assert.equal(sent.from, wallet);
     assert.equal(sent.sent.length, 1);
     assert.equal(sent.sent[0]!.status, "success");
-    const receipt = await base.publicClient.getTransactionReceipt({ hash: sent.sent[0]!.hash });
+    // Beside the hash, the pages a person opens: the explorer and the trace.
+    const hash = sent.sent[0]!.hash;
+    assert.deepEqual(
+      [
+        (sent.sent[0] as Record<string, unknown>).explorer,
+        (sent.sent[0] as Record<string, unknown>).trace,
+      ],
+      [
+        `https://basescan.org/tx/${hash}`,
+        `https://app.blocksec.com/phalcon/explorer/tx/base/${hash}`,
+      ],
+    );
+    const receipt = await base.publicClient.getTransactionReceipt({ hash });
     assert.equal(getAddress(receipt.from), wallet);
     assert.notEqual(await base.publicClient.getCode({ address: pot }), undefined);
     assert.ok(
@@ -137,9 +149,40 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
   it("sends sauce_tx's cook, and two cooks rehearsed together", async () => {
     await base.mint(usdc, pot, 10_000_000n);
     const cook = await cookOf(1_000_000n);
-    const sent = ok(await mcp.call("sauce_wallet_send", { wallet: "agent", transaction: cook }));
+    const sent = ok(
+      await mcp.call("sauce_wallet_send", { wallet: "agent", transaction: cook }),
+    ) as {
+      ok: boolean;
+      sent: Array<Record<string, unknown>>;
+    };
     assert.equal(sent.ok, true);
     assert.equal(await base.balanceOf(usdc, RECIPIENT), 1_000_000n);
+    // A cook's receipt, read back: what moved, by role, and the 9 USDC that stay in the Pot.
+    const [landed] = sent.sent;
+    assert.deepEqual(landed!.leftInPot, [
+      {
+        token: usdc,
+        symbol: "USDC",
+        decimals: 6,
+        amount: "9000000",
+        formatted: "9",
+        before: "10000000",
+      },
+    ]);
+    assert.deepEqual(
+      (landed!.moves as Array<Record<string, unknown>>).map((move) => [
+        move.fromRole,
+        move.to,
+        move.amount,
+      ]),
+      [["Pot", RECIPIENT, "1000000"]],
+    );
+    const summary = landed!.summary as string[];
+    assert.deepEqual(summary.slice(0, 2), [
+      "Left in the Pot, not in the wallet:",
+      "  9 USDC (it held 10 USDC before)",
+    ]);
+    assert.ok(summary.includes("What moved, in order:"), summary.join("\n"));
     const both = ok(
       await mcp.call("sauce_wallet_send", {
         wallet: "agent",

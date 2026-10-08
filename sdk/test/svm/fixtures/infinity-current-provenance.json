@@ -1,0 +1,132 @@
+{
+  "slot": 448452857,
+  "scope": "Current base accounts captured in one response at slot 448452857. Program metadata fetched separately at recorded slots. Header-only ProgramData fixtures are reconstructed with genuine ELF for physical CPI and cost; native-only tests pad unread bytes to actual recorded length.",
+  "files": {
+    "lst-state-list.json": "42eb2323bc565d01407cd655a93c0fd7238730eaa0a100241ac59fd7d29f277a",
+    "pool-reserves-jitosol.json": "f844369d7c38a2dde5371797f7708c75a6e605cfa02194ce5121adde1247c405",
+    "pool-reserves-jupsol.json": "1f9f77b691b784a45aa3b61115767d81e2b57eca9cb8379715e7b0b44c07121b",
+    "pool-reserves-wsol.json": "a9faa6eb30ad4e87b2436f4c570f6cdbf8c2b5b1ceae6b67ec2448385569197a",
+    "pool-state.json": "9e39bc6874b083db640a2b212ce4cbb1b135db654db470453c82c0eedc485e92",
+    "slab.json": "87d6d66efee5c1d06d0b5559f1a30393119ed749e07fd1960c4b7c8088b021fd",
+    "stake-pool-jitosol.json": "78bd121502b2cbb249aff512c72cdec9bbf0d3e5aad87091d05eb93b80196737",
+    "stake-pool-jupsol.json": "6a53b65bc41e7b1a89306ffc4fbd56eb96b410c8559ff988c0ac8bdc23520044",
+    "mint-jitosol.json": "09a431a2079eea7fd18ade1300711af685797b3621cd9d94b259286700e9a41b",
+    "mint-jupsol.json": "37d96c1db9be4ae171558a5aa32dcab92c95d9491a35a7e9288475e7c84e5abb",
+    "mint-wsol.json": "dbba51d8034e20da26335bc242911f1de037736602902b97d3203948bdbbeb22",
+    "clock.json": "2feb5a591d3eed46b7193828bc794169c63d417e3961de4152a0b18188689cbc",
+    "calc-state-spl.json": "0aa234408999a3f1259aa4e18e097876b5327dc65441f670aef987b1e94e642a",
+    "calc-state-sanctum.json": "4cdc002af96a25666e45319dcb36584b999c6e0ea39f61846ce57b86513fef82",
+    "calc-state-multi.json": "c65ec6aba81fa8c92bdbe35cfe5aeab7281ef45e2d8974115054aee6958b5975",
+    "infinity-spl-pool-programdata.json": {
+      "originalLength": 1080509,
+      "capturedPrefixLength": 45,
+      "originalDataSha256": "bcdbe9c692f865d54e824df8ef77e08ada3d788dc995fa935755c21feada7046",
+      "reason": "Only loader metadata is read; actual ELF is separately loaded from the genuine program dump."
+    },
+    "infinity-sanctum-pool-programdata.json": {
+      "originalLength": 1080509,
+      "capturedPrefixLength": 45,
+      "originalDataSha256": "5e6d7c7d2fad161ec77a953cc26c92639b5e73718e0bea0dacf7e6f995b91c81",
+      "reason": "Only loader metadata is read; actual ELF is separately loaded from the genuine program dump."
+    },
+    "infinity-multi-pool-programdata.json": {
+      "originalLength": 1080509,
+      "capturedPrefixLength": 45,
+      "originalDataSha256": "652634a333bf82a3f4fdb93230c57155939a2747fde482e0791de13e826bfdaf",
+      "reason": "Only loader metadata is read; actual ELF is separately loaded from the genuine program dump."
+    },
+    "mint-sanctumsol.json": "28433b3406f474b5bc5d3b5b24432cfea0bd73dc4c6969180bcbee377adfe9af",
+    "stake-pool-sanctumsol.json": "e138e508c587e9c5b58ac8905d5d4e3fdd3dbc095c29f59f18982ccbc9dba2aa",
+    "pool-reserves-sanctumsol.json": "6273a239f865c7e04e32746340ae0b92997f6181610dc9ea21627909647e5fa8"
+  },
+  "programs": {
+    "sanctum-infinity": {
+      "address": "5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx",
+      "programData": "ALmAxhSP7TDWGMHWBLjD9qS71YjqxjN1ba6JLRdzdVy",
+      "slot": 448447019,
+      "codeSha256": "4d11d617b2be14a13cbb859b6a8afb7355e609b0fa14a054c4b127c4b2c93947",
+      "deploymentSlot": "411884877"
+    },
+    "infinity-flat-slab": {
+      "address": "s1b6NRXj6ygNu1QMKXh2H9LUR2aPApAAm1UQ2DjdhNV",
+      "programData": "Bq9UFte9zDSUdUzE4JeTRLwejvcoizwUwbNVqi8n5QBx",
+      "slot": 448447020,
+      "codeSha256": "b6e540c924cd2780a631f71b1622b52ad998e494ad21ef95ae5eb77deb69a1db",
+      "deploymentSlot": "376937485"
+    },
+    "infinity-wsol-calc": {
+      "address": "wsoGmxQLSvwWpuaidCApxN5kEowLe2HLQLJhCQnj4bE",
+      "programData": "JCiy5grhSYeceD5FAd9AKQa9p2t7vXe6zC3sUDVjWMrx",
+      "slot": 448447021,
+      "codeSha256": "e0dbcc18caf6e3517c449c94511f4be947569d3ba1fc55f87c035934b9a703f9",
+      "deploymentSlot": "248060231"
+    },
+    "infinity-spl-calc": {
+      "address": "sp1V4h2gWorkGhVcazBc22Hfo2f5sd7jcjT4EDPrWFF",
+      "programData": "26GWfXL2eYH8AtX9b6Uw8PBrjLu98sWvc9wrfxLj4kLF",
+      "slot": 448447022,
+      "codeSha256": "20bf59669e278640c6b3bcb38e84f1b14ba1bc75d4376f419352e46c2f0dd4c0",
+      "deploymentSlot": "248053685"
+    },
+    "infinity-sanctum-calc": {
+      "address": "sspUE1vrh7xRoXxGsg7vR1zde2WdGtJRbyK9uRumBDy",
+      "programData": "3LvZbmj32toBzGoCpYYya2GSPAaWoC6K2YLTBPV3ZxLs",
+      "slot": 448447023,
+      "codeSha256": "33788425f5f157ef23ba698ef4cf526f78b2f10f9ea5d45dbd0ecbad2df5c2ae",
+      "deploymentSlot": "248057484"
+    },
+    "infinity-multi-calc": {
+      "address": "ssmbu3KZxgonUtjEMCKspZzxvUQCxAFnyh1rcHUeEDo",
+      "programData": "D2d3odoQoCeZ3dygmnvYZiUhsGvgskGJpoD9umnBKJz7",
+      "slot": 448447024,
+      "codeSha256": "a4eb80516d631baaa1018a5b8c5e3097c241fea5e14f3b6441416859d2249673",
+      "deploymentSlot": "258005833"
+    },
+    "infinity-spl-pool": {
+      "address": "SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy",
+      "programData": "EmiU8AQkB2sswTxVB6aCmsAJftoowZGGDXuytm6X65R3",
+      "slot": 448447025,
+      "codeSha256": "ec2dfefaa70d560754a0000f39bd2cabc192b895d36205b3c428f601b6e1d7e1",
+      "deploymentSlot": "429882117"
+    },
+    "infinity-sanctum-pool": {
+      "address": "SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY",
+      "programData": "Cn5fegqLh8Fmvffisr4Wk3LmuaUgMMzTFfEuidpZFsvV",
+      "slot": 448447027,
+      "codeSha256": "a8571c781982c72c2531f5957aab7d902df35cb3c1ed0d34829f03f9f0166770",
+      "deploymentSlot": "371704212"
+    },
+    "infinity-multi-pool": {
+      "address": "SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn",
+      "programData": "HxBTMuB7cFBPVWVJjTi9iBF8MPd7mfY1QnrrWfLAySFd",
+      "slot": 448447028,
+      "codeSha256": "a8571c781982c72c2531f5957aab7d902df35cb3c1ed0d34829f03f9f0166770",
+      "deploymentSlot": "371704232"
+    }
+  },
+  "primarySource": "https://github.com/igneous-labs/inf-1.5/tree/51471fc1f4a6abee1d6e45e3ce0a387a63e708af",
+  "fixtureSha256": {
+    "test/svm/fixtures/infinity-current/calc-state-multi.json": "c65ec6aba81fa8c92bdbe35cfe5aeab7281ef45e2d8974115054aee6958b5975",
+    "test/svm/fixtures/infinity-current/calc-state-sanctum.json": "4cdc002af96a25666e45319dcb36584b999c6e0ea39f61846ce57b86513fef82",
+    "test/svm/fixtures/infinity-current/calc-state-spl.json": "0aa234408999a3f1259aa4e18e097876b5327dc65441f670aef987b1e94e642a",
+    "test/svm/fixtures/infinity-current/clock.json": "2feb5a591d3eed46b7193828bc794169c63d417e3961de4152a0b18188689cbc",
+    "test/svm/fixtures/infinity-current/infinity-multi-pool-programdata.json": "87624306a0cd2f82b6c0d924b2256a516b91ea1cab27861b02cedcfa2c2aaf1b",
+    "test/svm/fixtures/infinity-current/infinity-sanctum-pool-programdata.json": "21dba13da575514a62a446e62d568abf421b7037f68b4c35d25a1489730ef231",
+    "test/svm/fixtures/infinity-current/infinity-spl-pool-programdata.json": "0191c4d7931d6ba97602b57774abea201fcc7f2dd24ab44b798029f9bf36250b",
+    "test/svm/fixtures/infinity-current/lst-state-list.json": "42eb2323bc565d01407cd655a93c0fd7238730eaa0a100241ac59fd7d29f277a",
+    "test/svm/fixtures/infinity-current/mint-jitosol.json": "09a431a2079eea7fd18ade1300711af685797b3621cd9d94b259286700e9a41b",
+    "test/svm/fixtures/infinity-current/mint-jupsol.json": "37d96c1db9be4ae171558a5aa32dcab92c95d9491a35a7e9288475e7c84e5abb",
+    "test/svm/fixtures/infinity-current/mint-sanctumsol.json": "28433b3406f474b5bc5d3b5b24432cfea0bd73dc4c6969180bcbee377adfe9af",
+    "test/svm/fixtures/infinity-current/mint-wsol.json": "dbba51d8034e20da26335bc242911f1de037736602902b97d3203948bdbbeb22",
+    "test/svm/fixtures/infinity-current/pool-reserves-jitosol.json": "f844369d7c38a2dde5371797f7708c75a6e605cfa02194ce5121adde1247c405",
+    "test/svm/fixtures/infinity-current/pool-reserves-jupsol.json": "1f9f77b691b784a45aa3b61115767d81e2b57eca9cb8379715e7b0b44c07121b",
+    "test/svm/fixtures/infinity-current/pool-reserves-sanctumsol.json": "6273a239f865c7e04e32746340ae0b92997f6181610dc9ea21627909647e5fa8",
+    "test/svm/fixtures/infinity-current/pool-reserves-wsol.json": "a9faa6eb30ad4e87b2436f4c570f6cdbf8c2b5b1ceae6b67ec2448385569197a",
+    "test/svm/fixtures/infinity-current/pool-state.json": "9e39bc6874b083db640a2b212ce4cbb1b135db654db470453c82c0eedc485e92",
+    "test/svm/fixtures/infinity-current/slab.json": "87d6d66efee5c1d06d0b5559f1a30393119ed749e07fd1960c4b7c8088b021fd",
+    "test/svm/fixtures/infinity-current/stake-pool-jitosol.json": "78bd121502b2cbb249aff512c72cdec9bbf0d3e5aad87091d05eb93b80196737",
+    "test/svm/fixtures/infinity-current/stake-pool-jupsol.json": "6a53b65bc41e7b1a89306ffc4fbd56eb96b410c8559ff988c0ac8bdc23520044",
+    "test/svm/fixtures/infinity-current/stake-pool-sanctumsol.json": "e138e508c587e9c5b58ac8905d5d4e3fdd3dbc095c29f59f18982ccbc9dba2aa"
+  },
+  "previousBaseSlot": 448452281
+}

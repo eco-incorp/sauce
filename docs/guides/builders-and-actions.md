@@ -60,10 +60,14 @@ returns what it received. Write the call into your program:
 ```js
 import { uniswapV3 } from "@sauce/router";
 
-function main() {
-  uniswapV3(POOL, WETH, USDC, AMOUNT_IN, 0, MIN_OUT, ctx.self());
+function main(recipient: Address) {
+  uniswapV3(POOL, WETH, USDC, AMOUNT_IN, 0, MIN_OUT, recipient);
 }
 ```
+
+The last argument decides where the output ends: your wallet, or `ctx.self()` to keep it in the Pot,
+where only another cook moves it
+([Where a program's results end](../concepts/kitchen-pot-cook.md#where-a-programs-results-end)).
 
 From data, write the swap as a [JSON action](actions.md#swaps) instead — `uniswapV3Swap`,
 `curveSwap`, … — which compiles to the same call. An action names its tokens and contracts as a
