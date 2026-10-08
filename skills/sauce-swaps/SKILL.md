@@ -12,11 +12,17 @@ it needs:
 ```sauce chain=base,arbitrum
 import { uniswapV3 } from "@sauce/router";
 
-function main(amount: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256) {
+// Sells `amount` of the Pot's WETH for USDC, paid to `recipient`: the user's wallet, or
+// `ctx.self()` to keep the USDC in the Pot.
+function main(amount: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
-  uniswapV3(pool, WETH, USDC, amount, sqrtPriceLimitX96, minOut, ctx.self());
+  uniswapV3(pool, WETH, USDC, amount, sqrtPriceLimitX96, minOut, recipient);
 }
 ```
+
+The last argument decides where the output ends: the wallet the user asked for, or the Pot, where
+only another cook moves it. A later step that spends the output in the same program takes it in the
+Pot.
 
 Every argument is a run-time value, so a program can choose the pool, the direction and the amount
 while it runs: spend what an earlier swap returned, read a balance, loop over a list of pools.

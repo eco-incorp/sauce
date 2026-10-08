@@ -1,7 +1,9 @@
 import { balancerV2, curve, uniswapV2, uniswapV3 } from "@sauce/router";
 
 // One compiled program for any route over four venues: each leg names its venue, pool and tokens,
-// and the program picks the function while it runs, spending what the previous leg returned.
+// and the program picks the function while it runs, spending what the previous leg returned. Every
+// leg pays into the Pot (`ctx.self()`), where the next leg spends it; the last leg's output stays
+// there too, so a route meant for the user's wallet ends with a transfer to it.
 interface Leg {
   venue: Uint256; // 0 Uniswap V2, 1 Uniswap V3, 3 Curve, 4 Balancer V2; any other reverts
   pool: Address; // the pair, the pool, or the Balancer Vault
