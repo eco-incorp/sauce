@@ -376,6 +376,8 @@ export class Intent {
   // The native the solver brings, which the Portal hands the Executor to pay the route's calls:
   // the body's cook its fee, and each hook what it sends.
   _native(fee) {
+    // A hop with no hook is the program it was before hooks: its native is the fee.
+    if (this._before.length == 0 && this._after.length == 0) return fee;
     let total = fee;
     for (const call of this._before) total = total + call.value;
     for (const call of this._after) total = total + call.value;
