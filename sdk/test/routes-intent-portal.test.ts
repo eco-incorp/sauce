@@ -3,7 +3,7 @@
  * names, for its intent alone, and each default is the value it stands for, byte for byte — the
  * program's bytecode, which carries every level's intent, and each intent it publishes.
  *
- * An intent a program opens is `@sauce/intents`' classes, which the compiler runs while it compiles:
+ * An intent a program opens is `@sauce/hop`'s classes, which the compiler runs while it compiles:
  * the program encodes the intent as it runs. So what the program publishes is read where it runs —
  * on an anvil standing in for Base, with eco-routes' real Portal (`intent-anvil.ts`) — from the
  * `IntentPublished` the Portal logs, rebuilt in full and held to the hash it announces.
@@ -810,8 +810,8 @@ ${body}
 });
 
 describe("the syntax as data", () => {
-  it("names exactly the fields and the steps `@sauce/intents` reads", () => {
-    const source = readFileSync(resolve("src/std/intents/intents.evm.js"), "utf8");
+  it("names exactly the fields and the steps `@sauce/hop` reads", () => {
+    const source = readFileSync(resolve("src/std/hop/hop.evm.js"), "utf8");
     const read = new Set([...source.matchAll(/\bconfig\.(\w+)/g)].map((match) => match[1]!));
     read.delete("length");
     expect([...read].sort()).toEqual(Object.keys(HOP_FIELDS).sort());

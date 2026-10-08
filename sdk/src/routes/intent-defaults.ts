@@ -37,7 +37,7 @@ export function randomSalt(): `0x${string}` {
 
 /**
  * What every intent a program opens takes when it does not name its own, and what the SDK cannot
- * look up: the defaults a compile hands `@sauce/intents` (`SauceCompileOptions.intents`). Each
+ * look up: the defaults a compile hands `@sauce/hop` (`SauceCompileOptions.intents`). Each
  * field a hop is given wins over its field here.
  */
 export interface IntentDefaults extends EcoRoutesSelector {

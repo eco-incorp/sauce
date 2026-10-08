@@ -1,7 +1,0 @@
-{
-  "name": "@sauce/intents",
-  "version": "0.0.0",
-  "private": true,
-  "description": "SauceScript intent publishing: funds an intent's reward and publishes it through the source Portal, from the calldata the SDK encoded. `main` names the NEUTRAL BASE the compiler suffixes per target (intents.evm.js); there is no SVM arm, because the Portals a program publishes through from a Pot are EVM contracts.",
-  "main": "intents.js"
-}
