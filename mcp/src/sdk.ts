@@ -34,7 +34,6 @@ export {
   compileCommand,
   compileProgram,
   expectingRevert,
-  pastDeadline,
   potCommand,
   programChains,
   txCommand,
@@ -69,12 +68,7 @@ export {
   resolvePriceTokens,
   tokenGiven,
 } from "../../sdk/dist/cli/price.js";
-export {
-  defineLabels,
-  fillCommand,
-  fillTargets,
-  type FillTarget,
-} from "../../sdk/dist/cli/fill.js";
+export { fillCommand, type FillTarget } from "../../sdk/dist/cli/fill.js";
 export {
   buildCancel,
   buildClaim,
@@ -89,7 +83,6 @@ export {
   type IntentRecord,
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
-export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export {
   CHAIN_SUPPORT_ISSUES_URL,

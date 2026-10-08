@@ -40,12 +40,6 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["pot"], input: "pot" },
   { flags: ["value"], input: "value" },
   { flags: ["account", "accounts"], input: "accounts" },
-  { flags: ["intent-deadline"], input: "intentDeadline" },
-  { flags: ["intent-creator"], input: "intentCreator" },
-  { flags: ["intent-execution-fee"], input: "intentExecutionFee" },
-  { flags: ["intent-fund-via"], input: "intentFundVia" },
-  { flags: ["intent-reward-deadline"], input: "intentRewardDeadline" },
-  { flags: ["intent-prover"], input: "intentProver" },
   { flags: ["no-prove"], input: "prove: false" },
   { flags: ["max-execution-fee"], input: "maxExecutionFee" },
   { flags: ["lookup-table"], input: "lookupTables" },
@@ -57,9 +51,8 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["rpc-url"], input: "rpcUrl" },
   { flags: ["block"], input: "block" },
   // A fill's solver is its `from`, as every other transaction's sender is.
-  { flags: ["from", "solver"], input: "from" },
+  { flags: ["solver"], input: "from" },
   { flags: ["claimant"], input: "claimant" },
-  { flags: ["dry-run"], input: "dryRun" },
   { flags: ["pin"], input: "pins" },
   { flags: ["engine"], input: "engines" },
   { flags: ["min-out"], input: "minOut" },
@@ -123,7 +116,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
     "sauce_intent_fill with the same inputs",
   ],
   // An intent's commands are its tools under sauce_intent_, spelt either way the command line has.
-  [command("sauce (?:intent )?(publish|fill)"), "sauce_intent_$1"],
+  [command("sauce (?:intent )?fill"), "sauce_intent_fill"],
   [command("sauce intent (status|import|prove|claim|refund|cancel)"), "sauce_intent_$1"],
   [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price|pools)"), "sauce_$1"],
   // The lifecycle core's refusal for a chain it has no endpoint of: the call can give one.
