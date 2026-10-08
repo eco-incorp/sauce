@@ -20,11 +20,18 @@
  * And what is refused: a second delivery of the same id, a callback from anyone but the protocol,
  * and `install` on a Shared Pot.
  *
+ * And `.catch`: in place of a body that reverted, with the body's writes undone, and in place of
+ * a request the protocol's delivery failed; with no `.catch`, a failed request reverts the
+ * callback and its body stays parked.
+ *
  * GATED twice. On SAUCE_V12_RUNTIME_CREATION_HEX, as every EVM execution suite is, and on
  * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code
  * (`forge inspect src/Router.sol:Router bytecode` in v12-evm at that branch): no release publishes
  * that Router yet, so CI has none to give and this suite skips there, until a kitchen-evm release
- * carries the handlers and the release's Router runs it.
+ * carries the handlers and the release's Router runs it. The two `.catch` cases also need an
+ * engine built from the compiler's own tree (the one its `try` blocks are written for): on the
+ * released engine a `catch (e)` that reads `e` loses its work, so they skip when the engine is the
+ * release's.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -67,6 +74,23 @@ const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
 const ROUTER = routerUnderTest();
 const describeAsync = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
+/** A \`catch (e)\` that reads \`e\` runs on an engine built from the compiler's own tree, and not on
+ *  the released one, where its block's work is dropped: the \`.catch\` cases skip there. */
+const RELEASED_ENGINE =
+  RUNTIME_HEX_PATH !== undefined &&
+  readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
+    (
+      JSON.parse(
+        readFileSync(
+          join(
+            dirname(fileURLToPath(import.meta.url)),
+            "../../../src/artifacts/V12RuntimeBytecode.json",
+          ),
+          "utf8",
+        ),
+      ) as { runtimeCreationCode: string }
+    ).runtimeCreationCode.toLowerCase();
+const itCatching = RELEASED_ENGINE ? it.skip : it;
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const ECHO = JSON.parse(readFileSync(join(FIXTURES, "EchoProtocol.json"), "utf8")) as {
@@ -99,6 +123,8 @@ const NAMESPACE = (() => {
 })();
 /** The Pot storage slot the body writes. */
 const ECHOED_SLOT = keccak256(toHex("async.echoed"));
+/** The Pot storage slot a \`.catch\` writes. */
+const CAUGHT_SLOT = keccak256(toHex("async.caught"));
 
 const potAbi = parseAbi([
   "function cook(address engine, bytes program) payable returns (bytes)",
@@ -139,9 +165,9 @@ const installSource = (echo: Address): string =>
     "the echo protocol",
   );
 
-/** The program that requests: the echo protocol in the shape a package writes one, and a body that
- *  writes what arrived plus `bump`, a value it captured when the request was made. */
-const requestSource = (echo: Address): string => `import { Request } from "@sauce/async";
+/** The echo protocol in the shape a package writes one. Its delivery fails the request when the
+ *  protocol echoes 13, as a protocol reporting an error does. */
+const ECHO_PROTOCOL = (echo: Address): string => `import { Request } from "@sauce/async";
 
 class EchoProtocol {
   request(value: Uint256) {
@@ -155,17 +181,39 @@ class EchoProtocol {
       },
       deliver: (input, body, fail) => {
         const [echoed] = abi.decode(input, ["Uint256"]);
-        body(echoed);
+        if (echoed == 13) {
+          fail(abi.encode(echoed));
+        } else {
+          body(echoed);
+        }
       },
     });
   }
 }
 const Echo = new EchoProtocol();
+`;
 
+/** The program that requests: a body that writes what arrived plus \`bump\`, a value it captured
+ *  when the request was made. */
+const requestSource = (echo: Address): string => `${ECHO_PROTOCOL(echo)}
 function main(value: Uint256, bump: Uint256): void {
   Echo.request(value).then((echoed) => {
     evm.sstore(${ECHOED_SLOT}, echoed + bump);
   });
+}`;
+
+/** The same request with a \`.catch\`: a body that reverts on 99 after writing, and a handler that
+ *  records the hash of what it was handed. */
+const catchingSource = (echo: Address): string => `${ECHO_PROTOCOL(echo)}
+function main(value: Uint256, bump: Uint256): void {
+  Echo.request(value)
+    .then((echoed) => {
+      evm.sstore(${ECHOED_SLOT}, echoed + bump);
+      require(echoed != 99, "unlucky");
+    })
+    .catch((e) => {
+      evm.sstore(${CAUGHT_SLOT}, crypto.keccak256(e));
+    });
 }`;
 
 let anvil: ChildProcess;
@@ -244,13 +292,17 @@ const parked = async (key: bigint, pot: Address = stack.pot): Promise<bigint> =>
   BigInt((await publicClient.getStorageAt({ address: pot, slot: slotOf(key) })) ?? "0x0");
 
 /** Requests `value` from the owner's Pot, answering the id the protocol gave it. */
-async function request(value: bigint, bump: bigint): Promise<bigint> {
+async function request(
+  value: bigint,
+  bump: bigint,
+  source: (echo: Address) => string = requestSource,
+): Promise<bigint> {
   const before = (await publicClient.readContract({
     address: echo,
     abi: ECHO.abi,
     functionName: "requests",
   })) as bigint;
-  const { ok } = await cook(compiled(requestSource(echo), [value, bump]));
+  const { ok } = await cook(compiled(source(echo), [value, bump]));
   expect(ok).toBe(true);
 
   return BigInt(
@@ -370,6 +422,44 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     expect(await publicClient.getStorageAt({ address: stack.pot, slot: ECHOED_SLOT })).toBe(
       word(9n),
     );
+  });
+
+  const fulfill = (id: bigint) =>
+    send(
+      stranger,
+      echo,
+      encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] }),
+    );
+  const slot = async (at: Hex): Promise<Hex | undefined> =>
+    publicClient.getStorageAt({ address: stack.pot, slot: at });
+
+  itCatching(
+    "runs `.catch` in place of a body that reverted, with the body's writes undone",
+    async () => {
+      const before = await slot(ECHOED_SLOT);
+      const id = await request(99n, 1n, catchingSource);
+      expect((await fulfill(id)).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(before);
+      expect(await slot(CAUGHT_SLOT)).toBe(keccak256(toHex("unlucky")));
+      expect(await parked(id)).toBe(0n);
+    },
+  );
+
+  itCatching(
+    "runs `.catch` when the protocol's delivery fails the request, handed why",
+    async () => {
+      const id = await request(13n, 1n, catchingSource);
+      expect((await fulfill(id)).ok).toBe(true);
+      expect(await slot(CAUGHT_SLOT)).toBe(keccak256(word(13n)));
+    },
+  );
+
+  it("reverts a failed request with no `.catch`, and leaves its body parked", async () => {
+    const id = await request(13n, 1n);
+    const call = encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] });
+    expect((await revertOf(STRANGER.address, echo, call)).data).toBe(word(13n));
+    expect((await fulfill(id)).ok).toBe(false);
+    expect(await parked(id)).not.toBe(0n);
   });
 
   it("refuses `install` on a Shared Pot, which answers no selector", async () => {
