@@ -82,6 +82,12 @@ wallet, or name the wallet as the call's beneficiary (`onBehalfOf`, `receiver`, 
 
 Send only once the user agrees.
 
+**Report what was sent.** Every command that sends a transaction prints its hash and two links: the
+chain's explorer page and its trace (calls and balance changes). Give the user both, to open in a
+browser, and never fetch or read them yourself. With them, report what the command printed from
+the transaction's receipt: what left the wallet, what arrived where, and what stayed in the Pot
+(`Left in the Pot`).
+
 Call typed bindings, namespaces and library functions directly: `USDC.transfer(...)`,
 `UniswapV3.Factory.getPool(...)`, `uniswapV3(...)` from `@sauce/router`. Do not wrap a single call
 in a helper, and do not hand-roll a raw selector with `evm.static` and `abi.decode` where a typed
@@ -195,8 +201,9 @@ to its tool.
 6. **Transactions on supported chains only.** Build and send on Ethereum, Base or Solana. On a
    preview chain, compile and simulate; when a command refuses one, offer the user the
    chain-support request it names instead of looking for another way to send.
-7. **The user sees it before it is sent.** The program, its arguments and the rehearsal's outcome
-   (what leaves the wallet, what arrives where, what stays in the Pot), then their go-ahead.
+7. **The user sees it before it is sent, and what it did after.** The program, its arguments and
+   the rehearsal's outcome (what leaves the wallet, what arrives where, what stays in the Pot),
+   then their go-ahead; once sent, its explorer and trace links and what its receipt shows.
 
 ## The skill map
 

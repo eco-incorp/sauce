@@ -201,9 +201,11 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    Assumed for this rehearsal only, by state override:
      the Pot holds 100 USDC: --assume-balance (…)
    …
-   Token transfers:
-     0.037716248833222607 WETH: <pool> -> <recipient>
-     100 USDC: <Pot> (the Pot) -> <pool>
+   What moved, in order:
+     [1] wallet <owner> -> Pot <Pot>          … ETH                      the cook's value
+     [2] Pot            -> Kitchen <Kitchen>  … ETH                      the Kitchen's fee
+     [3] <pool>         -> <recipient>        0.037716248833222607 WETH
+     [4] Pot            -> <pool>             100 USDC
    …
    Net balance changes:
      <pool>: -0.037716248833222607 WETH, +100 USDC
@@ -231,9 +233,13 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
      It counts tokens: a position a protocol keeps in its own books, with no token for it, shows
      in no balance, so read it from the protocol.
 
-   - **What the cook did**: the token transfers and approvals in its logs, in whole units; the
-     native transfers the node traces (the cook's value, paid to the Kitchen); and each address's
-     net change. The rehearsal names its route: `eth_simulateV1`, or `eth_call` where the endpoint
+   - **What moved, in order**: every movement of a token or the native coin, numbered in the order
+     it happened, in whole units, each party by its role: `wallet` (the owner), `Pot`, `Kitchen`,
+     a name the registry gives it, a token by its symbol, `mint` and `burn`, with its short address
+     the first time, and its short address alone when nothing names it. The native lines are the
+     cook's value, paid on to the Kitchen. Then the approvals and each address's net change;
+     `--json` gives the moves as `moves`, each with `fromRole` and `toRole`. The rehearsal names
+     its route: `eth_simulateV1`, or `eth_call` where the endpoint
      lacks it, which shows no transfers.
    - **A revert** prints its reason and exits 1. With `minOut` at `40000000000000000`, 0.04 WETH,
      more than 100 USDC buys there:
@@ -304,15 +310,17 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    ```
 
    compiles, rehearses, signs, sends and waits (on a supported chain), then prints the hash,
-   status and gas used, what the cook cost (gas, any L1 data fee, the value) and the tokens it
-   moved:
+   status and gas used, two links for a person to open, what the cook cost (gas, any L1 data fee,
+   the value) and what moved, read from the receipt:
 
    ```text
    cook <tx hash>: success, gas used 273670, block <block>
+     explorer: https://basescan.org/tx/<tx hash>
+     trace (calls and balance changes, to open in a browser): https://app.blocksec.com/phalcon/explorer/tx/base/<tx hash>
    cost …
-   Token transfers:
-     0.037716248833222607 WETH: <pool> -> <recipient>
-     100 USDC: <Pot> (the Pot) -> <pool>
+   What moved, in order:
+     [1] <pool>    -> <recipient>  0.037716248833222607 WETH
+     [2] Pot <Pot> -> <pool>       100 USDC
    Net balance changes:
      <pool>: -0.037716248833222607 WETH, +100 USDC
      <recipient>: +0.037716248833222607 WETH
@@ -322,7 +330,13 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
 
    A cook that leaves anything in the Pot says so after its cost, under
    `Left in the Pot, not in your wallet:`, read at the cook's block; `--json` gives it as
-   `leftInPot`.
+   `leftInPot`, the moves as `moves`, and `explorer` and `trace` beside each hash. A receipt
+   records no native transfer inside the cook, so the moves there are tokens only.
+
+   **Report a sent transaction** to the user with its two links, which every command that sends
+   one prints: the explorer page, and the trace (calls and balance changes), both for the user to
+   open in a browser. Never fetch or read them yourself: what you report is what the command
+   printed, what left the wallet, what arrived where and what stayed in the Pot.
 
    A Pot not deployed yet is deployed first once the user agrees at the prompt. `--auto-approve`
    approves, in advance, everything a run sends before its cook (deploying the Pot, approving
@@ -337,6 +351,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    ```text
    transaction <tx hash> on base: success, block <block>, gas used 273670
      from <owner> to <Pot>, value …
+     explorer: https://basescan.org/tx/<tx hash>
+     trace (calls and balance changes, to open in a browser): https://app.blocksec.com/phalcon/explorer/tx/base/<tx hash>
    …
        program: 1067 bytes, keccak256 …
          buy.sauce.ts's program, 907 bytes, then 160 of arguments
@@ -345,7 +361,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
            sqrtPriceLimitX96: Uint256 = 4116816085950893928074568
            minOut: Uint256 = 37000000000000000
            recipient: Address = <recipient>
-     Token transfers:
+     What moved, in order:
    …
    ```
 
@@ -379,9 +395,11 @@ sauce simulate payout.sauce.ts --chain base --owner <address> --assume-balance U
 ```text
 main returns Uint256[]: [700000000, 300000000]
 …
-Token transfers:
-  700 USDC: <Pot> (the Pot) -> <payee A>
-  300 USDC: <Pot> (the Pot) -> <payee B>
+What moved, in order:
+  [1] wallet <owner> -> Pot <Pot>          … ETH     the cook's value
+  [2] Pot            -> Kitchen <Kitchen>  … ETH     the Kitchen's fee
+  [3] Pot            -> <payee A>          700 USDC
+  [4] Pot            -> <payee B>          300 USDC
 …
 ```
 
@@ -504,7 +522,9 @@ The tools sign nothing, so `sauce run` has none: the user signs what they return
 is a server started over stdio with `--wallets` and a password source (`--password-env <NAME>`,
 given from the client's config): it sends from its own wallets. `sauce_wallet_create` makes one
 (`sauce wallet new`), `sauce_wallet_list` names them, and `sauce_wallet_send` rehearses what another
-tool returned, holds it to the wallet's policy, signs and sends it: `sauce run` from a wallet.
+tool returned, holds it to the wallet's policy, signs and sends it: `sauce run` from a wallet. Each
+transaction it sent comes back with its hash, `explorer` and `trace` to give the user, and a cook
+with `moves`, `leftInPot` and `summary`, the lines `sauce run` prints.
 Over HTTP, nothing signs.
 
 ## Rules
@@ -519,6 +539,9 @@ Over HTTP, nothing signs.
   body) before the first real send. Then show the user the program, its arguments and what the
   rehearsal says will happen (what leaves the wallet, what arrives where, what is left in the
   Pot), and send, or hand over `sauce tx`'s transaction, only once they confirm.
+- Report every transaction sent with its explorer link and its trace link, for the user to open,
+  and what the command printed of it: what moved and what stayed in the Pot. Never fetch either
+  link.
 - Send only on a supported chain: Ethereum, Base or Solana. On a preview chain, compile and
   simulate, and offer the user the chain-support request the refusal names; never look for another
   way to send there.

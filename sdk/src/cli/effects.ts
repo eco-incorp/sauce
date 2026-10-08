@@ -508,6 +508,25 @@ export const leftInPotJson = (
       before: each.before.toString(),
     }));
 
+/** One move for `--json` (`moves`): its parties with their roles where the command knows them. */
+export interface MoveJson {
+  readonly from: Address;
+  /** `wallet`, `Pot`, `Kitchen`, a registry name, a token's symbol, or `mint`. */
+  readonly fromRole?: string;
+  readonly to: Address;
+  /** The same, or `burn`. */
+  readonly toRole?: string;
+  readonly token: Address | "native";
+  readonly symbol?: string;
+  readonly decimals?: number;
+  readonly kind: Movement["kind"];
+  /** Base units, as a decimal string; `formatted` in whole units where the decimals are known. */
+  readonly amount: string;
+  readonly formatted?: string;
+  /** Why it moved, where the command knows: the cook's value, the Kitchen's fee, a wrap. */
+  readonly note?: string;
+}
+
 /** The effects for `--json`: amounts in base units as decimal strings, with whole units beside. */
 export function effectsJson(effects: Effects): Record<string, unknown> {
   const label = (address: Address) => {
@@ -520,7 +539,7 @@ export function effectsJson(effects: Effects): Record<string, unknown> {
     address === zeroAddress ? zero : roleOf(effects, address);
 
   return {
-    moves: effects.moves.map((move) => {
+    moves: effects.moves.map((move): MoveJson => {
       const fromRole = role(move.from, "mint");
       const toRole = role(move.to, "burn");
       const note = moveNote(move, fromRole, toRole);
