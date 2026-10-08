@@ -109,6 +109,8 @@ const BUY = "66063d1201daebea";
  *  the swap sells X: 0 selling X (the price only falls), u128's most buying it. */
 const NEVER_SELLING_X = `${"00".repeat(16)}01`;
 const NEVER_BUYING_X = `${"ff".repeat(16)}00`;
+/** Hadron's deadline, one that never passes: i64's most. */
+const NEVER = "ffffffffffffff7f";
 
 /** What an exact-input venue's `data` writes from: the direction, the floor's eight bytes in hex,
  *  and a further field of `width` bytes, checked. */
@@ -174,6 +176,29 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
   guacswap: { takes: [], data: ({ aToB }) => [SWAP, aToB ? NEVER_SELLING_X : NEVER_BUYING_X] },
   "meteora-dlmm": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
   "saros-dlmm": { takes: ["minOut"], data: ({ aToB, floor }) => [SWAP, `${floor}${bit(aToB)}00`] },
+  "solfi-v2": { takes: ["minOut"], data: ({ aToB, floor }) => ["07", floor + bit(!aToB)] },
+  hadron: { takes: ["minOut"], data: ({ aToB, floor }) => [`03${bit(aToB)}`, floor + NEVER] },
+  taurusfi: { takes: [], data: () => ["08", "0001"] },
+  riptide: { takes: [], data: ({ aToB }) => ["02", `${bit(aToB)}0001`] },
+  denali: {
+    takes: ["minOut"],
+    data: ({ aToB, floor }) => [`68688356a1bdb4d8${bit(!aToB)}`, floor],
+  },
+  gavel: { takes: ["minOut"], data: ({ aToB, floor }) => [`00${bit(aToB)}00`, floor] },
+  tesserav: {
+    takes: ["minOut"],
+    oneWay: "Tessera V sells only its token A",
+    data: ({ floor }) => ["1001", floor],
+  },
+  flint: { takes: [], data: () => ["0b", "0000"] },
+  deriverse: {
+    takes: ["instrId", "minOut"],
+    data: ({ aToB, field, floor }) => [
+      `1a${bit(!aToB)}0000${field("instrId", 4)}${"00".repeat(8)}`,
+      floor,
+    ],
+  },
+  "goonfi-v2": { takes: ["minOut"], data: ({ aToB, floor }) => [`01${bit(!aToB)}`, `${floor}00`] },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>

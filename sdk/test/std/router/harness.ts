@@ -307,6 +307,16 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   mercurial: 5,
   perena: 5,
   metadaoFutarchy: 5,
+  solfiV2: 7,
+  hadron: 12,
+  taurusfi: 8,
+  riptide: 6,
+  denali: 6,
+  gavel: 5,
+  tesserav: 8,
+  flint: 6,
+  deriverse: 11,
+  goonfiV2: 8,
 };
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form
@@ -372,6 +382,15 @@ export const SVM_EXACT_IN_ARGUMENTS: Readonly<Record<string, readonly string[]>>
   bonkswap: ["xToY"],
   guacswap: ["xToY"],
   sarosDlmm: ["minOut", "xToY"],
+  solfiV2: ["minOut", "aToB"],
+  hadron: ["minOut", "aToB"],
+  taurusfi: [],
+  riptide: ["aToB"],
+  denali: ["minOut", "aToB"],
+  gavel: ["minOut", "paysBase"],
+  flint: [],
+  deriverse: ["instrId", "minOut", "paysBase"],
+  goonfiV2: ["minOut", "aToB"],
 };
 
 /** An exact-input venue's `…Cpi` or `…Data` arguments, `amountIn` first; undefined for any other

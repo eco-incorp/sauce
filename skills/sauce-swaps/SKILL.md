@@ -325,7 +325,11 @@ tryRaydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
 The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `tokenSwapV1`,
 `orcaV1`, `penguin`, `stepn`, `saros`, `fluxbeam`, `dexlab`, `meteoraDammV2`, `meteoraDammV1`,
 `aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
-`mercurial`, `perena` and `metadaoFutarchy`.
+`mercurial`, `perena`, `metadaoFutarchy`, `solfiV2`, `hadron`, `taurusfi`, `riptide`, `denali`,
+`gavel`, `tesserav`, `flint`, `deriverse` and `goonfiV2`.
+
+The last ten are market makers pricing off their own oracle, quote or book, and refuse a swap on
+a quote gone stale, which a `try` form can't see.
 
 - **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:
   `svm.call(program, [accounts…], raydiumCpSwapData(amountIn, minOut))`. It is the cheapest form.

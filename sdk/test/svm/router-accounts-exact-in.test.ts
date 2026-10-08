@@ -48,6 +48,10 @@ const FIRST: Record<string, boolean> = {
   withdraw: false,
   buy: false,
   sell: true,
+  "0": true,
+  "1": false,
+  baseIn: true,
+  quoteIn: false,
 };
 
 const flip = (aToB: boolean, a: string, b: string): [string, string] => (aToB ? [a, b] : [b, a]);
@@ -305,6 +309,139 @@ ROLES.sarosDlmm = () => ({
   eventAuthority: "evt",
   program: "prog",
 });
+ROLES.solfiV2 = () => ({
+  pool: "pool",
+  oracle: "oracle",
+  registry: "registry",
+  vaultA: "va",
+  vaultB: "vb",
+  mintA: "ma",
+  mintB: "mb",
+  tokenProgramA: "tp",
+  tokenProgramB: "tp2",
+  instructionsSysvar: "Sysvar1nstructions1111111111111111111111111",
+});
+ROLES.hadron = (aToB) => {
+  const [va, vb] = flip(aToB, "vaultIn", "vaultOut");
+  return {
+    tokenProgram: "tp1",
+    pool: "pool",
+    assetConfigA: "assetCfgA",
+    assetConfigB: "assetCfgB",
+    growingA: "growingA",
+    vaultA: va,
+    vaultB: vb,
+    globalConfig: "global",
+    feeVaultA: "feeDest",
+    feeVaultB: "feeDest",
+    clock: "clock",
+    metadataA: "metaA",
+  };
+};
+ROLES.taurusfi = (aToB) => {
+  const [ta, tb] = flip(aToB, "tp1", "tp2");
+  const [ma, mb] = flip(aToB, "mintIn", "mintOut");
+  return {
+    vaultA: "vault0",
+    vaultB: "vault1",
+    vaultAuthority: "vaultAuthority",
+    globalConfig: "config",
+    pool: "price",
+    globalAuthority: "authority",
+    tokenProgramA: ta,
+    tokenProgramB: tb,
+    mintA: ma,
+    mintB: mb,
+    instructionsSysvar: "sysvarIx",
+  };
+};
+ROLES.riptide = () => ({
+  pool: "pool",
+  mintA: "mintA",
+  mintB: "mintB",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  tokenProgramA: "tp1",
+  tokenProgramB: "tp2",
+  memo: "memo",
+  instructionsSysvar: "sysvarInstructions",
+  dontFront: "jitodontfront",
+});
+ROLES.denali = () => ({
+  pool: "pool",
+  mintA: "mintA",
+  mintB: "mintB",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  tokenProgramA: "tp1",
+  tokenProgramB: "tp2",
+  oracle: "oracle",
+  globalConfig: "global",
+});
+ROLES.gavel = () => ({
+  program: "prog",
+  logAuthority: "log",
+  pool: "pool",
+  vaultA: "bv",
+  vaultB: "qv",
+  tokenProgram: "tp",
+});
+ROLES.tesserav = () => ({
+  poolAuthority: "auth",
+  pool: "pool",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  mintA: "mintA",
+  mintB: "mintB",
+  tokenProgramA: "tp1",
+  tokenProgramB: "tp2",
+  instructionsSysvar: "ixSysvar",
+  config: "cfgGlobal",
+  oracle: "oracleGlobal",
+});
+ROLES.flint = (aToB) => {
+  const [ma, mb] = flip(aToB, "marketIn", "marketOut");
+  const [va, vb] = flip(aToB, "vaultIn", "vaultOut");
+  const [ta, tb] = flip(aToB, "tpIn", "tpOut");
+  return {
+    instructionsSysvar: "sysvar",
+    marketA: ma,
+    marketB: mb,
+    vaultA: va,
+    vaultB: vb,
+    tokenProgramA: ta,
+    tokenProgramB: tb,
+    program: "flintSelf",
+  };
+};
+ROLES.deriverse = () => ({
+  mintA: "am",
+  mintB: "cm",
+  vaultA: "av",
+  vaultB: "cv",
+  pool: "instr",
+  bidsTree: "bidt",
+  bidOrders: "bido",
+  asksTree: "askt",
+  askOrders: "asko",
+  lines: "lines",
+  maps: "maps",
+  clientInfos: "ci",
+  tokenProgram: "tp",
+});
+ROLES.goonfiV2 = () => ({
+  pool: "pool",
+  vaultA: "va",
+  vaultB: "vb",
+  mintA: "ma",
+  mintB: "mb",
+  oracle: "oracle",
+  globalConfig: "global",
+  instructionsSysvar: "Sysvar1nstructions1111111111111111111111111",
+  tokenProgramA: "tp",
+  tokenProgramB: "tp2",
+  validator: "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv",
+});
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -336,6 +473,16 @@ const FAMILY: Record<string, string> = {
   guacswap: "bonkswap",
   "meteora-dlmm": "meteoraDlmm",
   "saros-dlmm": "sarosDlmm",
+  "solfi-v2": "solfiV2",
+  hadron: "hadron",
+  taurusfi: "taurusfi",
+  riptide: "riptide",
+  denali: "denali",
+  gavel: "gavel",
+  tesserav: "tesserav",
+  flint: "flint",
+  deriverse: "deriverse",
+  "goonfi-v2": "goonfiV2",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */

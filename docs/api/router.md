@@ -665,8 +665,8 @@ says the direction, they take it as their last argument: `aToB` paying the pool'
 (token 0 or A, the decimal wrapper's underlying token, Scale AMM's buy), `paysBase` the base token
 (Aldrin, MetaDAO futarchy, PumpSwap's sell), `xToY` token X (Bonkswap, Guacswap). Perena's take the
 two tokens' indices among the pool's ten, `perenaData(amountIn, inIndex, outIndex, minOut)`. A
-`minOut` past 64 bits, or a Perena index past its byte, reverts; `amountIn` is written as its
-low 64 bits.
+`minOut` past 64 bits, a Perena index past its byte or a Deriverse instrument id past 32 bits
+reverts; `amountIn` is written as its low 64 bits.
 
 **The account order is the SDK's.** `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder(venue,
 { aToB })` names each account of a venue's swap in order, with whether the instruction writes it and
@@ -682,11 +682,11 @@ of its fee beneficiaries.
 **So is the data.** `routerSvmDataTemplate(venue, options)` writes an exact-input venue's data
 around the amount when the program is generated, as it does a limit venue's: `prefix ‖
 u64le(amountIn) ‖ suffix`, its divisor 1, the bytes `<venue>Data` writes for the same fields. Its
-options are the account order's `aToB`, `minOut` where the swap carries a floor, and Perena's
-`inIndex` and `outIndex`. It throws a RangeError for a floor past 64 bits or an index past its
-byte, and refuses an option the venue's swap does not carry and the way a one-way venue does not
-swap, as its account order does. The program pays for none of it: those bytes cost what the
-recipes' hand-built data does, the "by hand" column below.
+options are the account order's `aToB`, `minOut` where the swap carries a floor, Perena's `inIndex`
+and `outIndex`, and Deriverse's `instrId`. It throws a RangeError for a floor past 64 bits, an index
+past its byte or an instrument id past 32 bits, and refuses an option the venue's swap does not
+carry and the way a one-way venue does not swap, as its account order does. The program pays for
+none of it: those bytes cost what the recipes' hand-built data does, the "by hand" column below.
 
 `trader` and `recipient` are the same as the limit functions take, `[authority, source, payMint,
 buyMint, tokenProgram, token2022, memo]`, with the recipient the token account the output lands in.
@@ -719,6 +719,16 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `mercurial`            | Mercurial             | `MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky`  | `authority, vault0, vault1` (a two-token pool; `mercurialCpi` takes any)                                                             |
 | `perena`               | Perena (Numéraire)    | `NUMERUNsFCP3kuNmWZuXtm1AaQCPj9uw6Guv2Ekoi5P`  | `numeraireConfig, vaultA, vaultB` (the two tokens traded)                                                                            |
 | `metadaoFutarchy`      | MetaDAO futarchy      | `FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq` | `baseVault, quoteVault, eventAuthority` (the DAO as the pool)                                                                        |
+| `solfiV2`              | SolFi v2              | `SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF`  | `oracle, registry, vaultA, vaultB, instructionsSysvar`                                                                               |
+| `hadron`               | Hadron                | `HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8` | `assetConfigA, assetConfigB, growingA, vaultA, vaultB, globalConfig, feeVaultA, feeVaultB, clock, metadataA`                         |
+| `taurusfi`             | TaurusFi              | `9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc` | `vault0, vault1, vaultAuthority, globalConfig, globalAuthority, instructionsSysvar` (the price account as the pool)                  |
+| `riptide`              | Riptide               | `riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j`  | `vaultA, vaultB, instructionsSysvar, dontFront`                                                                                      |
+| `denali`               | Denali                | `DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4` | `vaultA, vaultB, oracle, globalConfig`                                                                                               |
+| `gavel`                | Gavel                 | `srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi`  | `logAuthority, baseVault, quoteVault`                                                                                                |
+| `tesserav`             | Tessera V             | `TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH`  | `authority, vaultA, vaultB, instructionsSysvar, config, oracle`                                                                      |
+| `flint`                | Flint                 | `FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z`  | `marketB, vaultA, vaultB, instructionsSysvar` (market A as the pool)                                                                 |
+| `deriverse`            | Deriverse             | `DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD` | `assetVault, crncyVault, bidsTree, bidOrders, asksTree, askOrders, lines, maps, clientInfos` (the instrument as the pool)            |
+| `goonfiV2`             | GoonFi v2             | `goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE`  | `vaultA, vaultB, oracle, globalConfig, instructionsSysvar, validator`                                                                |
 
 Each row names four functions: the one listed, its `try` form, its `Cpi` form and its `Data`
 form. Raydium CP-Swap
@@ -727,6 +737,17 @@ are the vault's accounts for the two tokens traded, in either order. Each benefi
 vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direction from the paying
 and receiving accounts themselves. Perena finds each mint's index among the pool's ten tokens, and
 writes both mints, so they are attached writable.
+
+SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2 are
+proprietary market makers: each prices off its own oracle, quote or book, which a keeper keeps
+fresh, and refuses a swap on a quote gone stale. A `try` form can't see that, so a stale quote fails
+the transaction. `instructionsSysvar` is the Instructions sysvar and `clock` the Clock sysvar.
+Riptide's `dontFront` is `jitodontfront111111111111111111111111111111`, and GoonFi v2's `validator`
+is the vote account `J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv`. A Hadron fee vault is the fee
+treasury's token account for that token. A Flint market and its vault are one per token. Tessera V
+sells only its token A. SolFi v2, TaurusFi, Deriverse and GoonFi v2 write the authority, so it is
+attached writable, and Deriverse requires the authority's associated token accounts. Hadron and
+TaurusFi pay wrapped SOL into, and take it out of, native wrapped-SOL accounts.
 
 Six venues take more accounts in their swap than a function can list. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
@@ -756,9 +777,10 @@ is a few units, and it stays in `source`; a `Cpi` form returns what was actually
 Dexlab mint with a transfer fee keeps the fee out of what the pool receives.
 
 **`minOut`** goes into the venue's own floor where its swap takes one, so the venue refuses less
-itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` and `try<Venue>`, which also hold
-what the recipient received to `minOut` and to at least 1. The Saber decimal wrapper, Bonkswap and
-Guacswap have no floor of their own; for these, a `Data` or `Cpi` caller enforces the floor itself.
+itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` and `try<Venue>` (Denali's and
+Hadron's as given there too, 0 included), which also hold what the recipient received to `minOut`
+and to at least 1. The Saber decimal wrapper, Bonkswap, Guacswap, TaurusFi, Riptide and Flint have
+no floor of their own; for these, a `Data` or `Cpi` caller enforces the floor itself.
 
 **What each `try` form skips** before the swap:
 
@@ -775,7 +797,9 @@ Guacswap have no floor of their own; for these, a `Data` or `Cpi` caller enforce
 - the Mercurial form skips an empty side;
 - the Perena form skips a paused pool and an empty side;
 - the MetaDAO futarchy form skips a DAO not in its spot state, and an empty side;
-- the Saber decimal wrapper form skips a withdrawal the vault cannot pay.
+- the Saber decimal wrapper form skips a withdrawal the vault cannot pay;
+- the SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2
+  forms skip an empty side.
 
 "Dust" is an input too small to buy one unit at the pool's price after its fee. It is estimated from
 the vaults' balances. A venue's own refusal that the checks don't foresee still fails the
@@ -820,6 +844,16 @@ because an account list passed to a function is built as an array first, where o
 | Guacswap                          |  16,985 |        19,981 |       24,621 |           |              | 64,613–70,631 |
 | Meteora DLMM                      |  15,518 |        18,798 |       22,946 |           |              |        40,225 |
 | Saros DLMM                        |   9,529 |        14,187 |       18,241 |           |              |        53,053 |
+| SolFi v2                          |  18,924 |        23,593 |       27,625 |    61,769 |       69,408 |        81,206 |
+| Hadron                            |  16,108 |        21,692 |       25,608 |    58,889 |       66,528 |        31,027 |
+| TaurusFi                          |  15,204 |        16,572 |       20,284 |    51,688 |       59,327 |       117,086 |
+| Riptide                           |  15,039 |        17,791 |       21,387 |    57,312 |       64,951 |       531,428 |
+| Denali                            |  14,276 |        19,163 |       23,195 |    54,367 |       62,006 |        23,501 |
+| Gavel                             |  12,633 |        16,809 |       20,841 |    37,577 |       45,216 |        19,084 |
+| Tessera V                         |  15,257 |        19,381 |       23,529 |    54,512 |       59,616 |        51,729 |
+| Flint                             |  13,666 |        14,507 |       18,247 |    47,604 |       55,243 |         8,241 |
+| Deriverse                         |  18,264 |        23,510 |       27,426 |    64,142 |       71,407 |        39,027 |
+| GoonFi v2                         |  18,097 |        22,772 |       26,804 |    64,586 |       72,225 |        65,485 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own

@@ -17,7 +17,7 @@ import {
 } from "@solana/kit";
 import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
-import { FailedTransactionMetadata } from "litesvm";
+import { Clock, FailedTransactionMetadata } from "litesvm";
 
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
@@ -85,6 +85,9 @@ export interface Trade {
   authorityWritable?: boolean;
   /** The two mints attached writable, for a venue whose swap writes them. */
   mintsWritable?: boolean;
+  /** A wrapped-SOL paying or receiving account made native, its amount held in lamports too, for a
+   *  venue that requires it. */
+  native?: boolean;
 }
 
 export type Outcome =
@@ -153,8 +156,14 @@ export const boot = async (
   clock: bigint,
   dirs: readonly string[],
   programs: readonly [Address, string][],
+  slot?: bigint,
 ): Promise<EngineHarness> => {
   const harness = await startEngine(clock);
+  // A venue that checks its quote's slot against the Clock's runs at that slot.
+  if (slot !== undefined) {
+    harness.svm.warpToSlot(slot);
+    harness.svm.setClock(new Clock(slot, 0n, 0n, 0n, clock));
+  }
   const placed: Address[] = [];
   for (const dir of dirs) {
     const fixtures = loadFixtures(new URL(dir, FIXTURES).pathname);
@@ -184,6 +193,23 @@ export const boot = async (
   snapshots.set(harness, placed);
   freeze(harness);
   return harness;
+};
+
+/** A wrapped-SOL token account made native: `is_native` set to the rent reserve, and its amount in
+ *  lamports on top. Any other mint's account is left as it is. */
+const makeNative = (harness: EngineHarness, at: Address): void => {
+  const account = harness.svm.getAccount(at);
+  if (!account.exists || getAddressDecoder().decode(account.data.subarray(0, 32)) !== WSOL) return;
+  const data = new Uint8Array(account.data);
+  const view = new DataView(data.buffer);
+  const rent = harness.svm.minimumBalanceForRentExemption(165n);
+  view.setUint32(109, 1, true);
+  view.setBigUint64(113, rent, true);
+  harness.svm.setAccount({
+    ...account,
+    data,
+    lamports: lamports(rent + view.getBigUint64(64, true)),
+  });
 };
 
 /** Records the state every cook starts from: the fixture's accounts as they were, and the accounts
@@ -280,6 +306,7 @@ export const cook = async (
     0n,
     buyProgram,
   );
+  if (trade.native === true) for (const at of [source, recipient]) makeNative(harness, at);
   const w = AccountRole.WRITABLE;
   const r = AccountRole.READONLY;
   const named: Record<string, { address: Address; role: AccountRole }> = {

@@ -233,6 +233,56 @@ export const ROUTER_SVM_VENUES = {
     data: "sarosDlmmData",
     cpi: "sarosDlmmCpi",
   },
+  "solfi-v2": {
+    program: "SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF",
+    data: "solfiV2Data",
+    cpi: "solfiV2Cpi",
+  },
+  hadron: {
+    program: "HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8",
+    data: "hadronData",
+    cpi: "hadronCpi",
+  },
+  taurusfi: {
+    program: "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
+    data: "taurusfiData",
+    cpi: "taurusfiCpi",
+  },
+  riptide: {
+    program: "riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j",
+    data: "riptideData",
+    cpi: "riptideCpi",
+  },
+  denali: {
+    program: "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
+    data: "denaliData",
+    cpi: "denaliCpi",
+  },
+  gavel: {
+    program: "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi",
+    data: "gavelData",
+    cpi: "gavelCpi",
+  },
+  tesserav: {
+    program: "TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH",
+    data: "tesseravData",
+    cpi: "tesseravCpi",
+  },
+  flint: {
+    program: "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z",
+    data: "flintData",
+    cpi: "flintCpi",
+  },
+  deriverse: {
+    program: "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
+    data: "deriverseData",
+    cpi: "deriverseCpi",
+  },
+  "goonfi-v2": {
+    program: "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
+    data: "goonfiV2Data",
+    cpi: "goonfiV2Cpi",
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -535,6 +585,16 @@ const EXACT_IN_VENUES = [
   "guacswap",
   "meteora-dlmm",
   "saros-dlmm",
+  "solfi-v2",
+  "hadron",
+  "taurusfi",
+  "riptide",
+  "denali",
+  "gavel",
+  "tesserav",
+  "flint",
+  "deriverse",
+  "goonfi-v2",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -862,6 +922,162 @@ function exactInAccountOrder(
         r("hookProgram"),
         r("eventAuthority"),
         r("program"),
+      ];
+    case "solfi-v2":
+      return [
+        PAYER,
+        w("pool"),
+        r("oracle"),
+        w("registry"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("mintA"),
+        r("mintB"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("instructionsSysvar"),
+      ];
+    case "hadron":
+      return [
+        r("tokenProgram"),
+        r("tokenProgram"),
+        w("pool"),
+        w("assetConfigA"),
+        w("assetConfigB"),
+        w("growingA"),
+        w("pool"),
+        AUTHORITY,
+        w("source"),
+        ...paid("vaultA", "vaultB"),
+        w("recipient"),
+        w("globalConfig"),
+        w(aToB ? "feeVaultA" : "feeVaultB"),
+        r("clock"),
+        w("metadataA"),
+      ];
+    case "taurusfi":
+      return [
+        w("vaultA"),
+        w("vaultB"),
+        PAYER,
+        ownerA,
+        ownerB,
+        w("vaultAuthority"),
+        r("globalConfig"),
+        r("pool"),
+        r("globalAuthority"),
+        ...read("tokenProgramA", "tokenProgramB"),
+        ...read("mintA", "mintB"),
+        r("instructionsSysvar"),
+      ];
+    case "riptide":
+      return [
+        AUTHORITY,
+        w("pool"),
+        r("mintA"),
+        r("mintB"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("memo"),
+        r("instructionsSysvar"),
+        r("dontFront"),
+      ];
+    case "denali":
+      return [
+        AUTHORITY,
+        w("pool"),
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("oracle"),
+        r("globalConfig"),
+        ownerA,
+        ownerB,
+      ];
+    case "gavel":
+      return [
+        r("program"),
+        r("logAuthority"),
+        w("pool"),
+        AUTHORITY,
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        r("tokenProgram"),
+      ];
+    case "tesserav":
+      if (!aToB) throw new Error("Tessera V sells only its token A");
+      return [
+        r("poolAuthority"),
+        w("pool"),
+        AUTHORITY,
+        w("vaultA"),
+        w("vaultB"),
+        w("source"),
+        w("recipient"),
+        r("mintA"),
+        r("mintB"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("instructionsSysvar"),
+        r("config"),
+        r("oracle"),
+      ];
+    case "flint":
+      return [
+        AUTHORITY,
+        r("instructionsSysvar"),
+        ...paid("marketA", "marketB"),
+        w("source"),
+        w(aToB ? "vaultA" : "vaultB"),
+        w("recipient"),
+        w(aToB ? "vaultB" : "vaultA"),
+        ...read("tokenProgramA", "tokenProgramB"),
+        r("program"),
+      ];
+    case "deriverse":
+      // Selling the asset takes the bids, buying it the asks.
+      return [
+        PAYER,
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        w("pool"),
+        ...(aToB ? [w("bidsTree"), w("bidOrders")] : [w("asksTree"), w("askOrders")]),
+        w("lines"),
+        w("maps"),
+        w("clientInfos"),
+        ownerA,
+        ownerB,
+        r("tokenProgram"),
+      ];
+    case "goonfi-v2":
+      return [
+        PAYER,
+        w("pool"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        r("mintA"),
+        r("mintB"),
+        r("oracle"),
+        r("globalConfig"),
+        r("instructionsSysvar"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("validator"),
       ];
     default: {
       const unknown: never = venue;
