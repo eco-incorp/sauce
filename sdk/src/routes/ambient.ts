@@ -1,6 +1,6 @@
 /**
  * Chain-scoped scalar ambient defines — `chainId`/protocol-contract addresses/caller token symbols,
- * threaded into `compile()`'s `defines` underneath a caller's own `IntentOptions.compile.defines`
+ * threaded into `compile()`'s `defines` underneath a caller's own `defines`
  * (caller wins on a key collision; a user's own `let X = ...` inside the body wins over both, via
  * the compiler's own `getConstant`-only-when-`getVar`-is-undefined precedence).
  *
