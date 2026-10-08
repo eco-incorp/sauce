@@ -84,6 +84,7 @@ address.
 | [Beefy Finance](../protocols/beefy.md) | BIFI | `0xc55E93C62874D8100dBd2DfE307EDc1036ad5434` | `Beefy.BIFI` |
 | [Coinbase Wrapped Staked ETH](../protocols/cbeth.md) | cbETH | `0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22` | `Cbeth.CbETH` |
 | [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
+| [Chainlink](../protocols/chainlink.md) | keystoneForwarder | `0xF8344CFd5c43616a4366C34E3EEE75af79a74482` | `Chainlink.KeystoneForwarder` |
 | [Chainlink CCIP](../protocols/chainlink-ccip.md) | router | `0x881e3A65B4d4a04dD529061dd0071cf975F58bCD` | `ChainlinkCcip.Router` |
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |

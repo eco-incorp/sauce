@@ -76,6 +76,7 @@ and in each chain's file in `sauce-chains`.
 - `Celer.Bridge` ([`celer`](../../sauce-protocols/references/registry/celer.md), default)
 - `Chainlink.EthUsdFeed` ([`chainlink`](../../sauce-protocols/references/registry/chainlink.md))
 - `Chainlink.FeedRegistry` ([`chainlink`](../../sauce-protocols/references/registry/chainlink.md))
+- `Chainlink.KeystoneForwarder` ([`chainlink`](../../sauce-protocols/references/registry/chainlink.md))
 - `Chainlink.VrfV2Coordinator` ([`chainlink`](../../sauce-protocols/references/registry/chainlink.md))
 - `ChainlinkCcip.Router` ([`chainlink-ccip`](../../sauce-protocols/references/registry/chainlink-ccip.md), default)
 - `CircleGateway.GatewayMinter` ([`circle-gateway`](../../sauce-protocols/references/registry/circle-gateway.md))

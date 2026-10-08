@@ -311,7 +311,7 @@ transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Chainlink](protocols/chainlink.md) | — | `Chainlink`: ethereum, arc | ethereum, arc |
+| [Chainlink](protocols/chainlink.md) | — | `Chainlink`: ethereum, arc, base | ethereum, arc, base |
 | [Pyth Network](protocols/pyth.md) | — | `Pyth`: ethereum | ethereum |
 
 ## Payments and streaming (2)
