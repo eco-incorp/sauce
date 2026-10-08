@@ -39,7 +39,6 @@ import {
 
 import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12PotAbi } from "../evm/engine.js";
-import { v12KitchenAddress } from "../deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../deployments/pot.js";
 import { PortalABI } from "../protocols/eco-routes/abis.js";
 import { ECO_ROUTES_ADDRESSES } from "../protocols/eco-routes/addresses.generated.js";
@@ -887,7 +886,7 @@ export async function planFill(
   const claimant = (options.claimant ?? solver) as Hex;
   const steps: FillStep[] = [];
   if (cooks && !deployed) {
-    const kitchenAt = getAddress(v12KitchenAddress());
+    const kitchenAt = kitchenAddress();
     steps.push({
       kind: "deploy",
       what: `Kitchen.deployPot(${executor}, ${SAUCE_INTENT_POT_SALT})`,
