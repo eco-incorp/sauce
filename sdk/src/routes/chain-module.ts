@@ -233,6 +233,15 @@ function namesNoSingle(key: string, namespace: Namespace): string {
   return `'${key}' names no single contract — it has ${known.join(", ")}: use '${key}.<Contract>'`;
 }
 
+/** What a protocol whose one callable contract stands for it says it is, where that contract is. */
+function standsFor(key: string, namespace: Namespace): string {
+  const main = (namespace as Namespace & { kind: "protocol" }).contracts.get(
+    (namespace as Namespace & { kind: "protocol" }).defaultContract!,
+  )!;
+
+  return `'${key}' is ${main.protocol}.${main.contract}`;
+}
+
 /** The method names a namespace class keeps for itself. */
 const CLASS_MEMBERS: ReadonlySet<string> = new Set([
   "address",
@@ -283,11 +292,19 @@ function namespaceClass(key: string, namespace: Namespace): string {
     main === undefined
       ? "  [Symbol.toPrimitive](hint) { throw new Error(this.reason); }"
       : '  [Symbol.toPrimitive](hint) { if (this.address === undefined) { if (hint === "default") return 0; throw new Error(this.reason); } return this.address; }';
+  // A contract the chain lacks is left unset, so a comparison with it is the compiler's to decide.
+  const contracts = fields.map((name) => `if (c.${name} !== undefined) this.${name} = c.${name};`);
+  // What the namespace says used as a contract is the same on every chain but where its contract is
+  // missing there (the one sentence naming the chain), so the class holds it once, not each chain's
+  // instance.
+  const constructor =
+    main === undefined
+      ? `  constructor(c) { ${contracts.join(" ")} this.address = undefined; this.reason = ${str(namesNoSingle(key, namespace))}; }`
+      : `  constructor(c, address, reason) { ${contracts.join(" ")} this.address = address; this.reason = reason === undefined ? ${str(standsFor(key, namespace))} : reason; }`;
 
   return [
     `class Ns${key} {`,
-    // A contract the chain lacks is left unset, so a comparison with it is the compiler's to decide.
-    `  constructor(c, address, reason) { ${fields.map((name) => `if (c.${name} !== undefined) this.${name} = c.${name};`).join(" ")} this.address = address; this.reason = reason; }`,
+    constructor,
     conversion,
     "  toString() { return this.reason; }",
     ...methods,
@@ -331,21 +348,17 @@ class Namespaces {
       namespace.kind === "protocol" && namespace.defaultContract !== undefined
         ? namespace.contracts.get(namespace.defaultContract)
         : undefined;
-    let address: string | undefined;
-    let reason: string;
-    if (main === undefined) {
-      reason = namesNoSingle(key, namespace);
-    } else {
-      const there = addressOn(main, chain);
-      if (there !== undefined && (main.coverage.typeFidelity !== "widened" || this.allowWidened)) {
-        address = word(there);
-        reason = `'${key}' is ${main.protocol}.${main.contract}`;
-      } else {
-        reason = there === undefined ? notDeployed(main, chain) : widened(main);
-      }
+    const contracts = `{ ${fields.join(", ")} }`;
+    // The class says what a namespace with no single contract is, and what one whose contract is
+    // here stands for; an instance says only why its contract is missing on its chain.
+    if (main === undefined) return `new Ns${key}(${contracts})`;
+    const there = addressOn(main, chain);
+    if (there !== undefined && (main.coverage.typeFidelity !== "widened" || this.allowWidened)) {
+      return `new Ns${key}(${contracts}, ${word(there)}, undefined)`;
     }
+    const reason = there === undefined ? notDeployed(main, chain) : widened(main);
 
-    return `new Ns${key}({ ${fields.join(", ")} }, ${address ?? "undefined"}, ${str(reason)})`;
+    return `new Ns${key}(${contracts}, undefined, ${str(reason)})`;
   }
 }
 
