@@ -10,7 +10,7 @@ application calls them.
 
 | Example                                                        | Shows                                                                                                                         |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it — written in SauceScript               |
+| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where the chain has it — written in SauceScript                        |
 | [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)` |
 | [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                |
 | [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program — token symbols, a pool by key — compiled for two chains, and with a runtime amount      |

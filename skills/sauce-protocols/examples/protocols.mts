@@ -13,6 +13,7 @@ import {
   getProtocolsByChain,
   listProtocols,
   listSkillSlugs,
+  requireChain,
   routes,
 } from "@eco-incorp/sauce";
 import { compile } from "@eco-incorp/sauce/compiler";
@@ -27,8 +28,8 @@ const onBase = getProtocolsByChain(8453);
 check(getProtocol("pancakeswap-v3")?.slug === "pancakeswap-v3", "catalog lookup by slug");
 check(contracts.on("base").AaveV3.Pool.available, "AaveV3.Pool is a namespace on Base");
 
-// protocols.sauce.ts names PancakeSwap V3's factory by namespace, behind `available(...)`: the
-// program carries the factory where the chain has one, and compiles without it elsewhere.
+// protocols.sauce.ts names PancakeSwap V3's factory by namespace, behind `!= 0n`: the program
+// carries the factory where the chain has one, and compiles without it elsewhere.
 const source = readFileSync(new URL("./protocols.sauce.ts", import.meta.url), "utf8");
 const sizes: string[] = [];
 for (const [slug, hasPancake] of [
@@ -39,7 +40,19 @@ for (const [slug, hasPancake] of [
   const factory = contracts.on(slug).PancakeswapV3.Factory;
   check(factory.available === hasPancake, `PancakeswapV3.Factory on ${slug}: ${hasPancake}`);
   const program = routes.compileSauceProgram(slug, source);
-  check(program.source.includes("__sauce_approve(USDC,"), "the approve is SafeERC20");
+  const pool = contracts.on(slug).AaveV3.Pool.address!;
+  const usdc = `0x${routes.registryTokenAddress(requireChain(slug), "USDC")!.toString(16).padStart(40, "0")}`;
+  const approve = (body: string, imports = "") =>
+    Buffer.from(
+      routes.compileSauceProgram(slug, `${imports}function main(amount: Uint256) { ${body} }`)
+        .bytecode,
+    );
+  check(
+    approve("USDC.approve(AaveV3.Pool, amount);").equals(
+      approve(`approve(${usdc}, ${pool}, amount);`, 'import { approve } from "@sauce/token";\n'),
+    ),
+    "the approve is SafeERC20",
+  );
   const bytecode = Buffer.from(program.bytecode).toString("hex");
   check(
     hasPancake ===
