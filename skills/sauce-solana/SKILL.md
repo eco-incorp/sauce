@@ -283,7 +283,11 @@ Pots and intent steps are built and sent there.
   created yet is created in the same simulated transaction, ahead of the cook. Solana's simulation
   takes no account overrides, so there the owner must hold the Pot's rent and the fees, and the
   accounts hold what they hold. `sauce run` signs with `--keypair`; `sauce tx` prints a base64
-  transaction for the owner's wallet.
+  transaction for the owner's wallet. A cook that succeeds, rehearsed or sent, leads with what it
+  leaves in the Pot's token accounts (`Left in the Pot`, and `leftInPot` in `--json`): that is the
+  owner's, but not in their wallet, and only another cook moves it out. A sent one prints its
+  Solscan page and its trace (calls and balance changes), links for the user to open, and each
+  token account's change, read before the cook and once it lands.
 - **A rehearsal in a local copy.** A cook too large for one transaction, or one given
   `--assume-balance`, `sauce simulate` runs in a local copy of every account the cook names, read
   from the cluster as it is, with the cluster's rent and the released engine and Kitchen (the copy

@@ -1,0 +1,4068 @@
+{
+  "$comment": "The swap instructions eco-incorp/sauce-recipes builds for the venue fixture's pools, written by scripts/recipes-swap-templates.mjs: a ladder's prefix, then the patched u64 amount (in lots where `divisor` is given), then its suffix, and its accounts in order, `user:owner`/`user:in`/`user:out` the trader's. Test data: nothing ships it.",
+  "recipes": {
+    "commit": "0d72f826b90a0f69383590da3b62de94aeaf2e8b",
+    "sauce": "0.99.6"
+  },
+  "skipped": [
+    "byreal-sol-usdc: byreal: pool 9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq has a dynamic fee configured — its swap walks tick-spacing-bounded steps with a per-step volatility fee the in-VM quote does not model",
+    "byreal-usdc 0to1 buildBakedCpiSwap: CL static execution has no bounded window",
+    "byreal-usdc 1to0 buildBakedCpiSwap: CL static execution has no bounded window",
+    "stabble-clmm-usdc-usdt 0to1 buildBakedCpiSwap: CL static execution has no bounded window",
+    "stabble-clmm-usdc-usdt 1to0 buildBakedCpiSwap: CL static execution has no bounded window"
+  ],
+  "templates": [
+    {
+      "pool": "raydium-clmm-sol-usdc",
+      "venue": "raydium-clmm",
+      "direction": "0to1",
+      "builder": "buildSwapV2",
+      "programId": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "2BZdCyhMaxmKTi15yWBHEzWpDM3J27xMeojxKU9Wou22",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "raydium-clmm-sol-usdc",
+      "venue": "raydium-clmm",
+      "direction": "0to1",
+      "builder": "buildBakedCpiSwap",
+      "programId": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "0100000000000000b66746fc675cce57000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "2BZdCyhMaxmKTi15yWBHEzWpDM3J27xMeojxKU9Wou22",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "raydium-clmm-sol-usdc",
+      "venue": "raydium-clmm",
+      "direction": "1to0",
+      "builder": "buildSwapV2",
+      "programId": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "raydium-clmm-sol-usdc",
+      "venue": "raydium-clmm",
+      "direction": "1to0",
+      "builder": "buildBakedCpiSwap",
+      "programId": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "0100000000000000fc15c61af2d9db57000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "pancakeswap-clmm-sol-usdc",
+      "venue": "pancakeswap-clmm",
+      "direction": "0to1",
+      "builder": "buildSwapV2",
+      "programId": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "8zTGeWM6oKDzqumVqbZHXjHN8LrKBZcZ5FTeH5dx8N9a",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "F2CPsFh4yKxDLmEnFRXk1hwb6QjjP22vWCfPTHgDpWkb",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "bjnDeH75Tk7UqoyZHMRx5svjR1ndzSxLuxnzoX3wYSr",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "pancakeswap-clmm-sol-usdc",
+      "venue": "pancakeswap-clmm",
+      "direction": "0to1",
+      "builder": "buildBakedCpiSwap",
+      "programId": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "010000000000000019e8211cf37a9857000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "8zTGeWM6oKDzqumVqbZHXjHN8LrKBZcZ5FTeH5dx8N9a",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "F2CPsFh4yKxDLmEnFRXk1hwb6QjjP22vWCfPTHgDpWkb",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "bjnDeH75Tk7UqoyZHMRx5svjR1ndzSxLuxnzoX3wYSr",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "pancakeswap-clmm-sol-usdc",
+      "venue": "pancakeswap-clmm",
+      "direction": "1to0",
+      "builder": "buildSwapV2",
+      "programId": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "8zTGeWM6oKDzqumVqbZHXjHN8LrKBZcZ5FTeH5dx8N9a",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "2xmhJyp2uNmttg5VfMbiWfMSdWtrN4N9vLX4MTPuMZ4J",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "pancakeswap-clmm-sol-usdc",
+      "venue": "pancakeswap-clmm",
+      "direction": "1to0",
+      "builder": "buildBakedCpiSwap",
+      "programId": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "010000000000000085c00f60b8e00858000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "bHHnvxhkzBebvqxpnzVaXSdQ1GdFeZFg8yi9YKgL7zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "EaEKZFeuKvws16cfgkaCqZBwpvEdCC6Gsw6282A9WsCD",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "8zTGeWM6oKDzqumVqbZHXjHN8LrKBZcZ5FTeH5dx8N9a",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "2xmhJyp2uNmttg5VfMbiWfMSdWtrN4N9vLX4MTPuMZ4J",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-sol-usdc",
+      "venue": "orca-whirlpool",
+      "direction": "aToB",
+      "builder": "buildSwapV2",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000000000000000000000000000000000000101",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "D3461zSTVPNdBFPRk2b6zpqQ93g2LW5Kw2potgMdxNJP",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "8NPFeBD52yqJWnsmBNma9qXXGEjXa6WatYcLMXjzSeyK",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "FoKYKtRpD25TKzBMndysKpgPqbj8AdLXjfpYHXn9PGTX",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-sol-usdc",
+      "venue": "orca-whirlpool",
+      "direction": "aToB",
+      "builder": "buildBakedCpiSwap",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "010000000000000087e472d5a41b795400000000000000000101",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "D3461zSTVPNdBFPRk2b6zpqQ93g2LW5Kw2potgMdxNJP",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "8NPFeBD52yqJWnsmBNma9qXXGEjXa6WatYcLMXjzSeyK",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "FoKYKtRpD25TKzBMndysKpgPqbj8AdLXjfpYHXn9PGTX",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-sol-usdc",
+      "venue": "orca-whirlpool",
+      "direction": "bToA",
+      "builder": "buildSwapV2",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000000000000000000000000000000000000100",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "FdtvWk8j5u1a64YK2Uxk9eXxKZJTwLHDGx8aJPbJyw2Q",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "8fV1MQYaRiW9qDWinzYfNa3FLs8PXSdPxoytiwrcyJPD",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "FoKYKtRpD25TKzBMndysKpgPqbj8AdLXjfpYHXn9PGTX",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-sol-usdc",
+      "venue": "orca-whirlpool",
+      "direction": "bToA",
+      "builder": "buildBakedCpiSwap",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000ec6864d797133d5c00000000000000000100",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "FdtvWk8j5u1a64YK2Uxk9eXxKZJTwLHDGx8aJPbJyw2Q",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "8fV1MQYaRiW9qDWinzYfNa3FLs8PXSdPxoytiwrcyJPD",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "FoKYKtRpD25TKzBMndysKpgPqbj8AdLXjfpYHXn9PGTX",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "cropper-sol-usdc",
+      "venue": "cropper",
+      "direction": "aToB",
+      "builder": "buildSwapV2",
+      "programId": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000503b01000100000000000000000000000101",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "5zLmSAxN5dNQUeeFgnk55f3xViyDCrbbDL5yr79AM9NH",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "BLGsJzPU8UngoHz481jbFeC7jBNHhYCH2YF6L2nXoZHs",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "cropper-sol-usdc",
+      "venue": "cropper",
+      "direction": "aToB",
+      "builder": "buildBakedCpiSwap",
+      "programId": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000f749bdd100d47f5700000000000000000101",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "5zLmSAxN5dNQUeeFgnk55f3xViyDCrbbDL5yr79AM9NH",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "BLGsJzPU8UngoHz481jbFeC7jBNHhYCH2YF6L2nXoZHs",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "cropper-sol-usdc",
+      "venue": "cropper",
+      "direction": "bToA",
+      "builder": "buildSwapV2",
+      "programId": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000af331ba8327fbb35b1c4feff000000000100",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "49udb4GM9HDWSLfeejFSPmBKTFkWyaKRHTviNiH1nKcK",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "YzanZTYF2VqhpurmgFWkzippjhT8LLUAFcXTKBeP5Au",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "BLGsJzPU8UngoHz481jbFeC7jBNHhYCH2YF6L2nXoZHs",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "cropper-sol-usdc",
+      "venue": "cropper",
+      "direction": "bToA",
+      "builder": "buildBakedCpiSwap",
+      "programId": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000675b87df10346e5b00000000000000000100",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "Cux1Jc8HzNYJKos71qRUsEKtBT5HDFTK7mgSM8ybyfAW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "GQc9WHpd9sSa4WuwrKnixD8DvYBuER3cZRPjMR77SpYM",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "49udb4GM9HDWSLfeejFSPmBKTFkWyaKRHTviNiH1nKcK",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "YzanZTYF2VqhpurmgFWkzippjhT8LLUAFcXTKBeP5Au",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "BLGsJzPU8UngoHz481jbFeC7jBNHhYCH2YF6L2nXoZHs",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "defituna-sol-usdc",
+      "venue": "defituna",
+      "direction": "aToB",
+      "builder": "buildSwapV2",
+      "programId": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "010000000000000000000000000000000000000000000000010100",
+      "accounts": [
+        {
+          "ref": "s0:tpa",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpb",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "4AyU4fjeHuxwN7j2QDF6HuGRBGYjnr3zuMvWHcjvfze5",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "defituna-sol-usdc",
+      "venue": "defituna",
+      "direction": "aToB",
+      "builder": "buildBakedCpiSwap",
+      "programId": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000cfe809d269f321570000000000000000010100",
+      "accounts": [
+        {
+          "ref": "s0:tpa",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpb",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "4AyU4fjeHuxwN7j2QDF6HuGRBGYjnr3zuMvWHcjvfze5",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "defituna-sol-usdc",
+      "venue": "defituna",
+      "direction": "bToA",
+      "builder": "buildSwapV2",
+      "programId": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "010000000000000000000000000000000000000000000000010000",
+      "accounts": [
+        {
+          "ref": "s0:tpa",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpb",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "5EB33uqp5Lc6JKvdFwE3p7G5sYMwG26uCcKfjqconxdc",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "CSyeqvPvzDuL7PmuqjXiGC39Sh2cqcAyzwNrRrfqGQJF",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "defituna-sol-usdc",
+      "venue": "defituna",
+      "direction": "bToA",
+      "builder": "buildBakedCpiSwap",
+      "programId": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "01000000000000003a36dac628e768590000000000000000010000",
+      "accounts": [
+        {
+          "ref": "s0:tpa",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpb",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CYuiCBEhHLAYcDbFVtJ1KfgeQaQuN2sV18pNmzcDsbM7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "5EB33uqp5Lc6JKvdFwE3p7G5sYMwG26uCcKfjqconxdc",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "CSyeqvPvzDuL7PmuqjXiGC39Sh2cqcAyzwNrRrfqGQJF",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "crema-sol-usdc",
+      "venue": "crema",
+      "direction": "aToB",
+      "builder": "buildSwapV2",
+      "programId": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "prefix": "f8c69e91e17587c80101",
+      "suffix": "0100000000000000503b0100010000000000000000000000",
+      "accounts": [
+        {
+          "ref": "s0:cfg",
+          "address": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tam",
+          "address": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "GJVeGpgFfykzVkK3YiNt5jiu1xiWHacdiKmTxApApGGG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "7kDjYVixL55tcQXAzkUsDtCqvYEyZkYecJCi2qAR97HH",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "crema-sol-usdc",
+      "venue": "crema",
+      "direction": "aToB",
+      "builder": "buildBakedCpiSwap",
+      "programId": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "prefix": "f8c69e91e17587c80101",
+      "suffix": "0100000000000000204c47bef27ee8520000000000000000",
+      "accounts": [
+        {
+          "ref": "s0:cfg",
+          "address": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tam",
+          "address": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "GJVeGpgFfykzVkK3YiNt5jiu1xiWHacdiKmTxApApGGG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "7kDjYVixL55tcQXAzkUsDtCqvYEyZkYecJCi2qAR97HH",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "crema-sol-usdc",
+      "venue": "crema",
+      "direction": "bToA",
+      "builder": "buildSwapV2",
+      "programId": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "prefix": "f8c69e91e17587c80001",
+      "suffix": "0100000000000000af331ba8327fbb35b1c4feff00000000",
+      "accounts": [
+        {
+          "ref": "s0:cfg",
+          "address": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tam",
+          "address": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "5SroGZpjj5TCi9H5k2UfGpsxMXYos189V7uBkDFW2aQV",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "6hcX32PtyRsVxdsWZHCn6edt9bsxWHRP3TPkmcfmwJzT",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "crema-sol-usdc",
+      "venue": "crema",
+      "direction": "bToA",
+      "builder": "buildBakedCpiSwap",
+      "programId": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "prefix": "f8c69e91e17587c80001",
+      "suffix": "0100000000000000c9af209a7c4eb65d0000000000000000",
+      "accounts": [
+        {
+          "ref": "s0:cfg",
+          "address": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ma",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mb",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "GFqjBzMTFXEyoC33Zq46hz5xbNAQEap95siDHBcXsThQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "2EuvsnUPAkX3J3Rk8upZkS7veAVFNcj3jh95Pmn4KmYN",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tam",
+          "address": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "5SroGZpjj5TCi9H5k2UfGpsxMXYos189V7uBkDFW2aQV",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "6hcX32PtyRsVxdsWZHCn6edt9bsxWHRP3TPkmcfmwJzT",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "phoenix-sol-usdc",
+      "venue": "phoenix",
+      "direction": "baseIn",
+      "builder": "buildSwapV2",
+      "programId": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+      "prefix": "00020100",
+      "suffix": "000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000",
+      "divisor": "1000000",
+      "accounts": [
+        {
+          "ref": "s0:prog",
+          "address": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:log",
+          "address": "7aDTsspkQNGKmrexAN7FLx9oxU3iPczSSvHNggyuqYkR",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "3HSYXeGc3LjEPCuzoNDjQN37F1ebsSiR4CqXVqQCdekZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "phoenix-sol-usdc",
+      "venue": "phoenix",
+      "direction": "quoteIn",
+      "builder": "buildSwapV2",
+      "programId": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+      "prefix": "000200000000000000000000",
+      "suffix": "00000000000000000000000000000000010000000000000000000000000000000000000000",
+      "divisor": "1",
+      "accounts": [
+        {
+          "ref": "s0:prog",
+          "address": "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:log",
+          "address": "7aDTsspkQNGKmrexAN7FLx9oxU3iPczSSvHNggyuqYkR",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "3HSYXeGc3LjEPCuzoNDjQN37F1ebsSiR4CqXVqQCdekZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "byreal-usdc",
+      "venue": "byreal",
+      "direction": "0to1",
+      "builder": "buildSwapV2",
+      "programId": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "3mYgrhhxcEWU7YryJMm2GikfhjpckC7DvFTDQmZpqzux",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "8HPQzqMDoDcRDMh3Si75EGWh276QbcVrfHvrNFVPnW8s",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "FBfbFcUThYcXBPLseG2F6mPoLL38ooHY8HV9RNAmNTHY",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "GxmHBFUh2KWST8AqV2uiG5dVFt6kyS8e1qUg3sbmiVRw",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "76x9964TvFSUVdHAEezmT6JWi2Nn9sGnRof1JXgTJtcx",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "4SoQ8UkWfeDH47T56PA53CZCeW4KytYCiU65CwBWoJUt",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "GwQi9iyTDXyHTfwL8yfApgEEKgtAKxpME4h8oigT5Nzs",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "Cy82p2uN8UzXUeiSsVuN21NTV3Lsbg8dsJSrBr3pugDR",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "DauY8vZHBRNdqrWw9xy2yiAyPfUdf5GRvoJSCnyr4Ygw",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "byreal-usdc",
+      "venue": "byreal",
+      "direction": "1to0",
+      "builder": "buildSwapV2",
+      "programId": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "3mYgrhhxcEWU7YryJMm2GikfhjpckC7DvFTDQmZpqzux",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "8HPQzqMDoDcRDMh3Si75EGWh276QbcVrfHvrNFVPnW8s",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "GxmHBFUh2KWST8AqV2uiG5dVFt6kyS8e1qUg3sbmiVRw",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "FBfbFcUThYcXBPLseG2F6mPoLL38ooHY8HV9RNAmNTHY",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "76x9964TvFSUVdHAEezmT6JWi2Nn9sGnRof1JXgTJtcx",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "4SoQ8UkWfeDH47T56PA53CZCeW4KytYCiU65CwBWoJUt",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "GwQi9iyTDXyHTfwL8yfApgEEKgtAKxpME4h8oigT5Nzs",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "21YCFMkgAqeb6NaPhQM74KbB2cMtS1XKTFzd9RN12yYy",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "GBp3rLVnESTqAJpqW2dnk4351TNeAmW3xw6vqh2CdTtp",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "stabble-clmm-usdc-usdt",
+      "venue": "stabble-clmm",
+      "direction": "0to1",
+      "builder": "buildSwapV2",
+      "programId": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "GDcVu2J7RPJMg7Q8AbhFE8Reg2Y9ebP2qg1sD3Fm9jzJ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "7SYkZbyjjYYW41WEmheCFSbx2jihVAMfdFssXxKvgSsh",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "7TLtAZvbjYnouLUS8tu84rimiVTnopzq6HUy3QBMe5Rc",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "FNw27iQ9JRkmc1wSMNhG5xxtRQF11EMBFnoEWW3kbKcZ",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "GKWvvwxtYaMBgpseoq6Fg2QmmbPCHRFDJBBvxZJzAPo1",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "CxFHqo4dhM7H8uagxzhjSyrN5Ua5ixV3d6e8ogKffQEv",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "3NmTTb47r5GhHksn2YxVGphQtVzMMZUbM3EZakagrGC6",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "stabble-clmm-usdc-usdt",
+      "venue": "stabble-clmm",
+      "direction": "1to0",
+      "builder": "buildSwapV2",
+      "programId": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "prefix": "2b04ed0b1ac91e62",
+      "suffix": "01000000000000000000000000000000000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:cfg",
+          "address": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:iv",
+          "address": "7SYkZbyjjYYW41WEmheCFSbx2jihVAMfdFssXxKvgSsh",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ov",
+          "address": "GDcVu2J7RPJMg7Q8AbhFE8Reg2Y9ebP2qg1sD3Fm9jzJ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:obs",
+          "address": "7TLtAZvbjYnouLUS8tu84rimiVTnopzq6HUy3QBMe5Rc",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp22",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:memo",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:im",
+          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:om",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bmx",
+          "address": "FNw27iQ9JRkmc1wSMNhG5xxtRQF11EMBFnoEWW3kbKcZ",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "GKWvvwxtYaMBgpseoq6Fg2QmmbPCHRFDJBBvxZJzAPo1",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "7mc65TTb16ZjmoZo9iGV2uEzEWUGjD9FmyD4pryhtAHY",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "9v7GT2XXFDCeh7QxF5Xy6wPWJMq337LHFyeXme9CRzm9",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "invariant-usdc-usdt",
+      "venue": "invariant",
+      "direction": "xToY",
+      "builder": "buildSwapV2",
+      "programId": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "prefix": "f8c69e91e17587c801",
+      "suffix": "0100000000000000000000000000000000",
+      "accounts": [
+        {
+          "ref": "s0:state",
+          "address": "8NsPwRFYqob3FzYvHYTjFK6WVFJADFN8Hn7yNQKcVNW1",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tickmap",
+          "address": "DhLTuE6JXGWRAUxKSfFTuV8EZNaX4hm496Qbfo51YkPR",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:rx",
+          "address": "4go7nr5sVMTDztb5a7sF92HoeasDnpadspuHR9ACsfw6",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ry",
+          "address": "9J1h43E5XFdMpYsWsqK8q8SFyXPAt8dHm52enfjWhSJt",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:auth",
+          "address": "J4uBbeoWpZE8fH58PM1Fp9n9K6f1aThyeVCyRdJbaXqt",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:t0",
+          "address": "57cKqXzYQ7M8K3p3pjcVfbcTUoudHH2XE3JkRCvBXds4",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t1",
+          "address": "9efZE8Ns8kvmAT64dJDYv5HYrtsDfNmv9crQjLeiWDEv",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t2",
+          "address": "2hqUHwW2jdyURq1Zy7JHVRdME6jeGD1nSYeB6XPAouro",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "invariant-usdc-usdt",
+      "venue": "invariant",
+      "direction": "xToY",
+      "builder": "buildBakedCpiSwap",
+      "programId": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "prefix": "f8c69e91e17587c801",
+      "suffix": "01000000a1edccce1bc2d3000000000000",
+      "accounts": [
+        {
+          "ref": "s0:state",
+          "address": "8NsPwRFYqob3FzYvHYTjFK6WVFJADFN8Hn7yNQKcVNW1",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tickmap",
+          "address": "DhLTuE6JXGWRAUxKSfFTuV8EZNaX4hm496Qbfo51YkPR",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:rx",
+          "address": "4go7nr5sVMTDztb5a7sF92HoeasDnpadspuHR9ACsfw6",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ry",
+          "address": "9J1h43E5XFdMpYsWsqK8q8SFyXPAt8dHm52enfjWhSJt",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:auth",
+          "address": "J4uBbeoWpZE8fH58PM1Fp9n9K6f1aThyeVCyRdJbaXqt",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:t0",
+          "address": "57cKqXzYQ7M8K3p3pjcVfbcTUoudHH2XE3JkRCvBXds4",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t1",
+          "address": "9efZE8Ns8kvmAT64dJDYv5HYrtsDfNmv9crQjLeiWDEv",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t2",
+          "address": "2hqUHwW2jdyURq1Zy7JHVRdME6jeGD1nSYeB6XPAouro",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "invariant-usdc-usdt",
+      "venue": "invariant",
+      "direction": "yToX",
+      "builder": "buildSwapV2",
+      "programId": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "prefix": "f8c69e91e17587c800",
+      "suffix": "0100000000000000000000000000000000",
+      "accounts": [
+        {
+          "ref": "s0:state",
+          "address": "8NsPwRFYqob3FzYvHYTjFK6WVFJADFN8Hn7yNQKcVNW1",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tickmap",
+          "address": "DhLTuE6JXGWRAUxKSfFTuV8EZNaX4hm496Qbfo51YkPR",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:rx",
+          "address": "4go7nr5sVMTDztb5a7sF92HoeasDnpadspuHR9ACsfw6",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ry",
+          "address": "9J1h43E5XFdMpYsWsqK8q8SFyXPAt8dHm52enfjWhSJt",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:auth",
+          "address": "J4uBbeoWpZE8fH58PM1Fp9n9K6f1aThyeVCyRdJbaXqt",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:t0",
+          "address": "FPQKVT5iRxczsq3Cz72mw4bppn4CHKDyDZXvQaoAYjro",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t1",
+          "address": "9zvfSzdCoz8CMNt6MAjoRB9TJRhW4rNZkAK73wffjdyR",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t2",
+          "address": "BQnqfFuKjd2cnLnur1QqNNdyrzwfBaGCWHkbZBSoSscD",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "invariant-usdc-usdt",
+      "venue": "invariant",
+      "direction": "yToX",
+      "builder": "buildBakedCpiSwap",
+      "programId": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "prefix": "f8c69e91e17587c800",
+      "suffix": "0100d07510e2cf861debd5000000000000",
+      "accounts": [
+        {
+          "ref": "s0:state",
+          "address": "8NsPwRFYqob3FzYvHYTjFK6WVFJADFN8Hn7yNQKcVNW1",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:pool",
+          "address": "5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tickmap",
+          "address": "DhLTuE6JXGWRAUxKSfFTuV8EZNaX4hm496Qbfo51YkPR",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:rx",
+          "address": "4go7nr5sVMTDztb5a7sF92HoeasDnpadspuHR9ACsfw6",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ry",
+          "address": "9J1h43E5XFdMpYsWsqK8q8SFyXPAt8dHm52enfjWhSJt",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:auth",
+          "address": "J4uBbeoWpZE8fH58PM1Fp9n9K6f1aThyeVCyRdJbaXqt",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:t0",
+          "address": "FPQKVT5iRxczsq3Cz72mw4bppn4CHKDyDZXvQaoAYjro",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t1",
+          "address": "9zvfSzdCoz8CMNt6MAjoRB9TJRhW4rNZkAK73wffjdyR",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:t2",
+          "address": "BQnqfFuKjd2cnLnur1QqNNdyrzwfBaGCWHkbZBSoSscD",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "manifest-sol-usdc",
+      "venue": "manifest",
+      "direction": "baseIn",
+      "builder": "buildSwapV2",
+      "programId": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+      "prefix": "04",
+      "suffix": "01000000000000000101",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:sys",
+          "address": "11111111111111111111111111111111",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "AKjfJDv4ywdpCDrj7AURuNkGA3696GTVFgrMwk4TjkKs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "FN9K6rTdWtRDUPmLTN2FnGvLZpHVNRN2MeRghKknSGDs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bm",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpq",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:qm",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "manifest-sol-usdc",
+      "venue": "manifest",
+      "direction": "baseIn",
+      "builder": "buildBakedCpiSwap",
+      "programId": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+      "prefix": "04",
+      "suffix": "01000000000000000101",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:sys",
+          "address": "11111111111111111111111111111111",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "AKjfJDv4ywdpCDrj7AURuNkGA3696GTVFgrMwk4TjkKs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "FN9K6rTdWtRDUPmLTN2FnGvLZpHVNRN2MeRghKknSGDs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bm",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpq",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:qm",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "manifest-sol-usdc",
+      "venue": "manifest",
+      "direction": "quoteIn",
+      "builder": "buildSwapV2",
+      "programId": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+      "prefix": "04",
+      "suffix": "01000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:sys",
+          "address": "11111111111111111111111111111111",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "AKjfJDv4ywdpCDrj7AURuNkGA3696GTVFgrMwk4TjkKs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "FN9K6rTdWtRDUPmLTN2FnGvLZpHVNRN2MeRghKknSGDs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bm",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpq",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:qm",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "manifest-sol-usdc",
+      "venue": "manifest",
+      "direction": "quoteIn",
+      "builder": "buildBakedCpiSwap",
+      "programId": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+      "prefix": "04",
+      "suffix": "01000000000000000001",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:sys",
+          "address": "11111111111111111111111111111111",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "AKjfJDv4ywdpCDrj7AURuNkGA3696GTVFgrMwk4TjkKs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "FN9K6rTdWtRDUPmLTN2FnGvLZpHVNRN2MeRghKknSGDs",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bm",
+          "address": "So11111111111111111111111111111111111111112",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tpq",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:qm",
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "openbook-v2-bonk-usdc",
+      "venue": "openbook-v2",
+      "direction": "baseIn",
+      "builder": "buildSwapV2",
+      "programId": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "prefix": "032c47031ac7cb55010100000000000000",
+      "suffix": "ffffffffffffff7f0304",
+      "divisor": "100000000",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "D3gZwng2MgZGjktYcKpbR8Bz8653i4qCgzHCf5E4TcZb",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:auth",
+          "address": "7WQX98AWmbn6keR2vVHdZ3dfwzaLuUyAnr2DZ4rGhh3o",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bids",
+          "address": "6LWqnjYgqVuaYrv9rJCm3N9UzHQUbVBHBDWqU37xszmY",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:asks",
+          "address": "FDVjEDZiCxvch6vkFhw5g6oX9PUPqUeQd5gNq3b4LV3A",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "4PMzFKwkiT3snbaE7S9j4K52osuAN3LbptF2XMQYMort",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "HE3w6Tw6Z8ZqpfscqmDeA9U7Xoo6zRgNWGKaFwjRfBJZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:eh",
+          "address": "DPH9w3DvTGEWbpV3p7bbrDvfx7Gp5M5ahueUE9dUwjoG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:oa",
+          "address": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ob",
+          "address": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:sp",
+          "address": "11111111111111111111111111111111",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ooa",
+          "address": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "openbook-v2-bonk-usdc",
+      "venue": "openbook-v2",
+      "direction": "quoteIn",
+      "builder": "buildSwapV2",
+      "programId": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "prefix": "032c47031ac7cb5500010000000000000030e28e7915000000",
+      "suffix": "0304",
+      "divisor": "1",
+      "accounts": [
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": true,
+          "signer": true
+        },
+        {
+          "ref": "s0:mkt",
+          "address": "D3gZwng2MgZGjktYcKpbR8Bz8653i4qCgzHCf5E4TcZb",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:auth",
+          "address": "7WQX98AWmbn6keR2vVHdZ3dfwzaLuUyAnr2DZ4rGhh3o",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:bids",
+          "address": "6LWqnjYgqVuaYrv9rJCm3N9UzHQUbVBHBDWqU37xszmY",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:asks",
+          "address": "FDVjEDZiCxvch6vkFhw5g6oX9PUPqUeQd5gNq3b4LV3A",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:bv",
+          "address": "4PMzFKwkiT3snbaE7S9j4K52osuAN3LbptF2XMQYMort",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:qv",
+          "address": "HE3w6Tw6Z8ZqpfscqmDeA9U7Xoo6zRgNWGKaFwjRfBJZ",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:eh",
+          "address": "DPH9w3DvTGEWbpV3p7bbrDvfx7Gp5M5ahueUE9dUwjoG",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:oa",
+          "address": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ob",
+          "address": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:sp",
+          "address": "11111111111111111111111111111111",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "s0:ooa",
+          "address": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+          "writable": false,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-adaptive",
+      "venue": "orca-whirlpool",
+      "direction": "aToB",
+      "builder": "buildSwapV2",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000000000000000000000000000000000000101",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CnqneGkrhcf8prtRQSpBx4eZrkDx9t5WbENSqoqtLRAg",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "9HYQnRTZo6eyAxfJGj9ZoXmP1bD2E374b9tci9d8zb1E",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "ejH9ED8r3cp8La8goHG1kB9FjQdWhTABwfN6mB28K7S",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "G2USjAxqLHjon3kvUoHp28DJyLuGhCTz8KjsTvSfB2vB",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "8ez9MMRpkHkC8Q3qdUipoqEKxWt3dWr4ZwLKxLGXRVf3",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-adaptive",
+      "venue": "orca-whirlpool",
+      "direction": "aToB",
+      "builder": "buildBakedCpiSwap",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "01000000000000006d22a3fb13a5ed8b5f0a0000000000000101",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CnqneGkrhcf8prtRQSpBx4eZrkDx9t5WbENSqoqtLRAg",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "9HYQnRTZo6eyAxfJGj9ZoXmP1bD2E374b9tci9d8zb1E",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "ejH9ED8r3cp8La8goHG1kB9FjQdWhTABwfN6mB28K7S",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "G2USjAxqLHjon3kvUoHp28DJyLuGhCTz8KjsTvSfB2vB",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "8ez9MMRpkHkC8Q3qdUipoqEKxWt3dWr4ZwLKxLGXRVf3",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-adaptive",
+      "venue": "orca-whirlpool",
+      "direction": "bToA",
+      "builder": "buildSwapV2",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000000000000000000000000000000000000100",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CnqneGkrhcf8prtRQSpBx4eZrkDx9t5WbENSqoqtLRAg",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "9HYQnRTZo6eyAxfJGj9ZoXmP1bD2E374b9tci9d8zb1E",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "ENNENGWX3aF3DaBvS3XKqMmYZ1BSGh5rRNKLeHJp4rew",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "AS2dGdgTgVUhrdQtdbcuvgGwx89BLh6z8UcfxhnXVqpN",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "8ez9MMRpkHkC8Q3qdUipoqEKxWt3dWr4ZwLKxLGXRVf3",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    },
+    {
+      "pool": "orca-whirlpool-adaptive",
+      "venue": "orca-whirlpool",
+      "direction": "bToA",
+      "builder": "buildBakedCpiSwap",
+      "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "prefix": "f8c69e91e17587c8",
+      "suffix": "0100000000000000acd206bb6502be045c300100000000000100",
+      "accounts": [
+        {
+          "ref": "s0:tp",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "writable": false,
+          "signer": false
+        },
+        {
+          "ref": "user:owner",
+          "address": null,
+          "writable": false,
+          "signer": true
+        },
+        {
+          "ref": "s0:pool",
+          "address": "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:out",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:va",
+          "address": "CnqneGkrhcf8prtRQSpBx4eZrkDx9t5WbENSqoqtLRAg",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "user:in",
+          "address": null,
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:vb",
+          "address": "9HYQnRTZo6eyAxfJGj9ZoXmP1bD2E374b9tci9d8zb1E",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta0",
+          "address": "BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta1",
+          "address": "ENNENGWX3aF3DaBvS3XKqMmYZ1BSGh5rRNKLeHJp4rew",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:ta2",
+          "address": "AS2dGdgTgVUhrdQtdbcuvgGwx89BLh6z8UcfxhnXVqpN",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "ref": "s0:orc",
+          "address": "8ez9MMRpkHkC8Q3qdUipoqEKxWt3dWr4ZwLKxLGXRVf3",
+          "writable": true,
+          "signer": false
+        }
+      ]
+    }
+  ]
+}

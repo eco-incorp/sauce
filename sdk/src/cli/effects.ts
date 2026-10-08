@@ -66,6 +66,8 @@ export interface BalanceChange {
 }
 
 export interface Effects {
+  /** Every token and native movement, in the order the logs record them. */
+  readonly moves: readonly Movement[];
   readonly transfers: readonly Movement[];
   readonly approvals: readonly ApprovalEvent[];
   /** Native-currency transfers, or `undefined` when the node did not trace them. */
@@ -158,6 +160,7 @@ export async function effectsOf(
       .filter((row) => row.symbol === `W${native}` || row.symbol === "WETH")
       .map((row) => getAddress(row.address)),
   );
+  const moves: Movement[] = [];
   const transfers: Movement[] = [];
   const nativeMoves: Movement[] = [];
   const approvals: ApprovalEvent[] = [];
@@ -168,10 +171,13 @@ export async function effectsOf(
     const amount = amountOf(log.data);
     const topic = topic0?.toLowerCase();
     if (topic === TRANSFER && log.topics.length === 3 && amount !== undefined) {
-      const move = { from: topicAddress(one!), to: topicAddress(two!), amount };
-      if (emitter === NATIVE_EMITTER)
-        nativeMoves.push({ ...move, token: "native", kind: "transfer" });
-      else transfers.push({ ...move, token: emitter, kind: "transfer" });
+      const parties = { from: topicAddress(one!), to: topicAddress(two!), amount };
+      const move: Movement =
+        emitter === NATIVE_EMITTER
+          ? { ...parties, token: "native", kind: "transfer" }
+          : { ...parties, token: emitter, kind: "transfer" };
+      (emitter === NATIVE_EMITTER ? nativeMoves : transfers).push(move);
+      moves.push(move);
     } else if (topic === APPROVAL && log.topics.length === 3 && amount !== undefined) {
       approvals.push({
         token: emitter,
@@ -186,11 +192,12 @@ export async function effectsOf(
       wrapped.has(emitter)
     ) {
       const holder = topicAddress(one!);
-      transfers.push(
+      const move: Movement =
         topic === DEPOSIT
           ? { token: emitter, from: zeroAddress, to: holder, amount, kind: "wrap" }
-          : { token: emitter, from: holder, to: zeroAddress, amount, kind: "unwrap" },
-      );
+          : { token: emitter, from: holder, to: zeroAddress, amount, kind: "unwrap" };
+      transfers.push(move);
+      moves.push(move);
     } else {
       other.push(log);
     }
@@ -229,6 +236,7 @@ export async function effectsOf(
     .filter((change) => change.deltas.length > 0);
 
   return {
+    moves,
     transfers,
     approvals,
     ...(traced ? { native: nativeMoves } : {}),
@@ -271,37 +279,171 @@ export const labelled = (labels: ReadonlyMap<string, string>, address: Address):
 const signed = (effects: Effects, token: Address | "native", amount: bigint): string =>
   `${amount > 0n ? "+" : "-"}${formatAmount(effects, token, amount < 0n ? -amount : amount)}`;
 
+/** What a holder held of one token before a cook, and after it. */
+export interface Held {
+  readonly token: Address | "native";
+  readonly before: bigint;
+  readonly after: bigint;
+}
+
+/**
+ * What `holder` held, before the cook and after it, of each token the cook moved to or from it.
+ * `read` gives its balance of a token on one side of the cook (`side`, before by default); the
+ * other side is that plus or minus the cook's net change. A token `read` cannot answer for
+ * (`undefined`) is left out.
+ */
+export async function heldAround(
+  effects: Effects,
+  holder: Address,
+  read: (token: Address | "native") => Promise<bigint | undefined>,
+  side: "before" | "after" = "before",
+): Promise<Held[]> {
+  const tokens = new Set<Address | "native">();
+  for (const move of [...effects.transfers, ...(effects.native ?? [])]) {
+    if (move.from === holder || move.to === holder) tokens.add(move.token);
+  }
+  const deltas = effects.changes.find((change) => change.address === holder)?.deltas ?? [];
+  // Every balance at once: they are independent reads of one state.
+  const held = await Promise.all(
+    [...tokens].map(async (token) => {
+      const known = await read(token);
+      if (known === undefined) return undefined;
+      const delta = deltas.find((entry) => entry.token === token)?.amount ?? 0n;
+
+      return side === "before"
+        ? { token, before: known, after: known + delta }
+        : { token, before: known - delta, after: known };
+    }),
+  );
+
+  return held.filter((each): each is Held => each !== undefined);
+}
+
+/** What a report says of a Pot's holdings after a cook: who can move them, and how a program
+ *  delivers them instead. */
+export const POT_HOLDS =
+  "Only another cook moves it out. To end in a wallet, the program must send it there, or name " +
+  "the wallet as the recipient of the call that produces it.";
+
+/**
+ * What the Pot ends holding of the tokens a cook moved, for a person: the lines that lead the
+ * report, so nobody looks for them in their wallet. None for a cook that leaves the Pot nothing.
+ * `wallet` names the wallet they are not in: "the owner's wallet", "your wallet".
+ */
+export function leftInPotLines(effects: Effects, held: readonly Held[], wallet: string): string[] {
+  const left = held.filter((each) => each.after > 0n);
+  if (left.length === 0) return [];
+
+  return [
+    `Left in the Pot, not in ${wallet}:`,
+    ...left.map(
+      (each) =>
+        `  ${formatAmount(effects, each.token, each.after)}` +
+        (each.before === 0n
+          ? ""
+          : ` (it held ${formatAmount(effects, each.token, each.before)} before)`),
+    ),
+    `  ${POT_HOLDS}`,
+  ];
+}
+
+/** `0x0305…262a`: an address short enough for a column, the full one in `--json`. */
+export const shortAddress = (address: Address): string =>
+  `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+/**
+ * What `address` is in a cook, for a person: the command's own label for it, said as a role (the
+ * owner, or the signer, is the `wallet`; `the Pot` is the `Pot`), a name the registry gives it, or
+ * the symbol of a token it is. `undefined` for an address nothing names.
+ */
+export function roleOf(
+  effects: Pick<Effects, "labels" | "tokens">,
+  address: Address,
+): string | undefined {
+  const label = effects.labels.get(getAddress(address));
+  if (label !== undefined) {
+    const role = label.replace(/^the /, "");
+
+    return role === "owner" || role === "you" ? "wallet" : role;
+  }
+
+  return effects.tokens.get(getAddress(address))?.symbol;
+}
+
+/** Why a move happened, where the command knows: the cook's value, the Kitchen's fee, a wrap. */
+function moveNote(move: Movement, from: string | undefined, to: string | undefined): string {
+  if (move.kind === "wrap") return "wrapped";
+  if (move.kind === "unwrap") return "unwrapped";
+  if (move.token !== "native") return "";
+  if (from === "wallet" && to === "Pot") return "the cook's value";
+  if (to === "Kitchen") return "the Kitchen's fee";
+
+  return "";
+}
+
+/**
+ * Every move of the cook as a numbered flow, in the order it happened: who sent, who received,
+ * what, and why where the command knows. Each party is its role (`wallet`, `Pot`, `Kitchen`, a
+ * registry name, a token's symbol) with its short address the first time it appears, `mint` or
+ * `burn` for the zero address, and its short address alone when nothing names it.
+ */
+export function flowLines(effects: Effects): string[] {
+  const seen = new Set<string>();
+  const party = (address: Address, zero: "mint" | "burn"): string => {
+    if (address === zeroAddress) return zero;
+    const role = roleOf(effects, address);
+    if (role === undefined) return shortAddress(address);
+    if (seen.has(address)) return role;
+    seen.add(address);
+
+    return `${role} ${shortAddress(address)}`;
+  };
+  const rows = effects.moves.map((move, index) => {
+    const from = party(move.from, "mint");
+    const to = party(move.to, "burn");
+
+    return {
+      number: `[${index + 1}]`,
+      from,
+      to,
+      amount: formatAmount(effects, move.token, move.amount),
+      note: moveNote(move, roleOf(effects, move.from), roleOf(effects, move.to)),
+    };
+  });
+  const width = (pick: (row: (typeof rows)[number]) => string): number =>
+    Math.max(0, ...rows.map((row) => pick(row).length));
+  const [numbers, froms, tos, amounts] = [
+    width((row) => row.number),
+    width((row) => row.from),
+    width((row) => row.to),
+    width((row) => row.amount),
+  ];
+
+  return rows
+    .map(
+      (row) =>
+        `  ${row.number.padEnd(numbers)} ${row.from.padEnd(froms)} -> ${row.to.padEnd(tos)}  ` +
+        (row.note === "" ? row.amount : `${row.amount.padEnd(amounts)}  ${row.note}`),
+    )
+    .map((line) => line.trimEnd());
+}
+
 /** The effects as lines for a person. */
 export function effectLines(effects: Effects): string[] {
-  const at = (address: Address): string => labelled(effects.labels, address);
+  const at = (address: Address): string => {
+    const name =
+      effects.labels.get(getAddress(address)) ?? effects.tokens.get(getAddress(address))?.symbol;
+
+    return name === undefined ? address : `${address} (${name})`;
+  };
   const lines: string[] = [];
-  if (effects.transfers.length > 0) {
-    lines.push("Token transfers:");
-    for (const move of effects.transfers) {
-      const what = formatAmount(effects, move.token, move.amount);
-      lines.push(
-        move.kind === "wrap"
-          ? `  ${what} wrapped for ${at(move.to)}`
-          : move.kind === "unwrap"
-            ? `  ${what} unwrapped by ${at(move.from)}`
-            : `  ${what}: ${at(move.from)} -> ${at(move.to)}`,
-      );
-    }
-  }
+  if (effects.moves.length > 0) lines.push("What moved, in order:", ...flowLines(effects));
   if (effects.approvals.length > 0) {
     lines.push("Approvals:");
     for (const approval of effects.approvals) {
       lines.push(
         `  ${at(approval.owner)} lets ${at(approval.spender)} spend ` +
           `${formatAmount(effects, approval.token, approval.amount)}`,
-      );
-    }
-  }
-  if (effects.native !== undefined && effects.native.length > 0) {
-    lines.push("Native transfers:");
-    for (const move of effects.native) {
-      lines.push(
-        `  ${formatAmount(effects, "native", move.amount)}: ${at(move.from)} -> ${at(move.to)}`,
       );
     }
   }
@@ -350,6 +492,40 @@ const units = (effects: Effects, token: Address | "native", amount: bigint) => {
   return decimals === undefined ? {} : { formatted: formatUnits(amount, decimals) };
 };
 
+/** What the Pot ends holding of the tokens a cook moved, for `--json` (`leftInPot`): each token it
+ *  holds after the cook, with what it held before. Empty for a cook that leaves the Pot nothing. */
+export const leftInPotJson = (
+  effects: Effects,
+  held: readonly Held[],
+): Array<Record<string, unknown>> =>
+  held
+    .filter((each) => each.after > 0n)
+    .map((each) => ({
+      ...tokenJson(effects, each.token),
+      amount: each.after.toString(),
+      ...units(effects, each.token, each.after),
+      before: each.before.toString(),
+    }));
+
+/** One move for `--json` (`moves`): its parties with their roles where the command knows them. */
+export interface MoveJson {
+  readonly from: Address;
+  /** `wallet`, `Pot`, `Kitchen`, a registry name, a token's symbol, or `mint`. */
+  readonly fromRole?: string;
+  readonly to: Address;
+  /** The same, or `burn`. */
+  readonly toRole?: string;
+  readonly token: Address | "native";
+  readonly symbol?: string;
+  readonly decimals?: number;
+  readonly kind: Movement["kind"];
+  /** Base units, as a decimal string; `formatted` in whole units where the decimals are known. */
+  readonly amount: string;
+  readonly formatted?: string;
+  /** Why it moved, where the command knows: the cook's value, the Kitchen's fee, a wrap. */
+  readonly note?: string;
+}
+
 /** The effects for `--json`: amounts in base units as decimal strings, with whole units beside. */
 export function effectsJson(effects: Effects): Record<string, unknown> {
   const label = (address: Address) => {
@@ -358,7 +534,27 @@ export function effectsJson(effects: Effects): Record<string, unknown> {
     return name === undefined ? {} : { label: name };
   };
 
+  const role = (address: Address, zero: "mint" | "burn") =>
+    address === zeroAddress ? zero : roleOf(effects, address);
+
   return {
+    moves: effects.moves.map((move): MoveJson => {
+      const fromRole = role(move.from, "mint");
+      const toRole = role(move.to, "burn");
+      const note = moveNote(move, fromRole, toRole);
+
+      return {
+        from: move.from,
+        ...(fromRole === undefined ? {} : { fromRole }),
+        to: move.to,
+        ...(toRole === undefined ? {} : { toRole }),
+        ...tokenJson(effects, move.token),
+        kind: move.kind,
+        amount: move.amount.toString(),
+        ...units(effects, move.token, move.amount),
+        ...(note === "" ? {} : { note }),
+      };
+    }),
     transfers: effects.transfers.map((move) => ({
       ...tokenJson(effects, move.token),
       kind: move.kind,
