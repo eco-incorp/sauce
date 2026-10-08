@@ -704,7 +704,9 @@ its case's `fabricate` writes the captured header back with the program's ELF be
 `@sauce/router` has no function for (One Intro, BisonFi, the Sanctum stake pools: a Pot cannot swap
 there; WOOFi, Metric: no provable swap) has `data`/`cpi` null in `ROUTER_SVM_VENUES`, and where its
 instruction lands, the suite's `WALLET_ONLY` cases send it from a wallet, built from
-`routerSvmAccounts` and `routerSvmDataTemplate` alone.
+`routerSvmAccounts` and `routerSvmDataTemplate` alone. WOOFi's `swap` returns success and moves
+nothing when `from_amount <= min_swap_amount` (a u128 at its pool's offset 155): a WOOFi fixture
+with those bytes patched swaps nothing and still succeeds, which is not a swap.
 
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its

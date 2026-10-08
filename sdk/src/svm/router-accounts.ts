@@ -402,8 +402,9 @@ export const ROUTER_SVM_VENUES = {
   // - a Pot cannot send their swap: One Intro requires its signer owned by the System program,
   //   BisonFi a signature from the authorization account its routing program signs for, and a
   //   Sanctum stake pool's deposit takes native SOL from its signer;
-  // - WOOFi's keepers stopped on 2026-04-20, and on the one pool state captured its program
-  //   returns without moving either token, so no swap of it can be proven;
+  // - WOOFi's keepers stopped (its oracles last updated 2026-04-20 and 2025-11-23): on mainnet
+  //   state its swap refuses every price as infeasible (WooOracleNotFeasible) at any clock, so no
+  //   swap of it can be proven;
   // - Metric's oracle refuses its price as stale (its error 20, on mainnet itself on 2026-10-07),
   //   so no swap of it can be proven either.
   "one-intro-swap": {
