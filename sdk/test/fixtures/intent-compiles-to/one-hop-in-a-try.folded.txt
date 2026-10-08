@@ -1,0 +1,22 @@
+// one-hop-in-a-try: the program is 1686 bytes; the intent 1952 bytes, encoded once (holes: salt, delivered, beneficiary, refundTo, amount)
+try { // a program of its own, 1437 bytes to the engine
+  const intent = abi.encode(
+    8453, // destination: base
+    route: abi.encode({
+      salt: «salt», // keccak256(abi.encode(baseSalt, ++count)), as it runs
+      deadline: 1900000300,
+      portal: Portal,
+      nativeAmount: 777, // the destination Kitchen's fee
+      tokens: [{ token: USDC(base), amount: «delivered» }],
+      calls: [
+        { target: USDC(base), data: transfer(0x6340080a1967a03caad490a170828d4c59ee5983 /* the shared Pot */, «delivered»), value: 0 },
+        { target: 0x6340080a1967a03caad490a170828d4c59ee5983 /* the shared Pot */, data: cook(engine, <body: 548 bytes> ‖ [«beneficiary», «delivered», «refundTo»]), value: 777 },
+      ],
+    }),
+    reward: { deadline: 1900605100, creator: «refundTo», prover: 0xec08fb4647f3f50d1162a578d481266687c60fc5, nativeAmount: 0,
+              tokens: [{ token: USDC(ethereum), amount: «amount» }] },
+  );
+  const [vault] = abi.decode(evm.static(Portal, hex`0742ebe4` ++ intent), ["Address"]); // intentVaultAddress
+  USDC.transfer(vault, «amount»);
+  evm.call(Portal, 0, hex`645c890c` ++ intent); // publish
+} catch (e) { /* the try's handler, here on the source too */ }
