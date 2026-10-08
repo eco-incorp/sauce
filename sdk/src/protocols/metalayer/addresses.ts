@@ -13,3 +13,15 @@ export const deployments: ChainDeployment[] = [
   { chainId: 8453, chainName: "Base", addresses: { router: ROUTER } },
   { chainId: 42161, chainName: "Arbitrum", addresses: { router: ROUTER } },
 ];
+
+/**
+ * Metalayer DOMAIN ids (the `_destinationDomain` of `dispatch`, and the `origin` a recipient's
+ * `handle` is given), keyed by canonical chain slug: the `localDomain()` of the mailbox each router
+ * dispatches through (its `mailbox()`), read on-chain 2026-10-08. Each equals the chain id.
+ */
+export const METALAYER_DOMAIN: Readonly<Record<string, number>> = {
+  ethereum: 1,
+  bsc: 56,
+  base: 8453,
+  arbitrum: 42161,
+};
