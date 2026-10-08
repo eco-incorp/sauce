@@ -186,8 +186,8 @@ function main(tokenA: Address, tokenB: Address) {
 
 ## Chains, context, imports
 
-- **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) open an
-  intent from inside a program: `Ethereum(() => { ... }).reward({ ... })`. Every chain's names
+- **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) qualify
+  a contract with another chain's address: `Ethereum.UniswapV4.UniversalRouter`. Every chain's names
   compile; for the initial release its transactions are built and sent only on Ethereum, Base and
   Solana, and [references/chains.md](references/chains.md) marks every other chain a preview chain
   (`sauce-chains` says how to request one).

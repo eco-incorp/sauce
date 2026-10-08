@@ -2,8 +2,7 @@
  * The generated half of the SauceScript declarations an editor loads for a program file
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
- * - every chain as the function that opens an intent there, with its namespaces
- *   (`Base(() => { … })`, `Base.UniswapV3.Factory`);
+ * - every chain as a namespace of its contracts (`Base.UniswapV3.Factory`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;

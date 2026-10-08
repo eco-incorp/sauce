@@ -57,8 +57,8 @@ lowers to and its bytecode, and `sauce tx`, `simulate` and `run` take the docume
   shape it accepts.
 - **Composition is part of the document.** An action spends its `amount`, an earlier output named
   with `saveOutputAs`/`amountRef`, or the previous action's output. A `balanceOf` action spends what
-  the Pot actually holds, which is how a child of a dynamic `.nest()` spends exactly what its parent
-  delivered; an `argument` action makes an amount a runtime parameter of one compiled program.
+  the Pot actually holds, which is how an action spends exactly what an earlier one delivered; an
+  `argument` action makes an amount a runtime parameter of one compiled program.
 - **One swap implementation.** A swap at one of [`@sauce/router`](../docs/api/router.md)'s nine
   venues is a call into that SauceScript library, so an action program and a hand-written Sauce
   program trade a venue through the same code.

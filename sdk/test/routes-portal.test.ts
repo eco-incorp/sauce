@@ -454,9 +454,9 @@ describe("portal.ts: EVM-source guard", () => {
 });
 
 describe("a route body has no Portal binding", () => {
-  // The SDK lowers `Chain(() => ...).reward(...)` to the Portal call itself, and the TypeScript
-  // builder returns the source-chain requests. A second, hand-written way to reach the Portal from a
-  // program is exactly what that design exists to rule out, so it must stay absent.
+  // The SDK builds the Portal's calls itself (`routes/portal.ts`). A second, hand-written way to
+  // reach the Portal from a program is exactly what that design exists to rule out, so it must stay
+  // absent.
   it("rejects `IPortal.at(...)` with no `contracts` option", () => {
     const source = [
       "function main() {",

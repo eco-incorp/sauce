@@ -79,16 +79,6 @@ interface SauceBinding {
   readonly [method: string]: (...args: any[]) => any;
 }
 
-/** An intent's route: what the solver delivers to the destination for the body to run on. The one
- *  definition is the generated namespace types', which a typed closure in a host file uses too. */
-type SauceDelivery = import("../routes/source-globals.generated.js").SauceDelivery;
-
-/** An intent's reward, paid on the chain that opens it. */
-type SauceReward = import("../routes/source-globals.generated.js").SauceReward;
-
-/** An intent opened in a program: `Base(() => { … }).reward({ … })`. */
-type SauceIntent = import("../routes/source-globals.generated.js").SauceIntent;
-
 /** Context reads: who called, where, when. */
 declare const ctx: {
   /** The account that called: the Pot's owner, on a cook. */
