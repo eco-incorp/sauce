@@ -302,45 +302,52 @@ text, or over stdio `path`, the file; every result is the command's `--json`; an
 several chains takes `rpcUrls`, one endpoint per chain. Each flag is the input beside it, as the
 server's instructions also list:
 
-| Flag                      | Input             |
-| ------------------------- | ----------------- |
-| `--args`, `--args-json`   | `args`            |
-| `--assume-balance`        | `assumeBalance`   |
-| `--fund-mode`             | `fundMode`        |
-| `--fund`                  | `fund`            |
-| `--sweep`                 | `sweep`           |
-| `--salt-hex`              | `saltHex`         |
-| `--salt`                  | `salt`            |
-| `--owner`                 | `owner`           |
-| `--pot`                   | `pot`             |
-| `--value`                 | `value`           |
-| `--account`, `--accounts` | `accounts`        |
-| `--no-prove`              | `prove: false`    |
-| `--max-execution-fee`     | `maxExecutionFee` |
-| `--lookup-table`          | `lookupTables`    |
-| `--via`                   | `via`             |
-| `--compact-args`          | `compactArgs`     |
-| `--chain`                 | `chain`           |
-| `--target`                | `target`          |
-| `--rpc-url`               | `rpcUrl`          |
-| `--block`                 | `block`           |
-| `--solver`                | `from`            |
-| `--claimant`              | `claimant`        |
-| `--pin`                   | `pins`            |
-| `--engine`                | `engines`         |
-| `--min-out`               | `minOut`          |
-| `--spl-count`             | `splCount`        |
-| `--protocol`              | `protocol`        |
-| `--stocks`                | `stocks`          |
-| `--search`                | `search`          |
-| `--sqrt-price-x96`        | `sqrtPriceX96`    |
-| `--pool`                  | `pool`            |
-| `--v4-key`                | `v4Pools`         |
-| `--pay`                   | `pay`             |
-| `--max-price`             | `maxPrice`        |
-| `--per-venue`             | `perVenue`        |
-| `--slots`                 | `slots`           |
-| `--expect-revert`         | `expectRevert`    |
+| Flag                       | Input                  |
+| -------------------------- | ---------------------- |
+| `--args`, `--args-json`    | `args`                 |
+| `--assume-balance`         | `assumeBalance`        |
+| `--fund-mode`              | `fundMode`             |
+| `--fund`                   | `fund`                 |
+| `--sweep`                  | `sweep`                |
+| `--salt-hex`               | `saltHex`              |
+| `--salt`                   | `salt`                 |
+| `--owner`                  | `owner`                |
+| `--pot`                    | `pot`                  |
+| `--value`                  | `value`                |
+| `--account`, `--accounts`  | `accounts`             |
+| `--intent-deadline`        | `intentDeadline`       |
+| `--intent-execution-fee`   | `intentExecutionFee`   |
+| `--intent-fund-via`        | `intentFundVia`        |
+| `--intent-reward-deadline` | `intentRewardDeadline` |
+| `--intent-prover`          | `intentProver`         |
+| `--intent-salt`            | `intentSalt`           |
+| `--no-prove`               | `prove: false`         |
+| `--max-execution-fee`      | `maxExecutionFee`      |
+| `--lookup-table`           | `lookupTables`         |
+| `--via`                    | `via`                  |
+| `--compact-args`           | `compactArgs`          |
+| `--chain`                  | `chain`                |
+| `--target`                 | `target`               |
+| `--rpc-url`                | `rpcUrl`               |
+| `--block`                  | `block`                |
+| `--from`, `--solver`       | `from`                 |
+| `--claimant`               | `claimant`             |
+| `--dry-run`                | `dryRun`               |
+| `--pin`                    | `pins`                 |
+| `--engine`                 | `engines`              |
+| `--min-out`                | `minOut`               |
+| `--spl-count`              | `splCount`             |
+| `--protocol`               | `protocol`             |
+| `--stocks`                 | `stocks`               |
+| `--search`                 | `search`               |
+| `--sqrt-price-x96`         | `sqrtPriceX96`         |
+| `--pool`                   | `pool`                 |
+| `--v4-key`                 | `v4Pools`              |
+| `--pay`                    | `pay`                  |
+| `--max-price`              | `maxPrice`             |
+| `--per-venue`              | `perVenue`             |
+| `--slots`                  | `slots`                |
+| `--expect-revert`          | `expectRevert`         |
 
 Over stdio, `sauce_compile`, `sauce_simulate` and `sauce_tx` take `path` instead of `source`: a
 program file on the same machine, relative to the directory the server runs in, read with its

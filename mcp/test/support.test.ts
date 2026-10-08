@@ -13,10 +13,9 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { chainSupportRequest } from "../../sdk/dist/cli/support.js";
-import { intentRecord } from "../../sdk/dist/cli/lifecycle.js";
 import { ecoRoutesPortal, ecoRoutesProver } from "../../sdk/dist/protocols/eco-routes/lookup.js";
 import { assembleIntent } from "../../sdk/dist/routes/intent.js";
-import { registryTokenAddress } from "../../sdk/dist/routes/token-registry.js";
+import { intentRecord } from "../../sdk/dist/cli/lifecycle.js";
 import { connect, ok, textOf, type Connected } from "./harness.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -29,37 +28,31 @@ const PAY = [
   "}",
   "",
 ].join("\n");
-/** The record of an intent from `source` to `destination` built by hand, `USDC.transfer` its
- *  route's one call: the input every intent tool takes. */
-function recordOf(source: string, destination: string): Record<string, unknown> {
-  const from = requireChain(source);
-  const to = requireChain(destination);
-  const usdc = (chain: typeof from) =>
-    `0x${registryTokenAddress(chain, "USDC")!.toString(16).padStart(40, "0")}` as `0x${string}`;
+const intentTo = (chain: string): string =>
+  `${chain}.hop({ send: { token: USDC, amount: 7 }, refundee: ${OWNER} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
+const INTENT = { defines: { RECIPIENT }, intentDeadline: 2_000_000_000, intentExecutionFee: 0 };
+
+/** The record of an intent from `source` to `destination`, as sauce_intent_publish returns one. */
+function recordOf(destination: string, source: string): Record<string, unknown> {
   const intent = assembleIntent(
-    from,
-    to,
+    requireChain(source),
+    requireChain(destination),
     {
+      salt: `0x${"00".repeat(32)}`,
       deadline: 2_000_000_000n,
-      portal: ecoRoutesPortal(to.slug),
-      tokens: [{ token: usdc(to), amount: 5n }],
-      calls: [
-        {
-          target: usdc(to),
-          data: `0xa9059cbb${RECIPIENT.slice(2).padStart(64, "0")}${5n.toString(16).padStart(64, "0")}`,
-          value: 0n,
-        },
-      ],
+      portal: ecoRoutesPortal(destination),
+      tokens: [],
+      calls: [],
     },
     {
       deadline: 2_000_000_000n,
       creator: OWNER,
-      prover: ecoRoutesProver(from.slug, to.slug),
-      tokens: [{ token: usdc(from), amount: 7n }],
+      prover: ecoRoutesProver(source, destination),
+      nativeAmount: 7n,
     },
   );
 
-  return intentRecord(intent, { sourcePortal: ecoRoutesPortal(from.slug) }) as unknown as Record<
+  return intentRecord(intent, { sourcePortal: ecoRoutesPortal(source) }) as unknown as Record<
     string,
     unknown
   >;
@@ -149,22 +142,69 @@ function refused(result: CallToolResult, slug: string): Refusal {
 }
 
 describe("refused on a preview chain, before the call's endpoint", () => {
-  it("sauce_tx, for the program's chain", async () => {
+  it("sauce_tx, for the program's chain and every chain its intents go to", async () => {
     const pay = { source: PAY, owner: OWNER, args: [RECIPIENT, "1"], rpcUrl: url };
     const refusal = refused(await mcp.call("sauce_tx", { ...pay, chain: "optimism" }), "optimism");
     assert.equal(refusal.action, "building the cook transaction");
+    refused(
+      await mcp.call("sauce_tx", {
+        source: intentTo("Arbitrum"),
+        chain: "base",
+        owner: OWNER,
+        value: "0",
+        rpcUrl: url,
+        ...INTENT,
+      }),
+      "arbitrum",
+    );
     assert.deepEqual(methods, []);
   });
 
+  it("sauce_intent_publish, from or to a preview chain; its dry run goes ahead", async () => {
+    const toArbitrum = { source: intentTo("Arbitrum"), chain: "base", ...INTENT };
+    refused(await mcp.call("sauce_intent_publish", toArbitrum), "arbitrum");
+    refused(
+      await mcp.call("sauce_intent_publish", { ...toArbitrum, owner: OWNER, rpcUrl: url }),
+      "arbitrum",
+    );
+    refused(
+      await mcp.call("sauce_intent_publish", {
+        source: intentTo("Base"),
+        chain: "arbitrum",
+        ...INTENT,
+      }),
+      "arbitrum",
+    );
+    assert.deepEqual(methods, []);
+    // The rehearsal reaches its chain: it fails there, on the recorder, and is not refused.
+    const dry = await mcp.call("sauce_intent_publish", {
+      ...toArbitrum,
+      dryRun: true,
+      owner: OWNER,
+      rpcUrl: url,
+    });
+    assert.doesNotMatch(textOf(dry), /preview-chain/);
+    assert.ok(methods.length > 0);
+  });
+
   it("each intent step, by the chain it is sent on", async () => {
-    const toArbitrum = recordOf("base", "arbitrum");
-    const fromArbitrum = recordOf("arbitrum", "base");
+    const toArbitrum = recordOf("arbitrum", "base");
+    const fromArbitrum = recordOf("base", "arbitrum");
     const rpcUrls = { base: url, arbitrum: url };
     // The destination's: a fill, a proof, a cancellation.
     refused(
       await mcp.call("sauce_intent_fill", { intent: toArbitrum, from: OWNER, rpcUrls }),
       "arbitrum",
     );
+    // A program's intents are a preview, rehearsed with dryRun: a fill is built for a published one.
+    const fromProgram = await mcp.call("sauce_intent_fill", {
+      source: intentTo("Arbitrum"),
+      chain: "base",
+      ...INTENT,
+      from: OWNER,
+      rpcUrls,
+    });
+    assert.match(textOf(fromProgram), /a fill is built for an intent as it was published/);
     refused(await mcp.call("sauce_intent_prove", { intent: toArbitrum, rpcUrls }), "arbitrum");
     refused(await mcp.call("sauce_intent_cancel", { intent: toArbitrum, rpcUrls }), "arbitrum");
     // The source's: a claim and a refund — named by the source transaction, before it is read.
@@ -239,6 +279,7 @@ describe("still runs on a preview chain", () => {
       "sauce_tx",
       "sauce_pot",
       "sauce_actions",
+      "sauce_intent_publish",
       "sauce_intent_fill",
       "sauce_intent_prove",
       "sauce_intent_claim",

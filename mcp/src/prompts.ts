@@ -17,7 +17,7 @@ import * as z from "zod";
 import { shippedSkills, SKILLS_INDEX, WRITE_IT_YOURSELF, type Skill } from "./resources.js";
 import { PACKAGED_SKILLS, supportedChainNames } from "./sdk.js";
 
-export const PROMPT_NAMES = ["sauce_write_program"] as const;
+export const PROMPT_NAMES = ["sauce_write_program", "sauce_open_intent"] as const;
 
 /** The resource for `dir`, embedded; or nothing when the package ships no such skill. */
 function embedded(skills: readonly Skill[], dir: string, root: string) {
@@ -97,6 +97,78 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
           },
         },
         ...embedded(skills, solana(chain) ? "sauce-solana" : "sauce-overview", root),
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    "sauce_open_intent",
+    {
+      title: "Open a cross-chain intent",
+      description:
+        "Walks an agent through a Sauce program that opens a cross-chain intent: read the " +
+        "intents skill, compile it, rehearse publishing it from a Pot and filling it, and build " +
+        "the unsigned cook that publishes it.",
+      argsSchema: {
+        task: z
+          .string()
+          .min(1)
+          .max(4000)
+          .describe("What should happen on the destination chain, and the reward."),
+        source: z.string().max(64).optional().describe("The chain the intent is opened from."),
+        destination: z.string().max(64).optional().describe("The chain it is filled on."),
+      },
+    },
+    ({ task, source, destination }): GetPromptResult => ({
+      description: "Open a Sauce cross-chain intent",
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: [
+              "Write a Sauce program that opens a cross-chain intent" +
+                (source === undefined ? "" : ` from ${source}`) +
+                (destination === undefined ? "" : ` to ${destination}`) +
+                `: ${task}`,
+              "",
+              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, ["sauce-overview", "sauce-intents"])}),`,
+              "and follow them.",
+              ...WRITE_IT_YOURSELF,
+              "Then, with this server's tools:",
+              "1. sauce_globals for each chain involved, for its tokens and protocols. An intent",
+              "   body names the destination's tokens by address (the skill says why).",
+              "2. Price it: the reward must cover what the solver delivers on the destination, plus",
+              "   the destination Kitchen's fee when the body runs a program there (sauce_pot on",
+              "   that chain reads it; pass it as intentExecutionFee). sauce_price reads a",
+              "   pool's price for a swap in the body.",
+              "3. Every hop names its refundee, `hop({ send, refundee })` (a main parameter, so",
+              "   it is given with args). sauce_compile with intentDeadline (Unix seconds, in the",
+              "   future) until it compiles; sauce_inspect with the source lists each intent's",
+              "   destination and the body it cooks there.",
+              "4. Rehearse both sides with the same inputs, main's arguments (its inputs: recipient,",
+              "   amounts, limits, the refundee) as args: sauce_intent_publish with dryRun and owner",
+              "   (whose Pot publishes it; fund pulls the reward in from the owner), which returns",
+              "   each intent's `record`, and sauce_intent_fill with dryRun (a solver's fill, on the",
+              "   destination, where the body runs).",
+              "5. sauce_intent_publish for the unsigned cook that publishes it from the owner's Pot,",
+              "   which must hold the reward when it lands (intentFundVia publishAndFund funds the",
+              "   vault through the Portal instead). Once it has landed, sauce_intent_import with",
+              "   its txHash returns each intent's `record`.",
+              "6. Once published: sauce_intent_status (with the record)",
+              "   says where it stands and what can happen next. If no solver fills it before its",
+              "   deadline, sauce_intent_refund (from the reward's deadline) or sauce_intent_cancel",
+              "   then sauce_intent_prove then sauce_intent_refund (sooner) returns the reward.",
+              `Intents publish only between ${supportedChainNames()}, the chains this release`,
+              "supports: an intent that involves a preview chain compiles and rehearses, and the",
+              "tools that build its transactions return `refused` with the chain-support request to",
+              "offer the user instead.",
+              "Nothing here signs: hand the wallet's owner the unsigned cook, and",
+              "never ask for a private key.",
+            ].join("\n"),
+          },
+        },
+        ...embedded(skills, "sauce-intents", root),
       ],
     }),
   );

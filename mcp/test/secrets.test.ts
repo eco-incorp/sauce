@@ -55,6 +55,18 @@ describe("a server with endpoints", () => {
       ["sauce_inspect", { hex: HASH, chain: "base" }],
       ["sauce_verify", { hex: HASH, chain: "base" }],
       [
+        "sauce_intent_publish",
+        {
+          source: `Arbitrum.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${OWNER} }).then(() => {\n  USDC.transfer(R, 5);\n});\n`,
+          chain: "base",
+          defines: { R: OWNER },
+          intentDeadline: 2000000000,
+          intentExecutionFee: 0,
+          dryRun: true,
+          owner: OWNER,
+        },
+      ],
+      [
         "sauce_tx",
         {
           source: SVM,
