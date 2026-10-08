@@ -101,10 +101,9 @@ one.
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
 `base`, `solana`). Every other chain the SDK knows is a **preview chain**: a program compiles for
 it, and `sauce simulate` and the dry runs rehearse it there, but the `sauce` command and the MCP
-server build and send no transaction on it. `sauce tx`, `sauce run`, `sauce pot --deploy`,
-`sauce intent publish` and the intent steps sent there are refused before anything is read or
-signed, and the refusal names the supported chains and the chain-support request for that chain.
-An intent publishes only when every chain it involves is supported. `sauce-chains` marks each
+server build and send no transaction on it. `sauce tx`, `sauce run`, `sauce pot --deploy` and
+the intent steps sent there are refused before anything is read or signed, and the refusal names
+the supported chains and the chain-support request for that chain. `sauce-chains` marks each
 chain supported or preview.
 
 To ask for a chain, look among the
