@@ -400,6 +400,59 @@ Without `await`, the handler is `.catch(...)` after `.then(...)`:
 the handler does not read it. A handled body is always a program, so its cook pays the
 destination's Kitchen fee.
 
+### Calls around the body
+
+A hop's `before` and `after` are calls the destination Portal's Executor makes before the delivered
+tokens move into the Pot and after the body's cook. Use one for a call that must come from the
+Executor rather than the Pot, for calldata built elsewhere, or for a call a solver reads straight off
+the route. Here the Executor pays the referrer a tip in the native coin after the body has run:
+
+```js
+function main(
+  beneficiary: Address,
+  referrer: Address,
+  amount: Uint256,
+  tip: Uint256,
+  reward: Uint256,
+  refundTo: Address,
+) {
+  await Ethereum.hop({
+    reward: { token: USDC, amount: reward },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+    after: [() => evm.call(referrer, tip, hex``)],
+  });
+  USDC.approve(AaveV3.Pool, amount);
+  AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+}
+```
+
+Each is a list of closures, one even for a single call, and each closure's body is one external
+call: a contract's method, through its namespace (`Permit2.approve(…)`), `.at(address)`, an
+interface (`Erc20.ERC20(token).approve(…)`) or an imported ABI, or `evm.call(target, value, data)`.
+The route's calls are every `before` call, then the delivered tokens' move into the Pot and the
+body's cook, then every `after` call, in the order written.
+
+Hooks are low-level calls the Executor makes exactly as written. The SDK adds nothing: no
+deliveries, no approve resets. What the Executor holds when a hook runs is up to the intent.
+
+- **The Executor is the caller.** It is the `msg.sender` a hook's target sees, and what a call
+  pulls from its caller comes from the Executor. A token's own write, `USDC.approve(…)`, is
+  `SafeERC20`'s and more than one call, so a hook writes the ERC-20 call itself:
+  `Erc20.ERC20(USDC).approve(spender, amount)`. One Executor serves every intent on a chain, so an
+  allowance an earlier intent left may still stand: before approving a token that refuses to change
+  one (USDT), write the reset as a hook of its own, `Erc20.ERC20(USDT).approve(spender, 0)`.
+- **It spends what the Executor holds.** The delivery moves into the Pot whole before the body, and
+  `after` cannot spend what the body holds there. The native an `evm.call` hook sends is the one
+  thing added: the solver brings it beside the cook's fee (the route's `nativeAmount`), as the tip
+  above.
+- **A hook is outside the body's `try`.** A hook that reverts reverts the whole fill, and the body's
+  handler does not run in its place.
+- **Its arguments are fixed when the intent is published.** A literal, a compile-time value, or a
+  variable of the program opening the hop, written in where the hop opens. Nothing the body
+  computes reaches a hook. A computed value fills a whole word only: an `address`, a `bytes32`, or
+  an integer of 160 bits or more; a narrower argument and an `evm.call`'s calldata are literals.
+
 ### Where an `await` stands
 
 No `async` is needed: the `await` is a statement of `main`'s body, and everything after it is the
@@ -578,6 +631,8 @@ Each of these is a compile error naming the construct, never a silently differen
   supplies.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
+- A hook that is not a list of closures, or a closure whose body is not one external call (the
+  compiler's error, at the closure).
 
 A field a hop does not take is not refused by the compile: it is ignored, as TypeScript's editor
 declarations flag it, and the TypeScript builder refuses it.
