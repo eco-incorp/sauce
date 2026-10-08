@@ -286,10 +286,13 @@ and at Manifest's book. Each venue's swap comes in four forms:
 | the instruction's data: `<venue>Data`        | `(amountIn, limit, …)`                                  | the data, to send yourself   |
 
 with a plain form of each `try` form (`raydiumClmm`, `raydiumClmmAtLimit`, …) that reverts where
-it returns `0`. Every form sends the same instruction for the same amount, limit and floor. The
-`try` forms build it with the venue's `…Data`; `…Cpi` writes the same bytes itself, because a call
-into `…Data` would cost it about 2k compute units (Phoenix's excepted, which is cheaper through
-`phoenixData`).
+it returns `0`. Every form sends the same instruction for the same amount, limit and floor, Orca's
+excepted: at a price every pool's swap is `swap_v2`, and at its own limit a pool of two SPL Token
+mints takes the classic `swap`. The `try…AtLimit` forms build it with the venue's `…Data`. The forms
+at a price write it themselves and check none of its fields: their floor is 0 and their limit fits
+its field, so no check of `…Data`'s could fail there, and every program calling `trySwap` would carry
+them. `…Cpi` writes the same bytes itself too, because a call into `…Data` would cost it about 2k
+compute units (Phoenix's excepted, which is cheaper through `phoenixData`).
 
 | Venue            | Program                                        | At a price           | At its own limit            | Its instruction      | Its data                                   |
 | ---------------- | ---------------------------------------------- | -------------------- | --------------------------- | -------------------- | ------------------------------------------ |
@@ -316,13 +319,14 @@ trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipien
 - **`slot`** is the pool's accounts, the System program for any the venue does not take:
   `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`.
   [`sauce pools`](../guides/cli.md#sauce-pools) prints each pool's slot for the direction paid. Some
-  venues take accounts past the nine: a Raydium-layout pool (Raydium CLMM, PancakeSwap CLMM, Byreal,
-  Stabble CLMM) its tick-array bitmap extension tenth, which its swap reads past the pool's default
-  range (a slot of nine sends none); Invariant its program's authority tenth (its `config` is the
+  venues take accounts past the nine: at its own limit, a Raydium-layout pool (Raydium CLMM,
+  PancakeSwap CLMM, Byreal, Stabble CLMM) its tick-array bitmap extension tenth, which its swap reads
+  past the pool's default range (a slot of nine sends none, and so does every form at a price);
+  Invariant its program's authority tenth (its `config` is the
   program's state, `extra` the pool's tickmap, its ticks the tick accounts the swap may cross);
   OpenBook v2 its two oracles, the program itself for one the market has not (its `config` is the
   market's authority, `extra` its event heap, its ticks its bids, asks and the System program);
-  Manifest's `config` is the System program, which its swap takes. An Orca pool's `extra`, its oracle, must be writable for an adaptive fee and for a pool with a Token-2022 mint, whose `swap_v2` declares it writable whatever the fee. Crema refuses a tick array its
+  Manifest's `config` is the System program, which its swap takes. An Orca pool's `extra`, its oracle, must be writable at a price, where its swap is `swap_v2`, which declares it writable whatever the fee, and at its own limit for an adaptive fee and for a pool with a Token-2022 mint. Crema refuses a tick array its
   map does not mark and Invariant takes only the ticks it crosses, so each is passed the slot's first
   tick array and each after it until a System program.
 - **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
@@ -590,8 +594,8 @@ const { prefix, suffix, divisor } = routerSvmDataTemplate("defituna", {
 ### Size and compute
 
 A program carries the venues it calls and no other: one venue's function at a price or at a limit
-is about 0.9 to 2.0 KB of program, its instruction alone about 0.4 to 0.5 KB, its data alone about
-0.2 to 0.4 KB, `trySwap` all nine about 6.1 KB. A program that knows its venue calls that venue's
+is about 0.9 to 1.7 KB of program, its instruction alone about 0.4 to 0.5 KB, its data alone about
+0.2 to 0.4 KB, `trySwap` all nine about 4.4 KB. A program that knows its venue calls that venue's
 function, and keeps `trySwap` for slots whose venue it learns as it runs. Past one transaction a
 program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
 is one `trySwap` call per pool.
@@ -846,19 +850,19 @@ gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three or 
 launchpads, which settle in native SOL, nor at Quantum, Obsidian or AlphaQ until it is on their
 routers' list; and WOOFi's and Metric's swaps cannot be proven:
 
-| Venue (`ROUTER_SVM_VENUES`)      | Program                                                                                                                                     | Why                                                                                                                                             | Data options     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `one-intro-swap`                 | `DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm`                                                                                              | its signer must be owned by the System program, and a Pot is owned by the Kitchen                                                               | `minOut`         |
-| `bisonfi`                        | `BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi`                                                                                              | it requires a signature from an authorization account off the curve, which only its routing program signs for                                   | `aToB`, `minOut` |
-| `sanctum-stake-pool`, `-2`, `-3` | `SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy`, `SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY`, `SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn` | a deposit (`DepositSol`, the only way here) takes native SOL from its signer                                                                    | none             |
-| `woofi`                          | `WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb`                                                                                               | its keepers stopped (its oracles last updated 2026-04-20 and 2025-11-23): on mainnet state its swap reverts `WooOracleNotFeasible` at any clock | `minOut`         |
-| `metric`                         | `Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j`                                                                                              | its oracle refuses its price as stale (its error 20, on mainnet itself on 2026-10-07)                                                           | `aToB`, `minOut` |
-| `quantum`                        | `QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv`                                                                                               | it admits a swap only when the transaction's outermost program is one of its aggregators                                                        | `aToB`, `minOut` |
-| `obsidian`                       | `HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z`                                                                                              | it admits a swap only from a router on its list                                                                                                 | none             |
-| `alphaq`                         | `ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA`                                                                                              | it admits a swap only from a router on its list                                                                                                 | `aToB`           |
-| `pumpfun-bonding-curve`          | `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P`                                                                                               | it settles in native SOL on its signer                                                                                                          | `aToB`, `minOut` |
-| `boop-fun`                       | `boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4`                                                                                               | it settles in native SOL on its signer                                                                                                          | `aToB`, `minOut` |
-| `moonit`                         | `MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG`                                                                                               | it settles in native SOL on its signer                                                                                                          | `aToB`, `minOut` |
+| Venue (`ROUTER_SVM_VENUES`)      | Program                                                                                                                                     | Why                                                                                                                                                                                                                 | Data options     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `one-intro-swap`                 | `DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm`                                                                                              | its signer must be owned by the System program, and a Pot is owned by the Kitchen                                                                                                                                   | `minOut`         |
+| `bisonfi`                        | `BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi`                                                                                              | it requires a signature from an authorization account off the curve, which only its routing program signs for                                                                                                       | `aToB`, `minOut` |
+| `sanctum-stake-pool`, `-2`, `-3` | `SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy`, `SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY`, `SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn` | a deposit (`DepositSol`, the only way here) takes native SOL from its signer                                                                                                                                        | none             |
+| `woofi`                          | `WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb`                                                                                               | its keepers stopped (its oracles last updated 2026-04-20 and 2025-11-23): on mainnet state its swap reverts `WooOracleNotFeasible` at any clock; and `from_amount` ≤ `min_swap_amount` returns Ok and moves nothing | `minOut`         |
+| `metric`                         | `Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j`                                                                                              | its oracle refuses its price as stale (its error 20, on mainnet itself on 2026-10-07)                                                                                                                               | `aToB`, `minOut` |
+| `quantum`                        | `QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv`                                                                                               | it admits a swap only when the transaction's outermost program is one of its aggregators                                                                                                                            | `aToB`, `minOut` |
+| `obsidian`                       | `HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z`                                                                                              | it admits a swap only from a router on its list                                                                                                                                                                     | none             |
+| `alphaq`                         | `ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA`                                                                                              | it admits a swap only from a router on its list                                                                                                                                                                     | `aToB`           |
+| `pumpfun-bonding-curve`          | `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P`                                                                                               | it settles in native SOL on its signer; its template is unverified against its current binaries                                                                                                                     | `aToB`, `minOut` |
+| `boop-fun`                       | `boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4`                                                                                               | it settles in native SOL on its signer                                                                                                                                                                              | `aToB`, `minOut` |
+| `moonit`                         | `MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG`                                                                                               | it settles in native SOL on its signer                                                                                                                                                                              | `aToB`, `minOut` |
 
 One Intro's pool names its token 0 and 1 vaults `vaultA` and `vaultB`; a swap paying token A takes
 the fee accounts `feeA0` and `feeB0`, one paying B `feeA1` and `feeB1`. WOOFi's token A is the
@@ -866,7 +870,10 @@ pool's base token, and `aToB` sells it; its order takes the quote token's pool, 
 vault a second time, and the authority again, unsigned, as the rebate's recipient. A stake pool's
 `referrerFeeAccount` may be its `managerFeeAccount`, as the recipes send it. AlphaQ's order is the
 same both ways, its data saying the direction. The launchpads' token A is the launched token, and
-`aToB` sells it; Moonit's floor is the token amount buying and the SOL amount selling.
+`aToB` sells it; Moonit's floor is the token amount buying and the SOL amount selling. Boop's and
+Moonit's orders were sent from a wallet to their programs as deployed, but pump.fun's programs were
+upgraded after the capture its order and data are held to, so its template is unverified against
+the current binaries: check it against the deployed program before sending it.
 
 **A swap spends exactly `amountIn`**, with four exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference

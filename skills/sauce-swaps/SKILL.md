@@ -270,8 +270,9 @@ in the venue's own order: it checks the program, reads only the paying account, 
 paid. A fourth, `<venue>Data(amountIn, …)`, is that instruction's data alone, for a program that sends
 it with `svm.call` on accounts it writes in itself: the cheapest form, a few thousand compute units
 over a hand-built instruction. `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder` and
-`routerSvmAccounts` give each instruction's accounts in order. A slot may carry accounts past its
-nine: a Raydium-layout pool's bitmap extension, Invariant's program authority, OpenBook's oracles.
+`routerSvmAccounts` give each instruction's accounts in order. At a limit a slot may carry accounts
+past its nine: a Raydium-layout pool's bitmap extension, Invariant's program authority, OpenBook's
+oracles. At a price a slot is its nine.
 
 ```sauce chain=solana
 import { orcaWhirlpool } from "@sauce/router";
@@ -304,8 +305,8 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 2.0 KB of program, and
-`trySwap` all nine, about 6.1 KB, so a program that knows its venue calls that venue's function and
+A program carries only the venues it calls: one venue's function is about 1.6 KB of program, and
+`trySwap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
 keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
 program is staged (`sauce-solana`). For one order over several pools under one price, use
 `sauce-solana-distributed-swap`.
@@ -340,7 +341,8 @@ curve, Boop, Moonit, Quantum, Obsidian, AlphaQ, WOOFi and Metric have no functio
 cannot swap at the first nine (the stake pools and the three curves settle in native SOL) nor at the
 next three (they admit only routers on their own list), and WOOFi's and Metric's swaps cannot be
 proven. `routerSvmAccountOrder` and `routerSvmDataTemplate` still give their instruction, for a
-program that can send it.
+program that can send it. pump.fun's is unverified against its current programs, which were
+upgraded after the capture it is held to: check it against the deployed program before sending it.
 
 - **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:
   `svm.call(program, [accounts…], raydiumCpSwapData(amountIn, minOut))`. It is the cheapest form.
