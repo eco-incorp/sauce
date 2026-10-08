@@ -96,7 +96,9 @@ describe("canonical chain registry: protocol chainName reconciliation", () => {
       }
     }
     expect(visited).toBeGreaterThan(0); // guards a vacuously-true loop
-    expect(pairs.size).toBe(24); // + (1329, "Sei"), from circle-gateway; + (57073, "Ink"), from uniswap-v4
+    // + (1329, "Sei"), from circle-gateway; + (57073, "Ink"), from uniswap-v4; + (9745, "Plasma"),
+    // from polymer
+    expect(pairs.size).toBe(25);
   });
 });
 

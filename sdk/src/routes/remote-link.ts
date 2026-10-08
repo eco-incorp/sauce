@@ -27,6 +27,8 @@ export type RemoteBridge = (typeof REMOTE_BRIDGES)[number];
 /** One chain as `@sauce/remote`'s `Link` holds it. */
 export interface RemoteLink {
   readonly chainId: number;
+  /** The chain's slug, which a refusal names. */
+  readonly name: string;
   readonly hyperlane?: { readonly mailbox: `0x${string}`; readonly domain: number };
   readonly layerzero?: { readonly endpoint: `0x${string}`; readonly eid: number };
   readonly metalayer?: { readonly router: `0x${string}`; readonly domain: number };
@@ -52,6 +54,7 @@ export function remoteLink(chain: CanonicalChain): RemoteLink {
 
   return {
     chainId: chain.id,
+    name: chain.slug,
     ...(mailbox !== undefined && hyperlaneDomain !== undefined
       ? { hyperlane: { mailbox, domain: hyperlaneDomain } }
       : {}),
@@ -66,7 +69,7 @@ export function remoteLink(chain: CanonicalChain): RemoteLink {
 /** `link` as the SauceScript `new Link({ … })` a chain's module writes. */
 export function remoteLinkSource(link: RemoteLink): string {
   const word = (address: string): string => address.toLowerCase();
-  const fields = [`chainId: ${link.chainId}`];
+  const fields = [`chainId: ${link.chainId}`, `name: ${JSON.stringify(link.name)}`];
   if (link.hyperlane !== undefined) {
     fields.push(
       `hyperlane: { mailbox: ${word(link.hyperlane.mailbox)}, domain: ${link.hyperlane.domain} }`,

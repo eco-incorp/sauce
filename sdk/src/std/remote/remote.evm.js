@@ -50,17 +50,19 @@ import Prover from "./polymer-prover.abi.json";
 // bytes message)` — the chain whose Pot may run it, and the message.
 const SAUCE_REMOTE_TOPIC = 0x14021f465312ca78398455623921447618a4b2f17c8c2c92c70c6b4702ba68b6;
 
-// The storage of a Pot that receives over Polymer: one word per proven log it ran, keyed by the
-// log's place, under keccak256("sauce.storage.Remote").
-const SAUCE_REMOTE_NAMESPACE = 0xb05973c020f5652e9da7121be3b78d5072c321527a33e1b106c4db0c9c780e32;
+// The ERC-7201 namespace a Pot that receives over Polymer keeps its delivered logs in:
+// keccak256(abi.encode(uint256(keccak256("sauce.storage.Remote")) - 1)) & ~bytes32(uint256(0xff)).
+// A log's slot is `keccak256(abi.encode(srcChain, blockNumber, receiptIndex, logIndex, namespace))`,
+// its place as the proof proves it, holding 1 once the log has run.
+const SAUCE_REMOTE_NAMESPACE = 0x1525874021e6c09cdc55221a93ef44a332285f3245b5be9206bc84993cc94100;
 
 // The gas the destination's handler is given when a message names none: the Router's dispatch, the
 // Kitchen's cook, the handler's checks, and the program it runs.
 const SAUCE_REMOTE_GAS = 500000;
 
-// The chain a program runs on, as every message it sends or receives sees it: its chain id and its
-// bridges, each one's contract here and the id it names this chain by. A bridge this chain lacks is
-// left unset.
+// The chain a program runs on, as every message it sends or receives sees it: its chain id, its name,
+// and its bridges, each one's contract here and the id it names this chain by. A bridge this chain
+// lacks is left unset.
 //
 //   hyperlane  { mailbox, domain }
 //   metalayer  { router, domain }
@@ -169,7 +171,7 @@ export class Remote {
           "` needs " +
           this._config.via +
           " on both chains, and " +
-          (Bridge.has(here, this._config.via) ? "chain " + there.chainId : "this chain") +
+          (Bridge.has(here, this._config.via) ? there.name : here.name) +
           " has none: name a bridge both have (hyperlane, layerzero, metalayer, polymer)",
       );
     }
@@ -178,8 +180,10 @@ export class Remote {
     if (Bridge.has(here, "metalayer") && Bridge.has(there, "metalayer")) return "metalayer";
     if (Bridge.has(here, "polymer") && Bridge.has(there, "polymer")) return "polymer";
     throw new Error(
-      "no bridge joins this chain and chain " +
-        there.chainId +
+      "no bridge joins " +
+        here.name +
+        " and " +
+        there.name +
         ": a remote message needs Hyperlane, LayerZero, Metalayer or Polymer on both",
     );
   }
@@ -435,7 +439,7 @@ export class Receive {
     const [srcChain, blockNumber, receiptIndex, logIndex] =
       Prover.at(prover).inspectLogIdentifier(proof);
     const key = crypto.keccak256(
-      abi.encode(SAUCE_REMOTE_NAMESPACE, srcChain, blockNumber, receiptIndex, logIndex),
+      abi.encode(srcChain, blockNumber, receiptIndex, logIndex, SAUCE_REMOTE_NAMESPACE),
     );
     require(evm.sload(key) == 0, "remote: proof already delivered");
     evm.sstore(key, 1);
