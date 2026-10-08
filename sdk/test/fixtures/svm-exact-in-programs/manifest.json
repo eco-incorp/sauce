@@ -468,6 +468,18 @@
       "programId": "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
       "file": "archer.so.gz",
       "sha256": "682854dc48318ec900a81b774e3008b167c710d86e8ff7945268c08a8115252b"
+    },
+    {
+      "name": "boop-fun",
+      "programId": "boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4",
+      "file": "boop-fun.so.gz",
+      "sha256": "3eb1d8e8470d1411c531a2c1d257db8a0cab34d9b97632fad5666ca6f19ce403"
+    },
+    {
+      "name": "moonit",
+      "programId": "MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG",
+      "file": "moonit.so.gz",
+      "sha256": "54dfc30c218e6ef2f7dc5cbe887b187d035e7faada085d1c0a17810b29fc9bcc"
     }
   ]
 }

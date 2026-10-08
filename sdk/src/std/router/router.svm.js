@@ -24,9 +24,13 @@
 // (`orcaWhirlpoolData`) and `swap_v2`'s (`orcaWhirlpoolV2Data`), and OpenBook a second that takes
 // the order in lots, divided already (`openbookV2LotsData`). The `try` forms return what the
 // recipient received; `…Cpi` what the paying account paid; `…Data` the bytes. Every form sends the
-// same instruction for the same amount, limit and floor. The `try` forms build it with `…Data`;
-// `…Cpi` writes the same bytes itself, because a call into `…Data` would cost it about 2k compute
-// units (Phoenix's excepted, which is cheaper through `phoenixData`).
+// same instruction for the same amount, limit and floor, Orca's excepted: at a price every pool's
+// swap is `swap_v2`, and at its own limit a pool of two SPL Token mints takes the classic `swap`. The
+// `try…AtLimit` forms build it with `…Data`. The forms at a price write it themselves and check none
+// of its fields: their floor is 0 and their limit fits, so no check of `…Data`'s could fail there,
+// and every program calling `trySwap` would carry them. `…Cpi` writes the same bytes itself too,
+// because a call into `…Data` would cost it about 2k compute units (Phoenix's excepted, which is
+// cheaper through `phoenixData`).
 //
 // `slot` is the pool's accounts, in this order (an account a venue does not take is the System
 // program, `11111111111111111111111111111111`):
@@ -40,12 +44,15 @@
 //   6–8 ticks   the tick arrays the swap walks, in walk order
 //   9…          the accounts some venues take past those
 //
-// Past the nine: a Raydium-layout pool's slot may carry, tenth, its tick-array bitmap extension,
-// which its swap reads past the pool's default range (a slot of nine, or the System program there,
-// sends none); Invariant's carries its program's authority (its `config` is the program's state,
+// Past the nine: at its own limit, a Raydium-layout pool's slot may carry, tenth, its tick-array
+// bitmap extension, which its swap reads past the pool's default range (a slot of nine, or the System
+// program there, sends none, and so does every form at a price); Invariant's carries its program's authority (its `config` is the program's state,
 // `extra` the pool's tickmap, its ticks the tick accounts the swap may cross); OpenBook v2's its two
 // oracles (the program itself for one the market has not; its `config` is the market's authority,
-// `extra` its event heap, its ticks its bids, its asks and the System program). Crema's swap refuses a
+// `extra` its event heap, its ticks its bids, its asks and the System program). An Orca pool's
+// `extra`, its oracle, must be writable at a price, where its swap is `swap_v2`, which declares it
+// writable whatever the fee; at its own limit, for an adaptive fee and a Token-2022 mint. Crema's
+// swap refuses a
 // tick array its map does not mark, and Invariant's takes only the ticks it crosses, so each is passed
 // its slot's first tick array and each after it until a System program. Manifest's `config` is the
 // System program, which its swap takes.
@@ -102,8 +109,8 @@
 // program it is given to be the venue's: the authority signs the swap, so the program it calls must be
 // the venue's own. Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble CLMM run one program code and
 // share one pool layout and one swap; Cropper runs Orca's, with only its first swap, which Orca also
-// takes for a pool of two SPL Token mints (`swap_v2`, which names each mint and its token program,
-// for the rest).
+// takes at its own limit for a pool of two SPL Token mints (`swap_v2`, which names each mint and its
+// token program, for the rest, and at a price for every pool).
 //
 // TRY FORMS. A failed call into another program aborts the whole Solana transaction and cannot be
 // caught, so a Solana `try` form checks before anything moves: it returns 0 having moved nothing for
@@ -131,11 +138,11 @@
 // amount alone, which only a token account of the pair that a swap moved could hold.
 //
 // SIZE. A Solana program rides in transactions, so the arm shares code through functions (each
-// venue's data, its accounts from a slot, its checks, `settled`) where the EVM arm keeps each
-// function flat, and only the functions a program calls are compiled into it. `trySwap` takes any of
-// the nine, so it carries all nine venues' code: a program calling it is about 6.1 KB, one calling a
-// single venue's function about 0.9 to 2.0 KB, its instruction alone about 0.4 to 0.5 KB, its data
-// alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `trySwap` is
+// venue's data, its accounts from a slot, its checks, `clmmOrder`, `settled`) where the EVM arm keeps
+// each function flat, and only the functions a program calls are compiled into it. `trySwap` takes
+// any of the nine, so it carries all nine venues' code: a program calling it is about 4.4 KB, one
+// calling a single venue's function about 0.9 to 1.7 KB, its instruction alone about 0.4 to 0.5 KB,
+// its data alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `trySwap` is
 // for slots whose venue is only known when the program runs. Each venue's functions check its own program id, so a direct call never
 // signs into a program the caller names; only `trySwap`'s internal path relies on its one read of the
 // pool's owner.
@@ -148,31 +155,39 @@ import { balanceOf } from "@sauce/token";
 // The concentrated-liquidity limit
 // ---------------------------------------------------------------------------------------------
 
-// A concentrated-liquidity pool's own limit for `maxPrice`, as a Q64.64 sqrt price, or 0 when the
-// pool has nothing to sell within it (no liquidity at its price, or its price already at or past
-// the limit) or the input is dust. Requires the pool's two mints, in key order, to be the pair paid
-// (`pay`) and bought (`buy`). `fee` is in millionths, taken from the input.
-function clmmLimit(
-  mintA: Uint256,
-  mintB: Uint256,
-  liquidity: Uint256,
-  price: Uint256,
-  fee: Uint256,
-  pay: Uint256,
-  buy: Uint256,
+// A concentrated-liquidity pool's order for `maxPrice`: the 32 bytes each venue's swap carries for an
+// exact input of `amountIn` with no least out, up to the pool's own limit, a Q64.64 sqrt price — or
+// none when the pool has nothing to sell within it (no liquidity at its price, or its price already
+// at or past the limit) or the input is dust. It reads the pool where its venue keeps them: its two
+// mints at `mintAAt` and `mintBAt`, its liquidity's 16 bytes at `liquidityAt` and its sqrt price's
+// right after, and its fee, in millionths and taken from the input, in `feeBytes` at `feeAt` of
+// `feeAccount`. Requires the two mints, in key order, to be the pair `trader` pays and buys.
+function clmmOrder(
+  pool: Account,
+  mintAAt: Uint256,
+  mintBAt: Uint256,
+  liquidityAt: Uint256,
+  feeAccount: Account,
+  feeAt: Uint256,
+  feeBytes: Uint256,
+  trader: Account[],
   maxPrice: Uint256,
   amountIn: Uint256,
-): Uint256 {
+): bytes {
+  const pay = trader[2].address;
+  const buy = trader[3].address;
+  const mintA = svm.sload(pool, mintAAt, 32).toBe();
+  const mintB = svm.sload(pool, mintBAt, 32).toBe();
+  const liquidity = svm.sload(pool, liquidityAt, 16).toLe();
+  const price = svm.sload(pool, liquidityAt + 16, 16).toLe();
+  const fee = svm.sload(feeAccount, feeAt, feeBytes).toLe();
   const paysA = pay < buy;
   require(mintA == (paysA ? pay : buy) && mintB == (paysA ? buy : pay), "pool is not the pair");
   // maxPrice as a sqrt price: the higher-key token per lower-key token, times 2^64. Paying the
   // lower-key token it is upside down. Only the root the direction needs is taken.
-  let limit = 0;
-  if (paysA) {
-    limit = Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, maxPrice));
-  } else {
-    limit = Math.sqrt(Math.mulDiv(maxPrice, 1 << 128, 10 ** 18));
-  }
+  const limit = paysA
+    ? Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, maxPrice))
+    : Math.sqrt(Math.mulDiv(maxPrice, 1 << 128, 10 ** 18));
   // Moved by √(1 − fee), so that the pool's last unit, fee paid, costs exactly maxPrice. Paying the
   // lower-key token pushes the price down, the other up. The root is rounded down, so the limit sits
   // a hair inside the exact one: the pool stops a little sooner, never later.
@@ -180,9 +195,13 @@ function clmmLimit(
   const own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
   const better = paysA ? price > own : price < own;
   if (liquidity == 0 || !better || dust(paysA, price, fee, amountIn)) {
-    return 0;
+    return hex``;
   }
-  return own;
+  // The amount, a floor of 0 and the limit, unchecked: the limit is under 2^128, its field's 16
+  // bytes, by construction. Paying the lower-key token, it is a root of at most 2^128 · 10^18, under
+  // 2^94, moved by under 10^3; paying the other, the root of a 256-bit number moved down.
+  const word = (amountIn & 0xffffffffffffffff) | (own << 128);
+  return word.toBytesLe(32);
 }
 
 // Whether a concentrated-liquidity pool can take `amountIn` toward a limit given in its own terms
@@ -893,9 +912,17 @@ function cpiOpenbookV2(
 // Each venue's swap at a price: the pool's checks and its own limit for `maxPrice`, then its swap
 // with no least out. The caller has required the slot's program to be the venue's and the pool's
 // owner, and measures what moved.
+//
+// Each writes its instruction itself, from `clmmOrder`'s bytes (Phoenix's from its ticks), and checks
+// none of its fields: its floor is 0 and its limit fits, so no check of `…Data`'s could fail here,
+// and every program calling `trySwap` would carry them. Its accounts are a slot's nine: Raydium's code
+// with no bitmap extension, and Orca's `swap_v2` for every pool. Each sends the bytes its `…Data`
+// writes for the same amount and limit and a floor of 0.
 // ---------------------------------------------------------------------------------------------
 
-// Raydium CLMM's layout, on its code's four programs. The pool's fee is its `AmmConfig`'s rate.
+// Raydium CLMM's layout, on its code's four programs. The pool's fee is its `AmmConfig`'s rate. The
+// input and output vault, token program, Token-2022 and the memo program, both mints, then the tick
+// arrays.
 function swapRaydium(
   slot: Account[],
   trader: Account[],
@@ -914,26 +941,40 @@ function swapRaydium(
   ) {
     return;
   }
-  const pay = trader[2].address;
-  const buy = trader[3].address;
-  const own = clmmLimit(
-    svm.sload(pool, 73, 32).toBe(),
-    svm.sload(pool, 105, 32).toBe(),
-    svm.sload(pool, 237, 16).toLe(),
-    svm.sload(pool, 253, 16).toLe(),
-    svm.sload(slot[2], 47, 4).toLe(),
-    pay,
-    buy,
-    maxPrice,
-    amountIn,
-  );
-  if (own != 0) {
-    cpiRaydium(slot, trader, pay < buy, amountIn, own, 0, recipient);
+  const order = clmmOrder(pool, 73, 105, 237, slot[2], 47, 4, trader, maxPrice, amountIn);
+  if (order.length == 0) {
+    return;
   }
+  const paysA = trader[2].address < trader[3].address;
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  svm.call(
+    slot[0],
+    [
+      trader[0],
+      slot[2],
+      pool,
+      trader[1],
+      recipient,
+      paysA ? slot[3] : slot[4],
+      paysA ? slot[4] : slot[3],
+      slot[5],
+      trader[4],
+      trader[5],
+      trader[6],
+      trader[2],
+      trader[3],
+      slot[6],
+      slot[7],
+      slot[8],
+    ],
+    swapV2.concat(order, hex`01`),
+  );
 }
 
-// Orca Whirlpools' layout. A pool with an adaptive fee is skipped: its fee rises with volatility,
-// past the rate the pool shows.
+// Orca Whirlpools' layout, `swap_v2`: each mint's token program, the memo program, the authority,
+// the pool, both mints, then token A's account and vault, token B's, the tick arrays and the
+// oracle. A pool with an adaptive fee is skipped: its fee rises with volatility, past the rate the
+// pool shows.
 function swapWhirlpool(
   slot: Account[],
   trader: Account[],
@@ -945,25 +986,39 @@ function swapWhirlpool(
   if (svm.sload(pool, 41, 2).toLe() != svm.sload(pool, 43, 2).toLe()) {
     return;
   }
-  const pay = trader[2].address;
-  const buy = trader[3].address;
-  const own = clmmLimit(
-    svm.sload(pool, 101, 32).toBe(),
-    svm.sload(pool, 181, 32).toBe(),
-    svm.sload(pool, 49, 16).toLe(),
-    svm.sload(pool, 65, 16).toLe(),
-    svm.sload(pool, 45, 2).toLe(),
-    pay,
-    buy,
-    maxPrice,
-    amountIn,
-  );
-  if (own != 0) {
-    cpiWhirlpool(slot, trader, pay < buy, amountIn, own, 0, recipient);
+  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, maxPrice, amountIn);
+  if (order.length == 0) {
+    return;
   }
+  const paysA = trader[2].address < trader[3].address;
+  const mintA = paysA ? trader[2] : trader[3];
+  const mintB = paysA ? trader[3] : trader[2];
+  const token = trader[4];
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  svm.call(
+    slot[0],
+    [
+      mintA.owner == token.address ? token : trader[5],
+      mintB.owner == token.address ? token : trader[5],
+      trader[6],
+      trader[0],
+      pool,
+      mintA,
+      mintB,
+      paysA ? trader[1] : recipient,
+      slot[3],
+      paysA ? recipient : trader[1],
+      slot[4],
+      slot[6],
+      slot[7],
+      slot[8],
+      slot[5],
+    ],
+    swapV2.concat(order, paysA ? hex`010100` : hex`010000`),
+  );
 }
 
-// Cropper, a whirlpool's layout; an adaptive fee is skipped, as on Orca.
+// Cropper, a whirlpool's classic `swap`; an adaptive fee is skipped, as on Orca.
 function swapCropper(
   slot: Account[],
   trader: Account[],
@@ -975,22 +1030,29 @@ function swapCropper(
   if (svm.sload(pool, 41, 2).toLe() != svm.sload(pool, 43, 2).toLe()) {
     return;
   }
-  const pay = trader[2].address;
-  const buy = trader[3].address;
-  const own = clmmLimit(
-    svm.sload(pool, 101, 32).toBe(),
-    svm.sload(pool, 181, 32).toBe(),
-    svm.sload(pool, 49, 16).toLe(),
-    svm.sload(pool, 65, 16).toLe(),
-    svm.sload(pool, 45, 2).toLe(),
-    pay,
-    buy,
-    maxPrice,
-    amountIn,
-  );
-  if (own != 0) {
-    cpiCropper(slot, trader, pay < buy, amountIn, own, 0, recipient);
+  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, maxPrice, amountIn);
+  if (order.length == 0) {
+    return;
   }
+  const paysA = trader[2].address < trader[3].address;
+  const swap = hex`f8c69e91e17587c8`;
+  svm.call(
+    slot[0],
+    [
+      trader[4],
+      trader[0],
+      pool,
+      paysA ? trader[1] : recipient,
+      slot[3],
+      paysA ? recipient : trader[1],
+      slot[4],
+      slot[6],
+      slot[7],
+      slot[8],
+      slot[5],
+    ],
+    swap.concat(order, paysA ? hex`0101` : hex`0100`),
+  );
 }
 
 // DefiTuna's layout.
@@ -1002,25 +1064,38 @@ function swapDefituna(
   recipient: Account,
 ): void {
   const pool = slot[1];
-  const pay = trader[2].address;
-  const buy = trader[3].address;
-  const own = clmmLimit(
-    svm.sload(pool, 11, 32).toBe(),
-    svm.sload(pool, 43, 32).toBe(),
-    svm.sload(pool, 151, 16).toLe(),
-    svm.sload(pool, 167, 16).toLe(),
-    svm.sload(pool, 143, 2).toLe(),
-    pay,
-    buy,
-    maxPrice,
-    amountIn,
-  );
-  if (own != 0) {
-    cpiDefituna(slot, trader, pay < buy, amountIn, own, 0, recipient);
+  const order = clmmOrder(pool, 11, 43, 151, pool, 143, 2, trader, maxPrice, amountIn);
+  if (order.length == 0) {
+    return;
   }
+  const paysA = trader[2].address < trader[3].address;
+  const mintA = paysA ? trader[2] : trader[3];
+  const mintB = paysA ? trader[3] : trader[2];
+  const swap = hex`f8c69e91e17587c8`;
+  svm.call(
+    slot[0],
+    [
+      mintA.owner == trader[5].address ? trader[5] : trader[4],
+      mintB.owner == trader[5].address ? trader[5] : trader[4],
+      trader[6],
+      trader[0],
+      pool,
+      mintA,
+      mintB,
+      paysA ? trader[1] : recipient,
+      paysA ? recipient : trader[1],
+      slot[3],
+      slot[4],
+      slot[6],
+      slot[7],
+      slot[8],
+    ],
+    swap.concat(order, paysA ? hex`010100` : hex`010000`),
+  );
 }
 
-// Crema's layout; a paused pool is skipped.
+// Crema's layout, as `cpiCrema` sends it: only the slot's leading tick arrays, which its map marks.
+// A paused pool is skipped.
 function swapCrema(
   slot: Account[],
   trader: Account[],
@@ -1032,21 +1107,77 @@ function swapCrema(
   if (svm.sload(pool, 747, 1).toLe() != 0) {
     return;
   }
-  const pay = trader[2].address;
-  const buy = trader[3].address;
-  const own = clmmLimit(
-    svm.sload(pool, 40, 32).toBe(),
-    svm.sload(pool, 72, 32).toBe(),
-    svm.sload(pool, 174, 16).toLe(),
-    svm.sload(pool, 190, 16).toLe(),
-    svm.sload(pool, 172, 2).toLe(),
-    pay,
-    buy,
-    maxPrice,
-    amountIn,
-  );
-  if (own != 0) {
-    cpiCrema(slot, trader, pay < buy, amountIn, own, 0, recipient);
+  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, maxPrice, amountIn);
+  if (order.length == 0) {
+    return;
+  }
+  const paysA = trader[2].address < trader[3].address;
+  const swap = paysA ? hex`f8c69e91e17587c80101` : hex`f8c69e91e17587c80001`;
+  const mintA = paysA ? trader[2] : trader[3];
+  const mintB = paysA ? trader[3] : trader[2];
+  const ownerA = paysA ? trader[1] : recipient;
+  const ownerB = paysA ? recipient : trader[1];
+  const data = swap.concat(order);
+  if (slot[7].address == 0) {
+    svm.call(
+      slot[0],
+      [
+        slot[2],
+        pool,
+        mintA,
+        mintB,
+        ownerA,
+        ownerB,
+        slot[3],
+        slot[4],
+        slot[5],
+        trader[0],
+        trader[4],
+        slot[6],
+      ],
+      data,
+    );
+  } else if (slot[8].address == 0) {
+    svm.call(
+      slot[0],
+      [
+        slot[2],
+        pool,
+        mintA,
+        mintB,
+        ownerA,
+        ownerB,
+        slot[3],
+        slot[4],
+        slot[5],
+        trader[0],
+        trader[4],
+        slot[6],
+        slot[7],
+      ],
+      data,
+    );
+  } else {
+    svm.call(
+      slot[0],
+      [
+        slot[2],
+        pool,
+        mintA,
+        mintB,
+        ownerA,
+        ownerB,
+        slot[3],
+        slot[4],
+        slot[5],
+        trader[0],
+        trader[4],
+        slot[6],
+        slot[7],
+        slot[8],
+      ],
+      data,
+    );
   }
 }
 
@@ -1089,7 +1220,26 @@ function swapPhoenix(
   if (amountIn < lot || ticks == 0 || ticks > 0xffffffffffffffff) {
     return;
   }
-  cpiPhoenix(slot, trader, paysBase, amountIn, lot, ticks, recipient);
+  // `phoenixData`'s order at a price, its ticks held to 64 bits above.
+  const lots = (amountIn / lot) & 0xffffffffffffffff;
+  const order = 1 | (ticks << 8) | (paysBase ? lots << 72 : lots << 136);
+  const side = paysBase ? hex`000201` : hex`000200`;
+  const rest = hex`00000000000000000000000000000000010000000000000000000000000000000000000000`;
+  svm.call(
+    slot[0],
+    [
+      slot[0],
+      slot[2],
+      pool,
+      trader[0],
+      paysBase ? trader[1] : recipient,
+      paysBase ? recipient : trader[1],
+      slot[3],
+      slot[4],
+      trader[4],
+    ],
+    side.concat(order.toBytesLe(25), rest),
+  );
 }
 
 // What a swap moved: 0 when `source` paid nothing (`held` is its balance before), else

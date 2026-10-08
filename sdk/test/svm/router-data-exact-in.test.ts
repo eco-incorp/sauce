@@ -82,6 +82,8 @@ const FIRST: Record<string, boolean> = {
   jupToSctm: true,
   sellBase: true,
   sellQuote: false,
+  zeroIn: true,
+  oneIn: false,
 };
 const PAYS_FIRST: Record<string, boolean> = { "helium-treasury:Aon7:redeem": true };
 
@@ -107,6 +109,12 @@ const INSTRUCTION_ONLY: Record<string, string[]> = {
   "one-intro-swap": ["minOut"],
   woofi: ["minOut"],
   metric: ["minOut", "aToB"],
+  quantum: ["minOut", "aToB"],
+  obsidian: [],
+  alphaq: ["aToB"],
+  "pumpfun-bonding-curve": ["minOut", "aToB"],
+  "boop-fun": ["minOut", "aToB"],
+  moonit: ["minOut", "aToB"],
   bisonfi: ["minOut", "aToB"],
   "sanctum-stake-pool": [],
   "sanctum-stake-pool-2": [],

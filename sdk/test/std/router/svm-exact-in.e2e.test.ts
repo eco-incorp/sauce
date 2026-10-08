@@ -70,6 +70,8 @@ interface Vector {
     user?: string;
     address?: Address;
     ref?: string;
+    /** The recipes' name for a fixed account. */
+    role?: string;
     writable?: boolean;
     signer?: boolean;
   }[];
@@ -3023,6 +3025,10 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
     amountIn: bigint;
     received: bigint;
     minOut?: bigint;
+    /** The receiving account is the wallet's associated token account, as the venue requires. */
+    ata?: boolean;
+    /** Accounts placed before the swap. */
+    fabricate?: (harness: EngineHarness, c: Record<string, string>) => void;
     refs: (c: Record<string, string>) => Record<string, Address>;
   }
   const stakePool = (
@@ -3077,6 +3083,50 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
       tokenProgram: TOKEN,
     }),
   });
+  const LAUNCH_SYSTEM = SYSTEM;
+  /** The SDK's name for each of a launchpad's recipes roles, where they differ. */
+  const ROLE_NAMES: Record<string, Record<string, string>> = {
+    "boop-fun": {
+      mint: "mintA",
+      bondingCurve: "pool",
+      bondingCurveVault: "vaultA",
+      bondingCurveSolVault: "vaultB",
+      wsol: "mintB",
+    },
+    moonit: {
+      curveAccount: "pool",
+      curveTokenAccount: "vaultA",
+      mint: "mintA",
+      configAccount: "config",
+    },
+  };
+  const launch = (
+    venue: RouterSvmVenue,
+    vector: string,
+    clock: bigint,
+    amountIn: bigint,
+    received: bigint,
+    extra: Partial<WalletCase>,
+  ): WalletCase => ({
+    venue,
+    program: venue,
+    vector,
+    clock,
+    aToB: false,
+    buy: VECTORS[vector]!.buy,
+    amountIn,
+    received,
+    minOut: 1n,
+    refs: () =>
+      Object.fromEntries(
+        VECTORS[vector]!.accounts.flatMap((a) => {
+          if (a.address === undefined || a.role === undefined) return [];
+          const role = a.role.split(":").pop()!;
+          return [[ROLE_NAMES[venue]?.[role] ?? role, a.address]];
+        }),
+      ) as Record<string, Address>,
+    ...extra,
+  });
   const WALLET_ONLY: WalletCase[] = [
     oneIntro("one-intro-swap:Dbuv:0to1", true, 13_699_964n),
     oneIntro("one-intro-swap:Dbuv:1to0", false, 72_975n),
@@ -3098,6 +3148,31 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
       "sanctum-stake-pool-3:8VpR:deposit",
       2_497_391_149n,
     ),
+    // Buying with native SOL from the wallet, as the recipes' bridge pays it.
+    launch(
+      "boop-fun",
+      "boop-fun:8uwi:quoteToBase",
+      1_783_175_236n,
+      10_000_000n,
+      332_824_959_629_194n,
+      {},
+    ),
+    launch("moonit", "moonit:GnM6:quoteToBase", 1_783_123_200n, 300_000n, 19_719_929_410_422n, {
+      ata: true,
+      // The fee collectors are plain wallets, absent from the capture: credited a fee below rent, a
+      // fresh one would fail the transaction's rent check, so each holds the rent-exempt floor.
+      fabricate: (harness, c) => {
+        for (const fee of [c.dexFee!, c.helioFee!])
+          harness.svm.setAccount({
+            address: fee as Address,
+            data: new Uint8Array(0),
+            executable: false,
+            lamports: lamports(harness.svm.minimumBalanceForRentExemption(0n)),
+            programAddress: LAUNCH_SYSTEM,
+            space: 0n,
+          });
+      },
+    }),
   ];
 
   describe.each(WALLET_ONLY)("$vector, sent by a wallet", (trade) => {
@@ -3114,7 +3189,18 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         trade.pay === undefined
           ? undefined
           : setTokenAccount(harness, randomAddress(), trade.pay, wallet, trade.amountIn + 7n);
-      const recipient = setTokenAccount(harness, randomAddress(), trade.buy, wallet, 0n);
+      trade.fabricate?.(harness, cfg(trade.vector));
+      const recipient = setTokenAccount(
+        harness,
+        trade.ata === true
+          ? (
+              await findAssociatedTokenPda({ owner: wallet, mint: trade.buy, tokenProgram: TOKEN })
+            )[0]
+          : randomAddress(),
+        trade.buy,
+        wallet,
+        0n,
+      );
       const refs = {
         ...trade.refs(cfg(trade.vector)),
         authority: wallet,
