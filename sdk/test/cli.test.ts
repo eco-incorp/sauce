@@ -69,6 +69,8 @@ import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
 import { encodeCompactArguments } from "../src/compact-arguments.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+/** OWNER's key: anvil's second account, public. */
+const OWNER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const CREATOR = "0x3333333333333333333333333333333333333333";
 
@@ -282,7 +284,7 @@ describe("a program file that is a command: a leading #! line", () => {
 });
 
 describe("sauce compile", () => {
-  it("compiles a file byte-for-byte as compileSauceProgram compiles the same body", async () => {
+  it("compiles a file byte-for-byte as compileSauceProgram compiles it", async () => {
     const run = await sauce(
       "compile",
       file("pay.sauce.ts", PAY),
@@ -397,6 +399,39 @@ describe("sauce compile", () => {
     ]);
   });
 
+  it("refuses a past deadline in the commands themselves, which every front end calls", async () => {
+    const { compileCommand, cookOf, refusePastDeadline } = await import("../src/cli/commands.js");
+    const { publishCommand } = await import("../src/cli/publish.js");
+    // As the MCP tools build it: a ProgramInput by hand, no CLI argument handling.
+    const input = {
+      file: "pay.sauce.ts",
+      text: PAY,
+      chain: requireChain("base"),
+      defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT: 1000n },
+      compactArgs: false,
+      intents: { deadline: 1728432000n },
+    };
+    const past = /--intent-deadline 1728432000 \(2024-10-09T00:00:00\.000Z\) has passed/;
+    await expect(compileCommand(input, nodeIo())).rejects.toThrow(past);
+    expect(() =>
+      cookOf(
+        {
+          ...input,
+          target: { owner: getAddress(RECIPIENT), salt: `0x${"00".repeat(32)}` },
+        } as never,
+        nodeIo(),
+      ),
+    ).toThrow(past);
+    await expect(publishCommand({ ...input, dryRun: false } as never, nodeIo())).rejects.toThrow(
+      past,
+    );
+    // A deadline still ahead passes; one at the exact second does not.
+    expect(() => refusePastDeadline({ intents: { deadline: 2000000000n } })).not.toThrow();
+    expect(() => refusePastDeadline({ intents: { deadline: 1000n } }, 1_000_000)).toThrow(
+      /has passed/,
+    );
+  });
+
   it("names a price limit at or past the bounds a pool takes, where it fills nothing", async () => {
     const program = file(
       "limits.sauce.ts",
@@ -414,12 +449,43 @@ describe("sauce compile", () => {
         "strictly between 4295128739 and",
     );
     expect(run.stderr).toContain("sqrtPriceLimitX96 = 4295128739 is MIN_SQRT_RATIO");
+    // An intent's limit, named before it is published, whichever way its reward is paid.
+    const intent = file(
+      "limit-intent.sauce.ts",
+      `// @chain ethereum\nBase.hop({ send: { token: USDC, amount: 7 }, refundee: ${CREATOR} }).then(() => {\n` +
+        "  require(SQRT_PRICE_LIMIT_X96 > 0);\n  USDC.transfer(RECIPIENT, 5);\n});\n",
+    );
+    const published = await sauce(
+      ...["intent", "publish", intent, "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
+      ...["--define", `RECIPIENT=${RECIPIENT}`, "--intent-deadline", "2000000000"],
+      ...["--intent-execution-fee", "0", "--value", "0"],
+      ...["--from", CREATOR, "--format", "json"],
+    );
+    expect(published.code).toBe(0);
+    expect(published.stderr).toContain(`SQRT_PRICE_LIMIT_X96 = ${max} is MAX_SQRT_RATIO`);
     // 0 (no limit) and a limit inside the bounds pass quietly.
     const fine = await sauce(
       ...["compile", program, "--chain", "base", "--define", "SQRT_PRICE_LIMIT_X96=0"],
       ...["--args", "4295128740"],
     );
     expect(fine.stderr).toBe("");
+  });
+
+  it("refuses an intent deadline that has passed, which no solver could ever fill", async () => {
+    const run = await sauce(
+      "compile",
+      file("pay.sauce.ts", PAY),
+      "--chain",
+      "base",
+      ...PAY_DEFINES,
+      "--intent-deadline",
+      "1728432000",
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toContain(
+      "--intent-deadline 1728432000 (2024-10-09T00:00:00.000Z) has passed: an intent can be " +
+        "filled only until its deadline, so this one never could be. Give a later Unix time",
+    );
   });
 
   it("compiles for Solana, reporting the account manifest", async () => {
@@ -439,9 +505,139 @@ describe("sauce compile", () => {
     }
   });
 
+  it("reads an awaited intent's body on its destination, as its `.then(...)` form", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const opened =
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
+    const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
+    const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    // Where each part runs is the compile's to say.
+    const report = (text: string) =>
+      appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"]));
+    const awaited = report([`await ${opened};`, ...body, ""].join("\n"));
+    expect(awaited.defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
+      "RECIPIENT@arbitrum",
+      "USDC@arbitrum",
+      "USDC@base",
+      "WETH@arbitrum",
+      "chainId@arbitrum",
+    ]);
+    expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
+  });
+
+  it("reads a handler on every chain it runs on", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const opened =
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
+    const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    const read = (text: string) =>
+      appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"])).defines.map(
+        (d) => `${d.name}@${d.chain}`,
+      );
+    // A body's own handler runs on its destination alone.
+    expect(
+      read(
+        `${opened}.then(() => { require(WETH != 0); }).catch((e) => { USDC.transfer(RECIPIENT, 1); });\n`,
+      ),
+    ).toEqual(["RECIPIENT@arbitrum", "USDC@arbitrum", "USDC@base", "WETH@arbitrum"]);
+    // A `try`'s handles the hop it awaits, on its destination, and the program it is written in.
+    expect(
+      read(
+        [
+          "try {",
+          `  await ${opened};`,
+          "  require(WETH != 0);",
+          "} catch (e) {",
+          "  USDC.transfer(RECIPIENT, 1);",
+          "}",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      "RECIPIENT@arbitrum",
+      "RECIPIENT@base",
+      "USDC@arbitrum",
+      "USDC@base",
+      "WETH@arbitrum",
+    ]);
+  });
+
+  it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
+    // RECIPIENT is the user's alone, so the intent body reads it too. USDC is a name each chain
+    // sets: the user's holds on Base, where the reward reads it, and the body on Arbitrum reads
+    // Arbitrum's; WETH is read only there, so the user's WETH changes nothing.
+    const recipient = "0x6666666666666666666666666666666666666666";
+    const mine = "0x7777777777777777777777777777777777777777";
+    const text = [
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
+      "  USDC.transfer(RECIPIENT, 1n);",
+      "  require(chainId == 42161n && WETH != 0n);",
+      "});",
+      "",
+    ].join("\n");
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const base = routes.chainDefines(requireChain("base"));
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
+    const address = (value: unknown) =>
+      getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const user = { RECIPIENT: BigInt(recipient), USDC: BigInt(mine), WETH: BigInt(mine) };
+    const report = appliedDefines(
+      text,
+      requireChain("base"),
+      user,
+      new Set(["RECIPIENT", "USDC", "WETH"]),
+    );
+    expect(report.defines).toEqual([
+      { name: "RECIPIENT", value: getAddress(recipient), source: "user", chain: "arbitrum" },
+      {
+        name: "USDC",
+        value: address(arbitrum.USDC),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      {
+        name: "USDC",
+        value: getAddress(mine),
+        source: "user",
+        replaces: address(base.USDC),
+        chain: "base",
+      },
+      {
+        name: "WETH",
+        value: address(arbitrum.WETH),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      { name: "chainId", value: "42161", source: "chain", kind: "chain id", chain: "arbitrum" },
+    ]);
+    expect(report.unread).toEqual([{ name: "WETH", readOn: ["arbitrum"] }]);
+    // And the command says why the WETH define changes nothing.
+    const run = await sauce(
+      "compile",
+      file("scoped.sauce.ts", text),
+      "--chain",
+      "base",
+      "--define",
+      `RECIPIENT=${recipient}`,
+      "--define",
+      `WETH=${mine}`,
+      "--intent-deadline",
+      "2000000000",
+      "--intent-execution-fee",
+      "0",
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain(
+      "reads WETH only in intents on arbitrum, where it is that chain's own",
+    );
+  });
+
   it("reports the defines it applied and where each came from, and the contracts it resolved", async () => {
     // A venue the chain sets (UniswapV3_Factory), one the user sets, one the user sets and never
-    // reads, and a namespace call and a token.
+    // reads, and a namespace call and a token — at the top and inside an intent body, which reads
+    // its own chain's.
     const program = file(
       "venues.sauce.ts",
       [
@@ -451,6 +647,10 @@ describe("sauce compile", () => {
         "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
         "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
         "  require(pool != 0n);",
+        "  Arbitrum.hop({ send: [{ token: USDC, amount: amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
+        "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
+        "    require(there != 0n);",
+        "  });",
         "}",
         "",
       ].join("\n"),
@@ -465,6 +665,10 @@ describe("sauce compile", () => {
       `PANCAKE=${pancake}`,
       "--define",
       "UNUSED=5",
+      "--intent-deadline",
+      "2000000000",
+      "--intent-execution-fee",
+      "0",
       "--json",
       "--args",
       "1000",
@@ -476,8 +680,16 @@ describe("sauce compile", () => {
     const base = routes.chainDefines(requireChain("base"));
     const address = (value: unknown) =>
       getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
     expect(out.defines).toEqual([
       { name: "PANCAKE", value: pancake, source: "user", chain: "base" },
+      {
+        name: "USDC",
+        value: address(arbitrum.USDC),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
       { name: "USDC", value: address(base.USDC), source: "chain", kind: "token", chain: "base" },
       {
         name: "UniswapV3_Factory",
@@ -489,6 +701,12 @@ describe("sauce compile", () => {
       { name: "WETH", value: address(base.WETH), source: "chain", kind: "token", chain: "base" },
     ]);
     expect(out.contracts).toEqual([
+      {
+        reference: "UniswapV3.Factory",
+        contract: "UniswapV3.Factory",
+        chain: "arbitrum",
+        address: address(arbitrum.UniswapV3_Factory),
+      },
       {
         reference: "UniswapV3.Factory",
         contract: "UniswapV3.Factory",
@@ -508,6 +726,10 @@ describe("sauce compile", () => {
           "base",
           "--define",
           `PANCAKE=${pancake}`,
+          "--intent-deadline",
+          "2000000000",
+          "--intent-execution-fee",
+          "0",
           "--json",
         )
       ).stdout,
@@ -668,6 +890,34 @@ describe("sauce compile", () => {
     expect(run.stderr).not.toContain("main.js");
   });
 
+  it("reports a value returned after an await at the file's own line, the await it follows drawn", async () => {
+    const program = file(
+      "returns.sauce.ts",
+      [
+        "// A hop whose body returns a value.",
+        "function main(to: Address, amount: Uint256): Uint256 {",
+        "  await Ethereum.hop({",
+        "    send: { token: USDC, amount },",
+        "    receive: { token: USDC, amount },",
+        "    refundee: to,",
+        "  });",
+        "  USDC.transfer(to, amount);",
+        "  return amount;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const run = await sauce(
+      ...["compile", program, "--chain", "base", "--intent-execution-fee", "0", "--offline"],
+    );
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain("a value `return` after an `await`");
+    expect(run.stderr).toContain(`--> ${program}:9:3`);
+    expect(run.stderr).toContain("9 |     return amount;");
+    expect(run.stderr).toContain("the `await` it follows");
+    expect(run.stderr).not.toContain("main.js");
+  });
+
   it("reports a syntax error at the file's own line and column", async () => {
     const program = file("bad.sauce.ts", "USDC.transfer(RECIPIENT, 1n);\nconst z = ;\n");
     const run = await sauce("compile", program, "--chain", "base");
@@ -726,6 +976,63 @@ describe("sauce compile", () => {
         "finds the mints it has",
     );
     expect((await sauce("compile", program("TSLAx"), "--chain", "solana")).code).toBe(0);
+  });
+
+  it("needs no fee for --intent-execution-fee auto where no intent is opened", async () => {
+    const run = await sauce(
+      ...["compile", file("pay.sauce.ts", "USDC.transfer(RECIPIENT, AMOUNT);\n")],
+      ...["--chain", "arbitrum", ...PAY_DEFINES, "--intent-execution-fee", "auto", "--json"],
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain("no intent here runs a program, so none pays a fee");
+    expect(JSON.parse(run.stdout).intentPots).toBeUndefined();
+    // Every body is a program its destination's Kitchen charges for, a token-only one too: with
+    // nothing to read the fee from, it is asked for.
+    const bridge = file(
+      "bridge.sauce.ts",
+      `Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
+    );
+    const unpriced = await sauce(
+      ...["compile", bridge, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
+      ...["--intent-deadline", "2000000000", "--offline"],
+    );
+    expect(unpriced.code).toBe(2);
+    expect(unpriced.stderr).toContain(
+      "an intent's body runs a program on base, whose cook pays its Kitchen's fee",
+    );
+  });
+
+  it("builds an intent the program opens, naming the refundee it lacks", async () => {
+    const body = (refundee: string) =>
+      [
+        "const amount = USDC.balanceOf(ctx.self());",
+        `Arbitrum.hop({ send: [{ token: USDC, amount }]${refundee} }).then(() => {`,
+        "  USDC.transfer(RECIPIENT, amount);",
+        "});",
+        "",
+      ].join("\n");
+    const recipient = ["--define", `RECIPIENT=${RECIPIENT}`];
+    // A Pot runs it, and no wallet publishes it: it names its creator.
+    const unnamed = await sauce(
+      ...["compile", file("unnamed.sauce.ts", body("")), "--chain", "base", ...recipient],
+    );
+    expect(unnamed.code).toBe(1);
+    expect(unnamed.stderr).toMatch(
+      /a hop needs a `refundee`[^]*hint: write `refundee: <address>` in the hop's config/,
+    );
+    const named = body(`, refundee: ${CREATOR}`);
+    const salt = `0x${"00".repeat(32)}` as const;
+    const built = await sauce(
+      ...["compile", file("intent.sauce.ts", named), "--chain", "base", ...recipient],
+      ...["--intent-deadline", "2000000000", "--intent-salt", salt],
+      ...["--intent-execution-fee", "0"],
+    );
+    expect(built.code).toBe(0);
+    const program = compileSauceProgram("base", named, {
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+      intents: { deadline: 2_000_000_000n, salt, executionFee: 0n },
+    });
+    expect(built.stdout).toBe(`${bytesToHex(program.bytecode)}\n`);
   });
 
   it("names what is wrong with the invocation, exiting 2", async () => {
@@ -1153,6 +1460,220 @@ describe("sauce tx", () => {
   });
 });
 
+describe("sauce intent publish, offline", () => {
+  const INTENT = [
+    "// @chain ethereum",
+    `Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} })`,
+    "  .then(() => {",
+    "    USDC.transfer(RECIPIENT, 5);",
+    "  });",
+    "",
+  ].join("\n");
+  const FLAGS = [
+    "--define",
+    `RECIPIENT=${RECIPIENT}`,
+    "--intent-deadline",
+    "2000000000",
+    "--intent-execution-fee",
+    "0",
+    // One salt for every run: the command picks a random one otherwise.
+    "--intent-salt",
+    `0x${"00".repeat(32)}`,
+  ];
+  /** Printed offline, so the cook's value is given: no Kitchen to read it from. */
+  const PRINTED = ["--offline", "--value", "0"];
+
+  it("prints the cook on the owner's Pot that publishes it, as `sauce tx` prints it", async () => {
+    const bridge = file("bridge.sauce.ts", INTENT);
+    const run = await sauce(
+      ...["intent", "publish", bridge, ...FLAGS, ...PRINTED, "--from", OWNER, "--format", "json"],
+    );
+    expect(run.code).toBe(0);
+    const tx = await sauce("tx", bridge, ...FLAGS, ...PRINTED, "--owner", OWNER);
+    expect(JSON.parse(run.stdout)).toEqual(JSON.parse(tx.stdout));
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      chainId: 1,
+      to: v12PredictPot(OWNER, SAUCE_INTENT_POT_SALT),
+      value: "0",
+    });
+    // Another of the owner's Pots, by its salt.
+    const salted = await sauce(
+      ...["intent", "publish", bridge, ...FLAGS, ...PRINTED, "--from", OWNER, "--format", "json"],
+      ...["--salt", "treasury"],
+    );
+    expect(JSON.parse(salted.stdout).to).toBe(v12PredictPot(OWNER, potSalt("treasury")));
+    const cast = await sauce(
+      ...["intent", "publish", bridge, ...FLAGS, ...PRINTED, "--from", OWNER, "--format", "cast"],
+    );
+    expect(cast.stdout.trim().split("\n")).toHaveLength(1);
+    expect(cast.stdout).toMatch(
+      /^cast send 0x[0-9a-fA-F]{40} 0x[0-9a-f]+ --value 0 --rpc-url <RPC_URL>/,
+    );
+    // A value the program measures as it runs is the cook's to measure: it prints all the same.
+    const measured = await sauce(
+      ...[
+        "intent",
+        "publish",
+        file(
+          "measured.sauce.ts",
+          INTENT.replace("amount: 7", "amount: USDC.balanceOf(ctx.self())"),
+        ),
+      ],
+      ...FLAGS,
+      ...PRINTED,
+      ...["--from", OWNER, "--format", "json"],
+    );
+    expect(measured.code).toBe(0);
+  });
+
+  it("publishes an awaited intent with main's arguments as its `.then(...)` form", async () => {
+    const form = (opened: string, body: string) =>
+      [
+        "function main(recipient: Address, amount: Uint256) {",
+        `  ${opened}`,
+        `  ${body}`,
+        "}",
+        "",
+      ].join("\n");
+    const intent = `Base.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })`;
+    const cook = async (text: string): Promise<string> => {
+      const run = await sauce(
+        ...["intent", "publish", file("awaited.sauce.ts", text), "--chain", "ethereum"],
+        ...FLAGS.slice(2),
+        ...PRINTED,
+        ...["--from", OWNER, "--format", "json", "--args", RECIPIENT, "1000000"],
+      );
+      expect(run.code).toBe(0);
+
+      return (JSON.parse(run.stdout) as { data: string }).data;
+    };
+    expect(await cook(form(`await ${intent};`, "USDC.transfer(recipient, amount);"))).toBe(
+      await cook(form(`${intent}.then(() => { USDC.transfer(recipient, amount); });`, "")),
+    );
+  });
+
+  it("refuses a file with no intent, or with main's arguments not given, before any network", async () => {
+    const none = await sauce(
+      ...["intent", "publish", file("none.sauce.ts", "require(chainId == 1);\n")],
+      ...["--chain", "1", ...PRINTED, "--from", OWNER, "--format", "json"],
+    );
+    expect(none.code).toBe(2);
+    expect(none.stderr).toMatch(/opens no intent — there is nothing to publish/);
+    const typed = await sauce(
+      "intent",
+      "publish",
+      file(
+        "typed.sauce.ts",
+        `function main(recipient: Address) {\n  Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n    USDC.transfer(recipient, 5);\n  });\n}\n`,
+      ),
+      "--chain",
+      "ethereum",
+      ...FLAGS.slice(2),
+      ...PRINTED,
+      ...["--from", OWNER, "--format", "json"],
+    );
+    expect(typed.code).toBe(2);
+    expect(typed.stderr).toMatch(/main\(recipient: Address\)/);
+    // --fund pulls with what it signs or sends first; a printed cook carries neither.
+    const funded = await sauce(
+      ...["intent", "publish", file("bridge.sauce.ts", INTENT), ...FLAGS, ...PRINTED],
+      ...["--from", OWNER, "--format", "json", "--fund", "USDC:1"],
+    );
+    expect(funded.code).toBe(2);
+    expect(funded.stderr).toMatch(/--fund pulls the reward into the Pot with what it signs/);
+  });
+
+  it("needs a signer to send, and an endpoint to send through", async () => {
+    const unsigned = await sauce("intent", "publish", file("bridge.sauce.ts", INTENT), ...FLAGS);
+    expect(unsigned.code).toBe(2);
+    expect(unsigned.stderr).toMatch(/missing a signer to publish from: --wallet <name>/);
+    const offline = await sauce(
+      ...["intent", "publish", file("bridge.sauce.ts", INTENT), ...FLAGS, "--offline"],
+      ...["--private-key", OWNER_KEY],
+    );
+    expect(offline.code).toBe(2);
+    expect(offline.stderr).toMatch(/--offline reads no chain, and this reads ethereum/);
+  });
+});
+
+describe("sauce intent fill, offline", () => {
+  const INTENT = [
+    "// @chain arbitrum",
+    `Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {`,
+    "  USDC.transfer(RECIPIENT, 5);",
+    "});",
+    "",
+  ].join("\n");
+  const FLAGS = [
+    "--define",
+    `RECIPIENT=${RECIPIENT}`,
+    "--intent-deadline",
+    "2000000000",
+    "--intent-execution-fee",
+    "0",
+  ];
+  /** An endpoint nothing listens on: every refusal below comes before any request. */
+  const NOWHERE = ["--rpc-url", "http://127.0.0.1:9/"];
+
+  it("needs the destination's endpoint, where no built-in one reaches it", async () => {
+    const run = await sauce("intent", "fill", file("bridge.sauce.ts", INTENT), ...FLAGS);
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(/missing --rpc-url <url> \(or --config <file>\): the base endpoint/);
+  });
+
+  it("refuses a claimant that is neither 20 nor 32 bytes", async () => {
+    const run = await sauce(
+      "intent",
+      "fill",
+      file("bridge.sauce.ts", INTENT),
+      ...FLAGS,
+      ...NOWHERE,
+      "--claimant",
+      "0x1234",
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(/--claimant: '0x1234' is neither an address/);
+  });
+
+  it("refuses a file with no intent, and one whose intents --rpc-url cannot all reach", async () => {
+    const none = await sauce(
+      "intent",
+      "fill",
+      file("none.sauce.ts", "require(chainId == 42161n);\n"),
+      "--chain",
+      "arbitrum",
+      ...NOWHERE,
+    );
+    expect(none.code).toBe(2);
+    expect(none.stderr).toMatch(/opens no intent: there is nothing for a solver to fill/);
+    const two = await sauce(
+      "intent",
+      "fill",
+      file(
+        "two.sauce.ts",
+        `${INTENT}Optimism.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
+      ),
+      ...FLAGS,
+      ...NOWHERE,
+    );
+    expect(two.code).toBe(2);
+    expect(two.stderr).toMatch(/intents go to base and optimism: --rpc-url names one endpoint/);
+  });
+
+  it("refuses a source chain with no Portal to publish through", async () => {
+    const run = await sauce(
+      "intent",
+      "fill",
+      file("svm.sauce.ts", "function main() {}\n"),
+      "--chain",
+      "solana",
+      ...NOWHERE,
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(/rehearses intents an EVM chain opens, and solana is not one/);
+  });
+});
+
 describe("defines a script cannot see", () => {
   it("refuses a define that a script's own top-level const would silently shadow", async () => {
     const script = file("script.sauce.ts", "const AMOUNT = 5n;\nrequire(AMOUNT > 0n);\n");
@@ -1488,6 +2009,21 @@ describe("flags in any order", () => {
     expect(escaped.stderr).toMatch(/--args: .*amount/);
   });
 
+  it("says what does a retired flag's work, rather than an unknown option", async () => {
+    const program = file("pay.sauce.ts", PAY);
+    for (const flag of [
+      ["--intent-creator", OWNER],
+      [`--intent-creator=${OWNER}`],
+      ["--intent-refundee", OWNER],
+    ]) {
+      const run = await sauce("compile", program, "--chain", "base", ...flag);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(
+        /`--intent-(creator|refundee)` is gone: an intent names its refundee in the file: `hop\(\{ send, refundee: refundTo \}\)`/,
+      );
+    }
+  });
+
   it("names a flag the command does not take, and why, instead of an unknown option", async () => {
     const program = file("split.sauce.ts", SPLIT);
     const cases: Array<[string[], RegExp]> = [
@@ -1501,7 +2037,7 @@ describe("flags in any order", () => {
       ],
       [
         ["compile", program, "--chain", "base", "--auto-approve"],
-        /--auto-approve is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce intent, sauce pot, sauce intent fill, sauce intent prove, sauce intent claim, sauce intent refund, sauce intent cancel take it\)/,
+        /--auto-approve is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce intent, sauce pot, sauce intent publish, sauce intent fill, sauce intent prove, sauce intent claim, sauce intent refund, sauce intent cancel take it\)/,
       ],
       [
         ["globals", "--chain", "base", "--rpc-url", "http://x"],
@@ -2089,6 +2625,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/init.js"),
       await import("../src/cli/signer.js"),
       await import("../src/cli/chain.js"),
+      await import("../src/cli/publish.js"),
       await import("../src/cli/globals.js"),
       await import("../src/cli/inspect.js"),
       await import("../src/cli/verify.js"),
@@ -2096,6 +2633,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/price.js"),
       await import("../src/cli/pools.js"),
       await import("../src/cli/report.js"),
+      await import("../src/cli/intents.js"),
       await import("../src/cli/receipt.js"),
       await import("../src/cli/terminal.js"),
       await import("../src/cli/returned.js"),

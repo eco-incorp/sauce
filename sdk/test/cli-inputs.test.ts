@@ -3,6 +3,7 @@
  * command and the MCP server's tools both apply, held here independently of either front end.
  * And `sauce mcp`'s own flag rules, which the CLI checks before it loads the server at all.
  */
+
 import { requireChain } from "../src/chains/canonical.js";
 import { potSalt, SAUCE_INTENT_POT_SALT } from "../src/deployments/pot.js";
 import { UsageError } from "../src/cli/args.js";
