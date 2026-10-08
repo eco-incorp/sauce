@@ -784,9 +784,10 @@ const awaitOf = (statement: AstNode): AstNode | undefined =>
 
 /**
  * Where `program` awaits, when every `await` stands where the compiler takes one: a statement
- * directly in `main`'s body, a script's top level, a body a call takes, or a `try` block there,
- * with no value `return` after it and nothing after a `try` that awaits. `undefined` when one does
- * not: that program is the compiler's to refuse, at its own line.
+ * directly in `main`'s body, a script's top level, a body a call takes, a `try` block there, or a
+ * branch of an `if` standing in any of them, with no value `return` after it and nothing after a
+ * `try` or an `if` that awaits. `undefined` when one does not: that program is the compiler's to
+ * refuse, at its own line.
  */
 function awaitLists(program: AstNode): AwaitList[] | undefined {
   const lists: AwaitList[] = [];
@@ -813,6 +814,21 @@ function awaitLists(program: AstNode): AwaitList[] | undefined {
       refused = true;
       return;
     }
+    /** Whether `statements` await, in a branch of an `if` among them or a `try` block. */
+    const awaitsIn = (statements: readonly AstNode[]): boolean =>
+      statements.some(
+        (each) =>
+          awaitOf(each) !== undefined ||
+          (each.type === "TryStatement" && awaitsIn((each.block as AstNode).body as AstNode[])) ||
+          (each.type === "IfStatement" &&
+            [each.consequent, each.alternate].some(
+              (branch) =>
+                branch !== null && branch !== undefined && awaitsIn(branchOf(branch as AstNode)),
+            )),
+      );
+    /** A branch of an `if` as the statements it holds: a block's, or the one it is. */
+    const branchOf = (branch: AstNode): AstNode[] =>
+      branch.type === "BlockStatement" ? (branch.body as AstNode[]) : [branch];
     const list = (statements: AstNode[], tried?: AstNode): void => {
       const here: AwaitList = { statements, ...(tried === undefined ? {} : { tried }) };
       lists.push(here);
@@ -826,12 +842,27 @@ function awaitLists(program: AstNode): AwaitList[] | undefined {
         }
         if (statement.type === "TryStatement") {
           const block = (statement.block as AstNode).body as AstNode[];
-          if (block.some((each) => awaitOf(each) !== undefined) && index < statements.length - 1) {
-            refused = true;
-          }
+          if (awaitsIn(block) && index < statements.length - 1) refused = true;
           list(block, statement);
           visit(statement.handler, undefined);
           visit(statement.finalizer, undefined);
+          return;
+        }
+        if (statement.type === "IfStatement") {
+          // Each branch is a body of its own, in the same `try`: what follows an `await` there is
+          // that branch's. A statement after an `if` whose branches await is the compiler's to
+          // refuse: it would run wherever the branch taken continued.
+          const branches = [statement.consequent, statement.alternate].filter(
+            (branch): branch is AstNode => branch !== null && branch !== undefined,
+          );
+          if (
+            branches.some((branch) => awaitsIn(branchOf(branch))) &&
+            index < statements.length - 1
+          ) {
+            refused = true;
+          }
+          visit(statement.test, undefined);
+          for (const branch of branches) list(branchOf(branch), tried);
           return;
         }
         visit(statement, undefined);
