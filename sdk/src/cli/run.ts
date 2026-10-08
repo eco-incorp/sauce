@@ -126,6 +126,7 @@ import {
   loadKeypair,
   parseAccounts,
   parsePubkey,
+  parseRemaining,
   svmAssumedBalances,
   svmPotCommand,
   svmPotDeployCommand,
@@ -471,6 +472,13 @@ const COOK: FlagSpecs = {
     type: "string",
     value: "<kitchen|engine>",
     help: "The Kitchen's cook on the Pot (default), or the engine's own, with no Pot",
+    only: "svm",
+  },
+  remaining: {
+    type: "string",
+    multiple: true,
+    value: "<value>[,writable][,signer]",
+    help: "An account the program reads after its named ones (svm.remainingAccounts()), in order: an address, pot, owner or pot:USDC, with its role",
     only: "svm",
   },
   "max-execution-fee": {
@@ -920,6 +928,11 @@ function cookInput(
     throw new UsageError(
       `--lookup-table takes a Solana cook's accounts through a lookup table; a cook on ` +
         `${program.chain.slug} has none`,
+    );
+  }
+  if (repeatedFlag(args, "remaining").length > 0) {
+    throw new UsageError(
+      `--remaining names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
     );
   }
   for (const flag of ["via", "max-execution-fee"]) {
@@ -1693,12 +1706,14 @@ function svmCookInput(
   const lookupTables = repeatedFlag(args, "lookup-table").map((table) =>
     parsePubkey("lookup-table", table),
   );
+  const remaining = parseRemaining(repeatedFlag(args, "remaining"));
 
   return {
     ...program,
     owner: svmOwner(args, signer),
     ...saltOf(args),
     accounts: accountsOf(args, io),
+    ...(remaining.length === 0 ? {} : { remaining }),
     ...argsInput(args, io, trailing),
     rpcUrl: requiredEndpoint(args, io, program.chain),
     ...(via === undefined ? {} : { via: parseVia(via) }),
