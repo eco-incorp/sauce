@@ -115,3 +115,16 @@ export function resolveSdkPackage(specifier: string): string | undefined {
 
   return `${SDK_STD_ROOT}/${normalize(`${dir}/${entry}`)}`;
 }
+
+/**
+ * The text of `path`, a file of the standard-library package `specifier` (`@sauce/random`,
+ * `handlers/vrf.js`), or `undefined` when the package or the file is not the SDK's. `path` is
+ * relative to the package's directory and cannot leave it.
+ */
+export function sdkPackageFile(specifier: string, path: string): string | undefined {
+  const dir = STD_PACKAGES[specifier];
+  const file = normalize(path);
+  if (dir === undefined || file === undefined || file === "") return undefined;
+
+  return STD_SOURCES[`${dir}/${file}`];
+}
