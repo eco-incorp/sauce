@@ -1,6 +1,6 @@
 // @sauce/names — EVM arm.
 //
-// The classes a chain's tokens are instances of. The SDK writes one module per chain from its
+// The class a chain's tokens are instances of. The SDK writes one module per chain from its
 // registry — every token symbol, every protocol contract, `self`, `Token(address)` — and hands it to
 // each program compiled for that chain as an ambient module, so a program uses them with no
 // `import`. The compiler runs these classes while it compiles: a name costs a program nothing beyond
@@ -37,15 +37,5 @@ export class Token {
   }
   balanceOf(holder) {
     return ERC20.at(this.address).balanceOf(holder);
-  }
-}
-
-// A token's balance of the contract running the program, as `self.USDC` reads it.
-export class Holding {
-  constructor(token) {
-    this.token = token;
-  }
-  valueOf() {
-    return ERC20.at(this.token.address).balanceOf(ctx.self());
   }
 }

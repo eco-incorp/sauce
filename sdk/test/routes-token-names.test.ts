@@ -215,9 +215,9 @@ describe("self.USDC is the running contract's balance", () => {
     );
   });
 
-  // Pending the compiler: class getters (v12 #557). `self.USDC` is read where it is written, once:
-  // a `const` holding it is that balance, not a read each time it is used.
-  it.failing("const b = self.USDC reads once, where it is written", () => {
+  // `self.USDC` is read where it is written, once: a `const` holding it is that balance, not a read
+  // each time it is used.
+  it("const b = self.USDC reads once, where it is written", () => {
     expect(
       bytesOf(
         "base",
@@ -231,8 +231,8 @@ describe("self.USDC is the running contract's balance", () => {
     );
   });
 
-  // Pending the compiler: class getters (v12 #557). Held in a `let`, it is a number like any other.
-  it.failing("let left = self.USDC takes a compound assignment", () => {
+  // Held in a `let`, it is a number like any other.
+  it("let left = self.USDC takes a compound assignment", () => {
     expect(
       bytesOf("base", "function main(): Uint256 { let left = self.USDC; left -= 1; return left; }")
         .length,

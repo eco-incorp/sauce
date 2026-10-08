@@ -866,31 +866,27 @@ describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
     }, 60_000);
   });
 
-  // Pending the compiler: class getters (v12 #557). `self.USDC` reads the balance where it is
-  // written, once, so a `const` holding it keeps that value through a transfer.
+  // `self.USDC` reads the balance where it is written, once, so a `const` holding it keeps that
+  // value through a transfer.
   describe("self.USDC is read once, where it is written", () => {
-    it.failing(
-      "a const holding it keeps the balance from before a transfer",
-      async () => {
-        await mintTo(token, sauce.pot, AMOUNT);
-        const before = await balanceOf(token, sauce.pot);
-        const program = compileSauceProgram(
-          "base",
-          `function main(): Uint256 { const b = self.USDC; USDC.transfer(${RECIPIENT}, b); return b; }`,
-          { tokens: { USDC: token } },
-        );
-        const { data } = await publicClient.call({
-          account: DEPLOYER.address,
-          data: sauce.cookData(toHex(program.bytecode)),
-          gas: GAS_LIMIT,
-          to: sauce.pot,
-          value: sauce.fee,
-        });
+    it("a const holding it keeps the balance from before a transfer", async () => {
+      await mintTo(token, sauce.pot, AMOUNT);
+      const before = await balanceOf(token, sauce.pot);
+      const program = compileSauceProgram(
+        "base",
+        `function main(): Uint256 { const b = self.USDC; USDC.transfer(${RECIPIENT}, b); return b; }`,
+        { tokens: { USDC: token } },
+      );
+      const { data } = await publicClient.call({
+        account: DEPLOYER.address,
+        data: sauce.cookData(toHex(program.bytecode)),
+        gas: GAS_LIMIT,
+        to: sauce.pot,
+        value: sauce.fee,
+      });
 
-        expect(before).toBeGreaterThan(0n);
-        expect(BigInt(data ?? "0x0")).toBe(before);
-      },
-      60_000,
-    );
+      expect(before).toBeGreaterThan(0n);
+      expect(BigInt(data ?? "0x0")).toBe(before);
+    }, 60_000);
   });
 });
