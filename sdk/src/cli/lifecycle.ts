@@ -72,6 +72,7 @@ import { sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState, type TxRequest } from "./chain.js";
+import { txLinks } from "./links.js";
 import { kitchenAddress } from "./commands.js";
 import { formatAmount, tokenInfo, type TokenInfo } from "./effects.js";
 import { requireSupported } from "./support.js";
@@ -2366,6 +2367,9 @@ export async function gatewayStatus(
 export interface PublishedIntent {
   readonly record: IntentRecord;
   readonly txHash: Hex;
+  /** The transaction's explorer page and its trace, for a person to open. */
+  readonly explorer?: string;
+  readonly trace?: string;
   readonly block: string;
   readonly time: string;
   readonly logIndex: number;
@@ -2459,6 +2463,7 @@ export async function publishedIntents(
           ...(vault === undefined ? {} : { vault }),
         }),
         txHash: at.txHash,
+        ...txLinks(chain, at.txHash),
         block: at.blockNumber.toString(),
         time: block.timestamp.toString(),
         logIndex: index,

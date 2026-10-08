@@ -58,6 +58,7 @@ import { parseSauce } from "../routes/parse.js";
 import { CliError, UsageError } from "./args.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent, type TxRequest } from "./chain.js";
+import { linkLines, txLinks } from "./links.js";
 import {
   castSend,
   compileProgram,
@@ -638,10 +639,10 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
   return {
     text: [
       ...summary,
-      ...sent.map(
-        ({ step, result }) =>
-          `${step.what} ${result.hash}: ${result.status}, gas used ${result.gasUsed}`,
-      ),
+      ...sent.flatMap(({ step, result }) => [
+        `${step.what} ${result.hash}: ${result.status}, gas used ${result.gasUsed}`,
+        ...linkLines(txLinks(input.chain, result.hash)),
+      ]),
     ].join("\n"),
     json: {
       from: input.account.address,
@@ -650,6 +651,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
       transactions: sent.map(({ step, result }) => ({
         what: step.what,
         hash: result.hash,
+        ...txLinks(input.chain, result.hash),
         status: result.status,
         gasUsed: result.gasUsed.toString(),
       })),

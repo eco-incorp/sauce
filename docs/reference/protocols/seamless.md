@@ -32,7 +32,7 @@ function main(poolAddress: Address, asset: Address, amount: Uint256, onBehalfOf:
 }
 ```
 
-- `onBehalfOf`: Address receiving the supply tokens (use msg.sender for self)
+- `onBehalfOf`: Address receiving the supply tokens. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
 - Requires ERC-20 approval to the Pool
 
 ### withdraw

@@ -100,12 +100,18 @@ that lacks it.
   `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0`
   ([../sauce-script/references/builtins.md](../sauce-script/references/builtins.md)).
 - **Approve exactly what the call spends**: the Pot keeps any allowance it grants.
+- **Who receives the output is the program's choice.** A call that names a beneficiary
+  (`onBehalfOf`, `receiver`, `recipient`, `to`) credits it; one that names none credits its
+  caller, the Pot. A document's "the caller" or "self" is the Pot in a Sauce program, and what
+  lands there stays in the Pot, not in the user's wallet, until another cook moves it. Ask the
+  user which they want, and pass their wallet as a `main` parameter to deliver it.
 
 ## Verification checklist
 
 - [ ] The protocol is deployed on the program's chain, and the address has code.
 - [ ] Each contract is named as its registry file says for that chain, or behind `available(...)`.
 - [ ] The document's pitfalls are handled: approvals, balance deltas, minimums.
+- [ ] Every output ends where the user asked: their wallet, or the Pot when they chose it.
 - [ ] The program compiles with `--chain`.
 - [ ] Its transaction goes to a supported chain (Ethereum, Base or Solana); a protocol on a preview
       chain is compiled and simulated, and the chain requested.

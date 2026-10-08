@@ -232,8 +232,12 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     expect(run.stdout).toContain("  2. approve the Portal for 5 USDC");
     expect(run.stdout).toMatch(/ {2}3\. Portal\.fulfill\(0x[0-9a-f]{64}, route, 0x[0-9a-f]{64}, /);
     expect(run.stdout).toContain("the solver holds 5 USDC: the route's tokens");
-    expect(run.stdout).toContain(
-      `5 USDC: ${pot} (the shared intent Pot) -> ${RECIPIENT} (RECIPIENT)`,
+    expect(run.stdout).toMatch(
+      new RegExp(
+        ` {2}\\[\\d\\] shared intent Pot(?: ${pot.slice(0, 6)}…${pot.slice(-4)})? +-> ` +
+          `RECIPIENT ${RECIPIENT.slice(0, 6)}…${RECIPIENT.slice(-4)} +5 USDC$`,
+        "m",
+      ),
     );
     expect(run.stdout).toContain("The Portal records the fill: IntentFulfilled(");
     expect(run.stdout).toContain("Left behind: nothing.");

@@ -280,10 +280,10 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                            |
 | `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                                                         |
 | `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                             |
-| `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, each transaction's gas (`transactions`), what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                 |
+| `sauce_simulate`       | `sauce simulate`       | `ok`, then `leftInPot` (what the Pot holds after the cook of what it moved, with a note when that is anything), the `path` taken, each transaction's gas (`transactions`), what `main` returns, `moves` by role, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts      |
 | `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded` |
 | `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill rehearsed: the calls and gas, what moved, or the decoded `reason`                                                                     |
-| `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block and whether it was funded                                                                                                                                                                                                      |
+| `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block, whether it was funded, and the transaction's `explorer` and `trace` links                                                                                                                                                     |
 | `sauce_intent_status`  | `sauce intent status`  | `state`, both sides as read, the deadlines, the prover, and `can`: whether fill, prove, claim, refund and cancel can happen now, why not, and from when                                                                                                                                                    |
 | `sauce_intent_prove`   | `sauce intent prove`   | The unsigned `Portal.prove` for one or more fills or cancellations, its bridge fee in its value                                                                                                                                                                                                            |
 | `sauce_intent_claim`   | `sauce intent claim`   | The unsigned `withdraw` (`batchWithdraw` for several) that pays each proven intent's claimant                                                                                                                                                                                                              |
@@ -293,7 +293,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                      |
 | `sauce_wallet_create`  | `sauce wallet new`     | Over stdio with `--wallets` only: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                    |
 | `sauce_wallet_list`    | `sauce wallet list`    | Over stdio with `--wallets` only: each wallet's name, kind, address and policy                                                                                                                                                                                                                             |
-| `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list) rehearsed, held to the wallet's policy, signed and sent; each one's `hash` and `status`, or the refusal                                                                                                              |
+| `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list) rehearsed, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, and for a cook `moves`, `leftInPot` and `summary`; or the refusal                                      |
 
 ### The command's flags as inputs
 
@@ -356,8 +356,11 @@ relative imports beside it. A server over HTTP reads no file and refuses `path`.
 returns `sourceSha256`, the sha256 of the program's text, which ties a rehearsal to the file it
 came from. `sauce_compile` with `omitBytecode` leaves the bytecode out; `sauce_simulate` with
 `scenarios` rehearses one program with several sets of `args` and `assumeBalance` at one
-block, and with `summary` returns only `ok` or the revert reason, what `main` returned, the balance
-changes, the transfers, each transaction's gas and the block.
+block, and with `summary` returns only `ok` or the revert reason, what `main` returned,
+`leftInPot`, the balance changes, the transfers, each transaction's gas and the block. A rehearsal
+that leaves anything in the Pot adds a note saying so, for the agent to pass on to the user: what
+stays in the Pot is not in the owner's wallet
+([Where a program's results end](../concepts/kitchen-pot-cook.md#where-a-programs-results-end)).
 
 ### Supported and preview chains
 
@@ -623,7 +626,11 @@ The wallet tools, besides every other tool:
   If any would revert, it refuses and sends nothing. It holds them to the wallet's
   [policy](cli.md#a-wallets-policy) and refuses, naming the limit, what the policy does not allow.
   Then it sends each in order, through the same path `sauce run` uses, and stops at the first that
-  does not succeed. It returns each one's `hash` (on Solana, its signature) and `status`.
+  does not succeed. It returns each one's `hash` (on Solana, its signature) and `status`, with
+  `explorer` and `trace` beside it: the chain's explorer page and the transaction's trace on
+  BlockSec's Phalcon explorer (calls, balance changes and fund flow), links for the user to open.
+  For a cook on an EVM chain it adds what its receipt shows: `moves`, in order and by role,
+  `leftInPot`, and `summary`, the lines `sauce run` prints.
 
 So an agent goes: `sauce_wallet_create`, fund the address, build with the wallet's address as
 `owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), rehearse with

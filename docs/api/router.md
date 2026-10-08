@@ -12,8 +12,9 @@ import { curve, uniswapV2 } from "@sauce/router";
 import { balanceOf } from "@sauce/token";
 
 // Ethereum: sell every WETH the Pot holds on Uniswap V2, then the USDC that returns for USDT in
-// Curve's 3pool, and keep it. The tokens, the factory and the pool are the registry's names; the
-// amounts are only known when this runs.
+// Curve's 3pool, and keep the USDT in the Pot: each swap's recipient is `ctx.self()`, so a later
+// cook spends it (pass the wallet instead to deliver it). The tokens, the factory and the pool are
+// the registry's names; the amounts are only known when this runs.
 //
 //   sauce run router-swap.sauce.ts --chain ethereum --keystore <keystore> --args <minOut>
 //
@@ -188,7 +189,9 @@ of venues: give it the legs as arguments, and let it pick each function as it go
 import { balancerV2, curve, uniswapV2, uniswapV3 } from "@sauce/router";
 
 // One compiled program for any route over four venues: each leg names its venue, pool and tokens,
-// and the program picks the function while it runs, spending what the previous leg returned.
+// and the program picks the function while it runs, spending what the previous leg returned. Every
+// leg pays into the Pot (`ctx.self()`), where the next leg spends it; the last leg's output stays
+// there too, so a route meant for the user's wallet ends with a transfer to it.
 interface Leg {
   venue: Uint256; // 0 Uniswap V2, 1 Uniswap V3, 3 Curve, 4 Balancer V2; any other reverts
   pool: Address; // the pair, the pool, or the Balancer Vault
