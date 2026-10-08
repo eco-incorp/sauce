@@ -274,41 +274,81 @@ import, naming it: "`woofi` is not exported by module …" on Solana, "`trySwap`
 ## On Solana
 
 On Solana `@sauce/router` swaps at the venues whose swap takes a price limit that stops it and
-leaves the rest of the input, the venues of [the distributed swap on Solana](../guides/solana-distributed-swap.md):
+leaves the rest of the input, the venues of [the distributed swap on Solana](../guides/solana-distributed-swap.md),
+and at Manifest's book. Each venue's swap comes in four forms:
 
-| Function             | Venue            | Program                                        |
-| -------------------- | ---------------- | ---------------------------------------------- |
-| `tryRaydiumClmm`     | Raydium CLMM     | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
-| `tryPancakeswapClmm` | PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` |
-| `tryByreal`          | Byreal           | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2`  |
-| `tryStabbleClmm`     | Stabble CLMM     | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` |
-| `tryOrcaWhirlpool`   | Orca Whirlpools  | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`  |
-| `tryCropper`         | Cropper          | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` |
-| `tryDefituna`        | DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  |
-| `tryCrema`           | Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
-| `tryPhoenix`         | Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  |
+| Form                                         | Takes                                                   | Returns                      |
+| -------------------------------------------- | ------------------------------------------------------- | ---------------------------- |
+| at a price: `try<Venue>`                     | `(slot, trader, amountIn, maxPrice, minOut, recipient)` | what the recipient received  |
+| at the pool's own limit: `try<Venue>AtLimit` | `(slot, trader, amountIn, limit, minOut, recipient)`    | what the recipient received  |
+| the instruction alone: `<venue>Cpi`          | `(program, accounts, source, amountIn, limit, …)`       | what the paying account paid |
+| the instruction's data: `<venue>Data`        | `(amountIn, limit, …)`                                  | the data, to send yourself   |
 
-and `trySwap`, which takes a pool at any of the nine and reads its venue from the program that owns
-it. Each has a plain form, `raydiumClmm` to `phoenix` and `swap`, which reverts where the `try` form
-returns `0`. They all take one set of arguments and return what the recipient received:
+with a plain form of each `try` form (`raydiumClmm`, `raydiumClmmAtLimit`, …) that reverts where
+it returns `0`. Every form sends the same instruction for the same amount, limit and floor. The
+`try` forms build it with the venue's `…Data`; `…Cpi` writes the same bytes itself, because a call
+into `…Data` would cost it about 2k compute units (Phoenix's excepted, which is cheaper through
+`phoenixData`).
+
+| Venue            | Program                                        | At a price           | At its own limit            | Its instruction      | Its data                                   |
+| ---------------- | ---------------------------------------------- | -------------------- | --------------------------- | -------------------- | ------------------------------------------ |
+| Raydium CLMM     | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` | `tryRaydiumClmm`     | `tryRaydiumClmmAtLimit`     | `raydiumClmmCpi`     | `raydiumClmmData`                          |
+| PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` | `tryPancakeswapClmm` | `tryPancakeswapClmmAtLimit` | `pancakeswapClmmCpi` | `pancakeswapClmmData`                      |
+| Byreal           | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2`  | `tryByreal`          | `tryByrealAtLimit`          | `byrealCpi`          | `byrealData`                               |
+| Stabble CLMM     | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` | `tryStabbleClmm`     | `tryStabbleClmmAtLimit`     | `stabbleClmmCpi`     | `stabbleClmmData`                          |
+| Orca Whirlpools  | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`  | `tryOrcaWhirlpool`   | `tryOrcaWhirlpoolAtLimit`   | `orcaWhirlpoolCpi`   | `orcaWhirlpoolData`, `orcaWhirlpoolV2Data` |
+| Cropper          | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` | `tryCropper`         | `tryCropperAtLimit`         | `cropperCpi`         | `cropperData`                              |
+| DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `tryDefituna`        | `tryDefitunaAtLimit`        | `defitunaCpi`        | `defitunaData`                             |
+| Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `tryCrema`           | `tryCremaAtLimit`           | `cremaCpi`           | `cremaData`                                |
+| Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | `tryPhoenix`         | `tryPhoenixAtLimit`         | `phoenixCpi`         | `phoenixData`                              |
+| Invariant        | `HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt` |                      | `tryInvariantAtLimit`       | `invariantCpi`       | `invariantData`                            |
+| OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                      | `tryOpenbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`, `openbookV2LotsData`     |
+| Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                      | `tryManifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
+
+and `trySwap`/`swap`, which take a pool at any of the nine venues priced the first way and read its
+venue from the program that owns it.
 
 ```text
 trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: Account): Uint256
 ```
 
-- **`slot`** is the pool's nine accounts, the System program for any the venue does not take:
+- **`slot`** is the pool's accounts, the System program for any the venue does not take:
   `[program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2]`.
-  [`sauce pools`](../guides/cli.md#sauce-pools) prints each pool's slot for the direction paid.
+  [`sauce pools`](../guides/cli.md#sauce-pools) prints each pool's slot for the direction paid. Some
+  venues take accounts past the nine: a Raydium-layout pool (Raydium CLMM, PancakeSwap CLMM, Byreal,
+  Stabble CLMM) its tick-array bitmap extension tenth, which its swap reads past the pool's default
+  range (a slot of nine sends none); Invariant its program's authority tenth (its `config` is the
+  program's state, `extra` the pool's tickmap, its ticks the tick accounts the swap may cross);
+  OpenBook v2 its two oracles, the program itself for one the market has not (its `config` is the
+  market's authority, `extra` its event heap, its ticks its bids, asks and the System program);
+  Manifest's `config` is the System program, which its swap takes. An Orca pool's `extra`, its oracle, must be writable for an adaptive fee and for a pool with a Token-2022 mint, whose `swap_v2` declares it writable whatever the fee. Crema refuses a tick array its
+  map does not mark and Invariant takes only the ticks it crosses, so each is passed the slot's first
+  tick array and each after it until a System program.
 - **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
   authority that signs (the Pot, through the Kitchen), the token account paid from, the two mints,
   the SPL Token and Token-2022 programs and the memo program. Both are arrays because a function
-  other than `main` keeps at most about sixteen values in use at once.
-- **`amountIn`** is the most the pool may take. **`maxPrice`** is the most one unit bought may
-  cost, fee included: payToken base units per buyToken base unit, times 1e18. The function reads the
-  pool's fee and gives the pool its own limit, so its last unit, fee paid, costs `maxPrice`: a
-  concentrated-liquidity pool's sqrt price limit moved by `√(1 − fee)`, a Phoenix order's price
-  `maxPrice ÷ (1 + fee)` in ticks. The rest of `amountIn` stays in `source`.
-- **`minOut`** is the least a swap that ran may deliver; below it the whole program reverts.
+  other than `main` keeps at most about sixteen values in use at once. Manifest and OpenBook take the
+  authority as their payer, so for them it must be writable.
+- **`amountIn`** is the most the pool may take. The rest of it stays in `source`.
+- **`maxPrice`** is the most one unit bought may cost, fee included: payToken base units per
+  buyToken base unit, times 1e18. The function reads the pool's fee and gives the pool its own
+  limit, so its last unit, fee paid, costs `maxPrice`: a concentrated-liquidity pool's sqrt price
+  limit moved by `√(1 − fee)`, a Phoenix order's price `maxPrice ÷ (1 + fee)` in ticks.
+- **`limit`** is the pool's own: the sqrt price its swap takes as the pool keeps it (a Q64.64 root;
+  on Invariant a root times 10^24), Phoenix's order price in its market's ticks, OpenBook's in its
+  lots (`priceLots`, then `orders`, the most resting orders it may match). No fee is read for it, so
+  whatever fee the pool charges stays inside it: an adaptive-fee whirlpool and a Byreal pool with
+  fees of its own trade at a limit, and a limit computed to keep a walk inside the tick arrays a slot
+  carries keeps it there however the fee moves. `0` is no limit: the program's own bound on Raydium's
+  code, Orca and DefiTuna, an order at any price on Phoenix and OpenBook, and on Invariant only selling
+  token X. Cropper's and Crema's programs take no `0`; give them their own bound. Invariant's
+  program does not stop at its limit: a swap that reaches it with input left is refused (custom
+  error `0x1778`), and the whole transaction with it, so there `amountIn` must fit inside the limit.
+- **`minOut`** is the least a swap that ran may deliver; below it the whole program reverts. At a
+  pool's own limit it rides in the venue's own least-out field where the instruction has one
+  (Raydium's code and the whirlpools' `other_amount_threshold`, Crema's `amount_limit`, Manifest's
+  `out_atoms`), so the venue refuses a swap below it itself; Phoenix's, Invariant's and OpenBook's
+  recipient balance is held to it.
 - **`recipient`** is the token account the output lands in; Crema and Phoenix pay only into the
   authority's own.
 
@@ -316,22 +356,24 @@ Each venue's function requires the slot's program to be its venue's and the pool
 reads the pool, because the authority signs the swap; `trySwap` requires the slot's program to own
 the pool and that owner to be one of the nine. These are the caller's accounts, so each reverts
 rather than skips: a slot naming another program, a pool of another venue (`not a Crema pool`, …)
-or of none (`not a supported venue's pool`), and a pool that is not the pair. Only the System
-program itself as the pool is a missing slot, which a `try` form skips.
+or of none (`not a supported venue's pool`), a pool that is not the pair, and a limit an order cannot
+carry (a sqrt price limit past its 128 bits, which cut to its field would be no limit at all; Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
+itself as the pool is a missing slot, which a `try` form skips.
 
 A failed call into another program fails the whole Solana transaction and cannot be caught, so a
 `try` form checks before anything moves and returns `0`, having moved nothing, for a missing slot
 (the System program as its pool), no input, a pool whose swaps are off, a paused pool or a market
-not open for taking, a fee that is more than one rate (a dynamic or adaptive fee, or a Byreal
-pool's own), a pool with no liquidity at its price, a pool already past its own limit, an input too
-small to buy one unit at the pool's price after its fee, an input smaller than one of a market's
-lots, and a market limit too large for an order's 64-bit price. The price only worsens as a pool
-sells, so the estimate is the most the input could buy: dust an earlier pool left (an atom, which
-the fee takes whole) is skipped, never handed to a venue that would keep it or refuse it. A Phoenix
-order whose book has no offer within the limit is placed and fills nothing, so it returns `0` too,
-nothing having moved. A swap that ran returns at least 1, held to `minOut` and at least 1, and
-reverts below it. A failure the checks do not foresee, such as a tick array missing from the slot,
-fails the transaction.
+not open for taking, a pool with no liquidity at its price, a pool already at or past its limit, an
+input too small to buy one unit at the pool's price after its fee (judged at a limit by the pool's
+base fee), an input smaller than one of a market's lots, and, at a price, a fee that is more than one
+rate (a dynamic or adaptive fee, or a Byreal pool's own) and a market limit too large for an order's
+64-bit price. The price only worsens as a pool sells, so the estimate is the most the input could
+buy: dust an earlier pool left (an atom, which the fee takes whole) is skipped, never handed to a
+venue that would keep it or refuse it. A Phoenix or OpenBook order whose book has no offer within
+its price is placed and fills nothing, so it returns `0` too, nothing having moved. A swap that ran
+returns at least 1, held to `minOut` and at least 1, and reverts below it. A failure the checks do
+not foresee, such as a tick array missing from the slot or an Invariant input past its limit, fails
+the transaction.
 
 ```js
 import { trySwap } from "@sauce/router";
@@ -366,8 +408,229 @@ function main(
 }
 ```
 
-A program carries the venues it calls and no other: one venue's function is about 1.7 KB of
-program, `trySwap` all nine about 4.4 KB. A program that knows its venue calls that venue's
-function, and keeps `trySwap` for slots whose venue it learns as it runs. Either is past one
-transaction, so the program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
+### The instruction alone
+
+`<venue>Cpi` is a venue's swap instruction and nothing around it: it takes the accounts in the
+venue's own order, the paying account beside them, what the instruction carries and, where its
+accounts do not say it, its direction. It checks the program, reads the paying account before and
+after, and returns what that account paid, reverting (`debit`) if the venue took more than
+`amountIn`. The instruction is the one a caller would build by hand, byte for byte; an amount of `0`
+is the venue's to refuse, so skip the call.
+
+`<venue>Data` is that instruction's data alone, for a program that sends it with `svm.call` itself:
+it takes what the instruction carries and its direction, checks only that each field can carry its
+value (a floor past 64 bits, a sqrt price limit past 128 bits, Phoenix's limit past 64 bits, OpenBook's price or lots past 63 or `orders` past
+255 revert), and returns the bytes. The program names the venue's program and reads whatever
+balances it wants. It is the cheapest form: an account list passed to a function, as `…Cpi` takes it,
+is built as an array first, and one written into `svm.call` is not.
+
+| Function                                                              | After `program, accounts, source`       | `…Data` takes                                                                                                                        | `accounts`, in order                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raydiumClmmCpi`, `pancakeswapClmmCpi`, `byrealCpi`, `stabbleClmmCpi` | `amountIn, limit, minOut`               | `amountIn, limit, minOut`                                                                                                            | the authority, the `AmmConfig`, the pool, the paying and receiving token accounts, the input and output vault, the observation account, SPL Token, Token-2022, the memo program, the input and output mint, then the bitmap extension (if any) and the tick arrays                                |
+| `orcaWhirlpoolCpi`                                                    | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB` (`swap`'s, and `swap_v2`'s)                                                                          | for `swap` (both mints SPL Token's): SPL Token, the authority, the pool, token A's account and vault, token B's, three tick arrays, the oracle; for `swap_v2`: token A's and B's token programs, the memo program, the authority, the pool, mint A, mint B, then as `swap` from token A's account |
+| `cropperCpi`                                                          | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB`                                                                                                      | as a whirlpool's `swap`                                                                                                                                                                                                                                                                           |
+| `defitunaCpi`                                                         | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB`                                                                                                      | token A's and B's token programs, the memo program, the authority, the pool, mint A, mint B, token A's and B's accounts, vault A, vault B, three tick arrays                                                                                                                                      |
+| `cremaCpi`                                                            | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB`                                                                                                      | the `clmm_config`, the pool, mint A, mint B, token A's and B's accounts, vault A, vault B, the tick-array map, the authority, SPL Token, the marked tick arrays                                                                                                                                   |
+| `phoenixCpi`                                                          | `amountIn, ticks, paysBase`             | `amountIn, lot, ticks, paysBase`                                                                                                     | the program, the log authority, the market, the authority, the base and quote token accounts, the base and quote vaults, SPL Token                                                                                                                                                                |
+| `invariantCpi`                                                        | `amountIn, limit, xToY`                 | `amountIn, limit, xToY`                                                                                                              | the program's state, the pool, its tickmap, the X and Y token accounts, the X and Y reserves, the authority, the program's authority, SPL Token, the ticks it may cross                                                                                                                           |
+| `manifestCpi`                                                         | `amountIn, minOut, paysBase`            | `amountIn, minOut, paysBase`                                                                                                         | the authority, the market, the System program, the base and quote token accounts, the base and quote vaults, the base token program, the base mint, the quote token program, the quote mint                                                                                                       |
+| `openbookV2Cpi`                                                       | `amountIn, priceLots, orders, paysBase` | `amountIn, baseLot, quoteLot, priceLots, orders, paysBase`; `openbookV2LotsData`: `baseLots, quoteLots, priceLots, orders, paysBase` | the authority twice (signer and penalty payer), the market, its authority, bids, asks, the base and quote vaults, the event heap, the base and quote token accounts, the two oracles, SPL Token, the System program, the program                                                                  |
+
+`minOut` rides in the venue's floor; Phoenix's, Invariant's and OpenBook's instructions carry none,
+and their `…Cpi` and `…Data` take none. Phoenix and OpenBook size the order in their market's lots:
+`…Cpi` reads them from the market, the instruction's third account, and `…Data` takes them (`lot`,
+the paid token's lot size on Phoenix; `baseLot` and `quoteLot` on OpenBook). `openbookV2LotsData`
+takes the order in lots, divided already, for a program that knows the market's lot sizes when it
+compiles: the side paid bounds the order, so give the other side its most, `0x7fffffffffffffff` over
+its lot size. An input under one lot is no order: `phoenixCpi` returns `0` for it, and a caller of
+`phoenixData` skips it.
+
+The two `try` forms return what the recipient received, and `…Cpi` what the paying account paid,
+each one number. A program that wants both reads the other itself:
+
+```js
+import { defitunaCpi } from "@sauce/router";
+
+// A DefiTuna swap at a sqrt price limit computed beforehand, A to B: what source paid, through
+// defitunaCpi, and what output received, read around it. accounts is the instruction's own list.
+function main(
+  program: Account,
+  tokenProgramA: Account,
+  tokenProgramB: Account,
+  memo: Account,
+  authority: Account<Signer>,
+  pool: Account<Writable>,
+  mintA: Account,
+  mintB: Account,
+  source: Account<Writable>,
+  output: Account<Writable>,
+  vaultA: Account<Writable>,
+  vaultB: Account<Writable>,
+  ticks0: Account<Writable>,
+  ticks1: Account<Writable>,
+  ticks2: Account<Writable>,
+  amountIn: Uint256,
+  sqrtLimitX64: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const accounts = [
+    tokenProgramA, tokenProgramB, memo, authority, pool, mintA, mintB, source, output, vaultA,
+    vaultB, ticks0, ticks1, ticks2,
+  ];
+  const before = svm.sload(output, 64, 8).toLe();
+  const spent = defitunaCpi(program, accounts, source, amountIn, sqrtLimitX64, minOut, true);
+  const received = svm.sload(output, 64, 8).toLe() - before;
+  return (spent << 128) | received;
+}
+```
+
+With `…Data`, the same swap reads both itself, and costs a few thousand compute units less:
+
+```js
+import { defitunaData } from "@sauce/router";
+
+function main(
+  program: Account,
+  tokenProgramA: Account,
+  tokenProgramB: Account,
+  memo: Account,
+  authority: Account<Signer>,
+  pool: Account<Writable>,
+  mintA: Account,
+  mintB: Account,
+  source: Account<Writable>,
+  output: Account<Writable>,
+  vaultA: Account<Writable>,
+  vaultB: Account<Writable>,
+  ticks0: Account<Writable>,
+  ticks1: Account<Writable>,
+  ticks2: Account<Writable>,
+  amountIn: Uint256,
+  sqrtLimitX64: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const data = defitunaData(amountIn, sqrtLimitX64, minOut, true);
+  const held = svm.sload(source, 64, 8).toLe();
+  const before = svm.sload(output, 64, 8).toLe();
+  svm.call(
+    program,
+    [tokenProgramA, tokenProgramB, memo, authority, pool, mintA, mintB, source, output, vaultA,
+     vaultB, ticks0, ticks1, ticks2],
+    data,
+  );
+  const spent = held - svm.sload(source, 64, 8).toLe();
+  require(spent <= amountIn, "debit");
+  return (spent << 128) | (svm.sload(output, 64, 8).toLe() - before);
+}
+```
+
+A program compiled for one trade knows the venue's accounts before it runs. The SDK names them in
+the order each instruction takes them, so a code generator need not keep its own copy of that order:
+`routerSvmAccountOrder(venue, options)` from `@eco-incorp/sauce/svm` lists each account's name and
+whether the instruction writes it and it signs, and `routerSvmAccounts(venue, options, refs)` builds
+the list from a value for each name (an address, or whatever reference the generator resolves
+later). `options` is the direction (`aToB`: the pool's first token is paid — token 0 or A,
+Invariant's X, a market's base) and, where the venue takes them, Orca's `swap_v2` (`v2`, whose
+oracle is always writable), an adaptive-fee whirlpool, whose classic `swap` writes its oracle too
+(`adaptive`), a Raydium-layout pool's bitmap
+extension (`bitmapExtension`), and how many tick arrays Crema, or ticks Invariant, takes
+(`tickArrays`). `ROUTER_SVM_VENUES` gives each venue's program and its `…Data` and `…Cpi` functions.
+
+```ts
+import { routerSvmAccounts, ROUTER_SVM_VENUES } from "@eco-incorp/sauce/svm";
+
+const accounts = routerSvmAccounts(
+  "defituna",
+  { aToB: true },
+  {
+    tokenProgramA: TOKEN_PROGRAM,
+    tokenProgramB: TOKEN_PROGRAM,
+    memo: MEMO_PROGRAM,
+    authority: pot,
+    pool,
+    mintA: SOL,
+    mintB: USDC,
+    source,
+    recipient,
+    vaultA,
+    vaultB,
+    tickArray0,
+    tickArray1,
+    tickArray2,
+  },
+);
+// [{ name: "tokenProgramA", ref: …, writable: false, signer: false }, …], in the instruction's order
+const program = ROUTER_SVM_VENUES.defituna.program;
+```
+
+The data, too, can be written when the program is generated. The checks `<venue>Data` makes on every
+swap (a floor past 64 bits, a sqrt price limit past 128, a book's price or order count past its
+field) cost a few hundred compute units each, and the compiler does not fold them away for a literal
+argument: a program passing its limit as a literal still runs them. `routerSvmDataTemplate(venue,
+options)` makes them once, in TypeScript, throwing for a field past its slot, and returns the bytes
+around the amount, so the program writes `prefix ‖ u64le(amountIn ÷ divisor) ‖ suffix` and pays
+nothing for the encoding beyond the concatenation. Its bytes are `<venue>Data`'s for the same
+fields; its options are the account order's direction and Orca's `v2`, then the fields the venue's
+instruction carries (`limit`, `minOut`; Phoenix `ticks` and the paid token's `lot`; OpenBook
+`priceLots`, `orders`, `baseLot` and `quoteLot`).
+
+```ts
+import { routerSvmDataTemplate } from "@eco-incorp/sauce/svm";
+
+const { prefix, suffix, divisor } = routerSvmDataTemplate("defituna", {
+  aToB: true,
+  limit: sqrtLimitX64,
+  minOut,
+});
+// The program: prefix.concat((amountIn / divisor).toBytesLe(8), suffix), prefix and suffix as hex
+// literals.
+```
+
+### Size and compute
+
+A program carries the venues it calls and no other: one venue's function at a price or at a limit
+is about 0.9 to 2.0 KB of program, its instruction alone about 0.4 to 0.5 KB, its data alone about
+0.2 to 0.4 KB, `trySwap` all nine about 6.1 KB. A program that knows its venue calls that venue's
+function, and keeps `trySwap` for slots whose venue it learns as it runs. Past one transaction a
+program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
 is one `trySwap` call per pool.
+
+Reading an account out of an array is among the dearest steps in a program, so a form that takes a
+slot pays for every account it lays out; `…Cpi` and `…Data` read none, and `…Data` does not even
+build its accounts into an array. Measured on each fixture pool with the released engine (v12-svm
+1.3.0, devnet build, in LiteSVM), a swap of ten tokens: the venue's own compute, the whole cook of
+the instruction eco-incorp/sauce-recipes builds for it, sent by hand (its bytes, the amount patched
+in, and the paying account read around it), and what each form adds to that cook. `…Data` and
+`…Cpi` are compiled for the one trade, as the hand-built CPI is: every argument but the amount a
+literal. A whole cook moves by a few thousand units with its accounts' addresses; what a form adds,
+measured on the same accounts, does not.
+
+| Venue (pool, way)                     | Venue CU | Hand-built CPI | `…Data` |  `…Cpi` | `try…AtLimit` | `try…` at a price |
+| ------------------------------------- | -------: | -------------: | ------: | ------: | ------------: | ----------------: |
+| Raydium CLMM (SOL/USDC, 0→1)          |   48,274 |        114,662 |  +3,185 |  +6,781 |       +97,269 |          +111,032 |
+| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        136,486 |  +3,185 |  +6,781 |       +97,270 |          +112,194 |
+| Byreal (USDC pool, 0→1)               |   72,927 |        139,281 |  +3,185 |  +6,781 |       +96,308 |          +112,687 |
+| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         87,749 |  +3,793 |  +9,579 |       +83,951 |          +109,498 |
+| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |        100,130 |  +3,953 |  +9,931 |       +85,649 |           skipped |
+| Cropper (SOL/USDC, B→A)               |   51,207 |        108,790 |  +3,953 |  +7,433 |       +82,154 |           +94,050 |
+| DefiTuna (SOL/USDC, A→B)              |   50,589 |        112,128 |  +3,776 |  +7,256 |       +80,714 |           +91,805 |
+| Crema (SOL/USDC, B→A)                 |   75,506 |        137,178 |  +3,575 |  +7,055 |       +83,957 |          +109,789 |
+| Phoenix (SOL/USDC, selling base)      |   22,729 |         91,297 |  +6,437 | +14,318 |       +61,360 |                   |
+| Invariant (USDC/USDT, X→Y)            |   62,133 |        122,300 |  +3,498 |  +6,978 |       +76,219 |                   |
+| Manifest (SOL/USDC, selling base)     |   13,122 |         68,694 |  +2,967 |  +6,563 |       +55,410 |                   |
+| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         92,145 | +12,068 | +17,830 |       +82,208 |                   |
+
+`…Data`'s few thousand units are its fields' packing and checks: the floor's 64-bit check and the
+limit's 128-bit one (about 600 units each), the direction, one `toBytesLe`. `…Cpi` adds the program's check, building its account list into an
+array, and the call. A book's data carries more: Phoenix's divides the input by its lot size, and
+OpenBook's word has six fields, two of them chosen by the price. `openbookV2LotsData`, its lots
+divided when the program is compiled, adds +8,173 where `openbookV2Data`, dividing, adds +12,068.
+`routerSvmDataTemplate`'s bytes add nothing: they are the hand-built CPI's.
+The `try` forms pay for reading the slot: the pool's owner, its state for the skips, and every
+account they lay out.
+
+Stabble CLMM runs Raydium's code and its forms cost what Raydium's do. The forms' cost does not grow
+with the ticks a swap crosses; the venue's does. To the window's edge, with more input than the
+window holds, Raydium CLMM's SOL/USDC swap crosses 6 ticks for 64,198 units of its own, PancakeSwap's
+57 for 105,004, Crema's 1,423 for 122,377, and each form costs what it cost for ten tokens past
+that.

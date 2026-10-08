@@ -363,7 +363,7 @@ deep ones, and an order book's offers further still.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 6.3 KB, well past one transaction, so it runs from a code
+- **The program is staged.** It is about 8.0 KB, well past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that ([Solana](solana.md)).
 - **The accounts go through a lookup table.** Four slots and the shared accounts are 46 accounts;
   listed in the transaction they are over 1,500 bytes, and through an address lookup table one byte

@@ -6,6 +6,7 @@
 // SDK ships them: the suites run the venues exactly as mainnet does.
 //
 //   node scripts/dump-svm-venues.mjs --redump --rpc-config rpc.config.json
+//   node scripts/dump-svm-venues.mjs --add --rpc-config rpc.config.json
 //   node scripts/dump-svm-venues.mjs --check --rpc-config rpc.config.json
 //
 // Build first (`pnpm --filter './sdk' build`): the accounts a pool's swap takes (its config, vaults,
@@ -17,6 +18,10 @@
 // accounts were read at. `--check` reads the programs again and reports which were upgraded, and
 // re-hashes every file against its pin, writing nothing. Review a redump's diff before
 // committing it: a changed program sha256 is an upgrade, and the suite then runs the new code.
+// `--add` dumps only what the fixture lacks — a program, a pool, or a slot account past a held
+// pool's nine (`more`) — and writes nothing it holds: every account it pins, and every file already
+// on disk, stays as it is, so the suites' existing state does not move. Each pool it adds records
+// the `slot` and `unixTimestamp` it was read at.
 //
 // The endpoint comes only from the `--rpc-config` file (chain id -> URL), under Solana's chain id
 // 1399811149, as in `dump-eco-routes-svm.mjs`: no default, no fallback, nothing read from the
@@ -26,11 +31,18 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { gunzipSync } from "node:zlib";
-import { address, getAddressDecoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec, getAddressDecoder, getProgramDerivedAddress } from "@solana/kit";
 
-import { readAccountFile, roots, sha256, writeVenueFixture } from "./lib/svm-venue-fixture.mjs";
+import {
+  addToVenueFixture,
+  readAccountFile,
+  roots,
+  sha256,
+  writeVenueFixture,
+} from "./lib/svm-venue-fixture.mjs";
 
-const USAGE = "usage: node scripts/dump-svm-venues.mjs (--redump | --check) --rpc-config <path>";
+const USAGE =
+  "usage: node scripts/dump-svm-venues.mjs (--redump | --add | --check) --rpc-config <path>";
 const SOLANA = "1399811149";
 const LOADER = "BPFLoaderUpgradeab1e11111111111111111111111";
 /** `UpgradeableLoaderState::ProgramData`: a u32 tag, the deploy slot, an `Option<Pubkey>`. */
@@ -47,6 +59,7 @@ try {
   cli = parseArgs({
     options: {
       redump: { type: "boolean", default: false },
+      add: { type: "boolean", default: false },
       check: { type: "boolean", default: false },
       "rpc-config": { type: "string" },
     },
@@ -54,7 +67,8 @@ try {
 } catch (error) {
   fail(`${error.message}\n${USAGE}`);
 }
-if (cli.values.redump === cli.values.check) fail(`give one of --redump and --check\n${USAGE}`);
+if ([cli.values.redump, cli.values.add, cli.values.check].filter(Boolean).length !== 1)
+  fail(`give one of --redump, --add and --check\n${USAGE}`);
 if (cli.values["rpc-config"] === undefined) fail(`pass --rpc-config <path>\n${USAGE}`);
 let config;
 try {
@@ -86,6 +100,9 @@ const PROGRAMS = {
   defituna: "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
   crema: "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
   phoenix: "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+  invariant: "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+  manifest: "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+  "openbook-v2": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
 };
 
 const WSOL = "So11111111111111111111111111111111111111112";
@@ -96,7 +113,11 @@ const USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
  * The pools the suite trades: each venue's deepest SOL/USDC pool when the dump was made, Byreal's
  * deepest pool with no fee beyond its rate (its SOL/USDC pool adds decay and imbalance fees, which
  * the program skips) and Stabble's USDC/USDT pool (its SOL/USDC pools are thinner), to run their
- * swaps, and a Meteora DLMM pool, a venue the program refuses. `only`: the pool account alone.
+ * swaps, and a Meteora DLMM pool, a venue the program refuses. `only`: the pool account alone. The
+ * venues `@sauce/router` swaps at a pool's own limit besides: an Orca pool with an adaptive fee
+ * (`adaptive`), Invariant's USDC/USDT pool, Manifest's SOL/USDC market (`keep`: as
+ * `test/svm/fixtures/manifest` already holds it, the snapshot the venue suite's worked examples
+ * price against) and an OpenBook v2 BONK/USDC market.
  */
 const POOLS = [
   {
@@ -147,6 +168,28 @@ const POOLS = [
     venue: "meteora-dlmm",
     pool: "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
     only: true,
+  },
+  {
+    name: "orca-whirlpool-adaptive",
+    venue: "orca-whirlpool",
+    pool: "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
+    adaptive: true,
+  },
+  {
+    name: "invariant-usdc-usdt",
+    venue: "invariant",
+    pool: "5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7",
+  },
+  {
+    name: "manifest-sol-usdc",
+    venue: "manifest",
+    pool: "ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ",
+    keep: true,
+  },
+  {
+    name: "openbook-v2-bonk-usdc",
+    venue: "openbook-v2",
+    pool: "D3gZwng2MgZGjktYcKpbR8Bz8653i4qCgzHCf5E4TcZb",
   },
 ];
 
@@ -304,7 +347,7 @@ async function raydiumTickArrays(programId, pool, tick, spacing) {
 }
 
 /** A pool's slot, the nine accounts the program takes for it, and the tick arrays each way. */
-async function slotOf({ venue, pool, only }) {
+async function slotOf({ venue, pool, only, adaptive }) {
   const programId = PROGRAMS[venue] ?? (await loader(pool), read.get(pool).owner);
   if (only)
     return {
@@ -345,13 +388,25 @@ async function slotOf({ venue, pool, only }) {
         extra: cfg.observation,
         payA,
         payB,
+        ...(await moreOf({ venue, pool })),
       };
     }
     case "orca-whirlpool":
     case "cropper": {
       const fetchConfig =
         venue === "cropper" ? venues.fetchCropperConfig : venues.fetchOrcaWhirlpoolConfig;
-      const cfg = await fetchConfig(loader, at);
+      // The SDK's decoder refuses an adaptive fee tier (its fee is not one rate); the accounts a
+      // swap takes do not depend on the fee, so such a pool is read as if its tier were static.
+      const read = adaptive
+        ? async (account) => {
+            const data = await loader(account);
+            if (account !== pool || data === null) return data;
+            const copy = new Uint8Array(data);
+            copy.set(copy.subarray(41, 43), 43); // fee_tier_index := tick_spacing
+            return copy;
+          }
+        : loader;
+      const cfg = await fetchConfig(read, at);
       return {
         program: programId,
         pool,
@@ -361,6 +416,7 @@ async function slotOf({ venue, pool, only }) {
         extra: cfg.oracle,
         payA: cfg.windows.aToB.tickArrays,
         payB: cfg.windows.bToA.tickArrays,
+        ...(adaptive ? { mints: [cfg.tokenMintA, cfg.tokenMintB] } : {}),
       };
     }
     case "defituna": {
@@ -404,9 +460,165 @@ async function slotOf({ venue, pool, only }) {
         payB: none,
       };
     }
+    case "invariant": {
+      // `config` the program's state, the pool's reserves, `extra` its tickmap, the tick accounts
+      // the swap may cross each way (X is the lower-key mint) and, tenth, the program's authority.
+      const cfg = await venues.fetchInvariantPoolConfig(loader, at);
+      const state = await pda(programId, [new TextEncoder().encode("statev1")]);
+      const ticks = (window) =>
+        [...window.boundaries.map((b) => b.address), SYSTEM, SYSTEM, SYSTEM].slice(0, 3);
+      const key = (at) => Buffer.from(getAddressCodec().encode(at));
+      const xLower = Buffer.compare(key(cfg.tokenXMint), key(cfg.tokenYMint)) < 0;
+      return {
+        program: programId,
+        pool,
+        config: state,
+        vaultA: cfg.tokenXReserve,
+        vaultB: cfg.tokenYReserve,
+        extra: cfg.tickmap,
+        payA: ticks(xLower ? cfg.windows.xToY : cfg.windows.yToX),
+        payB: ticks(xLower ? cfg.windows.yToX : cfg.windows.xToY),
+        ...(await moreOf({ venue, pool })),
+        mints: [cfg.tokenXMint, cfg.tokenYMint],
+      };
+    }
+    case "manifest": {
+      const cfg = await venues.fetchManifestConfig(loader, at);
+      const none = [SYSTEM, SYSTEM, SYSTEM];
+      return {
+        program: programId,
+        pool,
+        config: SYSTEM, // the System program, which the swap takes
+        vaultA: cfg.baseVault,
+        vaultB: cfg.quoteVault,
+        extra: SYSTEM,
+        payA: none,
+        payB: none,
+        mints: [cfg.baseMint, cfg.quoteMint],
+      };
+    }
+    case "openbook-v2": {
+      // `config` the market's authority, its vaults, `extra` its event heap, then its bids, asks
+      // and the System program either way, and its two oracles (the program for one it lacks).
+      const cfg = await venues.fetchOpenBookV2Config(loader, at);
+      const book = [cfg.bidsAccount, cfg.asksAccount, SYSTEM];
+      return {
+        program: programId,
+        pool,
+        config: cfg.marketAuthority,
+        vaultA: cfg.marketBaseVault,
+        vaultB: cfg.marketQuoteVault,
+        extra: cfg.eventHeap,
+        payA: book,
+        payB: book,
+        more: [cfg.oracleA ?? programId, cfg.oracleB ?? programId],
+        mints: [cfg.baseMint, cfg.quoteMint],
+      };
+    }
     default:
       return fail(`no slot for venue ${venue}`);
   }
+}
+
+/** sha256("account:TickArrayBitmapExtension")[..8]. */
+const BITMAP_EXTENSION = "3c9624db61808b99";
+/**
+ * A slot's accounts past its nine, where the venue takes more: a Raydium-layout pool's tick-array
+ * bitmap extension, when it has one; Invariant's program authority.
+ */
+async function moreOf({ venue, pool }) {
+  const programId = PROGRAMS[venue];
+  if (["raydium-clmm", "pancakeswap-clmm", "byreal", "stabble-clmm"].includes(venue)) {
+    const extension = await pda(programId, [
+      new TextEncoder().encode("pool_tick_array_bitmap_extension"),
+      getAddressCodec().encode(address(pool)),
+    ]);
+    const data = await loader(extension);
+    return data !== null && Buffer.from(data.subarray(0, 8)).toString("hex") === BITMAP_EXTENSION
+      ? { more: [extension] }
+      : {};
+  }
+  if (venue === "invariant")
+    return { more: [await pda(programId, [new TextEncoder().encode("Invariant")])] };
+  return {};
+}
+
+/** Every account a pool's slot names, and the mints it trades where its slot names none. */
+const slotAccounts = (pool) => [
+  pool.pool,
+  pool.config,
+  pool.vaultA,
+  pool.vaultB,
+  pool.extra,
+  ...pool.payA,
+  ...pool.payB,
+  ...(pool.more ?? []),
+  ...(pool.mints ?? []),
+];
+/** A pool as the manifest records it: its slot, without the mints read for the dump. */
+const recorded = ({ mints: _mints, ...pool }) => pool;
+
+if (cli.values.add) {
+  if (!existsSync(MANIFEST)) fail("no manifest.json to add to: --redump first");
+  const before = JSON.parse(readFileSync(MANIFEST, "utf8"));
+  const held = new Set(before.accounts.map((item) => item.address));
+  const newPrograms = programs.filter(
+    ({ entry }) => !before.programs.some((item) => item.name === entry.name),
+  );
+  const added = [];
+  const extended = [];
+  for (const spec of POOLS) {
+    const was = before.pools.find((item) => item.name === spec.name);
+    if (was === undefined) {
+      added.push({ spec, pool: { name: spec.name, venue: spec.venue, ...(await slotOf(spec)) } });
+    } else if (was.more === undefined && !spec.only) {
+      const { more } = await moreOf(spec);
+      if (more !== undefined) extended.push({ name: spec.name, venue: spec.venue, more });
+    }
+  }
+  // Each account the fixture lacks, in the directory of the first pool naming it; every file
+  // already on disk is kept as it is.
+  const venueOfNew = new Map();
+  const claimNew = (at, venue) => {
+    if (at === SYSTEM || Object.values(PROGRAMS).includes(at) || held.has(at)) return;
+    if (!venueOfNew.has(at)) venueOfNew.set(at, venue);
+  };
+  for (const { pool } of added) for (const at of slotAccounts(pool)) claimNew(at, pool.venue);
+  for (const { venue, more } of extended) for (const at of more) claimNew(at, venue);
+  const fresh = [...venueOfNew.keys()];
+  for (const at of fresh) read.delete(at);
+  await fetchAll(fresh);
+  const time = await rpc("getBlockTime", [slot]);
+  const accounts = fresh.flatMap((at) => {
+    const account = read.get(at);
+    return account === null
+      ? []
+      : [
+          {
+            address: at,
+            owner: account.owner,
+            lamports: account.lamports,
+            data: account.data,
+            venue: venueOfNew.get(at),
+            keep: true,
+          },
+        ];
+  });
+  addToVenueFixture(SDK, {
+    before,
+    programs: newPrograms,
+    // A pool kept as earlier fixtures hold it was not read now.
+    pools: added.map(({ spec, pool }) =>
+      spec.keep ? recorded(pool) : { ...recorded(pool), slot, unixTimestamp: time },
+    ),
+    extended: extended.map(({ name, more }) => ({ name, more, moreSlot: slot })),
+    accounts,
+  });
+  console.log(
+    `dump-svm-venues: added ${newPrograms.length} programs, ${added.length} pools, ` +
+      `${extended.length} pools' further accounts, ${accounts.length} accounts at slot ${slot}`,
+  );
+  process.exit(0);
 }
 
 const pools = [];
@@ -432,16 +644,10 @@ claim(
 );
 for (const [index, pool] of pools.entries()) {
   if (POOLS[index].only) kept.add(pool.pool);
-  for (const at of [
-    pool.pool,
-    pool.config,
-    pool.vaultA,
-    pool.vaultB,
-    pool.extra,
-    ...pool.payA,
-    ...pool.payB,
-  ])
+  for (const at of slotAccounts(pool)) {
     claim(at, pool.venue);
+    if (POOLS[index].keep) kept.add(at);
+  }
 }
 const wanted = new Set(venueOf.keys());
 // Read them all again at one slot at least as late as the last decoder read, so the pools, their
@@ -466,7 +672,7 @@ for (const at of wanted) {
 
 writeVenueFixture(SDK, {
   programs,
-  pools,
+  pools: pools.map(recorded),
   accounts,
   slot,
   unixTimestamp: time,
