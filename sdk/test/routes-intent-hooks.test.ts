@@ -198,6 +198,7 @@ ${hop(`
     after: [
       () => Erc20.ERC20(USDC).approve(${SPENDER}, 0),
       () => IERC20.at(${HOOK}).approve(${SPENDER}, 9),
+      () => evm.call(${HOOK}, 11, hex\`\`),
     ],`)}`,
     );
     const [intent] = await published(program);
@@ -236,10 +237,11 @@ ${hop(`
         }),
         0n,
       ],
+      [getAddress(HOOK), "0x", 11n],
     ]);
-    // The solver brings the cook's fee and what the hooks send; the delivery is what `receive`
-    // names, and nothing for the hooks.
-    expect(intent!.route.nativeAmount).toBe(INTENTS.executionFee + 7n);
+    // The solver brings the cook's fee and every hook's value, before and after alike; the
+    // delivery is what `receive` names, and nothing for the hooks.
+    expect(intent!.route.nativeAmount).toBe(INTENTS.executionFee + 7n + 11n);
     expect(
       intent!.route.tokens.map((t) => [getAddress(`0x${t.token.slice(-40)}`), t.amount]),
     ).toEqual([[usdc, 1_000_000n]]);
