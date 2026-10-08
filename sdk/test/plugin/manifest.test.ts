@@ -22,8 +22,8 @@ describe("plugin manifest (Layer C)", () => {
   // An entry that is NOT resolvable on the route path (e.g. an npm package a consumer may not have
   // installed) would make every route throw `failed to import module "..."`, so this list must only
   // ever name modules the SDK can resolve itself.
-  it("declares @sauce/token as the default ambient module", () => {
-    expect(loadPlugin().ambient).toEqual(["@sauce/token"]);
+  it("declares @sauce/token and @sauce/swap as the default ambient modules", () => {
+    expect(loadPlugin().ambient).toEqual(["@sauce/token", "@sauce/swap"]);
   });
 
   describe("nameParity matches what the compiler actually implements", () => {

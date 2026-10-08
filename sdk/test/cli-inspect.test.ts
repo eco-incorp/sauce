@@ -150,6 +150,14 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
           "balanceOf(token: Address, account: Account): Uint256",
         ]),
       },
+      // The routed swaps a chain has: KyberSwap's and eco-swap's on an EVM chain.
+      {
+        specifier: "@sauce/swap",
+        functions: [
+          "kyberSwap(tokenIn, tokenOut, amountIn, minOut)",
+          "ecoSwap(tokenIn, tokenOut, amountIn, minOut)",
+        ],
+      },
     ]);
     // Solana: its mints as 32-byte keys, no EVM contracts, the SVM arm's functions.
     const solana = sourceGlobals("solana");
@@ -169,6 +177,13 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
     expect(solana.modules[0]!.functions).toContain(
       "transfer(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void",
     );
+    expect(solana.modules[1]).toEqual({
+      specifier: "@sauce/swap",
+      functions: [
+        "jupiterSwap(tokenIn, tokenOut, amountIn, minOut)",
+        "ecoSwap(tokenIn, tokenOut, amountIn, minOut)",
+      ],
+    });
   });
 
   it("names every method's parameters, struct fields included", () => {

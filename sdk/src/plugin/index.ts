@@ -12,10 +12,10 @@ import manifest from "./manifest.json" with { type: "json" };
  * chain, protocol, and token addresses. `chainAmbient()` supplies library module specifiers whose
  * exports become available without imports.
  *
- * The default ambient module is `@sauce/token`. `compileSauceProgram`, every intent body and the
- * internal route builder merge this list with caller-supplied modules; direct `compileSauceRoute`
- * uses only the caller's list. `rs-compile.ts` resolves the
- * token module to the SDK's packaged `std/token` sources. New ambient modules must likewise be
+ * The default ambient modules are `@sauce/token` and `@sauce/swap` (`kyberSwap`, `jupiterSwap`,
+ * `ecoSwap`). `compileSauceProgram`, every intent body and the internal route builder merge this
+ * list with caller-supplied modules; direct `compileSauceRoute` uses only the caller's list.
+ * `rs-compile.ts` resolves each to the SDK's packaged `std/` sources. New ambient modules must likewise be
  * resolvable by the SDK because a missing module causes route compilation to fail.
  *
  * The module exposes function forms such as `approve(token, spender, amount)`. SDK route rewriting

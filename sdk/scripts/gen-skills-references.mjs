@@ -848,11 +848,23 @@ function renderGlobals(data) {
     "SafeERC20: a token that returns nothing works, and one that returns `false` reverts.",
     "",
   );
-  for (const module of globals.functions) {
-    tokens.push(module.kind === "evm" ? "On EVM chains:" : "On Solana:", "");
-    for (const fn of module.functions) tokens.push(`- \`${fn}\``);
-    tokens.push("");
-  }
+  const listFunctions = (specifier) => {
+    for (const module of globals.functions.filter((one) => one.specifier === specifier)) {
+      tokens.push(module.kind === "evm" ? "On EVM chains:" : "On Solana:", "");
+      for (const fn of module.functions) tokens.push(`- \`${fn}\``);
+      tokens.push("");
+    }
+  };
+  listFunctions("@sauce/token");
+  tokens.push(
+    "## Swap functions",
+    "",
+    "Every program can call these `@sauce/swap` functions with no import: a swap along a route a",
+    "service builds while the program compiles, returning the amount of `tokenOut` that reached the",
+    "Pot and reverting below `minOut`.",
+    "",
+  );
+  listFunctions("@sauce/swap");
 
   const protocols = [
     HEADER,

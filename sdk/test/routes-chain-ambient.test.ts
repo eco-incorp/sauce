@@ -28,9 +28,9 @@ describe("chainAmbient", () => {
   // resolvable because the SDK serves its own copy (`embedded/resolve.ts`) whatever the caller
   // resolves. The default-path test at the bottom of this file proves an UNUSED
   // ambient module leaves bytecode untouched.
-  it("is ['@sauce/token'] for every chain — the token stdlib is the default ambient module", () => {
-    expect(chainAmbient(requireChain("base"))).toEqual(["@sauce/token"]);
-    expect(chainAmbient(requireChain("solana"))).toEqual(["@sauce/token"]);
+  it("is ['@sauce/token', '@sauce/swap'] for every chain — the token and swap stdlib", () => {
+    expect(chainAmbient(requireChain("base"))).toEqual(["@sauce/token", "@sauce/swap"]);
+    expect(chainAmbient(requireChain("solana"))).toEqual(["@sauce/token", "@sauce/swap"]);
   });
 });
 

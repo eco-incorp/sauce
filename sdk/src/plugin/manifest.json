@@ -1,5 +1,5 @@
 {
-  "ambient": ["@sauce/token"],
+  "ambient": ["@sauce/token", "@sauce/swap"],
   "nameParity": {
     "throw": "revert"
   }
