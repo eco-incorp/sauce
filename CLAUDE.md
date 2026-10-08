@@ -702,7 +702,7 @@ or overflow at the default clock), and the boot keeps each fixture account's rec
 read their stake pool program's ProgramData, which loading the program replaces with LiteSVM's own:
 its case's `fabricate` writes the captured header back with the program's ELF behind it. A venue
 `@sauce/router` has no function for (One Intro, BisonFi, the Sanctum stake pools: a Pot cannot swap
-there; WOOFi: no provable swap) has `data`/`cpi` null in `ROUTER_SVM_VENUES`, and where its
+there; WOOFi, Metric: no provable swap) has `data`/`cpi` null in `ROUTER_SVM_VENUES`, and where its
 instruction lands, the suite's `WALLET_ONLY` cases send it from a wallet, built from
 `routerSvmAccounts` and `routerSvmDataTemplate` alone.
 

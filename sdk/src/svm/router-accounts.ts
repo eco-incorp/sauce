@@ -393,12 +393,19 @@ export const ROUTER_SVM_VENUES = {
     data: "solfiV1Data",
     cpi: "solfiV1Cpi",
   },
+  archer: {
+    program: "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+    data: "archerData",
+    cpi: "archerCpi",
+  },
   // `@sauce/router` has no function for these, only their account order and data template:
   // - a Pot cannot send their swap: One Intro requires its signer owned by the System program,
   //   BisonFi a signature from the authorization account its routing program signs for, and a
   //   Sanctum stake pool's deposit takes native SOL from its signer;
   // - WOOFi's keepers stopped on 2026-04-20, and on the one pool state captured its program
-  //   returns without moving either token, so no swap of it can be proven.
+  //   returns without moving either token, so no swap of it can be proven;
+  // - Metric's oracle refuses its price as stale (its error 20, on mainnet itself on 2026-10-07),
+  //   so no swap of it can be proven either.
   "one-intro-swap": {
     program: "DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm",
     data: null,
@@ -406,6 +413,11 @@ export const ROUTER_SVM_VENUES = {
   },
   woofi: {
     program: "WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb",
+    data: null,
+    cpi: null,
+  },
+  metric: {
+    program: "Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j",
     data: null,
     cpi: null,
   },
@@ -482,6 +494,8 @@ export interface RouterSvmAccountOptions {
   readonly assets?: number;
   /** Jupiter Perpetuals' JLP mint: how many custodies its pool holds, each a custody and its oracle
    *  at the end; 6 when absent. */
+  /** Archer: how many makers the swap takes, each at the end; 1 when absent. */
+  readonly makers?: number;
   readonly custodies?: number;
   /** Sanctum Infinity: how many accounts the paid and the bought token's calculator takes, 1 for
    *  wrapped SOL's and 5 for a stake pool's; 5 when absent. */
@@ -782,6 +796,8 @@ const EXACT_IN_VENUES = [
   "sanctum-stake-pool",
   "sanctum-stake-pool-2",
   "sanctum-stake-pool-3",
+  "archer",
+  "metric",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1787,6 +1803,47 @@ function exactInAccountOrder(
         w("poolMint"),
         r("systemProgram"),
         r("tokenProgram"),
+      ];
+    case "archer": {
+      // Token A is the market's base, B its quote; `aToB` sells the base. The authority's quote
+      // account comes twice.
+      const count = options.makers ?? 1;
+      if (!Number.isInteger(count) || count < 1) throw new Error(`makers is a count, not ${count}`);
+      const quote = aToB ? w("recipient") : w("source");
+      return [
+        PAYER,
+        w("pool"),
+        quote,
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        aToB ? w("source") : w("recipient"),
+        quote,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        ...Array.from({ length: count }, (_, i) => w(`maker${i}`)),
+      ];
+    }
+    case "metric":
+      // The swap prices off its oracle, by a CPI to `oracleProgram` on `oracleConfig` and
+      // `priceAccount`.
+      return [
+        AUTHORITY,
+        w("pool"),
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        ownerA,
+        ownerB,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("systemProgram"),
+        r("program"),
+        r("oracleProgram"),
+        w("oracleConfig"),
+        w("priceAccount"),
       ];
     default: {
       const unknown: never = venue;

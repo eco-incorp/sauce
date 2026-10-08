@@ -7993,3 +7993,52 @@ export function solfiV1Cpi(
   require(held - left <= amountIn, "debit");
   return held - left;
 }
+
+// Archer, Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy: `swap` against its market's makers' quotes.
+// Its makers vary in number, so it has only its `Cpi` and `Data` forms.
+// Archer's `swap` of `amountIn`, `minOut` its least out: selling the base token (`paysBase`) in whole
+// base lots of `baseLot` each, buying it in the quote token's own units, of which it spends the whole
+// lots' cost.
+export function archerData(
+  amountIn: Uint256,
+  baseLot: Uint256,
+  minOut: Uint256,
+  paysBase: bool,
+): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const amount = paysBase ? amountIn / baseLot : amountIn;
+  // The amount, the floor, then the side (1 sells the base token) and a zero byte.
+  const word = (amount & 0xffffffffffffffff) | (minOut << 64) | ((paysBase ? 1 : 0) << 128);
+  const swap = hex`0f`;
+  return swap.concat(word.toBytesLe(18));
+}
+
+// `accounts`: the authority (writable), the market (writable), the authority's quote token account,
+// the base and quote mints, the market's base and quote vaults (writable), the authority's base and
+// quote token accounts (the paying one among them), the base and quote mints' token programs, then
+// each maker (writable).
+export function archerCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  baseLot: Uint256,
+  minOut: Uint256,
+  paysBase: bool,
+): Uint256 {
+  require(program.address ==
+    0x926f0255ffab30ed280f30883c8dcaf28cf91c32f965d74ea8aeb152888409d8, "not an Archer market");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const amount = paysBase ? amountIn / baseLot : amountIn;
+  const word = (amount & 0xffffffffffffffff) | (minOut << 64) | ((paysBase ? 1 : 0) << 128);
+  const swap = hex`0f`;
+  const data = swap.concat(word.toBytesLe(18));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}

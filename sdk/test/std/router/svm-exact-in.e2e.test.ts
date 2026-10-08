@@ -59,6 +59,7 @@ import type { Compiled, CpiAccount, SlotAccount, Trade } from "./exact-in-harnes
 import { svmExactInArguments } from "./harness.js";
 
 interface Vector {
+  amountPatch?: { patchDivisorIn?: string };
   program: Address;
   pay: Address;
   buy: Address;
@@ -114,6 +115,7 @@ const bakedFor = (base: string, trade: Case, vector?: Vector): Record<string, st
       if (trade.dir === undefined) throw new Error(`${base}: the case names its direction`);
       baked[name] = String(trade.dir);
     }
+  if (args.includes("baseLot")) baked.baseLot = String(vector!.cfg.baseLotSize);
   if (args.includes("instrId")) {
     const instr = vector!.prefix.slice(8, 16).match(/../g)!.reverse().join("");
     baked.instrId = String(parseInt(instr, 16));
@@ -1947,7 +1949,8 @@ const expectedCall = (
   user: { owner: Address; in: Address; out: Address },
   refs: Record<string, Address> = {},
 ): { data: string; accounts: Address[] } => ({
-  data: `${vector.prefix}${le64(amountIn)}${vector.suffix}`,
+  // Archer's data counts whole base lots selling base.
+  data: `${vector.prefix}${le64(amountIn / BigInt(vector.amountPatch?.patchDivisorIn ?? 1))}${vector.suffix}`,
   accounts: vector.accounts.map((account) => {
     if (account.user !== undefined) return user[account.user as "owner" | "in" | "out"];
     if (account.address !== undefined) return account.address;
@@ -2278,12 +2281,16 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
     clock: bigint;
     atSlot?: bigint;
     atEpoch?: { epoch: bigint; start: bigint };
+    /** The floor the recipes' instruction writes, which the `Cpi` and `Data` forms are given: 1. */
+    floor?: bigint;
     fabricate?: (harness: EngineHarness) => Address[];
     /** Transactions to send before the state is frozen, and the accounts they create. */
     prepare?: (harness: EngineHarness) => Promise<Address[]>;
     cases: (Omit<Trade, "slot"> & {
       vector: string;
       received?: bigint;
+      /** What the swap spends, where it is not `amountIn`: Archer's whole lots, buying base. */
+      paid?: bigint;
       ata?: boolean;
       dir?: boolean;
     })[];
@@ -2817,6 +2824,66 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         },
       ],
     },
+    {
+      name: "archer",
+      programs: ["archer"],
+      dirs: ["archer-usdv"],
+      clock: 1_790_409_788n,
+      atSlot: 450_615_056n,
+      floor: 0n,
+      cases: [
+        {
+          vector: "archer:BZDU:baseIn",
+          dir: true,
+          pay: VECTORS["archer:BZDU:baseIn"]!.pay,
+          buy: USDC,
+          amountIn: 100_000_000n,
+          received: 99_999_000n,
+          payProgram: TOKEN_2022,
+          authorityWritable: true,
+        },
+        {
+          vector: "archer:BZDU:quoteIn",
+          dir: false,
+          pay: USDC,
+          buy: VECTORS["archer:BZDU:baseIn"]!.pay,
+          amountIn: 100_000_000n,
+          received: 99_000_000n,
+          paid: 99_000_990n,
+          buyProgram: TOKEN_2022,
+          authorityWritable: true,
+        },
+      ],
+    },
+    {
+      name: "archer",
+      programs: ["archer"],
+      dirs: ["archer-sol"],
+      clock: 1_790_409_789n,
+      atSlot: 450_615_059n,
+      floor: 0n,
+      cases: [
+        {
+          vector: "archer:u8tn:baseIn",
+          dir: true,
+          pay: WSOL,
+          buy: USDC,
+          amountIn: 100_000_000n,
+          received: 12_059_300n,
+          authorityWritable: true,
+        },
+        {
+          vector: "archer:u8tn:quoteIn",
+          dir: false,
+          pay: USDC,
+          buy: WSOL,
+          amountIn: 100_000_000n,
+          received: 828_000_000n,
+          paid: 99_906_480n,
+          authorityWritable: true,
+        },
+      ],
+    },
   ];
 
   describe.each(CPI_VENUES)("$name", (venue) => {
@@ -2851,7 +2918,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         const list = cpiFromVector(vector, refs);
         const at = {
           ...trade,
-          minOut: 1n,
+          minOut: venue.floor ?? 1n,
           slot: [],
           cpi: { program: vector.program, accounts: list },
         };
@@ -2867,6 +2934,9 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             instruction("hand", venue.name, list.length, {
               prefix: vector.prefix,
               suffix: vector.suffix,
+              ...(vector.amountPatch?.patchDivisorIn === undefined
+                ? {}
+                : { divisor: vector.amountPatch.patchDivisorIn }),
             }),
           ],
         ];
@@ -2876,8 +2946,8 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             trade: trade.vector,
             form,
             received: String(trade.received ?? outcome.received),
-            paid: String(trade.amountIn),
-            returned: String(trade.amountIn),
+            paid: String(trade.paid ?? trade.amountIn),
+            returned: String(trade.paid ?? trade.amountIn),
           });
           expect(outcome.received > 0n).toBe(true);
           expect(outcome.call).toEqual({

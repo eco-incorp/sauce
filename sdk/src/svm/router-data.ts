@@ -37,7 +37,8 @@ export interface RouterSvmDataOptions {
   readonly ticks?: bigint;
   /** Phoenix: the market's lot size of the token paid. */
   readonly lot?: bigint;
-  /** OpenBook v2: the market's base and quote lot sizes. */
+  /** OpenBook v2: the market's base and quote lot sizes. Archer: its base lot size, which divides
+   *  the amount when it sells the base token. */
   readonly baseLot?: bigint;
   readonly quoteLot?: bigint;
   /** OpenBook v2: the order's price in lots (0, or absent: a market order), and the most resting
@@ -126,6 +127,8 @@ interface ExactInFields {
   readonly aToB: boolean;
   readonly floor: string;
   readonly field: (name: ExactInField, width: number) => string;
+  /** The market's base lot size, checked present and above 0. */
+  readonly baseLot: () => bigint;
 }
 
 /** An exact-input venue's data, as `<venue>Data` writes it. */
@@ -134,8 +137,11 @@ interface ExactInData {
   readonly takes: readonly (keyof RouterSvmDataOptions)[];
   /** Why it swaps only the first way, where it does. */
   readonly oneWay?: string;
-  /** The data before the amount and after it, in hex. */
-  readonly data: (fields: ExactInFields) => readonly [prefix: string, suffix: string];
+  /** The data before the amount and after it, in hex, and what the amount is divided by, 1 when
+   *  absent. */
+  readonly data: (
+    fields: ExactInFields,
+  ) => readonly [prefix: string, suffix: string, divisor?: bigint];
 }
 
 const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
@@ -292,6 +298,16 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
     oneWay: "a Sanctum stake pool only deposits here",
     data: () => ["0e", ""],
   },
+  archer: {
+    takes: ["baseLot", "minOut"],
+    // Selling the base token, the amount is in whole base lots.
+    data: ({ aToB, floor, baseLot }) => ["0f", `${floor}${bit(aToB)}00`, aToB ? baseLot() : 1n],
+  },
+  metric: {
+    takes: ["minOut"],
+    // Exact input, the side (1 pays token A), then the floor as a u128.
+    data: ({ aToB, floor }) => ["01", `01${bit(aToB)}${floor}${"00".repeat(8)}`],
+  },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>
@@ -316,8 +332,18 @@ const exactInTemplate = (
       le(within(venue, name, value, max, width === 1 ? "byte" : `${8 * width} bits`), width),
     );
   };
-  const [prefix, suffix] = data({ aToB: options.aToB, floor: toHex(le(minOut, 8)), field });
-  return { prefix: hex(prefix), suffix: hex(suffix), divisor: 1n };
+  const baseLot = (): bigint => {
+    if (options.baseLot === undefined || options.baseLot <= 0n)
+      throw new Error(`${venue}'s swap takes the market's base lot size`);
+    return options.baseLot;
+  };
+  const [prefix, suffix, divisor = 1n] = data({
+    aToB: options.aToB,
+    floor: toHex(le(minOut, 8)),
+    field,
+    baseLot,
+  });
+  return { prefix: hex(prefix), suffix: hex(suffix), divisor };
 };
 
 /**

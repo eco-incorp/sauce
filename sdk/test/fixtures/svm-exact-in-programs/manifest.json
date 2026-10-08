@@ -468,6 +468,12 @@
       "programId": "WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb",
       "file": "woofi.so.gz",
       "sha256": "7fab739a7f3334fb57f961fc5038081a89f1f0c75452ab43bdf6c9fff68467a0"
+    },
+    {
+      "name": "archer",
+      "programId": "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+      "file": "archer.so.gz",
+      "sha256": "682854dc48318ec900a81b774e3008b167c710d86e8ff7945268c08a8115252b"
     }
   ]
 }

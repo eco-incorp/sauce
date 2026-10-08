@@ -640,6 +640,7 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
     perpsJlpMint: PERPS_JLP_PROGRAM_ID,
     sanctumInfinity: SANCTUM_INFINITY_PROGRAM_ID,
     solfiV1: SOLFI_V1_PROGRAM_ID,
+    archer: "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
   };
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
   const carries = (code: string) =>

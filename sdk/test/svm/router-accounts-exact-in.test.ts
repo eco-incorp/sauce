@@ -829,6 +829,33 @@ ROLES.sanctumStakePool = () => ({
   tokenProgram: "tokenProgram",
 });
 
+ROLES.archer = () => ({
+  pool: "mkt",
+  mintA: "mA",
+  mintB: "mB",
+  vaultA: "vA",
+  vaultB: "vB",
+  tokenProgramA: "tpA",
+  tokenProgramB: "tpB",
+  maker0: "mk0",
+  maker1: "mk1",
+});
+
+ROLES.metric = () => ({
+  pool: "pool",
+  mintA: "ma",
+  mintB: "mb",
+  vaultA: "va",
+  vaultB: "vb",
+  tokenProgramA: "tpa",
+  tokenProgramB: "tpb",
+  systemProgram: "sys",
+  program: "self",
+  oracleProgram: "oracleProg",
+  oracleConfig: "oracleConfig",
+  priceAccount: "price",
+});
+
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -898,6 +925,8 @@ const FAMILY: Record<string, string> = {
   "sanctum-stake-pool": "sanctumStakePool",
   "sanctum-stake-pool-2": "sanctumStakePool",
   "sanctum-stake-pool-3": "sanctumStakePool",
+  archer: "archer",
+  metric: "metric",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */
@@ -931,6 +960,9 @@ describe("routerSvmAccountOrder: the exact-input venues, as sauce-recipes builds
       aToB: aToB!,
       ...(vector.venue === "pumpswap"
         ? { poolV2: vector.accounts.some((a) => roleOf(a) === "pv2") }
+        : {}),
+      ...(vector.venue === "archer"
+        ? { makers: vector.accounts.filter((a) => /^mk\d+$/.test(roleOf(a) ?? "")).length }
         : {}),
       ...(vector.venue === "perps-jlp-mint"
         ? {

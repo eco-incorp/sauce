@@ -685,11 +685,12 @@ of its fee beneficiaries.
 around the amount when the program is generated, as it does a limit venue's: `prefix ‖
 u64le(amountIn) ‖ suffix`, its divisor 1, the bytes `<venue>Data` writes for the same fields. Its
 options are the account order's `aToB`, `minOut` where the swap carries a floor, Perena's `inIndex`
-and `outIndex`, Deriverse's `instrId`, and Sanctum Infinity's `inCalcAccounts`, `outCalcAccounts`,
-`inIndex` and `outIndex`. It throws a RangeError for a floor past 64 bits, an index past its field
-or an instrument id past 32 bits, and refuses an option the venue's swap does not carry and the way
-a one-way venue does not swap, as its account order does. The program pays for none of it: those
-bytes cost what the recipes' hand-built data does, the "by hand" column below.
+and `outIndex`, Deriverse's `instrId`, Sanctum Infinity's `inCalcAccounts`, `outCalcAccounts`,
+`inIndex` and `outIndex`, and Archer's `baseLot`, the divisor when it sells the base token. It
+throws a RangeError for a floor past 64 bits, an index past its field or an instrument id past 32
+bits, and refuses an option the venue's swap does not carry and the way a one-way venue does not
+swap, as its account order does. The program pays for none of it: those bytes cost what the recipes'
+hand-built data does, the "by hand" column below.
 
 `trader` and `recipient` are the same as the limit functions take, `[authority, source, payMint,
 buyMint, tokenProgram, token2022, memo]`, with the recipient the token account the output lands in.
@@ -779,7 +780,8 @@ config. The liquid-unstake vault pays wrapped SOL into a native wrapped-SOL acco
 pool's deposit takes native SOL from its signer, which a Pot cannot pay: the stake pools are among
 the instruction-only venues below.
 
-Sixteen venues take more accounts in their swap than a function can list. A function other than
+Seventeen venues take more accounts in their swap than a function can list, or a number of them
+that varies. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
 forms, on the list the caller's `main` builds:
 
@@ -801,6 +803,7 @@ forms, on the list the caller's `main` builds:
 | `perpsJlp`         | Jupiter Perpetuals           | `PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu`  |
 | `perpsJlpMint`     | Jupiter Perpetuals' JLP mint | `PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu`  |
 | `sanctumInfinity`  | Sanctum Infinity             | `5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx` |
+| `archer`           | Archer                       | `Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy` |
 
 A PumpSwap buy takes the authority's volume accumulator, and it has to exist already. A Pot can't
 pay to create it, because the System program won't move lamports out of an account that holds data.
@@ -828,10 +831,16 @@ pool, the stake pool's program and that program's data, 1 account or 5 (`inCalcA
 accounts are named for the trade, `mintIn` and `mintOut`, `custodyIn` and `custodyOut`, and their
 order takes no direction; the JLP mint refuses the other way.
 
+Archer swaps against its market's makers' quotes, and its list ends with them, `makers` of them. It
+sells the base token in whole base lots: `archerData(amountIn, baseLot, minOut, paysBase)` takes the
+market's base lot size and writes `amountIn` in lots. It buys the base token spending only the whole
+lots' cost in the quote token, which can be less than `amountIn`; `archerCpi` returns what it spent.
+It writes the authority, so it is attached writable.
+
 **Instruction only.** `routerSvmAccountOrder` and `routerSvmDataTemplate` also give the swap of
 venues `@sauce/router` has no function for, for a program that can send it; `ROUTER_SVM_VENUES`
-gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three, and WOOFi's swap
-cannot be proven:
+gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three, and WOOFi's and
+Metric's swaps cannot be proven:
 
 | Venue (`ROUTER_SVM_VENUES`)      | Program                                                                                                                                     | Why                                                                                                                   | Data options     |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------- |
@@ -839,6 +848,7 @@ cannot be proven:
 | `bisonfi`                        | `BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi`                                                                                              | it requires a signature from an authorization account off the curve, which only its routing program signs for         | `aToB`, `minOut` |
 | `sanctum-stake-pool`, `-2`, `-3` | `SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy`, `SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY`, `SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn` | a deposit (`DepositSol`, the only way here) takes native SOL from its signer                                          | none             |
 | `woofi`                          | `WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb`                                                                                               | its keepers stopped on 2026-04-20, and on the one pool state captured its program returns without moving either token | `minOut`         |
+| `metric`                         | `Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j`                                                                                              | its oracle refuses its price as stale (its error 20, on mainnet itself on 2026-10-07)                                 | `aToB`, `minOut` |
 
 One Intro's pool names its token 0 and 1 vaults `vaultA` and `vaultB`; a swap paying token A takes
 the fee accounts `feeA0` and `feeB0`, one paying B `feeA1` and `feeB1`. WOOFi's token A is the pool's
@@ -846,10 +856,11 @@ base token, and `aToB` sells it; its order takes the quote token's pool, price u
 second time, and the authority again, unsigned, as the rebate's recipient. A stake pool's
 `referrerFeeAccount` may be its `managerFeeAccount`, as the recipes send it.
 
-**A swap spends exactly `amountIn`**, with three exceptions. The Token Swap program and its forks,
+**A swap spends exactly `amountIn`**, with four exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference
 is a few units, and it stays in `source`; a `Cpi` form returns what was actually paid. A Fluxbeam or
-Dexlab mint with a transfer fee keeps the fee out of what the pool receives.
+Dexlab mint with a transfer fee keeps the fee out of what the pool receives. Archer, buying its base
+token, spends the whole lots' cost and leaves the rest of `amountIn`.
 
 **`minOut`** goes into the venue's own floor where its swap takes one, so the venue refuses less
 itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` and `try<Venue>` (Denali's and
@@ -956,6 +967,7 @@ because an account list passed to a function is built as an array first, where o
 | Jupiter Perpetuals                |  11,388 |        14,668 |       18,816 |           |              |       113,112 |
 | Jupiter Perpetuals' JLP mint      |  16,018 |        19,286 |       23,434 |           |              |       126,354 |
 | Sanctum Infinity                  |  21,789 |        32,843 |       36,527 |           |              |        61,642 |
+| Archer                            |  14,644 |        20,236 |       24,835 |           |              |        22,314 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own
