@@ -657,15 +657,18 @@ raydiumCpSwapData(amountIn, minOut): bytes
   venue's listed below. Otherwise it is `<venue>`.
 
 `minOut` in `…Data` and `…Cpi` is the venue's own least out, written as given; a venue whose swap
-carries none takes no `minOut` there (Bonkswap, Guacswap, the Saber decimal wrapper, and the staking
-and vault venues but Helium's treasury). Where the data says the direction, they take it as their
-last argument: `aToB` paying the pool's first token (token 0 or A, the decimal wrapper's underlying
-token, Scale AMM's buy), `paysBase` the base token (Aldrin, MetaDAO futarchy, PumpSwap's sell),
-`xToY` token X (Bonkswap, Guacswap). At the staking and vault venues that swap both ways, `aToB` is
-the stake or deposit, and a venue that swaps one way takes no direction. Perena's take the two
-tokens' indices among the pool's ten, `perenaData(amountIn, inIndex, outIndex, minOut)`. A `minOut`
-past 64 bits, a Perena index past its byte or a Deriverse instrument id past 32 bits reverts;
-`amountIn` is written as its low 64 bits.
+carries none takes no `minOut` there (Bonkswap, Guacswap, the Saber decimal wrapper, M0's swap, and
+the staking and vault venues but Helium's treasury). Where the data says the direction, they take it
+as their last argument: `aToB` paying the pool's first token (token 0 or A, the decimal wrapper's
+underlying token, Scale AMM's buy), `paysBase` the base token (Aldrin, MetaDAO futarchy, PumpSwap's
+sell), `xToY` token X (Bonkswap, Guacswap). At the staking and vault venues that swap both ways,
+`aToB` is the stake or deposit, and a venue that swaps one way takes no direction. Perena's take the
+two tokens' indices among the pool's ten, `perenaData(amountIn, inIndex, outIndex, minOut)`, and
+Sanctum Infinity's each token's calculator's account count and its index in the pool's list,
+`sanctumInfinityData(amountIn, inCalcAccounts, outCalcAccounts, inIndex, outIndex, minOut)`. A
+`minOut` past 64 bits, a Perena index past its byte, a Deriverse instrument id past 32 bits, or a
+Sanctum Infinity count past its byte or index past 32 bits reverts; `amountIn` is written as its low
+64 bits.
 
 **The account order is the SDK's.** `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder(venue,
 { aToB })` names each account of a venue's swap in order, with whether the instruction writes it and
@@ -682,10 +685,11 @@ of its fee beneficiaries.
 around the amount when the program is generated, as it does a limit venue's: `prefix ‖
 u64le(amountIn) ‖ suffix`, its divisor 1, the bytes `<venue>Data` writes for the same fields. Its
 options are the account order's `aToB`, `minOut` where the swap carries a floor, Perena's `inIndex`
-and `outIndex`, and Deriverse's `instrId`. It throws a RangeError for a floor past 64 bits, an index
-past its byte or an instrument id past 32 bits, and refuses an option the venue's swap does not
-carry and the way a one-way venue does not swap, as its account order does. The program pays for
-none of it: those bytes cost what the recipes' hand-built data does, the "by hand" column below.
+and `outIndex`, Deriverse's `instrId`, and Sanctum Infinity's `inCalcAccounts`, `outCalcAccounts`,
+`inIndex` and `outIndex`. It throws a RangeError for a floor past 64 bits, an index past its field
+or an instrument id past 32 bits, and refuses an option the venue's swap does not carry and the way
+a one-way venue does not swap, as its account order does. The program pays for none of it: those
+bytes cost what the recipes' hand-built data does, the "by hand" column below.
 
 `trader` and `recipient` are the same as the limit functions take, `[authority, source, payMint,
 buyMint, tokenProgram, token2022, memo]`, with the recipient the token account the output lands in.
@@ -773,24 +777,28 @@ config. The liquid-unstake vault pays wrapped SOL into a native wrapped-SOL acco
 pool's deposit takes native SOL from the authority, which a Pot cannot pay, so the Sanctum stake
 pools are not here.
 
-Twelve venues take more accounts in their swap than a function can list. A function other than
+Sixteen venues take more accounts in their swap than a function can list. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
 forms, on the list the caller's `main` builds:
 
-| Functions          | Venue             | Program                                        |
-| ------------------ | ----------------- | ---------------------------------------------- |
-| `scaleAmm`         | Scale AMM         | `SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA`  |
-| `pumpswap`         | PumpSwap          | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
-| `bonkswap`         | Bonkswap          | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
-| `guacswap`         | Guacswap          | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
-| `meteoraDlmm`      | Meteora DLMM      | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  |
-| `sarosDlmm`        | Saros DLMM        | `1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE`  |
-| `raydiumLaunchlab` | Raydium LaunchLab | `LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj`  |
-| `runnerRodeo`      | Runner Rodeo      | `runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA`  |
-| `scaleVmm`         | Scale vMM         | `SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa`  |
-| `jupiterLendEarn`  | Jupiter Lend Earn | `jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9`  |
-| `hylo`             | Hylo              | `HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn` |
-| `carrot`           | Carrot            | `CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s` |
+| Functions          | Venue                        | Program                                        |
+| ------------------ | ---------------------------- | ---------------------------------------------- |
+| `scaleAmm`         | Scale AMM                    | `SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA`  |
+| `pumpswap`         | PumpSwap                     | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
+| `bonkswap`         | Bonkswap                     | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
+| `guacswap`         | Guacswap                     | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
+| `meteoraDlmm`      | Meteora DLMM                 | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  |
+| `sarosDlmm`        | Saros DLMM                   | `1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE`  |
+| `raydiumLaunchlab` | Raydium LaunchLab            | `LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj`  |
+| `runnerRodeo`      | Runner Rodeo                 | `runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA`  |
+| `scaleVmm`         | Scale vMM                    | `SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa`  |
+| `jupiterLendEarn`  | Jupiter Lend Earn            | `jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9`  |
+| `hylo`             | Hylo                         | `HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn` |
+| `carrot`           | Carrot                       | `CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s` |
+| `mswap`            | M0 swap                      | `MSwapi3WhNKMUGm9YrxGhypgUEt7wYQH3ZgG32XoWzH`  |
+| `perpsJlp`         | Jupiter Perpetuals           | `PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu`  |
+| `perpsJlpMint`     | Jupiter Perpetuals' JLP mint | `PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu`  |
+| `sanctumInfinity`  | Sanctum Infinity             | `5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx` |
 
 A PumpSwap buy takes the authority's volume accumulator, and it has to exist already. A Pot can't
 pay to create it, because the System program won't move lamports out of an account that holds data.
@@ -806,6 +814,18 @@ one of its vault's assets and redeems it back; its list ends with each of the va
 account and oracle, `assets` of them, and it writes the authority and requires the authority's
 associated token accounts.
 
+M0's swap exchanges one of M's extension tokens for another one for one, unwrapping through the paid
+extension's program and wrapping through the bought one's. Jupiter Perpetuals swaps one of its JLP
+pool's tokens for another at their oracles' prices less the pool's fee, and refuses a price its
+keeper has let go stale; its JLP mint only mints, and its list ends with each of the pool's
+custodies and each custody's oracle, `custodies` of them. Sanctum Infinity swaps one of its pool's
+liquid staking tokens, or wrapped SOL, for another at their calculators' SOL values less the pool's
+fee: each token's calculator is its program, and a stake pool's is followed by its state, the stake
+pool, the stake pool's program and that program's data, 1 account or 5 (`inCalcAccounts` and
+`outCalcAccounts`). The pool of these four is a basket or a pair the way it is paid, so their
+accounts are named for the trade, `mintIn` and `mintOut`, `custodyIn` and `custodyOut`, and their
+order takes no direction; the JLP mint refuses the other way.
+
 **A swap spends exactly `amountIn`**, with three exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference
 is a few units, and it stays in `source`; a `Cpi` form returns what was actually paid. A Fluxbeam or
@@ -814,9 +834,9 @@ Dexlab mint with a transfer fee keeps the fee out of what the pool receives.
 **`minOut`** goes into the venue's own floor where its swap takes one, so the venue refuses less
 itself: as given in `…Data` and `…Cpi`, and at least 1 in `<venue>` and `try<Venue>` (Denali's and
 Hadron's as given there too, 0 included), which also hold what the recipient received to `minOut`
-and to at least 1. The Saber decimal wrapper, Bonkswap, Guacswap, TaurusFi, Riptide, Flint and the
-staking and vault venues but Helium's treasury have no floor of their own; for these, a `Data` or
-`Cpi` caller enforces the floor itself.
+and to at least 1. The Saber decimal wrapper, Bonkswap, Guacswap, TaurusFi, Riptide, Flint, M0's
+swap and the staking and vault venues but Helium's treasury have no floor of their own; for these, a
+`Data` or `Cpi` caller enforces the floor itself.
 
 **What each `try` form skips** before the swap:
 
@@ -911,6 +931,10 @@ because an account list passed to a function is built as an array first, where o
 | Jupiter Lend Earn                 |  16,776 |        19,336 |       23,976 |           |              |        47,871 |
 | Hylo                              |  10,573 |        12,716 |       17,356 |           |              |        65,961 |
 | Carrot                            |  16,187 |        18,747 |       23,387 |           |              |       232,557 |
+| M0 swap                           |  20,246 |        21,106 |       24,846 |           |              |       126,171 |
+| Jupiter Perpetuals                |  11,388 |        14,668 |       18,816 |           |              |       113,112 |
+| Jupiter Perpetuals' JLP mint      |  16,018 |        19,286 |       23,434 |           |              |       126,354 |
+| Sanctum Infinity                  |  21,789 |        32,843 |       36,527 |           |              |        61,642 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own

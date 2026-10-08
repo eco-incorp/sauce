@@ -7702,3 +7702,189 @@ export function carrotCpi(
   require(held - left <= amountIn, "debit");
   return held - left;
 }
+
+// M0's swap, MSwapi3WhNKMUGm9YrxGhypgUEt7wYQH3ZgG32XoWzH: `swap`, one of M's extension tokens for
+// another one for one, unwrapping through the paying extension's program and wrapping through the
+// buying one's. Its swap takes more accounts than a function can list, so it has only its `Cpi` and
+// `Data` forms.
+// M0's `swap` of `amountIn` of the paying extension's token. It carries no least out, and reads its
+// direction from its accounts.
+export function mswapData(amountIn: Uint256): bytes {
+  // The amount, then the remaining accounts' split: none, no mint has a transfer hook.
+  const word = amountIn & 0xffffffffffffffff;
+  const swap = hex`f8c69e91e17587c8`;
+  return swap.concat(word.toBytesLe(9));
+}
+
+// `accounts`: the authority, the program itself twice (no wrap or unwrap authority), the swap's
+// global, the paying and the buying extension's global and mint, M's mint, the paying and receiving
+// token accounts, the swap's M account, each extension's M vault authority, mint authority and M
+// vault, each extension's token program, M's, each extension's program and the System program: the
+// paying extension's first of each pair.
+export function mswapCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x053cf2a7380b11366172e37227a7650da1beebda70dc7f597eae9717258223be, "not an M swap");
+  const word = amountIn & 0xffffffffffffffff;
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(9));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Jupiter Perpetuals, PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu: `swap2`, one of the JLP pool's
+// tokens for another at their oracles' prices less the pool's fee. Its swap takes more accounts than
+// a function can list, so it has only its `Cpi` and `Data` forms.
+// Jupiter Perpetuals' `swap2` of `amountIn`, `minOut` its least out. It reads its direction from its
+// accounts.
+export function perpsJlpData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap2 = hex`414b3f4ceb5b5b88`;
+  return swap2.concat(word.toBytesLe(16));
+}
+
+// `accounts`: the authority, the paying and receiving token accounts, the transfer authority, the
+// perpetuals, the pool (writable), then the paid token's custody (writable), its Doves and Pythnet
+// price accounts and its token account (writable), the same four of the bought token, SPL Token, the
+// event authority and the program itself.
+export function perpsJlpCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x05b1f3caf19462ef8760f0abde75cd3d9ee31b3a32c620e894122e9c9b8145fa, "not a Jupiter Perpetuals pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap2 = hex`414b3f4ceb5b5b88`;
+  const data = swap2.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Jupiter Perpetuals' `addLiquidity2`, one of the JLP pool's tokens for JLP; it only mints. Its swap
+// takes more accounts than a function can list, so it has only its `Cpi` and `Data` forms.
+// `addLiquidity2` of `amountIn`, `minOut` its least JLP out, with no swap first.
+export function perpsJlpMintData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // The amount, the floor, then no amount to swap first.
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const add = hex`e4a24e1c46db7473`;
+  return add.concat(word.toBytesLe(17));
+}
+
+// `accounts`: the authority, the paying token account, the receiving JLP account, the transfer
+// authority, the perpetuals, the pool (writable), the paid token's custody (writable), its Doves and
+// Pythnet price accounts and its token account (writable), JLP's mint (writable), SPL Token, the event
+// authority, the program itself, then each of the pool's custodies and each one's oracle.
+export function perpsJlpMintCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x05b1f3caf19462ef8760f0abde75cd3d9ee31b3a32c620e894122e9c9b8145fa, "not a Jupiter Perpetuals pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const add = hex`e4a24e1c46db7473`;
+  const data = add.concat(word.toBytesLe(17));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Sanctum Infinity, 5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx: `swap_exact_in`, one of its pool's
+// liquid staking tokens (or wrapped SOL) for another at their calculators' SOL values less the pool's
+// fee. Its swap takes more accounts than a function can list, so it has only its `Cpi` and `Data`
+// forms.
+// Sanctum Infinity's `swap_exact_in` of `amountIn`: the number of accounts each token's calculator
+// takes (1 for wrapped SOL's, 5 for a stake pool's), each token's index in the pool's list, and
+// `minOut`, its least out.
+export function sanctumInfinityData(
+  amountIn: Uint256,
+  inCalcAccounts: Uint256,
+  outCalcAccounts: Uint256,
+  inIndex: Uint256,
+  outIndex: Uint256,
+  minOut: Uint256,
+): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require((inCalcAccounts | outCalcAccounts) <= 255 &&
+    (inIndex | outIndex) <= 0xffffffff, "index past its field");
+  // The instruction, the counts, the indices, the floor, then the amount.
+  const word =
+    0x17 |
+    (inCalcAccounts << 8) |
+    (outCalcAccounts << 16) |
+    (inIndex << 24) |
+    (outIndex << 56) |
+    (minOut << 88) |
+    ((amountIn & 0xffffffffffffffff) << 152);
+  return word.toBytesLe(27);
+}
+
+// `accounts`: the authority, the paid and bought mint, the paying and receiving token accounts, each
+// mint's token program, the pool state and the LST list (both writable), the paid and bought token's
+// reserves (writable), then the paid token's calculator program and its accounts, the bought
+// token's, the pricing program and its slab. A stake pool's calculator takes its state, the stake
+// pool, the stake pool's program and that program's data; wrapped SOL's takes none.
+export function sanctumInfinityCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  inCalcAccounts: Uint256,
+  outCalcAccounts: Uint256,
+  inIndex: Uint256,
+  outIndex: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x475fed1dc0fff39bbf237b19aa9747fb56d4b0ddf233a21343c942d64e1883dd, "not a Sanctum Infinity pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require((inCalcAccounts | outCalcAccounts) <= 255 &&
+    (inIndex | outIndex) <= 0xffffffff, "index past its field");
+  const word =
+    0x17 |
+    (inCalcAccounts << 8) |
+    (outCalcAccounts << 16) |
+    (inIndex << 24) |
+    (outIndex << 56) |
+    (minOut << 88) |
+    ((amountIn & 0xffffffffffffffff) << 152);
+  const data = word.toBytesLe(27);
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}

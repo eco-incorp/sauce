@@ -61,6 +61,15 @@ const FIRST: Record<string, boolean> = {
   lstToSol: true,
   issue0: true,
   redeem0: false,
+  // Named for the trade, these take no direction: the first way is the way the key names.
+  wmToDawn: true,
+  dawnToWm: true,
+  solToUsdc: true,
+  usdcToSol: true,
+  usdc: true,
+  wsolToJito: true,
+  jitoToWsol: true,
+  jupToSctm: true,
 };
 
 /** A vector whose direction's name says the other way: Helium's redemption pays its supply token,
@@ -74,7 +83,7 @@ const WRITES_AUTHORITY = new Set(["vault-liquid-unstake"]);
 const flip = (aToB: boolean, a: string, b: string): [string, string] => (aToB ? [a, b] : [b, a]);
 
 /** Each of this module's names, as the recipes' role for that account, by venue family. */
-const ROLES: Record<string, (aToB: boolean) => Record<string, string>> = {
+const ROLES: Record<string, (aToB: boolean, vector: Vector) => Record<string, string>> = {
   cp: (aToB) => {
     const [va, vb] = flip(aToB, "vin", "vout");
     const [ta, tb] = flip(aToB, "tpin", "tpout");
@@ -684,6 +693,90 @@ ROLES.carrot = () => ({
   assetAccount2: "ata2",
   oracle2: "oracle2",
 });
+ROLES.mswap = () => ({
+  wrapAuthority: "wrapAuthoritySentinel",
+  unwrapAuthority: "unwrapAuthoritySentinel",
+  swapGlobal: "swapGlobal",
+  globalIn: "fromGlobal",
+  globalOut: "toGlobal",
+  mintIn: "fromMint",
+  mintOut: "toMint",
+  mMint: "mMint",
+  swapMAccount: "swapMAccount",
+  mVaultAuthorityIn: "fromMVaultAuth",
+  mVaultAuthorityOut: "toMVaultAuth",
+  mintAuthorityIn: "fromMintAuthority",
+  mintAuthorityOut: "toMintAuthority",
+  mVaultIn: "fromMVault",
+  mVaultOut: "toMVault",
+  tokenProgramIn: "fromTokenProgram",
+  tokenProgramOut: "toTokenProgram",
+  mTokenProgram: "mTokenProgram",
+  extProgramIn: "fromExtProgram",
+  extProgramOut: "toExtProgram",
+  systemProgram: "systemProgram",
+});
+ROLES.perpsJlp = () => ({
+  transferAuthority: "ta",
+  perpetuals: "perp",
+  pool: "pool",
+  custodyIn: "ci",
+  dovesOracleIn: "di",
+  pythnetOracleIn: "pyi",
+  custodyTokenAccountIn: "tai",
+  custodyOut: "co",
+  dovesOracleOut: "do",
+  pythnetOracleOut: "pyo",
+  custodyTokenAccountOut: "tao",
+  tokenProgram: "tp",
+  eventAuthority: "ea",
+  program: "prog",
+});
+/** The custody paid into is the pool's own, by its index: the recipes name it as it is in the list. */
+ROLES.perpsJlpMint = (_, vector) => ({
+  transferAuthority: "ta",
+  perpetuals: "perp",
+  pool: "pool",
+  custody: roleOf(vector.accounts[6]!)!,
+  dovesOracle: roleOf(vector.accounts[7]!)!,
+  pythnetOracle: roleOf(vector.accounts[8]!)!,
+  custodyTokenAccount: "custodyTokenAccount",
+  lpMint: "lpMint",
+  tokenProgram: "tokenProgram",
+  eventAuthority: "eventAuthority",
+  program: "program",
+  ...Object.fromEntries(
+    Array.from({ length: 6 }, (_, i) => [
+      [`custody${i}`, `custody${i}`],
+      [`oracle${i}`, `oracle${i}`],
+    ]).flat(),
+  ),
+});
+ROLES.sanctumInfinity = () => ({
+  mintIn: "inMint",
+  mintOut: "outMint",
+  tokenProgramIn: "inTokenProgram",
+  tokenProgramOut: "outTokenProgram",
+  poolState: "poolState",
+  lstStateList: "lstStateList",
+  reservesIn: "inPoolReserves",
+  reservesOut: "outPoolReserves",
+  ...Object.fromEntries(
+    (["In", "Out"] as const).flatMap((side) => {
+      const at = side === "In" ? "in" : "out";
+      return [
+        [`calcProgram${side}`, `${at}CalcProgram`],
+        [`calcState${side}`, `${at}CalcState`],
+        [`stakePool${side}`, `${at}StakePool`],
+        [`stakePoolProgram${side}`, `${at}CalcPoolProgram`],
+        [`stakePoolProgramData${side}`, `${at}CalcPoolProgramData`],
+      ];
+    }),
+  ),
+  pricingProgram: "pricingProgram",
+  slab: "slab",
+});
+
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -742,6 +835,10 @@ const FAMILY: Record<string, string> = {
   "jupiter-lend-earn": "jupiterLendEarn",
   hylo: "hylo",
   carrot: "carrot",
+  mswap: "mswap",
+  "perps-jlp": "perpsJlp",
+  "perps-jlp-mint": "perpsJlpMint",
+  "sanctum-infinity": "sanctumInfinity",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */
@@ -776,11 +873,28 @@ describe("routerSvmAccountOrder: the exact-input venues, as sauce-recipes builds
       ...(vector.venue === "pumpswap"
         ? { poolV2: vector.accounts.some((a) => roleOf(a) === "pv2") }
         : {}),
+      ...(vector.venue === "perps-jlp-mint"
+        ? {
+            custodies: new Set(
+              vector.accounts.map(roleOf).filter((role) => /^custody\d+$/.test(role ?? "")),
+            ).size,
+          }
+        : {}),
+      ...(vector.venue === "sanctum-infinity"
+        ? {
+            inCalcAccounts: vector.accounts.filter((a) =>
+              /^in(Calc|StakePool)/.test(roleOf(a) ?? ""),
+            ).length as 1 | 5,
+            outCalcAccounts: vector.accounts.filter((a) =>
+              /^out(Calc|StakePool)/.test(roleOf(a) ?? ""),
+            ).length as 1 | 5,
+          }
+        : {}),
       ...(vector.venue === "scale-amm" || vector.venue === "scale-vmm"
         ? { beneficiaries: vector.accounts.filter((a) => /^ben\d+$/.test(roleOf(a) ?? "")).length }
         : {}),
     };
-    const roles = ROLES[FAMILY[vector.venue]!]!(aToB!);
+    const roles = ROLES[FAMILY[vector.venue]!]!(aToB!, vector);
     const byRole = new Map(
       vector.accounts.filter((a) => a.user === undefined).map((a) => [roleOf(a), valueOf(a)]),
     );

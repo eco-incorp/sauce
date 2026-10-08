@@ -372,6 +372,84 @@
       "programId": "circAbx64bbsscPbQzZAUvuXpHqrCe6fLMzc2uKXz9g",
       "file": "helium-circuit-breaker.so.gz",
       "sha256": "e07a3891c3ee5394810941db5ce56e480eb545a882e6a8b450f074c0c16e50c3"
+    },
+    {
+      "name": "mswap",
+      "programId": "MSwapi3WhNKMUGm9YrxGhypgUEt7wYQH3ZgG32XoWzH",
+      "file": "mswap.so.gz",
+      "sha256": "086e74ca74cc2230d6b90a2caac59405d127db9dd3ff5580c04b6a1da352b7a0"
+    },
+    {
+      "name": "m0-wm-ext",
+      "programId": "wMXX1K1nca5W4pZr1piETe78gcAVVrEFi9f4g46uXko",
+      "file": "m0-wm-ext.so.gz",
+      "sha256": "1a71554f7ea8386a1919299f582485f238c2d91b8e7453f05731d0a2b0a803b8"
+    },
+    {
+      "name": "m0-ext",
+      "programId": "mextzNVPUbLbvyBwqBqnC5J1SSwjDLjjR4yppf6EBzc",
+      "file": "m0-ext.so.gz",
+      "sha256": "f8e897033981090c20762e7515591524be22d513f1ea7342e6452271c8fff88f"
+    },
+    {
+      "name": "sanctum-infinity",
+      "programId": "5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx",
+      "file": "sanctum-infinity.so.gz",
+      "sha256": "4d11d617b2be14a13cbb859b6a8afb7355e609b0fa14a054c4b127c4b2c93947"
+    },
+    {
+      "name": "infinity-flat-slab",
+      "programId": "s1b6NRXj6ygNu1QMKXh2H9LUR2aPApAAm1UQ2DjdhNV",
+      "file": "infinity-flat-slab.so.gz",
+      "sha256": "b6e540c924cd2780a631f71b1622b52ad998e494ad21ef95ae5eb77deb69a1db"
+    },
+    {
+      "name": "infinity-wsol-calc",
+      "programId": "wsoGmxQLSvwWpuaidCApxN5kEowLe2HLQLJhCQnj4bE",
+      "file": "infinity-wsol-calc.so.gz",
+      "sha256": "e0dbcc18caf6e3517c449c94511f4be947569d3ba1fc55f87c035934b9a703f9"
+    },
+    {
+      "name": "infinity-spl-calc",
+      "programId": "sp1V4h2gWorkGhVcazBc22Hfo2f5sd7jcjT4EDPrWFF",
+      "file": "infinity-spl-calc.so.gz",
+      "sha256": "20bf59669e278640c6b3bcb38e84f1b14ba1bc75d4376f419352e46c2f0dd4c0"
+    },
+    {
+      "name": "infinity-sanctum-calc",
+      "programId": "sspUE1vrh7xRoXxGsg7vR1zde2WdGtJRbyK9uRumBDy",
+      "file": "infinity-sanctum-calc.so.gz",
+      "sha256": "33788425f5f157ef23ba698ef4cf526f78b2f10f9ea5d45dbd0ecbad2df5c2ae"
+    },
+    {
+      "name": "infinity-multi-calc",
+      "programId": "ssmbu3KZxgonUtjEMCKspZzxvUQCxAFnyh1rcHUeEDo",
+      "file": "infinity-multi-calc.so.gz",
+      "sha256": "a4eb80516d631baaa1018a5b8c5e3097c241fea5e14f3b6441416859d2249673"
+    },
+    {
+      "name": "infinity-spl-pool",
+      "programId": "SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy",
+      "file": "infinity-spl-pool.so.gz",
+      "sha256": "ec2dfefaa70d560754a0000f39bd2cabc192b895d36205b3c428f601b6e1d7e1"
+    },
+    {
+      "name": "infinity-sanctum-pool",
+      "programId": "SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY",
+      "file": "infinity-sanctum-pool.so.gz",
+      "sha256": "a8571c781982c72c2531f5957aab7d902df35cb3c1ed0d34829f03f9f0166770"
+    },
+    {
+      "name": "infinity-multi-pool",
+      "programId": "SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn",
+      "file": "infinity-multi-pool.so.gz",
+      "sha256": "a8571c781982c72c2531f5957aab7d902df35cb3c1ed0d34829f03f9f0166770"
+    },
+    {
+      "name": "perps-jlp",
+      "programId": "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
+      "file": "perps-jlp.so.gz",
+      "sha256": "a2891a9277f865eb96feaae67e03cd88efc128d43f6093cc70618ad63cb7d9ba"
     }
   ]
 }

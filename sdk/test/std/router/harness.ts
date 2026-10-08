@@ -345,6 +345,10 @@ export const SVM_CPI_ONLY = [
   "jupiterLendEarn",
   "hylo",
   "carrot",
+  "mswap",
+  "perpsJlp",
+  "perpsJlpMint",
+  "sanctumInfinity",
 ] as const;
 
 const capitalized = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
@@ -420,6 +424,8 @@ export const SVM_EXACT_IN_ARGUMENTS: Readonly<Record<string, readonly string[]>>
   jupiterLendEarn: ["aToB"],
   hylo: ["aToB"],
   carrot: ["aToB"],
+  mswap: [],
+  sanctumInfinity: ["inCalcAccounts", "outCalcAccounts", "inIndex", "outIndex", "minOut"],
 };
 
 /** An exact-input venue's `…Cpi` or `…Data` arguments, `amountIn` first; undefined for any other

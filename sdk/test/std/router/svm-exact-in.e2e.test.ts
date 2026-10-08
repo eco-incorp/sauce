@@ -25,7 +25,7 @@
  */
 import { readFileSync } from "node:fs";
 import type { Address } from "@solana/kit";
-import { AccountRole, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { AccountRole, getAddressEncoder, getProgramDerivedAddress, lamports } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 
 import { describeSvm, sendInstructions, setTokenAccount } from "../../svm/engine-harness.js";
@@ -43,6 +43,7 @@ import {
   SYSTEM,
   TOKEN,
   TOKEN_2022,
+  venueProgram,
   venueProgramId,
 } from "./exact-in-harness.js";
 import type { Compiled, CpiAccount, SlotAccount, Trade } from "./exact-in-harness.js";
@@ -108,7 +109,23 @@ const bakedFor = (base: string, trade: Case, vector?: Vector): Record<string, st
     const instr = vector!.prefix.slice(8, 16).match(/../g)!.reverse().join("");
     baked.instrId = String(parseInt(instr, 16));
   }
-  if (args.includes("inIndex")) {
+  // Sanctum Infinity's counts and indices lead its data; Perena's indices follow its discriminator.
+  const le = (byte: number, width: number): string =>
+    String(
+      BigInt(
+        `0x${vector!.prefix
+          .slice(2 * byte, 2 * (byte + width))
+          .match(/../g)!
+          .reverse()
+          .join("")}`,
+      ),
+    );
+  if (args.includes("inCalcAccounts")) {
+    baked.inCalcAccounts = le(1, 1);
+    baked.outCalcAccounts = le(2, 1);
+    baked.inIndex = le(3, 4);
+    baked.outIndex = le(7, 4);
+  } else if (args.includes("inIndex")) {
     baked.inIndex = String(parseInt(vector!.prefix.slice(16, 18), 16));
     baked.outIndex = String(parseInt(vector!.prefix.slice(18, 20), 16));
   }
@@ -2196,6 +2213,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
     dirs: string[];
     clock: bigint;
     atSlot?: bigint;
+    atEpoch?: { epoch: bigint; start: bigint };
     fabricate?: (harness: EngineHarness) => Address[];
     /** Transactions to send before the state is frozen, and the accounts they create. */
     prepare?: (harness: EngineHarness) => Promise<Address[]>;
@@ -2595,6 +2613,146 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         },
       ],
     },
+    {
+      name: "mswap",
+      programs: ["mswap", "m0-wm-ext", "m0-ext"],
+      dirs: ["mswap-current"],
+      clock: 1_790_409_613n,
+      atSlot: 450_614_395n,
+      cases: [
+        {
+          vector: "mswap:462b:wmToDawn",
+          pay: VECTORS["mswap:462b:wmToDawn"]!.pay,
+          buy: VECTORS["mswap:462b:wmToDawn"]!.buy,
+          amountIn: 1_000_000n,
+          received: 1_000_000n,
+          payProgram: TOKEN_2022,
+          buyProgram: TOKEN_2022,
+        },
+        {
+          vector: "mswap:6u8D:dawnToWm",
+          pay: VECTORS["mswap:462b:wmToDawn"]!.buy,
+          buy: VECTORS["mswap:462b:wmToDawn"]!.pay,
+          amountIn: 1_000_000n,
+          received: 1_000_000n,
+          payProgram: TOKEN_2022,
+          buyProgram: TOKEN_2022,
+        },
+      ],
+    },
+    {
+      name: "perpsJlp",
+      programs: ["perps-jlp"],
+      dirs: ["perps-jlp-mint-active"],
+      clock: 1_789_754_842n,
+      atSlot: 448_159_719n,
+      cases: [
+        {
+          vector: "perps-jlp:7xS2:solToUsdc",
+          pay: WSOL,
+          buy: USDC,
+          amountIn: 1_000_000_000n,
+          received: 111_894_291n,
+          native: true,
+        },
+        {
+          vector: "perps-jlp:G18j:usdcToSol",
+          pay: USDC,
+          buy: WSOL,
+          amountIn: 100_000_000n,
+          received: 887_978_158n,
+          native: true,
+        },
+      ],
+    },
+    {
+      name: "perpsJlpMint",
+      programs: ["perps-jlp"],
+      dirs: ["perps-jlp-mint-active"],
+      clock: 1_789_754_842n,
+      atSlot: 448_159_719n,
+      cases: [
+        {
+          vector: "perps-jlp-mint:5BUw:usdc",
+          pay: USDC,
+          buy: VECTORS["perps-jlp-mint:5BUw:usdc"]!.buy,
+          amountIn: 1_000_000_000n,
+          received: 213_199_006n,
+        },
+      ],
+    },
+    {
+      name: "sanctumInfinity",
+      programs: [
+        "sanctum-infinity",
+        "infinity-flat-slab",
+        "infinity-wsol-calc",
+        "infinity-spl-calc",
+        "infinity-sanctum-calc",
+        "infinity-multi-calc",
+        "infinity-spl-pool",
+        "infinity-sanctum-pool",
+        "infinity-multi-pool",
+      ],
+      dirs: ["infinity-current"],
+      clock: 1_789_832_956n,
+      atSlot: 448_452_857n,
+      atEpoch: { epoch: 1038n, start: 1_789_823_115n },
+      // A stake pool's calculator reads its program's ProgramData, which the capture holds only the
+      // header of and loading the program replaces: the header again, with the program behind it.
+      fabricate: (harness) =>
+        (["spl", "sanctum", "multi"] as const).map((kind) => {
+          const fixture = JSON.parse(
+            readFileSync(
+              new URL(
+                `../../svm/fixtures/infinity-current/infinity-${kind}-pool-programdata.json`,
+                import.meta.url,
+              ),
+              "utf8",
+            ),
+          ) as { address: Address; owner: Address; base64Data: string };
+          const header = Buffer.from(fixture.base64Data, "base64");
+          const program = venueProgram(`infinity-${kind}-pool.so.gz`);
+          const data = new Uint8Array(header.length + program.length);
+          data.set(header);
+          data.set(program, header.length);
+          harness.svm.setAccount({
+            address: fixture.address,
+            data,
+            programAddress: fixture.owner,
+            executable: false,
+            lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
+            space: BigInt(data.length),
+          });
+          return fixture.address;
+        }),
+      cases: [
+        {
+          vector: "sanctum-infinity:FRNE:wsolToJito",
+          pay: WSOL,
+          buy: VECTORS["sanctum-infinity:FRNE:wsolToJito"]!.buy,
+          // The pool holds 0.146 JitoSOL: a whole SOL is past it.
+          amountIn: 100_000_000n,
+          received: 76_745_841n,
+          native: true,
+        },
+        {
+          vector: "sanctum-infinity:8ZMu:jitoToWsol",
+          pay: VECTORS["sanctum-infinity:FRNE:wsolToJito"]!.buy,
+          buy: WSOL,
+          amountIn: 1_000_000_000n,
+          received: 1_293_681_789n,
+          native: true,
+        },
+        {
+          vector: "sanctum-infinity:7p4Y:jupToSctm",
+          pay: VECTORS["sanctum-infinity:7p4Y:jupToSctm"]!.pay,
+          buy: VECTORS["sanctum-infinity:7p4Y:jupToSctm"]!.buy,
+          amountIn: 1_000_000_000n,
+          received: 1_083_328_274n,
+        },
+      ],
+    },
   ];
 
   describe.each(CPI_VENUES)("$name", (venue) => {
@@ -2606,6 +2764,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         venue.dirs,
         venue.programs.map((name) => [venueProgramId(name), `${name}.so.gz`]),
         venue.atSlot,
+        venue.atEpoch,
       );
       freeze(harness, [
         ...(venue.fabricate?.(harness) ?? []),
@@ -2689,6 +2848,26 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
         bakedFor(venue.name, first, VECTORS[first.vector]),
       );
       expect(refused(await cook(harness, program, trade, other))).toMatch(/^not an? /);
+      // A field past its slot, which cut to it would name another token: refused before the call.
+      if (svmExactInArguments(`${venue.name}Cpi`)!.includes("inCalcAccounts")) {
+        const baked = bakedFor(venue.name, first, VECTORS[first.vector]);
+        const own = VECTORS[first.vector]!.program;
+        for (const form of ["Cpi", "Data"] as const)
+          for (const wide of [{ inIndex: String(1n << 32n) }, { outCalcAccounts: "256" }] as Record<
+            string,
+            string
+          >[])
+            expect(
+              refused(
+                await cook(
+                  harness,
+                  instruction(form, venue.name, 1, { ...baked, ...wide }),
+                  { ...trade, cpi: { program: own, accounts: list } },
+                  own,
+                ),
+              ),
+            ).toBe("index past its field");
+      }
     }, 300_000);
   });
 });

@@ -368,6 +368,26 @@ export const ROUTER_SVM_VENUES = {
     data: "carrotData",
     cpi: "carrotCpi",
   },
+  mswap: {
+    program: "MSwapi3WhNKMUGm9YrxGhypgUEt7wYQH3ZgG32XoWzH",
+    data: "mswapData",
+    cpi: "mswapCpi",
+  },
+  "perps-jlp": {
+    program: "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
+    data: "perpsJlpData",
+    cpi: "perpsJlpCpi",
+  },
+  "perps-jlp-mint": {
+    program: "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
+    data: "perpsJlpMintData",
+    cpi: "perpsJlpMintCpi",
+  },
+  "sanctum-infinity": {
+    program: "5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx",
+    data: "sanctumInfinityData",
+    cpi: "sanctumInfinityCpi",
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -419,6 +439,13 @@ export interface RouterSvmAccountOptions {
   /** Carrot: how many assets its vault holds, each an account and an oracle at the end; 3 when
    *  absent. */
   readonly assets?: number;
+  /** Jupiter Perpetuals' JLP mint: how many custodies its pool holds, each a custody and its oracle
+   *  at the end; 6 when absent. */
+  readonly custodies?: number;
+  /** Sanctum Infinity: how many accounts the paid and the bought token's calculator takes, 1 for
+   *  wrapped SOL's and 5 for a stake pool's; 5 when absent. */
+  readonly inCalcAccounts?: 1 | 5;
+  readonly outCalcAccounts?: 1 | 5;
   /** Meteora DLMM: how many bin arrays the swap crosses, from the active bin's onwards in the trade's
    *  direction; 3 when absent. */
   readonly binArrays?: number;
@@ -703,6 +730,10 @@ const EXACT_IN_VENUES = [
   "jupiter-lend-earn",
   "hylo",
   "carrot",
+  "mswap",
+  "perps-jlp",
+  "perps-jlp-mint",
+  "sanctum-infinity",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1519,6 +1550,117 @@ function exactInAccountOrder(
         r("tokenProgramB"),
         r("logProgram"),
         ...Array.from({ length: count }, (_, i) => [w(`assetAccount${i}`), r(`oracle${i}`)]).flat(),
+      ];
+    }
+    case "mswap":
+      // Named for the trade, as the pool is the pair the way it is paid: the paying extension's
+      // first of each pair.
+      return [
+        AUTHORITY,
+        r("wrapAuthority"),
+        r("unwrapAuthority"),
+        r("swapGlobal"),
+        w("globalIn"),
+        w("globalOut"),
+        w("mintIn"),
+        w("mintOut"),
+        r("mMint"),
+        w("source"),
+        w("recipient"),
+        w("swapMAccount"),
+        r("mVaultAuthorityIn"),
+        r("mVaultAuthorityOut"),
+        r("mintAuthorityIn"),
+        r("mintAuthorityOut"),
+        w("mVaultIn"),
+        w("mVaultOut"),
+        r("tokenProgramIn"),
+        r("tokenProgramOut"),
+        r("mTokenProgram"),
+        r("extProgramIn"),
+        r("extProgramOut"),
+        r("systemProgram"),
+      ];
+    case "perps-jlp":
+      // Named for the trade: the JLP pool holds a basket, not a pair.
+      return [
+        AUTHORITY,
+        w("source"),
+        w("recipient"),
+        r("transferAuthority"),
+        r("perpetuals"),
+        w("pool"),
+        w("custodyIn"),
+        r("dovesOracleIn"),
+        r("pythnetOracleIn"),
+        w("custodyTokenAccountIn"),
+        w("custodyOut"),
+        r("dovesOracleOut"),
+        r("pythnetOracleOut"),
+        w("custodyTokenAccountOut"),
+        r("tokenProgram"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "perps-jlp-mint": {
+      if (!aToB) throw new Error("Jupiter Perpetuals' JLP pool only mints here");
+      const count = options.custodies ?? 6;
+      if (!Number.isInteger(count) || count < 1)
+        throw new Error(`custodies is a count, not ${count}`);
+      return [
+        AUTHORITY,
+        w("source"),
+        w("recipient"),
+        r("transferAuthority"),
+        r("perpetuals"),
+        w("pool"),
+        w("custody"),
+        r("dovesOracle"),
+        r("pythnetOracle"),
+        w("custodyTokenAccount"),
+        w("lpMint"),
+        r("tokenProgram"),
+        r("eventAuthority"),
+        r("program"),
+        ...Array.from({ length: count }, (_, i) => r(`custody${i}`)),
+        ...Array.from({ length: count }, (_, i) => r(`oracle${i}`)),
+      ];
+    }
+    case "sanctum-infinity": {
+      // Named for the trade, as the pool is the pair the way it is paid.
+      const calculator = (
+        side: "In" | "Out",
+        count: number | undefined,
+      ): RouterSvmAccountRole[] => {
+        const accounts = count ?? 5;
+        if (accounts !== 1 && accounts !== 5)
+          throw new Error(`a calculator takes 1 account or 5, not ${accounts}`);
+        return accounts === 1
+          ? [r(`calcProgram${side}`)]
+          : [
+              r(`calcProgram${side}`),
+              r(`calcState${side}`),
+              r(`stakePool${side}`),
+              r(`stakePoolProgram${side}`),
+              r(`stakePoolProgramData${side}`),
+            ];
+      };
+      return [
+        AUTHORITY,
+        r("mintIn"),
+        r("mintOut"),
+        w("source"),
+        w("recipient"),
+        r("tokenProgramIn"),
+        r("tokenProgramOut"),
+        w("poolState"),
+        w("lstStateList"),
+        w("reservesIn"),
+        w("reservesOut"),
+        ...calculator("In", options.inCalcAccounts),
+        ...calculator("Out", options.outCalcAccounts),
+        r("pricingProgram"),
+        r("slab"),
       ];
     }
     default: {

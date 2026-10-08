@@ -69,6 +69,14 @@ const FIRST: Record<string, boolean> = {
   lstToSol: true,
   issue0: true,
   redeem0: false,
+  wmToDawn: true,
+  dawnToWm: true,
+  solToUsdc: true,
+  usdcToSol: true,
+  usdc: true,
+  wsolToJito: true,
+  jitoToWsol: true,
+  jupToSctm: true,
 };
 const PAYS_FIRST: Record<string, boolean> = { "helium-treasury:Aon7:redeem": true };
 
@@ -94,9 +102,17 @@ const optionsOf = (key: string, vector: Vector): RouterSvmDataOptions => {
   return {
     aToB,
     ...(args.includes("minOut") ? { minOut: FLOOR[vector.venue] ?? 1n } : {}),
-    ...(args.includes("inIndex")
-      ? { inIndex: leHex(vector.prefix, 8, 1), outIndex: leHex(vector.prefix, 9, 1) }
-      : {}),
+    // Sanctum Infinity's counts and indices lead its data; Perena's indices follow its discriminator.
+    ...(args.includes("inCalcAccounts")
+      ? {
+          inCalcAccounts: leHex(vector.prefix, 1, 1),
+          outCalcAccounts: leHex(vector.prefix, 2, 1),
+          inIndex: leHex(vector.prefix, 3, 4),
+          outIndex: leHex(vector.prefix, 7, 4),
+        }
+      : args.includes("inIndex")
+        ? { inIndex: leHex(vector.prefix, 8, 1), outIndex: leHex(vector.prefix, 9, 1) }
+        : {}),
     ...(args.includes("instrId") ? { instrId: leHex(vector.prefix, 4, 4) } : {}),
   };
 };
@@ -113,6 +129,7 @@ const fieldsOf = (venue: string): Partial<RouterSvmDataOptions> => {
   const args = dataArguments(venue);
   return {
     ...(args.includes("inIndex") ? { inIndex: 0n, outIndex: 1n } : {}),
+    ...(args.includes("inCalcAccounts") ? { inCalcAccounts: 5n, outCalcAccounts: 1n } : {}),
     ...(args.includes("instrId") ? { instrId: 1n } : {}),
   };
 };
@@ -208,5 +225,36 @@ describe("routerSvmDataTemplate at an exact input: what it refuses when the prog
     expect(() => routerSvmDataTemplate("deriverse", { aToB: true })).toThrow(
       "deriverse's swap takes its instrId",
     );
+  });
+
+  it("Sanctum Infinity's calculators' account counts, a byte each, and its tokens' indices, 32 bits", () => {
+    const fields = { aToB: true, inCalcAccounts: 5n, outCalcAccounts: 1n, minOut: 1n };
+    const most = routerSvmDataTemplate("sanctum-infinity", {
+      ...fields,
+      inIndex: (1n << 32n) - 1n,
+      outIndex: 2n,
+    });
+    expect([hex(most.prefix), hex(most.suffix)]).toEqual([
+      "170501ffffffff020000000100000000000000",
+      "",
+    ]);
+    pastItsSlot(
+      () =>
+        routerSvmDataTemplate("sanctum-infinity", { ...fields, inIndex: 1n << 32n, outIndex: 0n }),
+      `sanctum-infinity: inIndex ${1n << 32n} is past its 32 bits`,
+    );
+    pastItsSlot(
+      () =>
+        routerSvmDataTemplate("sanctum-infinity", {
+          ...fields,
+          outCalcAccounts: 256n,
+          inIndex: 0n,
+          outIndex: 1n,
+        }),
+      "sanctum-infinity: outCalcAccounts 256 is past its byte",
+    );
+    expect(() =>
+      routerSvmDataTemplate("sanctum-infinity", { aToB: true, inIndex: 0n, outIndex: 1n }),
+    ).toThrow("sanctum-infinity's swap takes its inCalcAccounts");
   });
 });

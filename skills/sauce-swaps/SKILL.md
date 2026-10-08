@@ -357,13 +357,15 @@ its data written by hand, its `Cpi` form about 7,500 more, and the slot forms ab
 each account they read out of `slot` or `trader`.
 
 A function cannot list more than sixteen accounts. `scaleAmm`, `pumpswap`, `bonkswap`, `guacswap`,
-`meteoraDlmm`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo`, `scaleVmm`, `jupiterLendEarn`, `hylo`
-and `carrot` swap with more, so they have only their `Cpi` and `Data` forms: `scaleAmmCpi`,
-`pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `meteoraDlmmCpi`, `sarosDlmmCpi`,
-`raydiumLaunchlabCpi`, `runnerRodeoCpi`, `scaleVmmCpi`, `jupiterLendEarnCpi`, `hyloCpi`,
-`carrotCpi`, `scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `meteoraDlmmData`,
-`sarosDlmmData`, `raydiumLaunchlabData`, `runnerRodeoData`, `scaleVmmData`, `jupiterLendEarnData`,
-`hyloData` and `carrotData`.
+`meteoraDlmm`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo`, `scaleVmm`, `jupiterLendEarn`,
+`hylo`, `carrot`, `mswap`, `perpsJlp` and `sanctumInfinity`, and Jupiter Perpetuals' JLP mint, swap
+with more, so they have only their `Cpi` and `Data` forms: `scaleAmmCpi`, `pumpswapCpi`,
+`bonkswapCpi`, `guacswapCpi`, `meteoraDlmmCpi`, `sarosDlmmCpi`, `raydiumLaunchlabCpi`,
+`runnerRodeoCpi`, `scaleVmmCpi`, `jupiterLendEarnCpi`, `hyloCpi`, `carrotCpi`, `mswapCpi`,
+`perpsJlpCpi`, `perpsJlpMintCpi`, `sanctumInfinityCpi`, `scaleAmmData`, `pumpswapData`,
+`bonkswapData`, `guacswapData`, `meteoraDlmmData`, `sarosDlmmData`, `raydiumLaunchlabData`,
+`runnerRodeoData`, `scaleVmmData`, `jupiterLendEarnData`, `hyloData`, `carrotData`, `mswapData`,
+`perpsJlpData`, `perpsJlpMintData` and `sanctumInfinityData`.
 
 ## Example
 

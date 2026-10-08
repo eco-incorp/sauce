@@ -698,7 +698,9 @@ pins; it logs each form's compute units. A Pot cannot create a PumpSwap buy's vo
 with another payer. A venue that reads the time is booted at its vector's own: a case's `atSlot`/
 `atEpoch` set the Clock and the EpochSchedule (Voltr's withdrawal and the liquid-unstake vault fail
 or overflow at the default clock), and the boot keeps each fixture account's recorded `lamports`
-(the liquid-unstake vault prices off its SOL vault's).
+(the liquid-unstake vault prices off its SOL vault's). Sanctum Infinity's stake-pool calculators
+read their stake pool program's ProgramData, which loading the program replaces with LiteSVM's own:
+its case's `fabricate` writes the captured header back with the program's ELF behind it.
 
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
