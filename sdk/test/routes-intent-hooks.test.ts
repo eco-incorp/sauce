@@ -1,7 +1,7 @@
 /**
  * A hop's hooks, `before: [() => …]` and `after: [() => …]`: calls the destination Portal's Executor
  * makes before the delivered tokens move into the Pot and after the body's cook. Each closure's body
- * is one external call, which `@sauce/intents` reads as data with the compiler's
+ * is one external call, which `@sauce/hop` reads as data with the compiler's
  * `callOf(closure, scope)`, in the destination's scope, and the route carries exactly as written:
  * nothing is delivered for it and no allowance is reset.
  *
