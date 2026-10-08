@@ -26,11 +26,8 @@
  * the bundle equal to `quoteTokenMint` — are wired (`sellBase` sells the
  * non-quote side for the quote; `sellQuote` is the reverse). Of the 6 live
  * bundles, 3 are quote-paired (SOL/USDC, USDT/USDC, the third token/USDC) and
- * fully modeled end to end (feasibility, math, and capacity, INCLUDING a
- * real, currently-live `OFF_POOL_RESERVE` floor this deployment's swap
- * checks — see that constant's doc; it reads 0 on this deployment's SOL and
- * USDC pools today, so those two specific pools correctly self-drop right
- * now rather than "are immediately tradeable"); the other 3 (SOL/USDT,
+ * fully modeled end to end (feasibility, math, and capacity — see CAPS
+ * below for the per-trade limits the swap enforces); the other 3 (SOL/USDT,
  * SOL/<third>, USDT/<third>) are genuine BASE-TO-BASE pairs. The real `Swap` instruction DOES support
  * base-to-base directly (three account tuples: from/to/quote-settlement —
  * `woopool_quote`/`quote_price_update`/`quote_token_vault` are ALWAYS present
@@ -68,22 +65,29 @@
  *   fails (mirrored here as a SELF-DROP, never attempted).
  *
  * CAPS: `feeRate`/`maxGamma`/`maxNotionalSwap` are source-verified
- * (swap_math.rs's requires). `capBal`/`minSwapAmount` are WooPool fields
- * this deployment carries that the audited source (an older version) does
- * not define at all — the deployed WooPool account is 284 bytes vs the
- * audited 268, exactly a 16-byte insertion at this pair's offsets, empirically
- * confirmed byte-for-byte against 6 live pool dumps. Their exact enforcement
- * is UNDOCUMENTED upstream; modeled here CONSERVATIVELY (never a looser
- * bound than the real one could plausibly be) — see ladder.ts's capacity
- * derivation for the exact one-sided-safe reasoning (mirrors obric-v2's own
- * documented fee-rebate omission: predicted <= realized, never the reverse).
- * `minSwapAmount` is 0 on every live pool today (inert; still honored).
- * The "reserve" ledger field (WooPool's internal accounting mirror of the
- * vault) is NOT decoded — its deployed offset is unverified past the
- * documented fields — so capacity is bounded by the VAULT's real SPL balance
- * alone (one-sided safe: the true require is `reserve>=amt && vault>=amt`;
- * `vault>=amt` is necessary but not sufficient in a hypothetical
- * reserve-desyncs-below-vault state, an abnormal condition for the venue).
+ * (swap_math.rs's requires). The deployed WooPool is the 284-byte layout of
+ * github.com/jup-ag/WOOFi_Solana @ 686afec (`state/woopool.rs:39-61`; the
+ * program's on-chain IDL and woonetwork/woofi-jupiter-integration's
+ * `src/state/woopool.rs` agree), which adds `cap_bal`, `min_swap_amount` and
+ * `unclaimed_fee` (all u128) to the older audited 268-byte struct. The swap
+ * (`instructions/swap.rs`, `util/token.rs`) enforces, per trade:
+ *   - `from_amount <= woopool_from.min_swap_amount` returns `Ok(())` BEFORE
+ *     any transfer (swap.rs:100) — a silent no-op. A fill must be 0 or
+ *     strictly above it. `min_swap_amount` is a u128 at 155..171.
+ *   - `from_vault.amount + from_amount <= woopool_from.cap_bal`
+ *     (swap.rs:129 sellQuote, :220 sellBase; `BalanceCapExceeds`).
+ *   - sellBase: `quote_vault.amount - woopool_quote.unclaimed_fee >= gross
+ *     quote` (swap.rs:254 via `balance()`, token.rs:7-20); the subtraction
+ *     underflowing is `ReserveLessThanFee`. `unclaimed_fee` is a u128 at 171.
+ *     sellQuote's output check reads the BASE pool, where `balance()` is the
+ *     plain vault amount.
+ * Every rule is reproduced on the deployed binary by the consuming recipes
+ * package (`test/svm/ecoswap-svm.woofi.realcpi.e2e.test.ts` there). The FROM
+ * pool is the base pool for sellBase and the QUOTE pool for sellQuote:
+ * `capBal`/`minSwapAmount` on {@link WoofiPoolConfig} are the BASE pool's
+ * (fetch reads only that pool), so a sellQuote consumer reads `woopoolQuote`'s
+ * own fields at {@link OFF_POOL_CAP_BAL}/{@link OFF_POOL_MIN_SWAP_AMOUNT}, and a
+ * sellBase consumer reads `woopoolQuote` at {@link OFF_POOL_UNCLAIMED_FEE}.
  *
  * Byte offsets (all little-endian; PriceUpdateV2's `verification_level` is
  * ALWAYS the 1-byte `Full` tag on any account the swap could accept — `Full`
@@ -100,7 +104,8 @@
  *     quoteTokenMint@267 quoteFeedAccount@299 quotePriceUpdate@331
  *   WooPool (284, this deployment): feeRate@105(u16) maxGamma@107(u128)
  *     maxNotionalSwap@123(u128) capBal@139(u128) minSwapAmount@155(u128)
- *     tokenMint@187 tokenVault@219 baseDecimals@283(u8)
+ *     unclaimedFee@171(u128) tokenMint@187 tokenVault@219 quoteTokenMint@251
+ *     baseDecimals@283(u8)
  *   PriceUpdateV2 (134): writeAuthority@8 verificationTag@40(u8) feedId@41
  *     price@73(i64) conf@81(u64,unused) exponent@89(i32,unused live — baked)
  *     publishTime@93(i64) prevPublishTime/emaPrice/emaConf/postedSlot (unused)
@@ -169,25 +174,19 @@ export const OFF_POOL_FEE_RATE = 105;
 export const OFF_POOL_MAX_GAMMA = 107;
 export const OFF_POOL_MAX_NOTIONAL_SWAP = 123;
 export const OFF_POOL_CAP_BAL = 139;
-/** u16, NOT u128 — bisection-verified against the real binary (see OFF_POOL_RESERVE's doc): a
- * wider read here would swallow OFF_POOL_RESERVE's low bytes. Always 0 on every live pool today. */
+/**
+ * `min_swap_amount`, a u128 at bytes 155..171 (state/woopool.rs:54). The swap returns `Ok(())` before
+ * any transfer when `from_amount <= min_swap_amount` (instructions/swap.rs:100). There is no separate
+ * "reserve" field inside it: the former `OFF_POOL_RESERVE = 157` was bytes 2..10 of this u128, and the
+ * bisection that "found" it made every swap a no-op (an early success) rather than enabling one.
+ */
 export const OFF_POOL_MIN_SWAP_AMOUNT = 155;
 /**
- * A LIVE (not baked) per-pool accounting value the real `Swap` ix's newer,
- * deployed-only require (`ReserveLessThanFee`, not present in the audited
- * source this adapter otherwise mirrors) checks on the FROM side's own pool
- * before it will move anything. Bisection-verified against the real binary
- * (not documented anywhere): flipping only this field's low byte on a real
- * mainnet dump (woopoolBase, this pool's actual live bytes) took the swap
- * from a hard revert to succeeding. Semantics beyond "a floor this pool's own
- * activity must clear" are NOT independently confirmed (its exact relation
- * to swap_fee/from_amount, and its true width past 8 bytes, are unverified)
- * — modeled here as a conservative DIRECT cap on the tradable amount
- * (ladder.ts), the same one-sided-safe treatment as capBal. It reads 0 on
- * every live pool sampled 2026-07-31 (this pool's own real recent swaps all
- * fail on mainnet too — consistent with a currently-zeroed floor).
+ * `unclaimed_fee`, a u128 at bytes 171..187 (state/woopool.rs:56). On the QUOTE pool it is subtracted
+ * from the quote vault's balance (`util/token.rs:7-20`); a sellBase whose gross quote exceeds the
+ * remainder reverts `NotEnoughOut`, and a ledger above the vault reverts `ReserveLessThanFee`.
  */
-export const OFF_POOL_RESERVE = 157;
+export const OFF_POOL_UNCLAIMED_FEE = 171;
 export const OFF_POOL_TOKEN_MINT = 187;
 export const OFF_POOL_TOKEN_VAULT = 219;
 export const OFF_POOL_BASE_DECIMALS = 283;
@@ -234,9 +233,11 @@ export interface WoofiPoolConfig extends PoolConfig {
   feeRate: bigint;
   maxGamma: bigint;
   maxNotionalSwap: bigint;
-  /** woopoolBase.cap_bal — undocumented upstream; modeled as a base-token-unit cap (see file header). */
+  /** woopoolBase.cap_bal (u128): `base_vault.amount + from_amount <= cap_bal` for a sellBase. A
+   *  sellQuote checks the QUOTE pool's own cap_bal against the quote vault instead (file header). */
   capBal: bigint;
-  /** woopoolBase.min_swap_amount — 0 on every live pool today. */
+  /** woopoolBase.min_swap_amount (u128): a sellBase of at most this moves nothing. A sellQuote checks
+   *  the QUOTE pool's own min_swap_amount instead (file header). */
   minSwapAmount: bigint;
   bound: bigint;
   staleDuration: bigint;
@@ -381,7 +382,7 @@ export async function fetchWoofiConfig(
   const maxGamma = readUintLE(poolData, OFF_POOL_MAX_GAMMA, 16);
   const maxNotionalSwap = readUintLE(poolData, OFF_POOL_MAX_NOTIONAL_SWAP, 16);
   const capBal = readUintLE(poolData, OFF_POOL_CAP_BAL, 16);
-  const minSwapAmount = readUintLE(poolData, OFF_POOL_MIN_SWAP_AMOUNT, 2);
+  const minSwapAmount = readUintLE(poolData, OFF_POOL_MIN_SWAP_AMOUNT, 16);
   const baseDecimals = poolData[OFF_POOL_BASE_DECIMALS];
 
   const quotePythData = await load(priceUpdateQuote);
