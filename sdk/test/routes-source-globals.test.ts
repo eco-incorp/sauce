@@ -7,12 +7,12 @@ import { Base } from "../src/index.js";
 import { CONTRACT_LINKS } from "../src/descriptors/links.js";
 import { NAMESPACE_KEYS } from "../src/routes/accessor-index.js";
 import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
-import { sauceBodyToSource } from "../src/routes/closure.js";
-import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
-/** A typed closure's program, compiled for Base with Base's names. */
-const onBase = (body: string | (() => unknown)): Uint8Array =>
-  compileSauceProgram("base", typeof body === "string" ? body : sauceBodyToSource(body)).bytecode;
+const execution = {
+  pot: "0x1111111111111111111111111111111111111111",
+  engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+} as const;
 
 function diagnostics(source: string): string[] {
   const dir = mkdtempSync(join(tmpdir(), "sauce-source-types-"));
@@ -46,11 +46,20 @@ function diagnostics(source: string): string[] {
 }
 
 test("token/protocol closures compile identically to the same source text", () => {
-  const closure = onBase(() => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  });
-  const text = onBase("USDC.approve(Uniswap.UniversalRouter, 1_000_000n);");
-  expect(closure).toEqual(text);
+  const closure = compileSauceRoute(
+    "base",
+    () => {
+      USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+    },
+    execution,
+  );
+  const text = compileSauceRoute(
+    "base",
+    "USDC.approve(Uniswap.UniversalRouter, 1_000_000n);",
+    execution,
+  );
+  expect(closure.compiled.bytecode).toEqual(text.compiled.bytecode);
+  expect(closure.calls).toEqual(text.calls);
   // These names have compile-time meaning only. Importing typings must not
   // invent global runtime clients or eagerly bind them to one chain.
   expect(Object.hasOwn(globalThis, "USDC")).toBe(false);
@@ -141,16 +150,20 @@ test("a typed closure over a formerly unlinked namespace typechecks and compiles
   `;
   expect(diagnostics(`const routeBody = () => {${body}};\nexport {};`)).toEqual([]);
   // The same body as a closure, compiled for a chain with every name in it.
-  const closure = onBase(() => {
-    let pool = 0n;
-    if (PancakeswapV3.Factory != 0n) {
-      pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
-    }
-    const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(0x1234n);
-    return pool + sqrtPriceX96 + AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
-  });
+  const closure = compileSauceRoute(
+    "base",
+    () => {
+      let pool = 0n;
+      if (PancakeswapV3.Factory != 0n) {
+        pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+      }
+      const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(0x1234n);
+      return pool + sqrtPriceX96 + AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
+    },
+    execution,
+  );
   // Each contract is called at Base's address for it, which the bytecode carries.
-  const bytecode = Buffer.from(closure).toString("hex");
+  const bytecode = Buffer.from(closure.compiled.bytecode[0]!).toString("hex");
   for (const contract of [Base.PancakeswapV3.Factory, Base.AerodromeSlipstream.CLFactory]) {
     expect(bytecode).toContain(contract.address!.slice(2).toLowerCase());
   }
