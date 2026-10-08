@@ -66,7 +66,7 @@ import { toUniversalAddress } from "./normalize.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
 import { registryTokens, resolveTokenMap } from "./token-registry.js";
 import type { AddressInput } from "./types.js";
-import { notDeployed } from "./unknown-global.js";
+import { notDeployedAround } from "./unknown-global.js";
 
 /** What a chain's module is written with beyond the chain itself. */
 export interface ChainModuleOptions {
@@ -234,13 +234,29 @@ function namesNoSingle(key: string, namespace: Namespace): string {
   return `'${key}' names no single contract — it has ${known.join(", ")}: use '${key}.<Contract>'`;
 }
 
-/** What a protocol whose one callable contract stands for it says it is, where that contract is. */
-function standsFor(key: string, namespace: Namespace): string {
-  const main = (namespace as Namespace & { kind: "protocol" }).contracts.get(
-    (namespace as Namespace & { kind: "protocol" }).defaultContract!,
-  )!;
+/** The contract that stands for a protocol, where one does. */
+function standing(namespace: Namespace): ContractDescriptor {
+  const protocol = namespace as Namespace & { kind: "protocol" };
 
-  return `'${key}' is ${main.protocol}.${main.contract}`;
+  return protocol.contracts.get(protocol.defaultContract!)!;
+}
+
+/**
+ * What a protocol whose one callable contract stands for it says, as its class's constructor
+ * composes it from `address` and `missingOn`: what it stands for, where its contract is; why its
+ * contract is missing, on the chain `missingOn` names (`unknown-global.ts#notDeployed`, the slug
+ * joined in while compiling); and, where its ABI is widened, that.
+ */
+function missingReason(key: string, namespace: Namespace): string {
+  const main = standing(namespace);
+  const stands = str(`'${key}' is ${main.protocol}.${main.contract}`);
+  const [before, after] = notDeployedAround(main);
+  const missing = `${str(before)} + missingOn + ${str(after)}`;
+  if (main.coverage.typeFidelity !== "widened") {
+    return `address !== undefined || missingOn === undefined ? ${stands} : ${missing}`;
+  }
+
+  return `address !== undefined ? ${stands} : missingOn === undefined ? ${str(widened(main))} : ${missing}`;
 }
 
 /** The method names a namespace class keeps for itself. */
@@ -301,7 +317,7 @@ function namespaceClass(key: string, namespace: Namespace): string {
   const constructor =
     main === undefined
       ? `  constructor(c) { ${contracts.join(" ")} this.address = undefined; this.reason = ${str(namesNoSingle(key, namespace))}; }`
-      : `  constructor(c, address, reason) { ${contracts.join(" ")} this.address = address; this.reason = reason === undefined ? ${str(standsFor(key, namespace))} : reason; }`;
+      : `  constructor(c, address, missingOn) { ${contracts.join(" ")} this.address = address; this.reason = ${missingReason(key, namespace)}; }`;
 
   return [
     `class Ns${key} {`,
@@ -350,16 +366,17 @@ class Namespaces {
         ? namespace.contracts.get(namespace.defaultContract)
         : undefined;
     const contracts = `{ ${fields.join(", ")} }`;
-    // The class says what a namespace with no single contract is, and what one whose contract is
-    // here stands for; an instance says only why its contract is missing on its chain.
+    // The class says what the namespace says; an instance gives only its contract's address, or
+    // the chain it is missing on.
     if (main === undefined) return `new Ns${key}(${contracts})`;
     const there = addressOn(main, chain);
     if (there !== undefined && (main.coverage.typeFidelity !== "widened" || this.allowWidened)) {
       return `new Ns${key}(${contracts}, ${word(there)}, undefined)`;
     }
-    const reason = there === undefined ? notDeployed(main, chain) : widened(main);
 
-    return `new Ns${key}(${contracts}, undefined, ${str(reason)})`;
+    return there === undefined
+      ? `new Ns${key}(${contracts}, undefined, ${str(chain.slug)})`
+      : `new Ns${key}(${contracts}, undefined, undefined)`;
   }
 }
 

@@ -5,6 +5,7 @@
  */
 import { requireChain } from "../src/chains/canonical.js";
 import { chainModuleSource, forgetChainModules } from "../src/routes/chain-module.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 const SALT_A = `0x${"5a".repeat(32)}`;
 const SALT_B = `0x${"a5".repeat(32)}`;
@@ -50,11 +51,20 @@ describe("a chain's module", () => {
     expect(fromEthereum).not.toMatch(/\bSPCXc: /);
   });
 
-  it("says what a namespace is once, in its class, not in each chain's instance", () => {
+  it("says what a namespace is once, in its class, and an instance only the chain it is missing on", () => {
     const module = chainModuleSource(requireChain("base"), {}, SALT_A);
     expect(module.split("'UniswapV3' names no single contract").length - 1).toBe(1);
-    // A protocol whose contract is missing on a chain says so for that chain, in its instance.
-    expect(module).toContain(
+    // The class composes why its contract is missing from the slug an instance gives.
+    expect(
+      module.split("Contract 'DegenBox' (abracadabra) is not deployed on '\" + missingOn + \"'")
+        .length - 1,
+    ).toBe(1);
+    expect(module).toMatch(
+      /new NsAbracadabra\(\{ Cauldron: \(address\) => ABI_\d+\.at\(address\) \}, undefined, "optimism"\)/,
+    );
+    expect(() =>
+      compileSauceProgram("base", "function main(): Uint256 { return Optimism.Abracadabra + 1; }"),
+    ).toThrow(
       "Contract 'DegenBox' (abracadabra) is not deployed on 'optimism' (available: ethereum, arbitrum)",
     );
   });

@@ -170,8 +170,14 @@ export function unknownGlobalError(
 
 /** Why a contract is absent on `chain`, in the chain's words. */
 export const notDeployed = (descriptor: ContractDescriptor, chain: CanonicalChain): string =>
-  `Contract '${descriptor.contract}' (${descriptor.protocol}) is not deployed on '${chain.slug}'` +
-  ` (available: ${descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)"})`;
+  notDeployedAround(descriptor).join(chain.slug);
+
+/** {@link notDeployed}'s sentence on either side of the chain's slug, which a chain's module joins
+ *  in as it compiles. */
+export const notDeployedAround = (descriptor: ContractDescriptor): readonly [string, string] => [
+  `Contract '${descriptor.contract}' (${descriptor.protocol}) is not deployed on '`,
+  `' (available: ${descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)"})`,
+];
 
 /**
  * Why `name`, a name or dotted path a program wrote, is not on `chain` — a token or protocol it
