@@ -36,7 +36,8 @@
  *
  * WHAT DEPENDS ON THE COMPILE. A `tokens` override and a chain value chosen by the caller change
  * this chain's names; the intent defaults (`intents`) and each destination's Kitchen fee change its
- * hops. The registry part is written once per chain and kept; the rest is written per call.
+ * hops. The registry part is written once per chain and kept, with each other chain's contracts and
+ * each destination's facts as it binds them; the salt, in `HERE`, is written per call.
  */
 import type { Abi } from "viem";
 
@@ -368,6 +369,12 @@ interface RegistryPart {
   readonly namespaces: Namespaces | undefined;
   readonly lines: readonly string[];
   readonly exported: ReadonlySet<string>;
+  /** The token symbols this chain's module exports, which a hop's `receive` can name. */
+  readonly tokenSymbols: ReadonlySet<string>;
+  /** Another chain's contracts as this module binds them (its imports name their ABIs), by its id. */
+  readonly contractsOf: Map<number, string>;
+  /** A destination's facts from here, by its id and the intent defaults that shape them. */
+  readonly destinations: Map<string, string | { readonly absent: string }>;
 }
 
 const registryParts = new Map<number, RegistryPart>();
@@ -376,7 +383,6 @@ const registryParts = new Map<number, RegistryPart>();
  *  are written from, as a test that marks a descriptor does. */
 export function forgetChainModules(): void {
   registryParts.clear();
-  destinationTokens.clear();
 }
 
 function registryPart(chain: CanonicalChain, options: ChainModuleOptions): RegistryPart {
@@ -417,8 +423,10 @@ function registryPart(chain: CanonicalChain, options: ChainModuleOptions): Regis
   const tokens = resolveTokenMap(chain, options.tokens);
   const registered = registryTokens(chain);
   const held: string[] = [];
+  const tokenSymbols = new Set<string>();
   for (const [symbol, address] of tokens) {
     if (!IDENTIFIER.test(symbol) || exported.has(symbol)) continue;
+    tokenSymbols.add(symbol);
     if (evm) {
       const decimals = registered[symbol]?.decimals;
       add(
@@ -461,30 +469,62 @@ function registryPart(chain: CanonicalChain, options: ChainModuleOptions): Regis
     }
   }
 
-  const part = { imports, namespaces, lines: [...classes, ...lines], exported };
+  const part: RegistryPart = {
+    imports,
+    namespaces,
+    lines: [...classes, ...lines],
+    exported,
+    tokenSymbols,
+    contractsOf: new Map(),
+    destinations: new Map(),
+  };
   if (plain) registryParts.set(chain.id, part);
 
   return part;
 }
 
-const destinationTokens = new Map<number, string>();
-
-/** A destination's tokens by symbol, as `@sauce/intents` looks a delivered token up. */
-function destinationTokenTable(chain: CanonicalChain): string {
-  let table = destinationTokens.get(chain.id);
-  if (table === undefined) {
-    table = `{ ${[...resolveTokenMap(chain)]
-      .filter(([symbol]) => IDENTIFIER.test(symbol))
-      .map(([symbol, address]) => `${symbol}: ${word(address)}`)
-      .join(", ")} }`;
-    destinationTokens.set(chain.id, table);
-  }
-  return table;
+/** A destination's tokens by symbol, as `@sauce/intents` looks a delivered token up: those of the
+ *  symbols the source chain has, since a hop's `receive` names a token as the source writes it. */
+function destinationTokenTable(source: ReadonlySet<string>, chain: CanonicalChain): string {
+  return `{ ${[...resolveTokenMap(chain)]
+    .filter(([symbol]) => IDENTIFIER.test(symbol) && source.has(symbol))
+    .map(([symbol, address]) => `${symbol}: ${word(address)}`)
+    .join(", ")} }`;
 }
 
-/** A destination's facts, as seen from `source`, for a hop there: or why it has none. */
+/** A destination's facts, as seen from `source`, for a hop there: or why it has none. They are the
+ *  same text for every compile whose defaults agree on what shapes them, so each source's module
+ *  part keeps them; an execution fee given as a function is read again each time. */
 function destinationOf(
   source: CanonicalChain,
+  registry: RegistryPart,
+  destination: CanonicalChain,
+  defaults: IntentDefaults,
+): string | { readonly absent: string } {
+  const key =
+    typeof defaults.executionFee === "function"
+      ? undefined
+      : JSON.stringify([
+          destination.id,
+          defaults.generation,
+          defaults.environment,
+          defaults.destinationPortal,
+          defaults.pot,
+          defaults.engine,
+          defaults.prover,
+          defaults.executionFee?.toString(),
+        ]);
+  const kept = key === undefined ? undefined : registry.destinations.get(key);
+  if (kept !== undefined) return kept;
+  const facts = destinationFacts(source, registry, destination, defaults);
+  if (key !== undefined) registry.destinations.set(key, facts);
+
+  return facts;
+}
+
+function destinationFacts(
+  source: CanonicalChain,
+  registry: RegistryPart,
   destination: CanonicalChain,
   defaults: IntentDefaults,
 ): string | { readonly absent: string } {
@@ -530,7 +570,7 @@ function destinationOf(
     `pot: ${word(denormalizeToEvm(toUniversalAddress(pot)))}, ` +
     `engine: ${word(denormalizeToEvm(toUniversalAddress(engine)))}, ` +
     `prover: ${prover}, unproven: ${unproven}, fee: ${fee === undefined ? "undefined" : fee}, ` +
-    `missing: ${str(missing)}, tokens: ${destinationTokenTable(destination)} }`
+    `missing: ${str(missing)}, tokens: ${destinationTokenTable(registry.tokenSymbols, destination)} }`
   );
 }
 
@@ -609,7 +649,7 @@ function chainsPart(
       } else if (level === undefined) {
         unhopped = `eco-routes has no Portal on ${chain.slug}, so a program there opens no intent`;
       } else {
-        const destination = destinationOf(chain, other, defaults);
+        const destination = destinationOf(chain, registry, other, defaults);
         if (typeof destination === "string") {
           hop = `  hop(config) { return new Intent(${destination}, HERE, config); }`;
         } else {
@@ -618,15 +658,23 @@ function chainsPart(
       }
       // Another chain's contracts, as that chain deploys them: addresses to pass across chains.
       if (namespaces !== undefined && chain.kind === "evm" && other.kind === "evm") {
-        for (const namespaceKey of NAMESPACE_KEYS) {
-          const value = namespaces.value(namespaceKey, resolveNamespace(namespaceKey)!, other);
-          if (value !== undefined) fields.push(`this.${namespaceKey} = ${value};`);
+        let contracts = registry.contractsOf.get(other.id);
+        if (contracts === undefined) {
+          const held: string[] = [];
+          for (const namespaceKey of NAMESPACE_KEYS) {
+            const value = namespaces.value(namespaceKey, resolveNamespace(namespaceKey)!, other);
+            if (value !== undefined) held.push(`this.${namespaceKey} = ${value};`);
+          }
+          // Its eco-routes Portal, the contract: for a low-level call or a check, never to open an
+          // intent, which is `hop`.
+          const portal = ecoRoutesPortalContract();
+          const binding = portal === undefined ? undefined : namespaces.contract(portal, other);
+          if (binding !== undefined) held.push(`this.Portal = ${binding};`);
+          contracts = held.join(" ");
+          // The part's imports name the ABIs this binds, so it is kept with them.
+          registry.contractsOf.set(other.id, contracts);
         }
-        // Its eco-routes Portal, the contract: for a low-level call or a check, never to open an
-        // intent, which is `hop`.
-        const portal = ecoRoutesPortalContract();
-        const binding = portal === undefined ? undefined : namespaces.contract(portal, other);
-        if (binding !== undefined) fields.push(`this.Portal = ${binding};`);
+        if (contracts !== "") fields.push(contracts);
       }
     }
     lines.push(
