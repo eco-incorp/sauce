@@ -60,7 +60,7 @@ describe("a program compile: chain-scoped ambient bundle activation (P7)", () =>
         // A program compile merges chainAmbient() (`@sauce/token`) with the caller's list -- match
         // that merge here so this is a true apples-to-apples bytecode comparison.
         ambient: ["@sauce/token", "./math-helpers.js"],
-        // The chain's own values, given as defines, are the ones a program compile adds.
+        // The chain's own values, given as defines, are the chain's module's.
         defines: {
           chainId: BigInt(requireChain("base").id),
           CHAIN_ID: BigInt(requireChain("base").id),
@@ -77,7 +77,7 @@ describe("a program compile: chain-scoped ambient bundle activation (P7)", () =>
 
     // The default `@sauce/token` ambient module is broadcast into this compile but the program uses
     // none of its exports, so it treeshakes away -- the bytecode is byte-identical to compiling with
-    // NO ambient module, only the chain's defines. This is what proves the
+    // NO ambient module, only the chain's names. This is what proves the
     // default flip costs a token-free route nothing (routes-ambient.test.ts pins the chainDefines
     // half of the same equivalence).
     const withoutAmbient = compileSauceRoute(

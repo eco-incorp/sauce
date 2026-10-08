@@ -7,18 +7,10 @@
  */
 import type { CanonicalChain, ChainRef, ChainSlug } from "../chains/canonical.js";
 import { canonicalChains } from "../chains/canonical.js";
+import { pascalOfSlug, type PascalOf } from "./pascal.js";
 
-export type { ChainRef };
-
-/**
- * `PascalOf<"bnb-chain">` = `"BnbChain"`. Matches the runtime `pascal()`
- * derivation in `accessors.ts` by construction (both reduce to
- * `Capitalize<S>` composed across `-`-separated segments) -- re-exported from
- * `accessors.ts` so callers only need one import site.
- */
-export type PascalOf<S extends string> = S extends `${infer H}-${infer T}`
-  ? `${Capitalize<H>}${PascalOf<T>}`
-  : Capitalize<S>;
+export type { ChainRef, PascalOf };
+export { pascalOfSlug };
 
 /** A chain export: `.chain`. */
 export interface ChainGlobal {
@@ -74,22 +66,6 @@ export function createChainGlobals(): ChainGlobals {
     out[key] = makeChainGlobal(c);
   }
   return out as ChainGlobals;
-}
-
-// --- shared slug/pascal helpers (also used by accessors.ts, descriptors/accessors.ts, svm/accessors.ts) ---
-
-/**
- * `PascalOf`'s runtime mirror: split on `-`, upper-case each segment's first
- * character, join. Agrees with the type-level `PascalOf` by construction
- * (both reduce to `Capitalize<S>` per `-`-separated segment) as long as a
- * slug matches `^[a-z0-9]+(-[a-z0-9]+)*$` -- pinned by
- * `chains-canonical.test.ts`.
- */
-export function pascalOfSlug(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
 }
 
 // Re-exported so a caller checking for a hard denylist elsewhere (globals.ts)

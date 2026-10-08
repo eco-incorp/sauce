@@ -29,20 +29,31 @@ describe("stock tokens in a program", () => {
       [
         "function main(amount: Uint256): Uint256 {",
         `  require(SPCXc == ${SPCXC}n);`,
-        "  require(Token(SPCXc).balanceOf(ctx.self()) >= 0n);",
+        "  require(Token(SPCXc).balanceOf(self) >= 0n);",
         `  SPCXc.transfer(${RECIPIENT}n, amount);`,
         "  SPCXc.approve(ctx.self(), amount);",
-        "  return SPCXc.balanceOf(ctx.self());",
+        "  return SPCXc.balanceOf(self);",
         "}",
       ].join("\n"),
     );
     expect(program.bytecode.length).toBeGreaterThan(0);
-    // A write is the library's SafeERC20 one, as for any registry token.
-    expect(program.source).toMatch(
-      /import \{ transfer as __sauce_transfer\b.*\} from "@sauce\/token"/,
+    // A write is the library's SafeERC20 one and a read the typed call, as for any registry token:
+    // the same bytes as those written by hand with the token's address.
+    const byHand = compileSauceProgram(
+      "base",
+      [
+        'import { approve, transfer } from "@sauce/token";',
+        'import { IERC20 } from "./artifacts/IERC20.json";',
+        "function main(amount: Uint256): Uint256 {",
+        `  require(${SPCXC}n == ${SPCXC}n);`,
+        `  require(IERC20.at(${SPCXC}n).balanceOf(ctx.self()) >= 0n);`,
+        `  transfer(${SPCXC}n, ${RECIPIENT}n, amount);`,
+        `  approve(${SPCXC}n, ctx.self(), amount);`,
+        `  return IERC20.at(${SPCXC}n).balanceOf(ctx.self());`,
+        "}",
+      ].join("\n"),
     );
-    expect(program.source).toContain("__sauce_transfer(SPCXc,");
-    expect(program.source).toContain("__sauce_approve(SPCXc,");
+    expect(Buffer.from(program.bytecode)).toEqual(Buffer.from(byHand.bytecode));
   });
 
   it("compile on Ethereum by the issuer's ticker: an Ondo token, a renamed xStock, a bToken", () => {
@@ -57,11 +68,12 @@ describe("stock tokens in a program", () => {
   });
 
   it("are refused, by name, on a chain without them", () => {
+    // Used there, a stock token is the chain's refusal; compared with zero, it is zero there.
     expect(() =>
-      compileSauceProgram("ethereum", "function main() {\n  require(SPCXc != 0n);\n}"),
+      compileSauceProgram("ethereum", "function main() {\n  SPCXc.transfer(ctx.self(), 1n);\n}"),
     ).toThrow(/SPCXc/);
     expect(() =>
-      compileSauceProgram("base", "function main() {\n  require(TSLAon != 0n);\n}"),
+      compileSauceProgram("base", "function main() {\n  TSLAon.transfer(ctx.self(), 1n);\n}"),
     ).toThrow(/TSLAon/);
   });
 });
@@ -101,11 +113,12 @@ describe("Solana's stock mints in a program", () => {
   });
 
   it("are refused, by name, on a chain without them, and an EVM chain's on Solana", () => {
+    // Compared with zero, an absent name is zero there; any other use is refused, naming it.
     expect(() =>
-      compileSauceProgram("base", "function main() {\n  require(NVDA_US != 0n);\n}"),
+      compileSauceProgram("base", "function main(): Uint256 {\n  return NVDA_US;\n}"),
     ).toThrow(/NVDA_US/);
     expect(() =>
-      compileSauceProgram("ethereum", "function main() {\n  require(SPACEX != 0n);\n}"),
+      compileSauceProgram("ethereum", "function main(): Uint256 {\n  return SPACEX;\n}"),
     ).toThrow(/SPACEX/);
     expect(() =>
       compileSauceProgram(

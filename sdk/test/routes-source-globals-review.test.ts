@@ -70,10 +70,10 @@ describe("source globals match the Sauce contract model", () => {
         // A namespace for every registry protocol, not only the formerly linked ones.
         const pancake: bigint = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
         const clPool: bigint = AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
-        // The presence check takes a contract or a token, and is a compile-time boolean.
-        const has: boolean = available(PancakeswapV3.Factory) && available(USDT);
-        // @ts-expect-error The presence check takes a registry name, not an interface.
-        available(Erc4626.Vault);
+        // A contract or a token the chain lacks is zero there, so a program compares it with zero.
+        const has: boolean = PancakeswapV3.Factory != 0n && USDT != 0n;
+        // @ts-expect-error An unbound interface has no address to compare.
+        const unbound: boolean = Erc4626.Vault != 0n;
         // @ts-expect-error Factory is ambiguous across Uniswap versions.
         const factory: unknown = Uniswap.Factory;
         // @ts-expect-error Even a single-member family alias requires the contract name.

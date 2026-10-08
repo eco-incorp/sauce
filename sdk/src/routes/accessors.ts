@@ -5,10 +5,8 @@
  * `sdk/test/routes.test.ts`'s "accessor generation is registry-derived"
  * case for the proof.
  *
- * `PascalOf`/`pascalOfSlug` live in `builder.ts` (needed there for the
- * `ChainGlobals` mapped type) and are re-exported here so a caller only
- * needs one import site for the whole `routes/` surface, matching the
- * module layout in the design doc.
+ * `PascalOf`/`pascalOfSlug` live in `pascal.ts` and are re-exported here so a caller only
+ * needs one import site for the whole `routes/` surface.
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
