@@ -11,12 +11,18 @@
  * price limit past 128, which cut to its field would be no limit at all) runs once, before the
  * program exists, and costs the program nothing.
  *
+ * The venues `@sauce/router` swaps an exact input at write theirs the same way, with no divisor: the
+ * venue takes the whole amount, and the data carries the floor where the venue's swap takes one.
+ *
  * `routerSvmAccountOrder` (`router-accounts.ts`) gives the same instruction's accounts.
  */
-import type { RouterSvmVenue } from "./router-accounts.js";
+import type { RouterSvmExactInVenue, RouterSvmVenue } from "./router-accounts.js";
 
 export interface RouterSvmDataOptions {
-  /** The swap pays the pool's first token: token 0 or A, Invariant's X, a market's base. */
+  /**
+   * The swap pays the pool's first token: token 0 or A, Invariant's X, a market's base;
+   * `routerSvmAccountOrder`'s `aToB`. At a staking or vault venue, the stake or deposit.
+   */
   readonly aToB: boolean;
   /**
    * The pool's own limit: a Q64.64 sqrt price on the concentrated-liquidity venues, a sqrt price
@@ -38,6 +44,11 @@ export interface RouterSvmDataOptions {
    *  orders it may match. */
   readonly priceLots?: bigint;
   readonly orders?: bigint;
+  /** Perena: the indices among the pool's tokens of the one paid and the one bought, a byte each. */
+  readonly inIndex?: bigint;
+  readonly outIndex?: bigint;
+  /** Deriverse: the instrument's id, 32 bits. */
+  readonly instrId?: bigint;
 }
 
 /** A swap's data around its amount: `prefix ‖ u64le(amountIn / divisor) ‖ suffix`. */
@@ -86,6 +97,109 @@ const within = (venue: string, name: string, value: bigint, max: bigint, field: 
   return value;
 };
 
+const toHex = (bytes: Uint8Array): string =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+/** A flag's byte, in hex. */
+const bit = (on: boolean): string => (on ? "01" : "00");
+
+/** The exact-input venues' instructions, the selling and buying of a launchpad or Scale pool. */
+const SELL = "33e685a4017f83ad";
+const BUY = "66063d1201daebea";
+/** Bonkswap's and Guacswap's price limit past the amount, one the swap never reaches, and whether
+ *  the swap sells X: 0 selling X (the price only falls), u128's most buying it. */
+const NEVER_SELLING_X = `${"00".repeat(16)}01`;
+const NEVER_BUYING_X = `${"ff".repeat(16)}00`;
+
+/** What an exact-input venue's `data` writes from: the direction, the floor's eight bytes in hex,
+ *  and a further field of `width` bytes, checked. */
+interface ExactInFields {
+  readonly aToB: boolean;
+  readonly floor: string;
+  readonly field: (name: "inIndex" | "outIndex" | "instrId", width: number) => string;
+}
+
+/** An exact-input venue's data, as `<venue>Data` writes it. */
+interface ExactInData {
+  /** The options past `aToB` its swap's data carries. */
+  readonly takes: readonly (keyof RouterSvmDataOptions)[];
+  /** Why it swaps only the first way, where it does. */
+  readonly oneWay?: string;
+  /** The data before the amount and after it, in hex. */
+  readonly data: (fields: ExactInFields) => readonly [prefix: string, suffix: string];
+}
+
+const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
+  "raydium-cp-swap": { takes: ["minOut"], data: ({ floor }) => ["8fbe5adac41e33de", floor] },
+  gamma: { takes: ["minOut"], data: ({ floor }) => ["ef52c0bba01adfdf", floor] },
+  "raydium-amm-v4": { takes: ["minOut"], data: ({ floor }) => ["10", floor] },
+  "orca-legacy-token-swap": { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  "orca-legacy-token-swap-stable": { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  "token-swap-v1": { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  "orca-v1": { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  penguin: { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  stepn: { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  saros: { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  fluxbeam: { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  dexlab: { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  "meteora-damm-v2": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  "meteora-damm-v1-cp": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  "meteora-damm-v1-stable": { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  aldrin: { takes: ["minOut"], data: ({ aToB, floor }) => [SWAP, floor + bit(aToB)] },
+  omnipair: { takes: ["minOut"], data: ({ floor }) => [SWAP, floor] },
+  "saber-stableswap": { takes: ["minOut"], data: ({ floor }) => ["01", floor] },
+  "saber-decimals-wrapper": {
+    takes: [],
+    data: ({ aToB }) => [aToB ? "f223c68952e1f2b6" : "b712469c946da122", ""],
+  },
+  "stabble-stable-swap": { takes: ["minOut"], data: ({ floor }) => [`${SWAP}01`, floor] },
+  "stabble-weighted-swap": { takes: ["minOut"], data: ({ floor }) => [`${SWAP}01`, floor] },
+  mercurial: { takes: ["minOut"], data: ({ floor }) => ["04", floor] },
+  perena: {
+    takes: ["inIndex", "outIndex", "minOut"],
+    data: ({ field, floor }) => [
+      `68688356a1bdb4d8${field("inIndex", 1)}${field("outIndex", 1)}`,
+      floor,
+    ],
+  },
+  "metadao-futarchy": {
+    takes: ["minOut"],
+    data: ({ aToB, floor }) => ["a7610ce7ed4ea6fb", bit(aToB) + floor],
+  },
+  "scale-amm": { takes: ["minOut"], data: ({ aToB, floor }) => [aToB ? BUY : SELL, floor] },
+  pumpswap: {
+    takes: ["minOut"],
+    data: ({ aToB, floor }) => (aToB ? [SELL, floor] : ["c62e1552b4d9e870", `${floor}00`]),
+  },
+  bonkswap: { takes: [], data: ({ aToB }) => [SWAP, aToB ? NEVER_SELLING_X : NEVER_BUYING_X] },
+  guacswap: { takes: [], data: ({ aToB }) => [SWAP, aToB ? NEVER_SELLING_X : NEVER_BUYING_X] },
+};
+
+const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>
+  Object.hasOwn(EXACT_IN, venue);
+
+/** An exact-input venue's data around its amount, every other field checked and written. */
+const exactInTemplate = (
+  venue: RouterSvmExactInVenue,
+  options: RouterSvmDataOptions,
+): RouterSvmDataTemplate => {
+  const { takes, oneWay, data } = EXACT_IN[venue];
+  for (const name of Object.keys(options) as (keyof RouterSvmDataOptions)[])
+    if (name !== "aToB" && options[name] !== undefined && !takes.includes(name))
+      throw new Error(`${venue}'s swap takes no ${name}`);
+  if (oneWay !== undefined && !options.aToB) throw new Error(oneWay);
+  const minOut = within(venue, "minOut", options.minOut ?? 0n, U64, "64 bits");
+  const field = (name: "inIndex" | "outIndex" | "instrId", width: number): string => {
+    const value = options[name];
+    if (value === undefined) throw new Error(`${venue}'s swap takes its ${name}`);
+    const max = (1n << BigInt(8 * width)) - 1n;
+    return toHex(
+      le(within(venue, name, value, max, width === 1 ? "byte" : `${8 * width} bits`), width),
+    );
+  };
+  const [prefix, suffix] = data({ aToB: options.aToB, floor: toHex(le(minOut, 8)), field });
+  return { prefix: hex(prefix), suffix: hex(suffix), divisor: 1n };
+};
+
 /**
  * The data of `venue`'s swap around its amount, every other field checked and written. Throws for a
  * field the venue's instruction does not carry, or one past its slot.
@@ -94,6 +208,7 @@ export function routerSvmDataTemplate(
   venue: RouterSvmVenue,
   options: RouterSvmDataOptions,
 ): RouterSvmDataTemplate {
+  if (isExactIn(venue)) return exactInTemplate(venue, options);
   const { aToB } = options;
   const takes = (names: (keyof RouterSvmDataOptions)[]): void => {
     for (const name of Object.keys(options) as (keyof RouterSvmDataOptions)[])
@@ -184,7 +299,7 @@ export function routerSvmDataTemplate(
     }
     default: {
       const unknown: never = venue;
-      throw new Error(`not a venue @sauce/router swaps at a limit: ${String(unknown)}`);
+      throw new Error(`not a venue @sauce/router swaps: ${String(unknown)}`);
     }
   }
 }

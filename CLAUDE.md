@@ -678,7 +678,10 @@ read the direction from the slot and build their data with `<venue>Data`. In `�
 where the data says it; the slot forms write `minOut` at least 1. Every exact-in venue is in
 `sdk/src/svm/router-accounts.ts` (`ROUTER_SVM_VENUES` by the recipes' venue names,
 `routerSvmAccountOrder`/`routerSvmAccounts`), tested account by account against the recipes'
-instructions (`test/svm/router-accounts-exact-in.test.ts`). Two compiler facts shape it, both
+instructions (`test/svm/router-accounts-exact-in.test.ts`), and in `router-data.ts`'s `EXACT_IN`
+table (`routerSvmDataTemplate`: `prefix ‖ u64le(amountIn) ‖ suffix`, divisor 1, its options the
+account order's `aToB`, `minOut` and the venue's own fields), held byte for byte to every vector
+(`test/svm/router-data-exact-in.test.ts`). Two compiler facts shape it, both
 measured on compiler 2.5.0 and the released engine: a function other than `main` cannot build an
 account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
 Array(n)` holds only numbers, a function cannot return accounts, and account arrays cannot be

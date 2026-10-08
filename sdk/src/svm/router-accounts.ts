@@ -227,6 +227,9 @@ export const ROUTER_SVM_VENUES = {
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
 
+/** The venues `@sauce/router` swaps an exact input at, with no price limit. */
+export type RouterSvmExactInVenue = (typeof EXACT_IN_VENUES)[number];
+
 /** One account of a swap instruction: its name, and whether the instruction writes it and it signs. */
 export interface RouterSvmAccountRole {
   readonly name: string;

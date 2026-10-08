@@ -1211,6 +1211,24 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
             ),
           ),
         ).toMatch(/^not an? /);
+        // A field past its slot, which cut to it would name another token: refused before the call.
+        if (svmExactInArguments(`${base}Cpi`)!.includes("inIndex"))
+          for (const form of ["Cpi", "Data"] as const)
+            expect(
+              refused(
+                await cook(
+                  harness,
+                  instruction(form, base, 1, { ...baked, inIndex: "256" }),
+                  {
+                    ...trade,
+                    minOut: 1n,
+                    slot: [],
+                    cpi: { program: slot[0]!.address, accounts: list },
+                  },
+                  slot[0]!.address,
+                ),
+              ),
+            ).toBe("index past its byte");
       }, 300_000);
     },
   );

@@ -662,7 +662,8 @@ says the direction, they take it as their last argument: `aToB` paying the pool'
 (token 0 or A, the decimal wrapper's underlying token, Scale AMM's buy), `paysBase` the base token
 (Aldrin, MetaDAO futarchy, PumpSwap's sell), `xToY` token X (Bonkswap, Guacswap). Perena's take the
 two tokens' indices among the pool's ten, `perenaData(amountIn, inIndex, outIndex, minOut)`. A
-`minOut` past 64 bits reverts; `amountIn` is written as its low 64 bits.
+`minOut` past 64 bits, or a Perena index past its byte, reverts; `amountIn` is written as its
+low 64 bits.
 
 **The account order is the SDK's.** `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder(venue,
 { aToB })` names each account of a venue's swap in order, with whether the instruction writes it and
@@ -674,6 +675,15 @@ program and its `…Data` and `…Cpi` functions. Names are the pool's: `vaultA`
 account, `recipient` the one the output lands in, `authority` the account that signs (the Pot).
 PumpSwap takes `poolV2` for a pool with a coin creator, and Scale AMM `beneficiaries`, the number
 of its fee beneficiaries.
+
+**So is the data.** `routerSvmDataTemplate(venue, options)` writes an exact-input venue's data
+around the amount when the program is generated, as it does a limit venue's: `prefix ‖
+u64le(amountIn) ‖ suffix`, its divisor 1, the bytes `<venue>Data` writes for the same fields. Its
+options are the account order's `aToB`, `minOut` where the swap carries a floor, and Perena's
+`inIndex` and `outIndex`. It throws a RangeError for a floor past 64 bits or an index past its
+byte, and refuses an option the venue's swap does not carry and the way a one-way venue does not
+swap, as its account order does. The program pays for none of it: those bytes cost what the
+recipes' hand-built data does, the "by hand" column below.
 
 `trader` and `recipient` are the same as the limit functions take, `[authority, source, payMint,
 buyMint, tokenProgram, token2022, memo]`, with the recipient the token account the output lands in.

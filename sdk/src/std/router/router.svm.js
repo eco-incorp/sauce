@@ -4553,6 +4553,7 @@ export function perenaData(
   minOut: Uint256,
 ): bytes {
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require((inIndex | outIndex) <= 255, "index past its byte");
   const word = inIndex | (outIndex << 8) | ((amountIn & 0xffffffffffffffff) << 16) | (minOut << 80);
   const ix = hex`68688356a1bdb4d8`;
   return ix.concat(word.toBytesLe(18));
@@ -4614,6 +4615,7 @@ export function perenaCpi(
   require(program.address ==
     0x05801ed257838bcbfb687748ae4de2f6a5cafcadc61213bce4fe46b028ee8a82, "not a Perena pool");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  require((inIndex | outIndex) <= 255, "index past its byte");
   const word = inIndex | (outIndex << 8) | ((amountIn & 0xffffffffffffffff) << 16) | (minOut << 80);
   const ix = hex`68688356a1bdb4d8`;
   const data = ix.concat(word.toBytesLe(18));

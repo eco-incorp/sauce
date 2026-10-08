@@ -762,6 +762,17 @@ describe("@sauce/router (SVM): the reasons the exact-input functions revert with
     },
   );
 
+  it.each(["perena", "tryPerena", "perenaCpi", "perenaData"])(
+    "%s refuses a token index past its byte, which would spill into the next field",
+    (name) => {
+      const source = /(Cpi|Data)$/.test(name)
+        ? svmProgramCalling(name, 3)
+        : svmExactInProgramCalling(name, SVM_EXACT_IN.perena!);
+      const code = hex(compileStdRouter(source, "svm").bytecode);
+      expect(code).toContain(Buffer.from("index past its byte").toString("hex"));
+    },
+  );
+
   it.each(SVM_DATA_FUNCTIONS)("%s checks nothing but its floor's width", (name) => {
     const source = svmProgramCalling(name, 3);
     expect(venue(source)).toBe(false);
