@@ -299,7 +299,7 @@ export function routerSvmDataTemplate(
     }
     default: {
       const unknown: never = venue;
-      throw new Error(`not a venue @sauce/router swaps: ${String(unknown)}`);
+      throw new Error(`not a venue @sauce/router swaps at a limit: ${String(unknown)}`);
     }
   }
 }
