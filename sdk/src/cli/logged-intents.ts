@@ -1,7 +1,7 @@
 /**
  * The intents a cook published, read from the Portal's `IntentPublished` in its logs: a rehearsal's
  * (`sauce simulate`, `intent publish --dry-run`, `file-intents.ts`) or a receipt's (`sauce run`,
- * `intent publish`). An intent a program opens exists nowhere else: `@sauce/intents` builds it while
+ * `intent publish`). An intent a program opens exists nowhere else: `@sauce/hop` builds it while
  * the program compiles, and the program encodes it as it runs.
  */
 import { loggedIntents as published, type LoggedIntent } from "../routes/published.js";

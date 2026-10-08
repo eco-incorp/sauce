@@ -2,7 +2,7 @@
  * The intents a file opens, in full — what `sauce intent fill` rehearses from the file and the
  * lifecycle verbs name by it — read where they exist: in the Portal's `IntentPublished`.
  *
- * In a program an intent is `@sauce/intents`' classes, which the compiler runs: the intent is one
+ * In a program an intent is `@sauce/hop`'s classes, which the compiler runs: the intent is one
  * literal the program encodes as it runs, and nothing the compile hands back. So the file is
  * rehearsed publishing them (`eth_simulateV1`): compiled with its rewards left unpaid
  * (`intents.fund: false`, which changes no intent), cooked on `owner`'s Pot, and each intent

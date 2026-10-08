@@ -57,7 +57,7 @@ A hook is a closure written into the statement as it is declared, or the text of
 gives each default's reason. `.then(body)` writes the statement a program opens the intent with,
 `routes.HostIntent.source`, and compiles it for the source chain with `compile`
 (`SauceProgramOptions`: `defines` the body reads, `intents` defaults such as `executionFee`,
-`sourcePortal` and `destinationPortal`, `tokens`). The intent is `@sauce/intents`' class, the one
+`sourcePortal` and `destinationPortal`, `tokens`). The intent is `@sauce/hop`'s class, the one
 every program's intents are, so the program is the same one the statement compiles to in a file.
 
 | Member                | Behavior                                                                                                        |
@@ -176,7 +176,7 @@ inherited from the enclosing intent.
 
 `compileSauceProgram(chain, source, options).bodies` lists the program each intent's body compiles
 to (`CompiledBody`: its destination, its bytecode, and the values the enclosing program gives it as
-it runs, `captures`). The intents themselves are `@sauce/intents`' classes, which the compiler runs:
+it runs, `captures`). The intents themselves are `@sauce/hop`'s classes, which the compiler runs:
 each is built while the file compiles and encoded as the program runs, so it is published by a cook
 and read from the Portal's `IntentPublished` in its receipt or rehearsal
 (`intentFromPublished(log, sourceChainId)`), as `sauce intent publish` reads it.

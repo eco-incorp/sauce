@@ -1,6 +1,6 @@
 /**
  * The manual's "What is refused" list, pinned to what compiling a hop
- * refuses: the compiler's own errors, and `@sauce/intents`' (`src/std/intents/intents.evm.js`).
+ * refuses: the compiler's own errors, and `@sauce/hop`'s (`src/std/hop/hop.evm.js`).
  * And its account of which chain each name resolves on, and of the destination Pot, held to what the
  * compile builds: the program, and the body it compiles for each destination, carry the addresses.
  *

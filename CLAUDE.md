@@ -766,7 +766,7 @@ by every intent body's options (`programOptions`) and by the internal route buil
 (`approve`/`transfer`/`balanceOf`/…) are callable there with **zero import**. `compileSauceRoute`
 adds only the chain's module to its caller's `ambient`, so a direct `compileSauceRoute(..., {})`
 reaches `@sauce/token` only through `Token`. These resolve because `embedded/resolve.ts`'s
-`resolveSdkPackage` maps the bare `@sauce/token`, `@sauce/names`, `@sauce/intents` and
+`resolveSdkPackage` maps the bare `@sauce/token`, `@sauce/names`, `@sauce/hop` and
 `@sauce/router` specifiers to the embedded copies of `src/std`, and the chain modules to the text
 `chain-module.ts` wrote, ahead of any caller `resolvePackage` — an ambient module the compile can't
 resolve makes EVERY compile throw, so that list must only ever name modules the SDK resolves itself.
@@ -774,8 +774,12 @@ Two DISTINCT mechanisms share the word "ambient": ambient **DEFINES** (`chainDef
 SCALARS, still exported for a caller compiling a standalone asset) vs ambient **MODULES** (whole
 library exports, the chain's names among them).
 
-**Intents are a SauceScript class library, `@sauce/intents`** (`src/std/intents/intents.evm.js`),
-which the compiler runs while it compiles. The syntax is ONE verb with ONE config object (user,
+**Hops are a SauceScript class library, `@sauce/hop`** (`src/std/hop/hop.evm.js`), which the
+compiler runs while it compiles. A hop is the intent-based way to move money (user, 2026-10-08): an
+Eco intent whose body runs on the destination's public Shared Pot, where nothing persists between
+transactions. The package was `@sauce/intents`; the `Intent` class, `sauce intent …`, the MCP
+intent tools and the `sauce-intents` skill keep the word, because they are about Eco intents.
+The syntax is ONE verb with ONE config object (user,
 2026-10-06): `await Optimism.hop({ send, receive?, refundee, deadline?, rewardDeadline?, prover?,
 salt?, fee? })`, the code after the `await` running on Optimism, or `Optimism.hop({ … }).then(() =>
 { … })`, and `.catch((e) => …)` on what `.then` returns. `send`/`receive` take one item or a list:
@@ -824,7 +828,7 @@ table holds the symbols the source chain has), and a token only the destination 
 which the class reads on the destination with `nameOf` and `globalIn(chainId, name)`; one the
 destination lacks too is the chain's refusal (`unknown-global.ts`, the compiler's
 `GlobalInMissing`). `.catch(handler)` makes the body and its handler one destination program,
-`intents.evm.js#_run`: `() => { try { body(); } catch (e) { handler(e); } }`, byte for byte the
+`hop.evm.js#_run`: `() => { try { body(); } catch (e) { handler(e); } }`, byte for byte the
 `try` a program would write (EVM only); `e` is the body's revert data, and a handler that names no
 parameter drops it, as an arrow called in place does. A handler that reads `e` needs v12-evm 2.0.0,
 the major that carries `CATCH_READS` (#553): the releases.json row of the compiler with #553 pairs

@@ -11,7 +11,7 @@
  *
  * is the statement a program would open the intent with, written out as SauceScript and compiled
  * for the source chain, where a Pot cooks it: the Pot pays the reward into the intent's vault and
- * publishes it. The intent is `@sauce/intents`' class, the one every program's intents are, so a
+ * publishes it. The intent is `@sauce/hop`'s class, the one every program's intents are, so a
  * TypeScript intent and the same statement in a file are the same program. There is no second
  * encoder and no offline hash: the intent's hash is the one the Portal's `IntentPublished` announces,
  * read from the cook's rehearsal or its receipt (`intents(logs)`).

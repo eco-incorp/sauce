@@ -5,8 +5,8 @@
  *
  * One table, read by everything on the host that has to agree on the syntax: the generator that
  * writes the editor's declarations (`scripts/gen-source-globals.mjs`, `SauceHopConfig` and the
- * types after it) and the docs. In a program the syntax is `@sauce/intents`' classes
- * (`std/intents/intents.evm.js`), whose fields and refusals this table's names and words follow;
+ * types after it) and the docs. In a program the syntax is `@sauce/hop`'s classes
+ * (`std/hop/hop.evm.js`), whose fields and refusals this table's names and words follow;
  * `routes-intent-portal.test.ts` holds the fields the class reads and the steps it has to this
  * table. The TypeScript builder takes the same object, with `source` and `compile` besides, and
  * refuses any other field (`host-intent.ts`).
