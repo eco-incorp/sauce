@@ -29,6 +29,7 @@ const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/hop": "hop",
   "@sauce/names": "names",
   "@sauce/async": "async",
+  "@sauce/oracle": "oracle",
 };
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */
