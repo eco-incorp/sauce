@@ -814,10 +814,17 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const report =
     sent.receipt === undefined || sent.status !== "success"
       ? undefined
-      : await cookReport(client, input.chain, sent.receipt, {
+      : // The cook was sent: a failure to read its receipt back is a note, never the result.
+        await cookReport(client, input.chain, sent.receipt, {
           sender: signer,
           pot: cook.pot,
           wallet: "your wallet",
+        }).catch((error: unknown) => {
+          notes.push(
+            `what the cook moved could not be read back: ${(error as { shortMessage?: string }).shortMessage ?? "the endpoint failed"}`,
+          );
+
+          return undefined;
         });
   notes.push(...(report?.notes ?? []));
 

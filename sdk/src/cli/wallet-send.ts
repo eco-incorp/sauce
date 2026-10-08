@@ -330,11 +330,12 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
       result.status === "success" &&
       result.receipt !== undefined &&
       request.data.toLowerCase().startsWith(COOK)
-        ? await cookReport(client, input.chain, result.receipt, {
+        ? // What was sent stands whatever reading its receipt back does.
+          await cookReport(client, input.chain, result.receipt, {
             sender: account.address,
             pot: getAddress(request.to),
             wallet: "the wallet",
-          })
+          }).catch(() => undefined)
         : undefined;
     sent.push({
       what,

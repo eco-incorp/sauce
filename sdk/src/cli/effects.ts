@@ -236,8 +236,7 @@ export async function effectsOf(
     .filter((change) => change.deltas.length > 0);
 
   return {
-    // Untraced, the native transfers are not known: none of them is listed.
-    moves: traced ? moves : transfers,
+    moves,
     transfers,
     approvals,
     ...(traced ? { native: nativeMoves } : {}),
