@@ -233,10 +233,17 @@ class Lowering {
     this.stmts.push(...statements);
   }
 
-  /** A word `token/safe` can splice: a literal, or a local (an expression is bound to one). */
+  /**
+   * A word `token/safe` can splice: a literal, or a local (an expression is bound to one). A
+   * contract named by its namespace (`AaveV3.Pool`) is the contract itself in a program, which a
+   * call takes as its address but a word cannot be spliced from: its address is the chain's key of
+   * the same name (`AaveV3_Pool`).
+   */
   private wordArg(expr: Expr): WordArg {
     const literal = /^(0x[0-9a-f]+|[0-9]+)$/.exec(expr);
     if (literal) return { literal: BigInt(literal[1]!) };
+    const contract = /^([A-Z][A-Za-z0-9]*)\.([A-Z][A-Za-z0-9]*)$/.exec(expr);
+    if (contract) return { local: `${contract[1]}_${contract[2]}` };
     if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(expr)) return { local: expr };
 
     return { local: this.bind("w", expr) };
