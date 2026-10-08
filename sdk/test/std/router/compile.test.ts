@@ -491,9 +491,10 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
   const discriminator = (name: string): string =>
     createHash("sha256").update(`global:${name}`).digest("hex").slice(0, 16);
   const INSTRUCTIONS = ["swap_v2", "swap", "place_take_order"] as const;
-  // Each venue's id and the Anchor instructions its code carries, counted: Orca sends `swap` to a
-  // pool of SPL Token mints and `swap_v2` to the rest; Crema's and Invariant's `swap` is written
-  // once per direction, whose flag follows it. Phoenix's and Manifest's are a one-byte tag.
+  // Each venue's id and the Anchor instructions its code carries, counted: Orca at its own limit
+  // sends `swap` to a pool of SPL Token mints and `swap_v2` to the rest, and at a price `swap_v2` to
+  // every pool; Crema's and Invariant's `swap` is written once per direction, whose flag follows it.
+  // Phoenix's and Manifest's are a one-byte tag.
   const VENUES: [string, string, Partial<Record<(typeof INSTRUCTIONS)[number], number>>][] = [
     ["RaydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, { swap_v2: 1 }],
     ["PancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, { swap_v2: 1 }],
@@ -526,8 +527,10 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     VENUES.flatMap(([venue, id, ix]) => functionsOf(venue).map((fn) => [fn, id, ix] as const)),
   )("%s carries its venue's program id and instructions, and no other's", (fn, id, ix) => {
     const code = bytecode(fn);
+    const carried: typeof ix = fn === "tryOrcaWhirlpool" ? { swap_v2: 1 } : ix;
     for (const [, other] of VENUES) expect(count(code, key(other))).toBe(other === id ? 1 : 0);
-    for (const name of INSTRUCTIONS) expect(count(code, discriminator(name))).toBe(ix[name] ?? 0);
+    for (const name of INSTRUCTIONS)
+      expect(count(code, discriminator(name))).toBe(carried[name] ?? 0);
   });
 
   // `…Data` is the instruction's data alone: its instructions, and no program id at all.
@@ -566,10 +569,10 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
       expect(count(code, key(id))).toBe(
         ["Invariant", "Manifest", "OpenbookV2"].includes(venue) ? 0 : 1,
       );
-    // swap_v2: Raydium's code (four programs) and Orca's; swap: Orca's, Cropper, DefiTuna, Crema's
-    // two directions.
+    // swap_v2: Raydium's code (four programs) and Orca's; swap: Cropper, DefiTuna, Crema's two
+    // directions.
     expect(count(code, discriminator("swap_v2"))).toBe(2);
-    expect(count(code, discriminator("swap"))).toBe(5);
+    expect(count(code, discriminator("swap"))).toBe(4);
   });
 });
 
@@ -697,8 +700,8 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
   const none = Object.fromEntries(REASONS.map((reason) => [reason, 0]));
 
   it("trySwap refuses a slot whose program is not its pool's owner, a pool of no venue here, a pool or market not the pair, and a swap below its floor", () => {
-    // And each venue's data's: a floor and a sqrt price limit their fields cannot carry (Raydium's
-    // code, Orca's two swaps, Cropper, DefiTuna, Crema), and Phoenix's limit.
+    // And no field of its instructions: at a price the floor is 0 and the limit fits, so it carries
+    // none of the range checks each venue's `…Data` makes.
     expect(reasons("trySwap")).toEqual({
       ...none,
       "a pool's program is not its owner": 1,
@@ -706,9 +709,6 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       "pool is not the pair": 1,
       "market is not the pair": 1,
       "below minOut": 1,
-      "minOut past 64 bits": 6,
-      "limit past 128 bits": 6,
-      "limit past 64 bits": 1,
     });
     expect(reasons("swap")["nothing swapped"]).toBe(1);
   });

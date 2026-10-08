@@ -610,8 +610,12 @@ paysBase])` takes the CPI's accounts in the venue's own order, checks the progra
 `<venue>Data(amountIn, …)` (Orca: `orcaWhirlpoolData` for the classic `swap`, `orcaWhirlpoolV2Data`;
 Phoenix/OpenBook take the market's lot sizes) returns the instruction's bytes, checking only that a
 field can carry its value (`minOut past 64 bits`, a sqrt price limit's `limit past 128 bits` — cut to its 16 bytes 2^128 would be 0, which the CL venues read as NO limit, reproduced on the real Raydium program by review — Phoenix's `limit past 64 bits`, OpenBook's `limit
-past its field`); the at-price and at-limit forms build their data with it, but `…Cpi` writes the
-same bytes INLINE (measured: calling `…Data` from `…Cpi` cost it ~2k CU — +8.7k vs +6.7k on DefiTuna
+past its field`); the at-limit forms build their data with it. The at-price forms (`swap<Venue>`,
+all `trySwap` reaches) write it INLINE and UNCHECKED from `clmmOrder`'s 32 order bytes: their floor
+is 0 and their limit is under 2^128 by construction, and the range checks, Raydium's 17-account
+bitmap list and Orca's classic `swap` cost the distributed swap ~1.7 KB when they rode on that path
+(8,006 bytes where #102's was 6,319; `compile.test.ts` holds `trySwap` to carrying none of the
+range checks' reasons and one `swap` per venue code). `…Cpi` writes the same bytes INLINE (measured: calling `…Data` from `…Cpi` cost it ~2k CU — +8.7k vs +6.7k on DefiTuna
 — so b1aeaf48's routing was reverted for `…Cpi` in a later commit; Phoenix's alone stays on
 `phoenixData`, which measured 1.6k cheaper than its inline copy). Every form is held byte for byte
 to the recipes' templates by the at-limit e2e, so the two copies cannot drift unseen. `…Data` is the
@@ -634,13 +638,15 @@ account and flag for flag to the recipes' templates). `routerSvmDataTemplate(ven
 encoding cost — and throws at codegen for a field past its slot, because the compiler does NOT
 fold `…Data`'s range checks for a literal argument (measured: the guard and its reason string stay
 in the bytecode and cost ~600 CU each, even for a literal, even for an always-failing 2^128 limit;
-`test/svm/router-data.test.ts` holds its bytes to every template). A slot's accounts past its nine (`more`): Raydium-layout pools' tick-array bitmap
+`test/svm/router-data.test.ts` holds its bytes to every template). A slot's accounts past its nine (`more`, at a limit only — at a price a slot is
+its nine): Raydium-layout pools' tick-array bitmap
 extension (17 accounts, more values than a function holds, so that list is FILLED IN PLACE from a
 literal of one repeated value — a literal of 17 distinct values does not compile in a non-`main`
 function), Invariant's program authority, OpenBook's oracles; Crema and Invariant pass their slot's
 leading tick arrays only (a System program ends them), each count its own `svm.call` site (an
-account array has a fixed element count). Orca's builder sends the classic `swap` when both mints are
-SPL Token's, `swap_v2` otherwise. A `try` form can only CHECK before the swap (a failed CPI aborts the
+account array has a fixed element count). At a limit Orca's builder sends the classic `swap` when both mints
+are SPL Token's, `swap_v2` otherwise; at a price always `swap_v2` (so its oracle must be writable
+there). A `try` form can only CHECK before the swap (a failed CPI aborts the
 whole transaction): `0` having moved nothing for a missing slot, no input, swaps off,
 paused/closed, empty, past the limit, dust (an input that buys under one unit at the pool's price
 after its fee, `dust`; at a limit judged at the base fee), under one lot, an order that filled
@@ -651,10 +657,12 @@ an order cannot carry revert (caller mistakes, never 0); only the System program
 is a missing slot. Each EXPORTED venue function checks its own program id, so a direct call never
 signs a CPI into a program the caller names; only `trySwap`'s internal path relies on its one owner
 read. Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions
-(each venue's `…Data`, `cpi<Venue>` laying out a slot, `swap<Venue>`, `clmmLimit`/`clmmCan`,
-`settled`): a program carries only the venues it calls (`trySwap` ~6.1 KB, one venue's function
-~0.9–2.0 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the distributed swap, 8.0 KB, cooks in 925,760
-CU, 2.2% under its unshared 946,905). `compile.test.ts` pins its exports, each family's argument order, each venue's
+(each venue's `…Data`, `cpi<Venue>` laying out a slot, `swap<Venue>`, `clmmOrder` — which reads
+the pool at its venue's offsets, ~250 bytes smaller and ~5k CU a pool dearer than reading at
+each call site — `clmmCan`, `settled`): a program carries only the venues it calls (`trySwap` ~4.4
+KB, one venue's function ~0.9–1.7 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the
+distributed swap, 6,291 bytes with four slots and 6,362 with five, cooks four trading pools in
+941,176 CU, where #102's 6,319 bytes cooked in 955,936). `compile.test.ts` pins its exports, each family's argument order, each venue's
 program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
 revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
 in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from
