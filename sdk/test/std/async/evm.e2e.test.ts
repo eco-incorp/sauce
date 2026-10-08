@@ -7,8 +7,9 @@
  * requests, the protocol answers an id, and later `fulfill(id)` calls the Pot back with
  * `echo(uint256 id, uint256 value)`. Each step runs as a user would run it:
  *
- *   1. the owner cooks a program that `install`s the echo handler, a program compiled by the SDK
- *      for the chain, through the Router's `setHandler`;
+ *   1. the owner cooks the program the SDK writes to install a package's handlers
+ *      (`routes/handlers.ts`): the echo handler compiled for the chain, and an `install` of it for
+ *      `echo`'s selector, through the Router's `setHandler`;
  *   2. the owner cooks a program that requests, `Echo.request(value).then((echoed) => { … })`: the
  *      request's id is the key its body is parked under;
  *   3. anyone calls `fulfill(id)`: the Router's fallback cooks the handler, which checks its caller,
@@ -53,6 +54,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
+import { compileHandlers, handlersInstallSource } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
   gateAnchors,
@@ -125,12 +127,17 @@ function main(caller: Address, value: Uint256, data: bytes): bytes {
   return run(take(id), abi.encode(echoed));
 }`;
 
-/** The program the owner cooks to install it: one `install` per selector. */
-const INSTALL = `import { install } from "@sauce/async";
-
-function main(handler: bytes): void {
-  install(${ECHO_SELECTOR}, handler, false);
-}`;
+/** The program the owner cooks to install it, as the SDK writes it for a package: the handler
+ *  compiled for the chain, and one `install` per selector. */
+const installSource = (echo: Address): string =>
+  handlersInstallSource(
+    compileHandlers(
+      CHAIN,
+      [{ selector: "echo(uint256,uint256)", program: "echo.handler.js" }],
+      (path) => (path === "echo.handler.js" ? handlerSource(echo) : undefined),
+    ),
+    "the echo protocol",
+  );
 
 /** The program that requests: the echo protocol in the shape a package writes one, and a body that
  *  writes what arrived plus `bump`, a value it captured when the request was made. */
@@ -296,8 +303,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     });
     echo = (await publicClient.waitForTransactionReceipt({ hash })).contractAddress!;
 
-    const handler = compileSauceProgram(CHAIN, handlerSource(echo)).bytecode;
-    const { ok } = await cook(compiled(INSTALL, [bytesToHex(handler)]));
+    const { ok } = await cook(compiled(installSource(echo)));
     expect(ok).toBe(true);
   }, 120_000);
 
@@ -383,8 +389,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       functionName: "predictSharedPot",
       args: [salt],
     })) as Address;
-    const handler = compileSauceProgram(CHAIN, handlerSource(echo)).bytecode;
-    const install = compiled(INSTALL, [bytesToHex(handler)]);
+    const install = compiled(installSource(echo));
     const refused = await revertOf(
       STRANGER.address,
       shared,
