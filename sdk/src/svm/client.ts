@@ -28,7 +28,7 @@ import {
 import { COMPUTE_BUDGET_PROGRAM_ADDRESS } from "@solana-program/compute-budget";
 import { ENGINE_GAS_LIMIT_CU } from "./engine.js";
 import { buildComputeBudgetPrepend, buildHeapFramePrepend } from "./prepends.js";
-import { resolveAccounts } from "./resolve.js";
+import { remainingMetas, resolveAccounts } from "./resolve.js";
 import {
   buildCookFromAccountInstruction,
   buildCookInstruction,
@@ -37,7 +37,7 @@ import {
   derivePotPda,
   fetchExecutionFee,
 } from "./kitchen.js";
-import type { AccountResolution } from "./resolve.js";
+import type { AccountResolution, RemainingAccount } from "./resolve.js";
 import { recommendedComputeUnitLimit, sendExecute, simulateExecute } from "./send.js";
 import type { SendExecuteResult, SimulateExecuteResult } from "./send.js";
 import { buildExecuteTransaction } from "./transaction.js";
@@ -92,6 +92,12 @@ export interface SauceSvmClientConfig {
 export interface SimulateOpts {
   prepends?: readonly Instruction[];
   lookupTables?: AddressesByLookupTableAddress;
+  /**
+   * The accounts the program reads after its named ones (`svm.remainingAccounts()`), in order,
+   * appended after the manifest's slots: a route's accounts, whose program the program CPIs. Only
+   * for a manifest whose last entry is its `remaining` marker.
+   */
+  remaining?: readonly RemainingAccount[];
   /**
    * Append the fee payer as an in-list readonly signer when the manifest yields no
    * signer meta. Needed ONLY for programs that read MSG_SENDER/TX_ORIGIN —
@@ -331,9 +337,12 @@ export async function createSauceSvmClient({
     prepends: readonly Instruction[],
     opts: SimulateOpts,
   ): Promise<SignedExecuteTransaction> {
-    const accounts = resolveAccounts(manifest, resolution, payer.address, {
-      appendPayerSigner: opts.appendPayerSigner,
-    });
+    const accounts = [
+      ...resolveAccounts(manifest, resolution, payer.address, {
+        appendPayerSigner: opts.appendPayerSigner,
+      }),
+      ...remainingMetas(manifest, opts.remaining ?? []),
+    ];
     const cap = opts.maxExecutionFee ?? maxExecutionFee;
     const executeInstruction =
       via === "engine"
@@ -389,9 +398,12 @@ export async function createSauceSvmClient({
     opts: SimulateStagedOpts,
   ): Promise<SignedExecuteTransaction> {
     const address = typeof buffer === "string" ? buffer : buffer.address;
-    const accounts = resolveAccounts(manifest, resolution, payer.address, {
-      appendPayerSigner: opts.appendPayerSigner,
-    });
+    const accounts = [
+      ...resolveAccounts(manifest, resolution, payer.address, {
+        appendPayerSigner: opts.appendPayerSigner,
+      }),
+      ...remainingMetas(manifest, opts.remaining ?? []),
+    ];
     const cap = opts.maxExecutionFee ?? maxExecutionFee;
     if (via === "kitchen") assertNoExecutePin(opts.expectedSha256);
     const pin = via === "engine" ? directPin(buffer, opts.expectedSha256) : undefined;
@@ -551,6 +563,7 @@ export async function createSauceSvmClient({
         simulate(bytecode, manifest, resolution, {
           prepends: opts.prepends,
           lookupTables: opts.lookupTables,
+          remaining: opts.remaining,
           appendPayerSigner: opts.appendPayerSigner,
           maxExecutionFee: opts.maxExecutionFee,
         }),
@@ -571,6 +584,7 @@ export async function createSauceSvmClient({
         simulateStaged(buffer, manifest, resolution, {
           prepends: opts.prepends,
           lookupTables: opts.lookupTables,
+          remaining: opts.remaining,
           appendPayerSigner: opts.appendPayerSigner,
           expectedSha256: opts.expectedSha256,
           maxExecutionFee: opts.maxExecutionFee,

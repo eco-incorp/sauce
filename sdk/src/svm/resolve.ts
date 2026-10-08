@@ -203,3 +203,49 @@ export function resolveAccounts(
 
   return metas;
 }
+
+/**
+ * One account of the variable-length tail a program reads after its named ones
+ * (`svm.remainingAccounts()`), in the order the program takes them: a route's accounts, say.
+ * `signer` is what the TRANSACTION provides: `true` signs with the fee payer's key, a
+ * TransactionSigner with its own, and the Pot is attached unsigned, since the Kitchen signs for it.
+ */
+export interface RemainingAccount {
+  readonly address: Address;
+  readonly writable?: boolean;
+  readonly signer?: boolean | TransactionSigner;
+}
+
+/**
+ * `remaining` as the metas appended after `manifest`'s slots, where its `remaining` marker says the
+ * program's own tail begins. Refused for a manifest with no such marker: the program reads no
+ * account past its named ones, and an appended one would only cost the transaction its bytes.
+ */
+export function remainingMetas(
+  manifest: AccountManifest,
+  remaining: readonly RemainingAccount[],
+): ResolvedAccountMeta[] {
+  if (remaining.length === 0) return [];
+  if (!manifest.accounts.some((entry) => entry.kind === "remaining")) {
+    throw new Error(
+      `remaining accounts: the program reads no account after its named ones, so the ` +
+        `${remaining.length} given would reach nothing`,
+    );
+  }
+
+  return remaining.map((account) => {
+    const signs = account.signer !== undefined && account.signer !== false;
+    const role =
+      account.writable === true
+        ? signs
+          ? AccountRole.WRITABLE_SIGNER
+          : AccountRole.WRITABLE
+        : signs
+          ? AccountRole.READONLY_SIGNER
+          : AccountRole.READONLY;
+
+    return typeof account.signer === "object"
+      ? { address: account.address, role, signer: account.signer }
+      : { address: account.address, role };
+  });
+}
