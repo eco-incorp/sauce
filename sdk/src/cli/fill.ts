@@ -72,6 +72,7 @@ import {
   effectsJson,
   effectsOf,
   formatAmount,
+  heldAround,
   labelled,
   nativeSymbol,
   type Effects,
@@ -511,37 +512,26 @@ async function leftBehind(
   effects: Effects,
   holders: readonly Address[],
 ): Promise<Left[]> {
-  const pairs = holders.flatMap((holder) => {
-    const tokens = new Set<Address | "native">();
-    for (const move of [...effects.transfers, ...(effects.native ?? [])]) {
-      if (move.from === holder || move.to === holder) tokens.add(move.token);
-    }
-
-    return [...tokens].map((token) => ({ holder, token }));
-  });
-
-  // Every balance at once: they are independent reads of the state before the fill.
-  return Promise.all(
-    pairs.map(async ({ holder, token }) => {
-      const before =
-        token === "native"
-          ? await read("a balance", () => client.getBalance({ address: holder }))
-          : await read("a token balance", () =>
-              client.readContract({
-                address: token,
-                abi: ERC20,
-                functionName: "balanceOf",
-                args: [holder],
-              }),
-            );
-      const delta =
-        effects.changes
-          .find((change) => change.address === holder)
-          ?.deltas.find((entry) => entry.token === token)?.amount ?? 0n;
-
-      return { holder, token, before, after: before + delta };
-    }),
+  const held = await Promise.all(
+    holders.map(async (holder) =>
+      (
+        await heldAround(effects, holder, (token) =>
+          token === "native"
+            ? read("a balance", () => client.getBalance({ address: holder }))
+            : read("a token balance", () =>
+                client.readContract({
+                  address: token,
+                  abi: ERC20,
+                  functionName: "balanceOf",
+                  args: [holder],
+                }),
+              ),
+        )
+      ).map((each) => ({ holder, ...each })),
+    ),
   );
+
+  return held.flat();
 }
 
 const assumedText = (balance: Assumed): string =>

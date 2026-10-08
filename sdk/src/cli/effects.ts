@@ -271,6 +271,74 @@ export const labelled = (labels: ReadonlyMap<string, string>, address: Address):
 const signed = (effects: Effects, token: Address | "native", amount: bigint): string =>
   `${amount > 0n ? "+" : "-"}${formatAmount(effects, token, amount < 0n ? -amount : amount)}`;
 
+/** What a holder held of one token before a cook, and after it. */
+export interface Held {
+  readonly token: Address | "native";
+  readonly before: bigint;
+  readonly after: bigint;
+}
+
+/**
+ * What `holder` held, before the cook and after it, of each token the cook moved to or from it.
+ * `read` gives its balance of a token on one side of the cook (`side`, before by default); the
+ * other side is that plus or minus the cook's net change. A token `read` cannot answer for
+ * (`undefined`) is left out.
+ */
+export async function heldAround(
+  effects: Effects,
+  holder: Address,
+  read: (token: Address | "native") => Promise<bigint | undefined>,
+  side: "before" | "after" = "before",
+): Promise<Held[]> {
+  const tokens = new Set<Address | "native">();
+  for (const move of [...effects.transfers, ...(effects.native ?? [])]) {
+    if (move.from === holder || move.to === holder) tokens.add(move.token);
+  }
+  const deltas = effects.changes.find((change) => change.address === holder)?.deltas ?? [];
+  // Every balance at once: they are independent reads of one state.
+  const held = await Promise.all(
+    [...tokens].map(async (token) => {
+      const known = await read(token);
+      if (known === undefined) return undefined;
+      const delta = deltas.find((entry) => entry.token === token)?.amount ?? 0n;
+
+      return side === "before"
+        ? { token, before: known, after: known + delta }
+        : { token, before: known - delta, after: known };
+    }),
+  );
+
+  return held.filter((each): each is Held => each !== undefined);
+}
+
+/** What a report says of a Pot's holdings after a cook: who can move them, and how a program
+ *  delivers them instead. */
+export const POT_HOLDS =
+  "Only another cook moves it out. To end in a wallet, the program must send it there, or name " +
+  "the wallet as the recipient of the call that produces it.";
+
+/**
+ * What the Pot ends holding of the tokens a cook moved, for a person: the lines that lead the
+ * report, so nobody looks for them in their wallet. None for a cook that leaves the Pot nothing.
+ * `wallet` names the wallet they are not in: "the owner's wallet", "your wallet".
+ */
+export function leftInPotLines(effects: Effects, held: readonly Held[], wallet: string): string[] {
+  const left = held.filter((each) => each.after > 0n);
+  if (left.length === 0) return [];
+
+  return [
+    `Left in the Pot, not in ${wallet}:`,
+    ...left.map(
+      (each) =>
+        `  ${formatAmount(effects, each.token, each.after)}` +
+        (each.before === 0n
+          ? ""
+          : ` (it held ${formatAmount(effects, each.token, each.before)} before)`),
+    ),
+    `  ${POT_HOLDS}`,
+  ];
+}
+
 /** The effects as lines for a person. */
 export function effectLines(effects: Effects): string[] {
   const at = (address: Address): string => labelled(effects.labels, address);
@@ -349,6 +417,21 @@ const units = (effects: Effects, token: Address | "native", amount: bigint) => {
 
   return decimals === undefined ? {} : { formatted: formatUnits(amount, decimals) };
 };
+
+/** What the Pot ends holding of the tokens a cook moved, for `--json` (`leftInPot`): each token it
+ *  holds after the cook, with what it held before. Empty for a cook that leaves the Pot nothing. */
+export const leftInPotJson = (
+  effects: Effects,
+  held: readonly Held[],
+): Array<Record<string, unknown>> =>
+  held
+    .filter((each) => each.after > 0n)
+    .map((each) => ({
+      ...tokenJson(effects, each.token),
+      amount: each.after.toString(),
+      ...units(effects, each.token, each.after),
+      before: each.before.toString(),
+    }));
 
 /** The effects for `--json`: amounts in base units as decimal strings, with whole units beside. */
 export function effectsJson(effects: Effects): Record<string, unknown> {

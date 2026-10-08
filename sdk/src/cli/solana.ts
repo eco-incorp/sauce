@@ -118,6 +118,9 @@ import {
   accountsNow,
   messageAccounts,
   movedBy,
+  svmLeftInPot,
+  svmLeftInPotJson,
+  svmLeftInPotLines,
   svmMovedJson,
   svmMovedLines,
   writableAccounts,
@@ -1447,12 +1450,15 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
           input.owner,
         )
       : undefined;
+  // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
+  const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
   const missing = await missingAccounts(prepared.rpc, input.rpcUrl, prepared.given);
   // What main returned: the engine's return data, read as the type main declares.
   const returns = result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
   const returnType = mainReturnType(input.text);
   const json = {
     ok: result.ok,
+    ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
     chain: "solana",
     via: prepared.via,
     owner: input.owner,
@@ -1499,6 +1505,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
         ...(returns === undefined || returnType === undefined
           ? []
           : [returnedLine(returnType, returns, input.chain)]),
+        ...(left === undefined ? [] : svmLeftInPotLines(left, "the owner's wallet")),
         ...how,
         ...(moved === undefined ? [] : svmMovedLines(moved)),
       ].join("\n"),
@@ -1723,6 +1730,8 @@ async function stagedRehearsal(
   const moved = failed
     ? undefined
     : await movedBy(prepared.rpc, input.chain, tracked, before, after, labels, owner);
+  // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
+  const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
   // What main returned stands even when the transaction then fails on its own (a rent check, say):
   // only a failed instruction undoes the program's return.
   const instructionFailed =
@@ -1741,6 +1750,7 @@ async function stagedRehearsal(
   const staged = `${bytecode.length}-byte`;
   const json = {
     ok: !failed,
+    ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
     chain: "solana",
     via: prepared.via,
     owner,
@@ -1793,6 +1803,7 @@ async function stagedRehearsal(
         ...(returns === undefined || returnType === undefined
           ? []
           : [returnedLine(returnType, returns, input.chain)]),
+        ...(left === undefined ? [] : svmLeftInPotLines(left, "the owner's wallet")),
         ...how,
         ...(moved === undefined ? [] : svmMovedLines(moved)),
       ].join("\n"),

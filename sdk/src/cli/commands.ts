@@ -44,6 +44,7 @@ import {
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
 import {
   awaitPot,
+  balanceReader,
   connect,
   kitchenFee,
   potState,
@@ -54,6 +55,7 @@ import {
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
+import { heldAround, leftInPotJson, leftInPotLines } from "./effects.js";
 import {
   checkIntentPots,
   intentCooks,
@@ -803,15 +805,38 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const notes = [...(funding?.notes ?? []), ...stored];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
-  const effects =
+  const moved =
     sent.receipt === undefined || sent.status !== "success"
       ? undefined
-      : receiptReport(
-          await receiptEffects(client, input.chain, sent.receipt, [
-            [signer, "you"],
-            [cook.pot, "the Pot"],
-          ]),
+      : await receiptEffects(client, input.chain, sent.receipt, [
+          [signer, "you"],
+          [cook.pot, "the Pot"],
+        ]);
+  const effects = moved === undefined ? undefined : receiptReport(moved);
+  // What the Pot holds of what the cook moved, read at the cook's block.
+  const potAfter = balanceReader(client, cook.pot, sent.blockNumber);
+  const unread: string[] = [];
+  const held =
+    moved === undefined
+      ? undefined
+      : await heldAround(
+          moved,
+          cook.pot,
+          async (token) => {
+            const after = await potAfter(token);
+            if (after === undefined) unread.push(moved.tokens.get(token)?.symbol ?? token);
+
+            return after;
+          },
+          "after",
         );
+  notes.push(
+    ...unread.map(
+      (symbol) =>
+        `the Pot's ${symbol} balance could not be read, so what the cook left in the Pot ` +
+        "leaves it out",
+    ),
+  );
 
   return {
     text: [
@@ -821,6 +846,9 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       ...(cost === undefined
         ? []
         : [costLine(cost, input.chain, "the Kitchen's fee and any native the program spends")]),
+      ...(moved === undefined || held === undefined
+        ? []
+        : leftInPotLines(moved, held, "your wallet")),
       ...(effects?.lines ?? []),
     ].join("\n"),
     json: {
@@ -828,6 +856,9 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       from: signer,
       pot: cook.pot,
       value: value.toString(),
+      ...(moved === undefined || held === undefined
+        ? {}
+        : { leftInPot: leftInPotJson(moved, held) }),
       ...(deployed === undefined ? {} : { deployPot: sentJson(deployed) }),
       ...(funding === undefined
         ? {}
