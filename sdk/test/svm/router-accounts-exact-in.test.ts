@@ -442,6 +442,108 @@ ROLES.goonfiV2 = () => ({
   tokenProgramB: "tp2",
   validator: "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv",
 });
+ROLES.meteoraDbc = () => ({
+  poolAuthority: "auth",
+  config: "cfg",
+  pool: "pool",
+  vaultA: "bv",
+  vaultB: "qv",
+  mintA: "bm",
+  mintB: "qm",
+  tokenProgramA: "tbp",
+  tokenProgramB: "tqp",
+  program: "prog",
+  eventAuthority: "evt",
+});
+ROLES.trends = () => ({
+  config: "cfg",
+  pool: "pool",
+  poolAuthority: "pauth",
+  mintA: "bmint",
+  mintB: "qmint",
+  vaultA: "bvault",
+  vaultB: "qvault",
+  tokenProgramA: "btp",
+  tokenProgramB: "qtp",
+  program: "prog",
+  eventAuthority: "evt",
+});
+ROLES.heaven = () => ({
+  tokenProgramA: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  tokenProgramB: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  associatedTokenProgram: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+  systemProgram: "11111111111111111111111111111111",
+  pool: "pool",
+  mintA: "LiGHtkg3uTa9836RaNkKLLriqTNRcMdRAhqjGWNv777",
+  mintB: "So11111111111111111111111111111111111111112",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  protocolConfig: "protocolConfig",
+  instructionsSysvar: "Sysvar1nstructions1111111111111111111111111",
+  chainlink: "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
+  solUsdFeed: "CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt",
+});
+ROLES.virtuals = () => ({
+  pool: "vpool",
+  mintA: "mint",
+  poolTokenAccount: "vpoolToken",
+  platform: "platform",
+  platformVirtualsAccount: "platformVirtuals",
+  poolVirtualsAccount: "vpoolVirtuals",
+  tokenProgram: "tokenProgram",
+});
+ROLES.raydiumLaunchlab = () => ({
+  poolAuthority: "auth",
+  globalConfig: "gcfg",
+  platformConfig: "pcfg",
+  pool: "pool",
+  vaultA: "baseVault",
+  vaultB: "quoteVault",
+  mintA: "baseMint",
+  mintB: "quoteMint",
+  tokenProgramA: "baseTokenProgram",
+  tokenProgramB: "quoteTokenProgram",
+  eventAuthority: "eventAuthority",
+  program: "program",
+  systemProgram: "systemProgram",
+  platformVault: "platformVault",
+  creatorVault: "creatorVault",
+});
+ROLES.runnerRodeo = () => ({
+  poolAuthority: "authority",
+  config: "config",
+  pool: "state",
+  vaultA: "baseVault",
+  vaultB: "quoteVault",
+  protocolFeeA: "protocolFeeA",
+  protocolFeeB: "protocolFeeB",
+  creatorFee: "creatorFee",
+  mintA: "baseMint",
+  mintB: "quoteMint",
+  tokenProgramA: "baseTokenProgram",
+  tokenProgramB: "quoteTokenProgram",
+  systemProgram: "systemProgram",
+  eventAuthority: "eventAuthority",
+  program: "program",
+});
+ROLES.scaleVmm = () => ({
+  pool: "pair",
+  mintA: "mintA",
+  mintB: "mintB",
+  vaultA: "vaultA",
+  vaultB: "vaultB",
+  platformFeeA: "feeTaA",
+  tokenProgramA: "tpA",
+  tokenProgramB: "tpB",
+  systemProgram: "sys",
+  platformConfig: "cfg",
+  ammProgram: "ammProgram",
+  ammPool: "ammPool",
+  ammVaultA: "ammVaultA",
+  ammVaultB: "ammVaultB",
+  ammConfig: "ammConfig",
+  beneficiary0: "ben0",
+});
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -483,6 +585,13 @@ const FAMILY: Record<string, string> = {
   flint: "flint",
   deriverse: "deriverse",
   "goonfi-v2": "goonfiV2",
+  "meteora-dbc": "meteoraDbc",
+  trends: "trends",
+  heaven: "heaven",
+  virtuals: "virtuals",
+  "raydium-launchlab": "raydiumLaunchlab",
+  "runner-rodeo": "runnerRodeo",
+  "scale-vmm": "scaleVmm",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */
@@ -517,7 +626,7 @@ describe("routerSvmAccountOrder: the exact-input venues, as sauce-recipes builds
       ...(vector.venue === "pumpswap"
         ? { poolV2: vector.accounts.some((a) => roleOf(a) === "pv2") }
         : {}),
-      ...(vector.venue === "scale-amm"
+      ...(vector.venue === "scale-amm" || vector.venue === "scale-vmm"
         ? { beneficiaries: vector.accounts.filter((a) => /^ben\d+$/.test(roleOf(a) ?? "")).length }
         : {}),
     };

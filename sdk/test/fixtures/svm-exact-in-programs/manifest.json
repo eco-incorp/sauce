@@ -246,6 +246,54 @@
       "programId": "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
       "file": "goonfi-v2.so.gz",
       "sha256": "a24aa13a0a9a4d7d1c8752cc9d9a566a5fae3bc20ba0ca3ba11368abd613e43c"
+    },
+    {
+      "name": "raydium-launchlab",
+      "programId": "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj",
+      "file": "raydium-launchlab.so.gz",
+      "sha256": "4c87da8e9fdeda6daf9d141e409577733d6248ae78f694557176fe2709a09657"
+    },
+    {
+      "name": "virtuals",
+      "programId": "5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki",
+      "file": "virtuals.so.gz",
+      "sha256": "4fb0c085f7a1afb74e2445c70c46c6744b51acc7879d0e86a61c9460342b3a25"
+    },
+    {
+      "name": "meteora-dbc",
+      "programId": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+      "file": "meteora-dbc.so.gz",
+      "sha256": "4c26a8a5da99f8ce932fa0300c46675b527090021fbb74214c9486bedda9f23b"
+    },
+    {
+      "name": "heaven",
+      "programId": "HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o",
+      "file": "heaven.so.gz",
+      "sha256": "d91c053be9e1ef0fffbec008c9412bd249f02f744bb35da1619d8345ac24644b"
+    },
+    {
+      "name": "trends",
+      "programId": "CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz",
+      "file": "trends.so.gz",
+      "sha256": "467ab615d0d4a10a030a874dedb4e0c194cddc1cf9a0fec77280a06181236cba"
+    },
+    {
+      "name": "runner-rodeo",
+      "programId": "runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA",
+      "file": "runner-rodeo.so.gz",
+      "sha256": "489f760e47ec4eed3005409134d3498397ee71c14ed679f3f99912af97d7427e"
+    },
+    {
+      "name": "scale-vmm",
+      "programId": "SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa",
+      "file": "scale-vmm.so.gz",
+      "sha256": "b842d3058402555f2963ecacd6cce57a5692b665536540374faf5096ae4bef4e"
+    },
+    {
+      "name": "chainlink-store",
+      "programId": "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
+      "file": "chainlink-store.so.gz",
+      "sha256": "5f75e15df538fd4262080d2ef1e79fe14fd8e678aebdf22ab2062c9953e9a3b0"
     }
   ]
 }

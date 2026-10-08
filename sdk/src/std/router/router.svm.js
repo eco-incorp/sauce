@@ -6175,3 +6175,608 @@ export function goonfiV2Cpi(
   require(held - left <= amountIn, "debit");
   return held - left;
 }
+
+// Bonding curves and launchpads. Each sells a launched token against its quote token along the
+// venue's own curve until the token graduates; a graduated, migrated or paused curve refuses the
+// swap. A curve settled in native SOL on the authority (pump.fun's bonding curve, Boop, Moonit) is
+// not here: a Pot holds no native SOL it can pay out.
+
+// Meteora Dynamic Bonding Curve, dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN: `swap`. The slot is
+// `[program, pool, poolAuthority, config, baseVault, quoteVault, eventAuthority]`. The swap reads its
+// direction from the paying account's mint.
+function swapMeteoraDbc(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x09600ca524f7b1b7d6ccb1c3973aa0330d1903da601cc9b5dee3c662b4cad149, "not a Meteora DBC pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  const sellsBase = svm.sload(slot[4], 0, 32).toBe() == payMint.address;
+  const baseMint = sellsBase ? payMint : buyMint;
+  const quoteMint = sellsBase ? buyMint : payMint;
+  svm.call(
+    program,
+    [
+      slot[2],
+      slot[3],
+      slot[1],
+      trader[1],
+      recipient,
+      slot[4],
+      slot[5],
+      baseMint,
+      quoteMint,
+      trader[0],
+      baseMint.owner == token2022.address ? token2022 : tokenProgram,
+      quoteMint.owner == token2022.address ? token2022 : tokenProgram,
+      program,
+      slot[6],
+      program,
+    ],
+    meteoraDbcData(amountIn, minOut == 0 ? 1 : minOut),
+  );
+}
+
+// Meteora DBC's `swap`: exact input of `amountIn`, `minOut` its least out. The direction is the
+// accounts'.
+export function meteoraDbcData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  return swap.concat(word.toBytesLe(16));
+}
+
+export function meteoraDbc(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapMeteoraDbc(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryMeteoraDbc(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0x09600ca524f7b1b7d6ccb1c3973aa0330d1903da601cc9b5dee3c662b4cad149 &&
+    pool.owner ==
+      0x09600ca524f7b1b7d6ccb1c3973aa0330d1903da601cc9b5dee3c662b4cad149, "not a Meteora DBC pool");
+  const sellsBase = svm.sload(slot[4], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(sellsBase ? slot[5] : slot[4], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapMeteoraDbc(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the pool authority, the config, the pool, the authority's paying and receiving token
+// accounts, the base and quote vaults, the base and quote mints, the authority, their token
+// programs, the program itself (no referral), the event authority, and the program itself.
+export function meteoraDbcCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x09600ca524f7b1b7d6ccb1c3973aa0330d1903da601cc9b5dee3c662b4cad149, "not a Meteora DBC pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Trends, CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz: a bonding curve's `swap`, the Meteora DBC's data
+// on its own accounts. The slot is `[program, pool, config, poolAuthority, baseVault, quoteVault,
+// eventAuthority]`. The swap reads its direction from the paying account's mint.
+function swapTrends(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0xaa76ece759ebba1a789886f2c5a37a7bb11a5811decc9fd5582a5b983f9b4769, "not a Trends pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  const sellsBase = svm.sload(slot[4], 0, 32).toBe() == payMint.address;
+  const baseMint = sellsBase ? payMint : buyMint;
+  const quoteMint = sellsBase ? buyMint : payMint;
+  svm.call(
+    program,
+    [
+      slot[2],
+      slot[1],
+      slot[3],
+      trader[1],
+      recipient,
+      baseMint,
+      quoteMint,
+      slot[4],
+      slot[5],
+      trader[0],
+      baseMint.owner == token2022.address ? token2022 : tokenProgram,
+      quoteMint.owner == token2022.address ? token2022 : tokenProgram,
+      program,
+      slot[6],
+      program,
+    ],
+    trendsData(amountIn, minOut == 0 ? 1 : minOut),
+  );
+}
+
+// Trends' `swap`: exact input of `amountIn`, `minOut` its least out. The direction is the accounts'.
+export function trendsData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  return swap.concat(word.toBytesLe(16));
+}
+
+export function trends(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapTrends(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryTrends(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0xaa76ece759ebba1a789886f2c5a37a7bb11a5811decc9fd5582a5b983f9b4769 &&
+    pool.owner ==
+      0xaa76ece759ebba1a789886f2c5a37a7bb11a5811decc9fd5582a5b983f9b4769, "not a Trends pool");
+  const sellsBase = svm.sload(slot[4], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(sellsBase ? slot[5] : slot[4], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapTrends(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the config, the pool, the pool authority, the authority's paying and receiving token
+// accounts, the base and quote mints, the base and quote vaults, the authority, the mints' token
+// programs, the program itself (no referral), the event authority, and the program itself.
+export function trendsCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0xaa76ece759ebba1a789886f2c5a37a7bb11a5811decc9fd5582a5b983f9b4769, "not a Trends pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Heaven, HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o: `sell` (the token for SOL) and `buy`, priced
+// against Chainlink's SOL/USD feed. The slot is `[program, pool, vaultA, vaultB, protocolConfig,
+// instructionsSysvar, chainlink, solUsdFeed, associatedTokenProgram, systemProgram]`: token A is the
+// launched token, token B wrapped SOL. The swap writes the authority, so it has to be attached
+// writable.
+function swapHeaven(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0xf11a449d46b98508822f426a0490132f445500841f0d9389a6d88bbc743c7f48, "not a Heaven pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  const sells = svm.sload(slot[2], 0, 32).toBe() == payMint.address;
+  const mintA = sells ? payMint : buyMint;
+  const mintB = sells ? buyMint : payMint;
+  svm.call(
+    program,
+    [
+      mintA.owner == token2022.address ? token2022 : tokenProgram,
+      mintB.owner == token2022.address ? token2022 : tokenProgram,
+      slot[8],
+      slot[9],
+      slot[1],
+      trader[0],
+      mintA,
+      mintB,
+      sells ? trader[1] : recipient,
+      sells ? recipient : trader[1],
+      slot[2],
+      slot[3],
+      slot[4],
+      slot[5],
+      slot[6],
+      slot[7],
+    ],
+    heavenData(amountIn, minOut == 0 ? 1 : minOut, sells),
+  );
+}
+
+// Heaven's `sell` of `amountIn` of its token A (`aToB`) or `buy` with `amountIn` of SOL, `minOut` its
+// least out.
+export function heavenData(amountIn: Uint256, minOut: Uint256, aToB: bool): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // The amount, the floor, then the event's empty name.
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const sell = hex`33e685a4017f83ad`;
+  const buy = hex`66063d1201daebea`;
+  const ix = aToB ? sell : buy;
+  return ix.concat(word.toBytesLe(20));
+}
+
+export function heaven(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHeaven(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryHeaven(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0xf11a449d46b98508822f426a0490132f445500841f0d9389a6d88bbc743c7f48 &&
+    pool.owner ==
+      0xf11a449d46b98508822f426a0490132f445500841f0d9389a6d88bbc743c7f48, "not a Heaven pool");
+  const sells = svm.sload(slot[2], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(sells ? slot[3] : slot[2], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHeaven(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: token A's and token B's programs, the Associated Token program, the System program,
+// the pool, the authority (writable), mints A and B, the authority's A and B token accounts (the
+// paying one among them), the pool's A and B vaults, the protocol config, the Instructions sysvar,
+// Chainlink's program and its SOL/USD feed. It sells token A when `aToB`.
+export function heavenCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0xf11a449d46b98508822f426a0490132f445500841f0d9389a6d88bbc743c7f48, "not a Heaven pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // The amount, the floor, then the event's empty name.
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const sell = hex`33e685a4017f83ad`;
+  const buy = hex`66063d1201daebea`;
+  const ix = aToB ? sell : buy;
+  const data = ix.concat(word.toBytesLe(20));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Virtuals, 5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki: `sell`, the launched token for VIRTUAL. Its
+// `buy` takes the tokens to buy rather than what to pay, so it is not here. The slot is `[program,
+// pool, poolTokenAccount, platform, platformVirtualsAccount, poolVirtualsAccount]`, the pool's and
+// the platform's token accounts. Its swap takes SPL Token for both tokens.
+function swapVirtuals(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x425bf4171973f0c028277e1db97808d543063ae1bc573e0cb8f4077d1faa284b, "not a Virtuals pool");
+  require(svm.sload(slot[2], 0, 32).toBe() == trader[2].address, "Virtuals only sells its token");
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[1],
+      trader[2],
+      recipient,
+      trader[1],
+      slot[2],
+      slot[3],
+      slot[4],
+      slot[5],
+      trader[4],
+    ],
+    virtualsData(amountIn, minOut == 0 ? 1 : minOut),
+  );
+}
+
+// Virtuals' `sell` of `amountIn` of the launched token, `minOut` its least out.
+export function virtualsData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const sell = hex`33e685a4017f83ad`;
+  return sell.concat(word.toBytesLe(16));
+}
+
+export function virtuals(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapVirtuals(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryVirtuals(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(slot[0].address == 0x425bf4171973f0c028277e1db97808d543063ae1bc573e0cb8f4077d1faa284b &&
+    pool.owner ==
+      0x425bf4171973f0c028277e1db97808d543063ae1bc573e0cb8f4077d1faa284b, "not a Virtuals pool");
+  if (svm.sload(slot[5], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapVirtuals(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority, the pool, the token's mint, the authority's VIRTUAL and token accounts
+// (the token one paying), the pool's token account, the platform, its VIRTUAL account, the pool's
+// VIRTUAL account, and SPL Token.
+export function virtualsCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x425bf4171973f0c028277e1db97808d543063ae1bc573e0cb8f4077d1faa284b, "not a Virtuals pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const sell = hex`33e685a4017f83ad`;
+  const data = sell.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Raydium LaunchLab, LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj: `sell_exact_in` and `buy_exact_in`,
+// with no platform share. Its swap takes more accounts than a function can list, so it has only its
+// `Cpi` and `Data` forms.
+// Raydium LaunchLab's `sell_exact_in` of `amountIn` of the base token (`paysBase`) or `buy_exact_in`
+// with `amountIn` of the quote token, `minOut` its least out.
+export function raydiumLaunchlabData(amountIn: Uint256, minOut: Uint256, paysBase: bool): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // The amount, the floor, then a zero share rate.
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const sell = hex`9527de9bd37c981a`;
+  const buy = hex`faea0d7bd59c13ec`;
+  const ix = paysBase ? sell : buy;
+  return ix.concat(word.toBytesLe(24));
+}
+
+// `accounts`: the authority (writable), the program's authority, the global config, the platform
+// config, the pool, the authority's base and quote token accounts (the paying one among them), the
+// pool's base and quote vaults, the base and quote mints, their token programs, the event authority,
+// the program itself, then the System program, the platform's fee vault and the creator's. It sells
+// the base token when `paysBase`. A creator's fee vault that does not exist yet is created, the
+// authority paying its rent, which a Pot cannot.
+export function raydiumLaunchlabCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+  paysBase: bool,
+): Uint256 {
+  require(program.address ==
+    0x05043b954dca26e1ef91b52c4f8f89af8a6f5ac8c62156f171cf0f21ac51c922, "not a Raydium LaunchLab pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // The amount, the floor, then a zero share rate.
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const sell = hex`9527de9bd37c981a`;
+  const buy = hex`faea0d7bd59c13ec`;
+  const ix = paysBase ? sell : buy;
+  const data = ix.concat(word.toBytesLe(24));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Runner Rodeo, runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA: `swap`. Its swap takes more accounts than a
+// function can list, so it has only its `Cpi` and `Data` forms.
+// Runner Rodeo's `swap`: exact input of `amountIn`, `minOut` its least out. The direction is the
+// accounts'.
+export function runnerRodeoData(amountIn: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  return swap.concat(word.toBytesLe(16));
+}
+
+// `accounts`: the program's authority, the authority (writable), the config, the pool, the
+// authority's paying and receiving token accounts, the base and quote vaults, the protocol's two fee
+// accounts and the creator's, the base and quote mints, their token programs, the System program,
+// the event authority, and the program itself.
+export function runnerRodeoCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x0cc9261f431106898771b2351ba8fb1e971c126de8a97be35dd541d18070a979, "not a Runner Rodeo pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const swap = hex`f8c69e91e17587c8`;
+  const data = swap.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Scale vMM, SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa: `buy` (paying token A) and `sell`. Its swap
+// takes more accounts than a function can list, so it has only its `Cpi` and `Data` forms.
+// Scale vMM's `buy`, paying token A (`aToB`), or `sell`: exact input of `amountIn`, `minOut` its
+// least out.
+export function scaleVmmData(amountIn: Uint256, minOut: Uint256, aToB: bool): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const buy = hex`66063d1201daebea`;
+  const sell = hex`33e685a4017f83ad`;
+  const ix = aToB ? buy : sell;
+  return ix.concat(word.toBytesLe(16));
+}
+
+// `accounts`: the pair, the authority (writable), mints A and B, the authority's A and B token
+// accounts (the paying one among them), vaults A and B, the platform's A fee account, A's and B's
+// token programs, the System program, the platform config, the Scale AMM program and its pool, vaults
+// and config (for a swap that graduates the pair), and each fee beneficiary's token account. It
+// buys, paying token A, when `aToB`.
+export function scaleVmmCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+  aToB: bool,
+): Uint256 {
+  require(program.address ==
+    0x067423cf82a920c91a0c21e7e8be45af210e1f3d1b89c22f7cb955b76fb52cfb, "not a Scale vMM pair");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64);
+  const buy = hex`66063d1201daebea`;
+  const sell = hex`33e685a4017f83ad`;
+  const ix = aToB ? buy : sell;
+  const data = ix.concat(word.toBytesLe(16));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}

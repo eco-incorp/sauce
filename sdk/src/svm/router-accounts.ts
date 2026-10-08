@@ -283,6 +283,41 @@ export const ROUTER_SVM_VENUES = {
     data: "goonfiV2Data",
     cpi: "goonfiV2Cpi",
   },
+  "meteora-dbc": {
+    program: "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+    data: "meteoraDbcData",
+    cpi: "meteoraDbcCpi",
+  },
+  trends: {
+    program: "CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz",
+    data: "trendsData",
+    cpi: "trendsCpi",
+  },
+  heaven: {
+    program: "HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o",
+    data: "heavenData",
+    cpi: "heavenCpi",
+  },
+  virtuals: {
+    program: "5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki",
+    data: "virtualsData",
+    cpi: "virtualsCpi",
+  },
+  "raydium-launchlab": {
+    program: "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj",
+    data: "raydiumLaunchlabData",
+    cpi: "raydiumLaunchlabCpi",
+  },
+  "runner-rodeo": {
+    program: "runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA",
+    data: "runnerRodeoData",
+    cpi: "runnerRodeoCpi",
+  },
+  "scale-vmm": {
+    program: "SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa",
+    data: "scaleVmmData",
+    cpi: "scaleVmmCpi",
+  },
 } as const;
 
 export type RouterSvmVenue = keyof typeof ROUTER_SVM_VENUES;
@@ -328,8 +363,8 @@ export interface RouterSvmAccountOptions {
   readonly tickArrays?: 1 | 2 | 3;
   /** PumpSwap: the pool has a coin creator, so its swap takes the pool's v2 account. */
   readonly poolV2?: boolean;
-  /** Scale AMM: how many fee beneficiaries the pool pays, each a token account at the end; 1 when
-   *  absent. */
+  /** Scale AMM and Scale vMM: how many fee beneficiaries the pool pays, each a token account at the
+   *  end; 1 when absent. */
   readonly beneficiaries?: number;
   /** Meteora DLMM: how many bin arrays the swap crosses, from the active bin's onwards in the trade's
    *  direction; 3 when absent. */
@@ -360,8 +395,8 @@ export function routerSvmAccountOrder(
   if (options.poolV2 !== undefined && venue !== "pumpswap") {
     throw new Error(`poolV2 is PumpSwap's alone, not ${venue}'s`);
   }
-  if (options.beneficiaries !== undefined && venue !== "scale-amm") {
-    throw new Error(`beneficiaries is Scale AMM's alone, not ${venue}'s`);
+  if (options.beneficiaries !== undefined && venue !== "scale-amm" && venue !== "scale-vmm") {
+    throw new Error(`beneficiaries is Scale's alone, not ${venue}'s`);
   }
   if (options.binArrays !== undefined && venue !== "meteora-dlmm") {
     throw new Error(`binArrays is Meteora DLMM's alone, not ${venue}'s`);
@@ -595,6 +630,13 @@ const EXACT_IN_VENUES = [
   "flint",
   "deriverse",
   "goonfi-v2",
+  "meteora-dbc",
+  "trends",
+  "heaven",
+  "virtuals",
+  "raydium-launchlab",
+  "runner-rodeo",
+  "scale-vmm",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1079,6 +1121,144 @@ function exactInAccountOrder(
         r("tokenProgramB"),
         r("validator"),
       ];
+    case "meteora-dbc":
+      return [
+        r("poolAuthority"),
+        r("config"),
+        w("pool"),
+        w("source"),
+        w("recipient"),
+        w("vaultA"),
+        w("vaultB"),
+        r("mintA"),
+        r("mintB"),
+        AUTHORITY,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("program"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "trends":
+      return [
+        r("config"),
+        w("pool"),
+        r("poolAuthority"),
+        w("source"),
+        w("recipient"),
+        r("mintA"),
+        r("mintB"),
+        w("vaultA"),
+        w("vaultB"),
+        AUTHORITY,
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("program"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "heaven":
+      return [
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("associatedTokenProgram"),
+        r("systemProgram"),
+        w("pool"),
+        PAYER,
+        r("mintA"),
+        r("mintB"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        w("protocolConfig"),
+        r("instructionsSysvar"),
+        r("chainlink"),
+        r("solUsdFeed"),
+      ];
+    case "virtuals":
+      if (!aToB) throw new Error("Virtuals' buy takes the tokens bought, not what to pay");
+      return [
+        AUTHORITY,
+        w("pool"),
+        r("mintA"),
+        w("recipient"),
+        w("source"),
+        w("poolTokenAccount"),
+        w("platform"),
+        w("platformVirtualsAccount"),
+        w("poolVirtualsAccount"),
+        r("tokenProgram"),
+      ];
+    case "raydium-launchlab":
+      return [
+        PAYER,
+        r("poolAuthority"),
+        r("globalConfig"),
+        r("platformConfig"),
+        w("pool"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        r("mintA"),
+        r("mintB"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("eventAuthority"),
+        r("program"),
+        r("systemProgram"),
+        w("platformVault"),
+        w("creatorVault"),
+      ];
+    case "runner-rodeo":
+      return [
+        r("poolAuthority"),
+        PAYER,
+        r("config"),
+        w("pool"),
+        w("source"),
+        w("recipient"),
+        w("vaultA"),
+        w("vaultB"),
+        w("protocolFeeA"),
+        w("protocolFeeB"),
+        w("creatorFee"),
+        r("mintA"),
+        r("mintB"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("systemProgram"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "scale-vmm": {
+      const count = options.beneficiaries ?? 1;
+      if (!Number.isInteger(count) || count < 0) {
+        throw new Error(`beneficiaries is a count, not ${count}`);
+      }
+      return [
+        w("pool"),
+        PAYER,
+        r("mintA"),
+        r("mintB"),
+        ownerA,
+        ownerB,
+        w("vaultA"),
+        w("vaultB"),
+        w("platformFeeA"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("systemProgram"),
+        r("platformConfig"),
+        r("ammProgram"),
+        w("ammPool"),
+        w("ammVaultA"),
+        w("ammVaultB"),
+        r("ammConfig"),
+        ...Array.from({ length: count }, (_, i) => w(`beneficiary${i}`)),
+      ];
+    }
     default: {
       const unknown: never = venue;
       throw new Error(`not a venue @sauce/router swaps at an exact input: ${String(unknown)}`);

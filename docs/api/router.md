@@ -726,6 +726,10 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `flint`                | Flint                 | `FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z`  | `marketB, vaultA, vaultB, instructionsSysvar` (market A as the pool)                                                                 |
 | `deriverse`            | Deriverse             | `DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD` | `assetVault, crncyVault, bidsTree, bidOrders, asksTree, askOrders, lines, maps, clientInfos` (the instrument as the pool)            |
 | `goonfiV2`             | GoonFi v2             | `goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE`  | `vaultA, vaultB, oracle, globalConfig, instructionsSysvar, validator`                                                                |
+| `meteoraDbc`           | Meteora DBC           | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`  | `poolAuthority, config, baseVault, quoteVault, eventAuthority`                                                                       |
+| `trends`               | Trends                | `CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz` | `config, poolAuthority, baseVault, quoteVault, eventAuthority`                                                                       |
+| `heaven`               | Heaven                | `HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o` | `vaultA, vaultB, protocolConfig, instructionsSysvar, chainlink, solUsdFeed, associatedTokenProgram, systemProgram`                   |
+| `virtuals`             | Virtuals (selling)    | `5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki` | `poolTokenAccount, platform, platformVirtualsAccount, poolVirtualsAccount`                                                           |
 
 Each row names four functions: the one listed, its `try` form, its `Cpi` form and its `Data`
 form. Raydium CP-Swap
@@ -746,18 +750,30 @@ sells only its token A. SolFi v2, TaurusFi, Deriverse and GoonFi v2 write the au
 attached writable, and Deriverse requires the authority's associated token accounts. Hadron and
 TaurusFi pay wrapped SOL into, and take it out of, native wrapped-SOL accounts.
 
-Six venues take more accounts in their swap than a function can list. A function other than
+Meteora DBC, Trends, Heaven, Virtuals, Raydium LaunchLab, Runner Rodeo and Scale vMM are bonding
+curves: each sells a launched token against its quote token until the token graduates, and a
+graduated or paused curve refuses the swap. Trends runs the DBC's data on its own accounts. Heaven
+writes the authority, so it is attached writable. Virtuals' buy takes the tokens to buy rather than
+what to pay, so only its sell is here. A Raydium LaunchLab swap creates the creator's fee vault when
+it is missing, the authority paying its rent, which a Pot cannot: create it first. A curve settled in
+native SOL on the authority (pump.fun's bonding curve, Boop, Moonit) is not here, since a Pot holds
+no native SOL it can pay out.
+
+Nine venues take more accounts in their swap than a function can list. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
 forms, on the list the caller's `main` builds:
 
-| Functions     | Venue        | Program                                        |
-| ------------- | ------------ | ---------------------------------------------- |
-| `scaleAmm`    | Scale AMM    | `SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA`  |
-| `pumpswap`    | PumpSwap     | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
-| `bonkswap`    | Bonkswap     | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
-| `guacswap`    | Guacswap     | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
-| `meteoraDlmm` | Meteora DLMM | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  |
-| `sarosDlmm`   | Saros DLMM   | `1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE`  |
+| Functions          | Venue             | Program                                        |
+| ------------------ | ----------------- | ---------------------------------------------- |
+| `scaleAmm`         | Scale AMM         | `SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA`  |
+| `pumpswap`         | PumpSwap          | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
+| `bonkswap`         | Bonkswap          | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
+| `guacswap`         | Guacswap          | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
+| `meteoraDlmm`      | Meteora DLMM      | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  |
+| `sarosDlmm`        | Saros DLMM        | `1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE`  |
+| `raydiumLaunchlab` | Raydium LaunchLab | `LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj`  |
+| `runnerRodeo`      | Runner Rodeo      | `runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA`  |
+| `scaleVmm`         | Scale vMM         | `SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa`  |
 
 A PumpSwap buy takes the authority's volume accumulator, and it has to exist already. A Pot can't
 pay to create it, because the System program won't move lamports out of an account that holds data.
@@ -796,7 +812,8 @@ no floor of their own; for these, a `Data` or `Cpi` caller enforces the floor it
 - the MetaDAO futarchy form skips a DAO not in its spot state, and an empty side;
 - the Saber decimal wrapper form skips a withdrawal the vault cannot pay;
 - the SolFi v2, Hadron, TaurusFi, Riptide, Denali, Gavel, Tessera V, Flint, Deriverse and GoonFi v2
-  forms skip an empty side.
+  forms skip an empty side;
+- the Meteora DBC, Trends, Heaven and Virtuals forms skip an empty side.
 
 "Dust" is an input too small to buy one unit at the pool's price after its fee. It is estimated from
 the vaults' balances. A venue's own refusal that the checks don't foresee still fails the
@@ -851,6 +868,13 @@ because an account list passed to a function is built as an array first, where o
 | Flint                             |  13,666 |        14,507 |       18,247 |    47,604 |       55,243 |         8,241 |
 | Deriverse                         |  18,264 |        23,510 |       27,426 |    64,142 |       71,407 |        39,027 |
 | GoonFi v2                         |  18,097 |        22,772 |       26,804 |    64,586 |       72,225 |        65,485 |
+| Meteora DBC                       |  14,172 |        17,452 |       21,600 |    58,423 |       68,215 |        31,171 |
+| Trends                            |  13,358 |        16,638 |       20,786 |    57,428 |       67,220 |        42,988 |
+| Heaven                            |  16,713 |        21,629 |       26,589 |    70,052 |       79,844 |        48,893 |
+| Virtuals (selling)                |  13,375 |        16,655 |       20,803 |    39,790 |       46,866 |        27,853 |
+| Raydium LaunchLab                 |  16,392 |        21,282 |       26,242 |           |              |        46,034 |
+| Runner Rodeo                      |  14,874 |        18,154 |       22,302 |           |              |        51,904 |
+| Scale vMM                         |  17,623 |        22,390 |       27,350 |           |              |        46,619 |
 
 Each row is the first trade direction `svm-exact-in.e2e.test.ts` runs. The other direction is within
 about 1,600 units. Perena's slot forms include the scan for its two tokens' indices. A venue's own
