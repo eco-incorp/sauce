@@ -8,7 +8,7 @@ const executionFee = 1_000n;
 
 const built = Base.hop({
   source: Ethereum,
-  reward: { token: Ethereum.USDC.address, amount: 10_000n },
+  send: { token: Ethereum.USDC.address, amount: 10_000n },
   refundee: "0x4444444444444444444444444444444444444444",
   fee: executionFee,
 }).then(() => {

@@ -22,7 +22,7 @@ const usdcOn = (chain: typeof Base.chain) => {
 // Executor owns.
 export const built = Ethereum.hop({
   source: Base,
-  reward: { token: usdcOn(Base.chain), amount: 1_010_000n },
+  send: { token: usdcOn(Base.chain), amount: 1_010_000n },
   receive: { token: usdcOn(Ethereum.chain), amount: 1_000_000n },
   refundee: owner,
   fee: ethereumFee,

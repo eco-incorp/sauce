@@ -7,7 +7,7 @@ yours_. A program opens one by hopping to that chain:
 
 ```js
 await Base.hop({
-  reward: { token: USDC, amount: 1010000 },
+  send: { token: USDC, amount: 1010000 },
   receive: { token: USDC, amount: 1000000 },
   refundee: refundTo,
 });
@@ -15,7 +15,7 @@ USDC.transfer(recipient, 1000000); // runs on Base
 ```
 
 The chain you hop to is the **destination**, where the body runs: the code after the `await`, and
-therefore which compiler target, token addresses and protocol deployments apply. `reward` is
+therefore which compiler target, token addresses and protocol deployments apply. `send` is
 escrowed on the **source**, the chain the program runs on, until someone earns it; `receive` names
 what a solver delivers on the destination for the body to use. As in JavaScript, `await x; rest` is
 `x.then(() => { rest })`, so `Base.hop({ … }).then(() => { … })` is the same intent with its body
@@ -29,11 +29,11 @@ import { Base, Ethereum } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 export function buildApprovalIntent(
-  reward: routes.HopReward,
+  send: routes.HopSend,
   refundee: routes.HopAddress,
   executionFee: bigint,
 ) {
-  return Base.hop({ source: Ethereum, reward, refundee, fee: executionFee }).then(() => {
+  return Base.hop({ source: Ethereum, send, refundee, fee: executionFee }).then(() => {
     USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
   });
 }
@@ -65,7 +65,7 @@ A hop's one object sets both sides of the intent, each field at most once and in
 | Field or step    | Sets                                                                           | When you omit it                                           |
 | ---------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
 | `Base.hop`       | Destination chain, where the body runs                                         | Required                                                   |
-| `reward`         | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; it must offer something                          |
+| `send`           | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; it must offer something                          |
 | `source`         | Chain where the reward is escrowed and the intent published                    | Required in TypeScript; in a program, the chain it runs on |
 | `refundee`       | The refund address: who may reclaim an unearned reward                         | Required; see [the refundee](#where-each-value-comes-from) |
 | `rewardDeadline` | From when an unproven reward may be refunded                                   | The fill deadline plus seven days                          |
@@ -76,7 +76,7 @@ A hop's one object sets both sides of the intent, each field at most once and in
 | `salt`           | The route's salt                                                               | 32 random bytes, picked per compile                        |
 | `.then(body)`    | The body: a closure, or the statements of one                                  | In a program, what follows `await`                         |
 
-`reward` and `receive` each take one item or a list of them.
+`send` and `receive` each take one item or a list of them.
 
 [Intent defaults](../reference/intent-defaults.md) gives each default and why it is Eco's.
 TypeScript builds the intent where no chain is read, so the source has no default there; the
@@ -186,7 +186,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 
   return Base.hop({
     source: config.source,
-    reward: { token: config.rewardToken, amount: config.rewardAmount },
+    send: { token: config.rewardToken, amount: config.rewardAmount },
     receive: { token: config.baseUsdc, amount },
     refundee: config.refundee,
     deadline: config.routeDeadline,
@@ -212,7 +212,7 @@ _while_ it is running, which is what you want when the amount is the output of t
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   await Arbitrum.hop({
-    reward: { token: USDC, amount },
+    send: { token: USDC, amount },
     receive: { token: USDC, amount },
     refundee: refundTo,
   });
@@ -233,7 +233,7 @@ is the argument of `.then(...)`, and this is the same program:
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.hop({
-    reward: { token: USDC, amount },
+    send: { token: USDC, amount },
     receive: { token: USDC, amount },
     refundee: refundTo,
   }).then(() => {
@@ -304,7 +304,7 @@ function fee(amount: Uint256): Uint256 {
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   await Arbitrum.hop({
-    reward: { token: USDC, amount },
+    send: { token: USDC, amount },
     receive: { token: USDC, amount },
     refundee: refundTo,
   });
@@ -331,14 +331,14 @@ of hops, each paying the next what it was delivered, is written; see
 
 ### Names resolve per chain
 
-Two chains meet in `await Arbitrum.hop({ reward, receive, refundee })`, and each part belongs to
+Two chains meet in `await Arbitrum.hop({ send, receive, refundee })`, and each part belongs to
 one of them. A token symbol resolves on the chain where its part runs:
 
 | Part                                                     | Computed on                   | `USDC` is                              |
 | -------------------------------------------------------- | ----------------------------- | -------------------------------------- |
 | The body, what follows `await` or `.then(() => { ... })` | Arbitrum, the destination     | Arbitrum's                             |
 | `receive`, what is delivered                             | The chain the program runs on | Arbitrum's: a token is looked up again |
-| `reward` and every other field                           | The chain the program runs on | That chain's                           |
+| `send` and every other field                             | The chain the program runs on | That chain's                           |
 
 The reward belongs to the enclosing chain because the program escrows it there: it pays the reward
 token into the intent's vault on that chain's Portal and publishes the intent in the same
@@ -382,7 +382,7 @@ function main(beneficiary: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   try {
     await Ethereum.hop({
-      reward: { token: USDC, amount },
+      send: { token: USDC, amount },
       receive: { token: USDC, amount },
       refundee: refundTo,
     });
@@ -422,7 +422,7 @@ function main(recipient: Address, refundTo: Address) {
   const delivered = amount - amount / 1000;
   try {
     await Ethereum.hop({
-      reward: { token: USDC, amount },
+      send: { token: USDC, amount },
       receive: { token: USDC, amount: delivered },
       refundee: refundTo,
     });
@@ -572,7 +572,7 @@ Each of these is a compile error naming the construct, never a silently differen
 - An identifier that is neither a compile-time value nor a variable of the enclosing program.
 - A hop with no body (no `.then(() => { ... })` and nothing after an `await`), or a step after the
   wrong one, such as `.catch(...)` before `.then(...)`.
-- A hop with no `reward`, an empty `reward: []`, an item missing `token` or `amount`, or a
+- A hop with no `send`, an empty `send: []`, an item missing `token` or `amount`, or a
   `{ native }` item in `receive`.
 - A missing refundee: every intent names its own. A missing fee for a program body that nothing
   supplies.

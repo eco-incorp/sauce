@@ -1,7 +1,7 @@
 /**
  * An intent written inside a program, EXECUTED on chains whose tokens live at DIFFERENT addresses.
  *
- * `Chain.hop({ reward, receive, refundee }).then(() => { ... })` names tokens on two chains at once: the
+ * `Chain.hop({ send, receive, refundee }).then(() => { ... })` names tokens on two chains at once: the
  * body's run on the destination, and the reward's are escrowed — paid into the vault — on the chain the program runs on. The
  * only way to show that a lowering named the right chain's token is to give each chain a different
  * one, and to have every other chain's address be empty there, as it is on a real chain.
@@ -413,10 +413,10 @@ const CHAINS = [base, arbitrum, optimism, ethereum];
  */
 const THREE_CHAIN_CASCADE = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       const swapped = USDC.balanceOf(ctx.self());
-      Optimism.hop({ reward: { token: USDC, amount: swapped }, receive: { token: USDC, amount: swapped }, refundee: ${CREATOR} })
+      Optimism.hop({ send: { token: USDC, amount: swapped }, receive: { token: USDC, amount: swapped }, refundee: ${CREATOR} })
         .then(() => {
           USDC.transfer(RECIPIENT, swapped);
         });
@@ -424,7 +424,7 @@ const THREE_CHAIN_CASCADE = `function main() {
 }`;
 
 /**
- * The same three chains, written `Chain.hop({ reward, receive, refundee }).then(body)`, with each
+ * The same three chains, written `Chain.hop({ send, receive, refundee }).then(body)`, with each
  * delivery an amount computed where the intent opens (`amount * 99n / 100n`): spliced in at run
  * time on Base, and again on Arbitrum by the program the outer body compiles to. Each level names
  * its own creator, one a run-time value: nothing comes from the level above or the options.
@@ -433,10 +433,10 @@ const PORTAL_CREATOR = "0x4444444444444444444444444444444444444444";
 const PORTAL_CASCADE = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   const refundTo = ${PORTAL_CREATOR};
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount: amount * 99n / 100n }, refundee: refundTo })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount: amount * 99n / 100n }, refundee: refundTo })
     .then(() => {
       const arrived = USDC.balanceOf(ctx.self());
-      Optimism.hop({ reward: [{ token: USDC, amount: arrived }], receive: [{ token: USDC, amount: arrived * 99n / 100n }], refundee: ${PORTAL_CREATOR} })
+      Optimism.hop({ send: [{ token: USDC, amount: arrived }], receive: [{ token: USDC, amount: arrived * 99n / 100n }], refundee: ${PORTAL_CREATOR} })
         .then(() => {
           USDC.transfer(RECIPIENT, arrived * 99n / 100n);
         });
@@ -786,7 +786,7 @@ function sum(parts: Uint256[]): Uint256 {
 function main() {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= MIN_AMOUNT);
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
       const parts: Uint256[] = [held - fee(held), fee(held)];
@@ -824,7 +824,7 @@ function half(): Uint256 {
 function main() {
   total = USDC.balanceOf(ctx.self());
   require(total >= MIN_AMOUNT);
-  Arbitrum.hop({ reward: { token: USDC, amount: total }, receive: { token: USDC, amount: total }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: total }, receive: { token: USDC, amount: total }, refundee: ${CREATOR} })
     .then(() => {
       USDC.transfer(RECIPIENT, half());
     });
@@ -848,7 +848,7 @@ function main() {
     // the block's time, as Eco's Portal app quotes them.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
     });
@@ -902,7 +902,7 @@ function main() {
     // the failure the suite above exists to rule out, shown to be real rather than assumed.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.hop({ reward: { token: ARBITRUM_USDC, amount }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: ARBITRUM_USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
     });

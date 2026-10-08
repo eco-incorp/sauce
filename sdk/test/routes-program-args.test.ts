@@ -48,7 +48,7 @@ describe("a program compiled for main's arguments", () => {
 
   it("folds them into the intents main opens, whose bodies then capture nothing", () => {
     const opened = (amount: string, recipient: string) =>
-      `Arbitrum.hop({ reward: { token: USDC, amount: ${amount} }, receive: { token: USDC, amount: ${amount} * 99 / 100 }, refundee: ${CREATOR} })
+      `Arbitrum.hop({ send: { token: USDC, amount: ${amount} }, receive: { token: USDC, amount: ${amount} * 99 / 100 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(${recipient}, ${amount} * 99 / 100); });`;
     const bound = compileSauceProgram(
       "base",

@@ -3,7 +3,7 @@
  * host signature: `hop` and the `HostIntent` its `then` returns. Nothing is declared globally: a
  * chain named in a closure comes from the same import as the host calls
  * (`routes-chain-exports-types.test.ts` pins that a bare one is an error). An intent a closure
- * opens, `Ethereum.hop({ reward, refundee }).then(...)`, typechecks through the export's `hop`:
+ * opens, `Ethereum.hop({ send, refundee }).then(...)`, typechecks through the export's `hop`:
  * `routes-intent-portal-types.test.ts`.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -22,9 +22,9 @@ type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 const hop: Equal<typeof Base.hop, routes.ChainHop> = true;
 
-const received = Base.hop({ source: Ethereum, reward: { token: "0x4444444444444444444444444444444444444444", amount: 1n }, refundee: "0x4444444444444444444444444444444444444444", compile: { defines: { RECIPIENT: 1n } } });
+const received = Base.hop({ source: Ethereum, send: { token: "0x4444444444444444444444444444444444444444", amount: 1n }, refundee: "0x4444444444444444444444444444444444444444", compile: { defines: { RECIPIENT: 1n } } });
 const fromSource: routes.HostIntent = received.then("USDC.transfer(RECIPIENT, 1);");
-const fromClosure: routes.HostIntent = Base.hop({ source: "ethereum", reward: [], receive: { token: "0x4444444444444444444444444444444444444444", amount: 1n }, refundee: "0x4444444444444444444444444444444444444444", fee: 0n })
+const fromClosure: routes.HostIntent = Base.hop({ source: "ethereum", send: [], receive: { token: "0x4444444444444444444444444444444444444444", amount: 1n }, refundee: "0x4444444444444444444444444444444444444444", fee: 0n })
   .then(() => {});
 export const all = [fromSource, fromClosure, hop];
 `;
@@ -33,9 +33,9 @@ export const all = [fromSource, fromClosure, hop];
 const NOT_IMPORTED = `
 import { Base } from ${ROOT};
 
-Base.hop({ source: "base", reward: [], refundee: "0x4444444444444444444444444444444444444444" })
+Base.hop({ source: "base", send: [], refundee: "0x4444444444444444444444444444444444444444" })
   .then(() => {
-    Ethereum.hop({ reward: { token: USDC, amount: 1n }, refundee: 0x44n }).then(() => {});
+    Ethereum.hop({ send: { token: USDC, amount: 1n }, refundee: 0x44n }).then(() => {});
   });
 `;
 

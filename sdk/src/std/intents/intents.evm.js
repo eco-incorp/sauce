@@ -3,7 +3,7 @@
 // An Eco intent opened from inside a program, a hop to another chain:
 //
 //   await Arbitrum.hop({
-//     reward: { token: USDC, amount },
+//     send: { token: USDC, amount },
 //     receive: { token: USDC, amount: delivered },
 //     refundee: owner,
 //   });
@@ -37,7 +37,7 @@ import { approve, transfer } from "@sauce/token";
 // survives a `try` block, which runs as a program of its own.
 const SAUCE_INTENTS_NONCE = 0x91da66d2ed07997bae5bcd0c9e8b6e7824eb17d69e494553b5ad7ec46532b578;
 
-// What a hop's `reward` or `receive` lists, recorded as it is given, and what a list of them becomes.
+// What a hop's `send` or `receive` lists, recorded as it is given, and what a list of them becomes.
 class Items {
   constructor() {
     this.list = Lists.empty();
@@ -103,12 +103,12 @@ export class Level {
 // runs on (`level`) sees it — that chain's Portal, the prover, its shared Pot and engine, its Kitchen
 // fee, its tokens by symbol — with what `config` gives:
 //
-//   reward          what the program pays the solver, escrowed here: `{ token, amount }`,
-//                   `{ native: amount }`, or a list of them
+//   send            what leaves this chain: escrowed here, it pays the solver (the Portal's reward):
+//                   `{ token, amount }`, `{ native: amount }`, or a list of them
 //   receive         what the solver delivers there, for the body: `{ token, amount }` or a list
-//   refundee        who may reclaim an unearned reward (the reward's `creator`); required
+//   refundee        who may reclaim what was sent, unearned (the reward's `creator`); required
 //   deadline        the last second the intent may be filled
-//   rewardDeadline  from when an unproven reward may be refunded
+//   rewardDeadline  from when what was sent, if no fill is proven, may be refunded
 //   prover          the prover on this chain
 //   salt            the route's salt, used as written
 //   fee             the destination Kitchen's fee the body's cook pays, in wei
@@ -118,13 +118,13 @@ export class Intent {
   constructor(destination, level, config) {
     if (config === undefined || config.length !== undefined) {
       throw new Error(
-        "`hop(...)` takes one object: `hop({ reward: { token, amount }, receive: { token, amount }, refundee })`",
+        "`hop(...)` takes one object: `hop({ send: { token, amount }, receive: { token, amount }, refundee })`",
       );
     }
     // A field the hop does not take is a mistake, said by its name, as the editor's declarations say
     // it (`routes/intent-syntax.ts#HOP_FIELDS`, which the SDK's tests hold to this list).
     const fields = {
-      reward: true,
+      send: true,
       receive: true,
       refundee: true,
       deadline: true,
@@ -133,12 +133,17 @@ export class Intent {
       salt: true,
       fee: true,
     };
+    // A field under its former name says what it is called now.
+    const renamed = { reward: "what the source sends is `send`" };
     for (const key of Object.keys(config)) {
+      if (renamed[key] !== undefined) {
+        throw new Error("a hop takes no `" + key + "`: " + renamed[key]);
+      }
       if (fields[key] === undefined) {
         throw new Error(
           "a hop takes no `" +
             key +
-            "`: its fields are reward, receive, refundee, deadline, rewardDeadline, prover, salt and fee",
+            "`: its fields are send, receive, refundee, deadline, rewardDeadline, prover, salt and fee",
         );
       }
     }
@@ -203,27 +208,27 @@ export class Intent {
     const creator = config.refundee;
     if (creator === undefined) {
       throw new Error(
-        "a hop needs a `refundee`: the address an unfilled intent's reward is refunded to, and the only one that may redirect a refund. No default is safe: the Pot a program runs on may be shared, so a refund there is one anyone can take. Name the owner, or an address the program is given (`hop({ reward, refundee: refundTo })`).",
+        "a hop needs a `refundee`: the address an unfilled intent's reward is refunded to, and the only one that may redirect a refund. No default is safe: the Pot a program runs on may be shared, so a refund there is one anyone can take. Name the owner, or an address the program is given (`hop({ send, refundee: refundTo })`).",
       );
     }
 
-    // The reward, escrowed here.
-    if (config.reward === undefined) {
+    // What the hop sends: escrowed here, the Portal's reward.
+    if (config.send === undefined) {
       throw new Error(
-        "a hop needs a `reward`: what the program pays the solver, `{ token, amount }`, `{ native: amount }`, or a list of them",
+        "a hop needs a `send`: what leaves this chain to pay the solver, `{ token, amount }`, `{ native: amount }`, or a list of them",
       );
     }
     const rewardTokens = new Items();
     const funds = new Funds();
     const native = new Native();
-    if (config.reward.length !== undefined) {
-      for (const item of config.reward) this._rewardItem(item, rewardTokens, funds, native);
+    if (config.send.length !== undefined) {
+      for (const item of config.send) this._rewardItem(item, rewardTokens, funds, native);
     } else {
-      this._rewardItem(config.reward, rewardTokens, funds, native);
+      this._rewardItem(config.send, rewardTokens, funds, native);
     }
     if (rewardTokens.list.length == 0 && native.amount === undefined) {
       throw new Error(
-        "a hop's `reward` must offer something: a token amount, or `{ native: amount }`",
+        "a hop's `send` must offer something: a token amount, or `{ native: amount }`",
       );
     }
     const nativeAmount = native.amount === undefined ? 0 : native.amount;
@@ -363,15 +368,13 @@ export class Intent {
   _rewardItem(item, tokens, funds, native) {
     if (item.native !== undefined) {
       if (native.amount !== undefined) {
-        throw new Error("a hop's `reward` names its native amount once");
+        throw new Error("a hop's `send` names its native amount once");
       }
       native.amount = item.native;
       return;
     }
     if (item.token === undefined || item.amount === undefined) {
-      throw new Error(
-        "each item of a hop's `reward` is `{ token, amount }` or `{ native: amount }`",
-      );
+      throw new Error("each item of a hop's `send` is `{ token, amount }` or `{ native: amount }`");
     }
     tokens.add({ token: item.token, amount: item.amount });
     funds.add(item.token, item.amount);
@@ -379,7 +382,7 @@ export class Intent {
 
   _deliveryToken(item, tokens) {
     if (item.native !== undefined) {
-      throw new Error("a hop's `receive` names tokens: the native coin is paid in its `reward`");
+      throw new Error("a hop's `receive` names tokens: the native coin is paid in its `send`");
     }
     if (item.token === undefined || item.amount === undefined) {
       throw new Error("each item of a hop's `receive` is `{ token, amount }`");

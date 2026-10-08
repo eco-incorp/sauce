@@ -142,7 +142,7 @@ function main() {
       }
       const amount = USDC.balanceOf(0x1234n);
       Arbitrum.hop({
-        reward: [{ token: USDC, amount }],
+        send: [{ token: USDC, amount }],
         refundee: 0x3333333333333333333333333333333333333333n,
       }).then(() => {
         USDC.transfer(RECIPIENT, half(amount));

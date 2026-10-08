@@ -666,9 +666,13 @@ library exports, the chain's names among them).
 
 **Intents are a SauceScript class library, `@sauce/intents`** (`src/std/intents/intents.evm.js`),
 which the compiler runs while it compiles. The syntax is ONE verb with ONE config object (user,
-2026-10-06): `await Optimism.hop({ reward, receive?, refundee, deadline?, rewardDeadline?, prover?,
+2026-10-06): `await Optimism.hop({ send, receive?, refundee, deadline?, rewardDeadline?, prover?,
 salt?, fee? })`, the code after the `await` running on Optimism, or `Optimism.hop({ … }).then(() =>
-{ … })`, and `.catch((e) => …)` on what `.then` returns. `reward`/`receive` take one item or a list.
+{ … })`, and `.catch((e) => …)` on what `.then` returns. `send`/`receive` take one item or a list:
+`send` is what leaves the source chain, escrowed there to pay the solver (the Portal's reward, so
+`rewardDeadline` and every Portal struct keep the name), and `receive` what arrives on the
+destination. `send` was `reward` until the user renamed it (2026-10-08); a hop given `reward` is
+refused with "what the source sends is `send`".
 The chained `Chain.Portal.send(…).refundee(…).receive(…)` form is GONE (unreleased, no alias), and
 `Chain.Portal` is now just the chain's eco-routes Portal contract binding (`EcoRoutes.Portal`), for
 low-level calls, in a program and on the host. Each chain's class in the chain's module has
@@ -738,7 +742,7 @@ cascades on three anvils whose USDC differs; a test that gives a symbol one addr
 `tokens` override, a define) cannot see either defect.
 
 **A TypeScript intent is the program that opens it** (`routes/host-intent.ts`, lead, 2026-10-06):
-`Base.hop({ source, reward, receive, refundee, …, compile }).then(body)` writes the statement a
+`Base.hop({ source, send, receive, refundee, …, compile }).then(body)` writes the statement a
 program opens that intent with, compiles it for the source chain with `compile` (a
 `SauceProgramOptions`), and returns `{ source, program, cook(target, value), intents(logs) }`; a
 field it does not know is refused; the

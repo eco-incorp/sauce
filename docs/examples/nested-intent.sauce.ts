@@ -17,14 +17,14 @@
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
   await Base.hop({
-    reward: { token: USDC, amount: reward },
+    send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   });
   // On Base, in the fill of the outer intent.
   const payout = delivered - delivered / 1000;
   await Ethereum.hop({
-    reward: { token: USDC, amount: delivered },
+    send: { token: USDC, amount: delivered },
     receive: { token: USDC, amount: payout },
     refundee: refundTo, // every intent a program opens names its refundee
   });

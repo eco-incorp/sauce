@@ -109,7 +109,7 @@ const APPROVE = parseAbi(["function approve(address, uint256)"]);
  *  Base's shared Pot, paying the Kitchen's fee. */
 const INTENT = [
   "function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {",
-  "  Base.hop({ reward: { token: USDC, amount: reward }, receive: { token: USDC, amount }, refundee: refundTo })",
+  "  Base.hop({ send: { token: USDC, amount: reward }, receive: { token: USDC, amount }, refundee: refundTo })",
   "    .then(() => {",
   "      USDC.transfer(recipient, amount);",
   "    });",
@@ -126,7 +126,7 @@ const PERMIT2 = JSON.parse(
 const PORTAL_PROGRAM = [
   "function main(recipient: Address, refundTo: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount: amount * 99 / 100 }, refundee: refundTo })",
+  "  Base.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount: amount * 99 / 100 }, refundee: refundTo })",
   "    .then(() => {",
   "      USDC.transfer(recipient, amount * 99 / 100);",
   "    });",
@@ -347,7 +347,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     // A program, not a transfer alone: it cooks on the Pot and pays the Kitchen's fee.
     const built = Base.hop({
       source: Ethereum,
-      reward: { token: ethereumUsdc, amount: REWARD },
+      send: { token: ethereumUsdc, amount: REWARD },
       receive: { token: baseUsdc, amount: AMOUNT },
       refundee: OWNER.address,
       fee: fee,

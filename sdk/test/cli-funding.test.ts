@@ -161,7 +161,7 @@ describe("sauce run --fund, refused before anything is sent", () => {
   // Every `await` the compiler refuses reaches it as written: the program compiles as the user
   // wrote it before any funding wraps it, and `thenForm` leaves such a program untouched.
   const hop =
-    "Ethereum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to })";
+    "Ethereum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to })";
   it.each([
     [
       "in an `if`",
@@ -306,7 +306,7 @@ describe("the funding wrapper", () => {
 
   it("wraps a program that awaits an intent in its `.then` form: the sweep runs where it opens", () => {
     const opened =
-      "Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66, fee: 0 })";
+      "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66, fee: 0 })";
     const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
     for (const source of [
       `await ${opened};\nUSDC.transfer(0x66, 1);\n`,
@@ -322,7 +322,7 @@ describe("the funding wrapper", () => {
 
   it("leaves a program untouched where the compiler refuses one of its `await`s", () => {
     const hop =
-      "Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: to, fee: 0 })";
+      "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: to, fee: 0 })";
     const main = (...body: string[]) =>
       [
         "function main(to: Address, amount: Uint256): Uint256 {",
@@ -348,9 +348,9 @@ describe("the funding wrapper", () => {
   it("moves nothing: the user's statements keep their lines", () => {
     const source = [
       "function main(to: Address, amount: Uint256) {",
-      "  await Arbitrum.hop({ reward: { token: USDC, amount }, refundee: to, fee: 0 });",
+      "  await Arbitrum.hop({ send: { token: USDC, amount }, refundee: to, fee: 0 });",
       "  USDC.transfer(to, amount); // on Arbitrum",
-      "  await Optimism.hop({ reward: { token: USDC, amount }, refundee: to, fee: 0 });",
+      "  await Optimism.hop({ send: { token: USDC, amount }, refundee: to, fee: 0 });",
       "  USDC.transfer(to, 1);",
       "}",
       "",
@@ -368,7 +368,7 @@ describe("the funding wrapper", () => {
   it("an `await` is its `.then` form, byte for byte, in a `try` and nested in another", () => {
     const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
     const hop = (chain: string) =>
-      `await ${chain}.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to, fee: 0 });`;
+      `await ${chain}.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to, fee: 0 });`;
     for (const source of [
       `function main(to: Address, amount: Uint256) {\n  ${hop("Arbitrum")}\n  USDC.transfer(to, amount);\n  ${hop("Optimism")}\n  USDC.transfer(to, 1);\n}\n`,
       `function main(to: Address, amount: Uint256) {\n  try {\n    ${hop("Arbitrum")}\n    USDC.transfer(to, amount);\n    ${hop("Optimism")}\n    USDC.transfer(to, 1);\n  } catch (e) {\n    USDC.transfer(to, e.length);\n  }\n}\n`,

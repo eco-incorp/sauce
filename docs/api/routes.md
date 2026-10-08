@@ -16,12 +16,12 @@ There is no `/routes` subpath. The public types are members of the namespace: `r
 
 ## Chain entry points
 
-| Entry point                                                  | Result                                                           |
-| ------------------------------------------------------------ | ---------------------------------------------------------------- |
-| `Base.hop({ source, reward, receive, refundee }).then(body)` | The program that opens the intent, and its cook: [a hop](#a-hop) |
-| `routes.chainHop(ref)`                                       | The same `hop` for a chain reference                             |
-| `routes.chain(ref)`                                          | The chain accessor (`.chain`, `.hop`) for a chain reference      |
-| `routes.chainAccessors.Base`                                 | Explicit access to the bare chain accessor                       |
+| Entry point                                                | Result                                                           |
+| ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| `Base.hop({ source, send, receive, refundee }).then(body)` | The program that opens the intent, and its cook: [a hop](#a-hop) |
+| `routes.chainHop(ref)`                                     | The same `hop` for a chain reference                             |
+| `routes.chain(ref)`                                        | The chain accessor (`.chain`, `.hop`) for a chain reference      |
+| `routes.chainAccessors.Base`                               | Explicit access to the bare chain accessor                       |
 
 Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record.
 
@@ -39,7 +39,7 @@ know, and the builder refuses one at run time.
 | ---------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `source`         | The source chain, a reference or a chain export                    | Required                                                                   |
 | `compile`        | The source compile's options                                       | None                                                                       |
-| `reward`         | One `{ token, amount }` or `{ native: amount }`, or a list of them | Required; it must offer something                                          |
+| `send`           | One `{ token, amount }` or `{ native: amount }`, or a list of them | Required; it must offer something                                          |
 | `receive`        | One `{ token, amount }`, or a list of them                         | Nothing delivered                                                          |
 | `refundee`       | The refund address: who may reclaim an unearned reward             | Required                                                                   |
 | `deadline`       | The route's deadline                                               | When the cook runs, plus `routes.DEFAULT_FILL_WINDOW`                      |

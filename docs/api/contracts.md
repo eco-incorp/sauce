@@ -32,7 +32,7 @@ chain export's own `route`, `chain`, or a function property: composing the expor
 
 | Property           | What it is                                                                                                                                                                                            |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Base.hop`         | Opens an intent on Base, `Base.hop({ source, reward, receive, refundee }).then(body)`; see [routes](routes.md#a-hop)                                                                                  |
+| `Base.hop`         | Opens an intent on Base, `Base.hop({ source, send, receive, refundee }).then(body)`; see [routes](routes.md#a-hop)                                                                                    |
 | `Base.Portal`      | Base's eco-routes Portal contract, `Base.EcoRoutes.Portal`                                                                                                                                            |
 | `Base.chain`       | The chain record; see [routes](routes.md#chain-entry-points)                                                                                                                                          |
 | `Base.<Symbol>`    | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |

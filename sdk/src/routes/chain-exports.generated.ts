@@ -31,7 +31,7 @@
 // Every chain export carries its `hop` (`ChainHop`): in TypeScript it builds the program that
 // opens an intent to that chain and the cook that publishes it, and it takes a SauceScript token
 // value and amount as well as an address, so a typed closure's
-// `Ethereum.hop({ reward: { token: USDC, amount }, refundee })...` typechecks with the chain
+// `Ethereum.hop({ send: { token: USDC, amount }, refundee })...` typechecks with the chain
 // imported. Its `Portal` is the chain's eco-routes Portal contract, `EcoRoutes.Portal`.
 import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";

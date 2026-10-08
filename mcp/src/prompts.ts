@@ -142,7 +142,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   the destination Kitchen's fee when the body runs a program there (sauce_pot on",
               "   that chain reads it; pass it as intentExecutionFee). sauce_price reads a",
               "   pool's price for a swap in the body.",
-              "3. Every hop names its refundee, `hop({ reward, refundee })` (a main parameter, so",
+              "3. Every hop names its refundee, `hop({ send, refundee })` (a main parameter, so",
               "   it is given with args). sauce_compile with intentDeadline (Unix seconds, in the",
               "   future) until it compiles; sauce_inspect with the source lists each intent's",
               "   destination and the body it cooks there.",

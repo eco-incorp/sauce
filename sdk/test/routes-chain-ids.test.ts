@@ -51,7 +51,7 @@ describe("a chain's name is its chain id", () => {
     const opened = compileSauceProgram(
       "base",
       `function main() {
-  Ethereum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: ${RECIPIENT} })
+  Ethereum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: ${RECIPIENT} })
     .then(() => { USDC.transfer(${RECIPIENT}, 1); });
 }`,
       { intents: { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}`, executionFee: 1n } },
@@ -70,7 +70,7 @@ describe("a chain's name is its chain id", () => {
       ),
     ).toThrow(
       "`Arbitrum` is a chain id, not a function: an intent opens with " +
-        "`await Arbitrum.hop({ reward, receive, refundee })`",
+        "`await Arbitrum.hop({ send, receive, refundee })`",
     );
   });
 });

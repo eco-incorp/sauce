@@ -73,7 +73,7 @@ describe("making an intent: sauce intent publish with no file", () => {
     expect(created.rewardDeadline).toBe(NOW + 86_400n);
     const text = readFileSync(out, "utf8");
     expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}, 1500000);`);
-    expect(text).toContain("Base.hop({\n  reward: { token: USDC, amount: 1600000 },\n");
+    expect(text).toContain("Base.hop({\n  send: { token: USDC, amount: 1600000 },\n");
     // The signer is its refundee, written in the file: no intent has a default one.
     expect(text).toContain(`  refundee: ${ME.toLowerCase()},\n`);
     expect(text).toContain("  receive: { token: USDC, amount: 1500000 },\n");

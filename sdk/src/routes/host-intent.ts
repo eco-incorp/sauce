@@ -3,7 +3,7 @@
  *
  *   Base.hop({
  *     source: Ethereum,
- *     reward: { token: usdcEthereum, amount: 1_010_000n },
+ *     send: { token: usdcEthereum, amount: 1_010_000n },
  *     receive: { token: usdcBase, amount: 1_000_000n },
  *     refundee: owner,
  *     fee: kitchenFee,
@@ -47,11 +47,11 @@ export interface HopTokenAmount {
   readonly amount: bigint | number | string;
 }
 
-/** One thing a hop's `reward` pays: a token and an amount, or native coin as `{ native: amount }`. */
-export type HopRewardItem = HopTokenAmount | { readonly native: bigint | number | string };
+/** One thing a hop's `send` pays: a token and an amount, or native coin as `{ native: amount }`. */
+export type HopSendItem = HopTokenAmount | { readonly native: bigint | number | string };
 
-/** A hop's `reward`: an item, or a list of them. */
-export type HopReward = HopRewardItem | readonly HopRewardItem[];
+/** A hop's `send`: an item, or a list of them. */
+export type HopSend = HopSendItem | readonly HopSendItem[];
 
 /** A hop's `receive`: a token the solver delivers, or a list of them. */
 export type HopDelivery = HopTokenAmount | readonly HopTokenAmount[];
@@ -64,16 +64,16 @@ export type HopChain = ChainRef | { readonly chain: CanonicalChain };
  * with `source` and `compile` besides, which only the host has.
  */
 export interface HopConfig {
-  /** The chain the reward is escrowed on, where the intent is published and the program is
+  /** The chain what the hop sends is escrowed on, where the intent is published and the program is
    *  compiled. Required on the host, which runs on no chain to default it to; left out only inside
    *  a typed closure, where the program opens the hop from the chain the body runs on. */
   readonly source?: HopChain;
   /** The source compile's options: defines the body reads, the intents' defaults (the Kitchen fee
    *  as `intents.executionFee`, the Portals), tokens. */
   readonly compile?: SauceProgramOptions;
-  /** What the program pays the solver, escrowed on the source chain: tokens, and native coin as
-   *  `{ native: amount }`. */
-  readonly reward: HopReward;
+  /** What leaves the source chain: escrowed there, it pays the solver who fills the intent (the
+   *  Portal's reward). Tokens, and native coin as `{ native: amount }`. */
+  readonly send: HopSend;
   /** What the solver delivers on the destination, for the body. Left out, nothing. */
   readonly receive?: HopDelivery;
   /** Who may reclaim an unearned reward, the reward's `creator` on the Portal. Required, as on
@@ -82,8 +82,8 @@ export interface HopConfig {
   /** The last second the intent may be filled, Unix seconds. Defaults to `DEFAULT_FILL_WINDOW`
    *  past when the cook publishes it. */
   readonly deadline?: bigint | number;
-  /** From when an unproven reward may be refunded, Unix seconds. Defaults to the fill deadline
-   *  plus `DEFAULT_REFUND_WINDOW`. */
+  /** From when what was sent, if no fill is proven, may be refunded (the Portal reward's deadline),
+   *  Unix seconds. Defaults to the fill deadline plus `DEFAULT_REFUND_WINDOW`. */
   readonly rewardDeadline?: bigint | number;
   /** The source chain's prover. Defaults to the registry's for the pair. */
   readonly prover?: HopAddress;
@@ -176,21 +176,21 @@ const addressLiteral = (address: HopAddress): string =>
 const integer = (value: bigint | number | string): string => toBigInt(value).toString();
 
 /** A token amount, or native coin, as a SauceScript item. */
-function itemLiteral(item: HopRewardItem): string {
+function itemLiteral(item: HopSendItem): string {
   return "native" in item
     ? `{ native: ${integer(item.native)} }`
     : `{ token: ${addressLiteral(item.token)}, amount: ${integer(item.amount)} }`;
 }
 
 /** One item, or a list of them, as SauceScript writes it. */
-function itemsLiteral(given: HopRewardItem | readonly HopRewardItem[]): string {
+function itemsLiteral(given: HopSendItem | readonly HopSendItem[]): string {
   return Array.isArray(given)
-    ? `[${(given as readonly HopRewardItem[]).map(itemLiteral).join(", ")}]`
-    : itemLiteral(given as HopRewardItem);
+    ? `[${(given as readonly HopSendItem[]).map(itemLiteral).join(", ")}]`
+    : itemLiteral(given as HopSendItem);
 }
 
 /**
- * The `hop` of `chain`: `hop({ source, reward, receive, refundee, … }).then(body)` writes the
+ * The `hop` of `chain`: `hop({ source, send, receive, refundee, … }).then(body)` writes the
  * statement a program opens that intent with, compiles it for the source chain, and returns the
  * program and its cook.
  */
@@ -201,14 +201,15 @@ export function chainHop(chain: ChainRef): ChainHop {
   return (config) => {
     if (typeof config !== "object" || config === null || Array.isArray(config)) {
       throw new TypeError(
-        `${name}(...) takes one object: \`${name}({ source, reward, receive, refundee })\``,
+        `${name}(...) takes one object: \`${name}({ source, send, receive, refundee })\``,
       );
     }
     const unknown = Object.keys(config).filter((field) => !HOP_CONFIG.has(field));
     if (unknown.length > 0) {
       throw new TypeError(
         `${name}(...) takes no ${unknown.map((field) => `\`${field}\``).join(", ")}: its fields ` +
-          `are ${[...HOP_CONFIG].map((field) => `\`${field}\``).join(", ")}`,
+          `are ${[...HOP_CONFIG].map((field) => `\`${field}\``).join(", ")}` +
+          (unknown.includes("reward") ? "; what the source sends is `send`" : ""),
       );
     }
 
@@ -249,7 +250,7 @@ function hostIntent(
   const sourceRef = config.source;
   if (sourceRef === undefined) {
     throw new TypeError(
-      `${name}({ … }) needs a \`source\`: the chain the reward is escrowed on, where the intent ` +
+      `${name}({ … }) needs a \`source\`: the chain what it sends is escrowed on, where the intent ` +
         "is published and the program that opens it is compiled",
     );
   }
@@ -266,7 +267,7 @@ function hostIntent(
   // Each field given, as the program's `hop({ … })` takes it; one left out is the program's to
   // default or refuse, in its own words.
   const fields: (readonly [string, string | undefined])[] = [
-    ["reward", config.reward === undefined ? undefined : itemsLiteral(config.reward)],
+    ["send", config.send === undefined ? undefined : itemsLiteral(config.send)],
     ["receive", config.receive === undefined ? undefined : itemsLiteral(config.receive)],
     ["refundee", config.refundee === undefined ? undefined : addressLiteral(config.refundee)],
     ["deadline", config.deadline === undefined ? undefined : integer(config.deadline)],

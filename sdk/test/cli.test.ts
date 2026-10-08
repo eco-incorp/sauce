@@ -452,7 +452,7 @@ describe("sauce compile", () => {
     // An intent's limit, named before it is published, whichever way its reward is paid.
     const intent = file(
       "limit-intent.sauce.ts",
-      `// @chain ethereum\nBase.hop({ reward: { token: USDC, amount: 7 }, refundee: ${CREATOR} }).then(() => {\n` +
+      `// @chain ethereum\nBase.hop({ send: { token: USDC, amount: 7 }, refundee: ${CREATOR} }).then(() => {\n` +
         "  require(SQRT_PRICE_LIMIT_X96 > 0);\n  USDC.transfer(RECIPIENT, 5);\n});\n",
     );
     const published = await sauce(
@@ -508,7 +508,7 @@ describe("sauce compile", () => {
   it("reads an awaited intent's body on its destination, as its `.then(...)` form", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
-      "Arbitrum.hop({ reward: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
     const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
     const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
     // Where each part runs is the compile's to say.
@@ -528,7 +528,7 @@ describe("sauce compile", () => {
   it("reads a handler on every chain it runs on", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
-      "Arbitrum.hop({ reward: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
     const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
     const read = (text: string) =>
       appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"])).defines.map(
@@ -569,7 +569,7 @@ describe("sauce compile", () => {
     const recipient = "0x6666666666666666666666666666666666666666";
     const mine = "0x7777777777777777777777777777777777777777";
     const text = [
-      "Arbitrum.hop({ reward: [{ token: USDC, amount: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
       "  USDC.transfer(RECIPIENT, 1n);",
       "  require(chainId == 42161n && WETH != 0n);",
       "});",
@@ -647,7 +647,7 @@ describe("sauce compile", () => {
         "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
         "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
         "  require(pool != 0n);",
-        "  Arbitrum.hop({ reward: [{ token: USDC, amount: amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
+        "  Arbitrum.hop({ send: [{ token: USDC, amount: amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {",
         "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
         "    require(there != 0n);",
         "  });",
@@ -897,7 +897,7 @@ describe("sauce compile", () => {
         "// A hop whose body returns a value.",
         "function main(to: Address, amount: Uint256): Uint256 {",
         "  await Ethereum.hop({",
-        "    reward: { token: USDC, amount },",
+        "    send: { token: USDC, amount },",
         "    receive: { token: USDC, amount },",
         "    refundee: to,",
         "  });",
@@ -990,7 +990,7 @@ describe("sauce compile", () => {
     // nothing to read the fee from, it is asked for.
     const bridge = file(
       "bridge.sauce.ts",
-      `Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
+      `Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
     );
     const unpriced = await sauce(
       ...["compile", bridge, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
@@ -1006,7 +1006,7 @@ describe("sauce compile", () => {
     const body = (refundee: string) =>
       [
         "const amount = USDC.balanceOf(ctx.self());",
-        `Arbitrum.hop({ reward: [{ token: USDC, amount }]${refundee} }).then(() => {`,
+        `Arbitrum.hop({ send: [{ token: USDC, amount }]${refundee} }).then(() => {`,
         "  USDC.transfer(RECIPIENT, amount);",
         "});",
         "",
@@ -1463,7 +1463,7 @@ describe("sauce tx", () => {
 describe("sauce intent publish, offline", () => {
   const INTENT = [
     "// @chain ethereum",
-    `Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} })`,
+    `Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} })`,
     "  .then(() => {",
     "    USDC.transfer(RECIPIENT, 5);",
     "  });",
@@ -1535,7 +1535,7 @@ describe("sauce intent publish, offline", () => {
         "}",
         "",
       ].join("\n");
-    const intent = `Base.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })`;
+    const intent = `Base.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })`;
     const cook = async (text: string): Promise<string> => {
       const run = await sauce(
         ...["intent", "publish", file("awaited.sauce.ts", text), "--chain", "ethereum"],
@@ -1564,7 +1564,7 @@ describe("sauce intent publish, offline", () => {
       "publish",
       file(
         "typed.sauce.ts",
-        `function main(recipient: Address) {\n  Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n    USDC.transfer(recipient, 5);\n  });\n}\n`,
+        `function main(recipient: Address) {\n  Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n    USDC.transfer(recipient, 5);\n  });\n}\n`,
       ),
       "--chain",
       "ethereum",
@@ -1599,7 +1599,7 @@ describe("sauce intent publish, offline", () => {
 describe("sauce intent fill, offline", () => {
   const INTENT = [
     "// @chain arbitrum",
-    `Base.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {`,
+    `Base.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {`,
     "  USDC.transfer(RECIPIENT, 5);",
     "});",
     "",
@@ -1651,7 +1651,7 @@ describe("sauce intent fill, offline", () => {
       "fill",
       file(
         "two.sauce.ts",
-        `${INTENT}Optimism.hop({ reward: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
+        `${INTENT}Optimism.hop({ send: [{ token: USDC, amount: 7 }], refundee: ${CREATOR} }).then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`,
       ),
       ...FLAGS,
       ...NOWHERE,
@@ -2019,7 +2019,7 @@ describe("flags in any order", () => {
       const run = await sauce("compile", program, "--chain", "base", ...flag);
       expect(run.code).toBe(2);
       expect(run.stderr).toMatch(
-        /`--intent-(creator|refundee)` is gone: an intent names its refundee in the file: `hop\(\{ reward, refundee: refundTo \}\)`/,
+        /`--intent-(creator|refundee)` is gone: an intent names its refundee in the file: `hop\(\{ send, refundee: refundTo \}\)`/,
       );
     }
   });

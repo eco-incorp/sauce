@@ -1,6 +1,6 @@
 /**
  * Chain-global surface machinery: every canonical chain export is a namespace carrying `.chain`
- * (its registry record) and `.hop` (`Base.hop({ source, reward, receive, refundee }).then(body)`,
+ * (its registry record) and `.hop` (`Base.hop({ source, send, receive, refundee }).then(body)`,
  * an intent whose body runs on that chain, compiled into the program a Pot on the source chain
  * cooks: `host-intent.ts`).
  *
@@ -20,7 +20,7 @@ export interface ChainGlobal {
   /** The registry record this export was generated from (or resolved via `chain(ref)`). */
   readonly chain: CanonicalChain;
   /** Opens an intent whose body runs on this chain:
-   *  `hop({ source, reward, receive, refundee }).then(body)`. */
+   *  `hop({ source, send, receive, refundee }).then(body)`. */
   readonly hop: ChainHop;
 }
 

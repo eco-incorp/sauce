@@ -810,7 +810,7 @@ describeEvm("an intent file: published by a cook on the signer's Pot", () => {
   /** A top-level file: no `main`, one intent, every amount a define, refunded to `REFUND_TO`. */
   const INTENT = [
     "// @chain ethereum",
-    "Base.hop({ reward: [{ token: USDC, amount: REWARD }], receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })",
+    "Base.hop({ send: [{ token: USDC, amount: REWARD }], receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })",
     "  .then(() => {",
     "    USDC.transfer(RECIPIENT, AMOUNT);",
     "  });",
@@ -973,7 +973,7 @@ describeEvm("an intent file: published by a cook on the signer's Pot", () => {
         path,
         [
           "// @chain ethereum",
-          `Base.hop({ reward: ${reward}, receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })`,
+          `Base.hop({ send: ${reward}, receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })`,
           "  .then(() => {",
           "    USDC.transfer(RECIPIENT, AMOUNT);",
           "  });",
@@ -1036,7 +1036,7 @@ describeEvm("an intent file: published by a cook on the signer's Pot", () => {
       [
         "// @chain ethereum",
         "const amount = USDC.balanceOf(ctx.self());",
-        "Base.hop({ reward: [{ token: USDC, amount }], receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })",
+        "Base.hop({ send: [{ token: USDC, amount }], receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })",
         "  .then(() => {",
         "    USDC.transfer(RECIPIENT, AMOUNT);",
         "  });",
@@ -1067,7 +1067,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   // the Pot every intent through Base's Portal shares.
   const INTENT = [
     "// @chain ethereum",
-    `Base.hop({ reward: [{ token: USDC, amount: REWARD }], refundee: ${OWNER.address} }).then(() => {`,
+    `Base.hop({ send: [{ token: USDC, amount: REWARD }], refundee: ${OWNER.address} }).then(() => {`,
     "  require(AMOUNT > 0n);",
     "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",
     "});",

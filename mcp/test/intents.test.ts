@@ -21,7 +21,7 @@ const TX = `0x${"ab".repeat(32)}`;
 const PROGRAM = {
   source: [
     "function main(recipient: Address, refundTo: Address) {",
-    "  Base.hop({ reward: { token: USDC, amount: 7 }, refundee: refundTo }).then(() => {",
+    "  Base.hop({ send: { token: USDC, amount: 7 }, refundee: refundTo }).then(() => {",
     "    USDC.transfer(recipient, 5);",
     "  });",
     "}",
@@ -101,7 +101,7 @@ describe("sauce_intent_publish", () => {
     assert.match(
       failed(
         await mcp.call("sauce_intent_publish", {
-          source: "Base.hop({ reward: { token: USDC, amount: 7 } }).then(() => {});\n",
+          source: "Base.hop({ send: { token: USDC, amount: 7 } }).then(() => {});\n",
           chain: "ethereum",
           intentDeadline: 2_000_000_000,
           intentExecutionFee: 0,

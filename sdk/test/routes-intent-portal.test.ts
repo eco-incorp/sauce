@@ -1,5 +1,5 @@
 /**
- * `Chain.hop({ reward, receive, refundee, … }).then(body)`: each field is the compile option it
+ * `Chain.hop({ send, receive, refundee, … }).then(body)`: each field is the compile option it
  * names, for its intent alone, and each default is the value it stands for, byte for byte — the
  * program's bytecode, which carries every level's intent, and each intent it publishes.
  *
@@ -13,7 +13,7 @@
  * `DEFAULT_REFUND_WINDOW` past that, the compile's salt, each destination's own Kitchen fee. The
  * refundee has none: every hop names its own, `refundee`.
  *
- * On the host: `Base.hop({ source, reward, … }).then(body)` writes the statement a program
+ * On the host: `Base.hop({ source, send, … }).then(body)` writes the statement a program
  * opens that intent with and compiles it for the source chain — the same program as the statement
  * written in a file — and its cook publishes the same intent from a Pot there; its `then` refuses to
  * be a promise's.
@@ -95,10 +95,10 @@ function expectSame(a: CompiledSauceProgram, b: CompiledSauceProgram): void {
 
 /** Base opens Arbitrum, whose body measures what arrived and opens Optimism with it. */
 const NESTED = `function main(amount: Uint256, recipient: Address) {
-  Arbitrum.hop({ reward: [{ token: USDC, amount }], receive: [{ token: USDC, amount: amount * 99 / 100 }], refundee: ${CREATOR} })
+  Arbitrum.hop({ send: [{ token: USDC, amount }], receive: [{ token: USDC, amount: amount * 99 / 100 }], refundee: ${CREATOR} })
     .then(() => {
       USDC.transfer(recipient, amount * 99 / 100 / 2);
-      Optimism.hop({ reward: { token: USDC, amount: amount * 99 / 100 / 2 }, receive: { token: USDT0, amount: amount * 98 / 100 / 2 }, refundee: ${CREATOR} })
+      Optimism.hop({ send: { token: USDC, amount: amount * 99 / 100 / 2 }, receive: { token: USDT0, amount: amount * 98 / 100 / 2 }, refundee: ${CREATOR} })
         .then(() => { USDT0.transfer(recipient, amount * 98 / 100 / 2); });
     });
 }`;
@@ -106,7 +106,7 @@ const NESTED = `function main(amount: Uint256, recipient: Address) {
 describe("the intents a program opens, as compiled", () => {
   it("a field builds the same program as its option", () => {
     const program = (fields: string) => `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}, fee: 1000${fields} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}, fee: 1000${fields} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     // The salt is not among them: an option's is a default, which each intent mixes with how many
@@ -120,7 +120,7 @@ describe("the intents a program opens, as compiled", () => {
   it("defaults the deadlines from when the intent opens, as the compile says", () => {
     const openedAt = 1_900_000_000n;
     const program = (fields: string) => `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}${fields} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}${fields} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     expectSame(
@@ -137,10 +137,10 @@ describe("the intents a program opens, as compiled", () => {
 
   it("every hop a program opens names its refundee: none comes from above or the options", () => {
     const opens = (inner: string) => `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777 })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777 })
     .then(() => {
       const held = USDC.balanceOf(ctx.self());
-      Optimism.hop({ reward: { token: USDC, amount: held }, receive: { token: USDT0, amount: held }${inner} })
+      Optimism.hop({ send: { token: USDC, amount: held }, receive: { token: USDT0, amount: held }${inner} })
         .then(() => { const left = USDT0.balanceOf(ctx.self()); USDT0.transfer(RECIPIENT, left); });
     });
 }`;
@@ -152,7 +152,7 @@ describe("the intents a program opens, as compiled", () => {
 
   it("picks a random salt for each compile, unless one is given", () => {
     const program = `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     const bytes = (intents: IntentDefaults) => bytesToHex(compile(program, intents).bytecode);
@@ -165,7 +165,7 @@ describe("the intents a program opens, as compiled", () => {
   it("a delivery token only the destination has, by its bare symbol", () => {
     const usdt0 = hex(registryTokenAddress(requireChain("arbitrum"), "USDT0")!);
     const program = (token: string) => `function main(amount: Uint256) {
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: ${token}, amount }, refundee: ${CREATOR}, fee: 0 })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: ${token}, amount }, refundee: ${CREATOR}, fee: 0 })
     .then(() => { USDT0.transfer(RECIPIENT, amount); });
 }`;
     expectSame(compile(program("USDT0"), INTENTS), compile(program(`Token(${usdt0})`), INTENTS));
@@ -192,7 +192,7 @@ describe("the intents a program opens, as compiled", () => {
   });
 
   it("an `await` of the intent makes the statements after it its body, byte for byte", () => {
-    const opened = `Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
+    const opened = `Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
     const body = "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);";
     expectSame(
       compile(`function main() {\n  await ${opened};\n  ${body}\n}`, INTENTS),
@@ -202,7 +202,7 @@ describe("the intents a program opens, as compiled", () => {
 
   it("a `try` around awaited hops is each body's `.catch`, byte for byte, two and three deep", () => {
     const hop = (chain: string) =>
-      `${chain}.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
+      `${chain}.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
     const pay = "USDC.transfer(RECIPIENT, 1000000);";
     const handle = "USDC.transfer(" + CREATOR + ", e.length);";
     const chains = ["Arbitrum", "Optimism", "Ethereum"];
@@ -234,7 +234,7 @@ describe("the intents a program opens, as compiled", () => {
   it("`.then(...).catch(() => { … })` is the body in a `try` on its destination, byte for byte", () => {
     const handled = compile(
       `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); })
     .catch(() => { USDC.transfer(${CREATOR}, 1000000); });
 }`,
@@ -255,7 +255,7 @@ describe("the intents a program opens, as compiled", () => {
   // body: a program of its own, told apart by what it captures.
   it("a handled hop opens another handled hop, two and three deep", () => {
     const hop = (chain: string, body: string) =>
-      `${chain}.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+      `${chain}.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { ${body} })
     .catch((e) => { USDC.transfer(${CREATOR}, 1000000); });`;
     const pay = "USDC.transfer(RECIPIENT, 1000000);";
@@ -277,7 +277,7 @@ describe("the intents a program opens, as compiled", () => {
   it("a handler reads what the body reverted with", () => {
     compile(
       `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); })
     .catch((e) => { USDC.transfer(${CREATOR}, e.length); });
 }`,
@@ -305,12 +305,12 @@ describeEvm("the intents a program publishes", () => {
     }`;
     // The second names only its refundee, so it takes the options either way.
     const second = `
-  Ethereum.hop({ reward: { token: USDC, amount: 2020000 }, receive: { token: USDC, amount: 2000000 }, refundee: ${CREATOR} })
+  Ethereum.hop({ send: { token: USDC, amount: 2020000 }, receive: { token: USDC, amount: 2000000 }, refundee: ${CREATOR} })
     .then(() => ${body});`;
     const [first, rest] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777, deadline: 2000000600, rewardDeadline: 2000700000, prover: 0x8888888888888888888888888888888888888888, salt: 0x1234, fee: 7 })
+  Arbitrum.hop({ send: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777, deadline: 2000000600, rewardDeadline: 2000700000, prover: 0x8888888888888888888888888888888888888888, salt: 0x1234, fee: 7 })
     .then(() => ${body});${second}
 }`,
         INTENTS,
@@ -319,7 +319,7 @@ describeEvm("the intents a program publishes", () => {
     const [optioned] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777, salt: 0x1234 })
+  Arbitrum.hop({ send: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777, salt: 0x1234 })
     .then(() => ${body});
 }`,
         {
@@ -346,7 +346,7 @@ describeEvm("the intents a program publishes", () => {
   it("defaults the deadlines from when the program opening it runs, with no time given", async () => {
     const program = compile(
       `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
       { salt: SALT, executionFee: 1_000n },
@@ -363,7 +363,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}, deadline: ctx.timestamp() + 3600 })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR}, deadline: ctx.timestamp() + 3600 })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         { executionFee: 1_000n },
@@ -380,10 +380,10 @@ describeEvm("the intents a program publishes", () => {
     const [outer] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777 })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: 0x7777777777777777777777777777777777777777 })
     .then(() => {
       const held = USDC.balanceOf(ctx.self());
-      Optimism.hop({ reward: { token: USDC, amount: held }, receive: { token: USDT0, amount: held }, refundee: ${hex(inner)} })
+      Optimism.hop({ send: { token: USDC, amount: held }, receive: { token: USDT0, amount: held }, refundee: ${hex(inner)} })
         .then(() => { const left = USDT0.balanceOf(ctx.self()); USDT0.transfer(RECIPIENT, left); });
     });
 }`,
@@ -405,7 +405,7 @@ describeEvm("the intents a program publishes", () => {
     expect(() =>
       compile(
         `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 } })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 } })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         INTENTS,
@@ -415,9 +415,9 @@ describeEvm("the intents a program publishes", () => {
 
   it("`fund: false` publishes the same intent, paying nothing into its vault", async () => {
     const program = `function main() {
-  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: [{ token: USDC, amount: 1010000 }, { native: 5 }], receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => {
-      Optimism.hop({ reward: { token: USDC, amount: 7 }, receive: { token: USDC, amount: 6 }, refundee: ${CREATOR} })
+      Optimism.hop({ send: { token: USDC, amount: 7 }, receive: { token: USDC, amount: 6 }, refundee: ${CREATOR} })
         .then(() => { USDC.transfer(RECIPIENT, 6); });
     });
 }`;
@@ -445,7 +445,7 @@ describeEvm("the intents a program publishes", () => {
 
   it("mixes the compile's salt with the intents the transaction opened; a `salt` is as written", async () => {
     const program = `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     const [given] = await published(compile(program, INTENTS));
@@ -460,7 +460,7 @@ describeEvm("the intents a program publishes", () => {
   }, 120_000);
 
   it("two intents built alike are two intents, in sequence or in a loop", async () => {
-    const intent = `Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+    const intent = `Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });`;
     const twice = await published(
       compile(`function main() {\n  ${intent}\n  ${intent}\n}`, INTENTS),
@@ -486,7 +486,7 @@ describeEvm("the intents a program publishes", () => {
         await published(
           compile(
             `function main() {
-  Arbitrum.hop({ reward: ${reward}, receive: ${receive}, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: ${reward}, receive: ${receive}, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
             INTENTS,
@@ -514,7 +514,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, refundee: ${CREATOR}, fee: 7 })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, refundee: ${CREATOR}, fee: 7 })
     .then(() => { const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held); });
 }`,
         { ...INTENTS, openedAt: DEADLINE },
@@ -529,7 +529,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         INTENTS,
@@ -551,7 +551,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         INTENTS,
@@ -568,7 +568,7 @@ describeEvm("the intents a program publishes", () => {
 
   it("cooks on the Pot of an overriding destination Portal's Executor, or the one named", async () => {
     const program = `function main() {
-  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     const portal = "0x6666666666666666666666666666666666666666" as Hex;
@@ -588,7 +588,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: [{ token: USDC, amount: 7 }, { token: USDC, amount: 9 }, { token: USDC, amount: 4 }], receive: { token: USDC, amount: 1 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: [{ token: USDC, amount: 7 }, { token: USDC, amount: 9 }, { token: USDC, amount: 4 }], receive: { token: USDC, amount: 1 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1); });
 }`,
         INTENTS,
@@ -603,7 +603,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: [{ token: WETH, amount: 1000000000000000001 }, { native: 10 ** 18 }], receive: { token: WETH, amount: 10 ** 18 + 1 }, refundee: 0x1234567890abcdef1234567890abcdef12345678, deadline: 9007199254740995, rewardDeadline: 9007199254740993, salt: 0xffffffffffffffffffff, fee: 1000 })
+  Arbitrum.hop({ send: [{ token: WETH, amount: 1000000000000000001 }, { native: 10 ** 18 }], receive: { token: WETH, amount: 10 ** 18 + 1 }, refundee: 0x1234567890abcdef1234567890abcdef12345678, deadline: 9007199254740995, rewardDeadline: 9007199254740993, salt: 0xffffffffffffffffffff, fee: 1000 })
     .then(() => { WETH.transfer(RECIPIENT, 1000000000000000001); });
 }`,
         {},
@@ -642,7 +642,7 @@ describeEvm("the intents a program publishes", () => {
     const [opened] = await published(
       compile(
         `function main() {
-  Arbitrum.hop({ reward: [{ token: USDC, amount: 1010000 }, { token: USDC, amount: 7 }], receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: [{ token: USDC, amount: 1010000 }, { token: USDC, amount: 7 }], receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
         { ...INTENTS, fundVia: "publishAndFund" },
@@ -654,7 +654,7 @@ describeEvm("the intents a program publishes", () => {
   it("a TypeScript intent's cook publishes what the same statement in a file publishes", async () => {
     const built = Arbitrum.hop({
       source: Base,
-      reward: { token: base.token("USDC"), amount: 1_010_000n },
+      send: { token: base.token("USDC"), amount: 1_010_000n },
       receive: { token: hex(usdcOf("arbitrum")), amount: 1_000_000n },
       refundee: CREATOR,
       compile: { defines: { RECIPIENT }, intents: INTENTS },
@@ -667,7 +667,7 @@ describeEvm("the intents a program publishes", () => {
     const [sent] = built.intents(logs);
     const [written] = await published(
       compile(
-        `Arbitrum.hop({ reward: { token: ${base.token("USDC")}, amount: 1010000 }, receive: { token: ${hex(usdcOf("arbitrum"))}, amount: 1000000 }, refundee: ${CREATOR} })
+        `Arbitrum.hop({ send: { token: ${base.token("USDC")}, amount: 1010000 }, receive: { token: ${hex(usdcOf("arbitrum"))}, amount: 1000000 }, refundee: ${CREATOR} })
   .then(() => { USDC.transfer(RECIPIENT, 1000000); });`,
         INTENTS,
       ),
@@ -687,7 +687,7 @@ describe("on the host", () => {
   it("writes the statement a program opens it with, and compiles it for the source chain", () => {
     const built = Base.hop({
       source: Ethereum,
-      reward: paid,
+      send: paid,
       receive: delivered,
       refundee: CREATOR,
       deadline: DEADLINE,
@@ -696,7 +696,7 @@ describe("on the host", () => {
       compile: options,
     }).then(body);
     const written = `Base.hop({
-  reward: { token: ${paid.token}, amount: 1010000 },
+  send: { token: ${paid.token}, amount: 1010000 },
   receive: { token: ${delivered.token}, amount: 1000000 },
   refundee: ${CREATOR.toLowerCase()},
   deadline: ${DEADLINE},
@@ -716,7 +716,7 @@ ${body}
     const hopOf = (receive: typeof delivered | readonly (typeof delivered)[]) =>
       Base.hop({
         source: Ethereum,
-        reward: [paid],
+        send: [paid],
         receive,
         refundee: CREATOR,
         fee: FEE,
@@ -732,7 +732,7 @@ ${body}
   it("cooks on a Pot, named or by its owner, with the source Kitchen's fee as its value", () => {
     const built = Base.hop({
       source: "ethereum",
-      reward: paid,
+      send: paid,
       refundee: CREATOR,
       fee: FEE,
       compile: options,
@@ -750,12 +750,12 @@ ${body}
 
   it("refuses a hop with no source chain, no refundee, a field it does not take, and a handler", () => {
     expect(() =>
-      Base.hop({ reward: paid, receive: delivered, refundee: CREATOR, fee: FEE }).then(body),
-    ).toThrow(/needs a `source`: the chain the reward is escrowed on/);
+      Base.hop({ send: paid, receive: delivered, refundee: CREATOR, fee: FEE }).then(body),
+    ).toThrow(/needs a `source`: the chain what it sends is escrowed on/);
     expect(() =>
       Base.hop({
         source: "ethereum",
-        reward: paid,
+        send: paid,
         receive: delivered,
         fee: FEE,
         compile: options,
@@ -764,16 +764,21 @@ ${body}
     expect(() =>
       Base.hop({
         source: "ethereum",
-        reward: paid,
+        send: paid,
         refundee: CREATOR,
         recieve: delivered,
       } as unknown as HopConfig),
-    ).toThrow(
-      /Base\.hop\(\.\.\.\) takes no `recieve`: its fields are `source`, `compile`, `reward`/,
-    );
+    ).toThrow(/Base\.hop\(\.\.\.\) takes no `recieve`: its fields are `source`, `compile`, `send`/);
+    expect(() =>
+      Base.hop({
+        source: "ethereum",
+        reward: paid,
+        refundee: CREATOR,
+      } as unknown as HopConfig),
+    ).toThrow(/takes no `reward`: .*; what the source sends is `send`$/);
     const built = Base.hop({
       source: "ethereum",
-      reward: paid,
+      send: paid,
       receive: delivered,
       refundee: CREATOR,
       fee: FEE,
@@ -783,7 +788,7 @@ ${body}
   });
 
   const pending = () =>
-    Base.hop({ source: "ethereum", reward: paid, receive: delivered, refundee: CREATOR, fee: FEE });
+    Base.hop({ source: "ethereum", send: paid, receive: delivered, refundee: CREATOR, fee: FEE });
 
   it("refuses to be awaited: its then is the intent's", async () => {
     // TypeScript refuses the `await` itself (`routes-intent-portal-types.test.ts`); JavaScript, or
@@ -831,13 +836,19 @@ describe("what the lowering refuses", () => {
   const item = "{ token: USDC, amount: 1 }";
   const then = ".then(() => { USDC.transfer(RECIPIENT, 1); })";
   const hop = (fields: string) => `Arbitrum.hop({ ${fields} })`;
-  const whole = `reward: ${item}, receive: ${item}, refundee: ${CREATOR}`;
+  const whole = `send: ${item}, receive: ${item}, refundee: ${CREATOR}`;
 
   it("refuses the refund address under its old name: the field is `refundee`", () => {
-    expect(refused(`${hop(`reward: ${item}, creator: ${CREATOR}`)}${then};`)).toThrow(
+    expect(refused(`${hop(`send: ${item}, creator: ${CREATOR}`)}${then};`)).toThrow(
       /a hop takes no `creator`: its fields are .*\brefundee\b/,
     );
-    expect(refused(`${hop(`reward: ${item}`)}${then};`)).toThrow(/a hop needs a `refundee`/);
+    expect(refused(`${hop(`send: ${item}`)}${then};`)).toThrow(/a hop needs a `refundee`/);
+  });
+
+  it("refuses what the source sends under its old name: the field is `send`", () => {
+    expect(
+      refused(`${hop(`reward: ${item}, receive: ${item}, refundee: ${CREATOR}`)}${then};`),
+    ).toThrow("a hop takes no `reward`: what the source sends is `send`");
   });
 
   it("refuses a field the hop does not take, naming it", () => {
@@ -884,40 +895,40 @@ describe("what the lowering refuses", () => {
     [`${hop(whole)};`, /has no body\. Finish it with `\.then\(\(\) => \{ … \}\)`, or `await` it/],
     [`Arbitrum.hop()${then};`, /`hop\(\.\.\.\)` takes one object/],
     [`Arbitrum.hop([${item}])${then};`, /`hop\(\.\.\.\)` takes one object/],
-    [`${hop(`receive: ${item}, refundee: ${CREATOR}`)}${then};`, /a hop needs a `reward`/],
+    [`${hop(`receive: ${item}, refundee: ${CREATOR}`)}${then};`, /a hop needs a `send`/],
     [`${hop(whole)}${then}${then};`, /`\.then\(\.\.\.\)` is not a step after `\.then\(\.\.\.\)`/],
     [`${hop(whole)}.then();`, /`\.then\(\.\.\.\)` takes the body/],
     [`${hop(whole)}.catch((e) => {});`, /`\.catch\(\.\.\.\)` follows `\.then\(\.\.\.\)`/],
     [
-      `${hop(`reward: [], receive: ${item}, refundee: ${CREATOR}`)}${then};`,
-      /a hop's `reward` must offer something: a token amount, or `\{ native: amount \}`/,
+      `${hop(`send: [], receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      /a hop's `send` must offer something: a token amount, or `\{ native: amount \}`/,
     ],
     [
-      `${hop(`reward: ${item}, receive: { native: 1 }, refundee: ${CREATOR}`)}${then};`,
-      /a hop's `receive` names tokens: the native coin is paid in its `reward`/,
+      `${hop(`send: ${item}, receive: { native: 1 }, refundee: ${CREATOR}`)}${then};`,
+      /a hop's `receive` names tokens: the native coin is paid in its `send`/,
     ],
     [
-      `${hop(`reward: [{ native: 1 }, { native: 2 }], receive: ${item}, refundee: ${CREATOR}`)}${then};`,
-      /a hop's `reward` names its native amount once/,
+      `${hop(`send: [{ native: 1 }, { native: 2 }], receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      /a hop's `send` names its native amount once/,
     ],
     [
-      `${hop(`reward: { token: USDC }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
-      /each item of a hop's `reward` is `\{ token, amount \}` or `\{ native: amount \}`/,
+      `${hop(`send: { token: USDC }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      /each item of a hop's `send` is `\{ token, amount \}` or `\{ native: amount \}`/,
     ],
     [
-      `${hop(`reward: ${item}, receive: { token: USDC }, refundee: ${CREATOR}`)}${then};`,
+      `${hop(`send: ${item}, receive: { token: USDC }, refundee: ${CREATOR}`)}${then};`,
       /each item of a hop's `receive` is `\{ token, amount \}`/,
     ],
     [
-      `${hop(`reward: ${item}, receive: { token: USDT, amount: 1 }, refundee: ${CREATOR}`)}${then};`,
+      `${hop(`send: ${item}, receive: { token: USDT, amount: 1 }, refundee: ${CREATOR}`)}${then};`,
       /`USDT` is not a token or protocol on arbitrum\. Did you mean `USDC` or `USDT0`\?/,
     ],
     [
-      `${hop(`reward: { token: USDC, amount: 1 - 2 }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      `${hop(`send: { token: USDC, amount: 1 - 2 }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
       /constant `-` expression overflows 256 bits/,
     ],
     [
-      `${hop(`reward: { token: USDC, amount: 1 / 0 }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
+      `${hop(`send: { token: USDC, amount: 1 / 0 }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
       /constant `\/` expression divides by zero/,
     ],
     [

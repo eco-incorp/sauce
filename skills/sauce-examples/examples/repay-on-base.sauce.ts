@@ -14,7 +14,7 @@
 // braces is enough: their values go into each intent. Each intent names `refundTo` its refundee,
 // where its reward goes back if no solver fills it.
 //
-// `USDC` and `AaveV3.Pool` in the braces are Base's; in each `reward`, the chain's that pays it:
+// `USDC` and `AaveV3.Pool` in the braces are Base's; in each `send`, the chain's that pays it:
 // Ethereum's for the first, Base's for the second. The variable debt token is read from the
 // pool through AaveV3Reads.json beside this file, the reads the registry's Aave V3 ABI does not
 // declare.
@@ -44,7 +44,7 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
   const delivered = amount - (amount * solverBps) / 10000;
 
   await Base.hop({
-    reward: { token: USDC, amount }, // Ethereum's
+    send: { token: USDC, amount }, // Ethereum's
     receive: { token: USDC, amount: delivered }, // Base's USDC, which the solver delivers
     refundee: refundTo,
   });
@@ -65,7 +65,7 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
     const paid = change - (change * solverBps) / 10000;
     // A hop opened on a condition is written with `.then`: an `await` cannot stand in an `if`.
     Ethereum.hop({
-      reward: { token: USDC, amount: change }, // Base's: it funds this level
+      send: { token: USDC, amount: change }, // Base's: it funds this level
       receive: { token: USDC, amount: paid }, // Ethereum's
       refundee: refundTo,
     }).then(() => {

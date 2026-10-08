@@ -890,7 +890,7 @@ describeEvm("intent bodies, executed", () => {
     }, 180_000);
   });
 
-  describe("`Chain.hop({ reward, receive, refundee }).then(...)` written inside the program", () => {
+  describe("`Chain.hop({ send, receive, refundee }).then(...)` written inside the program", () => {
     // The syntax the SDK exists to offer: an intent created from a Sauce program with no Portal,
     // no selector, no offset word and no approve written by the author. Everything below the
     // `PROGRAM` constant is the lowering's output, and none of it appears in the source.
@@ -903,7 +903,7 @@ describeEvm("intent bodies, executed", () => {
 
     const PROGRAM = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.hop({ reward: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     Token(TOKEN).transfer(RECIPIENT, amount);
   });
 }`;
@@ -1060,7 +1060,7 @@ describeEvm("intent bodies, executed", () => {
       // publish an intent whose vault is empty.
       const { status } = await runIntentProgram(
         `function main() {
-  Base.hop({ reward: [{ token: TOKEN, amount: 5n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: [{ token: TOKEN, amount: 5n }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1078,7 +1078,7 @@ describeEvm("intent bodies, executed", () => {
       const { status, logs } = await runIntentProgram(
         `function main() {
   const native = ctx.selfBalance();
-  Base.hop({ reward: { native: native }, refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: { native: native }, refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1141,7 +1141,7 @@ describeEvm("intent bodies, executed", () => {
         const { status, logs } = await runIntentProgram(
           `function main() {
   const native = ctx.selfBalance();
-  Base.hop({ reward: { native: native }, refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: { native: native }, refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1163,15 +1163,15 @@ describeEvm("intent bodies, executed", () => {
     // The headline case: every hop's amount is only known when that hop runs. The parent measures a
     // balance and offers an intent; fulfilling THAT intent delivers the amount to a Pot, where a
     // program measures it again and offers a third. Nothing below is written by hand -- the program
-    // text is the three `Chain.hop({ reward, receive, refundee }).then(...)` expressions and nothing else.
+    // text is the three `Chain.hop({ send, receive, refundee }).then(...)` expressions and nothing else.
     const SEEDED = 7_000_000n;
     const FINAL_RECIPIENT = "0x00000000000000000000000000000000000000c3" as Address;
 
     const THREE_HOP = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.hop({ reward: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     const got = Token(TOKEN).balanceOf(ctx.self());
-    Base.hop({ reward: [{ token: TOKEN, amount: got }], receive: [{ token: Token(TOKEN), amount: got }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+    Base.hop({ send: [{ token: TOKEN, amount: got }], receive: [{ token: Token(TOKEN), amount: got }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
       Token(TOKEN).transfer(RECIPIENT, got);
     });
   });
@@ -1274,7 +1274,7 @@ describeEvm("intent bodies, executed", () => {
       // Control flow in the body, so this takes the program path rather than the direct-call one.
       const WITH_LOGIC = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.hop({ reward: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);
@@ -1322,7 +1322,7 @@ describeEvm("intent bodies, executed", () => {
     }`;
       const handled = (body: string, handler: string) => `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.hop({ reward: { token: TOKEN, amount }, receive: { token: Token(TOKEN), amount }, refundee: 0x3333333333333333333333333333333333333333 })
+  Base.hop({ send: { token: TOKEN, amount }, receive: { token: Token(TOKEN), amount }, refundee: 0x3333333333333333333333333333333333333333 })
     .then(() => {
       Token(TOKEN).transfer(RECIPIENT, 1n);
       ${body}
@@ -1442,7 +1442,7 @@ describeEvm("intent bodies, executed", () => {
       // reverts, everything it did is undone, and the handler runs there in its place.
       const FALLBACK = "0x0000000000000000000000000000000000000fb2" as Address;
       const hop = (amount: string) =>
-        `await Base.hop({ reward: [{ token: TOKEN, amount: ${amount} }], receive: [{ token: Token(TOKEN), amount: ${amount} }], refundee: 0x3333333333333333333333333333333333333333 });`;
+        `await Base.hop({ send: [{ token: TOKEN, amount: ${amount} }], receive: [{ token: Token(TOKEN), amount: ${amount} }], refundee: 0x3333333333333333333333333333333333333333 });`;
       const FORWARD = "Token(TOKEN).transfer(FALLBACK, Token(TOKEN).balanceOf(ctx.self()));";
       const tried = (depth: number, last: string, handler: string) => `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
@@ -1647,7 +1647,7 @@ describeEvm("intent bodies, executed", () => {
         "base",
         `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.hop({ reward: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);
@@ -1771,12 +1771,12 @@ describeEvm("intent bodies, executed", () => {
         );
     };
 
-    describe("inside a program: `Chain.hop({ reward, receive, refundee }).then(...)`", () => {
+    describe("inside a program: `Chain.hop({ send, receive, refundee }).then(...)`", () => {
       // Control flow, so the child is a PROGRAM cooked on its destination Pot, not a list of
       // token calls. Base -> Base so this one anvil can fulfil the child too.
       const PROGRAM = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.hop({ reward: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: [{ token: TOKEN, amount }], receive: [{ token: Token(TOKEN), amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);

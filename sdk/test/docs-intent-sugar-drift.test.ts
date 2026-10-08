@@ -53,7 +53,7 @@ const wrap = (
   chain = "Arbitrum",
   fields = `, receive: { token: USDC, amount }, refundee: ${CREATOR}`,
 ) =>
-  `function main() {\n  const amount = 5;\n  ${chain}.hop({ reward: ${reward}${fields} }).then(() => {\n    ${body}\n  });\n}`;
+  `function main() {\n  const amount = 5;\n  ${chain}.hop({ send: ${reward}${fields} }).then(() => {\n    ${body}\n  });\n}`;
 
 /** Documented sentence -> the program that must produce it. */
 const REFUSALS: readonly {
@@ -70,7 +70,7 @@ const REFUSALS: readonly {
     documented: "A hop with no body",
     trigger: () =>
       lower(
-        `function main() {\n  Arbitrum.hop({ reward: { token: USDC, amount: 1 }, receive: { token: USDC, amount: 1 }, refundee: ${CREATOR} });\n}`,
+        `function main() {\n  Arbitrum.hop({ send: { token: USDC, amount: 1 }, receive: { token: USDC, amount: 1 }, refundee: ${CREATOR} });\n}`,
       ),
     message: /has no body\. Finish it with `\.then/,
   },
@@ -78,27 +78,27 @@ const REFUSALS: readonly {
     documented: "a step after the wrong one",
     trigger: () =>
       lower(
-        `function main() {\n  Arbitrum.hop({ reward: { token: USDC, amount: 1 }, refundee: ${CREATOR} }).catch((e) => {});\n}`,
+        `function main() {\n  Arbitrum.hop({ send: { token: USDC, amount: 1 }, refundee: ${CREATOR} }).catch((e) => {});\n}`,
       ),
     message: /`\.catch\(\.\.\.\)` follows `\.then\(\.\.\.\)`/,
   },
   {
-    documented: "A hop with no `reward`",
+    documented: "A hop with no `send`",
     trigger: () =>
       lower(
         `function main() {\n  Arbitrum.hop({ refundee: ${CREATOR} }).then(() => {\n    USDC.transfer(RECIPIENT, 1);\n  });\n}`,
       ),
-    message: /a hop needs a `reward`/,
+    message: /a hop needs a `send`/,
   },
   {
-    documented: "an empty `reward: []`",
+    documented: "an empty `send: []`",
     trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "[]")),
-    message: /a hop's `reward` must offer something/,
+    message: /a hop's `send` must offer something/,
   },
   {
     documented: "an item missing `token` or `amount`",
     trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "{ token: USDC }")),
-    message: /each item of a hop's `reward` is `\{ token, amount \}`/,
+    message: /each item of a hop's `send` is `\{ token, amount \}`/,
   },
   {
     documented: "a `{ native }` item in `receive`",
@@ -111,7 +111,7 @@ const REFUSALS: readonly {
           `, receive: { native: 1 }, refundee: ${CREATOR}`,
         ),
       ),
-    message: /a hop's `receive` names tokens: the native coin is paid in its `reward`/,
+    message: /a hop's `receive` names tokens: the native coin is paid in its `send`/,
   },
   {
     documented: "A missing refundee",
@@ -138,7 +138,7 @@ const REFUSALS: readonly {
     documented: "A chain with no eco-routes deployment",
     trigger: () =>
       lower(
-        `function main() {\n  Zora.hop({ reward: { token: USDC, amount: 5 } }).then(() => {\n    Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, 5);\n  });\n}`,
+        `function main() {\n  Zora.hop({ send: { token: USDC, amount: 5 } }).then(() => {\n    Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, 5);\n  });\n}`,
       ),
     message: /eco-routes v3 is not deployed on zora/,
   },
@@ -147,7 +147,7 @@ const REFUSALS: readonly {
     trigger: () =>
       lower(
         `function payout(amount: Uint256) {
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} }).then(() => {
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} }).then(() => {
     if (amount > 0) { payout(amount); }
   });
 }
@@ -226,7 +226,7 @@ describe("the guide's account of which chain a name resolves on is the lowering'
   // it names. Executed across three chains in `routes-intent-chains.e2e.test.ts`.
   const PROGRAM = `function main() {
   const amount = 5;
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
     });
@@ -259,8 +259,7 @@ describe("the guide's account of which chain a name resolves on is the lowering'
       holds: () => carries(lowered().bytecode, usdc(ARBITRUM)),
     },
     {
-      documented:
-        "| `reward` and every other field | The chain the program runs on | That chain's |",
+      documented: "| `send` and every other field | The chain the program runs on | That chain's |",
       holds: () => carries(lowered().bytecode, usdc(BASE)),
     },
     {
@@ -307,7 +306,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       lower(
         `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
+  Arbitrum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })
     .then(() => {
       if (amount > 0) { USDC.transfer(RECIPIENT, amount); }
     });

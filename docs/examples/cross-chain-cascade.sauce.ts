@@ -25,21 +25,21 @@
 // Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
   await Base.hop({
-    reward: { token: USDC, amount: reward },
+    send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   });
   // On Base, in the fill of the first hop.
   const second = delivered - delivered / 1000;
   await Ethereum.hop({
-    reward: { token: USDC, amount: delivered },
+    send: { token: USDC, amount: delivered },
     receive: { token: USDC, amount: second },
     refundee: refundTo,
   });
   // On Ethereum, in the fill of the second.
   const third = second - second / 1000;
   await Base.hop({
-    reward: { token: USDC, amount: second },
+    send: { token: USDC, amount: second },
     receive: { token: USDC, amount: third },
     refundee: refundTo,
   });

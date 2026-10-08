@@ -197,7 +197,7 @@ check(
 // Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
 // Ethereum's, while the one in `reward` is Base's, which the program escrows.
 const oneTransfer =
-  "function main(to: Address, amount: Uint256) { Ethereum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to }).then(() => { USDC.transfer(to, amount); }); }";
+  "function main(to: Address, amount: Uint256) { Ethereum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to }).then(() => { USDC.transfer(to, amount); }); }";
 check(
   refusal("base", oneTransfer).includes("give the hop a `fee`"),
   "a one-transfer body pays the fee too",
@@ -212,7 +212,7 @@ check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool"
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
-  `function main(pool: Address) { Base.hop({ reward: { token: WETH, amount: 1 }, receive: { token: WETH, amount: 1 }, refundee: ${refundee} }).then(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }); }`;
+  `function main(pool: Address) { Base.hop({ send: { token: WETH, amount: 1 }, receive: { token: WETH, amount: 1 }, refundee: ${refundee} }).then(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }); }`;
 check(
   refusal("ethereum", decodeIn('const x = abi.decode(evm.static(pool, d), ["Uint256"])[0];'), {
     executionFee: fee.base,

@@ -49,22 +49,22 @@ export interface SauceIntentTokenAmount {
   readonly amount: bigint | number;
 }
 
-/** Native coin in an intent's reward: `{ native: amount }`. */
+/** Native coin a hop sends: `{ native: amount }`. */
 export interface SauceIntentNative {
   readonly native: bigint | number;
 }
 
 /**
  * What a chain's `hop` takes:
- * `await Base.hop({ reward: { token, amount }, receive: { token, amount }, refundee })`. Each field
- * left out but `reward` and `refundee` has its default.
+ * `await Base.hop({ send: { token, amount }, receive: { token, amount }, refundee })`. Each field
+ * left out but `send` and `refundee` has its default.
  */
 export interface SauceHopConfig {
   /**
-   * What the program pays the solver, escrowed on the chain it runs on: `{ token, amount }`,
-   * `{ native: amount }`, or a list of them.
+   * What leaves the chain the program runs on: escrowed there, it pays the solver who fills the
+   * intent (the Portal's reward): `{ token, amount }`, `{ native: amount }`, or a list of them.
    */
-  readonly reward: SauceIntentTokenAmount | SauceIntentNative | readonly (SauceIntentTokenAmount | SauceIntentNative)[];
+  readonly send: SauceIntentTokenAmount | SauceIntentNative | readonly (SauceIntentTokenAmount | SauceIntentNative)[];
   /**
    * What the solver delivers on the destination, for the body to run with: `{ token, amount }`, or
    * a list of them. Each token is the destination's, looked up again there by its symbol; every
@@ -83,8 +83,8 @@ export interface SauceHopConfig {
    */
   readonly deadline?: bigint | number;
   /**
-   * From when an unproven reward may be refunded, Unix seconds. Defaults to seven days past the
-   * fill deadline.
+   * From when what was sent, if no fill is proven, may be refunded (the Portal reward's deadline),
+   * Unix seconds. Defaults to seven days past the fill deadline.
    */
   readonly rewardDeadline?: bigint | number;
   /** The source chain's prover. Defaults to the registry's for the pair. */
@@ -125,7 +125,7 @@ export interface SauceHopOpened {
 
 /**
  * A chain in compiled source: `hop` opens an intent whose body runs there,
- * `await Ethereum.hop({ reward: { token, amount }, refundee })`, and `Portal` is its eco-routes
+ * `await Ethereum.hop({ send: { token, amount }, refundee })`, and `Portal` is its eco-routes
  * Portal contract. The one definition of that SauceScript: a `.sauce.ts` file's chains
  * (`sauce-script/index.d.ts`'s `SauceChain`) extend it. A package chain export carries the host's
  * `hop` instead (`host-intent.ts#ChainHop`), which takes these values as well as its own, so a

@@ -1,5 +1,5 @@
 /**
- * The intent a program opens, `await Chain.hop({ reward, receive, refundee })` or
+ * The intent a program opens, `await Chain.hop({ send, receive, refundee })` or
  * `Chain.hop({ … }).then(() => { … })`, as data: the fields its one config object takes, what each
  * holds and the per-level option it overrides, and the steps on what `hop` returns.
  *
@@ -39,16 +39,16 @@ export interface HopStage {
   readonly steps: Readonly<Record<string, HopStep>>;
 }
 
-const REWARD_ITEM = "SauceIntentTokenAmount | SauceIntentNative";
+const SEND_ITEM = "SauceIntentTokenAmount | SauceIntentNative";
 const DELIVERY_ITEM = "SauceIntentTokenAmount";
 
 export const HOP_FIELDS = {
-  reward: {
-    ts: `${REWARD_ITEM} | readonly (${REWARD_ITEM})[]`,
+  send: {
+    ts: `${SEND_ITEM} | readonly (${SEND_ITEM})[]`,
     required: true,
     doc:
-      "What the program pays the solver, escrowed on the chain it runs on: `{ token, amount }`, " +
-      "`{ native: amount }`, or a list of them.",
+      "What leaves the chain the program runs on: escrowed there, it pays the solver who fills the " +
+      "intent (the Portal's reward): `{ token, amount }`, `{ native: amount }`, or a list of them.",
   },
   receive: {
     ts: `${DELIVERY_ITEM} | readonly ${DELIVERY_ITEM}[]`,
@@ -74,7 +74,7 @@ export const HOP_FIELDS = {
   rewardDeadline: {
     ts: "bigint | number",
     option: "rewardDeadline",
-    doc: "From when an unproven reward may be refunded, Unix seconds. Defaults to seven days past the fill deadline.",
+    doc: "From when what was sent, if no fill is proven, may be refunded (the Portal reward's deadline), Unix seconds. Defaults to seven days past the fill deadline.",
   },
   prover: {
     ts: "bigint",

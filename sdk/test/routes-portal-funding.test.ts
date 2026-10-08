@@ -230,7 +230,7 @@ describe("intents.fundVia, in the program that opens the intent", () => {
   it("funds by transfer into the vault by default, and through publishAndFund when told", () => {
     const body = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Base.hop({ reward: [{ token: USDC, amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+  Base.hop({ send: [{ token: USDC, amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`;

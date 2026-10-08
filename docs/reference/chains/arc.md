@@ -49,9 +49,9 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
   native coin are refused for Arc.
 - Native value sent to the zero address, to or from a blocklisted address, or to a
   self-destructed account reverts, also when a contract forwards it.
-- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one
-  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is
-  built. Fold the two into one amount.
+- A hop's `send`, the intent's reward, offers native value or `USDC`, not both: Arc's Portal
+  takes them for one asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a
+  `send` when it is built. Fold the two into one amount.
 
 ## In a program
 

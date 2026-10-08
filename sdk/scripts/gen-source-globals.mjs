@@ -93,8 +93,8 @@ function docComment(text, indent) {
 function renderHop() {
   const out = [
     docComment(
-      "What a chain's `hop` takes: `await Base.hop({ reward: { token, amount }, receive: { token, " +
-        "amount }, refundee })`. Each field left out but `reward` and `refundee` has its default.",
+      "What a chain's `hop` takes: `await Base.hop({ send: { token, amount }, receive: { token, " +
+        "amount }, refundee })`. Each field left out but `send` and `refundee` has its default.",
       "",
     ),
     "export interface SauceHopConfig {",
@@ -536,7 +536,7 @@ export interface SauceIntentTokenAmount {
   readonly amount: bigint | number;
 }
 
-/** Native coin in an intent's reward: \`{ native: amount }\`. */
+/** Native coin a hop sends: \`{ native: amount }\`. */
 export interface SauceIntentNative {
   readonly native: bigint | number;
 }
@@ -545,7 +545,7 @@ ${renderHop()}
 
 /**
  * A chain in compiled source: \`hop\` opens an intent whose body runs there,
- * \`await Ethereum.hop({ reward: { token, amount }, refundee })\`, and \`Portal\` is its eco-routes
+ * \`await Ethereum.hop({ send: { token, amount }, refundee })\`, and \`Portal\` is its eco-routes
  * Portal contract. The one definition of that SauceScript: a \`.sauce.ts\` file's chains
  * (\`sauce-script/index.d.ts\`'s \`SauceChain\`) extend it. A package chain export carries the host's
  * \`hop\` instead (\`host-intent.ts#ChainHop\`), which takes these values as well as its own, so a
