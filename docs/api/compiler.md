@@ -54,19 +54,20 @@ console.log(artifact.bytecode.length, artifact.entryEncoding);
 
 ### Options
 
-| Field             | Type                                                   | Meaning                                                                |
-| ----------------- | ------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `target`          | `"evm" \| "svm"`                                       | Required target runtime                                                |
-| `resolve`         | `(path: string) => Uint8Array \| undefined \| null`    | Required synchronous module/JSON resolver                              |
-| `entry`           | `string`                                               | Entry module; default `"main.js"`                                      |
-| `resolvePackage`  | `(specifier, importer) => string \| undefined \| null` | Map a bare package specifier to a path understood by `resolve`         |
-| `contracts`       | `[name, path][]`                                       | Register entry-module ABI bindings by resolver path                    |
-| `inlineContracts` | `[name, abiJson][]`                                    | Register entry-module ABI bindings from JSON strings                   |
-| `ambient`         | `string[]`                                             | Resolve libraries and broadcast their exports into every module        |
-| `defines`         | `[name, value][]`                                      | Program-wide scalar compile-time constants; values are integer strings |
-| `optimize`        | `boolean`                                              | Enable compiler optimizations; default `true`                          |
-| `compactArgs`     | `boolean`                                              | Use compact-v1 entry arguments; default `false`                        |
-| `cache`           | `boolean`                                              | Enable the per-function lowering cache; default `true`                 |
+| Field             | Type                                                   | Meaning                                                                                                                  |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `target`          | `"evm" \| "svm"`                                       | Required target runtime                                                                                                  |
+| `resolve`         | `(path: string) => Uint8Array \| undefined \| null`    | Required synchronous module/JSON resolver                                                                                |
+| `entry`           | `string`                                               | Entry module; default `"main.js"`                                                                                        |
+| `resolvePackage`  | `(specifier, importer) => string \| undefined \| null` | Map a bare package specifier to a path understood by `resolve`                                                           |
+| `contracts`       | `[name, path][]`                                       | Register entry-module ABI bindings by resolver path                                                                      |
+| `inlineContracts` | `[name, abiJson][]`                                    | Register entry-module ABI bindings from JSON strings                                                                     |
+| `ambient`         | `string[]`                                             | Resolve libraries and broadcast their exports into every module                                                          |
+| `defines`         | `[name, value][]`                                      | Program-wide scalar compile-time constants; values are integer strings                                                   |
+| `optimize`        | `boolean`                                              | Enable compiler optimizations; default `true`                                                                            |
+| `compactArgs`     | `boolean`                                              | Use compact-v1 entry arguments; default `false`                                                                          |
+| `args`            | `(bigint \| boolean \| string)[]`                      | `main`'s arguments to compile the program for, one word each in `entryParams` order; `entryParams` then comes back empty |
+| `cache`           | `boolean`                                              | Enable the per-function lowering cache; default `true`                                                                   |
 
 `optimize: false` turns the optimizer off. Every check the compiler performs still
 runs; you get a larger, more literal program.

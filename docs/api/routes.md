@@ -176,6 +176,11 @@ each is built while the file compiles and encoded as the program runs, so it is 
 and read from the Portal's `IntentPublished` in its receipt or rehearsal
 (`intentFromPublished(log, sourceChainId)`), as `sauce intent publish` reads it.
 
+`options.args` compiles the program for `main`'s arguments: one word each (an unsigned integer, an
+address or a `bool`), in the order of `entryParams`, where a Solana `Account` parameter takes none
+and stays the manifest's. `main` reads each as a constant, so it takes none as it runs
+(`entryParams` is empty), and each body folds them in, capturing nothing for them.
+
 ## Lower-level encoding
 
 For callers building their own calls, `assembleIntent(source, destination, route, reward)` normalizes an intent without compiling a program. `encodeRoute`, `encodeReward`, `hashIntent`, and their explicit EVM/SVM variants expose encoding and hashing. `toUniversalAddress` normalizes addresses for the cross-chain intent model, while `denormalizeToEvm` converts an EVM-shaped universal address back to its 20-byte form.

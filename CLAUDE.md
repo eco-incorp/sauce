@@ -343,8 +343,10 @@ contract, absent on EVM. Compile-time values affect bytecode; runtime entry argu
 and appended separately. With `compactArgs: true`, pass the returned schema and positional values
 to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
 `decodeCompactArguments`. Pair the artifact with an engine by exact version (`releases.json`,
-above); an ISA label does not query the deployed runtime and does not distinguish engine releases. There is no `argsLayout` and no `staged`/`args` compile option; the SDK owns
-its SVM layout types (`sdk/src/svm/layout.ts`).
+above); an ISA label does not query the deployed runtime and does not distinguish engine releases. There is no `argsLayout` and no `staged` compile option; `args` compiles `main` for its
+arguments (one word each, in `entryParams`' order, which then comes back empty), which
+`compileSauceProgram`'s `args` passes through (`routes/entry.ts#entryWords`). The SDK owns its SVM
+layout types (`sdk/src/svm/layout.ts`).
 
 SVM settlement execution verification defaults to `wireFormat: "gated-v1"`: raw engine CPI
 data with the 65-byte owner/salt/bump gate header and the full accounts including the trailing Pot
