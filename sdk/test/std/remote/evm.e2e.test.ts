@@ -400,6 +400,31 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     120_000,
   );
 
+  it("delivers again, once what the body needs has arrived, a message whose body reverted", async () => {
+    // As a body does when a hop brings it what it spends: the two arrive in no set order.
+    const needed = (await base.publicClient.getBalance({ address: pot })) + parseEther("2");
+    const receipt = await cook(
+      ethereum,
+      `function main(needed: Uint256) {
+  Base.remote(() => {
+    require(ctx.selfBalance() >= needed, "not arrived yet");
+    evm.sstore(${slot("retried")}, 1);
+  });
+}`,
+      [needed],
+    );
+    await expect(relayHyperlane(receipt, ethereumBridges, base, baseBridges)).rejects.toThrow();
+    expect(await read(base, "retried")).toBe(0n);
+    await base.deployer.sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      to: pot,
+      value: parseEther("3"),
+    });
+    await relayHyperlane(receipt, ethereumBridges, base, baseBridges);
+    expect(await read(base, "retried")).toBe(1n);
+  }, 120_000);
+
   it("refuses a message any other sender dispatched to the Pot", async () => {
     // A stranger dispatches, from Ethereum, a message in the shape the Pot's own are.
     const program = compileSauceProgram(
