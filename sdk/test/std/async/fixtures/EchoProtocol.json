@@ -1,0 +1,107 @@
+{
+  "source": "sdk/test/std/async/fixtures/EchoProtocol.sol",
+  "solc": "0.8.36+commit.8a079791 --optimize",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "requester",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "Requested",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "fulfill",
+      "outputs": [
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "pending",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "requester",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "request",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "requests",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "creationCode": "0x6080604052348015600e575f5ffd5b506103a28061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061004a575f3560e01c8063753b88071461004e578063af6e623814610077578063b74cb2db146100c8578063d845a4b3146100df575b5f5ffd5b61006161005c3660046102e6565b6100f2565b60405161006e91906102fd565b60405180910390f35b6100a96100853660046102e6565b5f60208190529081526040902080546001909101546001600160a01b039091169082565b604080516001600160a01b03909316835260208301919091520161006e565b6100d160015481565b60405190815260200161006e565b6100d16100ed3660046102e6565b610226565b5f8181526020818152604091829020825180840190935280546001600160a01b0316808452600190910154918301919091526060919061016a5760405162461bcd60e51b815260206004820152600f60248201526e1b9bc81cdd58da081c995c5d595cdd608a1b604482015260640160405180910390fd5b5f5f825f01516001600160a01b0316858460200151604051602401610199929190918252602082015260400190565b60408051601f198184030181529181526020820180516001600160e01b03166303bb2bcd60e41b179052516101ce9190610332565b5f604051808303815f865af19150503d805f8114610207576040519150601f19603f3d011682016040523d82523d5f602084013e61020c565b606091505b50915091508161021e57805160208201fd5b949350505050565b5f3060015f815461023690610348565b9182905550604080516001600160a01b03909316602084015282015260600160408051808303601f1901815282825280516020918201208383018352338085528285018781525f838152808552859020955186546001600160a01b0319166001600160a01b0390911617865551600190950194909455915185815291935083917ff89d13b935f76904b0b664a7f4c33fce217c49061ebcf6c810468d7422335f79910160405180910390a3919050565b5f602082840312156102f6575f5ffd5b5035919050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b5f82518060208501845e5f920191825250919050565b5f6001820161036557634e487b7160e01b5f52601160045260245ffd5b506001019056fea2646970667358221220f4da502c60bbeafd0c307fb9d45790335661ca384412e404fa5798c3da41b87064736f6c63430008240033"
+}
