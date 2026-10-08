@@ -1,6 +1,6 @@
 /**
  * The intents a cook published, read from the Portal's `IntentPublished` in its logs: a rehearsal's
- * (`eth_simulateV1`) or a receipt's. An intent a program opens exists nowhere else: `@sauce/intents`
+ * (`eth_simulateV1`) or a receipt's. An intent a program opens exists nowhere else: `@sauce/hop`
  * builds it while the program compiles, and the program encodes it as it runs, so its hash is the
  * one its log announces.
  */

@@ -1,5 +1,5 @@
 /**
- * What `hop(...).then(...)` compiles to. `@sauce/intents`' class runs while the file compiles, so a
+ * What `hop(...).then(...)` compiles to. `@sauce/hop`'s class runs while the file compiles, so a
  * hop leaves the program only its run-time work: the intent, encoded once, its vault read, the
  * payment into it, and the publish. This suite writes that residual program out from the real
  * thing rather than by hand: each file is compiled as the SDK compiles it and cooked on anvil

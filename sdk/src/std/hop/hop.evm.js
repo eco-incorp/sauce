@@ -1,6 +1,10 @@
-// @sauce/intents — EVM arm.
+// @sauce/hop — EVM arm.
 //
-// An Eco intent opened from inside a program, a hop to another chain:
+// The intent-based way to move money to another chain. A hop is an Eco intent a program opens: the
+// source escrows what it sends, a solver delivers what it asks for on the destination, and its body
+// runs there on the destination's Shared Pot. That Pot is public, the one every hop to the chain
+// cooks on, so nothing persists on it between transactions: a body keeps no state, and moves what
+// it receives on within its own transaction.
 //
 //   await Arbitrum.hop({
 //     send: { token: USDC, amount },
@@ -11,7 +15,7 @@
 //
 // which is, as in JavaScript, `Arbitrum.hop({ … }).then(() => { USDC.transfer(recipient, delivered); })`.
 // `Arbitrum.hop` is a method of the chain's name in the SDK's module for the chain the program is
-// compiled for, which knows that pair of chains: both Portals, the prover, the destination's shared
+// compiled for, which knows that pair of chains: both Portals, the prover, the destination's Shared
 // Pot, its engine and its Kitchen fee, and its tokens by symbol. It returns an `Intent`, whose steps
 // only record what they are given. The compiler runs all of it while it compiles, and when the
 // statement ends it runs `[Symbol.dispose]()`, which builds the intent as one literal, the body
@@ -28,7 +32,7 @@
 // `publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))` and
 // `publishAndFund(…,bool)` send the intent, `intentVaultAddress(…)` reads its vault, a route call
 // moves a delivered token with ERC-20's `transfer(address,uint256)` and cooks the body with the Pot's
-// `cook(address,bytes)`. `test/std/intents/compile.test.ts` holds each selector to the registry's ABI.
+// `cook(address,bytes)`. The SDK's intent suites execute each of them against eco-routes' own Portal.
 import { Token } from "@sauce/names";
 import { approve, transfer } from "@sauce/token";
 
