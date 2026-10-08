@@ -1,0 +1,235 @@
+{
+  "tokenLedgerInstruction": null,
+  "computeBudgetInstructions": [
+    {
+      "programId": "ComputeBudget111111111111111111111111111111",
+      "accounts": [],
+      "data": "AsBcFQA="
+    },
+    {
+      "programId": "ComputeBudget111111111111111111111111111111",
+      "accounts": [],
+      "data": "AwQXAQAAAAAA"
+    }
+  ],
+  "setupInstructions": [
+    {
+      "programId": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+      "accounts": [
+        {
+          "pubkey": "B1NfwC9SGiyCTjTedWhHRgyJ4HAeDw1G1dbFBueHL8dZ",
+          "isSigner": true,
+          "isWritable": true
+        },
+        {
+          "pubkey": "7xXLuyirtmepEKGCeuH9g8Tpe9pK1w3VhTtreQAwt4Q6",
+          "isSigner": false,
+          "isWritable": true
+        },
+        {
+          "pubkey": "B1NfwC9SGiyCTjTedWhHRgyJ4HAeDw1G1dbFBueHL8dZ",
+          "isSigner": false,
+          "isWritable": false
+        },
+        {
+          "pubkey": "So11111111111111111111111111111111111111112",
+          "isSigner": false,
+          "isWritable": false
+        },
+        {
+          "pubkey": "11111111111111111111111111111111",
+          "isSigner": false,
+          "isWritable": false
+        },
+        {
+          "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "isSigner": false,
+          "isWritable": false
+        }
+      ],
+      "data": "AQ=="
+    }
+  ],
+  "swapInstruction": {
+    "programId": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+    "accounts": [
+      {
+        "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "6U91aKa8pmMxkJwBCfPTmUEfZi6dHe7DcFq2ALvB2tbB",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "B1NfwC9SGiyCTjTedWhHRgyJ4HAeDw1G1dbFBueHL8dZ",
+        "isSigner": true,
+        "isWritable": false
+      },
+      {
+        "pubkey": "ByRFGgHuADmhfULQdnvXeWMcQnGyGr1yw9EgBgpAzsYA",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "59v2cSbCsnyaWymLnsq6TWzE6cEN5KJYNTBNrcP4smRH",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "7x4VcEX8aLd3kFsNWULTp1qFgVtDwyWSxpTGQkoMM6XX",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "7xXLuyirtmepEKGCeuH9g8Tpe9pK1w3VhTtreQAwt4Q6",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "So11111111111111111111111111111111111111112",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "3TK9D8aoBFYjYZtKCjciPrVrRStsnvo7KmpcJqDavpaU",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "6U91aKa8pmMxkJwBCfPTmUEfZi6dHe7DcFq2ALvB2tbB",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "7yD7gfXv49SFxhx9uTc11dEd7Nj98rGWeYMdZJgheZbG",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "HgFLBWQugxt6qbPaWiwXjrqauXdQmcpMV6H6t8ttD8s1",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "FzvRbXDdrsYVMa9KohXyQytWNAZAo4PsF8yujDH7KCfG",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "So11111111111111111111111111111111111111112",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "7x4VcEX8aLd3kFsNWULTp1qFgVtDwyWSxpTGQkoMM6XX",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "59v2cSbCsnyaWymLnsq6TWzE6cEN5KJYNTBNrcP4smRH",
+        "isSigner": false,
+        "isWritable": true
+      },
+      {
+        "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "11111111111111111111111111111111",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "B1NfwC9SGiyCTjTedWhHRgyJ4HAeDw1G1dbFBueHL8dZ",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "CmDagSgv6umtZgHv6RsnEYZn9HsqVkNP1R6JZAR5qhMi",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "A315PfxZVzc1o5eEHxKNnvLuUEWdJSE9HgXfo2zvuJt4",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv",
+        "isSigner": false,
+        "isWritable": false
+      },
+      {
+        "pubkey": "Sysvar1nstructions1111111111111111111111111",
+        "isSigner": false,
+        "isWritable": false
+      }
+    ],
+    "data": "wSCbM0HWnIEDAQAAALUAZAABAOH1BQAAAACHgr4xAAAAADIAAA=="
+  },
+  "cleanupInstruction": null,
+  "otherInstructions": [],
+  "addressLookupTableAddresses": ["2Lvj7QkiAWMHziSQbP4yZcoYJPLTESKUWdscnpbj7Ham"],
+  "prioritizationFeeLamports": 99999,
+  "computeUnitLimit": 1400000,
+  "loadedAccountsDataSize": null,
+  "loadedAccountsDataSizeLimit": null,
+  "transactionVersion": 0,
+  "prioritizationType": {
+    "computeBudget": {
+      "microLamports": 71428,
+      "estimatedMicroLamports": 600832
+    }
+  },
+  "simulationSlot": null,
+  "dynamicSlippageReport": null,
+  "simulationError": null,
+  "addressesByLookupTableAddress": null,
+  "blockhashWithMetadata": {
+    "blockhash": [
+      219, 174, 142, 130, 76, 26, 53, 11, 118, 60, 121, 115, 126, 208, 55, 255, 243, 27, 45, 110,
+      202, 45, 249, 233, 175, 11, 28, 102, 10, 80, 78, 188
+    ],
+    "lastValidBlockHeight": 431107686,
+    "fetchedAt": {
+      "secs_since_epoch": 1791066816,
+      "nanos_since_epoch": 257503719
+    }
+  },
+  "timeTaken": 0.041431505,
+  "createAtaTimeTaken": 0.019671076
+}
