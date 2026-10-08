@@ -464,6 +464,38 @@ function main(protocol: Address, value: Uint256, recipient: Address) {
   the protocol reports the request failed, handed why. With no `.catch`, the callback reverts and
   the body stays parked.
 
+### Randomness: `@sauce/random`
+
+`Random.vrf` asks Chainlink VRF for random words, on Ethereum and Base, and `Random.entropy` asks Pyth
+Entropy for one random number, on Base. A coin flip for a prize:
+
+```sauce chain=ethereum,base
+import { Random } from "@sauce/random";
+
+function main(heads: Address, tails: Address, prize: Uint256) {
+  Random.vrf({ words: 1 }).then((words) => {
+    USDC.transfer(words[0] % 2 == 0 ? heads : tails, prize);
+  });
+}
+```
+
+- **`Random.vrf({ words, confirmations, gas })`** hands the body `words` random numbers, 1 to 10
+  (1 when left out), as a `Uint256[]`. `confirmations` is how many blocks the request waits: 3
+  when left out, which every chain accepts.
+- **`Random.entropy({ provider, gas })`** hands the body one random 32-byte number. `provider` is
+  Entropy's default provider when left out.
+- **The Pot pays.** The request pays the provider's price in the native coin from the Pot's
+  balance as the program runs (exactly the price: both providers keep any excess), and the
+  callback's cook pays the Kitchen's fee later, so the Pot holds both.
+- **`gas` is the callback's gas limit,** fixed and paid for when the request is made. Left out,
+  it is sized from the body as compiled: enough for writes, hashing and a few token transfers. A
+  body that loops or makes many calls needs `gas` given. VRF gives the callback exactly that much,
+  and a callback that runs out is spent: paid for, never retried, its body left parked. Entropy
+  keeps a request whose callback failed open, and anyone may reveal it again.
+- **The body reads numbers, addresses and bools** from the program around it, not an array: pick
+  among fixed parameters, as `heads` and `tails` above.
+- **Install the handlers once per Pot:** `sauce run @sauce/random --chain base --wallet <name>`.
+
 ## What a program costs
 
 On an EVM chain, a cook's gas is the transaction's own, the Kitchen's and the Pot's, plus the

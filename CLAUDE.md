@@ -23,7 +23,7 @@ everything from one name.
 
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
+| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 137-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents; `sauce actions` lowers them                                  |
 | `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's building tools (and, over stdio, wallets), the agent skills   |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
@@ -1220,6 +1220,21 @@ runs it end to end with `startGatedEngine(…, { routerCreationCode })`, the exp
 to deploy a Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it
 skips without one, in CI too). Its `.catch` cases need an engine built from the compiler's tree:
 on the released v12-evm 1.2.0 a `catch (e)` that READS `e` loses its work.
+
+**Randomness is `@sauce/random`** (`src/std/random/`), a package of that family over two registry
+protocols: `chainlink-vrf` (VRF v2.5's VRFV2PlusWrapper and coordinator, Ethereum and Base) and
+`pyth-entropy` (Entropy v2, Base only: it is not on Ethereum mainnet). `Random.vrf` pays the
+wrapper's `calculateRequestPriceNative` in native with ExtraArgsV1's `nativePayment` (the wrapper,
+not the coordinator, calls the Pot back, with EXACTLY the callback gas, and a failed callback is
+spent); `Random.entropy` pays `getFeeV2` (the callback gets AT MOST its gas, and a failed one stays
+open). Keys: `(wrapper, requestId)` and `(entropy, provider, sequence)`: Entropy's sequence numbers
+count per provider. The callback gas defaults to `SAUCE_RANDOM_LANDING_GAS` plus
+`SAUCE_RANDOM_GAS_PER_BYTE` per byte of the parked body, calibrated in
+`test/std/random/evm.e2e.test.ts` (landing measured at about 98k through #571's Router), whose
+providers are mocks (`test/evm/fixtures/Mock{VRFV2PlusWrapper,Entropy}.sol`, compiled with
+`--combined-json abi,bin,bin-runtime`) installed with `setCode` at the real Base addresses, so the
+package's own handlers authenticate them. A `.then` body captures numbers, addresses and bools,
+never a run-time array.
 
 ## Agent skills
 

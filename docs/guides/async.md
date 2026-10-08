@@ -112,3 +112,48 @@ A handler marked `readOnly` runs under a static call with no fee: a view the pro
 | `requireCaller(expected, actual)`      | The handler's check that the protocol called.                                   |
 | `requireSelf(sender)`                  | The handler's check that a message came from this Pot.                          |
 | `install(selector, program, readOnly)` | Registers a handler on this Pot, from a cooked program.                         |
+
+## Randomness
+
+`@sauce/random` asks for verifiable randomness and hands it to the body: `Random.vrf` from
+Chainlink VRF, on Ethereum and Base, and `Random.entropy` from Pyth Entropy, on Base. A coin flip
+for a prize:
+
+```js
+import { Random } from "@sauce/random";
+
+function main(heads: Address, tails: Address, prize: Uint256) {
+  Random.vrf({ words: 1 }).then((words) => {
+    USDC.transfer(words[0] % 2 == 0 ? heads : tails, prize);
+  });
+}
+```
+
+| Request                                     | The body receives                     | Defaults                                              |
+| ------------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| `Random.vrf({ words, confirmations, gas })` | `words` random numbers, a `Uint256[]` | 1 word, 3 confirmations, `gas` sized from the body    |
+| `Random.entropy({ provider, gas })`         | one random 32-byte number             | Entropy's default provider, `gas` sized from the body |
+
+- **The Pot pays twice.** The request pays the provider's price in the native coin from the Pot's
+  balance when the program runs: VRF's wrapper price at the transaction's gas price, or Entropy's
+  fee. Exactly the price is paid, since both providers keep any excess. The callback's cook then
+  pays the Kitchen's fee.
+- **`gas` is the callback's gas limit,** fixed and paid for with the request. Left out, the package
+  sizes it from the body as compiled: what reaching the body costs, about 100,000 gas, plus an
+  allowance for each byte of the body. That covers writes, hashing and a few token transfers; a
+  body that loops, or calls out more than its size suggests, needs `gas` given.
+- **A callback that fails** is final with VRF: the wrapper gives the callback exactly `gas`, and a
+  callback that reverts or runs out is spent, paid for and never retried. Pyth Entropy keeps the
+  request open, and anyone may reveal it again.
+- **The body reads numbers, addresses and booleans** from the program around it, not arrays: choose
+  among fixed parameters, as the coin flip does.
+- **Requests are keyed by the provider's own id.** VRF's request id, bound to the wrapper, and
+  Entropy's sequence number, bound to the Entropy contract and its provider, since sequence numbers
+  count per provider.
+
+Install the handlers, which answer `rawFulfillRandomWords` from the chain's VRF wrapper and
+`_entropyCallback` from its Entropy contract, once per Pot:
+
+```sh
+sauce run @sauce/random --chain base --wallet <name>
+```
