@@ -141,7 +141,7 @@ describe("an eco-routes Portal's vaults, predicted offline", () => {
   });
 
   it("is the Proxy the vendored eco-routes Portal build carries", () => {
-    // `routes-nest-dynamic.e2e.test.ts` deploys this build and asks it for a vault; here, only that
+    // The suites that run the Portal deploy this build and ask it for a vault; here, only that
     // the bytes the SDK records are the ones it was compiled with, once.
     const code = PORTAL_FIXTURE.creationCode.toLowerCase();
     const proxy = ECO_ROUTES_VAULT_PROXY_CREATION_CODE.slice(2).toLowerCase();

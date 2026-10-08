@@ -3,7 +3,7 @@
  *
  * SauceScript is a checked subset of TypeScript, and annotations are part of it — an unannotated
  * parameter is a number, so a helper that takes or returns an array, a record or bytes must say so.
- * The rewrites (`token-rewrite.ts`, `protocol-rewrite.ts`, `intent-sugar.ts`, `closure.ts`) run on
+ * The rewrites (`token-rewrite.ts`, `protocol-rewrite.ts`, `closure.ts`) run on
  * the source before the compiler does, so they have to parse whatever it accepts. A JavaScript
  * parser refused the first annotation it met.
  *

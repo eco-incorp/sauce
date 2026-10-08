@@ -1,8 +1,8 @@
 /**
  * `routes/composed.ts` refuses to compose a chain accessor when a contract or venue namespace key
- * would land on a name the accessor already owns: `route` and `chain`, or a function intrinsic of
- * the callable it returns (`call`, `bind`, `prototype`, ...). A protocol slug that happened to be
- * one of those would otherwise corrupt `Base` itself for every consumer, at module-eval time.
+ * would land on a name the accessor already owns: `chain`, or an intrinsic (`call`, `bind`,
+ * `toString`, ...). A protocol slug that happened to be one of those would otherwise corrupt `Base`
+ * itself for every consumer, at module-eval time.
  *
  * No registry protocol collides today, so the namespace tree is replaced for this file only: the
  * descriptor layer's `chainContracts` is mocked to return whatever namespaces a case plants, and
@@ -38,7 +38,7 @@ function composeWith(key: string): { name: string; compose: () => unknown } {
 }
 
 describe("composedChainGlobal: a namespace that collides with the accessor is refused", () => {
-  it.each(["route", "chain"])("an eco-routes accessor key: %s", (key) => {
+  it.each(["chain"])("an accessor key: %s", (key) => {
     const { name, compose } = composeWith(key);
     expect(compose).toThrow(
       `routes/composed: '${key}' collides with another name on the '${name}' accessor`,
@@ -56,7 +56,7 @@ describe("composedChainGlobal: a namespace that collides with the accessor is re
     "apply",
     "toString",
     "constructor",
-  ])("a function intrinsic: %s", (key) => {
+  ])("an intrinsic: %s", (key) => {
     const { name, compose } = composeWith(key);
     expect(compose).toThrow(
       `routes/composed: '${key}' collides with another name on the '${name}' accessor`,
@@ -74,6 +74,6 @@ describe("composedChainGlobal: a namespace that collides with the accessor is re
     const { compose } = composeWith("Planted");
     const composed = compose() as Record<string, unknown>;
     expect(composed.Planted).toEqual({ contract: "planted" });
-    expect(typeof composed).toBe("function");
+    expect(typeof composed).toBe("object");
   });
 });

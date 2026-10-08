@@ -6,9 +6,9 @@
 import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { getDescriptor } from "../src/descriptors/query.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 
 const BASE = requireChain("base");
 const OPTIMISM = requireChain("optimism");
@@ -20,20 +20,23 @@ const ETHEREUM_AAVE_POOL = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
+const SVM_EXECUTION = {
+  code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  accounts: [],
+} as const;
 
-function evmOptions() {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base" as const,
-    creator: "0x3333333333333333333333333333333333333333" as const,
-    prover: "0x4444444444444444444444444444444444444444" as const,
-    rewardDeadline: 1000n,
-  };
-}
+/** `body` compiled as a route on `chain`: an EVM Pot's cook, or an SVM code account's. */
+const route = (
+  chain: string,
+  body: string,
+  options: Parameters<typeof compileSauceRoute>[3] = {},
+): ReturnType<typeof compileSauceRoute> =>
+  compileSauceRoute(
+    chain,
+    body,
+    chain === "solana" ? SVM_EXECUTION : { pot: POT, engine: ENGINE },
+    options,
+  );
 
 describe("rewriteProtocolAccessors: THE DECISIVE STEP -- a real protocol accessor for a real chain", () => {
   it("Uniswap.UniversalRouter.execute(...) on Base compiles byte-identically to hand-written IUniswapV4_UniversalRouter.at(<addr>n).execute(...) with NO import line and NO baseDirs", () => {
@@ -59,13 +62,9 @@ describe("rewriteProtocolAccessors: THE DECISIVE STEP -- a real protocol accesso
     expect(a.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
-  it("openRoute end-to-end: a real accessor call on the destination chain produces exactly one cook() call", () => {
-    const built = openRoute(
-      "base",
-      `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`,
-      evmOptions(),
-    ).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+  it("end-to-end: a real accessor call on the destination chain produces exactly one cook() call", () => {
+    const built = route("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`);
+    expect(built.calls).toHaveLength(1);
   });
 });
 
@@ -284,30 +283,15 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
   });
 
   it("an svm destination throws via compileSauceRoute -- every starter-set descriptor is EVM-only, so it fails closed on 'not deployed' before an accessor site could ever resolve", () => {
-    expect(() =>
-      openRoute("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
-        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-        deadline: 2000n,
-        portal: PORTAL,
-        source: "base",
-        creator: "0x3333333333333333333333333333333333333333",
-        prover: "0x4444444444444444444444444444444444444444",
-        rewardDeadline: 1000n,
-      }),
-    ).toThrow(/not deployed on 'solana'/);
+    expect(() => route("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`)).toThrow(
+      /not deployed on 'solana'/,
+    );
   });
 
   it("accessors: false makes an svm destination unaffected by the rewrite entirely (falls through to the compiler's own error)", () => {
     expect(() =>
-      openRoute("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
-        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-        deadline: 2000n,
-        portal: PORTAL,
-        source: "base",
-        creator: "0x3333333333333333333333333333333333333333",
-        prover: "0x4444444444444444444444444444444444444444",
-        rewardDeadline: 1000n,
-        compile: { accessors: false },
+      route("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
+        accessors: false,
       }),
     ).toThrow();
   });
@@ -323,24 +307,16 @@ describe("rewriteProtocolAccessors: negative controls -- isolation", () => {
   });
 
   it("a body with zero accessor/self sites compiles byte-identically with accessors on and off", () => {
-    const built1 = openRoute("base", `function main() { return 5n; }`, {
-      ...evmOptions(),
-      compile: { accessors: true },
-    }).reward(0n);
-    const built2 = openRoute("base", `function main() { return 5n; }`, {
-      ...evmOptions(),
-      compile: { accessors: false },
-    }).reward(0n);
-    expect(built1.intent.route.calls[0]!.data).toEqual(built2.intent.route.calls[0]!.data);
+    const built1 = route("base", `function main() { return 5n; }`, { accessors: true });
+    const built2 = route("base", `function main() { return 5n; }`, { accessors: false });
+    expect(built1.calls[0]!.data).toEqual(built2.calls[0]!.data);
   });
 
   it("accessors: false opts out entirely even when the body has a recognizable accessor shape", () => {
-    // Left untouched -> the base compiler throws its own generic property-access error, at
-    // openRoute() time (compileSauceRoute runs eagerly, not deferred to .reward()).
+    // Left untouched -> the base compiler throws its own generic property-access error.
     expect(() =>
-      openRoute("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
-        ...evmOptions(),
-        compile: { accessors: false },
+      route("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
+        accessors: false,
       }),
     ).toThrow();
   });
@@ -413,13 +389,9 @@ describe("rewriteProtocolAccessors: VALUE position -- an accessor used as an add
     expect(heard).toHaveLength(3);
   });
 
-  it("END TO END: USDC.approve(Cctp.TokenMessenger, x) compiles through openRoute (dot form as a spender)", () => {
-    const built = openRoute(
-      "base",
-      `function main() { USDC.approve(Cctp.TokenMessenger, 1000000n); }`,
-      evmOptions(),
-    ).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+  it("END TO END: USDC.approve(Cctp.TokenMessenger, x) compiles as a route (dot form as a spender)", () => {
+    const built = route("base", `function main() { USDC.approve(Cctp.TokenMessenger, 1000000n); }`);
+    expect(built.calls).toHaveLength(1);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

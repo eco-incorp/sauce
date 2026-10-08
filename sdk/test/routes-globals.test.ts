@@ -12,33 +12,12 @@ import { canonicalChains, requireChain } from "../src/chains/canonical.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "../src/routes/globals.js";
 import { Base as BaseExport } from "../src/routes/chain-exports.generated.js";
-import type { IntentOptions } from "../src/routes/index.js";
 
 /** Every chain name, plus the two non-chain names this module installs by default: `chain`
  *  and the universal `Token` interface. Kept derived, not a magic number, so a future
  *  chain/global addition can't silently mask a real regression here. */
 const CHAIN_PLUS_CHAIN_PLUS_TOKEN = canonicalChains.length + 2;
 const CHAIN_PLUS_TOKEN = canonicalChains.length + 1;
-
-const POT = "0x1111111111111111111111111111111111111111" as const;
-const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x3333333333333333333333333333333333333333" as const;
-const CREATOR = "0x5555555555555555555555555555555555555555" as const;
-const PROVER = "0x6666666666666666666666666666666666666666" as const;
-
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: CREATOR,
-    prover: PROVER,
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -75,10 +54,9 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
     installRouteGlobals();
     for (const c of canonicalChains) {
       const key = pascalOfSlug(c.slug);
-      const composed = g[key] as { chain: unknown; route: unknown };
+      const composed = g[key] as { chain: unknown };
       const origin = chainAccessors[key as keyof typeof chainAccessors];
       expect(composed.chain).toEqual(origin.chain);
-      expect(typeof composed.route).toBe("function");
     }
   });
 
@@ -87,14 +65,12 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
     expect(g.Base).toBe(BaseExport);
   });
 
-  it("the installed global carries BOTH the eco-routes DSL and the native contract accessor tree", () => {
+  it("the installed global carries the native contract accessor tree", () => {
     installRouteGlobals();
     const base = g.Base as {
-      route: unknown;
       UniswapV4: { UniversalRouter: unknown };
       Uniswap: { UniversalRouter: unknown };
     };
-    expect(typeof base.route).toBe("function");
     expect(base.UniswapV4.UniversalRouter).toBeDefined();
     // Family alias forwards to the SAME underlying accessor as the canonical namespace.
     expect(base.Uniswap.UniversalRouter).toBe(base.UniswapV4.UniversalRouter);
@@ -102,7 +78,7 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
 
   it("composition never mutates the imported chainAccessors.Base object", () => {
     installRouteGlobals();
-    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "route"]);
+    expect(Object.keys(chainAccessors.Base)).toEqual(["chain"]);
   });
 
   it("contract namespaces install as lazy, memoising getters (not eagerly constructed)", () => {
@@ -118,27 +94,6 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
     expect(typeof g.chain).toBe("function");
     const viaGlobal = (g.chain as (ref: unknown) => { chain: unknown })("base");
     expect(viaGlobal.chain).toEqual(requireChain("base"));
-  });
-
-  it("end-to-end: Base(sauce, opts).reward(...) through the installed name matches the named-import build", () => {
-    installRouteGlobals();
-    const opts = evmOptions();
-
-    type OriginLike = {
-      (sauce: string, o: IntentOptions): { reward: (r: number | bigint) => unknown };
-      route: (sauce: string, o: IntentOptions) => { reward: (r: number | bigint) => unknown };
-    };
-    const viaCall = (g.Base as OriginLike)("function main() { return 1n; }", opts).reward(0n) as {
-      intent: unknown;
-    };
-    const viaRoute = (g.Base as OriginLike)
-      .route("function main() { return 1n; }", opts)
-      .reward(0n) as {
-      intent: unknown;
-    };
-    const viaNamedImport = chainAccessors.Base("function main() { return 1n; }", opts).reward(0n);
-    expect(viaCall.intent).toEqual(viaNamedImport.intent);
-    expect(viaRoute.intent).toEqual(viaNamedImport.intent);
   });
 
   it("installed properties are non-enumerable (don't pollute Object.keys(globalThis))", () => {

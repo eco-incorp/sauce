@@ -475,49 +475,11 @@ export interface SauceInterface<Methods> extends SauceBinding<Methods> {
  *  \`.at(address)\` to call another deployment of the same ABI. */
 export type SauceContract<Methods> = bigint & Methods & SauceBinding<Methods>;
 
-/** A token and an amount in an intent a program opens: a token symbol (\`USDC\`), an address, or a
- *  value the program measured. */
-export interface SauceIntentTokenAmount {
-  readonly token: bigint | number;
-  readonly amount: bigint | number;
-}
-
-/** What the solver of an intent a program opens brings to its destination, for the body to run
- *  on: \`Base(() => { … }, { tokens })\`. A delivery names at least one token. */
-export interface SauceDelivery {
-  readonly tokens: readonly SauceIntentTokenAmount[];
-}
-
-/** An intent's reward, paid on the chain that opens it. The deadlines, the creator and the prover
- *  are the program's options, shared by every intent it opens. */
-export interface SauceReward {
-  readonly tokens?: readonly SauceIntentTokenAmount[];
-  readonly nativeAmount?: bigint | number;
-}
-
-/** An intent opened in compiled source, waiting for its reward: \`Base(() => { … }).reward({ … })\`.
- *  Not a host value: \`.reward(...)\` returns nothing. */
-export interface SauceIntent {
-  reward(reward: SauceReward): void;
-}
-
-/**
- * A chain in compiled source, opening an intent whose body runs there:
- * \`Ethereum(() => { ... }, { tokens }).reward({ tokens })\`. The one definition of that call: a
- * \`.sauce.ts\` file's chains (\`sauce-script/index.d.ts\`'s \`SauceChain\`) extend it, and each package
- * chain export carries it (\`chain-exports.generated.ts\`), so a typed closure inside
- * \`Base(() => { ... })\` opens one with the chain it imports. The body is never invoked: it is compiled
- * for that chain.
- */
-export interface SauceIntentChain {
-  (body: () => void, delivery?: SauceDelivery): SauceIntent;
-}
-
 ${sourceDefinitions.join("\n\n")}
 
 declare global {
 ${globalDeclarations.join("\n")}
-  /** Destination chain identity supplied by openRoute. */
+  /** The id of the chain the program is compiled for. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
   /**

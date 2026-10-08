@@ -143,8 +143,8 @@ function chunksFor(
 /**
  * The statements that issue one ERC-20 write with no output decode.
  *
- * `prefix` namespaces the locals this introduces, the same discipline `nest.ts` and
- * `nest-dynamic.ts` already use so several of these merge into one program scope. Each literal byte
+ * `prefix` namespaces the locals this introduces, so several of these merge into one program
+ * scope. Each literal byte
  * run is bound to its own `const` before `.concat` is called on it — a method call directly on a
  * `hex` literal is outside the compiler's M1 subset.
  */
