@@ -407,6 +407,20 @@ export interface ChainlinkCcipCCIPRouterMethods {
   "isChainSupported"(arg0: bigint): boolean;
 }
 
+export interface ChainlinkVrfVRFV2PlusWrapperMethods {
+  "requestRandomWordsInNative"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): bigint;
+  "calculateRequestPriceNative"(arg0: bigint, arg1: bigint): bigint;
+  "estimateRequestPriceNative"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getConfig"(): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] & { "fallbackWeiPerUnitLink": bigint; "stalenessSeconds": bigint; "fulfillmentFlatFeeNativePPM": bigint; "fulfillmentFlatFeeLinkDiscountPPM": bigint; "wrapperGasOverhead": bigint; "coordinatorGasOverheadNative": bigint; "coordinatorGasOverheadLink": bigint; "coordinatorGasOverheadPerWord": bigint; "wrapperNativePremiumPercentage": bigint; "wrapperLinkPremiumPercentage": bigint; "keyHash": bigint; "maxNumWords": bigint };
+  "s_vrfCoordinator"(): bigint;
+}
+
+export interface ChainlinkVrfVRFCoordinatorV2_5Methods {
+  "s_config"(): [bigint, bigint, boolean, bigint, bigint, bigint, bigint, bigint, bigint] & { "minimumRequestConfirmations": bigint; "maxGasLimit": bigint; "reentrancyLock": boolean; "stalenessSeconds": bigint; "gasAfterPaymentCalculation": bigint; "fulfillmentFlatFeeNativePPM": bigint; "fulfillmentFlatFeeLinkDiscountPPM": bigint; "nativePremiumPercentage": bigint; "linkPremiumPercentage": bigint };
+  "MAX_NUM_WORDS"(): bigint;
+  "MAX_REQUEST_CONFIRMATIONS"(): bigint;
+}
+
 export interface CircleGatewayGatewayWalletMethods {
   "deposit"(arg0: bigint, arg1: bigint): void;
   "depositFor"(arg0: bigint, arg1: bigint, arg2: bigint): void;
@@ -1081,6 +1095,17 @@ export interface PythOracleMethods {
   "getUpdateFee"(arg0: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): bigint;
 }
 
+export interface PythEntropyEntropyMethods {
+  "requestV2"(): bigint;
+  "requestV2"(arg0: bigint): bigint;
+  "requestV2"(arg0: bigint, arg1: bigint): bigint;
+  "requestV2"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getDefaultProvider"(): bigint;
+  "getFeeV2"(): bigint;
+  "getFeeV2"(arg0: bigint): bigint;
+  "getFeeV2"(arg0: bigint, arg1: bigint): bigint;
+}
+
 export interface QuickswapV2RouterMethods {
   "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
   "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
@@ -1740,6 +1765,11 @@ export interface ChainlinkCcipSource extends ChainlinkCcipCCIPRouterMethods {
   readonly Router: SauceContract<ChainlinkCcipCCIPRouterMethods>;
 }
 
+export interface ChainlinkVrfSource {
+  readonly Wrapper: SauceContract<ChainlinkVrfVRFV2PlusWrapperMethods>;
+  readonly Coordinator: SauceContract<ChainlinkVrfVRFCoordinatorV2_5Methods>;
+}
+
 export interface CircleGatewaySource {
   readonly GatewayWallet: SauceContract<CircleGatewayGatewayWalletMethods>;
   readonly GatewayMinter: SauceContract<CircleGatewayGatewayMinterMethods>;
@@ -2082,6 +2112,10 @@ export interface PufferSource extends PufferVaultMethods {
 
 export interface PythSource extends PythOracleMethods {
   readonly Oracle: SauceContract<PythOracleMethods>;
+}
+
+export interface PythEntropySource extends PythEntropyEntropyMethods {
+  readonly Entropy: SauceContract<PythEntropyEntropyMethods>;
 }
 
 export interface QuickswapSource {
@@ -2452,6 +2486,7 @@ declare global {
   const Celer: CelerSource;
   const Chainlink: ChainlinkSource;
   const ChainlinkCcip: ChainlinkCcipSource;
+  const ChainlinkVrf: ChainlinkVrfSource;
   const CircleGateway: CircleGatewaySource;
   const CompoundV2: CompoundV2Source;
   const CompoundV3: CompoundV3Source;
@@ -2520,6 +2555,7 @@ declare global {
   const Premia: PremiaSource;
   const Puffer: PufferSource;
   const Pyth: PythSource;
+  const PythEntropy: PythEntropySource;
   const Quickswap: QuickswapSource;
   const Radiant: RadiantSource;
   const Ramses: RamsesSource;

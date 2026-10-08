@@ -302,7 +302,7 @@ buys, exercises or settles a position it holds.
 | [Premia](premia.md) ([registry](registry/premia.md)) | — | `Premia`: arbitrum | arbitrum |
 | [Thales](thales.md) ([registry](registry/thales.md)) | — | `Thales`: optimism | optimism |
 
-## Oracles (2)
+## Oracles (4)
 
 ### Choosing between them
 
@@ -313,7 +313,9 @@ transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
 | [Chainlink](chainlink.md) ([registry](registry/chainlink.md)) | — | `Chainlink`: ethereum, arc | ethereum, arc |
+| [Chainlink VRF](chainlink-vrf.md) ([registry](registry/chainlink-vrf.md)) | — | `ChainlinkVrf`: ethereum, base | ethereum, base |
 | [Pyth Network](pyth.md) ([registry](registry/pyth.md)) | — | `Pyth`: ethereum | ethereum |
+| [Pyth Entropy](pyth-entropy.md) ([registry](registry/pyth-entropy.md)) | — | `PythEntropy`: base | base |
 
 ## Payments and streaming (2)
 
