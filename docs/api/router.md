@@ -764,9 +764,9 @@ curves: each sells a launched token against its quote token until the token grad
 graduated or paused curve refuses the swap. Trends runs the DBC's data on its own accounts. Heaven
 writes the authority, so it is attached writable. Virtuals' buy takes the tokens to buy rather than
 what to pay, so only its sell is here. A Raydium LaunchLab swap creates the creator's fee vault when
-it is missing, the authority paying its rent, which a Pot cannot: create it first. A curve settled in
-native SOL on the authority (pump.fun's bonding curve, Boop, Moonit) is not here, since a Pot holds
-no native SOL it can pay out.
+it is missing, the authority paying its rent, which a Pot cannot: create it first. A curve settled
+in native SOL on the authority (pump.fun's bonding curve, Boop, Moonit) has no function, since a Pot
+cannot pay or be paid native SOL: they are among the instruction-only venues below.
 
 xORCA, Solayer, Voltr, the liquid-unstake vault, Hylo's stability pool, Huma and Helium's treasury
 stake, deposit, unstake or redeem: each swaps a token for its receipt, or a receipt back, at the
@@ -839,9 +839,9 @@ It writes the authority, so it is attached writable.
 
 **Instruction only.** `routerSvmAccountOrder` and `routerSvmDataTemplate` also give the swap of
 venues `@sauce/router` has no function for, for a program that can send it; `ROUTER_SVM_VENUES`
-gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three, nor at Quantum,
-Obsidian or AlphaQ until it is on their routers' list, and WOOFi's and Metric's swaps cannot be
-proven:
+gives their `data` and `cpi` as `null`. A Pot cannot swap at the first three or the three
+launchpads, which settle in native SOL, nor at Quantum, Obsidian or AlphaQ until it is on their
+routers' list; and WOOFi's and Metric's swaps cannot be proven:
 
 | Venue (`ROUTER_SVM_VENUES`)      | Program                                                                                                                                     | Why                                                                                                                                             | Data options     |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
@@ -853,13 +853,17 @@ proven:
 | `quantum`                        | `QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv`                                                                                               | it admits a swap only when the transaction's outermost program is one of its aggregators                                                        | `aToB`, `minOut` |
 | `obsidian`                       | `HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z`                                                                                              | it admits a swap only from a router on its list                                                                                                 | none             |
 | `alphaq`                         | `ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA`                                                                                              | it admits a swap only from a router on its list                                                                                                 | `aToB`           |
+| `pumpfun-bonding-curve`          | `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P`                                                                                               | it settles in native SOL on its signer                                                                                                          | `aToB`, `minOut` |
+| `boop-fun`                       | `boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4`                                                                                               | it settles in native SOL on its signer                                                                                                          | `aToB`, `minOut` |
+| `moonit`                         | `MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG`                                                                                               | it settles in native SOL on its signer                                                                                                          | `aToB`, `minOut` |
 
 One Intro's pool names its token 0 and 1 vaults `vaultA` and `vaultB`; a swap paying token A takes
 the fee accounts `feeA0` and `feeB0`, one paying B `feeA1` and `feeB1`. WOOFi's token A is the
 pool's base token, and `aToB` sells it; its order takes the quote token's pool, price update and
 vault a second time, and the authority again, unsigned, as the rebate's recipient. A stake pool's
 `referrerFeeAccount` may be its `managerFeeAccount`, as the recipes send it. AlphaQ's order is the
-same both ways, its data saying the direction.
+same both ways, its data saying the direction. The launchpads' token A is the launched token, and
+`aToB` sells it; Moonit's floor is the token amount buying and the SOL amount selling.
 
 **A swap spends exactly `amountIn`**, with four exceptions. The Token Swap program and its forks,
 Fluxbeam and Dexlab spend what their curve rounds the input to, and so does Aldrin. The difference

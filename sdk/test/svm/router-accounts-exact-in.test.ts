@@ -883,6 +883,57 @@ ROLES.alphaq = () => ({
   instructionsSysvar: "ixSysvar",
 });
 
+ROLES.pumpfun = () => ({
+  global: "global",
+  mintA: "baseMint",
+  mintB: "quoteMint",
+  tokenProgramA: "baseTokenProgram",
+  tokenProgramB: "quoteTokenProgram",
+  associatedTokenProgram: "ata",
+  feeRecipient: "feeRecipient",
+  feeRecipientB: "assocQuoteFeeRecipient",
+  buybackFeeRecipient: "buybackFeeRecipient",
+  buybackFeeRecipientB: "assocQuoteBuybackFeeRecipient",
+  pool: "bondingCurve",
+  vaultA: "assocBaseBondingCurve",
+  vaultB: "assocQuoteBondingCurve",
+  creatorVault: "creatorVault",
+  creatorVaultB: "assocCreatorVault",
+  sharingConfig: "sharingConfig",
+  globalVolumeAccumulator: "globalVolumeAccumulator",
+  userVolumeAccumulator: "pumpfun-bonding-curve-user-volume-accumulator",
+  userVolumeAccumulatorB: "pumpfun-bonding-curve-associated-user-volume-accumulator",
+  feeConfig: "feeConfig",
+  feeProgram: "feeProgram",
+  systemProgram: "systemProgram",
+  eventAuthority: "eventAuthority",
+  program: "program",
+});
+ROLES.boop = () => ({
+  mintA: "mint",
+  pool: "bondingCurve",
+  tradingFeesVault: "tradingFeesVault",
+  vaultA: "bondingCurveVault",
+  vaultB: "bondingCurveSolVault",
+  config: "config",
+  vaultAuthority: "vaultAuthority",
+  mintB: "wsol",
+  systemProgram: "systemProgram",
+  tokenProgram: "tokenProgram",
+  associatedTokenProgram: "associatedTokenProgram",
+});
+ROLES.moonit = () => ({
+  pool: "curveAccount",
+  vaultA: "curveTokenAccount",
+  dexFee: "dexFee",
+  helioFee: "helioFee",
+  mintA: "mint",
+  config: "configAccount",
+  tokenProgram: "tokenProgram",
+  associatedTokenProgram: "associatedTokenProgram",
+  systemProgram: "systemProgram",
+});
+
 const FAMILY: Record<string, string> = {
   "raydium-cp-swap": "cp",
   gamma: "cp",
@@ -957,6 +1008,9 @@ const FAMILY: Record<string, string> = {
   quantum: "quantum",
   obsidian: "obsidian",
   alphaq: "alphaq",
+  "pumpfun-bonding-curve": "pumpfun",
+  "boop-fun": "boop",
+  moonit: "moonit",
 };
 
 /** A vector account's role, without the recipes' slot or venue prefix. */

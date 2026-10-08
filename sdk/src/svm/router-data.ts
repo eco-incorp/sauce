@@ -315,6 +315,22 @@ const EXACT_IN: { readonly [V in RouterSvmExactInVenue]: ExactInData } = {
     // Eight bytes after the amount every landed swap leaves zero: no floor of its own.
     data: ({ aToB }) => [`0c${bit(aToB)}`, "00".repeat(8)],
   },
+  "pumpfun-bonding-curve": {
+    takes: ["minOut"],
+    // `sell_v2` selling the launched token, `buy_exact_quote_in_v2` buying it.
+    data: ({ aToB, floor }) => [aToB ? "5df6823ce7e940b2" : "c2ab1c46684d5b2f", floor],
+  },
+  "boop-fun": {
+    takes: ["minOut"],
+    data: ({ aToB, floor }) => [aToB ? "6d3d28bbe6b087ae" : "8a7f0e5b26577369", floor],
+  },
+  moonit: {
+    takes: ["minOut"],
+    // The token amount, the SOL amount, the fixed side and no slippage: the floor is the token
+    // amount buying, the SOL amount selling.
+    data: ({ aToB, floor }) =>
+      aToB ? [SELL, `${floor}${"00".repeat(9)}`] : [`${BUY}${floor}`, "00".repeat(9)],
+  },
 };
 
 const isExactIn = (venue: RouterSvmVenue): venue is RouterSvmExactInVenue =>

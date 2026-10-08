@@ -441,6 +441,23 @@ export const ROUTER_SVM_VENUES = {
     data: null,
     cpi: null,
   },
+  // These three bonding curves settle in native SOL on their signer, which a Pot cannot pay or be
+  // paid in: eco-incorp/sauce-recipes wraps them in its own native-SOL bridge.
+  "pumpfun-bonding-curve": {
+    program: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    data: null,
+    cpi: null,
+  },
+  "boop-fun": {
+    program: "boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4",
+    data: null,
+    cpi: null,
+  },
+  moonit: {
+    program: "MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG",
+    data: null,
+    cpi: null,
+  },
   bisonfi: {
     program: "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi",
     data: null,
@@ -821,6 +838,9 @@ const EXACT_IN_VENUES = [
   "quantum",
   "obsidian",
   "alphaq",
+  "pumpfun-bonding-curve",
+  "boop-fun",
+  "moonit",
 ] as const satisfies readonly RouterSvmVenue[];
 type ExactInVenue = (typeof EXACT_IN_VENUES)[number];
 const isExactInVenue = (venue: RouterSvmVenue): venue is ExactInVenue =>
@@ -1908,6 +1928,86 @@ function exactInAccountOrder(
         w("vaultB"),
         r("tokenProgram"),
         r("instructionsSysvar"),
+      ];
+    case "pumpfun-bonding-curve":
+      // Token A is the launched token, B wrapped SOL; `aToB` sells A. The user's A account comes
+      // first; a buy also takes the global volume accumulator.
+      return [
+        r("global"),
+        r("mintA"),
+        r("mintB"),
+        r("tokenProgramA"),
+        r("tokenProgramB"),
+        r("associatedTokenProgram"),
+        w("feeRecipient"),
+        w("feeRecipientB"),
+        w("buybackFeeRecipient"),
+        w("buybackFeeRecipientB"),
+        w("pool"),
+        w("vaultA"),
+        w("vaultB"),
+        PAYER,
+        ownerA,
+        ownerB,
+        w("creatorVault"),
+        w("creatorVaultB"),
+        r("sharingConfig"),
+        ...(aToB ? [] : [r("globalVolumeAccumulator")]),
+        w("userVolumeAccumulator"),
+        w("userVolumeAccumulatorB"),
+        r("feeConfig"),
+        r("feeProgram"),
+        r("systemProgram"),
+        r("eventAuthority"),
+        r("program"),
+      ];
+    case "boop-fun":
+      // Token A is the launched token, B wrapped SOL, which the curve holds as native SOL; `aToB`
+      // sells A, paying the SOL to the authority.
+      return aToB
+        ? [
+            r("mintA"),
+            w("pool"),
+            w("tradingFeesVault"),
+            w("vaultA"),
+            w("vaultB"),
+            w("source"),
+            PAYER,
+            { name: "authority", writable: true, signer: false },
+            r("config"),
+            r("systemProgram"),
+            r("tokenProgram"),
+            r("associatedTokenProgram"),
+          ]
+        : [
+            r("mintA"),
+            w("pool"),
+            w("tradingFeesVault"),
+            w("vaultA"),
+            w("vaultB"),
+            w("recipient"),
+            PAYER,
+            r("config"),
+            r("vaultAuthority"),
+            r("mintB"),
+            r("systemProgram"),
+            r("tokenProgram"),
+            r("associatedTokenProgram"),
+          ];
+    case "moonit":
+      // Token A is the launched token; `aToB` sells it. The authority pays or is paid native SOL.
+      return [
+        PAYER,
+        aToB ? w("source") : w("recipient"),
+        w("pool"),
+        w("vaultA"),
+        w("dexFee"),
+        w("helioFee"),
+        r("mintA"),
+        r("config"),
+        r("tokenProgram"),
+        r("associatedTokenProgram"),
+        r("systemProgram"),
       ];
     default: {
       const unknown: never = venue;
