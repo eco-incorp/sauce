@@ -403,7 +403,9 @@ destination's Kitchen fee.
 ### Calls around the body
 
 A hop's `before` and `after` are calls the destination Portal's Executor makes before the delivered
-tokens move into the Pot and after the body's cook. Use one for a call that must come from the
+tokens move into the Pot and after the body's cook. They run on the DESTINATION, as the route's own
+calls around the cook, never inside the body's program: the hop's `.catch` (or the `try` around an
+`await`) covers the body only, and a hook that reverts reverts the whole fill. Use one for a call that must come from the
 Executor rather than the Pot, for calldata built elsewhere, or for a call a solver reads straight off
 the route. Here the Executor pays the referrer a tip in the native coin after the body has run:
 
@@ -440,14 +442,15 @@ deliveries, no approve resets. What the Executor holds when a hook runs is up to
   pulls from its caller comes from the Executor. A token's own write, `USDC.approve(…)`, is
   `SafeERC20`'s and more than one call, so a hook writes the ERC-20 call itself:
   `Erc20.ERC20(USDC).approve(spender, amount)`. One Executor serves every intent on a chain, so an
-  allowance an earlier intent left may still stand: before approving a token that refuses to change
-  one (USDT), write the reset as a hook of its own, `Erc20.ERC20(USDT).approve(spender, 0)`.
+  allowance an earlier intent left may still stand, and USDT refuses to change one non-zero
+  allowance to another: a hook approving USDT is two hooks, the reset then the approve,
+  `before: [() => Erc20.ERC20(USDT).approve(spender, 0), () => Erc20.ERC20(USDT).approve(spender, amount)]`.
 - **It spends what the Executor holds.** The delivery moves into the Pot whole before the body, and
   `after` cannot spend what the body holds there. The native an `evm.call` hook sends is the one
-  thing added: the solver brings it beside the cook's fee (the route's `nativeAmount`), as the tip
-  above.
-- **A hook is outside the body's `try`.** A hook that reverts reverts the whole fill, and the body's
-  handler does not run in its place.
+  thing added: every hook's value is summed with the cook's fee into the route's `nativeAmount`,
+  which the solver brings, as it does the tip above.
+- **A hook is outside the body's `try`.** The handler covers the body's program only. A hook that
+  reverts reverts the whole fill, and the handler does not run in its place.
 - **Its arguments are fixed when the intent is published.** A literal, a compile-time value, or a
   variable of the program opening the hop, written in where the hop opens. Nothing the body
   computes reaches a hook. A computed value fills a whole word only: an `address`, a `bytes32`, or
