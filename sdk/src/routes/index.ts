@@ -162,6 +162,7 @@ export type {
   HopChain,
   HopConfig,
   HopDelivery,
+  HopHook,
   HopOpened,
   HopReward,
   HopRewardItem,

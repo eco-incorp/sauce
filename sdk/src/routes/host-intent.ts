@@ -93,7 +93,16 @@ export interface HopConfig {
   /** The destination Kitchen's fee, in wei, which the body's cook pays: read it with
    *  `destinationExecutionFee()`. Else `intents.executionFee` in `compile`. */
   readonly fee?: bigint | number;
+  /** Calls the destination Portal's Executor makes before the delivered tokens move into the Pot,
+   *  each one external call, made exactly as written: no delivery, no approve reset. */
+  readonly before?: readonly HopHook[];
+  /** Calls the destination Portal's Executor makes after the body's cook, as `before`'s are. */
+  readonly after?: readonly HopHook[];
 }
+
+/** A hook: a closure whose body is one external call, written into the program as it is declared
+ *  (`() => Permit2.approve(USDC, spender, amount, 0)`), or that call's own text. */
+export type HopHook = SauceBody;
 
 /** A hop waiting for its body. Its `then` is the intent's, not a promise's: `await` on it is
  *  refused on the host. */
@@ -239,6 +248,10 @@ export function chainHop(chain: ChainRef): ChainHop {
   };
 }
 
+/** A hook list as the program writes it: each closure's own text, or a call's text in one. */
+const hooksLiteral = (hooks: readonly HopHook[]): string =>
+  `[${hooks.map((hook) => (isSauceClosure(hook) ? closureText(hook) : `() => ${hook}`)).join(", ")}]`;
+
 /** `chainHop`'s `then`: the statement written out, compiled for the source chain. */
 function hostIntent(
   destination: CanonicalChain,
@@ -277,6 +290,8 @@ function hostIntent(
     ["prover", config.prover === undefined ? undefined : addressLiteral(config.prover)],
     ["salt", config.salt === undefined ? undefined : salt(config.salt)],
     ["fee", config.fee === undefined ? undefined : integer(config.fee)],
+    ["before", config.before === undefined ? undefined : hooksLiteral(config.before)],
+    ["after", config.after === undefined ? undefined : hooksLiteral(config.after)],
   ];
   const body = isSauceClosure(given) ? closureText(given) : `() => {\n${given}\n}`;
   const options = config.compile ?? {};
