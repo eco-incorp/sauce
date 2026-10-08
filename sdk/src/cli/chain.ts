@@ -615,6 +615,27 @@ export async function sendAndWait(
 
 const BALANCE_OF = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 
+/**
+ * A reader of `holder`'s balance of a token, or of the native currency, at `blockNumber` (the
+ * client's block when absent); `undefined` where it could not be read.
+ */
+export const balanceReader =
+  (client: PublicClient, holder: Address, blockNumber?: bigint) =>
+  (token: Address | "native"): Promise<bigint | undefined> =>
+    (token === "native"
+      ? client.getBalance({
+          address: holder,
+          ...(blockNumber === undefined ? {} : { blockNumber }),
+        })
+      : client.readContract({
+          address: token,
+          abi: BALANCE_OF,
+          functionName: "balanceOf",
+          args: [holder],
+          ...(blockNumber === undefined ? {} : { blockNumber }),
+        })
+    ).catch(() => undefined);
+
 /** One registered token's balance; `null` where the token could not be read on this chain. */
 export interface RegisteredBalance {
   readonly symbol: string;

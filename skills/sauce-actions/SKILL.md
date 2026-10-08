@@ -53,6 +53,8 @@ names are checked when it compiles.
 - Amounts are base-10 strings: `"1000000"` is 1 USDC. JSON numbers lose precision past 2^53, so a
   number is refused; fee tiers, indices, tick spacings and Unix times are plain integers.
 - `"recipient": "self"` keeps an action's output in the Pot. An address there pays that account.
+  Ask the user which they want: what stays in the Pot is theirs, but not in their wallet, and only
+  another cook moves it out.
 - Leave `chainId` out. A document with a `chainId` compiles for that chain only (its addresses are
   that chain's); without one, `--chain` picks the chain each time.
 

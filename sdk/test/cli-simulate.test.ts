@@ -25,7 +25,7 @@ import {
 import { requireChain } from "../src/chains/canonical.js";
 import { assumeTokenBalance, findBalanceSlot, mergeOverrides } from "../src/cli/assume.js";
 import { revertReason } from "../src/cli/chain.js";
-import { effectLines, effectsJson, effectsOf, type RawLog } from "../src/cli/effects.js";
+import { effectLines, effectsJson, effectsOf, flowLines, type RawLog } from "../src/cli/effects.js";
 import { POT_ROUTER_SLOT } from "../src/cli/rehearse.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
@@ -377,17 +377,37 @@ describe("what the cook did, from its logs", () => {
       { address: weth, deltas: [{ token: "native", amount: -4n * 10n ** 14n }] },
     ]);
     const lines = effectLines(effects);
+    // Every move in the order it happened, each party by its role, its short address the first
+    // time: the Pot, an address nothing names, the zero address an unwrap burns to, WETH by its
+    // symbol.
+    expect(lines.slice(0, 5)).toEqual([
+      "What moved, in order:",
+      "  [1] Pot 0x0000…00A1  -> 0x0000…00b2  2 USDC",
+      "  [2] 0x0000…00b2      -> Pot          0.001 WETH",
+      "  [3] Pot              -> burn         0.0004 WETH  unwrapped",
+      "  [4] WETH 0x4200…0006 -> Pot          0.0004 ETH",
+    ]);
     expect(lines).toEqual(
       expect.arrayContaining([
-        `  2 USDC: ${POT} (the Pot) -> ${POOL}`,
-        `  0.0004 WETH unwrapped by ${POT} (the Pot)`,
         `  ${POT} (the Pot) lets ${POOL} spend 5 OTH`,
-        `  0.0004 ETH: ${weth} -> ${POT} (the Pot)`,
         `  ${POT} (the Pot): -2 USDC, +0.0006 WETH, +0.0004 ETH`,
-        `Other events: 2, from ${OTHER} x2 (--json lists them)`,
+        `  ${weth} (WETH): -0.0004 ETH`,
+        `Other events: 2, from ${OTHER} (OTH) x2 (--json lists them)`,
       ]),
     );
     const json = effectsJson(effects);
+    expect(json.moves).toEqual([
+      expect.objectContaining({ from: POT, fromRole: "Pot", to: POOL, symbol: "USDC" }),
+      expect.objectContaining({ from: POOL, to: POT, toRole: "Pot", amount: "1000000000000000" }),
+      expect.objectContaining({ fromRole: "Pot", to: zeroAddress, toRole: "burn", kind: "unwrap" }),
+      expect.objectContaining({
+        from: weth,
+        fromRole: "WETH",
+        token: "native",
+        formatted: "0.0004",
+      }),
+    ]);
+    expect((json.moves as Array<Record<string, unknown>>)[1]!.fromRole).toBeUndefined();
     expect(json.approvals).toEqual([
       {
         token: OTHER,
@@ -400,6 +420,43 @@ describe("what the cook did, from its logs", () => {
       },
     ]);
     expect((json.otherLogs as unknown[]).length).toBe(2);
+  });
+
+  it("names the wallet, the Pot and the Kitchen in the flow, and says why the native coin moved", async () => {
+    const OWNER = getAddress("0x00000000000000000000000000000000000000d4");
+    const KITCHEN = getAddress("0x00000000000000000000000000000000000000e5");
+    const NATIVE = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+    const effects = await effectsOf(
+      metadata,
+      base,
+      [
+        log(NATIVE, [TRANSFER, at(OWNER), at(POT)], 1234n),
+        log(NATIVE, [TRANSFER, at(POT), at(KITCHEN)], 1234n),
+        log(usdc, [TRANSFER, at(zeroAddress), at(POT)], 3_000_000n),
+      ],
+      true,
+      new Map([
+        [POT, "the Pot"],
+        [OWNER, "owner"],
+        [KITCHEN, "Kitchen"],
+      ]),
+    );
+    expect(flowLines(effects)).toEqual([
+      "  [1] wallet 0x0000…00D4 -> Pot 0x0000…00A1      0.000000000000001234 ETH  the cook's value",
+      "  [2] Pot                -> Kitchen 0x0000…00E5  0.000000000000001234 ETH  the Kitchen's fee",
+      "  [3] mint               -> Pot                  3 USDC",
+    ]);
+    expect(
+      (effectsJson(effects).moves as Array<Record<string, unknown>>).map((move) => [
+        move.fromRole,
+        move.toRole,
+        move.note,
+      ]),
+    ).toEqual([
+      ["wallet", "Pot", "the cook's value"],
+      ["Pot", "Kitchen", "the Kitchen's fee"],
+      ["mint", "Pot", undefined],
+    ]);
   });
 
   it("says when the endpoint did not trace native transfers, and when nothing moved", async () => {

@@ -11,7 +11,8 @@
  * The SVM arm:
  *   4. every exported function compiles, from run-time arguments, to the same bytes either way, and
  *      takes the accounts its callers attach in the documented order;
- *   5. the exports are exactly the documented API;
+ *   5. the exports are exactly the documented API, the limit functions taking one argument order and
+ *      the exact-input functions another;
  *   6. each venue's program id, derived from the SDK's base58 id, and each instruction's
  *      discriminator, derived from its name, counted in the bytecode: a function carries its own
  *      venue's and no other, `trySwap` every one;
@@ -22,7 +23,8 @@
  *
  * What the EVM functions DO on chain is `actions/tests/swap*.mainnet.test.ts`'s (real pools, captured
  * state) and `test/evm/{swap,router}.e2e.test.ts`'s (the Router's V3 and V4 paths, on mocks); what
- * the SVM functions do is `svm.e2e.test.ts`'s, on the venues' own programs and pools in LiteSVM.
+ * the SVM functions do is `svm.e2e.test.ts`'s and `svm-exact-in.e2e.test.ts`'s, on the venues' own
+ * programs and pools in LiteSVM.
  */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -32,15 +34,77 @@ import { toFunctionSelector, type AbiFunction } from "viem";
 
 import { compileWithRs } from "../../../src/routes/rs-compile.js";
 import {
+  aldrin,
+  bonkswap,
   BYREAL_PROGRAM_ID,
   CREMA_PROGRAM_ID,
   CROPPER_PROGRAM_ID,
   DEFITUNA_PROGRAM_ID,
+  INVARIANT_PROGRAM_ID,
+  MANIFEST_PROGRAM_ID,
+  OPENBOOK_V2_PROGRAM_ID,
   ORCA_WHIRLPOOL_PROGRAM_ID,
   PANCAKESWAP_CLMM_PROGRAM_ID,
   PHOENIX_PROGRAM_ID,
   RAYDIUM_CLMM_PROGRAM_ID,
   STABBLE_CLMM_PROGRAM_ID,
+  dexlab,
+  fluxbeam,
+  gamma,
+  guacswap,
+  mercurial,
+  METADAO_FUTARCHY_PROGRAM_ID,
+  METEORA_DLMM_PROGRAM_ID,
+  meteoraDammV1Stable,
+  meteoraDammV2,
+  omnipair,
+  orcaLegacyTokenSwap,
+  orcaV1,
+  penguin,
+  perena,
+  pumpswapAdapter,
+  raydiumAmmV4,
+  raydiumCpSwap,
+  saberDecimalsWrapper,
+  saberStableswap,
+  saros,
+  SAROS_DLMM_PROGRAM_ID,
+  SCALE_AMM_PROGRAM_ID,
+  stabbleStableSwap,
+  stabbleWeightedSwap,
+  stepn,
+  tokenSwapV1,
+  DENALI_PROGRAM_ID,
+  DERIVERSE_PROGRAM_ID,
+  FLINT_PROGRAM_ID,
+  GAVEL_PROGRAM_ID,
+  GOONFI_V2_PROGRAM_ID,
+  CARROT_PROGRAM_ID,
+  MSWAP_PROGRAM_ID,
+  PERPS_JLP_PROGRAM_ID,
+  SANCTUM_INFINITY_PROGRAM_ID,
+  SOLFI_V1_PROGRAM_ID,
+  HADRON_PROGRAM_ID,
+  HELIUM_TREASURY_PROGRAM_ID,
+  HUMA_PROGRAM_ID,
+  HYLO_PROGRAM_ID,
+  HYLO_STABILITY_POOL_PROGRAM_ID,
+  JUPITER_LEND_EARN_PROGRAM_ID,
+  SOLAYER_PROGRAM_ID,
+  VOLTR_PROGRAM_ID,
+  XORCA_PROGRAM_ID,
+  vaultLiquidUnstake,
+  HEAVEN_PROGRAM_ID,
+  METEORA_DBC_PROGRAM_ID,
+  RAYDIUM_LAUNCHLAB_PROGRAM_ID,
+  RUNNER_RODEO_PROGRAM_ID,
+  SCALE_VMM_PROGRAM_ID,
+  TRENDS_PROGRAM_ID,
+  VIRTUALS_PROGRAM_ID,
+  RIPTIDE_PROGRAM_ID,
+  SOLFI_V2_PROGRAM_ID,
+  TAURUSFI_PROGRAM_ID,
+  TESSERAV_PROGRAM_ID,
 } from "../../../src/svm/index.js";
 import {
   compileStdRouter,
@@ -48,9 +112,20 @@ import {
   programCalling,
   routerAbi,
   routerSource,
+  SVM_CPI_FUNCTIONS,
+  SVM_DATA_FUNCTIONS,
+  SVM_CPI_ONLY,
+  SVM_EXACT_IN,
+  SVM_EXACT_IN_FUNCTIONS,
   SVM_FUNCTIONS,
   SVM_SLOT,
   SVM_TRADER,
+  svmArguments,
+  svmCpiArguments,
+  svmDataArguments,
+  svmInstructionForm,
+  svmExactInArguments,
+  svmExactInProgramCalling,
   svmProgramCalling,
 } from "./harness.js";
 
@@ -244,9 +319,13 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
   });
 });
 
+/** The accounts a Solana function's test program attaches: an instruction-only `…Cpi`'s or
+ *  `…Data`'s list. */
+const cpiAccounts = (name: string): number => (svmInstructionForm(name) ? 16 : 0);
+
 describe("@sauce/router (SVM): every function compiles from run-time arguments", () => {
   it.each(SVM_FUNCTIONS)("%s, off disk and embedded, to the same bytes", (name) => {
-    const source = svmProgramCalling(name);
+    const source = svmProgramCalling(name, cpiAccounts(name));
     const fromDisk = compileStdRouter(source, "svm");
     const embedded = compileWithRs({ source, target: "svm" });
     expect(fromDisk.bytecode.length).toBeGreaterThan(0);
@@ -254,40 +333,148 @@ describe("@sauce/router (SVM): every function compiles from run-time arguments",
   });
 
   // The manifest is `main`'s own `Account` params, so what this pins is the attach order the
-  // execution suite resolves by name: the slot's nine, the trader's seven, then the recipient.
-  it.each(SVM_FUNCTIONS)("%s takes the slot, the trader's accounts and the recipient", (name) => {
-    const { manifest } = compileStdRouter(svmProgramCalling(name), "svm");
-    expect(manifest?.accounts.map((entry) => (entry.kind === "slot" ? entry.name : "…"))).toEqual([
-      ...SVM_SLOT,
-      ...SVM_TRADER,
-      "recipient",
-    ]);
+  // execution suites resolve by name: a slot function's nine, the trader's seven, then the
+  // recipient; an instruction-only `…Cpi`'s or `…Data`'s program, paying account and instruction
+  // accounts.
+  it.each(SVM_FUNCTIONS)("%s takes its accounts in their documented order", (name) => {
+    const { manifest } = compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm");
+    expect(manifest?.accounts.map((entry) => (entry.kind === "slot" ? entry.name : "…"))).toEqual(
+      svmInstructionForm(name)
+        ? ["program", "source", ...Array.from({ length: 16 }, (_, i) => `a${i}`)]
+        : [...SVM_SLOT, ...SVM_TRADER, "recipient"],
+    );
   });
 });
 
+describe("@sauce/router (SVM): every exact-input function compiles from run-time arguments", () => {
+  it.each(SVM_EXACT_IN_FUNCTIONS)("%s, off disk and embedded, to the same bytes", (name, slot) => {
+    const source = svmExactInProgramCalling(name, slot);
+    const fromDisk = compileStdRouter(source, "svm");
+    const embedded = compileWithRs({ source, target: "svm" });
+    expect(fromDisk.bytecode.length).toBeGreaterThan(0);
+    expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
+  });
+
+  it.each(SVM_EXACT_IN_FUNCTIONS)(
+    "%s takes its slot, the trader's accounts and the recipient",
+    (name, slot) => {
+      const { manifest } = compileStdRouter(svmExactInProgramCalling(name, slot), "svm");
+      expect(manifest?.accounts.map((entry) => (entry.kind === "slot" ? entry.name : "…"))).toEqual(
+        [...Array.from({ length: slot }, (_, i) => `s${i}`), ...SVM_TRADER, "recipient"],
+      );
+    },
+  );
+
+  // A `Cpi` or `Data` form takes the list whole, so one compiled program serves a list of any length.
+  it.each([...SVM_CPI_FUNCTIONS, ...SVM_DATA_FUNCTIONS])(
+    "%s, off disk and embedded, to the same bytes",
+    (name) => {
+      const source = svmProgramCalling(name, 3);
+      const fromDisk = compileStdRouter(source, "svm");
+      const embedded = compileWithRs({ source, target: "svm" });
+      expect(fromDisk.bytecode.length).toBeGreaterThan(0);
+      expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
+    },
+  );
+});
+
 describe("@sauce/router (SVM): the exports are the documented API", () => {
-  it("exports the nine venues and trySwap/swap, each with its `try` form", () => {
+  it("exports trySwap/swap, the nine venues at a price, the eleven at their own limit, each instruction's data and Manifest's", () => {
     const exported = [...routerSource("svm").matchAll(/^export function (\w+)\(/gm)].map(
       (m) => m[1],
     );
-    expect(exported.sort()).toEqual([...SVM_FUNCTIONS].sort());
+    expect(exported.sort()).toEqual(
+      [
+        ...SVM_FUNCTIONS,
+        ...SVM_EXACT_IN_FUNCTIONS.map(([name]) => name),
+        ...SVM_CPI_FUNCTIONS,
+        ...SVM_DATA_FUNCTIONS,
+      ].sort(),
+    );
   });
 
-  it("takes every function's arguments in one order", () => {
-    for (const [, params] of routerSource("svm").matchAll(/^export function \w+\(([^)]*)\)/gm))
-      expect(
-        params!
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean),
-      ).toEqual([
-        "slot: Account[]",
-        "trader: Account[]",
-        "amountIn: Uint256",
-        "maxPrice: Uint256",
-        "minOut: Uint256",
-        "recipient: Account",
-      ]);
+  it("takes each family's arguments in one order", () => {
+    const BOOLS = ["aToB", "xToY", "paysBase"];
+    const signature = (name: string): string[] => {
+      if (name.endsWith("Data")) {
+        return svmDataArguments(name).map(
+          (arg) => `${arg}: ${BOOLS.includes(arg) ? "bool" : "Uint256"}`,
+        );
+      }
+      if (name.endsWith("Cpi")) {
+        const direction = /^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm)Cpi$/.test(name)
+          ? []
+          : /^(orcaWhirlpool|cropper|defituna|crema)Cpi$/.test(name)
+            ? ["aToB: bool"]
+            : name === "invariantCpi"
+              ? ["xToY: bool"]
+              : ["paysBase: bool"];
+        const carries = svmCpiArguments(name)
+          .filter((arg) => !["aToB", "xToY", "paysBase"].includes(arg))
+          .map((arg) => `${arg}: Uint256`);
+        return [
+          "program: Account",
+          "accounts: Account[]",
+          "source: Account",
+          ...carries,
+          ...direction,
+        ];
+      }
+      const middle = svmArguments(name).map((arg) =>
+        name === "tryPhoenixAtLimit" || name === "phoenixAtLimit"
+          ? `${arg === "limit" ? "ticks" : arg}: Uint256`
+          : `${arg}: Uint256`,
+      );
+      return ["slot: Account[]", "trader: Account[]", ...middle, "recipient: Account"];
+    };
+    const limit = new Set<string>(SVM_FUNCTIONS);
+    for (const [, name, params] of routerSource("svm").matchAll(
+      /^export function (\w+)\(([^)]*)\)/gm,
+    ))
+      if (limit.has(name!))
+        expect({
+          name,
+          params: params!
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean),
+        }).toEqual({ name, params: signature(name!) });
+  });
+
+  const signatures = (): [string, string[]][] =>
+    [...routerSource("svm").matchAll(/^export function (\w+)\(([^)]*)\)/gm)].map((m) => [
+      m[1]!,
+      m[2]!
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean),
+    ]);
+
+  it("takes the exact-input functions' arguments in one order, and each instruction form what its instruction carries, its floor and its direction", () => {
+    const limit = new Set<string>(SVM_FUNCTIONS);
+    const BOOLS = ["aToB", "xToY", "paysBase"];
+    const typed = (args: string[]) =>
+      args.map((arg) => `${arg}: ${BOOLS.includes(arg) ? "bool" : "Uint256"}`);
+    for (const [name, params] of signatures().filter(([name]) => !limit.has(name)))
+      expect({ name, params }).toEqual({
+        name,
+        params: name.endsWith("Data")
+          ? typed(svmExactInArguments(name)!)
+          : name.endsWith("Cpi")
+            ? [
+                "program: Account",
+                "accounts: Account[]",
+                "source: Account",
+                ...typed(svmExactInArguments(name)!),
+              ]
+            : [
+                "slot: Account[]",
+                "trader: Account[]",
+                "amountIn: Uint256",
+                "minOut: Uint256",
+                "recipient: Account",
+              ],
+      });
   });
 
   it("declares no module-level const, which a program-wide define could replace", () => {
@@ -303,69 +490,230 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
   // An Anchor instruction's discriminator: the first 8 bytes of sha256("global:<name>").
   const discriminator = (name: string): string =>
     createHash("sha256").update(`global:${name}`).digest("hex").slice(0, 16);
-  const VENUES: [string, string, string | undefined][] = [
-    ["RaydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, "swap_v2"],
-    ["PancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, "swap_v2"],
-    ["Byreal", BYREAL_PROGRAM_ID, "swap_v2"],
-    ["StabbleClmm", STABBLE_CLMM_PROGRAM_ID, "swap_v2"],
-    ["OrcaWhirlpool", ORCA_WHIRLPOOL_PROGRAM_ID, "swap_v2"],
-    ["Cropper", CROPPER_PROGRAM_ID, "swap"],
-    ["Defituna", DEFITUNA_PROGRAM_ID, "swap"],
-    ["Crema", CREMA_PROGRAM_ID, "swap"],
-    // Phoenix's instructions are a one-byte tag, not an Anchor discriminator.
-    ["Phoenix", PHOENIX_PROGRAM_ID, undefined],
+  const INSTRUCTIONS = ["swap_v2", "swap", "place_take_order"] as const;
+  // Each venue's id and the Anchor instructions its code carries, counted: Orca at its own limit
+  // sends `swap` to a pool of SPL Token mints and `swap_v2` to the rest, and at a price `swap_v2` to
+  // every pool; Crema's and Invariant's `swap` is written once per direction, whose flag follows it.
+  // Phoenix's and Manifest's are a one-byte tag.
+  const VENUES: [string, string, Partial<Record<(typeof INSTRUCTIONS)[number], number>>][] = [
+    ["RaydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, { swap_v2: 1 }],
+    ["PancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, { swap_v2: 1 }],
+    ["Byreal", BYREAL_PROGRAM_ID, { swap_v2: 1 }],
+    ["StabbleClmm", STABBLE_CLMM_PROGRAM_ID, { swap_v2: 1 }],
+    ["OrcaWhirlpool", ORCA_WHIRLPOOL_PROGRAM_ID, { swap_v2: 1, swap: 1 }],
+    ["Cropper", CROPPER_PROGRAM_ID, { swap: 1 }],
+    ["Defituna", DEFITUNA_PROGRAM_ID, { swap: 1 }],
+    ["Crema", CREMA_PROGRAM_ID, { swap: 2 }],
+    ["Phoenix", PHOENIX_PROGRAM_ID, {}],
+    ["Invariant", INVARIANT_PROGRAM_ID, { swap: 2 }],
+    ["Manifest", MANIFEST_PROGRAM_ID, {}],
+    ["OpenbookV2", OPENBOOK_V2_PROGRAM_ID, { place_take_order: 1 }],
   ];
+  const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
+  /** Each venue's functions: at a price (the nine), at its own limit, and its instruction alone. */
+  const functionsOf = (venue: string): string[] =>
+    venue === "Manifest"
+      ? ["tryManifest", "manifestCpi"]
+      : [
+          ...((SVM_FUNCTIONS as readonly string[]).includes(`try${venue}`) ? [`try${venue}`] : []),
+          `try${venue}AtLimit`,
+          `${lower(venue)}Cpi`,
+        ];
   const bytecode = (name: string): string =>
-    hex(compileStdRouter(svmProgramCalling(name), "svm").bytecode);
+    hex(compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm").bytecode);
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 
-  it.each(VENUES)(
-    "try%s carries its venue's program id and instruction, and no other's",
-    (venue, id, ix) => {
-      const code = bytecode(`try${venue}`);
-      for (const [, other] of VENUES) expect(count(code, key(other))).toBe(other === id ? 1 : 0);
-      for (const name of ["swap_v2", "swap"])
-        expect(count(code, discriminator(name))).toBe(name === ix ? 1 : 0);
+  it.each(
+    VENUES.flatMap(([venue, id, ix]) => functionsOf(venue).map((fn) => [fn, id, ix] as const)),
+  )("%s carries its venue's program id and instructions, and no other's", (fn, id, ix) => {
+    const code = bytecode(fn);
+    const carried: typeof ix = fn === "tryOrcaWhirlpool" ? { swap_v2: 1 } : ix;
+    for (const [, other] of VENUES) expect(count(code, key(other))).toBe(other === id ? 1 : 0);
+    for (const name of INSTRUCTIONS)
+      expect(count(code, discriminator(name))).toBe(carried[name] ?? 0);
+  });
+
+  // `…Data` is the instruction's data alone: its instructions, and no program id at all.
+  const DATA: [string, Partial<Record<(typeof INSTRUCTIONS)[number], number>>][] = [
+    ["raydiumClmmData", { swap_v2: 1 }],
+    ["pancakeswapClmmData", { swap_v2: 1 }],
+    ["byrealData", { swap_v2: 1 }],
+    ["stabbleClmmData", { swap_v2: 1 }],
+    ["orcaWhirlpoolData", { swap: 1 }],
+    ["orcaWhirlpoolV2Data", { swap_v2: 1 }],
+    ["cropperData", { swap: 1 }],
+    ["defitunaData", { swap: 1 }],
+    ["cremaData", { swap: 2 }],
+    ["phoenixData", {}],
+    ["invariantData", { swap: 2 }],
+    ["manifestData", {}],
+    ["openbookV2Data", { place_take_order: 1 }],
+    ["openbookV2LotsData", { place_take_order: 1 }],
+  ];
+
+  it("lists every …Data function", () => {
+    expect(DATA.map(([fn]) => fn).sort()).toEqual(
+      SVM_FUNCTIONS.filter((fn) => fn.endsWith("Data")).sort(),
+    );
+  });
+
+  it.each(DATA)("%s carries its instructions and no program id", (fn, ix) => {
+    const code = bytecode(fn);
+    for (const [, id] of VENUES) expect(count(code, key(id))).toBe(0);
+    for (const name of INSTRUCTIONS) expect(count(code, discriminator(name))).toBe(ix[name] ?? 0);
+  });
+
+  it("trySwap carries the nine venues' program ids once, and each instruction once per venue code", () => {
+    const code = bytecode("trySwap");
+    for (const [venue, id] of VENUES)
+      expect(count(code, key(id))).toBe(
+        ["Invariant", "Manifest", "OpenbookV2"].includes(venue) ? 0 : 1,
+      );
+    // swap_v2: Raydium's code (four programs) and Orca's; swap: Cropper, DefiTuna, Crema's two
+    // directions.
+    expect(count(code, discriminator("swap_v2"))).toBe(2);
+    expect(count(code, discriminator("swap"))).toBe(4);
+  });
+});
+
+describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
+  // The program carries a constant without its leading zero bytes, and Saros DLMM's id has one.
+  const key = (base58: string): string =>
+    Buffer.from(getAddressCodec().encode(address(base58)))
+      .toString("hex")
+      .replace(/^(00)+/, "");
+  const IDS: Record<string, string> = {
+    raydiumCpSwap: raydiumCpSwap.programId,
+    gamma: gamma.programId,
+    raydiumAmmV4: raydiumAmmV4.programId,
+    orcaLegacyTokenSwap: orcaLegacyTokenSwap.programId,
+    tokenSwapV1: tokenSwapV1.programId,
+    orcaV1: orcaV1.programId,
+    penguin: penguin.programId,
+    stepn: stepn.programId,
+    saros: saros.programId,
+    fluxbeam: fluxbeam.programId,
+    dexlab: dexlab.programId,
+    meteoraDammV2: meteoraDammV2.programId,
+    meteoraDammV1: meteoraDammV1Stable.programId,
+    aldrin: aldrin.programId,
+    omnipair: omnipair.programId,
+    saber: saberStableswap.programId,
+    saberDecimalsWrapper: saberDecimalsWrapper.programId,
+    stabbleStableSwap: stabbleStableSwap.programId,
+    stabbleWeightedSwap: stabbleWeightedSwap.programId,
+    mercurial: mercurial.programId,
+    perena: perena.programId,
+    metadaoFutarchy: METADAO_FUTARCHY_PROGRAM_ID,
+    scaleAmm: SCALE_AMM_PROGRAM_ID,
+    pumpswap: pumpswapAdapter.programId,
+    bonkswap: bonkswap.programId,
+    guacswap: guacswap.programId,
+    meteoraDlmm: METEORA_DLMM_PROGRAM_ID,
+    sarosDlmm: SAROS_DLMM_PROGRAM_ID,
+    solfiV2: SOLFI_V2_PROGRAM_ID,
+    hadron: HADRON_PROGRAM_ID,
+    taurusfi: TAURUSFI_PROGRAM_ID,
+    riptide: RIPTIDE_PROGRAM_ID,
+    denali: DENALI_PROGRAM_ID,
+    gavel: GAVEL_PROGRAM_ID,
+    tesserav: TESSERAV_PROGRAM_ID,
+    flint: FLINT_PROGRAM_ID,
+    deriverse: DERIVERSE_PROGRAM_ID,
+    goonfiV2: GOONFI_V2_PROGRAM_ID,
+    meteoraDbc: METEORA_DBC_PROGRAM_ID,
+    trends: TRENDS_PROGRAM_ID,
+    heaven: HEAVEN_PROGRAM_ID,
+    virtuals: VIRTUALS_PROGRAM_ID,
+    raydiumLaunchlab: RAYDIUM_LAUNCHLAB_PROGRAM_ID,
+    runnerRodeo: RUNNER_RODEO_PROGRAM_ID,
+    scaleVmm: SCALE_VMM_PROGRAM_ID,
+    xorca: XORCA_PROGRAM_ID,
+    solayer: SOLAYER_PROGRAM_ID,
+    voltr: VOLTR_PROGRAM_ID,
+    vaultLiquidUnstake: vaultLiquidUnstake.programId,
+    hyloStabilityPool: HYLO_STABILITY_POOL_PROGRAM_ID,
+    huma: HUMA_PROGRAM_ID,
+    heliumTreasury: HELIUM_TREASURY_PROGRAM_ID,
+    jupiterLendEarn: JUPITER_LEND_EARN_PROGRAM_ID,
+    hylo: HYLO_PROGRAM_ID,
+    carrot: CARROT_PROGRAM_ID,
+    mswap: MSWAP_PROGRAM_ID,
+    perpsJlp: PERPS_JLP_PROGRAM_ID,
+    perpsJlpMint: PERPS_JLP_PROGRAM_ID,
+    sanctumInfinity: SANCTUM_INFINITY_PROGRAM_ID,
+    solfiV1: SOLFI_V1_PROGRAM_ID,
+    archer: "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+  };
+  const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+  const carries = (code: string) =>
+    Object.entries(IDS).map(([venue, id]) => ({ venue, carried: count(code, key(id)) > 0 }));
+  // A venue's own program's id, which Jupiter Perpetuals' swap and its JLP mint share.
+  const only = (base: string) =>
+    Object.entries(IDS).map(([venue, id]) => ({ venue, carried: id === IDS[base] }));
+
+  it("names a program for every exact-input venue", () => {
+    expect(Object.keys(IDS).sort()).toEqual([...Object.keys(SVM_EXACT_IN), ...SVM_CPI_ONLY].sort());
+  });
+
+  it.each(SVM_EXACT_IN_FUNCTIONS)(
+    "%s carries its venue's program id and no other's",
+    (name, slot) => {
+      const code = hex(compileStdRouter(svmExactInProgramCalling(name, slot), "svm").bytecode);
+      const base = name.startsWith("try") ? name.charAt(3).toLowerCase() + name.slice(4) : name;
+      expect(carries(code)).toEqual(only(base));
     },
   );
 
-  it("trySwap carries every venue's program id once, and each instruction once per venue code", () => {
-    const code = bytecode("trySwap");
-    for (const [, id] of VENUES) expect(count(code, key(id))).toBe(1);
-    // swap_v2: Raydium's code (four programs) and Orca's; swap: Cropper, DefiTuna, Crema.
-    expect(count(code, discriminator("swap_v2"))).toBe(2);
-    expect(count(code, discriminator("swap"))).toBe(3);
+  it.each(SVM_DATA_FUNCTIONS)("%s carries no program id: its caller names the program", (name) => {
+    const code = hex(compileStdRouter(svmProgramCalling(name, 3), "svm").bytecode);
+    expect(carries(code)).toEqual(Object.keys(IDS).map((venue) => ({ venue, carried: false })));
+  });
+
+  it.each(SVM_CPI_FUNCTIONS)("%s carries its venue's program id and no other's", (name) => {
+    const code = hex(compileStdRouter(svmProgramCalling(name, 3), "svm").bytecode);
+    const base = name.replace(/Cpi$/, "");
+    expect(carries(code)).toEqual(only(base));
   });
 });
 
 describe("@sauce/router (SVM): the reasons its checks revert with", () => {
+  const REASONS = [
+    "a pool's program is not its owner",
+    "not a supported venue's pool",
+    "pool is not the pair",
+    "market is not the pair",
+    "below minOut",
+    "nothing swapped",
+    "minOut past 64 bits",
+    "limit past 64 bits",
+    "limit past 128 bits",
+    "limit past its field",
+    "debit",
+  ];
   const reasons = (name: string): Record<string, number> => {
-    const code = hex(compileStdRouter(svmProgramCalling(name), "svm").bytecode);
+    const code = hex(compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm").bytecode);
     return Object.fromEntries(
-      [
-        "a pool's program is not its owner",
-        "not a supported venue's pool",
-        "pool is not the pair",
-        "market is not the pair",
-        "below minOut",
-        "nothing swapped",
-      ].map((reason) => [reason, code.split(Buffer.from(reason).toString("hex")).length - 1]),
+      REASONS.map((reason) => [reason, code.split(Buffer.from(reason).toString("hex")).length - 1]),
     );
   };
+  const none = Object.fromEntries(REASONS.map((reason) => [reason, 0]));
 
   it("trySwap refuses a slot whose program is not its pool's owner, a pool of no venue here, a pool or market not the pair, and a swap below its floor", () => {
+    // And no field of its instructions: at a price the floor is 0 and the limit fits, so it carries
+    // none of the range checks each venue's `…Data` makes.
     expect(reasons("trySwap")).toEqual({
+      ...none,
       "a pool's program is not its owner": 1,
       "not a supported venue's pool": 1,
       "pool is not the pair": 1,
       "market is not the pair": 1,
       "below minOut": 1,
-      "nothing swapped": 0,
     });
     expect(reasons("swap")["nothing swapped"]).toBe(1);
   });
 
-  it.each([
+  const VENUE_REASONS: [string, string][] = [
     ["RaydiumClmm", "not a Raydium CLMM pool"],
     ["PancakeswapClmm", "not a PancakeSwap CLMM pool"],
     ["Byreal", "not a Byreal pool"],
@@ -375,11 +723,151 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
     ["Defituna", "not a DefiTuna pool"],
     ["Crema", "not a Crema pool"],
     ["Phoenix", "not a Phoenix market"],
-  ])("try%s refuses another venue's pool as %j", (venue, reason) => {
+    ["Invariant", "not an Invariant pool"],
+    ["OpenbookV2", "not an OpenBook v2 market"],
+    ["Manifest", "not a Manifest market"],
+  ];
+  const book = (venue: string): boolean => ["Phoenix", "Manifest", "OpenbookV2"].includes(venue);
+
+  it.each(
+    VENUE_REASONS.filter(([venue]) => !["Invariant", "OpenbookV2", "Manifest"].includes(venue)),
+  )("try%s refuses another venue's pool as %j", (venue, reason) => {
     const code = hex(compileStdRouter(svmProgramCalling(`try${venue}`), "svm").bytecode);
     expect(code.split(Buffer.from(reason).toString("hex")).length - 1).toBe(1);
-    const pair = venue === "Phoenix" ? "market is not the pair" : "pool is not the pair";
+    const pair = book(venue) ? "market is not the pair" : "pool is not the pair";
     expect(code.split(Buffer.from(pair).toString("hex")).length - 1).toBe(1);
+  });
+
+  // At a limit: its data refuses a floor or a limit its instruction cannot carry (Orca's data is two
+  // swaps', each with its floor); `…Cpi` the same, and the program and the debit; `try…AtLimit` the
+  // venue's own pool and pair, as above, the floor afterwards, and, first, a limit its order cannot
+  // carry, whatever the market's state.
+  it.each(VENUE_REASONS)("%s at a limit refuses another venue's pool as %j", (venue, reason) => {
+    const tryForm = venue === "Manifest" ? "tryManifest" : `try${venue}AtLimit`;
+    const floors = ["Phoenix", "Invariant", "OpenbookV2"].includes(venue)
+      ? 0
+      : venue === "OrcaWhirlpool"
+        ? 2
+        : 1;
+    const limit =
+      venue === "Phoenix"
+        ? "limit past 64 bits"
+        : venue === "OpenbookV2"
+          ? "limit past its field"
+          : undefined;
+    // A sqrt price limit's 16 bytes (Invariant's too), on every concentrated-liquidity venue.
+    const wide = book(venue) ? 0 : venue === "Invariant" ? 1 : floors;
+    const data = {
+      ...(floors > 0 ? { "minOut past 64 bits": floors } : {}),
+      ...(wide > 0 ? { "limit past 128 bits": wide } : {}),
+      ...(limit === undefined ? {} : { [limit]: 1 }),
+    };
+    const lower = `${venue.charAt(0).toLowerCase()}${venue.slice(1)}`;
+    if (venue === "OrcaWhirlpool")
+      for (const name of ["orcaWhirlpoolData", "orcaWhirlpoolV2Data"])
+        expect(reasons(name)).toEqual({
+          ...none,
+          "minOut past 64 bits": 1,
+          "limit past 128 bits": 1,
+        });
+    else expect(reasons(`${lower}Data`)).toEqual({ ...none, ...data });
+    if (venue === "OpenbookV2") expect(reasons("openbookV2LotsData")).toEqual({ ...none, ...data });
+    expect(reasons(tryForm)).toEqual({
+      ...none,
+      ...data,
+      [book(venue) ? "market is not the pair" : "pool is not the pair"]: 1,
+      "below minOut": 1,
+      ...(limit === undefined ? {} : { [limit]: 2 }),
+      // and a sqrt price limit wider than its field, whatever the pool's state, checked first too.
+      ...(wide > 0 ? { "limit past 128 bits": wide + 1 } : {}),
+    });
+    const cpi = `${lower}Cpi`;
+    // `…Cpi` writes its data itself (Orca's two swaps' under one floor check), Phoenix's excepted.
+    expect(reasons(cpi)).toEqual({
+      ...none,
+      ...data,
+      ...(venue === "OrcaWhirlpool" ? { "minOut past 64 bits": 1, "limit past 128 bits": 1 } : {}),
+      debit: 1,
+    });
+    for (const name of [tryForm, cpi]) {
+      const code = hex(
+        compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm").bytecode,
+      );
+      expect(code.split(Buffer.from(reason).toString("hex")).length - 1).toBe(1);
+    }
+  });
+});
+
+describe("@sauce/router (SVM): the reasons the exact-input functions revert with", () => {
+  const reasons = (source: string): string[] => {
+    const code = hex(compileStdRouter(source, "svm").bytecode);
+    return ["minOut past 64 bits", "below minOut", "debit"].filter((reason) =>
+      code.includes(Buffer.from(reason).toString("hex")),
+    );
+  };
+  const venue = (source: string): boolean =>
+    /6e6f742061(6e)?20/.test(hex(compileStdRouter(source, "svm").bytecode)); // "not a " / "not an "
+
+  // A floor its field cannot carry, where the venue's instruction has one.
+  const floor = (name: string): string[] =>
+    svmExactInArguments(
+      `${name.replace(/^try([A-Z])/, (_, c: string) => c.toLowerCase())}Data`,
+    )!.includes("minOut")
+      ? ["minOut past 64 bits"]
+      : [];
+
+  it.each(SVM_EXACT_IN_FUNCTIONS)(
+    "%s refuses another program, a floor past 64 bits and a swap below its floor",
+    (name, slot) => {
+      const source = svmExactInProgramCalling(name, slot);
+      expect(venue(source)).toBe(true);
+      expect(reasons(source)).toEqual([...floor(name), "below minOut"]);
+    },
+  );
+
+  it.each(SVM_CPI_FUNCTIONS)(
+    "%s refuses another program, a floor past 64 bits and a debit past its input",
+    (name) => {
+      const source = svmProgramCalling(name, 3);
+      expect(venue(source)).toBe(true);
+      expect(reasons(source)).toEqual([...floor(name.replace(/Cpi$/, "")), "debit"]);
+    },
+  );
+
+  it.each(["perena", "tryPerena", "perenaCpi", "perenaData"])(
+    "%s refuses a token index past its byte, which would spill into the next field",
+    (name) => {
+      const source = /(Cpi|Data)$/.test(name)
+        ? svmProgramCalling(name, 3)
+        : svmExactInProgramCalling(name, SVM_EXACT_IN.perena!);
+      const code = hex(compileStdRouter(source, "svm").bytecode);
+      expect(code).toContain(Buffer.from("index past its byte").toString("hex"));
+    },
+  );
+
+  it.each(["deriverse", "tryDeriverse", "deriverseCpi", "deriverseData"])(
+    "%s refuses an instrument id past 32 bits, which cut to them would name another instrument",
+    (name) => {
+      const source = /(Cpi|Data)$/.test(name)
+        ? svmProgramCalling(name, 3)
+        : svmExactInProgramCalling(name, SVM_EXACT_IN.deriverse!);
+      const code = hex(compileStdRouter(source, "svm").bytecode);
+      expect(code).toContain(Buffer.from("instrId past 32 bits").toString("hex"));
+    },
+  );
+
+  it.each(["sanctumInfinityCpi", "sanctumInfinityData"])(
+    "%s refuses a calculator's account count past its byte or a token's index past 32 bits",
+    (name) => {
+      const code = hex(compileStdRouter(svmProgramCalling(name, 3), "svm").bytecode);
+      expect(code).toContain(Buffer.from("index past its field").toString("hex"));
+    },
+  );
+
+  it.each(SVM_DATA_FUNCTIONS)("%s checks nothing but its floor's width", (name) => {
+    const source = svmProgramCalling(name, 3);
+    expect(venue(source)).toBe(false);
+    expect(reasons(source)).toEqual(floor(name.replace(/Data$/, "")));
   });
 });
 

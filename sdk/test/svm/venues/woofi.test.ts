@@ -22,7 +22,14 @@
  */
 import { resolve } from "path";
 import { address } from "@solana/kit";
-import { fetchWoofiConfig, woofi } from "../../../src/svm/venues/woofi/index.js";
+import {
+  fetchWoofiConfig,
+  OFF_POOL_CAP_BAL,
+  OFF_POOL_MIN_SWAP_AMOUNT,
+  OFF_POOL_UNCLAIMED_FEE,
+  woofi,
+} from "../../../src/svm/venues/woofi/index.js";
+import * as woofiModule from "../../../src/svm/venues/woofi/index.js";
 import { fixtureLoader, loadFixtures } from "../fixtures.js";
 
 const REAL_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/woofi");
@@ -65,6 +72,39 @@ describe("fetchWoofiConfig: decodes the real WooAmmPool bundle + resolves the ba
           ? new Uint8Array(data.get(addr)!)
           : null;
     await expect(fetchWoofiConfig(load as any, POOL)).rejects.toThrow(/base-to-base/);
+  });
+});
+
+describe("WooPool u128 fields at the deployed layout (state/woopool.rs: cap_bal@139, min_swap_amount@155, unclaimed_fee@171)", () => {
+  // WooPool = disc 8 + wooconfig 32 + bump 1 + authority 32 + wooracle 32 + fee_rate 2, then four u128s.
+  it("offsets follow the struct order, and no field sits inside min_swap_amount", () => {
+    expect(OFF_POOL_CAP_BAL).toBe(8 + 32 + 1 + 32 + 32 + 2 + 16 + 16);
+    expect(OFF_POOL_MIN_SWAP_AMOUNT).toBe(OFF_POOL_CAP_BAL + 16);
+    expect(OFF_POOL_UNCLAIMED_FEE).toBe(OFF_POOL_MIN_SWAP_AMOUNT + 16);
+    // The former OFF_POOL_RESERVE = 157 lay inside min_swap_amount (bytes 155..171).
+    expect((woofiModule as Record<string, unknown>).OFF_POOL_RESERVE).toBeUndefined();
+  });
+
+  it("minSwapAmount is read at its full u128 width (bytes past the u16 count)", async () => {
+    const fixtures = loadFixtures(REAL_FIXTURES);
+    const base = await fetchWoofiConfig(fixtureLoader(fixtures), POOL);
+    const data = new Map(fixtures.map((f) => [f.address, Buffer.from(f.base64Data, "base64")]));
+    const poolBuf = Buffer.from(data.get(base.woopoolBase)!);
+    // 1e13 at byte 157 (the old patched fixture's bytes) and 1 at byte 163: u128 = 1e13 << 16 | 1 << 64.
+    poolBuf.writeBigUInt64LE(10n ** 13n, 157);
+    poolBuf[163] = 1;
+    const load = async (addr: string) =>
+      addr === base.woopoolBase
+        ? new Uint8Array(poolBuf)
+        : data.get(addr)
+          ? new Uint8Array(data.get(addr)!)
+          : null;
+    const cfg = await fetchWoofiConfig(load as never, POOL);
+    let expected = 0n;
+    for (let i = 15; i >= 0; i--)
+      expected = (expected << 8n) | BigInt(poolBuf[OFF_POOL_MIN_SWAP_AMOUNT + i]!);
+    expect(expected.toString()).toBe((((10n ** 13n) << 16n) | (1n << 64n)).toString());
+    expect(cfg.minSwapAmount.toString()).toBe(expected.toString());
   });
 });
 

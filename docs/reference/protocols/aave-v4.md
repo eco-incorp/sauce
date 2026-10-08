@@ -38,6 +38,8 @@ function main(
 - `reserveId`: the Spoke's reserve id for the asset. Resolve it with `spoke.getReserveId(hub, hub.getAssetId(token))`
 - The underlying token must be `approve`d to the Spoke first
 
+- `onBehalfOf`: who holds the supplied position. In a Sauce program the caller is the Pot: pass the user's wallet to give them the position, or `ctx.self()` to keep it in the Pot
+
 `withdraw`, `borrow` and `repay` take the same `(reserveId, amount, onBehalfOf)` arguments.
 
 ## Notes
