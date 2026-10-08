@@ -23,6 +23,12 @@
  * needs `value`. Its Router is the release's, at the release's Router address: passed to the
  * implementation's constructor for a kitchen-evm release that takes it (1.0.0 and earlier), and set
  * with `setRouter` — the way a fresh deploy sets it — for one that keeps it in storage.
+ *
+ * **A Router not yet released runs only where a suite asks for it.** `routerCreationCode` deploys
+ * that Router's creation code in the release Router's place, at the same address, so a suite can
+ * execute against a Router change before it ships (v12 #571's handlers, which `@sauce/async`'s
+ * suite runs). The suite chooses it, with a file it is given (`routerUnderTest`); nothing chooses it
+ * by default, and every other suite runs the release.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -81,6 +87,26 @@ export const POT_SALT = `0x${"00".repeat(31)}07` as Hex;
 const PROXY_CHILD_INITCODE = "0x67363d3d37363d34f03d5260086018f3" as Hex;
 const PROXY_CHILD_RUNTIME = "0x363d3d37363d34f0" as Hex;
 
+/**
+ * The creation code of a Router to run in the release's place: the file
+ * `SAUCE_V12_ROUTER_CREATION_HEX` names, or `undefined` when it names none. A suite that needs a
+ * Router the release does not have yet passes it as `routerCreationCode`, and skips without it: no
+ * release publishes that Router, so CI has none to give it.
+ */
+export const routerUnderTest = (): Hex | undefined => {
+  const path = process.env.SAUCE_V12_ROUTER_CREATION_HEX;
+
+  return path === undefined || path === "" ? undefined : (readFileSync(path, "utf8").trim() as Hex);
+};
+
+/** What a suite may change about the stack it stands up. */
+export interface GatedEngineOptions {
+  /** A Router's creation code to deploy in place of the release's, at the release's Router
+   *  address: a Router not yet released, which the suite testing it names. The release's when left
+   *  out. */
+  readonly routerCreationCode?: Hex;
+}
+
 export interface GatedEngine {
   /** The engine, at its release address (`v12EngineAddress()`), deployed from creation code: its
    *  constructor bound that identity for the Pot's `EVAL` relay. */
@@ -108,6 +134,7 @@ export const startGatedEngine = async (
   clients: { publicClient: PublicClient; walletClient: WalletClient; testClient: TestClient },
   owner: Address,
   runtimeCreationCode: Hex,
+  options: GatedEngineOptions = {},
 ): Promise<GatedEngine> => {
   const { publicClient, walletClient, testClient } = clients;
   const { kitchen: gateKitchen, potInitCodeHash } = gateAnchors();
@@ -129,7 +156,7 @@ export const startGatedEngine = async (
   /** CREATE3 at `ref.address`: install CreateX's proxy child at the salt's CREATE2 address and let
    *  it CREATE `initCode` at its nonce 1. Clears whatever the address held first, which is what a
    *  replayed chain carrying an older deployment needs. */
-  const create3 = async (ref: ContractRef, initCode: Hex): Promise<Address> => {
+  const create3 = async (ref: ContractRef, initCode: Hex, released = true): Promise<Address> => {
     const child = getCreate2Address({
       bytecodeHash: keccak256(PROXY_CHILD_INITCODE),
       from: factory,
@@ -139,7 +166,7 @@ export const startGatedEngine = async (
     if (at !== getAddress(ref.address)) {
       throw new Error(`the release's salt derives ${at}, not the recorded ${ref.address}`);
     }
-    if (ref.initCodeHash !== undefined && keccak256(initCode) !== ref.initCodeHash) {
+    if (released && ref.initCodeHash !== undefined && keccak256(initCode) !== ref.initCodeHash) {
       throw new Error(`the initcode for ${ref.address} does not hash to its recorded address`);
     }
     await testClient.setCode({ address: at, bytecode: "0x" });
@@ -155,7 +182,11 @@ export const startGatedEngine = async (
   };
 
   const engine = await create3(contracts.engine, runtimeCreationCode);
-  const router = await create3(contracts.router, artifact("Router").bytecode);
+  // CREATE3's address is the salt's alone, so a Router under test lands where the release's would.
+  const router =
+    options.routerCreationCode === undefined
+      ? await create3(contracts.router, artifact("Router").bytecode)
+      : await create3(contracts.router, options.routerCreationCode, false);
   // Which Kitchen era this release is, read off its ABI the way v12's own deploy tooling does
   // (`release-artifacts.mjs#initCode`): kitchen-evm up to 1.0.0 took the Router as its constructor
   // argument and held it immutably; later releases take nothing and keep the Router in storage,

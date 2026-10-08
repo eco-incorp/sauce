@@ -150,7 +150,11 @@ export interface LocalChain {
   stop(): Promise<void>;
 }
 
-export async function startChain(slug: string, port: number): Promise<LocalChain> {
+export async function startChain(
+  slug: string,
+  port: number,
+  options: gated.GatedEngineOptions = {},
+): Promise<LocalChain> {
   const chain = requireChain(slug);
   const rpcUrl = `http://127.0.0.1:${port}`;
   const anvil: ChildProcess = spawn(
@@ -206,6 +210,7 @@ export async function startChain(slug: string, port: number): Promise<LocalChain
     { publicClient, walletClient: deployer, testClient },
     DEPLOYER.address,
     creationCode,
+    options,
   );
   // The CLI names the engine the SDK records. A harness that deploys it at that release address
   // needs nothing more; one that deploys it elsewhere moves it there.
