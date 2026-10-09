@@ -138,6 +138,20 @@ carries its bytes, `requireSelf(sender)` then `settleCarried(key, stored, progra
 `requires` names the contracts a handler needs (`Namespace.Contract`), so a chain without one skips
 it; `interfaces` are ERC-165 ids the Pot declares for a protocol that checks its receiver.
 
+## The Pot as a signer
+
+A Pot answers ERC-1271's `isValidSignature(bytes32 hash, bytes signature)` with one handler the
+core ships, which a package that needs the Pot to sign declares as its own handler
+(`"program": "@sauce/async/erc1271.handler.js"`, a view). It is valid for:
+
+- **a hash the Pot approved**: `Erc1271.approve(hash)` in a program running as the Pot (and
+  `Erc1271.revoke(hash)`), such as a request the Pot made, which a market checks before it spends
+  the Pot's deposit. One storage read, well under the 100,000 gas such a check gives it;
+- **the owner's signature over the hash bound to the Pot**: EIP-712's `PotMessage { hash: bytes32 }`
+  under the domain `{ name: "Sauce Pot", version: "1", chainId, verifyingContract: the Pot }`, never
+  the bare hash, so a signature the owner made for anything else is none of the Pot's. A malleable
+  signature is refused; an owner that is a contract is asked ERC-1271 itself.
+
 ## What it costs
 
 A request parks one word, beside up to three words its body captured (more go into code), and its

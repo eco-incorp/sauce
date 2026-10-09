@@ -1211,7 +1211,9 @@ unreleased), which cooks the HANDLER the owner installed for that selector,
 `main(caller, value, data)`: `requireCaller`, `take(id)` (one-shot), `run(program, input)`
 (`evm.delegate` into the in-flight engine, one fee). `run` holds `input` in TRANSIENT storage
 (`keccak256("sauce.async.received")`), which `received()` reads: not the program's input, because
-a `.catch` runs the body in a `try` block, a frame whose `ctx.msgData()` is the block's. A package
+a `.catch` runs the body in a `try` block, a frame whose `ctx.msgData()` is the block's. A Pot's ONE ERC-1271 handler is the core's, `std/async/erc1271.handler.js` (an approved hash,
+`Erc1271.approve`, or the owner's signature over the hash bound to the Pot, `PotMessage`), which a
+package needing it declares by that path. A package
 declares handlers in its `package.json` (`"handlers": [{ selector, program, readOnly }]`);
 `routes/handlers.ts` compiles them for a chain and writes the install program (one `install` per
 selector), and the `sauce` command takes a package as a program operand
