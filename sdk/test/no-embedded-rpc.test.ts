@@ -27,7 +27,10 @@
  * source, a package registry) is simply not matched.
  *
  * The npm registry is the `sauce` command's one other network access, and only `sauce update`
- * (`sdk/src/cli/update.ts`) reaches it, only when it runs: shipped code names it nowhere else.
+ * (`sdk/src/cli/update.ts`) reaches it, only when it runs: shipped code names it nowhere else. npm
+ * reaches it too, as the user's npm configuration says, where the command runs npm: `sauce init
+ * --install`, the package managers of `sauce update`, and `npm ci` into a runtime folder
+ * (`runtime.ts`, which only the executable gives the process).
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -61,6 +64,10 @@ const REQUIRED = [
   "sdk/src/cli/run.ts",
   "sdk/src/cli/commands.ts",
 ];
+/** Loading Node.js's child_process module, however it is spelled: a static import or re-export, a
+ *  `require`, a dynamic `import()`, with or without the `node:` prefix. */
+const CHILD_PROCESS =
+  /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](?:node:)?child_process["']/;
 /** Generated, not authored: its URLs are package tarballs. */
 const SKIP = new Set(["pnpm-lock.yaml"]);
 /** The `sauce` command's public endpoints: the one file that may hold RPC URLs. */
@@ -248,6 +255,39 @@ describe("the SDK ships no RPC endpoints", () => {
     );
     expect(deliberate).toHaveLength(1);
     expect(found.filter((finding) => !deliberate.includes(finding))).toEqual([]);
+  });
+
+  it("shipped code runs another process only where npm, a package manager or a password needs one", () => {
+    const shipped = scanned(SHIPPED_ROOTS);
+    // run.ts: --password-command, and `sauce init --install`'s npm install; update.ts: the package
+    // managers `sauce update` runs; runtime.ts: `npm ci` into a runtime folder. The three that reach
+    // the npm registry, through npm and its user's configuration.
+    const spawning = [...shipped]
+      .filter(([, text]) => CHILD_PROCESS.test(text))
+      .map(([file]) => file)
+      .sort();
+    // Every spelling of loading the module counts, so a new one cannot slip past.
+    for (const spelling of [
+      'import { spawn } from "node:child_process";',
+      "import * as cp from 'child_process';",
+      'const { spawn } = require("child_process");',
+      'const cp = require("node:child_process");',
+      'const cp = await import("node:child_process");',
+      "const cp = await import('child_process');",
+      'export { spawn } from "child_process";',
+    ]) {
+      expect([spelling, CHILD_PROCESS.test(spelling)]).toEqual([spelling, true]);
+    }
+    expect(spawning).toEqual([
+      "sdk/src/cli/run.ts",
+      "sdk/src/cli/runtime.ts",
+      "sdk/src/cli/update.ts",
+    ]);
+    // The runtime folder's installer is the process's only where the executable gives it.
+    const importers = [...shipped]
+      .filter(([, text]) => /from\s+["']\.\/runtime\.js["']/.test(text))
+      .map(([file]) => file);
+    expect(importers).toEqual(["sdk/src/cli/main.ts"]);
   });
 
   it("shipped code names the npm registry only where sauce update reads it", () => {

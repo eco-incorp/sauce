@@ -226,7 +226,7 @@ describe("sauce update", () => {
   /**
    * An updater for a copy at `root`, at `version`, in `cwd`, whose files are `files`: each install
    * it is asked to run sets the package's manifest to the version it installs, as a real one would,
-   * and the new binary's `skills update` answers `skills`.
+   * the new binary's `skills update` answers `skills`, and its `runtime install` answers `installs`.
    */
   function updater(options: {
     root?: string;
@@ -236,6 +236,8 @@ describe("sauce update", () => {
     packument?: Packument | Error;
     status?: number | null;
     skills?: Captured;
+    runtime?: string;
+    installs?: Captured;
     platform?: NodeJS.Platform;
   }) {
     const root = options.root ?? NPM_ROOT;
@@ -252,6 +254,7 @@ describe("sauce update", () => {
       cwd: options.cwd ?? work,
       platform: options.platform ?? "linux",
       node: "/usr/bin/node",
+      ...(options.runtime === undefined ? {} : { runtime: options.runtime }),
       ...fs,
       packument: async () => {
         packumentReads++;
@@ -272,6 +275,9 @@ describe("sauce update", () => {
       },
       capture: async (file, args, cwd) => {
         captured.push({ file, args, cwd });
+        if (args[1] === "runtime") {
+          return options.installs ?? { status: 0, stdout: "zod 4.6.5: installed\n", stderr: "" };
+        }
 
         return options.skills ?? { status: 0, stdout: "skills are up to date\n", stderr: "" };
       },
@@ -383,6 +389,40 @@ describe("sauce update", () => {
     expect(newer("1.2.0", "1.2.0")).toBe(false);
     expect(newer("0.99.8", "1.0.0")).toBe(false);
     expect(newer("unknown", "1.0.0")).toBe(false);
+  });
+
+  it("has the new binary install its runtime packages where the version replaced had them", async () => {
+    const runtime = "/home/me/.sauce/runtime";
+    const { self, captured } = updater({ runtime, files: { [`${runtime}/1.0.0`]: "" } });
+    const run = await sauce(self, "--json");
+    expect(run.code).toBe(0);
+    expect(captured).toEqual([
+      {
+        file: "/usr/bin/node",
+        args: [join(NPM_ROOT, "./sdk/dist/cli/main.js"), "runtime", "install"],
+        cwd: work,
+      },
+    ]);
+    expect(JSON.parse(run.stdout).runtime).toEqual({
+      installed: true,
+      output: "zod 4.6.5: installed",
+    });
+    // The version replaced had none: its first use installs the new one's, not the update.
+    const none = updater({ runtime });
+    expect((await sauce(none.self)).code).toBe(0);
+    expect(none.captured).toEqual([]);
+    // An install that fails leaves the update standing, and says so.
+    const failing = updater({
+      runtime,
+      files: { [`${runtime}/1.0.0`]: "" },
+      installs: { status: 1, stdout: "", stderr: "sauce runtime: npm is not on PATH\n" },
+    });
+    const failed = await sauce(failing.self);
+    expect(failed.code).toBe(0);
+    expect(failed.stderr).toContain(
+      "The new sauce did not install its runtime packages (its first sauce mcp does): " +
+        "sauce runtime: npm is not on PATH",
+    );
   });
 
   it("updates the skills installed here with the new binary, and says what changed", async () => {

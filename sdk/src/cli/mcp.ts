@@ -9,6 +9,10 @@
  * LOADED HERE ONLY WHEN THIS COMMAND RUNS, by a dynamic import of that build, so no other command
  * pays for the MCP SDK; and it is reached through the interface below, which the workspace's own
  * entry module is checked against when it compiles (`mcp/src/entry.ts`), so neither side can drift.
+ * The MCP SDK and zod are optional peer dependencies of the package: the user's own copies at the
+ * versions pinned, else this version's runtime folder, which this command installs on first use
+ * (`optional.ts`) — `sauce mcp setup` up front, so an agent's first start of the server does not
+ * wait for it.
  *
  * It reads a chain through a caller's `rpcUrl`, else `--config`'s entry for the chain, else the
  * built-in public endpoints the command hands it. Over stdio, `--wallets [dir]` with a password
@@ -26,6 +30,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import type { CommandOutput } from "./commands.js";
+import { MCP_EXTRA, provide, useRuntime } from "./optional.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
@@ -82,6 +87,10 @@ export const MCP_FLAGS: FlagSpecs = {
     value: "<file>",
     help: 'Your own RPC endpoints: { "rpcUrls": { "<chain id>": "<url>" } } (default: public ones)',
   },
+  offline: {
+    type: "boolean",
+    help: "Reach no network of its own: no built-in endpoint, and nothing installed",
+  },
   http: {
     type: "string",
     value: "<port>",
@@ -122,8 +131,9 @@ export const MCP_FLAGS: FlagSpecs = {
   force: { type: "boolean", help: 'setup: replace a "sauce" entry that differs' },
 };
 
-/** The server, from the package's build of `mcp/`. */
-async function loadMcp(): Promise<McpEntry> {
+/** The server, from the package's build of `mcp/`, its packages provided first. */
+async function loadMcp(offline: boolean, log: (text: string) => void): Promise<McpEntry> {
+  await provide(MCP_EXTRA, { offline, log });
   // A specifier TypeScript does not follow, so the SDK builds without the workspace built after it.
   const entry = new URL("../../../mcp/dist/entry.js", import.meta.url).href;
   let module: { mcpEntry?: McpEntry };
@@ -171,11 +181,15 @@ export async function mcpCommand(
   }
   const given = (flags: readonly string[]) => flags.find((flag) => args.values[flag] !== undefined);
   const config = stringFlag(args, "config");
+  const offline = args.values.offline === true;
+  // The whole process installs nothing: a tool's Solana rehearsal later refuses as the start does.
+  if (offline) useRuntime({ offline: true });
   if (sub === "setup") {
     const serving = given(SERVE_ONLY);
     if (serving !== undefined) throw new UsageError(`--${serving} is for serving, not setup`);
     const dir = stringFlag(args, "dir");
-    const lines = (await loadMcp()).setup({
+    // Setup installs the server's packages now, so an agent's first start of it does not wait.
+    const lines = (await loadMcp(offline, io.stderr)).setup({
       agents: repeatedFlag(args, "agent"),
       ...(dir === undefined ? {} : { dir }),
       ...(config === undefined ? {} : { config }),
@@ -191,10 +205,10 @@ export async function mcpCommand(
   const maxBody = stringFlag(args, "max-body");
   const wallets = await walletsOf(args, io, http !== undefined);
   await (
-    await loadMcp()
+    await loadMcp(offline, io.stderr)
   ).serve({
     ...(config === undefined ? {} : { config }),
-    ...(io.publicRpcs === undefined ? {} : { publicRpcs: io.publicRpcs }),
+    ...(io.publicRpcs === undefined || offline ? {} : { publicRpcs: io.publicRpcs }),
     ...(http === undefined ? {} : { http }),
     ...(host === undefined ? {} : { host }),
     allowedHosts: repeatedFlag(args, "allowed-host"),
