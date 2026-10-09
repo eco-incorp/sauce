@@ -220,6 +220,10 @@ interface EvmRoute {
 }
 
 let sauce: GatedEngine;
+/** Whether the engine under test reads what a caught call reverted with (`CATCH_READS`, v12 #553):
+ *  the v12-evm releases up to 1.2.0 do not, and refuse a handler that reads it, so its fill reverts.
+ *  Probed on the deployed engine, not named by a variable (`readsCaughtRevert`). */
+let READS_CAUGHT_REVERT: boolean;
 let portal: Address;
 let executor: Address;
 /** The Pot the cooks run on — owned by the Executor, so `ctx.self()` is this address. */
@@ -336,6 +340,27 @@ const fulfilRoute = async (
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
   return { status: receipt.status, intentHash, gasUsed: receipt.gasUsed, logs: receipt.logs };
+};
+
+/**
+ * Whether the engine under test reads a caught revert: the handlers' own read, `e.toBe()` of what
+ * `require(false, "no")` reverted with, cooked on the harness Pot. An engine without `CATCH_READS`
+ * refuses the read, so the cook reverts; one with it answers.
+ */
+const readsCaughtRevert = async (): Promise<boolean> => {
+  const program = compileProgram(
+    'function main(): Uint256 { let n = 0; try { require(false, "no"); } catch (e) { n = e.toBe(); } return n; }',
+  ).bytecode[0]!;
+  try {
+    await publicClient.call({
+      account: DEPLOYER.address,
+      to: sauce.pot,
+      data: sauce.cookData(toHex(program)),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 /** A fresh top-level route around `calls`, with a reward this suite never has to produce. */
@@ -563,6 +588,7 @@ describeEvm("intent bodies, executed", () => {
 
   beforeAll(async () => {
     anvil = await startEvm();
+    READS_CAUGHT_REVERT = await readsCaughtRevert();
   }, 120_000);
 
   afterAll(() => (anvil ? stopEvm(anvil) : undefined));
@@ -1355,10 +1381,10 @@ describeEvm("intent bodies, executed", () => {
           0x6e6fn,
         ],
       ] as const) {
-        // Pending the engine: a handler that reads `e` runs on v12-evm 2.0.0, the major that carries
-        // `CATCH_READS` (v12 #553). Against an engine built from #553 (SAUCE_V12_RUNTIME_CREATION_HEX),
-        // it passes.
-        (handler.startsWith("(e)") ? it.failing : it)(
+        // A handler that reads `e` needs an engine that reads a caught revert (`CATCH_READS`, v12
+        // #553): on one without it, which refuses the read, the fill reverts instead.
+        const reads = handler.startsWith("(e)");
+        it(
           name,
           async () => {
             const token = await deploy(MOCK_ERC20.creationCode);
@@ -1425,6 +1451,10 @@ describeEvm("intent bodies, executed", () => {
             await publicClient.waitForTransactionReceipt({ hash: approve });
 
             const fill = await fulfilRoute(route, rewardOf(published!).rewardHash);
+            if (reads && !READS_CAUGHT_REVERT) {
+              expect(fill.status).toBe("reverted");
+              return;
+            }
             expect(fill.status).toBe("success");
             // As strings: a failed bigint comparison cannot cross jest's worker boundary.
             expect(String((await balanceOf(token, FINAL_RECIPIENT)) - recipient)).toBe(
@@ -1460,8 +1490,13 @@ describeEvm("intent bodies, executed", () => {
   }
 }`;
 
-      /** Fills the one intent `logs` show published, delivering `SEEDED`, and returns the fill. */
-      const fill = async (token: Address, logs: readonly Log[]) => {
+      /** Fills the one intent `logs` show published, delivering `SEEDED`, and returns the fill, which
+       *  must end as `expected`. */
+      const fill = async (
+        token: Address,
+        logs: readonly Log[],
+        expected: "success" | "reverted" = "success",
+      ) => {
         const [published] = publishedIn(logs);
         expect(published).toBeDefined();
         const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.route) as unknown as [
@@ -1481,7 +1516,7 @@ describeEvm("intent bodies, executed", () => {
         });
         await publicClient.waitForTransactionReceipt({ hash: approve });
         const filled = await fulfilRoute(route, rewardOf(published!).rewardHash);
-        expect(filled.status).toBe("success");
+        expect(filled.status).toBe(expected);
 
         return filled;
       };
@@ -1505,69 +1540,67 @@ describeEvm("intent bodies, executed", () => {
             2n,
           ],
         ] as const) {
-          // Pending the engine: a handler that reads `e` runs on v12-evm 2.0.0, the major that
-          // carries `CATCH_READS` (v12 #553). Against an engine built from #553
-          // (SAUCE_V12_RUNTIME_CREATION_HEX), it passes.
-          (handler === FORWARD ? it : it.failing)(
-            `${depth} hops: ${name}`,
-            async () => {
-              const token = await deploy(MOCK_ERC20.creationCode);
-              const recipient = await balanceOf(token, FINAL_RECIPIENT);
-              const fallback = await balanceOf(token, FALLBACK);
-              const compiled = compileSauceRoute(
-                "base",
-                tried(depth, last, handler),
-                { pot: executorPot, engine: sauce.engine },
-                {
-                  defines: {
-                    TOKEN: BigInt(token),
-                    RECIPIENT: BigInt(FINAL_RECIPIENT),
-                    FALLBACK: BigInt(FALLBACK),
-                  },
-                  intents: {
-                    deadline: 4_000_000_000n,
-                    prover: PROVER,
-                    sourcePortal: portal,
-                    destinationPortal: portal,
-                    pot: executorPot,
-                    engine: sauce.engine,
-                    executionFee: 0n,
-                    salt: `0x${(depth * 16 + (toFallback === 0n ? 1 : toFallback === 2n ? 3 : 2)).toString(16).repeat(32)}` as Hex,
-                  },
+          // A handler that reads `e` needs an engine that reads a caught revert (`CATCH_READS`,
+          // v12 #553): on one without it, which refuses the read, the first fill reverts instead.
+          const reads = handler !== FORWARD;
+          it(`${depth} hops: ${name}`, async () => {
+            const token = await deploy(MOCK_ERC20.creationCode);
+            const recipient = await balanceOf(token, FINAL_RECIPIENT);
+            const fallback = await balanceOf(token, FALLBACK);
+            const compiled = compileSauceRoute(
+              "base",
+              tried(depth, last, handler),
+              { pot: executorPot, engine: sauce.engine },
+              {
+                defines: {
+                  TOKEN: BigInt(token),
+                  RECIPIENT: BigInt(FINAL_RECIPIENT),
+                  FALLBACK: BigInt(FALLBACK),
                 },
-              );
-              // The first hop, opened from the Pot; then each hop's fill opens the next.
-              let logs = (
-                await fulfil([
-                  {
-                    target: token,
-                    data: encodeFunctionData({
-                      abi: erc20Abi,
-                      functionName: "mint",
-                      args: [executorPot, SEEDED],
-                    }),
-                    value: 0n,
-                  },
-                  {
-                    target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
-                    data: compiled.calls[0]!.data,
-                    value: 0n,
-                  },
-                ])
-              ).logs;
-              for (let level = 1; level <= depth; level++) {
-                logs = (await fill(token, logs)).logs;
-              }
-              // As strings: a failed bigint comparison cannot cross jest's worker boundary.
-              expect(String((await balanceOf(token, FINAL_RECIPIENT)) - recipient)).toBe(
-                String(toRecipient),
-              );
-              expect(String((await balanceOf(token, FALLBACK)) - fallback)).toBe(
-                String(toFallback),
-              );
-            },
-            300_000,
-          );
+                intents: {
+                  deadline: 4_000_000_000n,
+                  prover: PROVER,
+                  sourcePortal: portal,
+                  destinationPortal: portal,
+                  pot: executorPot,
+                  engine: sauce.engine,
+                  executionFee: 0n,
+                  salt: `0x${(depth * 16 + (toFallback === 0n ? 1 : toFallback === 2n ? 3 : 2)).toString(16).repeat(32)}` as Hex,
+                },
+              },
+            );
+            // The first hop, opened from the Pot; then each hop's fill opens the next.
+            let logs = (
+              await fulfil([
+                {
+                  target: token,
+                  data: encodeFunctionData({
+                    abi: erc20Abi,
+                    functionName: "mint",
+                    args: [executorPot, SEEDED],
+                  }),
+                  value: 0n,
+                },
+                {
+                  target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+                  data: compiled.calls[0]!.data,
+                  value: 0n,
+                },
+              ])
+            ).logs;
+            if (reads && !READS_CAUGHT_REVERT) {
+              await fill(token, logs, "reverted");
+              return;
+            }
+            for (let level = 1; level <= depth; level++) {
+              logs = (await fill(token, logs)).logs;
+            }
+            // As strings: a failed bigint comparison cannot cross jest's worker boundary.
+            expect(String((await balanceOf(token, FINAL_RECIPIENT)) - recipient)).toBe(
+              String(toRecipient),
+            );
+            expect(String((await balanceOf(token, FALLBACK)) - fallback)).toBe(String(toFallback));
+          }, 300_000);
         }
       }
     });
@@ -1590,8 +1623,13 @@ describeEvm("intent bodies, executed", () => {
         return `function main() {\nconst amount = Token(TOKEN).balanceOf(ctx.self());\n${handled("amount", body, handler)}\n}`;
       };
 
-      /** Fills the one intent `logs` show published, delivering `SEEDED`, and returns the fill. */
-      const fill = async (token: Address, logs: readonly Log[]) => {
+      /** Fills the one intent `logs` show published, delivering `SEEDED`, and returns the fill, which
+       *  must end as `expected`. */
+      const fill = async (
+        token: Address,
+        logs: readonly Log[],
+        expected: "success" | "reverted" = "success",
+      ) => {
         const [published] = publishedIn(logs);
         expect(published).toBeDefined();
         const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.route) as unknown as [
@@ -1611,7 +1649,7 @@ describeEvm("intent bodies, executed", () => {
         });
         await publicClient.waitForTransactionReceipt({ hash: approve });
         const filled = await fulfilRoute(route, rewardOf(published!).rewardHash);
-        expect(filled.status).toBe("success");
+        expect(filled.status).toBe(expected);
 
         return filled;
       };
@@ -1635,69 +1673,67 @@ describeEvm("intent bodies, executed", () => {
             2n,
           ],
         ] as const) {
-          // Pending the engine: a handler that reads `e` runs on v12-evm 2.0.0, the major that
-          // carries `CATCH_READS` (v12 #553). Against an engine built from #553
-          // (SAUCE_V12_RUNTIME_CREATION_HEX), it passes.
-          (handler === FORWARD ? it : it.failing)(
-            `${depth} hops: ${name}`,
-            async () => {
-              const token = await deploy(MOCK_ERC20.creationCode);
-              const recipient = await balanceOf(token, FINAL_RECIPIENT);
-              const fallback = await balanceOf(token, FALLBACK);
-              const compiled = compileSauceRoute(
-                "base",
-                tried(depth, last, handler),
-                { pot: executorPot, engine: sauce.engine },
-                {
-                  defines: {
-                    TOKEN: BigInt(token),
-                    RECIPIENT: BigInt(FINAL_RECIPIENT),
-                    FALLBACK: BigInt(FALLBACK),
-                  },
-                  intents: {
-                    deadline: 4_000_000_000n,
-                    prover: PROVER,
-                    sourcePortal: portal,
-                    destinationPortal: portal,
-                    pot: executorPot,
-                    engine: sauce.engine,
-                    executionFee: 0n,
-                    salt: `0x${(depth * 16 + (toFallback === 0n ? 1 : toFallback === 2n ? 3 : 2)).toString(16).repeat(32)}` as Hex,
-                  },
+          // A handler that reads `e` needs an engine that reads a caught revert (`CATCH_READS`,
+          // v12 #553): on one without it, which refuses the read, the first fill reverts instead.
+          const reads = handler !== FORWARD;
+          it(`${depth} hops: ${name}`, async () => {
+            const token = await deploy(MOCK_ERC20.creationCode);
+            const recipient = await balanceOf(token, FINAL_RECIPIENT);
+            const fallback = await balanceOf(token, FALLBACK);
+            const compiled = compileSauceRoute(
+              "base",
+              tried(depth, last, handler),
+              { pot: executorPot, engine: sauce.engine },
+              {
+                defines: {
+                  TOKEN: BigInt(token),
+                  RECIPIENT: BigInt(FINAL_RECIPIENT),
+                  FALLBACK: BigInt(FALLBACK),
                 },
-              );
-              // The first hop, opened from the Pot; then each hop's fill opens the next.
-              let logs = (
-                await fulfil([
-                  {
-                    target: token,
-                    data: encodeFunctionData({
-                      abi: erc20Abi,
-                      functionName: "mint",
-                      args: [executorPot, SEEDED],
-                    }),
-                    value: 0n,
-                  },
-                  {
-                    target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
-                    data: compiled.calls[0]!.data,
-                    value: 0n,
-                  },
-                ])
-              ).logs;
-              for (let level = 1; level <= depth; level++) {
-                logs = (await fill(token, logs)).logs;
-              }
-              // As strings: a failed bigint comparison cannot cross jest's worker boundary.
-              expect(String((await balanceOf(token, FINAL_RECIPIENT)) - recipient)).toBe(
-                String(toRecipient),
-              );
-              expect(String((await balanceOf(token, FALLBACK)) - fallback)).toBe(
-                String(toFallback),
-              );
-            },
-            300_000,
-          );
+                intents: {
+                  deadline: 4_000_000_000n,
+                  prover: PROVER,
+                  sourcePortal: portal,
+                  destinationPortal: portal,
+                  pot: executorPot,
+                  engine: sauce.engine,
+                  executionFee: 0n,
+                  salt: `0x${(depth * 16 + (toFallback === 0n ? 1 : toFallback === 2n ? 3 : 2)).toString(16).repeat(32)}` as Hex,
+                },
+              },
+            );
+            // The first hop, opened from the Pot; then each hop's fill opens the next.
+            let logs = (
+              await fulfil([
+                {
+                  target: token,
+                  data: encodeFunctionData({
+                    abi: erc20Abi,
+                    functionName: "mint",
+                    args: [executorPot, SEEDED],
+                  }),
+                  value: 0n,
+                },
+                {
+                  target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+                  data: compiled.calls[0]!.data,
+                  value: 0n,
+                },
+              ])
+            ).logs;
+            if (reads && !READS_CAUGHT_REVERT) {
+              await fill(token, logs, "reverted");
+              return;
+            }
+            for (let level = 1; level <= depth; level++) {
+              logs = (await fill(token, logs)).logs;
+            }
+            // As strings: a failed bigint comparison cannot cross jest's worker boundary.
+            expect(String((await balanceOf(token, FINAL_RECIPIENT)) - recipient)).toBe(
+              String(toRecipient),
+            );
+            expect(String((await balanceOf(token, FALLBACK)) - fallback)).toBe(String(toFallback));
+          }, 300_000);
         }
       }
     });
