@@ -43,7 +43,7 @@
 // ABIs: Hyperlane's `dispatch(uint32,bytes32,bytes,bytes)`, LayerZero's
 // `send((uint32,bytes32,bytes,bytes,bool),address)`, the MetalayerRouter's
 // `dispatch(uint32,bytes32,(uint32,address,bytes)[],bytes,uint8,uint256)`, and for Polymer a log.
-import { Request, received, requireCaller, requireSelf, run, settleCarried } from "@sauce/async";
+import { Request, requireCaller, requireSelf, run, settleCarried } from "@sauce/async";
 import Mailbox from "./hyperlane-mailbox.abi.json";
 import Endpoint from "./layerzero-endpoint.abi.json";
 import MetalayerRouter from "./metalayer-router.abi.json";
@@ -293,8 +293,8 @@ export class Remote {
   }
 
   // What runs there on a round trip: the body, then the answer sent back over the same bridge to
-  // settle the promise `key`, with what it was handed (the continuation, unless the table holds the
-  // promise). The flag form: the body runs in a frame of its own, caught at that one call, its
+  // settle the promise `key`, with what it was handed, its parameter `back` (the continuation,
+  // unless the table holds the promise; `run` appends it with its mode). The flag form: the body runs in a frame of its own, caught at that one call, its
   // answer kept in transient storage, and the answer is sent after the call either way — what the
   // body returned, fulfilling the promise, or what it reverted with, rejecting it, everything the
   // body did undone.
@@ -303,8 +303,7 @@ export class Remote {
     const here = this._here;
     const there = this._there;
     const gas = this._replyGas();
-    return () => {
-      const back = received();
+    return (back: bytes, mode: Uint256) => {
       let ok = 1;
       let value = hex``;
       evm
