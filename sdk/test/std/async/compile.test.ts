@@ -150,8 +150,7 @@ function main(value: Uint256, to: Address) {
     expect(program.bodies).toEqual([]);
   });
 
-  // await dropped from the compiler (v12 #554)
-  it.skip("`await` folds onto the same `then`", () => {
+  it.skip("`await` folds onto the same `then` (await dropped from the compiler (v12 #554))", () => {
     const awaited = compile(`${ECHO}
 function main(value: Uint256, to: Address) {
   await Echo.request(value);
