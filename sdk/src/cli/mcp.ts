@@ -9,6 +9,8 @@
  * LOADED HERE ONLY WHEN THIS COMMAND RUNS, by a dynamic import of that build, so no other command
  * pays for the MCP SDK; and it is reached through the interface below, which the workspace's own
  * entry module is checked against when it compiles (`mcp/src/entry.ts`), so neither side can drift.
+ * The MCP SDK and zod are optional dependencies of the package (`optional.ts`): an install that left
+ * them out runs every other command, and this one says how to install them.
  *
  * It reads a chain through a caller's `rpcUrl`, else `--config`'s entry for the chain, else the
  * built-in public endpoints the command hands it. Over stdio, `--wallets [dir]` with a password
@@ -26,6 +28,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import type { CommandOutput } from "./commands.js";
+import { MCP_DEPENDENCIES, missingPackage, optionalMissing } from "./optional.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
@@ -130,6 +133,9 @@ async function loadMcp(): Promise<McpEntry> {
   try {
     module = (await import(entry)) as { mcpEntry?: McpEntry };
   } catch (error) {
+    if (missingPackage(error, MCP_DEPENDENCIES) !== undefined) {
+      throw new CliError(optionalMissing("the MCP server", MCP_DEPENDENCIES));
+    }
     const code = (error as { code?: string }).code;
     if (code === "ERR_MODULE_NOT_FOUND") {
       throw new CliError(

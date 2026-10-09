@@ -329,20 +329,21 @@ export function nodeIo(): CliIo {
 function packageInfo(): {
   name: string;
   version: string;
-  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 } {
   const manifest = new URL("../../../package.json", import.meta.url);
 
   return JSON.parse(readFileSync(manifest, "utf8")) as {
     name: string;
     version: string;
-    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
   };
 }
 
 const skillsSource = (): SkillsSource => {
-  const { name, version, dependencies } = packageInfo();
-  const typescript = dependencies?.typescript;
+  const { name, version, devDependencies } = packageInfo();
+  // The TypeScript the package is built and checked with: it needs none at run time.
+  const typescript = devDependencies?.typescript;
   const viem = installedViem();
 
   return {
