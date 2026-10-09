@@ -5,7 +5,7 @@
 // rejected with a reason, and its `.then` body, compiled while the program compiles, runs when it
 // settles, as the same Pot:
 //
-//   await Random.vrf({ words: 2 }).then((words) => {
+//   Random.vrf({ words: 2 }).then((words) => {
 //     USDC.transfer(players[words[0] % 2], prize);
 //   });
 //
@@ -16,8 +16,8 @@
 // `Random.vrf` is a protocol package's (`@sauce/random`); this package is what every such package
 // is built on, and holds no protocol of its own:
 //
-//   Request             a promise a package's request method returns, which `.then`/`.catch`/
-//                       `await` fold on
+//   Request             a promise a package's request method returns, which `.then` and `.catch`
+//                       fold on
 //   Promise             all, race, any, allSettled, resolve, reject and withResolvers, with
 //                       JavaScript's semantics, folded while the program compiles
 //   Async               resolve/reject a promise by its key in a later transaction, expire one
@@ -540,7 +540,7 @@ class Lists {
 //   deadline  a unix time after which anyone may `expire` the promise, rejecting it with
 //             `Timeout(bytes32)`; or call `.within(seconds)`.
 //
-// and the program gives it the body, `.then((…) => { … })`, or the code after `await`. `.catch(e)`
+// and the program gives it the body, `.then((…) => { … })`. `.catch(e)`
 // handles a rejection: the protocol's `fail`, `reject` or `expire`, and the body's own revert, with
 // everything the body did undone.
 //
@@ -599,7 +599,7 @@ export class Request {
 
   toString() {
     if (this._stage == 1) {
-      return "a request's one step is `.then((result) => { … })`, the body; or `await` it, and the body is what follows";
+      return "a request's one step is `.then((result) => { … })`, the body";
     }
     if (this._stage == 2) {
       return "after `.then(...)` its one step is `.catch(...)`";
@@ -611,7 +611,7 @@ export class Request {
   [Symbol.dispose]() {
     if (this._stage == 1) {
       throw new Error(
-        "a request has no body. Finish it with `.then((result) => { … })`, or `await` it and write the body after it: the code that runs when the callback arrives",
+        "a request has no body. Finish it with `.then((result) => { … })`: the code that runs when the callback arrives",
       );
     }
     const continuation = program(this._continuation(), { continuation: this._chainId() });
@@ -885,9 +885,7 @@ class Join {
   }
   [Symbol.dispose]() {
     if (this._stage == 1) {
-      throw new Error(
-        "a combinator has no body. Finish it with `.then((results) => { … })`, or `await` it",
-      );
+      throw new Error("a combinator has no body. Finish it with `.then((results) => { … })`");
     }
     const joinKey = salt();
     const continuation = program(this._continuation(joinKey), { continuation: chainId });
