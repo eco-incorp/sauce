@@ -26,6 +26,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce init`     | Scaffold a project that uses this package                                         |
 | `sauce skills`   | Install, update or check this package's agent skills in a project                 |
 | `sauce update`   | Update this `sauce` command to the latest release, the way it was installed       |
+| `sauce runtime`  | Install or check the packages `sauce mcp` and Solana rehearsals load              |
 
 Every command takes `--help`. A mistyped invocation exits 2. A program that does not compile, a
 cook that reverts, a rejected settle, an outdated skills install and a transaction on a
@@ -40,10 +41,6 @@ sauce --version
 ```
 
 Node.js 24 or newer. Every command in this guide is written as `sauce …`, the global install.
-
-The MCP SDK and zod (for `sauce mcp`) and LiteSVM (for Solana rehearsals in a local copy) are
-optional dependencies, which npm installs by default. A library-only install with `--omit=optional`
-leaves them out. Those commands then print the `npm i` line that adds what they need.
 
 `sauce update` upgrades it to the latest release (or `--version <version>`), the way it was
 installed: a global install by npm, pnpm, yarn or bun is installed again by that manager, and skills
@@ -79,6 +76,26 @@ resolves only a project's own. It also writes an `AGENTS.md` with the project's 
 local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
 ([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](skills.md)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
+
+### Runtime packages
+
+Two commands load packages that no install of `@eco-incorp/sauce` brings, being its optional peer
+dependencies: `sauce mcp` (the MCP SDK and zod) and a Solana rehearsal in a local copy (LiteSVM).
+Each takes your own copies where they are exactly the versions the package pins. Otherwise its
+first use installs them for itself, once per version, into `~/.sauce/runtime/<version>`: `npm ci`
+on the lockfile the package ships, so every package is the one pinned, checked by its integrity
+hash, and LiteSVM's native binary is your platform's. The command says so on stderr. The folder is
+owner-only and installed whole or not at all. Other versions' folders are removed, except the
+newest older one.
+
+- `sauce runtime` says where each command's packages come from. `sauce runtime install` installs
+  the folder now.
+- `sauce mcp setup` installs it too, so an agent's first start of the server does not wait.
+  `sauce update` has the new version install its own folder where the version it replaces had one.
+- `sauce mcp --offline` installs nothing. Without npm, or without its registry, the command
+  refuses and says why.
+
+npm reaches the registry your npm configuration names, a mirror or a proxy included.
 
 ## Endpoints and signers
 

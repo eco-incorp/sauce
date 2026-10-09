@@ -22,19 +22,45 @@ bundling is the key mental model: code lives in four packages for development, c
 everything from one name.
 
 **What the root manifest depends on is held to what the code imports.** Its `dependencies` are
-exactly what a library import loads. Its `optionalDependencies` are what only one command of the
-`sauce` bin loads, by a dynamic import when that command runs: `@modelcontextprotocol/sdk` and
-`zod` (`sauce mcp`, i.e. `mcp/dist`) and `litesvm` (a Solana rehearsal, `cli/svm-fork.ts`), at the
-pins of the workspace that uses each. npm installs them by default, so `npx -y @eco-incorp/sauce
-mcp` needs nothing else. A library install leaves them out with `--omit=optional`, and the command
-that needs one prints `cli/optional.ts#optionalMissing`'s one line with the `npm i` that adds it.
-TypeScript is a devDependency only: the editor plugin gets the editor's TypeScript, and `sauce
-init` writes our devDependency's range into the new project's devDependencies.
-`sdk/test/optional-dependencies.test.ts` walks every export's module graph to enforce this.
-`check-packed-package.mjs` installs the tarball a second time with `--omit=optional` and runs the
-library, `compile`/`tx`/`globals`, and both refusals there. Never add a runtime dependency that no
-export loads. Give a new CLI-only package to `optionalDependencies` and a lazy import, and register
-it in `optional.ts`.
+exactly what a library import loads. The packages only one command of the `sauce` bin loads are
+OPTIONAL PEER dependencies at exact pins: `@modelcontextprotocol/sdk` and `zod` (`sauce mcp`, i.e.
+`mcp/dist`) and `litesvm` (a Solana rehearsal, `cli/svm-fork.ts`). No install of the package brings
+them, with no flag. The command takes, in this order (`cli/optional.ts#provide`): the user's own
+copies where the package's modules resolve them, when each is exactly the pin; else
+`~/.sauce/runtime/<version>`; else it installs that folder first. The install is `npm ci
+--ignore-scripts` on the lockfile the package ships, `sdk/runtime/package{,-lock}.json`
+(`cli/runtime.ts`), run in a 0700 mkdtemp beside the folder and renamed into place, after which
+other versions' folders are pruned, except the newest older one. The packages then load from the
+folder through a `module.registerHooks` resolve hook, limited to the package's own modules' imports.
+Only `main.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
+test, the skills checker) never runs npm and refuses with `sauce runtime install` instead. In this
+repository the workspaces' own copies are the pins, so nothing installs. `sauce runtime
+[status|install]` reports and installs; `sauce mcp setup` installs up front; and `sauce update` has
+the new binary run `sauce runtime install` where the replaced version had a folder. `sauce mcp
+--offline` installs nothing.
+
+`sdk/scripts/gen-runtime-lock.mjs` (`pnpm --filter './sdk' gen-runtime-lock`, which reaches the
+registry) writes `sdk/runtime/` from the root's peers. `optional-dependencies.test.ts` fails while
+the lock is stale or incomplete, and also walks every export's module graph: every package it loads
+is a dependency, and none reaches the command. Every pin is three places that test holds equal: the
+root's peers, the workspace that imports the package, and `sdk/runtime/`.
+
+TypeScript is a devDependency only: the editor plugin gets the editor's TypeScript, and `sauce init`
+writes our devDependency's range into the new project's devDependencies.
+`check-packed-package.mjs` proves all of this on the tarball, every `sauce` it runs with a
+temporary HOME:
+
+- a plain install is slim, and every export loads;
+- the first `sauce mcp` and the first rehearsal install the folder, including the platform's LiteSVM
+  binary;
+- a second start works with npm off PATH;
+- a mismatched user MCP SDK is passed over;
+- `--offline`, no npm and an unreachable registry each refuse on one line, leaving nothing;
+- `mcp setup` installs the folder.
+
+Never add a runtime dependency that no export loads. A new CLI-only package becomes an optional
+peer, joins an `Extra` in `optional.ts` and goes through `provide`, and `gen-runtime-lock` then
+regenerates `sdk/runtime/`.
 
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -931,7 +957,9 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
 else the built-in public endpoints (none with `--offline`) — and `sauce update`, its one other
 network access, the npm registry, read only when that command runs (no background or automatic
-update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`) — and signs only with
+update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`), and npm itself, with the
+user's npm configuration, where the command runs it (`init --install`, `sauce update`'s package
+managers, and `runtime.ts`'s `npm ci`, the three modules that may spawn) — and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
 from everything it prints. **The public endpoints are the one exception to "the package ships no
 RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
@@ -966,7 +994,7 @@ tool arguments into it.
 of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
 owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
-MCP SDK, an optional dependency, as zod is: an install without them gets `optional.ts`'s message);
+MCP SDK, an optional peer dependency, as zod is: `optional.ts#provide` finds or installs them first);
 `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
 Its tools are the `sauce` command's building half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
 `sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,

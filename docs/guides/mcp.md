@@ -15,12 +15,13 @@ from its MCP configuration, whenever it needs it. Install the command once (Node
 
 ```sh
 npm i -g @eco-incorp/sauce
-sauce --version
+sauce runtime install
 ```
 
-`npm i -g @eco-incorp/sauce@latest` upgrades it. The server's MCP SDK and zod are optional
-dependencies, which npm installs by default. An install with `--omit=optional` leaves them out, and
-`sauce mcp` then prints the `npm i` line that adds them. Then add the server to your agent.
+`npm i -g @eco-incorp/sauce@latest` upgrades it. The server's own packages, the MCP SDK and zod, are
+not part of that install: `sauce runtime install` puts them in `~/.sauce/runtime/` once per version,
+so an agent's first start of the server does not wait for them
+([Runtime packages](cli.md#runtime-packages)). Then add the server to your agent.
 
 ### Claude Code
 
@@ -177,10 +178,11 @@ endpoint in this order:
    { "rpcUrls": { "1": "https://…", "8453": "https://…", "1399811149": "https://…" } }
    ```
 
-3. the built-in public endpoint for the chain;
+3. the built-in public endpoint for the chain, unless the server was started with `--offline`;
 4. if none has one, a plain error naming the chain and saying to pass `rpcUrl`.
 
-The server reads no environment variable.
+The server reads no environment variable. `sauce mcp --offline` reaches no network of its own: no
+public endpoint, and no install of its packages, which must already be in place.
 
 A provider URL usually carries a key, so no URL of yours is ever returned, logged or quoted, from
 the call or from the file. That covers results and errors, including an upstream error that

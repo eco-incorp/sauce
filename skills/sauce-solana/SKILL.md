@@ -291,7 +291,7 @@ Pots and intent steps are built and sent there.
 - **A rehearsal in a local copy.** A cook too large for one transaction, or one given
   `--assume-balance`, `sauce simulate` runs in a local copy of every account the cook names, read
   from the cluster as it is, with the cluster's rent and the released engine and Kitchen (the copy
-  is LiteSVM, an optional dependency the package installs by default): the Pot created where it is
+  is LiteSVM, which the first rehearsal installs for the command): the Pot created where it is
   missing, the owner given the lamports the staging and the fees take (so any address can
   rehearse), the program staged as `sauce run` stages it, then the cook. Nothing is signed or sent. A failure names the account an
   error gives only by its index, and what `main` returned when the program finished first. There
