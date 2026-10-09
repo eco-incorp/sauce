@@ -13,8 +13,7 @@
 // reads or pays out the Pot's whole balance: on an intent's destination the Pot is shared by every
 // intent, so only what the swap itself moved is counted. `minOut`, and eco-swap's `amountIn`, may be
 // values the program computes as it runs.
-import { allowance, approve, balanceOf } from "@sauce/token";
-import { Token as TokenOf } from "@sauce/names";
+import { allowance, approve, balanceOf, TokenOf } from "@sauce/token";
 
 // KyberSwap's aggregator. The route is its router's `swap(...)` calldata, built for this Pot, which
 // pays and receives, cut where its floor (`minReturnAmount`) sits: the program's `minOut` goes
