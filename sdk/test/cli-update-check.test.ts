@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { newer, PACKAGE, readLatest, REGISTRY } from "../src/cli/npm-registry.js";
+import { assertPrivate, runtimeDir, useRuntime } from "../src/cli/optional.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   cacheText,
@@ -306,7 +307,7 @@ describe("the cache file", () => {
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-  it("is written whole, owner-only, in a directory created owner-only", () => {
+  it("is written whole, owner-only, in a ~/.sauce created owner-only", () => {
     const file = join(home, ".sauce", "update-check.json");
     writeCacheFile(file, cache(NOW, "1.2.0"));
     writeCacheFile(file, cache(NOW + 1, "1.3.0"));
@@ -316,6 +317,13 @@ describe("the cache file", () => {
     if (process.platform !== "win32") {
       expect(statSync(join(home, ".sauce")).mode & 0o777).toBe(0o700);
       expect(statSync(file).mode & 0o777).toBe(0o600);
+      // The ~/.sauce it creates is one a runtime folder may be loaded beside.
+      useRuntime({ root: join(home, ".sauce", "runtime") });
+      try {
+        expect(() => assertPrivate(runtimeDir())).not.toThrow();
+      } finally {
+        useRuntime({ root: undefined });
+      }
     }
   });
 });

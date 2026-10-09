@@ -252,14 +252,17 @@ describe("sauce mcp, built, over stdio", () => {
     assert.equal(readFileSync(cache, "utf8"), fresh, "a fresh cache starts no refresh");
   });
 
-  it("notes nothing when its --config file turns the check off", async () => {
+  it("notes nothing with --offline, or when its --config file turns the check off", async () => {
     const config = join(home, "sauce.config.json");
     writeFileSync(config, JSON.stringify({ rpcUrls: {}, updateCheck: false }));
-    const results = await twice("--config", config);
-    assert.deepEqual(
-      results.map((result) => noted(result)),
-      [false, false, false],
-    );
-    assert.equal("latest" in results[2]!.structuredContent!, false);
+    for (const argv of [["--offline"], ["--config", config]]) {
+      const results = await twice(...argv);
+      assert.deepEqual(
+        results.map((result) => noted(result)),
+        [false, false, false],
+        argv.join(" "),
+      );
+      assert.equal("latest" in results[2]!.structuredContent!, false, argv.join(" "));
+    }
   });
 });
