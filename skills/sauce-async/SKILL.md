@@ -95,10 +95,11 @@ A child that settles after its combinator has runs nothing. `Promise.resolve(wor
   handler's cook is paid from the Pot's balance, so one anyone could call for free would drain it.
 - **A timeout**: `Async.timeout(seconds)` is a promise that only times out, for
   `Promise.race([request, Async.timeout(3600)])`.
-- **A deferred**: `Promise.withResolvers()` is a promise the program settles itself, later. Its key
-  is `d.key`, and the Pot logs it, `PromisePending(bytes32 key, uint256 deadline)`, when its body
-  is parked; a later cook of the owner settles it: `Async.resolve(key, value)` or
-  `Async.reject(key, reason)`. Its body is handed the value as bytes.
+- **A deferred**: `Promise.withResolvers()` is a promise the program settles itself, later:
+  `const { promise, key } = Promise.withResolvers()`. The Pot logs its key,
+  `PromisePending(bytes32 key, uint256 deadline)`, when its body is parked; a later cook of the
+  owner settles it: `Async.resolve(key, value)` or `Async.reject(key, reason)`. Its body is handed
+  the value as bytes.
 
 [`examples/approval.sauce.ts`](examples/approval.sauce.ts) pays once the owner approves, within a
 day: a deferred raced against a timeout. [`examples/approve.sauce.ts`](examples/approve.sauce.ts) is
@@ -106,8 +107,10 @@ the owner's later cook that resolves it by its key.
 
 ## Writing a package
 
-A package's request is a method on an object the program reads (the echo protocol's `request`
-above), never a plain function, returning `new Request({ send, deliver, carries, chain, deadline })`:
+A package's request returns `new Request({ send, deliver, carries, chain, deadline })`, from a
+method on an object the program reads (the echo protocol's `request` above) or a plain function; or
+it is a class that extends `Request` and hands `super` the same options. The three compile to the
+same program:
 
 - `send(continuation)` makes the request when the statement ends and answers the promise's key,
   `promiseKey(tag, id)`: the protocol's id under a word naming the protocol.
@@ -117,8 +120,32 @@ above), never a plain function, returning `new Request({ send, deliver, carries,
   proof's extra data): the key is picked first, and `send` is handed `{ key, stored, program }`. A
   plain `.then` stores nothing: the message carries `program`. With a deadline or a combinator,
   `stored` is true and the message carries only `key`.
-- `chain` is the chain id the callback lands on, which the body is compiled for: this chain by
-  default.
+- `chain` is the chain the callback lands on (`Optimism`, or its id), which the body is compiled
+  for: this chain by default.
+
+```sauce chain=base
+import { Request, promiseKey } from "@sauce/async";
+
+class Echo extends Request {
+  constructor(protocol: Address, value: Uint256) {
+    super({
+      send: (continuation) => {
+        const asked = evm.call(protocol, 0, hex`d845a4b3`.concat(abi.encode(value)));
+        return promiseKey(7, abi.decode(asked, ["Uint256"])[0]);
+      },
+      deliver: (input, body, fail) => {
+        body(abi.decode(input, ["Uint256"])[0]);
+      },
+    });
+  }
+}
+
+function main(protocol: Address, value: Uint256, recipient: Address) {
+  new Echo(protocol, value).then((echoed) => {
+    USDC.transfer(recipient, echoed);
+  });
+}
+```
 
 Its handlers are programs `main(caller: Address, value: Uint256, data: bytes)`, listed in its
 `package.json`:
