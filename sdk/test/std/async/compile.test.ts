@@ -150,6 +150,15 @@ function main(value: Uint256, to: Address) {
     expect(program.bodies).toEqual([]);
   });
 
+  it.skip("`await` folds onto the same `then` (await dropped from the compiler (v12 #554))", () => {
+    const awaited = compile(`${ECHO}
+function main(value: Uint256, to: Address) {
+  await Echo.request(value);
+  evm.sstore(1, to);
+}`);
+    expect(awaited.continuations).toHaveLength(1);
+  });
+
   it("`.catch` and a deadline fold onto the same promise", () => {
     const caught = compile(`${ECHO}
 function main(value: Uint256, to: Address) {
