@@ -866,7 +866,7 @@ export const rejections = [
   },
   {
     quotes: [
-      "a .catch() handler compiles to N bytes, over the 254-byte limit — shorten the handler",
+      "a .catch() handler compiles to N bytes, over the 255-byte limit — shorten the handler",
     ],
     targets: ["evm"],
     contracts,
