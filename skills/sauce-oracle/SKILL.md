@@ -9,7 +9,7 @@ A program asks a Chainlink CRE workflow for an answer and continues when the ans
 workflow is code its owner deployed to Chainlink's network: it can fetch an API, read chains and
 compute, and the nodes of its DON agree on the result before it is written on chain. The request is
 made now; the workflow answers in a transaction of its own, and the request's `.then` body runs
-then, on the same Pot. Promises themselves (`.then`, `.catch`, `await`, deadlines, combinators) and
+then, on the same Pot. Promises themselves (`.then`, `.catch`, deadlines, combinators) and
 installing a package's handlers on a Pot are `sauce-async`'s; this skill is what the oracle adds.
 
 ```sauce chain=ethereum,base

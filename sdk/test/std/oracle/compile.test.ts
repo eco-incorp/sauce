@@ -91,12 +91,13 @@ describe("what compiles", () => {
     expect(program.continuations[0]!.captures[0]).toMatch(/\blimit$/);
   });
 
-  it("`await` folds onto the same `then`, and `args` may be left out", () => {
+  it("a body that takes nothing, and `args` left out", () => {
     const program = compile(`import { Oracle } from "@sauce/oracle";
 
 function main(owner: Address): void {
-  await Oracle.cre({ owner });
-  evm.sstore(1, 1);
+  Oracle.cre({ owner }).then(() => {
+    evm.sstore(1, 1);
+  });
 }`);
     expect(program.continuations).toHaveLength(1);
   });
