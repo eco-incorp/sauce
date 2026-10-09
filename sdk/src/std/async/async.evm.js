@@ -887,7 +887,7 @@ class Join {
     const settledBody =
       kind == SAUCE_ASYNC_ALL
         ? () => {
-            Fold.all(children, 0, Lists.empty(), joinKey, body, fail);
+            Fold.all(children, 0, undefined, joinKey, body, fail);
           }
         : kind == SAUCE_ASYNC_ALL_SETTLED
           ? () => {
@@ -921,8 +921,12 @@ class Fold {
   }
 
   // Every child's value, decoded by its own decoder, in order: what `Promise.all` hands its body.
-  static all(children, index, values, joinKey, body, fail) {
+  // A decoder may hand on its value inside an `if`, where a list made outside cannot grow, so the
+  // values travel as a chain of new objects, and the list is made where the last one arrives.
+  static all(children, index, chain, joinKey, body, fail) {
     if (index == children.length) {
+      const values = Lists.empty();
+      Fold.fill(values, chain);
       body(values);
       return;
     }
@@ -930,11 +934,19 @@ class Fold {
     decode(
       result(joinKey, index),
       (value) => {
-        values.push(value);
-        Fold.all(children, index + 1, values, joinKey, body, fail);
+        Fold.all(children, index + 1, { value, rest: chain }, joinKey, body, fail);
       },
       fail,
     );
+  }
+
+  // `chain`'s values into `values`, first first.
+  static fill(values, chain) {
+    if (chain === undefined) {
+      return;
+    }
+    Fold.fill(values, chain.rest);
+    values.push(chain.value);
   }
 
   // Each child's `{ status, value }`, as it arrived: what `Promise.allSettled` hands its body.
