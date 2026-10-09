@@ -2,7 +2,7 @@
   "name": "@sauce/zk",
   "version": "0.0.0",
   "private": true,
-  "description": "SauceScript's ZK-coprocessor requests: a question now, and the `.then` body run on the same Private Pot when the proven answer is called back, as a promise of @sauce/async's. `Zk.sql(query)` asks Space and Time a SQL query, proven with Proof of SQL, paying in SXT; its promise is parked under the query's id and expires at the query's timeout, when `Zk.cancel(e)` in its `.catch` takes the payment back; `Zk.cell`/`Zk.rows` read the result's table. `queryCallback` is the body of the handler the Pot answers Space and Time's callback with. `main` names the NEUTRAL BASE the compiler suffixes per target (zk.evm.js); there is no SVM arm, because the coprocessors' contracts are EVM contracts.",
+  "description": "SauceScript's ZK-coprocessor requests: a question now, and the `.then` body run on the same Private Pot when the proven answer is called back, as a promise of @sauce/async's. `Zk.sql(query)` asks Space and Time a SQL query, proven with Proof of SQL, paying in SXT; its promise is parked under the query's id and expires at the query's timeout, when `Zk.cancel(e)` in its `.catch` takes the payment back; `Zk.cell`/`Zk.rows` read the result's table. `Zk.risc0(request)` asks Boundless's market (Base) to prove a RISC Zero guest ran on an input, the Pot the request's client: its promise is keyed by the guest's image and the sha256 of its stdin, which the journal commits first. `queryCallback`, `handleProof` and `isValidSignature` are the bodies of the handlers the Pot answers Space and Time's callback, Boundless's callback and Boundless's ERC-1271 check with. `main` names the NEUTRAL BASE the compiler suffixes per target (zk.evm.js); there is no SVM arm, because the coprocessors' contracts are EVM contracts.",
   "main": "zk.js",
   "handlers": [
     {
@@ -11,6 +11,22 @@
       "readOnly": false,
       "requires": [
         "SpaceAndTime.CallbackExecutor"
+      ]
+    },
+    {
+      "selector": "handleProof(bytes32,bytes,bytes)",
+      "program": "risc0.handler.js",
+      "readOnly": false,
+      "requires": [
+        "Boundless.Market"
+      ]
+    },
+    {
+      "selector": "isValidSignature(bytes32,bytes)",
+      "program": "signature.handler.js",
+      "readOnly": true,
+      "requires": [
+        "Boundless.Market"
       ]
     }
   ]

@@ -1,8 +1,9 @@
 // @sauce/zk — EVM arm.
 //
 // A proven answer, delivered to a `.then`. A program asks a ZK coprocessor a question now — a SQL
-// query over indexed chain data, proven with Proof of SQL — and the body runs on the same Private
-// Pot when the coprocessor calls back with the result, as a promise of `@sauce/async`'s:
+// query over indexed chain data, proven with Proof of SQL, or a RISC Zero guest program, proven run
+// on an input — and the body runs on the same Private Pot when the coprocessor calls back with the
+// result, as a promise of `@sauce/async`'s:
 //
 //   import { Zk } from "@sauce/zk";
 //
@@ -16,6 +17,8 @@
 //         Zk.cancel(e);
 //       });
 //   }
+//
+// SPACE AND TIME (`Zk.sql`, Ethereum and Base).
 //
 // THE QUERY. Space and Time's: the SQL is turned into a proof plan off chain (Space and Time's RPC
 // answers `commitments_v1_evmProofPlan` with it), and `Zk.sql` asks the chain's QueryRouter for it
@@ -42,11 +45,41 @@
 // THE RESULT is Proof of SQL's table, serialized: `Zk.cell(result, column, row)` reads one value of
 // a fixed-width column, and `Zk.rows(result)` how many rows it has.
 //
-// The calls are written out, selector and arguments, as the QueryRouter declares them:
+// BOUNDLESS (`Zk.risc0`, Base), RISC Zero's proof market.
+//
+// THE REQUEST. A guest program, named by its image id and published at its image URL, run on an
+// input: `Zk.risc0({ imageId, imageUrl, input, offer })` builds the market's `ProofRequest` with the
+// Pot as its client and its callback, deposits the offer's most as its price, and submits it. The
+// guest's stdin is the request's id (32 bytes) followed by `input`, so no two requests share one,
+// and the guest must commit the sha256 of its whole stdin as the first 32 bytes of its journal: the
+// request's predicate requires it (a `PrefixMatch` on that digest).
+//
+// THE POT SIGNS ITS OWN REQUESTS. A prover locks a request by asking its client
+// `isValidSignature(requestHash, signature)` (ERC-1271), static, with 100,000 gas, and the lock spends
+// the client's balance at the market. The Pot answers with the read-only handler whose body is
+// `isValidSignature` below: yes only for a request hash it stored when it submitted the request,
+// which it hashes as the market does (EIP-712, under the market's own domain). It takes about 40,000
+// of the 100,000.
+//
+// THE CALLBACK carries no request id: the market calls `handleProof(bytes32 imageId, bytes journal,
+// bytes seal)`. The promise's key is the image id with the journal's first word, the sha256 of the
+// guest's stdin (`promiseKey(RISC0, keccak256(abi.encode(imageId, digest)))`), so the handler finds
+// the promise from the callback alone, and a proof of the same guest over another input finds
+// nothing. The body is handed the rest of the journal. A proof delivered again finds the promise
+// settled.
+//
+// The request expires at its deadline (`rampUpStart + timeout`), and so does its promise; there
+// `Zk.reclaim(e)` slashes the request if a prover locked it and failed, and withdraws its price.
+//
+// The calls are written out, selector and arguments, as the contracts declare them. The QueryRouter's:
 // `requestQuery((bytes32,bytes,bytes,bytes),(uint256,uint64,address,bytes4,bytes),
 // (uint256,address,uint64))` (0x9165fb7f), `PAYMENT_TOKEN()` (0x877c86fb) and
-// `cancelQuery(bytes32,(uint256,address,uint64))` (0x4e8d0f8d). The SDK's tests derive each from its
-// signature and run them against the QueryRouter and CallbackExecutor as deployed.
+// `cancelQuery(bytes32,(uint256,address,uint64))` (0x4e8d0f8d). BoundlessMarket's:
+// `submitRequest((uint256,((address,uint96),(uint8,bytes),bytes4),string,(uint8,bytes),(uint256,
+// uint256,uint64,uint32,uint32,uint32,uint256)),bytes)` (0xdf2e6706), `eip712DomainSeparator()`
+// (0x5b07fdd8), `requestIsLocked(uint256)` (0xcb74db11), `requestIsFulfilled(uint256)` (0x81bf6c24),
+// `slash(uint256)` (0x45bc4d10) and `withdraw(uint256)` (0x2e1a7d4d). The SDK's tests derive each
+// from its signature and run them against the contracts as deployed.
 import { Request, fulfil, promiseKey, requireCaller } from "@sauce/async";
 import { approve } from "@sauce/token";
 
@@ -70,13 +103,42 @@ const SAUCE_ZK_QUERY_CALLBACK = 0xd1eefc40;
 // `Timeout(bytes32)`, what `expire` rejects a promise with.
 const SAUCE_ZK_TIMEOUT = 0xe6cc9dd0;
 
+// The tag a Boundless request's promise key is made under: keccak256("sauce.zk.risc0").
+const SAUCE_ZK_RISC0 = 0xb99128647b7cf726b7c5d344394fa65fa7c24e2e70f54d99faf3927ff32222c4;
+
+// The ERC-7201 namespace of the Boundless requests, in the Pot's storage:
+// keccak256(abi.encode(uint256(keccak256("sauce.storage.ZkRisc0")) - 1)) & ~bytes32(uint256(0xff)).
+// Its first word counts the requests the Pot has made, each request's index. At
+// `keccak256(abi.encode(x, namespace))`: under a request hash, 1 while the Pot approves it; under a
+// promise's key, the request's index and its price above it, until the promise settles.
+const SAUCE_ZK_RISC0_NAMESPACE = 0x569afbd4b1cedd4b9d4b5b614f8f04991e23581bad9d682bc2052921d7763600;
+
+// The EIP-712 type hashes of the market's `ProofRequest` and the structs in it, each the keccak256 of
+// its type string followed by those of the types it references, in order:
+// `Callback(address addr,uint96 gasLimit)`,
+const SAUCE_ZK_CALLBACK_TYPEHASH = 0xc0d011520a6b2314053ae9acff853f2e68d4acc34231ca7a0f721507ec141590;
+// `Predicate(uint8 predicateType,bytes data)`,
+const SAUCE_ZK_PREDICATE_TYPEHASH = 0x0294f25a16f4c103f0fdbc81eeda91cda27d840512cff113bd72c4939b8fe685;
+// `Requirements(Callback callback,Predicate predicate,bytes4 selector)` with Callback and Predicate,
+const SAUCE_ZK_REQUIREMENTS_TYPEHASH = 0xa4be3f5638620534f7fc09e92fb30a7009441f99acfdf16a3f069fb49d206a7a;
+// `Input(uint8 inputType,bytes data)`,
+const SAUCE_ZK_INPUT_TYPEHASH = 0x073039c66bce7413182ec91963b518ef97a9eadb8216b337c8ea3be14ac2ac10;
+// `Offer(uint256 minPrice,uint256 maxPrice,uint64 rampUpStart,uint32 rampUpPeriod,uint32
+// lockTimeout,uint32 timeout,uint256 lockCollateral)`,
+const SAUCE_ZK_OFFER_TYPEHASH = 0xa563ca6047b9178e0a2d4ee0299d3e9edb98870eed639d251ef21ea51d6d1794;
+// and `ProofRequest(uint256 id,Requirements requirements,string imageUrl,Input input,Offer offer)`
+// with Callback, Input, Offer, Predicate and Requirements.
+const SAUCE_ZK_PROOF_REQUEST_TYPEHASH = 0x9fcf2e0179af2440b5f4e7adff50bb887832a78929465dcca0d29c2a83b93054;
+
 // What a query leaves out: no parameters (a serialized empty list, its count as eight bytes), the
 // callback's gas, and how long the query may wait before it may be cancelled.
 const SAUCE_ZK_NO_PARAMETERS = hex`0000000000000000`;
 const SAUCE_ZK_GAS_LIMIT = 1000000;
 const SAUCE_ZK_TIMEOUT_SECONDS = 3600;
 
-// The requests a program makes: `Zk.sql(query)`, and what its `.catch` and `.then` call.
+// The requests a program makes: `Zk.sql(query)`, `Zk.risc0(request)`, and what their `.catch` and
+// `.then` call. Each coprocessor's takes its own calls, so a program names only the contracts of the
+// coprocessors it asks: one for Ethereum, which has no Boundless market, names none of its.
 class Requests {
   // A SQL query to Space and Time:
   //
@@ -163,11 +225,88 @@ class Requests {
     });
   }
 
-  // In a query's `.catch`: when it was rejected for its timeout, cancel the query and take its
-  // payment back. Anything else — the body's own revert — is left alone. Answers whether it
-  // cancelled.
+  // A RISC Zero guest program run on an input, proven by Boundless's market:
+  //
+  //   imageId   the guest's image id; required
+  //   imageUrl  where provers download the guest, its UTF-8 bytes; required
+  //   input     what the guest reads from stdin after the request's id: none when left out
+  //   offer     the price and its timing, as the market's Offer: `maxPrice` (wei, deposited),
+  //             `rampUpPeriod`, `lockTimeout`, `timeout` (seconds from now) and `lockCollateral`
+  //             (ZKC's base units) required, `minPrice` 0 when left out
+  //   gasLimit  the callback's gas: 1,000,000
+  risc0(config) {
+    if (config === undefined || config.length !== undefined) {
+      throw new Error(
+        "`Zk.risc0(...)` takes one object: `Zk.risc0({ imageId, imageUrl, input, offer })`",
+      );
+    }
+    const fields = { imageId: true, imageUrl: true, input: true, offer: true, gasLimit: true };
+    for (const key of Object.keys(config)) {
+      if (fields[key] === undefined) {
+        throw new Error(
+          "`Zk.risc0` takes no `" +
+            key +
+            "`: its fields are imageId, imageUrl, input, offer and gasLimit",
+        );
+      }
+    }
+    if (
+      config.imageId === undefined ||
+      config.imageUrl === undefined ||
+      config.offer === undefined
+    ) {
+      throw new Error(
+        "`Zk.risc0` needs `imageId` and `imageUrl`, the guest and where provers find it, and `offer`, its price",
+      );
+    }
+    const offer = config.offer;
+    if (
+      offer.maxPrice === undefined ||
+      offer.rampUpPeriod === undefined ||
+      offer.lockTimeout === undefined ||
+      offer.timeout === undefined ||
+      offer.lockCollateral === undefined
+    ) {
+      throw new Error(
+        "`offer` is `{ maxPrice, rampUpPeriod, lockTimeout, timeout, lockCollateral }`, and `minPrice` when it is not 0",
+      );
+    }
+    const deadline = ctx.timestamp() + offer.timeout;
+    return new Request({
+      deadline,
+      send: (continuation) => {
+        return requestProof(
+          Boundless.Market,
+          config.imageId,
+          config.imageUrl,
+          config.input === undefined ? hex`` : config.input,
+          offer.minPrice === undefined ? 0 : offer.minPrice,
+          offer.maxPrice,
+          offer.rampUpPeriod,
+          offer.lockTimeout,
+          offer.timeout,
+          offer.lockCollateral,
+          config.gasLimit === undefined ? SAUCE_ZK_GAS_LIMIT : config.gasLimit,
+        );
+      },
+      deliver: (input, body, fail) => {
+        body(input);
+      },
+    });
+  }
+
+  // In a query's `.catch`: when it was rejected for its timeout, cancel the Space and Time query and
+  // take its payment back. Anything else — the body's own revert — is left alone. Answers whether it
+  // took the payment back.
   cancel(reason) {
-    return cancelQuery(reason);
+    return cancelQuery(timedOut(reason), SpaceAndTime.QueryRouter);
+  }
+
+  // In a proof request's `.catch`: when it was rejected for its deadline, slash the Boundless request
+  // if a prover locked it and failed, and withdraw its price. Anything else is left alone. Answers
+  // whether it took the price back.
+  reclaim(reason) {
+    return reclaimProof(timedOut(reason), Boundless.Market);
   }
 
   // One value of a result: column `column`'s `row`th, of a fixed-width type (BOOLEAN, TINYINT,
@@ -195,15 +334,23 @@ function forget(key: Uint256): void {
   evm.sstore(slot + 1, 0);
 }
 
-// The body of `Zk.cancel`.
-export function cancelQuery(reason: bytes): bool {
+// The promise a `.catch` was handed `Timeout(bytes32 key)` for, or zero for any other reason.
+function timedOut(reason: bytes): Uint256 {
   if (reason.length != 36) {
-    return false;
+    return 0;
   }
   if (reason.slice(0, 4).toBe() != SAUCE_ZK_TIMEOUT) {
+    return 0;
+  }
+  return reason.slice(4, 36).toBe();
+}
+
+// `Zk.cancel` for a Space and Time query: cancel it at `router`, its payment back to the Pot. False
+// when the promise has no query.
+export function cancelQuery(key: Uint256, router: Address): bool {
+  if (key == 0) {
     return false;
   }
-  const key = reason.slice(4, 36).toBe();
   const slot = recordOf(key);
   const queryId = evm.sload(slot);
   if (queryId == 0) {
@@ -214,7 +361,7 @@ export function cancelQuery(reason: bytes): bool {
   let cancelled = true;
   evm
     .call(
-      SpaceAndTime.QueryRouter,
+      router,
       0,
       hex`4e8d0f8d`.concat(
         abi.encode(queryId, {
@@ -244,6 +391,172 @@ export function queryCallback(executor: Address, caller: Address, data: bytes): 
   const key = promiseKey(SAUCE_ZK_SQL, queryId);
   forget(key);
   fulfil(key, result);
+}
+
+// ---- a Boundless request -----------------------------------------------------------------------
+
+function risc0SlotOf(x: Uint256): Uint256 {
+  return crypto.keccak256(abi.encode(x, SAUCE_ZK_RISC0_NAMESPACE));
+}
+
+// The request's id: the Pot as its client, which signs with ERC-1271 (bit 192), and its index.
+function requestIdOf(index: Uint256): Uint256 {
+  return (1 << 192) | (ctx.self() << 32) | index;
+}
+
+// Submit the request `Zk.risc0` describes, its price deposited, its hash approved as the Pot's, and
+// answer its promise's key.
+export function requestProof(
+  market: Address,
+  imageId: Uint256,
+  imageUrl: bytes,
+  input: bytes,
+  minPrice: Uint256,
+  maxPrice: Uint256,
+  rampUpPeriod: Uint256,
+  lockTimeout: Uint256,
+  timeout: Uint256,
+  lockCollateral: Uint256,
+  gasLimit: Uint256,
+): Uint256 {
+  const index = evm.sload(SAUCE_ZK_RISC0_NAMESPACE) + 1;
+  require(index < 1 << 32, "zk: the Pot has made every request it can");
+  evm.sstore(SAUCE_ZK_RISC0_NAMESPACE, index);
+  const id = requestIdOf(index);
+  // The guest's stdin, its id first; the input as the market carries it, a version byte (0, raw)
+  // first; and the predicate, the guest's image and the sha256 of its stdin, which its journal must
+  // begin with.
+  const stdin = abi.encode(id).concat(input);
+  const data = hex`00`.concat(stdin);
+  const [digest] = abi.decode(evm.static(2, stdin), ["Uint256"]);
+  const predicate = abi.encode(imageId, digest);
+  const rampUpStart = ctx.timestamp();
+  // The request's EIP-712 hash, as the market's `_hashTypedDataV4(request.eip712Digest())`.
+  const requirements = crypto.keccak256(
+    abi.encode(
+      SAUCE_ZK_REQUIREMENTS_TYPEHASH,
+      crypto.keccak256(abi.encode(SAUCE_ZK_CALLBACK_TYPEHASH, ctx.self(), gasLimit)),
+      crypto.keccak256(abi.encode(SAUCE_ZK_PREDICATE_TYPEHASH, 1, crypto.keccak256(predicate))),
+      0,
+    ),
+  );
+  const structHash = crypto.keccak256(
+    abi.encode(
+      SAUCE_ZK_PROOF_REQUEST_TYPEHASH,
+      id,
+      requirements,
+      crypto.keccak256(imageUrl),
+      crypto.keccak256(abi.encode(SAUCE_ZK_INPUT_TYPEHASH, 0, crypto.keccak256(data))),
+      crypto.keccak256(
+        abi.encode(
+          SAUCE_ZK_OFFER_TYPEHASH,
+          minPrice,
+          maxPrice,
+          rampUpStart,
+          rampUpPeriod,
+          lockTimeout,
+          timeout,
+          lockCollateral,
+        ),
+      ),
+    ),
+  );
+  const [domain] = abi.decode(evm.static(market, hex`5b07fdd8`), ["Uint256"]);
+  evm.sstore(risc0SlotOf(crypto.keccak256(hex`1901`.concat(abi.encode(domain, structHash)))), 1);
+  evm.call(
+    market,
+    maxPrice,
+    hex`df2e6706`.concat(
+      abi.encode(
+        {
+          id,
+          requirements: {
+            callback: { addr: ctx.self(), gasLimit },
+            predicate: { predicateType: 1, data: predicate },
+            selector: 0,
+          },
+          imageUrl,
+          input: { inputType: 0, data },
+          offer: {
+            minPrice,
+            maxPrice,
+            rampUpStart,
+            rampUpPeriod,
+            lockTimeout,
+            timeout,
+            lockCollateral,
+          },
+        },
+        hex``,
+      ),
+    ),
+  );
+  const key = promiseKey(SAUCE_ZK_RISC0, crypto.keccak256(abi.encode(imageId, digest)));
+  evm.sstore(risc0SlotOf(key), index | (maxPrice << 32));
+  return key;
+}
+
+// The body of the read-only handler for `isValidSignature(bytes32,bytes)` (ERC-1271): the magic
+// value `0x1626ba7e` for a request hash the Pot approved when it submitted the request, and
+// `0xffffffff` for any other. The signature is not read: the Pot's own record is the approval.
+export function isValidSignature(data: bytes): bytes {
+  const hash = data.slice(4, 36).toBe();
+  if (evm.sload(risc0SlotOf(hash)) == 1) {
+    return hex`1626ba7e00000000000000000000000000000000000000000000000000000000`;
+  }
+  return hex`ffffffff00000000000000000000000000000000000000000000000000000000`;
+}
+
+// The body of the handler for `handleProof(bytes32,bytes,bytes)`, the call a fulfilled request lands
+// on: from `market` (the chain's BoundlessMarket) alone, it fulfils the promise the image id and the
+// journal's first word name with the rest of the journal. A proof of another request finds nothing
+// pending, and the call returns.
+export function handleProof(market: Address, caller: Address, data: bytes): void {
+  requireCaller(market, caller);
+  const [imageId, journal, seal] = abi.decode(data.slice(4, data.length), [
+    "Uint256",
+    "bytes",
+    "bytes",
+  ]);
+  if (journal.length < 32) {
+    return;
+  }
+  const key = promiseKey(
+    SAUCE_ZK_RISC0,
+    crypto.keccak256(abi.encode(imageId, journal.slice(0, 32).toBe())),
+  );
+  evm.sstore(risc0SlotOf(key), 0);
+  fulfil(key, journal.slice(32, journal.length));
+}
+
+// `Zk.reclaim` for a Boundless request: slash it at `market` if a prover locked it and did not fulfil
+// it, then withdraw its price from the Pot's balance there. False when the promise has no request.
+export function reclaimProof(key: Uint256, market: Address): bool {
+  if (key == 0) {
+    return false;
+  }
+  const slot = risc0SlotOf(key);
+  const record = evm.sload(slot);
+  if (record == 0) {
+    return false;
+  }
+  evm.sstore(slot, 0);
+  const id = requestIdOf(record & 0xffffffff);
+  const [fulfilled] = abi.decode(evm.static(market, hex`81bf6c24`.concat(abi.encode(id))), [
+    "bool",
+  ]);
+  if (fulfilled) {
+    return false;
+  }
+  const [locked] = abi.decode(evm.static(market, hex`cb74db11`.concat(abi.encode(id))), ["bool"]);
+  if (locked) {
+    evm.call(market, 0, hex`45bc4d10`.concat(abi.encode(id))).catch((e) => {});
+  }
+  let withdrawn = true;
+  evm.call(market, 0, hex`2e1a7d4d`.concat(abi.encode(record >> 32))).catch((e) => {
+    withdrawn = false;
+  });
+  return withdrawn;
 }
 
 // ---- reading a result ---------------------------------------------------------------------------
