@@ -18,7 +18,9 @@
  * `selector` is the function's signature (or its four bytes, `0x1fe543e3`); `program` is a file of
  * the package, compiled for the chain the Pot is on with that chain's names, so a handler names the
  * protocol's contract as the program's registry does; `readOnly` runs it under a static call with
- * no fee, for a view the protocol asks the Pot.
+ * no fee, for a view the protocol asks the Pot; `requires` lists the contracts the handler names
+ * (`"PythEntropy.Entropy"`), and a chain whose registry lacks one installs the package's other
+ * handlers without it: a package may speak protocols deployed on different chains.
  *
  * Installing them is one cook of the Pot: a program calling `@sauce/async`'s `install` once per
  * selector, with each handler's bytecode written into it, which {@link handlersInstallSource}
@@ -28,8 +30,9 @@
  */
 import { bytesToHex, isHex, toFunctionSelector, type Hex } from "viem";
 
-import { requireChain, type ChainRef } from "../chains/canonical.js";
+import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
 import { resolveSdkPackage, sdkPackageFile } from "../embedded/resolve.js";
+import { contractAddressOn } from "./chain-module.js";
 import { compileSauceProgram, type SauceCompileOptions } from "./sauce-route.js";
 
 /** One selector a package answers on a Pot, as its `package.json` declares it. */
@@ -40,6 +43,9 @@ export interface HandlerDeclaration {
   readonly program: string;
   /** Run under a static call, with no fee, rather than as a cook. */
   readonly readOnly?: boolean;
+  /** The contracts the handler names, `Namespace.Contract`: on a chain whose registry lacks one,
+   *  the handler is not installed. */
+  readonly requires?: readonly string[];
 }
 
 /** A handler compiled for one chain: what `install` registers for its selector. */
@@ -85,18 +91,36 @@ export function packageHandlerDeclarations(specifier: string): readonly HandlerD
   }
 
   return manifest.handlers.map((entry: unknown, index) => {
-    const { selector, program, readOnly } = (entry ?? {}) as Record<string, unknown>;
+    const { selector, program, readOnly, requires } = (entry ?? {}) as Record<string, unknown>;
     if (
       typeof selector !== "string" ||
       typeof program !== "string" ||
-      (readOnly !== undefined && typeof readOnly !== "boolean")
+      (readOnly !== undefined && typeof readOnly !== "boolean") ||
+      (requires !== undefined &&
+        (!Array.isArray(requires) ||
+          !requires.every((name) => typeof name === "string" && CONTRACT_NAME.test(name))))
     ) {
       throw new Error(
-        `${specifier}'s handler ${index} is not { selector: string, program: string, readOnly?: boolean }`,
+        `${specifier}'s handler ${index} is not { selector: string, program: string, readOnly?: boolean, requires?: "Namespace.Contract"[] }`,
       );
     }
 
-    return { selector, program, ...(readOnly === undefined ? {} : { readOnly }) };
+    return {
+      selector,
+      program,
+      ...(readOnly === undefined ? {} : { readOnly }),
+      ...(requires === undefined ? {} : { requires: requires as string[] }),
+    };
+  });
+}
+
+const CONTRACT_NAME = /^[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*$/;
+
+/** The contracts `declaration` requires that `chain`'s registry does not give an address. */
+function missingOn(chain: CanonicalChain, declaration: HandlerDeclaration): string[] {
+  return (declaration.requires ?? []).filter((name) => {
+    const [namespace, contract] = name.split(".") as [string, string];
+    return contractAddressOn(chain, namespace, contract) === undefined;
   });
 }
 
@@ -144,18 +168,26 @@ export function compileHandlers(
   });
 }
 
-/** Every handler `specifier` declares, compiled for `chain`. */
+/**
+ * Every handler `specifier` declares that `chain` has the contracts for, compiled for `chain`.
+ * Throws when it declares some and the chain has the contracts for none of them.
+ */
 export function packageHandlers(
   chain: ChainRef,
   specifier: string,
   options: SauceCompileOptions = {},
 ): CompiledHandler[] {
-  return compileHandlers(
-    requireChain(chain),
-    packageHandlerDeclarations(specifier),
-    (path) => sdkPackageFile(specifier, path),
-    options,
-  );
+  const resolved = requireChain(chain);
+  const declarations = packageHandlerDeclarations(specifier);
+  const available = declarations.filter((d) => missingOn(resolved, d).length === 0);
+  if (declarations.length > 0 && available.length === 0) {
+    const missing = [...new Set(declarations.flatMap((d) => missingOn(resolved, d)))];
+    throw new Error(
+      `${specifier} answers no callback on ${resolved.slug}: its handlers name ${missing.join(", ")}, which ${resolved.slug}'s registry does not have`,
+    );
+  }
+
+  return compileHandlers(resolved, available, (path) => sdkPackageFile(specifier, path), options);
 }
 
 /**
