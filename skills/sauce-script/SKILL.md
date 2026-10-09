@@ -308,8 +308,7 @@ The full list, with what each rejection says, is section 14 of
 
 | Rejected                                                             | Write instead                                                               |
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `switch`, `for...in`, `enum`, `type` aliases                         | `if` chains, arrays, inline object types, plain functions                   |
-| `await` used as a value, or of a value with no `then`                | `await x;` alone, which is `x.then(() => { … })`                            |
+| `switch`, `for...in`, `enum`, `type` aliases, `await`                | `if` chains, arrays, inline object types, plain functions                   |
 | `finally`                                                            | code after the `try`; to survive a failure on EVM, `try`/`catch` (below)    |
 | arrow functions and nested functions, except `.catch(() => { ... })` | top-level function declarations                                             |
 | template literals, comparing bytes with `==`                         | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each |

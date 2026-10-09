@@ -37,7 +37,6 @@ const plugin = createRequire(import.meta.url)("../sauce-script/ts-plugin.cjs") a
   isFalsePositive(
     diagnostic: ts.Diagnostic,
     flatten: typeof ts.flattenDiagnosticMessageText,
-    typescript?: typeof ts,
   ): boolean;
 };
 
@@ -154,49 +153,22 @@ describe("SauceScript in an editor", () => {
     const bare = service(textOf(CORPUS), false);
     const left = CORPUS.flatMap((file) => bare.getSemanticDiagnostics(file));
     expect(left.length).toBeGreaterThan(0);
-    // Each is a bigint index, a number beside a bigint or an `await` with no `async` — and the
-    // plugin says so of every one.
+    // Each is a bigint index or a number beside a bigint — and the plugin says so of every one.
     for (const diagnostic of left) {
-      expect([2538, 2365, 2367, 2322, 2345, 1308]).toContain(diagnostic.code);
-      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText, ts)).toBe(true);
+      expect([2538, 2365, 2367, 2322, 2345]).toContain(diagnostic.code);
+      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText)).toBe(true);
     }
   });
 
-  it("takes an `await` in main's body, a body a call takes, a `try` or an `if` there, and nowhere else", () => {
+  it("leaves TypeScript's error on an `await`: SauceScript has none", () => {
     const file = join(work, "awaited.sauce.ts");
     const opened =
       "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x44 })";
-    const codes = (body: string, withPlugin = true) =>
-      service({ [file]: body }, withPlugin)
-        .getSemanticDiagnostics(file)
-        .map((diagnostic) => diagnostic.code);
-    for (const body of [
-      `function main() {\n  await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`,
-      `function main() {\n  ${opened}.then(() => {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  });\n}\n`,
-      `function main() {\n  try {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  } catch (e) {\n    USDC.transfer(0x44, 1);\n  }\n}\n`,
-      `function main() {\n  if (USDC != 0) {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  }\n}\n`,
-      `function main() {\n  if (chainId == Ethereum) await ${opened};\n  else if (chainId == Base) {\n    await ${opened};\n  } else {\n    USDC.transfer(0x66, 1);\n  }\n}\n`,
-      `function main() {\n  try {\n    if (USDC != 0) {\n      await ${opened};\n    }\n  } catch (e) {}\n}\n`,
-      `function main() {\n  if (USDC != 0) {\n    try {\n      await ${opened};\n    } catch (e) {}\n  }\n}\n`,
-    ]) {
-      // TypeScript wants an `async` function around it; SauceScript has none.
-      expect(codes(body, false)).toContain(1308);
-      expect(codes(body)).toEqual([]);
-    }
-    // At a script's top level TypeScript takes it as it is.
-    expect(codes(`await ${opened};\nUSDC.transfer(0x66, 1);\n`, false)).not.toContain(1308);
-    // In another function, in an `if` or a `try` with a statement after it, in a handler or in a
-    // nested `try`, the compile refuses it, and TypeScript's error stays.
-    for (const body of [
-      `function pay() {\n  await ${opened};\n}\nfunction main() {\n  pay();\n}\n`,
-      `function main() {\n  if (USDC != 0) {\n    await ${opened};\n  }\n  USDC.transfer(0x66, 1);\n}\n`,
-      `function main() {\n  if (USDC != 0) await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`,
-      `function main() {\n  try {\n    await ${opened};\n  } catch (e) {}\n  USDC.transfer(0x66, 1);\n}\n`,
-      `function main() {\n  try {\n    USDC.transfer(0x66, 1);\n  } catch (e) {\n    await ${opened};\n  }\n}\n`,
-      `function main() {\n  try {\n    try {\n      await ${opened};\n    } catch (e) {}\n  } catch (e) {}\n}\n`,
-    ]) {
-      expect(codes(body)).toEqual([1308]);
-    }
+    const body = `function main() {\n  await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`;
+    const codes = service({ [file]: body })
+      .getSemanticDiagnostics(file)
+      .map((diagnostic) => diagnostic.code);
+    expect(codes).toContain(1308);
   });
 
   it("types a chain's name as its id, beside its Portal and namespaces", () => {

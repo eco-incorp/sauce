@@ -56,11 +56,7 @@ describe("an ABI binding given in `contracts`", () => {
     same(given(body), imported(body));
   });
 
-  it("reaches what follows an `await`, and a body nested in a body", () => {
-    same(
-      given(`await ${opened};\n  Grid.at(${AT}).poke(1);`),
-      given(`${opened}.then(() => { Grid.at(${AT}).poke(1); });`),
-    );
+  it("reaches a body nested in a body", () => {
     const nested = `${opened}.then(() => {
     Optimism.hop({ send: { token: USDC, amount: 1 }, refundee: ${AT} })
       .then(() => { Grid.at(${AT}).poke(2); });
