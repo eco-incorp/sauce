@@ -75,7 +75,8 @@ const SAUCE_RANDOM_LANDING_GAS = 150000;
 // The allowance per byte of the continuation as compiled, its captured values included.
 const SAUCE_RANDOM_GAS_PER_BYTE = 600;
 // What a combinator's child adds to its callback before the combinator's continuation runs:
-// recording the child's settlement, keeping its value as code until the last child settles.
+// recording the child's settlement and keeping its value (a slot for a word, code for more) until
+// the last child settles.
 const SAUCE_RANDOM_CHILD_GAS = 120000;
 
 // The event the handlers log, from the Pot, before settling: what the provider delivered for the
