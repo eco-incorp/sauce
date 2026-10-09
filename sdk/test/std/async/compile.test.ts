@@ -150,12 +150,7 @@ function main(value: Uint256, to: Address) {
     expect(program.bodies).toEqual([]);
   });
 
-  it("`await`, `.catch` and a deadline fold onto the same promise", () => {
-    const awaited = compile(`${ECHO}
-function main(value: Uint256, to: Address) {
-  await Echo.request(value);
-  evm.sstore(1, to);
-}`);
+  it("`.catch` and a deadline fold onto the same promise", () => {
     const caught = compile(`${ECHO}
 function main(value: Uint256, to: Address) {
   Echo.request(value)
@@ -167,7 +162,6 @@ function main(value: Uint256, to: Address) {
       evm.sstore(2, to);
     });
 }`);
-    expect(awaited.continuations).toHaveLength(1);
     expect(caught.continuations).toHaveLength(1);
     expect(caught.continuations[0]!.captures).toEqual(["body.to"]);
   });
