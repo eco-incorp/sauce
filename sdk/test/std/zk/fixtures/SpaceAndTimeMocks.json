@@ -1,0 +1,121 @@
+{
+  "source": "sdk/test/std/zk/fixtures/SpaceAndTimeMocks.sol",
+  "solc": "0.8.36+commit.8a079791 --optimize",
+  "AggregatorMock": {
+    "abi": [
+      {
+        "inputs": [],
+        "name": "answer",
+        "outputs": [
+          {
+            "internalType": "int256",
+            "name": "",
+            "type": "int256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [
+          {
+            "internalType": "uint8",
+            "name": "",
+            "type": "uint8"
+          }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "latestRoundData",
+        "outputs": [
+          {
+            "internalType": "uint80",
+            "name": "roundId",
+            "type": "uint80"
+          },
+          {
+            "internalType": "int256",
+            "name": "",
+            "type": "int256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "startedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "updatedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint80",
+            "name": "answeredInRound",
+            "type": "uint80"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "creationCode": "0x6080604052348015600e575f5ffd5b5060cd80601a5f395ff3fe6080604052348015600e575f5ffd5b5060043610603a575f3560e01c8063313ce56714603e57806385bb7d69146052578063feaf968c146066575b5f5ffd5b604051600881526020015b60405180910390f35b60595f5481565b6040519081526020016049565b5f546040805160018082526020820193909352429181018290526060810191909152608081019190915260a001604956fea2646970667358221220b8e05de9743f56fe5ea112d56d9b6087f4dc214b26a3e1a8fa13ae957773c2a164736f6c63430008240033",
+    "runtime": "0x6080604052348015600e575f5ffd5b5060043610603a575f3560e01c8063313ce56714603e57806385bb7d69146052578063feaf968c146066575b5f5ffd5b604051600881526020015b60405180910390f35b60595f5481565b6040519081526020016049565b5f546040805160018082526020820193909352429181018290526060810191909152608081019190915260a001604956fea2646970667358221220b8e05de9743f56fe5ea112d56d9b6087f4dc214b26a3e1a8fa13ae957773c2a164736f6c63430008240033"
+  },
+  "PoSQLVerifierMock": {
+    "abi": [
+      {
+        "inputs": [
+          {
+            "components": [
+              {
+                "internalType": "bytes32",
+                "name": "version",
+                "type": "bytes32"
+              },
+              {
+                "internalType": "bytes",
+                "name": "innerQuery",
+                "type": "bytes"
+              },
+              {
+                "internalType": "bytes",
+                "name": "parameters",
+                "type": "bytes"
+              },
+              {
+                "internalType": "bytes",
+                "name": "metadata",
+                "type": "bytes"
+              }
+            ],
+            "internalType": "struct Query",
+            "name": "",
+            "type": "tuple"
+          },
+          {
+            "internalType": "bytes",
+            "name": "proof",
+            "type": "bytes"
+          }
+        ],
+        "name": "verify",
+        "outputs": [
+          {
+            "internalType": "bytes",
+            "name": "",
+            "type": "bytes"
+          }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+      }
+    ],
+    "creationCode": "0x6080604052348015600e575f5ffd5b5061019d8061001c5f395ff3fe608060405234801561000f575f5ffd5b5060043610610029575f3560e01c8063dd71257c1461002d575b5f5ffd5b61004061003b366004610096565b610056565b60405161004d9190610132565b60405180910390f35b606082828080601f0160208091040260200160405190810160405280939291908181526020018383808284375f9201919091525092979650505050505050565b5f5f5f604084860312156100a8575f5ffd5b833567ffffffffffffffff8111156100be575f5ffd5b8401608081870312156100cf575f5ffd5b9250602084013567ffffffffffffffff8111156100ea575f5ffd5b8401601f810186136100fa575f5ffd5b803567ffffffffffffffff811115610110575f5ffd5b866020828401011115610121575f5ffd5b939660209190910195509293505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f8301168401019150509291505056fea26469706673582212200b9e2ac7fe88b2b23240076b9576adf858735b8b0abbe154d80f387b2178365064736f6c63430008240033",
+    "runtime": "0x608060405234801561000f575f5ffd5b5060043610610029575f3560e01c8063dd71257c1461002d575b5f5ffd5b61004061003b366004610096565b610056565b60405161004d9190610132565b60405180910390f35b606082828080601f0160208091040260200160405190810160405280939291908181526020018383808284375f9201919091525092979650505050505050565b5f5f5f604084860312156100a8575f5ffd5b833567ffffffffffffffff8111156100be575f5ffd5b8401608081870312156100cf575f5ffd5b9250602084013567ffffffffffffffff8111156100ea575f5ffd5b8401601f810186136100fa575f5ffd5b803567ffffffffffffffff811115610110575f5ffd5b866020828401011115610121575f5ffd5b939660209190910195509293505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f8301168401019150509291505056fea26469706673582212200b9e2ac7fe88b2b23240076b9576adf858735b8b0abbe154d80f387b2178365064736f6c63430008240033"
+  }
+}
