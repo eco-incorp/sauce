@@ -222,6 +222,39 @@ describe("what runs where", () => {
     expect(hex(body.bytecode)).toContain(usdc);
   });
 
+  it("a combinator's children are round trips, answered into the combinator here", () => {
+    const program = compile(`import { Promise } from "@sauce/async";
+
+function main(bump: Uint256) {
+  Promise.all([
+    Base.remote(() => {
+      return 1;
+    }),
+    Optimism.remote(() => {
+      return 2;
+    }),
+  ]).then((r) => {
+    evm.sstore(1, r[0].length + r[1].length + bump);
+  });
+}`);
+    const top = program.bodies
+      .filter((body) => body.path.length === 0)
+      .map((body) => body.destination.slug)
+      .sort();
+    // The combinator's continuation and each child's, here; the program each message runs there.
+    expect(top).toEqual(["base", "ethereum", "ethereum", "ethereum", "optimism"]);
+  });
+
+  it("a deadline bounds an answer, so a one-way message refuses one", () => {
+    expect(() =>
+      compile(`function main() {
+  Base.remote(() => {
+    evm.sstore(1, 1);
+  }).within(60);
+}`),
+    ).toThrow("`.within(...)` bounds the answer");
+  });
+
   it("refuses a step out of order", () => {
     expect(() =>
       compile(`function main() {
