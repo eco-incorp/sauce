@@ -176,9 +176,10 @@ each is built while the file compiles and encoded as the program runs, so it is 
 and read from the Portal's `IntentPublished` in its receipt or rehearsal
 (`intentFromPublished(log, sourceChainId)`), as `sauce intent publish` reads it.
 
-`options.args` compiles the program for `main`'s arguments: one word each (an unsigned integer, an
-address or a `bool`), in the order of `entryParams`, where a Solana `Account` parameter takes none
-and stays the manifest's. `main` reads each as a constant, so it takes none as it runs
+`options.args` compiles the program for `main`'s arguments, in the order of `entryParams`, each as
+its parameter reads it: an unsigned integer, an address or a `bool`; a `bytes` (a `Uint8Array` or
+`0x` hex); a string; an array; a record, its fields in order or by name. A Solana `Account`
+parameter takes none and stays the manifest's. `main` reads each as a constant, so it takes none as it runs
 (`entryParams` is empty), and each body folds them in, capturing nothing for them.
 
 ## Lower-level encoding
