@@ -126,7 +126,9 @@ export class IntentStore {
   save(record: IntentRecord): "created" | "exists" {
     if (record.schema !== INTENT_SCHEMA) throw new Error(`not a ${INTENT_SCHEMA} record`);
     const dir = this.intentDir(record.intentHash);
-    mkdirSync(dir, { recursive: true });
+    // Owner-only, as every directory under ~/.sauce is, whatever the umask: a runtime folder is
+    // loaded from only while no one else can write ~/.sauce (`optional.ts#assertPrivate`).
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
     const final = join(dir, "intent.json");
     const text = `${JSON.stringify(record, null, 2)}\n`;
     const temporary = join(
@@ -158,7 +160,7 @@ export class IntentStore {
   /** Appends `event` to the intent's log, in one write. */
   append(intentHash: Hex, event: Omit<StoreEvent, "v">): void {
     const dir = this.intentDir(intentHash);
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
     const line = `${JSON.stringify({ v: 1, ...event })}\n`;
     const bytes = new TextEncoder().encode(line);
     if (bytes.length > MAX_LINE) {
