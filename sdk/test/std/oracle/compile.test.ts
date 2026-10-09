@@ -84,10 +84,11 @@ describe("what the library writes out by hand", () => {
 describe("what compiles", () => {
   it("a request's body and `.catch` are one program for this chain, reading what they capture", () => {
     const program = compile(REQUEST);
-    expect(program.bodies).toHaveLength(1);
-    expect(program.bodies[0]!.destination.slug).toBe("base");
-    expect(program.bodies[0]!.captures).toHaveLength(1);
-    expect(program.bodies[0]!.captures[0]).toMatch(/\blimit$/);
+    expect(program.bodies).toHaveLength(0);
+    expect(program.continuations).toHaveLength(1);
+    expect(program.continuations[0]!.destination.slug).toBe("base");
+    expect(program.continuations[0]!.captures).toHaveLength(1);
+    expect(program.continuations[0]!.captures[0]).toMatch(/\blimit$/);
   });
 
   it("`await` folds onto the same `then`, and `args` may be left out", () => {
@@ -97,7 +98,7 @@ function main(owner: Address): void {
   await Oracle.cre({ owner });
   evm.sstore(1, 1);
 }`);
-    expect(program.bodies).toHaveLength(1);
+    expect(program.continuations).toHaveLength(1);
   });
 
   it("a deadline, given or as `.within(seconds)`", () => {
@@ -116,7 +117,7 @@ function main(owner: Address): void {
       evm.sstore(2, err.length);
     });
 }`);
-      expect(program.bodies).toHaveLength(1);
+      expect(program.continuations).toHaveLength(1);
     }
   });
 
