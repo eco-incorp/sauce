@@ -1,5 +1,6 @@
 {
   "ambient": ["@sauce/token"],
+  "await": false,
   "nameParity": {
     "throw": "revert"
   }

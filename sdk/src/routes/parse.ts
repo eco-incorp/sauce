@@ -26,9 +26,15 @@
 import { Parser, type Options } from "acorn";
 import { tsPlugin } from "@sveltejs/acorn-typescript";
 
+import { AWAIT_SUPPORTED } from "../plugin/await.js";
 import type { AstNode } from "./ast-walk.js";
 
 const SauceParser = Parser.extend(tsPlugin());
+// With `await` on (`plugin/await.ts`), it is SauceScript's wherever a statement stands, with no
+// `async`: `await x; rest` is `x.then(() => { rest })`, and the compiler decides where one may be.
+// JavaScript reads one only in an `async` function or at a module's top level, so this parser is
+// then told it may always await.
+if (AWAIT_SUPPORTED) Object.defineProperty(SauceParser.prototype, "canAwait", { get: () => true });
 
 /** `locations` is the plugin's requirement, not a rewrite's: every rewrite uses `start`/`end`. */
 const OPTIONS: Options = { ecmaVersion: "latest", sourceType: "module", locations: true };

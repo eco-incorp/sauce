@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 import { sauceScriptTsconfig } from "../src/cli/skills.js";
+import { AWAIT_SUPPORTED } from "../src/plugin/await.js";
 import { sauceScriptDeclarations } from "../src/sauce-script/declarations.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -197,7 +198,10 @@ describe("SauceScript in an editor", () => {
     }
   });
 
-  it("leaves TypeScript's error on an `await`: SauceScript has none", () => {
+  it("keeps `await` off, as the compiler has none, and leaves TypeScript's error on one", () => {
+    // The one switch (`plugin/await.ts`, the manifest's `await`): flip it with a compiler that
+    // takes `await`, and the skipped tests named for v12 #554 come back.
+    expect(AWAIT_SUPPORTED).toBe(false);
     const file = join(work, "awaited.sauce.ts");
     const opened =
       "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x44 })";
