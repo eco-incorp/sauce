@@ -145,9 +145,11 @@ describe("what compiles", () => {
   it("a request's body is a program of its own for this chain, reading what it captures", () => {
     for (const source of [VRF, ENTROPY]) {
       const program = compile(source);
-      expect(program.bodies).toHaveLength(1);
-      expect(program.bodies[0]!.destination.slug).toBe("base");
-      expect(program.bodies[0]!.captures).toEqual(["body.bump"]);
+      // A continuation, never an intent's body.
+      expect(program.bodies).toHaveLength(0);
+      expect(program.continuations).toHaveLength(1);
+      expect(program.continuations[0]!.destination.slug).toBe("base");
+      expect(program.continuations[0]!.captures).toEqual(["body.bump"]);
     }
   });
 
@@ -173,7 +175,7 @@ function main(provider: Address, confirmations: Uint256, deadline: Uint256): voi
     evm.sstore(3, value);
   });
 }`);
-    expect(program.bodies).toHaveLength(2);
+    expect(program.continuations).toHaveLength(2);
     expect(hex(program.bytecode)).toContain((300000).toString(16).padStart(6, "0"));
     expect(hex(program.bytecode)).toContain((700000).toString(16).padStart(6, "0"));
   });
@@ -201,7 +203,8 @@ function main(bump: Uint256): void {
       evm.sstore(4, value);
     });
 }`);
-    expect(program.bodies.length).toBeGreaterThanOrEqual(3);
+    expect(program.bodies).toHaveLength(0);
+    expect(program.continuations.length).toBeGreaterThanOrEqual(3);
   });
 
   it("a request checks the Pot keeps the Kitchen's fee for its callback", () => {

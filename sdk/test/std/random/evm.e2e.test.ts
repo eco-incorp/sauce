@@ -77,10 +77,10 @@ const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
 const ROUTER = routerUnderTest();
 const describeRandom = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
-/** The core runs a body under `.catch((e) => …)` to settle it whatever it does, and a catch that
- *  reads `e` loses its work on the released engine (see `std/async`'s suite): a body that reverts, a
- *  `.catch` handed its reason, and a combinator settling need an engine built from the compiler's
- *  tree, and skip on the released one. */
+/** Settling a promise catches its continuation's revert with a `catch (e)` that reads `e`, which an
+ *  engine built from the compiler's tree runs and the released one refuses, loudly (see
+ *  `std/async`'s suite): every case that settles runs on the first (`itSettling`), and on the
+ *  release one case holds that refusal (`itOnRelease`). */
 const RELEASED_ENGINE =
   RUNTIME_HEX_PATH !== undefined &&
   readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
@@ -95,7 +95,8 @@ const RELEASED_ENGINE =
         ),
       ) as { runtimeCreationCode: string }
     ).runtimeCreationCode.toLowerCase();
-const itOnStackEngine = RELEASED_ENGINE ? it.skip : it;
+const itSettling = RELEASED_ENGINE ? it.skip : it;
+const itOnRelease = RELEASED_ENGINE ? it : it.skip;
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "evm", "fixtures");
 const fixture = (name: string) =>
@@ -577,39 +578,42 @@ describeRandom("@sauce/random on the EVM, through the Router's handlers", () => 
   });
 
   describe("Chainlink VRF", () => {
-    it("pays the wrapper's price, parks the body, and the callback runs it once, for one fee", async () => {
-      const wrapperBefore = await publicClient.getBalance({ address: WRAPPER });
-      const { id, receipt } = await requestVrf(VRF_SOURCE, [1_000n]);
-      expect(await parked(vrfKey(id))).not.toBe(0n);
+    itSettling(
+      "pays the wrapper's price, parks the body, and the callback runs it once, for one fee",
+      async () => {
+        const wrapperBefore = await publicClient.getBalance({ address: WRAPPER });
+        const { id, receipt } = await requestVrf(VRF_SOURCE, [1_000n]);
+        expect(await parked(vrfKey(id))).not.toBe(0n);
 
-      // Exactly the price, at the request's own gas price, for the gas it asked for.
-      const gas = await callbackGasOf(id);
-      const price = (await publicClient.readContract({
-        address: WRAPPER,
-        abi: WRAPPER_MOCK.abi,
-        functionName: "estimateRequestPriceNative",
-        args: [Number(gas), 2, receipt.effectiveGasPrice],
-      })) as bigint;
-      expect(price).toBeGreaterThan(0n);
-      expect((await publicClient.getBalance({ address: WRAPPER })) - wrapperBefore).toBe(price);
+        // Exactly the price, at the request's own gas price, for the gas it asked for.
+        const gas = await callbackGasOf(id);
+        const price = (await publicClient.readContract({
+          address: WRAPPER,
+          abi: WRAPPER_MOCK.abi,
+          functionName: "estimateRequestPriceNative",
+          args: [Number(gas), 2, receipt.effectiveGasPrice],
+        })) as bigint;
+        expect(price).toBeGreaterThan(0n);
+        expect((await publicClient.getBalance({ address: WRAPPER })) - wrapperBefore).toBe(price);
 
-      const kitchen = gateAnchors().kitchen;
-      const kitchenBefore = await publicClient.getBalance({ address: kitchen });
-      const fulfilled = await send(stranger, WRAPPER, fulfill(id, [7n, 35n]));
-      expect(fulfilled.status).toBe("success");
-      expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
-      expect(deliveredIn(fulfilled, vrfKey(id))).toBe(
-        encodeAbiParameters([{ type: "uint256[]" }], [[7n, 35n]]),
-      );
-      expect(potLogs(fulfilled)).toContainEqual([SETTLED, word(vrfKey(id)), word(2n)]);
+        const kitchen = gateAnchors().kitchen;
+        const kitchenBefore = await publicClient.getBalance({ address: kitchen });
+        const fulfilled = await send(stranger, WRAPPER, fulfill(id, [7n, 35n]));
+        expect(fulfilled.status).toBe("success");
+        expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect(deliveredIn(fulfilled, vrfKey(id))).toBe(
+          encodeAbiParameters([{ type: "uint256[]" }], [[7n, 35n]]),
+        );
+        expect(potLogs(fulfilled)).toContainEqual([SETTLED, word(vrfKey(id)), word(2n)]);
 
-      expect(await storage(SLOT)).toBe(1_042n);
-      expect(await parked(vrfKey(id))).toBe(0n);
-      expect((await publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
-    });
+        expect(await storage(SLOT)).toBe(1_042n);
+        expect(await parked(vrfKey(id))).toBe(0n);
+        expect((await publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
+      },
+    );
 
     // Bodies that write, hash and call out, each sized by the library from its bytes alone.
-    it.each([
+    (RELEASED_ENGINE ? it.skip : it).each([
       ["a write", "evm.sstore(SLOT, words[0] + words[1] + bump);"],
       [
         "five writes",
@@ -670,23 +674,26 @@ function main(bump: Uint256): void {
       },
     );
 
-    it("refuses a callback from anyone but the wrapper, and leaves the body parked", async () => {
-      const { id } = await requestVrf(VRF_SOURCE, [0n]);
-      const forged = concat([
-        VRF_CALLBACK,
-        encodeAbiParameters([{ type: "uint256" }, { type: "uint256[]" }], [id, [666n, 0n]]),
-      ]);
-      expect((await callAs(STRANGER.address, stack.pot, forged)).reason).toBe(
-        "async: the call is not from the protocol",
-      );
-      expect((await send(stranger, stack.pot, forged)).status).toBe("reverted");
-      expect(await parked(vrfKey(id))).not.toBe(0n);
-      // The wrapper's own delivery still runs it.
-      expect((await send(stranger, WRAPPER, fulfill(id, [1n, 2n]))).status).toBe("success");
-      expect(await storage(SLOT)).toBe(3n);
-    });
+    itSettling(
+      "refuses a callback from anyone but the wrapper, and leaves the body parked",
+      async () => {
+        const { id } = await requestVrf(VRF_SOURCE, [0n]);
+        const forged = concat([
+          VRF_CALLBACK,
+          encodeAbiParameters([{ type: "uint256" }, { type: "uint256[]" }], [id, [666n, 0n]]),
+        ]);
+        expect((await callAs(STRANGER.address, stack.pot, forged)).reason).toBe(
+          "async: the call is not from the protocol",
+        );
+        expect((await send(stranger, stack.pot, forged)).status).toBe("reverted");
+        expect(await parked(vrfKey(id))).not.toBe(0n);
+        // The wrapper's own delivery still runs it.
+        expect((await send(stranger, WRAPPER, fulfill(id, [1n, 2n]))).status).toBe("success");
+        expect(await storage(SLOT)).toBe(3n);
+      },
+    );
 
-    it("lets an id delivered again, or never requested, pass and run nothing", async () => {
+    itSettling("lets an id delivered again, or never requested, pass and run nothing", async () => {
       const { id } = await requestVrf(VRF_SOURCE, [0n]);
       expect((await send(stranger, WRAPPER, fulfill(id, [5n, 5n]))).status).toBe("success");
       expect(await storage(SLOT)).toBe(10n);
@@ -708,7 +715,7 @@ function main(bump: Uint256): void {
       }
     });
 
-    itOnStackEngine(
+    itSettling(
       "runs `.catch` in the body's place when the body reverts, with its reason",
       async () => {
         const { id } = await requestVrf(VRF_CATCH_SOURCE, [100n]);
@@ -720,7 +727,7 @@ function main(bump: Uint256): void {
       },
     );
 
-    itOnStackEngine(
+    itSettling(
       "returns from a callback whose body reverts with no `.catch`, the words kept in its log",
       async () => {
         const before = await storage(SLOT);
@@ -754,6 +761,19 @@ function main(bump: Uint256): void {
       expect(await parked(vrfKey(id))).not.toBe(0n);
     });
 
+    itOnRelease(
+      "on the released engine the callback reverts, so the wrapper spends it, and the promise stays pending",
+      async () => {
+        const { id } = await requestVrf(VRF_SOURCE, [0n]);
+        const fulfilled = await send(stranger, WRAPPER, fulfill(id, [1n, 2n]));
+        expect(fulfilled.status).toBe("success");
+        expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi).map((e) => e.eventName)).toEqual([
+          "WrapperFulfillmentFailed",
+        ]);
+        expect(await parked(vrfKey(id))).not.toBe(0n);
+      },
+    );
+
     it("refuses a request the Pot cannot pay and still keep the Kitchen's fee for its callback", async () => {
       const balance = await publicClient.getBalance({ address: stack.pot });
       await testClient.setBalance({ address: stack.pot, value: 0n });
@@ -773,7 +793,7 @@ function main(bump: Uint256): void {
       await testClient.setBalance({ address: stack.pot, value: balance });
     });
 
-    itOnStackEngine(
+    itSettling(
       "rejects a request past its deadline through the Pot's expire; a late fulfilment is a no-op",
       async () => {
         const before = await storage(SLOT);
@@ -811,7 +831,7 @@ function main(bump: Uint256): void {
         return { id, timeout: BigInt(timed[0]![1]!) };
       }
 
-      itOnStackEngine(
+      itSettling(
         "settles with the words when they arrive first; the timeout, expired later, is a no-op",
         async () => {
           await testClient.setStorageAt({ address: stack.pot, index: SLOT, value: word(0n) });
@@ -833,7 +853,7 @@ function main(bump: Uint256): void {
         },
       );
 
-      itOnStackEngine(
+      itSettling(
         "rejects with the timeout when it expires first; the words, arriving late, are a no-op",
         async () => {
           await testClient.setStorageAt({ address: stack.pot, index: SLOT, value: word(0n) });
@@ -853,76 +873,86 @@ function main(bump: Uint256): void {
   });
 
   describe("Pyth Entropy", () => {
-    it("pays Entropy's fee, parks the body under the provider's sequence number, and runs it", async () => {
-      const entropyBefore = await publicClient.getBalance({ address: ENTROPY });
-      const { sequence, gasLimit } = await requestEntropy(ENTROPY_SOURCE, [5n]);
-      const key = entropyKey(PROVIDER, sequence);
-      expect(await parked(key)).not.toBe(0n);
-      const fee = (await publicClient.readContract({
-        address: ENTROPY,
-        abi: ENTROPY_MOCK.abi,
-        functionName: "getFeeV2",
-        args: [PROVIDER, gasLimit],
-      })) as bigint;
-      expect((await publicClient.getBalance({ address: ENTROPY })) - entropyBefore).toBe(fee);
-
-      const value = BigInt(keccak256(toHex("a random number")));
-      const revealed = await send(
-        stranger,
-        ENTROPY,
-        encodeFunctionData({
+    itSettling(
+      "pays Entropy's fee, parks the body under the provider's sequence number, and runs it",
+      async () => {
+        const entropyBefore = await publicClient.getBalance({ address: ENTROPY });
+        const { sequence, gasLimit } = await requestEntropy(ENTROPY_SOURCE, [5n]);
+        const key = entropyKey(PROVIDER, sequence);
+        expect(await parked(key)).not.toBe(0n);
+        const fee = (await publicClient.readContract({
+          address: ENTROPY,
           abi: ENTROPY_MOCK.abi,
-          functionName: "reveal",
-          args: [PROVIDER, sequence, word(value)],
-        }),
-      );
-      expect(revealed.status).toBe("success");
-      const [event] = eventsOf(revealed, ENTROPY, ENTROPY_MOCK.abi);
-      expect((event!.args as { callbackFailed: boolean }).callbackFailed).toBe(false);
-      expect(await storage(SLOT)).toBe((value + 5n) % 2n ** 256n);
-      expect(await parked(key)).toBe(0n);
-    });
+          functionName: "getFeeV2",
+          args: [PROVIDER, gasLimit],
+        })) as bigint;
+        expect((await publicClient.getBalance({ address: ENTROPY })) - entropyBefore).toBe(fee);
 
-    it("refuses a callback from anyone but Entropy; one delivered again, or for another provider, is a no-op", async () => {
-      const { sequence } = await requestEntropy(ENTROPY_SOURCE, [0n]);
-      const callback = (seq: bigint, provider: Address) =>
-        concat([
-          ENTROPY_CALLBACK,
-          encodeAbiParameters(
-            [{ type: "uint64" }, { type: "address" }, { type: "bytes32" }],
-            [seq, provider, word(1n)],
-          ),
-        ]);
-      expect((await callAs(STRANGER.address, stack.pot, callback(sequence, PROVIDER))).reason).toBe(
-        "async: the call is not from the protocol",
-      );
-      const reveal = encodeFunctionData({
-        abi: ENTROPY_MOCK.abi,
-        functionName: "reveal",
-        args: [PROVIDER, sequence, word(42n)],
-      });
-      expect((await send(stranger, ENTROPY, reveal)).status).toBe("success");
-      expect(await storage(SLOT)).toBe(42n);
-      for (const [seq, provider] of [
-        [sequence, PROVIDER],
-        [sequence, STRANGER.address],
-      ] as const) {
-        const again = await send(
+        const value = BigInt(keccak256(toHex("a random number")));
+        const revealed = await send(
           stranger,
           ENTROPY,
           encodeFunctionData({
             abi: ENTROPY_MOCK.abi,
-            functionName: "deliver",
-            args: [stack.pot, seq, provider, word(9n)],
+            functionName: "reveal",
+            args: [PROVIDER, sequence, word(value)],
           }),
         );
-        expect(again.status).toBe("success");
-        expect(potLogs(again)).toContainEqual([IGNORED, word(entropyKey(provider, seq)), word(0n)]);
-        expect(await storage(SLOT)).toBe(42n);
-      }
-    });
+        expect(revealed.status).toBe("success");
+        const [event] = eventsOf(revealed, ENTROPY, ENTROPY_MOCK.abi);
+        expect((event!.args as { callbackFailed: boolean }).callbackFailed).toBe(false);
+        expect(await storage(SLOT)).toBe((value + 5n) % 2n ** 256n);
+        expect(await parked(key)).toBe(0n);
+      },
+    );
 
-    itOnStackEngine(
+    itSettling(
+      "refuses a callback from anyone but Entropy; one delivered again, or for another provider, is a no-op",
+      async () => {
+        const { sequence } = await requestEntropy(ENTROPY_SOURCE, [0n]);
+        const callback = (seq: bigint, provider: Address) =>
+          concat([
+            ENTROPY_CALLBACK,
+            encodeAbiParameters(
+              [{ type: "uint64" }, { type: "address" }, { type: "bytes32" }],
+              [seq, provider, word(1n)],
+            ),
+          ]);
+        expect(
+          (await callAs(STRANGER.address, stack.pot, callback(sequence, PROVIDER))).reason,
+        ).toBe("async: the call is not from the protocol");
+        const reveal = encodeFunctionData({
+          abi: ENTROPY_MOCK.abi,
+          functionName: "reveal",
+          args: [PROVIDER, sequence, word(42n)],
+        });
+        expect((await send(stranger, ENTROPY, reveal)).status).toBe("success");
+        expect(await storage(SLOT)).toBe(42n);
+        for (const [seq, provider] of [
+          [sequence, PROVIDER],
+          [sequence, STRANGER.address],
+        ] as const) {
+          const again = await send(
+            stranger,
+            ENTROPY,
+            encodeFunctionData({
+              abi: ENTROPY_MOCK.abi,
+              functionName: "deliver",
+              args: [stack.pot, seq, provider, word(9n)],
+            }),
+          );
+          expect(again.status).toBe("success");
+          expect(potLogs(again)).toContainEqual([
+            IGNORED,
+            word(entropyKey(provider, seq)),
+            word(0n),
+          ]);
+          expect(await storage(SLOT)).toBe(42n);
+        }
+      },
+    );
+
+    itSettling(
       "returns from a callback whose body reverts, so Entropy records no failure, the number kept in its log",
       async () => {
         const before = await storage(SLOT);
@@ -950,7 +980,7 @@ function main(bump: Uint256): void {
     );
   });
 
-  itOnStackEngine(
+  itSettling(
     "joins VRF and Entropy with Promise.all: the body runs once, when the last arrives, sized for it",
     async () => {
       await testClient.setStorageAt({ address: stack.pot, index: SLOT, value: word(0n) });
@@ -996,28 +1026,31 @@ function main(bump: Uint256): void {
         args: [holder],
       })) as bigint;
 
-    it("sauce-random/examples/coin-flip pays heads on an even word and tails on an odd one", async () => {
-      for (const [drawn, winner] of [
-        [8n, HEADS],
-        [9n, TAILS],
-      ] as const) {
-        const before = await usdcOf(winner);
-        const program = compileSauceProgram(CHAIN, skillExample("coin-flip"));
-        const receipt = await cook(
-          bytesToHex(
-            concat([program.bytecode, encodeEntryArguments(program, [HEADS, TAILS, 5_000_000n])]),
-          ),
-        );
-        expect(receipt.status).toBe("success");
-        const [requested] = eventsOf(receipt, WRAPPER, WRAPPER_MOCK.abi);
-        const id = (requested!.args as { requestId: bigint }).requestId;
-        expect(await parked(vrfKey(id))).not.toBe(0n);
-        expect((await send(stranger, WRAPPER, fulfill(id, [drawn]))).status).toBe("success");
-        expect((await usdcOf(winner)) - before).toBe(5_000_000n);
-      }
-    });
+    itSettling(
+      "sauce-random/examples/coin-flip pays heads on an even word and tails on an odd one",
+      async () => {
+        for (const [drawn, winner] of [
+          [8n, HEADS],
+          [9n, TAILS],
+        ] as const) {
+          const before = await usdcOf(winner);
+          const program = compileSauceProgram(CHAIN, skillExample("coin-flip"));
+          const receipt = await cook(
+            bytesToHex(
+              concat([program.bytecode, encodeEntryArguments(program, [HEADS, TAILS, 5_000_000n])]),
+            ),
+          );
+          expect(receipt.status).toBe("success");
+          const [requested] = eventsOf(receipt, WRAPPER, WRAPPER_MOCK.abi);
+          const id = (requested!.args as { requestId: bigint }).requestId;
+          expect(await parked(vrfKey(id))).not.toBe(0n);
+          expect((await send(stranger, WRAPPER, fulfill(id, [drawn]))).status).toBe("success");
+          expect((await usdcOf(winner)) - before).toBe(5_000_000n);
+        }
+      },
+    );
 
-    itOnStackEngine(
+    itSettling(
       "sauce-random/examples/draw pays the entrant the number picks, within the hour",
       async () => {
         const entrants = [
