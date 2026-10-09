@@ -653,6 +653,16 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     expect(delivered.ok).toBe(true);
     GAS["request-id: callback"] = await gasOf(delivered.hash);
     expect(await slot(ECHOED_SLOT)).toBe(word(3n));
+    // The same request made bare, with no promise: what the protocol and the cook cost alone.
+    const bare = await cook(
+      compiled(
+        `function main(value: Uint256): void {
+  evm.call(${echo}, 0, hex\`${REQUEST_SELECTOR.slice(2)}\`.concat(abi.encode(value)));
+}`,
+        [3n],
+      ),
+    );
+    GAS["request-id: the same request with no promise"] = await gasOf(bare.hash);
   });
 
   itCatching(
