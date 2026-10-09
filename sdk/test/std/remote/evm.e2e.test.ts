@@ -402,24 +402,25 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
   );
 
   itSettling(
-    "runs what follows an await back on Ethereum, once the body ran on Base",
+    "runs a .then with no parameter back on Ethereum, once the body ran on Base",
     async () => {
       const out = await cook(
         ethereum,
         `function main(value: Uint256) {
-  await Base.remote(() => {
-    evm.sstore(${slot("awaited.there")}, value);
-  }, { via: "layerzero" });
-  evm.sstore(${slot("awaited.here")}, value + 1);
+  Base.remote(() => {
+    evm.sstore(${slot("after.there")}, value);
+  }, { via: "layerzero" }).then(() => {
+    evm.sstore(${slot("after.here")}, value + 1);
+  });
 }`,
         [9n],
       );
       const [there] = await relayLayerZero(out, ethereumBridges, base, baseBridges);
-      expect(await read(base, "awaited.there")).toBe(9n);
-      expect(await read(ethereum, "awaited.here")).toBe(0n);
+      expect(await read(base, "after.there")).toBe(9n);
+      expect(await read(ethereum, "after.here")).toBe(0n);
       const back = await base.publicClient.getTransactionReceipt({ hash: there! });
       await relayLayerZero(back, baseBridges, ethereum, ethereumBridges);
-      expect(await read(ethereum, "awaited.here")).toBe(10n);
+      expect(await read(ethereum, "after.here")).toBe(10n);
     },
     120_000,
   );

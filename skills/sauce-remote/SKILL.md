@@ -1,6 +1,6 @@
 ---
 name: sauce-remote
-description: Remote messages written in Sauce — a program that runs code on your own Private Pot on another chain, Base.remote(() => { … }) in main, the body compiled for that chain and run there as the same Pot when a bridge delivers it; a round trip as a promise, .then((result) => { … }) back here with what the body returned, .catch((e) => { … }) with what it reverted with there, await, .within, Promise.all and race over several chains; the bridge (Hyperlane, LayerZero, Metalayer or Polymer, the first both chains have, or via) and each leg's gas; which Pot pays what; the handlers both Pots install with sauce run @sauce/remote and what each checks; Polymer proofs anyone submits; a message that waits for money an intent brings. Use when a program should run code on the same Pot on another chain, read or change its state there, get an answer back from one or several chains, or when the user mentions remote messages, cross-chain calls or messaging, Hyperlane, LayerZero, Metalayer or Polymer.
+description: Remote messages written in Sauce — a program that runs code on your own Private Pot on another chain, Base.remote(() => { … }) in main, the body compiled for that chain and run there as the same Pot when a bridge delivers it; a round trip as a promise, .then((result) => { … }) back here with what the body returned, .catch((e) => { … }) with what it reverted with there, .within, Promise.all and race over several chains; the bridge (Hyperlane, LayerZero, Metalayer or Polymer, the first both chains have, or via) and each leg's gas; which Pot pays what; the handlers both Pots install with sauce run @sauce/remote and what each checks; Polymer proofs anyone submits; a message that waits for money an intent brings. Use when a program should run code on the same Pot on another chain, read or change its state there, get an answer back from one or several chains, or when the user mentions remote messages, cross-chain calls or messaging, Hyperlane, LayerZero, Metalayer or Polymer.
 ---
 
 # Remote messages in Sauce
@@ -57,9 +57,8 @@ function main(bump: Uint256) {
 - **`.catch((e) => { … })`** runs back here when the body reverts there, handed what it reverted
   with (at most its first 256 bytes), everything the body did there undone; and here, in place of
   the `.then`, when that reverts.
-- **`await`** is `.then` with the code after it: what follows `await Base.remote(() => { … });` runs
-  back here, once the body ran there. An `await` cannot give a value (`const r = await …` is a
-  compile error): take the result through `.then`.
+- **Code that should run back here once the body ran there** goes in a `.then(() => { … })` that
+  names no parameter; SauceScript has no `await`.
 - **With no `.catch`**, a body that reverts there still rejects the promise: nothing runs back
   here, and the rejection is logged as unhandled. The message is delivered once either way.
 - **With no `.then` or `.catch` at all**, a message is one way and nothing comes back. Its body

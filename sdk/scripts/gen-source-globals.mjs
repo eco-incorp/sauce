@@ -558,8 +558,8 @@ export interface SauceRemoteOptions {
 
 /**
  * A remote message: its body runs on the chain, as the same Pot. Nothing comes back unless it
- * has a \`.then\` or a \`.catch\`; \`await\` it, and the code after it runs back here once the body
- * ran there.
+ * has a \`.then\` or a \`.catch\`: \`.then(() => { … })\` runs code back here once the body ran
+ * there.
  */
 export interface SauceRemote {
   /**
