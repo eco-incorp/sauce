@@ -21,7 +21,7 @@ import { parseSauce } from "../routes/parse.js";
 import { resolveContractReference } from "../routes/protocol-names.js";
 import { resolveNamespace } from "../routes/accessor-index.js";
 import { addressOn } from "../descriptors/query.js";
-import { intentParts, pathsAt } from "../routes/intent-parts.js";
+import { intentParts, pathAt } from "../routes/intent-parts.js";
 import { isChainKey } from "../routes/accessor-index.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 import { pascalOfSlug } from "../routes/pascal.js";
@@ -111,9 +111,7 @@ export function namesRead(text: string): readonly ReadName[] {
   const names: ReadName[] = [];
   walk(program, (node) => {
     if (node.type !== "Identifier" || skipped.has(node)) return;
-    for (const path of pathsAt(parts, node.start, node.end)) {
-      names.push({ name: node.name as string, path });
-    }
+    names.push({ name: node.name as string, path: pathAt(parts, node.start, node.end) });
   });
 
   return names;
@@ -255,35 +253,30 @@ export function usedContracts(text: string, chain: CanonicalChain): readonly Use
     const qualified = isChainKey(head);
     const rest = qualified ? path : [head, ...path];
     if (rest.length === 0 || resolveNamespace(rest[0]!) === undefined) return;
-    // A name in a `try`'s handler runs on every chain the handler does.
-    const chains = new Set(
-      pathsAt(parts, node.start, node.end).map((each) => each.at(-1) ?? chain),
-    );
-    for (const on of chains) {
-      for (const take of [2, 1]) {
-        if (rest.length < take) continue;
-        try {
-          const found = resolveContractReference(
-            qualified ? head : rest[0]!,
-            qualified ? rest.slice(0, take) : rest.slice(1, take),
-            on,
-            undefined,
-            "",
-            "",
-          );
-          const address = addressOn(found.descriptor, found.chain);
-          if (address === undefined) break;
-          const reference = [...(qualified ? [head] : []), ...rest.slice(0, take)].join(".");
-          seen.set(`${found.chain.slug} ${reference}`, {
-            reference,
-            contract: `${pascalOfSlug(found.protocol)}.${found.contract}`,
-            chain: found.chain.slug,
-            address: getAddress(address),
-          });
-          break;
-        } catch {
-          // Not a contract with that many segments: try fewer.
-        }
+    const on = pathAt(parts, node.start, node.end).at(-1) ?? chain;
+    for (const take of [2, 1]) {
+      if (rest.length < take) continue;
+      try {
+        const found = resolveContractReference(
+          qualified ? head : rest[0]!,
+          qualified ? rest.slice(0, take) : rest.slice(1, take),
+          on,
+          undefined,
+          "",
+          "",
+        );
+        const address = addressOn(found.descriptor, found.chain);
+        if (address === undefined) break;
+        const reference = [...(qualified ? [head] : []), ...rest.slice(0, take)].join(".");
+        seen.set(`${found.chain.slug} ${reference}`, {
+          reference,
+          contract: `${pascalOfSlug(found.protocol)}.${found.contract}`,
+          chain: found.chain.slug,
+          address: getAddress(address),
+        });
+        break;
+      } catch {
+        // Not a contract with that many segments: try fewer.
       }
     }
   });

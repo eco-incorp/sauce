@@ -1437,28 +1437,23 @@ describeEvm("intent bodies, executed", () => {
       }
     });
 
-    describe("a `try` around awaited hops handles each body, two and three deep", () => {
-      // `try { S1; await a; S2 } catch (e) { H }` is each body's `.catch`: the last hop's body
-      // reverts, everything it did is undone, and the handler runs there in its place.
+    describe("a handled hop opens another handled hop, two and three deep", () => {
+      // Each hop's `.then(...)` opens the next, and each `.catch(...)` handles its own body: the
+      // last hop's body reverts, everything it did is undone, and the handler runs there in its
+      // place.
       const FALLBACK = "0x0000000000000000000000000000000000000fb2" as Address;
       const hop = (amount: string) =>
-        `await Base.hop({ send: [{ token: TOKEN, amount: ${amount} }], receive: [{ token: Token(TOKEN), amount: ${amount} }], refundee: 0x3333333333333333333333333333333333333333 });`;
+        `Base.hop({ send: [{ token: TOKEN, amount: ${amount} }], receive: [{ token: Token(TOKEN), amount: ${amount} }], refundee: 0x3333333333333333333333333333333333333333 })`;
       const FORWARD = "Token(TOKEN).transfer(FALLBACK, Token(TOKEN).balanceOf(ctx.self()));";
-      const tried = (depth: number, last: string, handler: string) => `function main() {
-  const amount = Token(TOKEN).balanceOf(ctx.self());
-  try {
-    ${hop("amount")}
-    ${Array.from(
-      { length: depth - 1 },
-      (_, level) =>
-        `const got${level} = Token(TOKEN).balanceOf(ctx.self());\n    ${hop(`got${level}`)}`,
-    ).join("\n    ")}
-    Token(TOKEN).transfer(RECIPIENT, 1n);
-    ${last}
-  } catch (e) {
-    ${handler}
-  }
-}`;
+      const handled = (amount: string, body: string, handler: string): string =>
+        `${hop(amount)}.then(() => {\n${body}\n}).catch((e) => {\n${handler}\n});`;
+      const tried = (depth: number, last: string, handler: string) => {
+        let body = `Token(TOKEN).transfer(RECIPIENT, 1n);\n${last}`;
+        for (let level = depth - 2; level >= 0; level--) {
+          body = `const got${level} = Token(TOKEN).balanceOf(ctx.self());\n${handled(`got${level}`, body, handler)}`;
+        }
+        return `function main() {\nconst amount = Token(TOKEN).balanceOf(ctx.self());\n${handled("amount", body, handler)}\n}`;
+      };
 
       /** Fills the one intent `logs` show published, delivering `SEEDED`, and returns the fill. */
       const fill = async (token: Address, logs: readonly Log[]) => {

@@ -70,7 +70,7 @@ describe("a chain's name is its chain id", () => {
       ),
     ).toThrow(
       "`Arbitrum` is a chain id, not a function: an intent opens with " +
-        "`await Arbitrum.hop({ send, receive, refundee })`",
+        "`Arbitrum.hop({ send, receive, refundee }).then(() => { … })`",
     );
   });
 });

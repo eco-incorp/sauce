@@ -6,7 +6,7 @@
  * through eco-routes' own Portal, its calls read back from the cook's call trace, the intent
  * decoded from its `publish`, and every value that changes with `main`'s arguments (two runs,
  * different arguments) marked as a hole, `«amount»`. The printouts are `fixtures/intent-compiles-to/
- * *.folded.txt`, which #61's description quotes; `SAUCE_FOLDED_WRITE=1` rewrites them.
+ * *.folded.txt`, which #124's description quotes; `SAUCE_FOLDED_WRITE=1` rewrites them.
  *
  * It holds the class to encoding the intent ONCE: `intentVaultAddress` and `publish` take the same
  * `(uint64, bytes, Reward)`, and the two calls carry the same bytes. And it builds a template of
@@ -52,21 +52,29 @@ const HOP =
 
 const PROGRAMS = {
   "one-hop": `${MAIN} {
-  await ${HOP};
-  USDC.transfer(beneficiary, delivered);
+  ${HOP}.then(() => {
+    USDC.transfer(beneficiary, delivered);
+  });
 }`,
   "one-hop-in-a-try": `${MAIN} {
   try {
-    await ${HOP};
-    USDC.transfer(beneficiary, delivered);
+    ${HOP}
+      .then(() => {
+        USDC.transfer(beneficiary, delivered);
+      })
+      .catch((e) => {
+        USDC.transfer(refundTo, delivered);
+      });
   } catch (e) {
     USDC.transfer(refundTo, delivered);
   }
 }`,
   "two-hops": `${MAIN} {
-  await ${HOP};
-  await Optimism.hop({ send: { token: USDC, amount: delivered }, receive: { token: USDC, amount: delivered - 1000 }, refundee: refundTo });
-  USDC.transfer(beneficiary, delivered - 1000);
+  ${HOP}.then(() => {
+    Optimism.hop({ send: { token: USDC, amount: delivered }, receive: { token: USDC, amount: delivered - 1000 }, refundee: refundTo }).then(() => {
+      USDC.transfer(beneficiary, delivered - 1000);
+    });
+  });
 }`,
 } as const;
 
