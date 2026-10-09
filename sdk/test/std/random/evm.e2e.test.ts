@@ -140,7 +140,8 @@ const STRANGER = privateKeyToAccount(
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
 );
 
-const PORT = 9700 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
+/** A range no other suite takes (cli-wallet's base chain starts at 9700, the next suite's at 9800). */
+const PORT = 9750 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 /** Non-zero, so a cook provably pays it, and a callback's single fee can be counted. */
 const FEE = 1_234n;
