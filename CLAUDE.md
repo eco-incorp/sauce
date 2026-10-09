@@ -784,8 +784,9 @@ refundee, deadline?, rewardDeadline?, prover?, salt?, fee? }).then(() => { … }
 Optimism, and `.catch((e) => …)` on what `.then` returns. SauceScript has no `await` (user,
 2026-10-08: the compiler's await work, v12 #554, was dropped), so a cascade nests each hop in the
 body above it. What the SDK built for `await` is KEPT, dormant behind ONE switch, the plugin
-manifest's `await` (`plugin/await.ts#AWAIT_SUPPORTED`, false): the route parser's `canAwait`, the
-intent parts after an awaited hop and in a `try` around one (`intent-parts.ts`), `--fund`'s
+manifest's `awaitSupported` (`plugin/await.ts#AWAIT_SUPPORTED`, false; not `await`, which tsx's
+JSON modules cannot export): the route parser's `canAwait`, the intent parts after an awaited hop
+and in a `try` around one (`intent-parts.ts`), `--fund`'s
 `thenForm` (`await x; rest` as `x.then(() => { rest })`, byte for byte), and the editor plugin's
 TS1308 rule, which reads the manifest itself. Off, the editor reports an `await` as the compiler
 refuses it, and the tests of that machinery are skipped, named "await dropped from the compiler
