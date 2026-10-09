@@ -41,24 +41,22 @@ export type RunNpm = (
 ) => Promise<{ readonly status: number | null; readonly stderr: string; readonly error?: string }>;
 
 /**
- * `npm ci`'s arguments in `dir`: exactly the lockfile, no scripts, every platform binary it pins for
- * this platform (whatever a user's `omit=optional` says), quietly — and in `dir` itself, never in a
- * workspace root above it whose `workspaces` glob happens to match the temporary directory.
+ * `npm ci`'s arguments: exactly the lockfile, no scripts, every platform binary it pins for this
+ * platform (whatever a user's `omit=optional` says), quietly — and in the directory it runs in,
+ * never in a workspace root above it whose `workspaces` glob happens to match the temporary
+ * directory. Not `--prefix`, which would also move npm's global config (`$PREFIX/etc/npmrc`, where
+ * an organisation sets its registry, proxy or CA) to the temporary directory, unread.
  */
-export function npmCi(dir: string): readonly string[] {
-  return [
-    "ci",
-    "--ignore-scripts",
-    "--include=optional",
-    "--prefer-offline",
-    "--no-audit",
-    "--no-fund",
-    "--loglevel=error",
-    "--workspaces=false",
-    "--prefix",
-    dir,
-  ];
-}
+export const NPM_CI = [
+  "ci",
+  "--ignore-scripts",
+  "--include=optional",
+  "--prefer-offline",
+  "--no-audit",
+  "--no-fund",
+  "--loglevel=error",
+  "--workspaces=false",
+] as const;
 
 /** Version folders are named by version; anything else under the root is left alone, but for the
  *  temporary directories an install leaves only if it was killed. */
@@ -128,7 +126,7 @@ export async function installRuntime(dir: string, runNpm: RunNpm): Promise<void>
   try {
     copyFileSync(join(RUNTIME_SOURCE, "package.json"), join(temp, "package.json"));
     copyFileSync(join(RUNTIME_SOURCE, "package-lock.json"), join(temp, "package-lock.json"));
-    const ran = await runNpm(npmCi(temp), temp);
+    const ran = await runNpm(NPM_CI, temp);
     if (ran.status !== 0) throw new Error(npmReason(ran.status, ran.stderr, ran.error));
     try {
       renameSync(temp, dir);

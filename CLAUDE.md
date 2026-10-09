@@ -32,8 +32,9 @@ The pins are the root's devDependencies. The command takes, in this order
 each is exactly the pin; else `~/.sauce/runtime/<version>`; else it installs that folder first. The
 install is `npm ci
 --ignore-scripts` on the lockfile the package ships, `sdk/runtime/package{,-lock}.json`
-(`cli/runtime.ts`), run in a 0700 mkdtemp beside the folder with `--workspaces=false --prefix
-<temp>` (npm adopts an ancestor workspace root otherwise) and renamed into place, after which older
+(`cli/runtime.ts`), run in a 0700 mkdtemp beside the folder with `--workspaces=false` (npm adopts
+an ancestor workspace root otherwise; never `--prefix`, which moves npm's global config away) and
+renamed into place, after which older
 versions' folders are pruned but the newest of them. A newer version's folder is never pruned: a
 project's older pinned copy runs beside a newer global one. `optional.ts#assertPrivate` refuses to
 install into or load from a folder, or one above it up to `~/.sauce` (symlinks resolved), that

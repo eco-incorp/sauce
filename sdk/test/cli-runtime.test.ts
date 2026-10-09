@@ -37,7 +37,8 @@ import {
   type RuntimeInstaller,
 } from "../src/cli/optional.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import { installRuntime, npmCi, npmCommand, npmReason, prune } from "../src/cli/runtime.js";
+import { installRuntime, npmCommand, npmReason, NPM_CI, prune } from "../src/cli/runtime.js";
+import { IntentStore } from "../src/cli/store.js";
 
 let work: string;
 let root: string;
@@ -200,6 +201,25 @@ describe("where a command's runtime packages come from", () => {
     expect(() => assertPrivate(runtimeDir(), uid)).toThrow(/can be written by others \(mode 757\)/);
   });
 
+  it("a ~/.sauce the intent store creates stays the user's alone, whatever the umask", () => {
+    if (process.platform === "win32") return;
+    const sauce = join(work, ".sauce");
+    useRuntime({ root: join(sauce, "runtime") });
+    const umask = process.umask(0o002);
+    try {
+      new IntentStore(join(sauce, "intents")).append(`0x${"11".repeat(32)}`, {
+        event: "published",
+        chain: "base",
+        chainId: 8453,
+        time: new Date(0).toISOString(),
+      });
+    } finally {
+      process.umask(umask);
+    }
+    expect(statSync(sauce).mode & 0o777).toBe(0o700);
+    expect(() => assertPrivate(runtimeDir())).not.toThrow();
+  });
+
   it("refuses a folder another can write before it installs into it or loads from it", async () => {
     if (process.platform === "win32") return;
     const importer = join(work, "app");
@@ -272,8 +292,11 @@ describe("the runtime folder's installer", () => {
   const npm =
     (status = 0, stderr = "") =>
     async (args: readonly string[], cwd: string) => {
-      expect(args).toEqual(npmCi(cwd));
-      expect(args).toEqual(expect.arrayContaining(["--workspaces=false", "--prefix", cwd]));
+      expect(args).toEqual(NPM_CI);
+      // In the directory it runs in, never an ancestor workspace root's; and no --prefix, which
+      // would leave the machine's own npm config unread.
+      expect(args).toContain("--workspaces=false");
+      expect(args.some((arg) => arg.startsWith("--prefix"))).toBe(false);
       if (status === 0) installed(cwd);
 
       return { status, stderr };
