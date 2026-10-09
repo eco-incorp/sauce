@@ -47,9 +47,9 @@
 //
 // THE CALLBACK'S GAS is fixed when the request is made, and paid for then. Left out, `gas` is what
 // landing costs — the Router's dispatch, the handler's cook, settling and running the body — plus an
-// allowance per byte of what runs, as compiled. A body that loops, or calls out more than its size
-// says, needs `gas` given; so does a request raced or joined with others, whose callback runs the
-// combinator's body too. VRF's wrapper hands the callback exactly that much, and a callback that
+// allowance per byte of what runs, as compiled: the body, or for a request raced or joined with
+// others, its part and the combinator's body. A body that loops, or calls out more than its size
+// says, needs `gas` given. VRF's wrapper hands the callback exactly that much, and a callback that
 // runs out is spent: the wrapper catches it, and the request is paid and never retried. Entropy hands
 // it at most that much (and never less than its provider's default), and a callback that fails stays
 // open: anyone may reveal it again.
@@ -173,13 +173,19 @@ class Requests {
     });
   }
 
-  // The callback's gas limit a request asks for: `gas`, else sized from the continuation.
+  // The callback's gas limit a request asks for: `gas`, else sized from what settling runs: the
+  // continuation, and for a combinator's child the combinator's continuation too (`settles`).
   _callbackGas(gas, continuation) {
     if (gas !== undefined) return gas;
-    return (
-      SAUCE_RANDOM_LANDING_GAS +
-      SAUCE_RANDOM_GAS_PER_BYTE * (continuation.code.length + continuation.args.length)
-    );
+    const settles = continuation.settles;
+    const bytes =
+      settles === undefined
+        ? continuation.code.length + continuation.args.length
+        : continuation.code.length +
+          continuation.args.length +
+          settles.code.length +
+          settles.args.length;
+    return SAUCE_RANDOM_LANDING_GAS + SAUCE_RANDOM_GAS_PER_BYTE * bytes;
   }
 
   // The Pot pays `price` now and keeps the Kitchen's fee for the callback's cook.
