@@ -102,15 +102,15 @@ exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the
 
 **Not literals:**
 
-| Rejected                    | Error                                                                                                         | Write instead                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `1e18`                      | "not a valid integer literal"                                                                                 | `10 ** 18` or `1000000000000000000`     |
-| `1.5`                       | "`1.5` is not a valid 256-bit literal"                                                                        | integers in the smallest unit           |
-| `null`                      | rejected                                                                                                      | `0` or a flag                           |
-| `` `text` ``, `` `a${b}` `` | rejected, with or without `${}`                                                                               | `"text"`, or bytes built with `.concat` |
-| a bad `hex`                 | "`hex`…`` is not a valid hex literal (expected an even number of `[0-9a-fA-F]` digits, optional `0x` prefix)" |                                         |
-| `let xs = [];`              | "an array literal must have at least one element"                                                             | `let xs: Uint256[] = [];`               |
-| `[1, true]`                 | "every element of an array literal must have the same type — …"                                               |                                         |
+| Rejected                                  | Error                                                                                                               | Write instead                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `1e18`                                    | "not a valid integer literal"                                                                                       | `10 ** 18` or `1000000000000000000`     |
+| `1.5`                                     | "`1.5` is not a valid 256-bit literal"                                                                              | integers in the smallest unit           |
+| `null`                                    | rejected                                                                                                            | `0` or a flag                           |
+| `` `a${b}` ``, `b` known only at run time | "a template literal's `${…}` needs a value known while compiling, and this one is known only when the program runs" | `"text"`, or bytes built with `.concat` |
+| a bad `hex`                               | "`hex`…`` is not a valid hex literal (expected an even number of `[0-9a-fA-F]` digits, optional `0x` prefix)"       |                                         |
+| `let xs = [];`                            | "an array literal must have at least one element"                                                                   | `let xs: Uint256[] = [];`               |
+| `[1, true]`                               | "every element of an array literal must have the same type — …"                                                     |                                         |
 
 ## 3. Operators
 
@@ -142,7 +142,8 @@ exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the
   - "`++`/`--` as a value (they are statement-only here — write `i += 1n`)"
 
 Accounts compare only with `==` and `!=`: "accounts compare for identity only — `==` and `!=`. …".
-`>>>`, `??`, `typeof`, `instanceof`, `in`, `void`, `delete` and unary `+` are not supported (see §14).
+`>>>`, `??`, `in`, `void`, `delete` and unary `+` are not supported (see §14). `typeof` and
+`instanceof` are answered while compiling (§4).
 
 ## 4. Variables, control flow, functions and modules
 
@@ -210,6 +211,20 @@ program rarely needs to.
 - A dotted path to nothing, `Monkey.Jump` with `Monkey` undeclared or a member a static object lacks,
   reads as `0` under `==` and `!=`, so `if (Monkey.Jump != 0) { … }` is decided while compiling and
   its other arm is never compiled; any other use is an error. A bare unknown name is always one.
+- `typeof x`, `Array.isArray(x)` and a function's `length` are constants: a number or an address is
+  `"bigint"`, a `bool` `"boolean"`, bytes and a string `"string"`, an array or an object
+  `"object"`, a function, a class or a contract import `"function"`. A run-time value answers from
+  its type.
+- A template literal whose every `${…}` the compiler knows is a string constant (`` `n=${n}` ``).
+  One known only at run time is an error: "a template literal's `${…}` needs a value known while
+  compiling, and this one is known only when the program runs".
+- `[...xs, y]` and `{ ...a, b: 2 }` copy an array or an object the compiler knows. Spreading a
+  run-time array is an error: "a spread of an array needs a value known while compiling, and this
+  one is known only when the program runs".
+- An array the compiler knows answers `map`, `filter`, `forEach`, `find`, `some`, `every`,
+  `includes` and `join` while compiling, and a string it knows `startsWith`, `endsWith`, `includes`,
+  `toUpperCase`, `toLowerCase` and `length`. An array known only at run time has none of them:
+  "`.map` needs a value known while compiling, and this one is known only when the program runs".
 - `const xs = []` is an empty array of this kind; an empty array in a `let` needs a declared type (§2).
 - A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown
   message.
@@ -538,8 +553,9 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
 - `.slice(start, end)`, on bytes
   - Types: `(scalar, scalar) → bytes`
   - Covers bytes `start` up to, but not including, `end`. `end < start` reverts. Arrays have no
-    `.slice`: "a bytes method's receiver requires a bytes value". "`.slice` takes exactly 2
-    arguments (start, end), got N"
+    `.slice`: "a bytes method's receiver requires a bytes value". "`.slice` at run time takes
+    exactly 2 positions (start, end), but this call passes N; one position, as JavaScript takes it,
+    is answered only for a string the compiler knows, in code it runs, such as a class's method"
   - Example: `const args = input.slice(4, 68);`
 - `.concat(b1, b2, …)`, on bytes
   - Types: `(...bytes) → bytes`
@@ -605,6 +621,9 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
   - Example: `Library.lib(lib).run(x);`
 - `const t = ERC20.at(address); t.method(args)`: the same, through a variable
   - Example: `const t = ERC20.at(token); t.approve(router, amount);`
+- `ERC20(address).method(args)`: the import called with an address is its `.at(address)`, byte for
+  byte, as is a registry interface (`UniswapV3.Pool(pool)`, §4). A binding is no function: "a
+  binding of `ERC20` is not a function, so it cannot be called".
 
 - **Results.**
   - A method with no outputs returns its raw return bytes.
@@ -622,7 +641,9 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
 - **Errors.**
   - "`ERC20` has no method named `totalSupply`".
   - "`ERC20.transfer()` expects 2 argument(s), but this call passes 1".
-  - "`.at()` (a contract binding) takes exactly 1 argument (the address)".
+  - "`.at()` (a contract binding) takes exactly 1 argument (the address)", and called with an
+    address: "`ERC20(…)` binds the contract to the address it is called with, so it takes exactly 1
+    argument, but this call passes N".
   - Overloaded methods with the same argument count are not supported.
   - On SVM: "`Contract.at` is not available on the svm target; invoke another program with svm.call(program,
     accounts, calldata), or import a library's SVM arm (@sauce/token)".
@@ -694,33 +715,33 @@ function main(x: Uint256): Uint256 {
 
 ## 14. Not supported, and what to write instead
 
-| Not supported                                                    | Write instead                                                                                                     |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `switch`                                                         | `if` / `else if` chains                                                                                           |
-| `do { } while (…)`                                               | `while (true) { …; if (!cond) { break; } }`                                                                       |
-| `for (k in obj)`, `for await`                                    | an index loop or `for (const x of array)`                                                                         |
-| `finally`                                                        | `try`/`catch` (§13) for what fails on EVM, and the code after it                                                  |
-| function expressions, nested `function` declarations             | top-level `function` declarations, or an arrow function (§4)                                                      |
-| `enum`, `type` aliases, generics, `namespace`                    | records, `interface`, constants                                                                                   |
-| `async function`, `await`                                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
-| default parameters, rest parameters, destructuring parameters    | plain parameters                                                                                                  |
-| object destructuring `const { a } = t`                           | `const a = t.a;`                                                                                                  |
-| spread `[...xs]`, `f(...xs)`                                     | explicit elements, or a loop                                                                                      |
-| `?.`, `??`, `x!`, `as`, `satisfies`                              | explicit checks; annotations                                                                                      |
-| `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+` | `Math.sShr`, or plain values                                                                                      |
-| `>>>=`, `\|\|=`, `&&=`, `??=`                                    | `x = …`                                                                                                           |
-| `a[i] += v`, `t.f += v`, `a[i]++`                                | `a[i] = a[i] + v`                                                                                                 |
-| `i++` used as a value                                            | `i += 1` on its own line                                                                                          |
-| `t[0] = v` on a record                                           | `t.field = v`                                                                                                     |
-| template strings                                                 | `"text"`, or bytes built with `.concat`                                                                           |
-| `1e18`, `1.5`, `null`                                            | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
-| `xs.push(v)`, `console.log`, any JavaScript library              | `new Array(n)` with an index; `log(…)`                                                                            |
-| `Math.min`, `max`, `abs`, `pow`                                  | `if` or a ternary; `**`                                                                                           |
-| comparing bytes with `==`                                        | compare `crypto.keccak256` of each                                                                                |
-| `export default`, `export { … }`, `import * as X`                | `export function` / `export const`; named imports                                                                 |
-| sending value through a bound call                               | `evm.call(address, value, data)`                                                                                  |
-| labeled statements, labeled `break`/`continue`                   | a flag variable                                                                                                   |
-| computed object keys, object methods                             | plain named fields                                                                                                |
+| Not supported                                                 | Write instead                                                                                                     |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `switch`                                                      | `if` / `else if` chains                                                                                           |
+| `do { } while (…)`                                            | `while (true) { …; if (!cond) { break; } }`                                                                       |
+| `for (k in obj)`, `for await`                                 | an index loop or `for (const x of array)`                                                                         |
+| `finally`                                                     | `try`/`catch` (§13) for what fails on EVM, and the code after it                                                  |
+| function expressions, nested `function` declarations          | top-level `function` declarations, or an arrow function (§4)                                                      |
+| `enum`, `type` aliases, generics, `namespace`                 | records, `interface`, constants                                                                                   |
+| `async function`, `await`                                     | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
+| default parameters, rest parameters, destructuring parameters | plain parameters                                                                                                  |
+| object destructuring `const { a } = t`                        | `const a = t.a;`                                                                                                  |
+| spread of a run-time array, `f(...xs)`                        | explicit elements, or a loop                                                                                      |
+| `?.`, `??`, `x!`, `as`, `satisfies`                           | explicit checks; annotations                                                                                      |
+| `>>>`, `in`, `delete`, `void`, unary `+`                      | `Math.sShr`, or plain values                                                                                      |
+| `>>>=`, `\|\|=`, `&&=`, `??=`                                 | `x = …`                                                                                                           |
+| `a[i] += v`, `t.f += v`, `a[i]++`                             | `a[i] = a[i] + v`                                                                                                 |
+| `i++` used as a value                                         | `i += 1` on its own line                                                                                          |
+| `t[0] = v` on a record                                        | `t.field = v`                                                                                                     |
+| a template string with a run-time `${…}`                      | `"text"`, or bytes built with `.concat`                                                                           |
+| `1e18`, `1.5`, `null`                                         | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
+| `xs.push(v)`, `console.log`, any JavaScript library           | `new Array(n)` with an index; `log(…)`                                                                            |
+| `Math.min`, `max`, `abs`, `pow`                               | `if` or a ternary; `**`                                                                                           |
+| comparing bytes with `==`                                     | compare `crypto.keccak256` of each                                                                                |
+| `export default`, `export { … }`, `import * as X`             | `export function` / `export const`; named imports                                                                 |
+| sending value through a bound call                            | `evm.call(address, value, data)`                                                                                  |
+| labeled statements, labeled `break`/`continue`                | a flag variable                                                                                                   |
+| computed object keys, object methods                          | plain named fields                                                                                                |
 
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
 

@@ -299,10 +299,9 @@ describe("every registry protocol, every contract kind", () => {
     );
   });
 
-  // Pending the compiler: a namespace's interface is `(address) => binding`, which `Pool(pool)`
-  // calls and which has no `.at`. Holding the contract import instead gives `.at`, and loses the
-  // call: the compiler calls no contract import (`Pool(pool)` is "not a function").
-  it.failing("an interface is called at the address the program supplies", () => {
+  // A namespace's interface is its contract import: called with an address, the compiler binds it
+  // there, as `.at` does.
+  it("an interface is called at the address the program supplies", () => {
     expect(
       bytesOf(
         "base",
@@ -319,7 +318,7 @@ describe("every registry protocol, every contract kind", () => {
     );
   });
 
-  it.failing("an interface called with an address is its .at(address), byte for byte", () => {
+  it("an interface called with an address is its .at(address), byte for byte", () => {
     expect(
       bytesOf(
         "base",
@@ -368,11 +367,12 @@ describe("every registry protocol, every contract kind", () => {
         "function main(): Uint256 { const pool = UniswapV3.Pool(1n); return pool.fee(); }",
       ),
     ).toEqual(bytesOf("base", "function main(): Uint256 { return UniswapV3.Pool(1n).fee(); }"));
-    // An interface is an arrow of one address: as in JavaScript, an argument beyond it is dropped
-    // (the editor's declarations flag it).
-    expect(
+    // Called with anything but one address, it is refused, naming the call as written.
+    expect(() =>
       bytesOf("base", "function main(): Uint256 { return UniswapV3.Pool(1n, 2n).fee(); }"),
-    ).toEqual(bytesOf("base", "function main(): Uint256 { return UniswapV3.Pool(1n).fee(); }"));
+    ).toThrow(
+      "`UniswapV3.Pool(…)` binds the contract to the address it is called with, so it takes exactly 1 argument, but this call passes 2",
+    );
   });
 
   it("a deployed contract's name is never called with an address: .at binds another deployment", () => {
