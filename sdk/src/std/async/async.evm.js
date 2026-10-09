@@ -688,8 +688,8 @@ class Lists {
 //             delivered, and calls `body` with it decoded, or `fail` with why the request failed.
 //             Left out, the body is handed `input` as it is.
 //   carries   true for a protocol that carries the continuation back (above).
-//   chain     the id of the chain the callback lands on, a number the compiler knows
-//             (`Optimism.valueOf()`): this chain's (`chainId`) when left out.
+//   chain     the chain the callback lands on, `Optimism` or its id: this chain (`chainId`)
+//             when left out.
 //   deadline  a unix time after which anyone may `expire` the promise, rejecting it with
 //             `Timeout(bytes32)`; or call `.within(seconds)`.
 //

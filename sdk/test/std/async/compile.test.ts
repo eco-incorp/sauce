@@ -353,6 +353,20 @@ function main(to: Address, value: Uint256) {
   }
 }`);
     expect(settledHere.continuations).toHaveLength(1);
+    // Taken apart, as JavaScript's are: the same program.
+    const destructured = compile(`${ECHO}
+function main(to: Address, value: Uint256) {
+  const { promise, resolve, reject } = Promise.withResolvers();
+  promise.then((got) => {
+    evm.sstore(1, got.length + to);
+  });
+  if (value == 0) {
+    reject(abi.encode(value));
+  } else {
+    resolve(abi.encode(value));
+  }
+}`);
+    expect(hex(destructured.bytecode)).toBe(hex(settledHere.bytecode));
     const later = compile(`${ECHO}
 function main(key: Uint256, value: Uint256) {
   Async.resolve(key, abi.encode(value));
@@ -362,8 +376,9 @@ function main(key: Uint256, value: Uint256) {
     expect(later.continuations).toHaveLength(0);
   });
 
-  it("a request on another chain compiles its body for that chain", () => {
-    const program = compile(`import { Request } from "@sauce/async";
+  it("a request on another chain compiles its body for that chain, named or by its id", () => {
+    const sent = (chain: string) =>
+      compile(`import { Request } from "@sauce/async";
 
 class Remote {
   send(chain) {
@@ -379,11 +394,13 @@ class Remote {
 const Messenger = new Remote();
 
 function main(to: Address) {
-  Messenger.send(Ethereum.valueOf()).then((input) => {
+  Messenger.send(${chain}).then((input) => {
     USDC.transfer(to, 1);
   });
 }`);
-    expect(program.continuations.map((b) => b.destination.slug)).toEqual(["ethereum"]);
+    const named = sent("Ethereum");
+    expect(named.continuations.map((b) => b.destination.slug)).toEqual(["ethereum"]);
+    expect(hex(sent("Ethereum.valueOf()").bytecode)).toBe(hex(named.bytecode));
   });
 });
 
