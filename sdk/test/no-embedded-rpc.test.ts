@@ -64,6 +64,10 @@ const REQUIRED = [
   "sdk/src/cli/run.ts",
   "sdk/src/cli/commands.ts",
 ];
+/** Loading Node.js's child_process module, however it is spelled: a static import or re-export, a
+ *  `require`, a dynamic `import()`, with or without the `node:` prefix. */
+const CHILD_PROCESS =
+  /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](?:node:)?child_process["']/;
 /** Generated, not authored: its URLs are package tarballs. */
 const SKIP = new Set(["pnpm-lock.yaml"]);
 /** The `sauce` command's public endpoints: the one file that may hold RPC URLs. */
@@ -259,9 +263,21 @@ describe("the SDK ships no RPC endpoints", () => {
     // managers `sauce update` runs; runtime.ts: `npm ci` into a runtime folder. The three that reach
     // the npm registry, through npm and its user's configuration.
     const spawning = [...shipped]
-      .filter(([, text]) => /from\s+["']node:child_process["']/.test(text))
+      .filter(([, text]) => CHILD_PROCESS.test(text))
       .map(([file]) => file)
       .sort();
+    // Every spelling of loading the module counts, so a new one cannot slip past.
+    for (const spelling of [
+      'import { spawn } from "node:child_process";',
+      "import * as cp from 'child_process';",
+      'const { spawn } = require("child_process");',
+      'const cp = require("node:child_process");',
+      'const cp = await import("node:child_process");',
+      "const cp = await import('child_process');",
+      'export { spawn } from "child_process";',
+    ]) {
+      expect([spelling, CHILD_PROCESS.test(spelling)]).toEqual([spelling, true]);
+    }
     expect(spawning).toEqual([
       "sdk/src/cli/run.ts",
       "sdk/src/cli/runtime.ts",
