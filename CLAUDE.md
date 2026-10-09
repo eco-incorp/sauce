@@ -21,6 +21,21 @@ A **pnpm monorepo** of four workspace packages (`pnpm-workspace.yaml`: `dev-tool
 bundling is the key mental model: code lives in four packages for development, consumers import
 everything from one name.
 
+**What the root manifest depends on is held to what the code imports.** Its `dependencies` are
+exactly what a library import loads. Its `optionalDependencies` are what only one command of the
+`sauce` bin loads, by a dynamic import when that command runs: `@modelcontextprotocol/sdk` and
+`zod` (`sauce mcp`, i.e. `mcp/dist`) and `litesvm` (a Solana rehearsal, `cli/svm-fork.ts`), at the
+pins of the workspace that uses each. npm installs them by default, so `npx -y @eco-incorp/sauce
+mcp` needs nothing else. A library install leaves them out with `--omit=optional`, and the command
+that needs one prints `cli/optional.ts#optionalMissing`'s one line with the `npm i` that adds it.
+TypeScript is a devDependency only: the editor plugin gets the editor's TypeScript, and `sauce
+init` writes our devDependency's range into the new project's devDependencies.
+`sdk/test/optional-dependencies.test.ts` walks every export's module graph to enforce this.
+`check-packed-package.mjs` installs the tarball a second time with `--omit=optional` and runs the
+library, `compile`/`tx`/`globals`, and both refusals there. Never add a runtime dependency that no
+export loads. Give a new CLI-only package to `optionalDependencies` and a lazy import, and register
+it in `optional.ts`.
+
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
@@ -951,7 +966,8 @@ tool arguments into it.
 of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
 owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
-MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
+MCP SDK, an optional dependency, as zod is: an install without them gets `optional.ts`'s message);
+`entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
 Its tools are the `sauce` command's building half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
 `sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
 `sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,

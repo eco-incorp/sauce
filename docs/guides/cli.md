@@ -41,6 +41,10 @@ sauce --version
 
 Node.js 24 or newer. Every command in this guide is written as `sauce …`, the global install.
 
+The MCP SDK and zod (for `sauce mcp`) and LiteSVM (for Solana rehearsals in a local copy) are
+optional dependencies, which npm installs by default. A library-only install with `--omit=optional`
+leaves them out. Those commands then print the `npm i` line that adds what they need.
+
 `sauce update` upgrades it to the latest release (or `--version <version>`), the way it was
 installed: a global install by npm, pnpm, yarn or bun is installed again by that manager, and skills
 installed in the current directory are then updated by the new `sauce`. A project's own copy is

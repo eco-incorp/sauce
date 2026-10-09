@@ -18,6 +18,10 @@ npm install @eco-incorp/sauce
 Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compiler.md#in-a-browser) and the
 same code compiles the same bytes.
 
+Only using the library? `npm i @eco-incorp/sauce --omit=optional` leaves out the MCP SDK, zod and
+LiteSVM. Only `sauce mcp` and Solana rehearsals load those. The flag also leaves out every other
+package's optional dependencies, so don't use it if something else in the project needs one.
+
 For the [`sauce` command](docs/guides/cli.md), install the package once globally:
 
 ```sh

@@ -18,7 +18,9 @@ npm i -g @eco-incorp/sauce
 sauce --version
 ```
 
-`npm i -g @eco-incorp/sauce@latest` upgrades it. Then add the server to your agent.
+`npm i -g @eco-incorp/sauce@latest` upgrades it. The server's MCP SDK and zod are optional
+dependencies, which npm installs by default. An install with `--omit=optional` leaves them out, and
+`sauce mcp` then prints the `npm i` line that adds them. Then add the server to your agent.
 
 ### Claude Code
 
