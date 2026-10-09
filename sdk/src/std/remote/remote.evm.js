@@ -39,7 +39,7 @@
 // ABIs: Hyperlane's `dispatch(uint32,bytes32,bytes,bytes)`, LayerZero's
 // `send((uint32,bytes32,bytes,bytes,bool),address)`, the MetalayerRouter's
 // `dispatch(uint32,bytes32,(uint32,address,bytes)[],bytes,uint8,uint256)`, and for Polymer a log.
-import { Request, received, requireCaller, requireSelf, run } from "@sauce/async";
+import { Request, received, requireCaller, requireSelf, run, settleCarried } from "@sauce/async";
 import Mailbox from "./hyperlane-mailbox.abi.json";
 import Endpoint from "./layerzero-endpoint.abi.json";
 import MetalayerRouter from "./metalayer-router.abi.json";
@@ -55,6 +55,10 @@ const SAUCE_REMOTE_TOPIC = 0x14021f465312ca78398455623921447618a4b2f17c8c2c92c70
 // A log's slot is `keccak256(abi.encode(srcChain, blockNumber, receiptIndex, logIndex, namespace))`,
 // its place as the proof proves it, holding 1 once the log has run.
 const SAUCE_REMOTE_NAMESPACE = 0x1525874021e6c09cdc55221a93ef44a332285f3245b5be9206bc84993cc94100;
+
+// The transient-storage slot (EIP-1153) where the far side of a round trip keeps what the body
+// returned, past the frame it ran in: keccak256("sauce.remote.out"), its length, and its words after.
+const SAUCE_REMOTE_OUT = 0x060f47f4cf8915d03a5bd9eecaa2f85d38b0536343fffc5d1adbc0a0ea1c1710;
 
 // The gas the destination's handler is given when a message names none: the Router's dispatch, the
 // Kitchen's cook, the handler's checks, and the program it runs.
@@ -144,17 +148,43 @@ export class Remote {
     return "after `.catch(...)` nothing follows it";
   }
 
+  // A deadline `seconds` from when the message is sent: after it, anyone may `expire` the promise
+  // here, rejecting it with `Timeout(bytes32)`, and an answer that comes later is ignored.
+  within(seconds) {
+    if (seconds === undefined) {
+      throw new Error("`.within(...)` takes the seconds the answer has: `.within(3600)`");
+    }
+    this._deadline = ctx.timestamp() + seconds;
+    return this;
+  }
+
   // The statement ends: compile what runs there and send it. The bridge is passed as an argument
   // rather than held by a `const`: a string a `const` holds is a run-time value, and the bridge must
   // be one the compiler knows, so that only its calls are compiled.
   [Symbol.dispose]() {
     if (this._then === undefined && this._catch === undefined) {
+      if (this._deadline !== undefined) {
+        throw new Error(
+          "`.within(...)` bounds the answer, and a remote message with no `.then` or `.catch` has none",
+        );
+      }
       this._oneWay(this._via());
     } else if (this._catch === undefined) {
       this._roundTrip(this._via());
     } else {
       this._roundTripCaught(this._via());
     }
+  }
+
+  // As a combinator's child (`Promise.all([Base.remote(…), Optimism.remote(…)])`): a round trip whose
+  // answer settles the child the combinator counts.
+  _join(joinKey, index, settles) {
+    new Request(this._spec(this._via(), false))._join(joinKey, index, settles);
+  }
+
+  // How a combinator hands on what this message answered: the bytes the body returned.
+  _decoder() {
+    return (input, next, fail) => next(input);
   }
 
   // The bridge: the one the options name, which both chains must have, or the first both have.
@@ -196,27 +226,28 @@ export class Remote {
     return this._config.replyGas === undefined ? SAUCE_REMOTE_GAS : this._config.replyGas;
   }
 
-  // The body alone, handed nothing.
+  // The body alone, handed nothing. A body that reverts reverts the delivery, which the bridge can
+  // retry.
   _oneWay(via) {
-    const body = program(this._body, this._there.chainId);
     Bridge.send(
       this._here,
       this._there,
       via,
-      abi.encode(body.code.concat(body.args), hex``),
+      Message.run(Reply.compiled(this._body, this._there.chainId), hex``),
       this._gas(),
     );
   }
 
   // The body, and the `.then` back here with what it returned.
   _roundTrip(via) {
-    const request = new Request(this._spec(via, this._reply(via)));
+    const request = new Request(this._spec(via, false));
     request.then(this._then);
   }
 
-  // The body, and back here the `.then` with what it returned or the `.catch` with why it reverted.
+  // The body, and back here the `.then` with what it returned or the `.catch` with why it was
+  // rejected: the body's revert there, the `.then`'s here, or a deadline past.
   _roundTripCaught(via) {
-    const request = new Request(this._spec(via, this._replyCaught(via)));
+    const request = new Request(this._spec(via, true));
     request.then(this._continuation()).catch(this._catch);
   }
 
@@ -226,77 +257,129 @@ export class Remote {
     return () => {};
   }
 
-  // The request a round trip is: its continuation, compiled for this chain, sent there as the
-  // input of `reply`, which sends it back; and its delivery, `abi.encode(ok, data)`.
-  _spec(via, reply) {
+  // The promise a round trip is, carried: `@sauce/async` compiles its continuation for this chain
+  // and picks its key, and `send` sends the program that runs the body there, handed the
+  // continuation to carry back, or, when the table here holds the promise (a deadline, a
+  // combinator), only its key.
+  _spec(via, catches) {
     const here = this._here;
     const there = this._there;
     const gas = this._gas();
+    const remote = this;
     return {
+      carries: true,
       chain: here.chainId,
+      deadline: this._deadline,
       send: (continuation) => {
-        const compiled = program(reply, there.chainId);
+        const reply = program(
+          remote._reply(via, continuation.key, continuation.stored, catches || continuation.stored),
+          there.chainId,
+        );
         Bridge.send(
           here,
           there,
           via,
-          abi.encode(
-            compiled.code.concat(compiled.args),
-            continuation.code.concat(continuation.args),
+          Message.run(
+            reply.code.concat(reply.args),
+            continuation.stored ? hex`` : continuation.program,
           ),
           gas,
         );
       },
-      deliver: (input, body, fail) => {
-        const [ok, data] = abi.decode(input, ["Uint256", "bytes"]);
-        if (ok == 1) {
-          body(data);
-        } else {
-          fail(data);
-        }
-      },
     };
   }
 
-  // What runs there on a round trip: the body, then the continuation it was handed sent back with
-  // what the body returned. A body that reverts reverts the delivery.
-  _reply(via) {
+  // What runs there on a round trip: the body, then the answer sent back over the same bridge to
+  // settle the promise `key`, with what it was handed (the continuation, unless the table holds the
+  // promise). When something here handles a rejection (`handles`: a `.catch`, or a table record a
+  // combinator or a deadline reads), the body runs caught, and its revert is sent back as the
+  // rejection, everything it did undone; otherwise a body that reverts reverts the delivery, which
+  // the bridge can retry.
+  _reply(via, key, stored, handles) {
     const body = this._body;
     const here = this._here;
     const there = this._there;
     const gas = this._replyGas();
-    return () => {
-      const back = received();
-      const out = run(Reply.compiled(body, there.chainId), hex``);
-      Bridge.send(there, here, via, abi.encode(back, abi.encode(1, out)), gas);
-    };
-  }
-
-  // The same, with the body's revert sent back too. The `try` block is a frame of its own, so what
-  // the body did is undone with it, and the transient storage `received()` reads is as the handler
-  // left it: the continuation, read again in the `catch`.
-  _replyCaught(via) {
-    const body = this._body;
-    const here = this._here;
-    const there = this._there;
-    const gas = this._replyGas();
-    return () => {
-      try {
+    if (!handles) {
+      return () => {
         const back = received();
         const out = run(Reply.compiled(body, there.chainId), hex``);
-        Bridge.send(there, here, via, abi.encode(back, abi.encode(1, out)), gas);
-      } catch (e) {
-        Bridge.send(there, here, via, abi.encode(received(), abi.encode(0, e)), gas);
+        Bridge.send(there, here, via, Message.settle(key, stored, back, out, 1), gas);
+      };
+    }
+    // The flag form: the body runs in a frame of its own, caught at that one call, its answer kept
+    // in transient storage, and the answer is sent after it either way.
+    return () => {
+      const back = received();
+      let ok = 1;
+      let value = hex``;
+      evm
+        .delegate(
+          Reply.engine(),
+          Reply.compiled(() => {
+            Reply.keep(run(Reply.compiled(body, there.chainId), hex``));
+          }, there.chainId),
+        )
+        .catch((e) => {
+          ok = 0;
+          value = e;
+        });
+      if (ok == 1) {
+        value = Reply.kept();
       }
+      Bridge.send(there, here, via, Message.settle(key, stored, back, value, ok), gas);
     };
   }
 }
 
+// A message: the program a Pot runs where it arrives and what it is handed, or the answer that
+// settles a promise there. The first word says which.
+class Message {
+  // `abi.encode(0, program, input)`: run `program`, handed `input`.
+  static run(code, input) {
+    return abi.encode(0, code, input);
+  }
+
+  // `abi.encode(1, key, stored, program, value, ok)`: settle the promise `key`, fulfilled (`ok` 1)
+  // with `value` or rejected (0) with it, running `program` when no table holds it.
+  static settle(key, stored, code, value, ok) {
+    return abi.encode(1, key, stored ? 1 : 0, code, value, ok);
+  }
+}
+
+// The way back from the destination, compiled into the program the destination runs.
 class Reply {
   // `body` as a program for `chainId`, with its arguments.
   static compiled(body, chainId) {
     const compiled = program(body, chainId);
     return compiled.code.concat(compiled.args);
+  }
+
+  // The engine the Pot's cook in flight runs: `inFlightEngine()`.
+  static engine() {
+    const [engine] = abi.decode(evm.static(ctx.self(), hex`9fd004e1`), ["Address"]);
+    return engine;
+  }
+
+  // Keep `out` in transient storage, its length and its words, past the frame that made it.
+  static keep(out) {
+    const length = out.length;
+    evm.tstore(SAUCE_REMOTE_OUT, length);
+    const padded = out.concat(hex`00000000000000000000000000000000000000000000000000000000000000`);
+    for (let i = 0; i * 32 < length; i += 1) {
+      const [w] = abi.decode(padded.slice(i * 32, i * 32 + 32), ["Uint256"]);
+      evm.tstore(SAUCE_REMOTE_OUT + 1 + i, w);
+    }
+  }
+
+  // What `keep` kept.
+  static kept() {
+    const length = evm.tload(SAUCE_REMOTE_OUT);
+    let out = hex``;
+    for (let i = 0; i * 32 < length; i += 1) {
+      out = out.concat(evm.tload(SAUCE_REMOTE_OUT + 1 + i).toBytesBe(32));
+    }
+    return out.slice(0, length);
   }
 }
 
@@ -447,10 +530,22 @@ export class Receive {
     Receive.run(message);
   }
 
-  // Run a message's program, writable, as this Pot, in the cook the handler runs in, handed the
-  // message's input.
+  // A message this same Pot sent: run its program, writable, as this Pot, in the cook the handler
+  // runs in, handed its input; or settle the promise its answer names, once.
   static run(message) {
-    const [code, input] = abi.decode(message, ["bytes", "bytes"]);
-    run(code, input);
+    if (message.slice(0, 32).toBe() == 0) {
+      const [kind, code, input] = abi.decode(message, ["Uint256", "bytes", "bytes"]);
+      run(code, input);
+    } else {
+      const [kind, key, stored, code, value, ok] = abi.decode(message, [
+        "Uint256",
+        "Uint256",
+        "Uint256",
+        "bytes",
+        "bytes",
+        "Uint256",
+      ]);
+      settleCarried(key, stored == 1, code, value, ok == 1);
+    }
   }
 }

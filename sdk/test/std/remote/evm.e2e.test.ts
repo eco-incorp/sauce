@@ -74,8 +74,6 @@ import {
 
 const ROUTER = routerUnderTest();
 const describeRemote = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
-/** A `catch (e)` that reads `e` runs on an engine built from the compiler's own tree, and not on
- *  the released one: the `.catch` case skips there. */
 const RELEASED_ENGINE =
   RUNTIME_HEX_PATH !== undefined &&
   readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
@@ -90,7 +88,10 @@ const RELEASED_ENGINE =
         ),
       ) as { runtimeCreationCode: string }
     ).runtimeCreationCode.toLowerCase();
-const itCatching = RELEASED_ENGINE ? it.skip : it;
+/** A round trip settles its promise through `@sauce/async`'s `settleCarried`, whose catch reads the
+ *  body's revert: it runs on an engine built from the compiler's tree, and not on the released
+ *  one, so every case an answer comes back in skips there. */
+const itSettling = RELEASED_ENGINE ? it.skip : it;
 
 /** Anvil's third dev account: a stranger to every Pot. A public key, local only. */
 const STRANGER = privateKeyToAccount(
@@ -102,16 +103,23 @@ const potAbi = parseAbi([
   "function handle(uint32 origin, bytes32 sender, bytes message) payable",
   "function deliver(bytes proof)",
   "function allowInitializePath((uint32 srcEid, bytes32 sender, uint64 nonce) origin) view returns (bool)",
+  "function expire(bytes32 key)",
   "function nextNonce(uint32 srcEid, bytes32 sender) view returns (uint64)",
 ]);
+
+/** `@sauce/async`'s logs: a promise parked in the table, and a callback that found it settled. */
+const PROMISE_PENDING = keccak256(toHex("PromisePending(bytes32,uint256)"));
+const PROMISE_IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
 
 /** A Pot storage slot a test's body writes. */
 const slot = (name: string): Hex => keccak256(toHex(`remote.${name}`));
 
 let ethereum: LocalChain;
 let base: LocalChain;
+let optimism: LocalChain;
 let ethereumBridges: Bridges;
 let baseBridges: Bridges;
+let optimismBridges: Bridges;
 /** The Pot the harness mints on both chains: the deployer's, under the harness's salt. */
 let pot: Address;
 
@@ -173,9 +181,10 @@ async function reverts(
 describeRemote("@sauce/remote between two chains, over each bridge", () => {
   beforeAll(async () => {
     const options = { routerCreationCode: ROUTER };
-    [ethereum, base] = await Promise.all([
-      startChain("ethereum", 8850 + WORKER * 2, options),
-      startChain("base", 8851 + WORKER * 2, options),
+    [ethereum, base, optimism] = await Promise.all([
+      startChain("ethereum", 8850 + WORKER * 3, options),
+      startChain("base", 8851 + WORKER * 3, options),
+      startChain("optimism", 8852 + WORKER * 3, options),
     ]);
     pot = getCreate2Address({
       bytecodeHash: gateAnchors().potInitCodeHash,
@@ -187,11 +196,12 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
         ),
       ),
     });
-    [ethereumBridges, baseBridges] = await Promise.all([
-      plantBridges(ethereum, base),
-      plantBridges(base, ethereum),
+    [ethereumBridges, baseBridges, optimismBridges] = await Promise.all([
+      plantBridges(ethereum, [base, optimism]),
+      plantBridges(base, [ethereum, optimism]),
+      plantBridges(optimism, [ethereum, base]),
     ]);
-    for (const local of [ethereum, base]) {
+    for (const local of [ethereum, base, optimism]) {
       // The Pot pays each bridge's fee and the Kitchen's for every message it runs.
       await local.deployer.sendTransaction({
         account: DEPLOYER,
@@ -208,7 +218,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
   }, 240_000);
 
   afterAll(async () => {
-    await Promise.all([ethereum?.stop(), base?.stop()]);
+    await Promise.all([ethereum?.stop(), base?.stop(), optimism?.stop()]);
   });
 
   it("the Pot has one address on both chains, and answers each bridge's selector", async () => {
@@ -224,6 +234,8 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       "allowInitializePath((uint32,bytes32,uint64))",
       "nextNonce(uint32,bytes32)",
       "deliver(bytes)",
+      // @sauce/async's, which every package installs: anyone may expire a promise past its deadline.
+      "expire(bytes32)",
     ]);
   });
 
@@ -333,10 +345,12 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     expect(await read(base, "polymer")).toBe(44n);
   }, 120_000);
 
-  it("comes back to Ethereum with what the body returned on Base", async () => {
-    const out = await cook(
-      ethereum,
-      `function main(bump: Uint256) {
+  itSettling(
+    "comes back to Ethereum with what the body returned on Base",
+    async () => {
+      const out = await cook(
+        ethereum,
+        `function main(bump: Uint256) {
   Base.remote(() => {
     return ctx.chainId() * 1000;
   }).then((result) => {
@@ -344,61 +358,71 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     evm.sstore(${slot("round")}, n + bump + ctx.chainId());
   });
 }`,
-      [7n],
-    );
-    const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
-    const back = await base.publicClient.getTransactionReceipt({ hash: there! });
-    await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
-    // 8453000 from Base, 7 the program captured, 1 Ethereum's own chain id: the `.then` ran here.
-    expect(await read(ethereum, "round")).toBe(8_453_000n + 7n + 1n);
-  }, 120_000);
+        [7n],
+      );
+      const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      const back = await base.publicClient.getTransactionReceipt({ hash: there! });
+      await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
+      // 8453000 from Base, 7 the program captured, 1 Ethereum's own chain id: the `.then` ran here.
+      expect(await read(ethereum, "round")).toBe(8_453_000n + 7n + 1n);
+    },
+    120_000,
+  );
 
-  it("runs the skill's example: pays on Base, and records back on Ethereum what is left there", async () => {
-    const example = readFileSync(
-      join(
-        dirname(fileURLToPath(import.meta.url)),
-        "../../../../skills/sauce-remote/examples/pay-on-base.sauce.ts",
-      ),
-      "utf8",
-    );
-    const recipient = "0x000000000000000000000000000000000000beef" as Address;
-    const amount = parseEther("0.001");
-    const out = await cook(ethereum, example, [recipient, amount]);
-    const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
-    expect(await base.publicClient.getBalance({ address: recipient })).toBe(amount);
-    const left = await base.publicClient.getBalance({ address: pot });
-    const back = await base.publicClient.getTransactionReceipt({ hash: there! });
-    await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
-    // What the Pot held on Base once it paid, before the way back's fee was paid from it.
-    const recorded = BigInt(
-      (await ethereum.publicClient.getStorageAt({
-        address: pot,
-        slot: keccak256(toHex("base.balance")),
-      })) ?? "0x0",
-    );
-    expect(recorded).toBe(left + HYPERLANE_FEE);
-  }, 120_000);
+  itSettling(
+    "runs the skill's example: pays on Base, and records back on Ethereum what is left there",
+    async () => {
+      const example = readFileSync(
+        join(
+          dirname(fileURLToPath(import.meta.url)),
+          "../../../../skills/sauce-remote/examples/pay-on-base.sauce.ts",
+        ),
+        "utf8",
+      );
+      const recipient = "0x000000000000000000000000000000000000beef" as Address;
+      const amount = parseEther("0.001");
+      const out = await cook(ethereum, example, [recipient, amount]);
+      const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      expect(await base.publicClient.getBalance({ address: recipient })).toBe(amount);
+      const left = await base.publicClient.getBalance({ address: pot });
+      const back = await base.publicClient.getTransactionReceipt({ hash: there! });
+      await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
+      // What the Pot held on Base once it paid, before the way back's fee was paid from it.
+      const recorded = BigInt(
+        (await ethereum.publicClient.getStorageAt({
+          address: pot,
+          slot: keccak256(toHex("base.balance")),
+        })) ?? "0x0",
+      );
+      expect(recorded).toBe(left + HYPERLANE_FEE);
+    },
+    120_000,
+  );
 
-  it("runs what follows an await back on Ethereum, once the body ran on Base", async () => {
-    const out = await cook(
-      ethereum,
-      `function main(value: Uint256) {
+  itSettling(
+    "runs what follows an await back on Ethereum, once the body ran on Base",
+    async () => {
+      const out = await cook(
+        ethereum,
+        `function main(value: Uint256) {
   await Base.remote(() => {
     evm.sstore(${slot("awaited.there")}, value);
   }, { via: "layerzero" });
   evm.sstore(${slot("awaited.here")}, value + 1);
 }`,
-      [9n],
-    );
-    const [there] = await relayLayerZero(out, ethereumBridges, base, baseBridges);
-    expect(await read(base, "awaited.there")).toBe(9n);
-    expect(await read(ethereum, "awaited.here")).toBe(0n);
-    const back = await base.publicClient.getTransactionReceipt({ hash: there! });
-    await relayLayerZero(back, baseBridges, ethereum, ethereumBridges);
-    expect(await read(ethereum, "awaited.here")).toBe(10n);
-  }, 120_000);
+        [9n],
+      );
+      const [there] = await relayLayerZero(out, ethereumBridges, base, baseBridges);
+      expect(await read(base, "awaited.there")).toBe(9n);
+      expect(await read(ethereum, "awaited.here")).toBe(0n);
+      const back = await base.publicClient.getTransactionReceipt({ hash: there! });
+      await relayLayerZero(back, baseBridges, ethereum, ethereumBridges);
+      expect(await read(ethereum, "awaited.here")).toBe(10n);
+    },
+    120_000,
+  );
 
-  itCatching(
+  itSettling(
     "runs the .catch back on Ethereum with what the body reverted with on Base",
     async () => {
       const out = await cook(
@@ -422,6 +446,140 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
       expect(await read(ethereum, "caught.then")).toBe(0n);
       expect(await read(ethereum, "caught.here")).toBe(BigInt(keccak256(toHex("not zero"))));
+    },
+    120_000,
+  );
+
+  itSettling(
+    "Promise.all over messages to Base and to Optimism runs its body once both answered",
+    async () => {
+      const out = await cook(
+        ethereum,
+        `import { Promise } from "@sauce/async";
+
+function main(bump: Uint256) {
+  Promise.all([
+    Base.remote(() => {
+      return ctx.chainId();
+    }),
+    Optimism.remote(() => {
+      return ctx.chainId() * 2;
+    }),
+  ]).then((r) => {
+    const [a] = abi.decode(r[0], ["Uint256"]);
+    const [b] = abi.decode(r[1], ["Uint256"]);
+    evm.sstore(${slot("all")}, a * 1000 + b + bump);
+  });
+}`,
+        [3n],
+      );
+      const [toBase] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      const [toOptimism] = await relayHyperlane(out, ethereumBridges, optimism, optimismBridges);
+      // Base answers first: one child of two, and the body waits.
+      await relayHyperlane(
+        await base.publicClient.getTransactionReceipt({ hash: toBase! }),
+        baseBridges,
+        ethereum,
+        ethereumBridges,
+      );
+      expect(await read(ethereum, "all")).toBe(0n);
+      await relayHyperlane(
+        await optimism.publicClient.getTransactionReceipt({ hash: toOptimism! }),
+        optimismBridges,
+        ethereum,
+        ethereumBridges,
+      );
+      // 8453 from Base, 10 * 2 from Optimism, in the order the program listed them.
+      expect(await read(ethereum, "all")).toBe(8_453_000n + 20n + 3n);
+    },
+    120_000,
+  );
+
+  itSettling(
+    "Promise.race takes the first answer, and the later one settles nothing",
+    async () => {
+      const out = await cook(
+        ethereum,
+        `import { Promise } from "@sauce/async";
+
+function main() {
+  Promise.race([
+    Base.remote(() => {
+      return 1;
+    }),
+    Optimism.remote(() => {
+      return 2;
+    }, { via: "layerzero" }),
+  ]).then((r) => {
+    const [v] = abi.decode(r, ["Uint256"]);
+    evm.sstore(${slot("race")}, evm.sload(${slot("race")}) * 10 + v);
+  });
+}`,
+      );
+      const [toBase] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      const [toOptimism] = await relayLayerZero(out, ethereumBridges, optimism, optimismBridges);
+      // Optimism answers first, over LayerZero: it wins.
+      await relayLayerZero(
+        await optimism.publicClient.getTransactionReceipt({ hash: toOptimism! }),
+        optimismBridges,
+        ethereum,
+        ethereumBridges,
+      );
+      expect(await read(ethereum, "race")).toBe(2n);
+      // Base's answer arrives: delivered, and the race, decided, ignores it.
+      const [late] = await relayHyperlane(
+        await base.publicClient.getTransactionReceipt({ hash: toBase! }),
+        baseBridges,
+        ethereum,
+        ethereumBridges,
+      );
+      const receipt = await ethereum.publicClient.getTransactionReceipt({ hash: late! });
+      expect(receipt.status).toBe("success");
+      expect(receipt.logs.some((log) => log.topics[0] === PROMISE_IGNORED)).toBe(true);
+      expect(await read(ethereum, "race")).toBe(2n);
+    },
+    120_000,
+  );
+
+  itSettling(
+    "an answer past the deadline is ignored, once anyone expired the promise into its .catch",
+    async () => {
+      const out = await cook(
+        ethereum,
+        `function main() {
+  Base.remote(() => {
+    return 5;
+  }).within(60).then((r) => {
+    evm.sstore(${slot("late.then")}, 1);
+  }).catch((e) => {
+    evm.sstore(${slot("late.caught")}, crypto.keccak256(e));
+  });
+}`,
+      );
+      const pending = out.logs.find((log) => log.topics[0] === PROMISE_PENDING);
+      const key = pending!.topics[1]!;
+      const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      await ethereum.testClient.increaseTime({ seconds: 120 });
+      await ethereum.testClient.mine({ blocks: 1 });
+      const stranger = createWalletClient({ account: STRANGER, transport: http(ethereum.rpcUrl) });
+      // Anyone, paying the Kitchen's fee the expiry's cook costs the Pot.
+      await ethereum.send(
+        stranger,
+        pot,
+        encodeFunctionData({ abi: potAbi, functionName: "expire", args: [key] }),
+        FEE,
+      );
+      // Rejected with `Timeout(bytes32 key)`.
+      expect(await read(ethereum, "late.caught")).toBe(
+        BigInt(keccak256(concat(["0xe6cc9dd0", key]))),
+      );
+      await relayHyperlane(
+        await base.publicClient.getTransactionReceipt({ hash: there! }),
+        baseBridges,
+        ethereum,
+        ethereumBridges,
+      );
+      expect(await read(ethereum, "late.then")).toBe(0n);
     },
     120_000,
   );
@@ -465,7 +623,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     const hash = await stranger.sendTransaction({
       account: STRANGER,
       chain: null,
-      to: ethereumBridges.mailbox,
+      to: ethereumBridges.mailbox!,
       data: encodeFunctionData({
         abi: mailboxAbi,
         functionName: "dispatch",
@@ -475,7 +633,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     });
     const receipt = await ethereum.publicClient.waitForTransactionReceipt({ hash });
     const [dispatch] = receipt.logs.filter(
-      (log) => log.address.toLowerCase() === ethereumBridges.mailbox.toLowerCase(),
+      (log) => log.address.toLowerCase() === ethereumBridges.mailbox!.toLowerCase(),
     );
     const { args } = decodeEventLog({
       abi: mailboxAbi,
@@ -487,7 +645,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       await reverts(
         base,
         DEPLOYER.address,
-        baseBridges.mailbox,
+        baseBridges.mailbox!,
         encodeFunctionData({
           abi: mailboxAbi,
           functionName: "process",

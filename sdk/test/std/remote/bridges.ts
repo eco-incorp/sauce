@@ -146,33 +146,33 @@ async function plantAt(local: LocalChain, from: Address, at: Address): Promise<v
 const call = (local: LocalChain, to: Address, data: Hex): Promise<Hex> =>
   local.send(local.deployer, to, data);
 
-/** The bridges planted on one chain, by where the SDK records them. */
+/** The bridges planted on one chain, by where the SDK records them: each one the chain has. */
 export interface Bridges {
-  readonly mailbox: Address;
-  readonly endpoint: Address;
-  readonly simpleLib: Address;
-  readonly metalayerRouter: Address;
-  readonly metalayerMailbox: Address;
-  readonly prover: Address;
+  readonly mailbox?: Address;
+  readonly endpoint?: Address;
+  readonly simpleLib?: Address;
+  readonly metalayerRouter?: Address;
+  readonly metalayerMailbox?: Address;
+  readonly prover?: Address;
 }
 
+/** `value`, which a chain without that bridge leaves out: a suite asking for it is wrong. */
+export const the = <T>(value: T | undefined, what: string): T => {
+  if (value === undefined) throw new Error(`no ${what} on this chain`);
+
+  return value;
+};
+
 /**
- * Plants every bridge on `local`, wired to `remote`, the other chain: each at the address the SDK
- * records for `local`'s chain, so the programs compiled for it reach them.
+ * Plants every bridge `local`'s chain has, wired to each of `remotes`' that has it too: each at the
+ * address the SDK records for `local`'s chain, so the programs compiled for it reach them.
  */
-export async function plantBridges(local: LocalChain, remote: LocalChain): Promise<Bridges> {
+export async function plantBridges(
+  local: LocalChain,
+  remotes: readonly LocalChain[],
+): Promise<Bridges> {
   const here = remoteLink(local.chain);
-  const there = remoteLink(remote.chain);
-  if (
-    here.hyperlane === undefined ||
-    here.layerzero === undefined ||
-    here.metalayer === undefined ||
-    here.polymer === undefined ||
-    there.layerzero === undefined ||
-    there.metalayer === undefined
-  ) {
-    throw new Error(`${local.chain.slug} lacks a bridge the suite plants`);
-  }
+  const there = remotes.map((remote) => remoteLink(remote.chain));
   const noop = await deploy(local, fixture("NoopIsm").creationCode);
   /** A hook charging `fee`: the interchain gas payment's stand-in. */
   const hookCharging = async (fee: bigint): Promise<Address> => {
@@ -203,117 +203,146 @@ export async function plantBridges(local: LocalChain, remote: LocalChain): Promi
 
     return mailbox;
   };
+  const planted: {
+    -readonly [K in keyof Bridges]: Bridges[K];
+  } = {};
 
   // Hyperlane: a Mailbox for this chain's domain at the recorded Mailbox.
-  const mailbox = getAddress(here.hyperlane.mailbox);
-  await plantAt(local, await newMailbox(here.hyperlane.domain, HYPERLANE_FEE), mailbox);
+  if (here.hyperlane !== undefined) {
+    planted.mailbox = getAddress(here.hyperlane.mailbox);
+    await plantAt(local, await newMailbox(here.hyperlane.domain, HYPERLANE_FEE), planted.mailbox);
+  }
 
   // LayerZero: the endpoint at the recorded address, then its library, which reads the endpoint's
-  // id when it is constructed.
-  const endpoint = getAddress(here.layerzero.endpoint);
-  await plantAt(
-    local,
-    await deploy(
+  // id when it is constructed, as the default for each other chain's endpoint.
+  if (here.layerzero !== undefined) {
+    const endpoint = getAddress(here.layerzero.endpoint);
+    await plantAt(
+      local,
+      await deploy(
+        local,
+        withArgs(
+          fixture("EndpointV2").creationCode,
+          ["uint32", "address"],
+          [here.layerzero.eid, DEPLOYER.address],
+        ),
+      ),
+      endpoint,
+    );
+    const simpleLib = await deploy(
       local,
       withArgs(
-        fixture("EndpointV2").creationCode,
-        ["uint32", "address"],
-        [here.layerzero.eid, DEPLOYER.address],
+        fixture("SimpleMessageLib").creationCode,
+        ["address", "address"],
+        [endpoint, DEPLOYER.address],
       ),
-    ),
-    endpoint,
-  );
-  const simpleLib = await deploy(
-    local,
-    withArgs(
-      fixture("SimpleMessageLib").creationCode,
-      ["address", "address"],
-      [endpoint, DEPLOYER.address],
-    ),
-  );
-  for (const data of [
-    encodeFunctionData({ abi: endpointAbi, functionName: "registerLibrary", args: [simpleLib] }),
-    encodeFunctionData({
-      abi: endpointAbi,
-      functionName: "setDefaultSendLibrary",
-      args: [there.layerzero.eid, simpleLib],
-    }),
-    encodeFunctionData({
-      abi: endpointAbi,
-      functionName: "setDefaultReceiveLibrary",
-      args: [there.layerzero.eid, simpleLib, 0n],
-    }),
-  ]) {
-    await call(local, endpoint, data);
+    );
+    await call(
+      local,
+      endpoint,
+      encodeFunctionData({ abi: endpointAbi, functionName: "registerLibrary", args: [simpleLib] }),
+    );
+    for (const link of there) {
+      if (link.layerzero === undefined) continue;
+      await call(
+        local,
+        endpoint,
+        encodeFunctionData({
+          abi: endpointAbi,
+          functionName: "setDefaultSendLibrary",
+          args: [link.layerzero.eid, simpleLib],
+        }),
+      );
+      await call(
+        local,
+        endpoint,
+        encodeFunctionData({
+          abi: endpointAbi,
+          functionName: "setDefaultReceiveLibrary",
+          args: [link.layerzero.eid, simpleLib, 0n],
+        }),
+      );
+    }
+    planted.endpoint = endpoint;
+    planted.simpleLib = simpleLib;
   }
 
   // Metalayer: its own mailbox, and the router's proxy, initialized, at the recorded router, which
-  // trusts the router at the same address on the other chain.
-  // Its gas payment is the hook the router names, `igp`, which charges the fee.
-  const metalayerMailbox = await newMailbox(here.metalayer.domain, 0n);
-  const metalayerHook = await hookCharging(METALAYER_FEE);
-  const metalayerRouter = getAddress(here.metalayer.router);
-  const implementation = await deploy(local, fixture("MetalayerRouter").creationCode);
-  const proxy = await deploy(
-    local,
-    withArgs(
-      fixture("ERC1967Proxy").creationCode,
-      ["address", "bytes"],
-      [
-        implementation,
-        encodeFunctionData({
-          abi: routerAbi,
-          functionName: "initialize",
-          args: [
-            metalayerMailbox,
-            noop,
-            noop,
-            noop,
-            [there.metalayer.domain],
-            [getAddress(there.metalayer.router)],
-            DEPLOYER.address,
-            metalayerHook,
-          ],
-        }),
-      ],
-    ),
-  );
-  await plantAt(local, proxy, metalayerRouter);
+  // trusts the router at the same address on each other chain. Its gas payment is the hook the
+  // router names, `igp`, which charges the fee.
+  if (here.metalayer !== undefined) {
+    const metalayerMailbox = await newMailbox(here.metalayer.domain, 0n);
+    const metalayerHook = await hookCharging(METALAYER_FEE);
+    const others = there.flatMap((link) => (link.metalayer === undefined ? [] : [link.metalayer]));
+    const implementation = await deploy(local, fixture("MetalayerRouter").creationCode);
+    const proxy = await deploy(
+      local,
+      withArgs(
+        fixture("ERC1967Proxy").creationCode,
+        ["address", "bytes"],
+        [
+          implementation,
+          encodeFunctionData({
+            abi: routerAbi,
+            functionName: "initialize",
+            args: [
+              metalayerMailbox,
+              noop,
+              noop,
+              noop,
+              others.map((other) => other.domain),
+              others.map((other) => getAddress(other.router)),
+              DEPLOYER.address,
+              metalayerHook,
+            ],
+          }),
+        ],
+      ),
+    );
+    planted.metalayerRouter = getAddress(here.metalayer.router);
+    planted.metalayerMailbox = metalayerMailbox;
+    await plantAt(local, proxy, planted.metalayerRouter);
+  }
 
   // Polymer: the deployed prover, its sequencer the suite's key.
-  const polymer = fixture<{
-    runtimeCode: Hex;
-    sequencer: Address;
-    clientTypeSlot: Hex;
-    clientType: Hex;
-  }>("CrossL2ProverV2");
-  const prover = getAddress(here.polymer.prover);
-  const sequencer = polymer.sequencer.slice(2).toLowerCase();
-  const runtime = polymer.runtimeCode.toLowerCase();
-  if (runtime.split(sequencer).length !== 3) {
-    throw new Error("the prover's runtime holds its sequencer other than twice");
+  if (here.polymer !== undefined) {
+    const polymer = fixture<{
+      runtimeCode: Hex;
+      sequencer: Address;
+      clientTypeSlot: Hex;
+      clientType: Hex;
+    }>("CrossL2ProverV2");
+    const prover = getAddress(here.polymer.prover);
+    const sequencer = polymer.sequencer.slice(2).toLowerCase();
+    const runtime = polymer.runtimeCode.toLowerCase();
+    if (runtime.split(sequencer).length !== 3) {
+      throw new Error("the prover's runtime holds its sequencer other than twice");
+    }
+    await local.testClient.setCode({
+      address: prover,
+      bytecode: runtime.split(sequencer).join(SEQUENCER.address.slice(2).toLowerCase()) as Hex,
+    });
+    await local.testClient.setStorageAt({
+      address: prover,
+      index: pad(polymer.clientTypeSlot, { size: 32 }),
+      value: polymer.clientType,
+    });
+    planted.prover = prover;
   }
-  await local.testClient.setCode({
-    address: prover,
-    bytecode: runtime.split(sequencer).join(SEQUENCER.address.slice(2).toLowerCase()) as Hex,
-  });
-  await local.testClient.setStorageAt({
-    address: prover,
-    index: pad(polymer.clientTypeSlot, { size: 32 }),
-    value: polymer.clientType,
-  });
 
-  return { mailbox, endpoint, simpleLib, metalayerRouter, metalayerMailbox, prover };
+  return planted;
 }
 
-/** The Mailbox `Dispatch`es `receipt` holds, from `mailbox`: the messages to carry. */
-function dispatched(receipt: TransactionReceipt, mailbox: Address): Hex[] {
+/** The Mailbox `Dispatch`es `receipt` holds, from `mailbox` to `domain`: the messages to carry. */
+function dispatched(receipt: TransactionReceipt, mailbox: Address, domain: number): Hex[] {
   return receipt.logs
     .filter((log) => getAddress(log.address) === getAddress(mailbox))
     .flatMap((log) => {
       try {
         const event = decodeEventLog({ abi: mailboxAbi, data: log.data, topics: log.topics });
-        return event.eventName === "Dispatch" ? [event.args.message] : [];
+        return event.eventName === "Dispatch" && event.args.destination === domain
+          ? [event.args.message]
+          : [];
       } catch {
         return [];
       }
@@ -328,11 +357,12 @@ export async function relayHyperlane(
   toBridges: Bridges,
 ): Promise<Hex[]> {
   const hashes: Hex[] = [];
-  for (const message of dispatched(receipt, from.mailbox)) {
+  const domain = the(remoteLink(to.chain).hyperlane, "Hyperlane").domain;
+  for (const message of dispatched(receipt, the(from.mailbox, "Mailbox"), domain)) {
     hashes.push(
       await to.send(
         to.deployer,
-        toBridges.mailbox,
+        the(toBridges.mailbox, "Mailbox"),
         encodeFunctionData({ abi: mailboxAbi, functionName: "process", args: ["0x", message] }),
       ),
     );
@@ -352,11 +382,16 @@ export async function relayMetalayer(
   // One range, [8, 8): present (its start is non-zero) and empty.
   const metadata = encodePacked(["uint32", "uint32"], [8, 8]);
   const hashes: Hex[] = [];
-  for (const message of dispatched(receipt, from.metalayerMailbox)) {
+  const domain = the(remoteLink(to.chain).metalayer, "Metalayer").domain;
+  for (const message of dispatched(
+    receipt,
+    the(from.metalayerMailbox, "Metalayer mailbox"),
+    domain,
+  )) {
     hashes.push(
       await to.send(
         to.deployer,
-        toBridges.metalayerMailbox,
+        the(toBridges.metalayerMailbox, "Metalayer mailbox"),
         encodeFunctionData({ abi: mailboxAbi, functionName: "process", args: [metadata, message] }),
       ),
     );
@@ -376,15 +411,17 @@ export interface Packet {
   readonly message: Hex;
 }
 
-/** The packets `receipt` sent through `from`'s endpoint. */
-export function packets(receipt: TransactionReceipt, from: Bridges): Packet[] {
+/** The packets `receipt` sent through `from`'s endpoint, to `to` when it is named. */
+export function packets(receipt: TransactionReceipt, from: Bridges, to?: LocalChain): Packet[] {
+  const eid = to === undefined ? undefined : the(remoteLink(to.chain).layerzero, "LayerZero").eid;
   return receipt.logs
-    .filter((log) => getAddress(log.address) === getAddress(from.endpoint))
+    .filter((log) => getAddress(log.address) === getAddress(the(from.endpoint, "EndpointV2")))
     .flatMap((log) => {
       try {
         const event = decodeEventLog({ abi: endpointAbi, data: log.data, topics: log.topics });
         if (event.eventName !== "PacketSent") return [];
         const encoded = event.args.encodedPayload;
+        if (eid !== undefined && Number(BigInt(slice(encoded, 45, 49))) !== eid) return [];
         // version (1) | nonce (8) | srcEid (4) | sender (32) | dstEid (4) | receiver (32) | guid (32)
         // | message
         return [
@@ -409,7 +446,7 @@ export function packets(receipt: TransactionReceipt, from: Bridges): Packet[] {
 export const verifyPacket = (packet: Packet, to: LocalChain, toBridges: Bridges): Promise<Hex> =>
   to.send(
     to.deployer,
-    toBridges.simpleLib,
+    the(toBridges.simpleLib, "SimpleMessageLib"),
     encodeFunctionData({
       abi: simpleLibAbi,
       functionName: "validatePacket",
@@ -421,7 +458,7 @@ export const verifyPacket = (packet: Packet, to: LocalChain, toBridges: Bridges)
 export const executePacket = (packet: Packet, to: LocalChain, toBridges: Bridges): Promise<Hex> =>
   to.send(
     to.deployer,
-    toBridges.endpoint,
+    the(toBridges.endpoint, "EndpointV2"),
     encodeFunctionData({
       abi: endpointAbi,
       functionName: "lzReceive",
@@ -443,7 +480,7 @@ export async function relayLayerZero(
   toBridges: Bridges,
 ): Promise<Hex[]> {
   const hashes: Hex[] = [];
-  for (const packet of packets(receipt, from)) {
+  for (const packet of packets(receipt, from, to)) {
     await verifyPacket(packet, to, toBridges);
     hashes.push(await executePacket(packet, to, toBridges));
   }
@@ -481,7 +518,7 @@ export async function polymerProof(
   const membership = concat([toHex(0, { size: 1 }), toHex(2 + 1, { size: 1 }), prefix]);
   const height = 7n;
   const chainId = await to.publicClient.readContract({
-    address: toBridges.prover,
+    address: the(toBridges.prover, "CrossL2ProverV2"),
     abi: proverAbi,
     functionName: "CHAIN_ID",
   });
