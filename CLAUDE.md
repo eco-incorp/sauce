@@ -21,6 +21,57 @@ A **pnpm monorepo** of four workspace packages (`pnpm-workspace.yaml`: `dev-tool
 bundling is the key mental model: code lives in four packages for development, consumers import
 everything from one name.
 
+**What the root manifest depends on is held to what the code imports.** Its `dependencies` are
+exactly what a library import loads. The packages only one command of the `sauce` bin loads are
+OPTIONAL PEER dependencies: `@modelcontextprotocol/sdk` and `zod` (`sauce mcp`, i.e. `mcp/dist`) and
+`litesvm` (a Solana rehearsal, `cli/svm-fork.ts`). No install of the package brings them, with no
+flag. They are declared at any version (`*`). npm refuses (ERESOLVE) to install a package whose
+optional peer range a project's own copy misses, and zod is common, so never narrow those ranges.
+The pins are the root's devDependencies. The command takes, in this order
+(`cli/optional.ts#provide`): the user's own copies where the package's modules resolve them, when
+each is exactly the pin; else `~/.sauce/runtime/<version>`; else it installs that folder first. The
+install is `npm ci
+--ignore-scripts` on the lockfile the package ships, `sdk/runtime/package{,-lock}.json`
+(`cli/runtime.ts`), run in a 0700 mkdtemp beside the folder with `--workspaces=false` (npm adopts
+an ancestor workspace root otherwise; never `--prefix`, which moves npm's global config away) and
+renamed into place, after which older
+versions' folders are pruned but the newest of them. A newer version's folder is never pruned: a
+project's older pinned copy runs beside a newer global one. `optional.ts#assertPrivate` refuses to
+install into or load from a folder, or one above it up to `~/.sauce` (symlinks resolved), that
+another user owns or anyone else can write, and a version folder that is not 0700, because the
+process may hold a wallet password. The packages then load from the
+folder through a `module.registerHooks` resolve hook, limited to the package's own modules' imports.
+Only `main.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
+test, the skills checker) never runs npm and refuses with `sauce runtime install` instead. In this
+repository the workspaces' own copies are the pins, so nothing installs. `sauce runtime
+[status|install]` reports and installs; `sauce mcp setup` installs up front; and `sauce update` has
+the new binary run `sauce runtime install` where the replaced version had a folder. `sauce mcp
+--offline` makes the whole process install nothing (`useRuntime({ offline: true })`), a tool's
+later Solana rehearsal included.
+
+`sdk/scripts/gen-runtime-lock.mjs` (`pnpm --filter './sdk' gen-runtime-lock`, which reaches the
+registry) writes `sdk/runtime/` from those pins. `optional-dependencies.test.ts` fails while
+the lock is stale or incomplete, and also walks every export's module graph: every package it loads
+is a dependency, and none reaches the command. Every pin is three places that test holds equal: the
+root's devDependencies, the workspace that imports the package, and `sdk/runtime/`.
+
+TypeScript is a devDependency only: the editor plugin gets the editor's TypeScript, and `sauce init`
+writes our devDependency's range into the new project's devDependencies.
+`check-packed-package.mjs` proves all of this on the tarball, every `sauce` it runs with a
+temporary HOME:
+
+- a plain install is slim, and every export loads;
+- the first `sauce mcp` and the first rehearsal install the folder, including the platform's LiteSVM
+  binary;
+- a second start works with npm off PATH;
+- a mismatched user MCP SDK is passed over;
+- `--offline`, no npm and an unreachable registry each refuse on one line, leaving nothing;
+- `mcp setup` installs the folder.
+
+Never add a runtime dependency that no export loads. A new CLI-only package becomes an optional
+peer, joins an `Extra` in `optional.ts` and goes through `provide`, and `gen-runtime-lock` then
+regenerates `sdk/runtime/`.
+
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
@@ -1054,9 +1105,11 @@ body for its destination) — and no encoder or decoder: the cook is
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
 names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
-else the built-in public endpoints (none with `--offline`) — and `sauce update`, its one other
-network access, the npm registry, read only when that command runs (no background or automatic
-update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`) — and signs only with
+else the built-in public endpoints (none with `--offline`) — and the npm registry, its one other
+network access, named and read in `npm-registry.ts` alone, by `sauce update` when it runs and by
+the update check, and npm itself, with the user's npm configuration, where the command runs it
+(`init --install`, `sauce update`'s package managers, and `runtime.ts`'s `npm ci`; with the update
+check's refresh, the four modules that may spawn) — and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
 from everything it prints. **The public endpoints are the one exception to "the package ships no
 RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
@@ -1069,7 +1122,24 @@ guard's forwarder) that falls back through the list on a network error, a timeou
 5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
 executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
 it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
-`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI. `run --fund` (`funding.ts`)
+`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI.
+**The update check** (`update-check.ts`, the user's call, replacing "no automatic update check")
+prints one line on stderr after a command when its cache, `~/.sauce/update-check.json` (the last
+check's time, the latest version seen, the version that checked), names a newer release (a
+prerelease only to a prerelease). The command reads the cache synchronously and never waits on the
+registry: a cache a day old is refreshed by `update-refresh.ts`, a script `startDetached` runs in a
+detached, unref'd Node process with stdio ignored. It records the attempt first, so a failing
+registry is asked again a day later, and writes the cache 0600 in a 0700 `~/.sauce`, renamed into
+place. An in-process request could not do this: it either holds a short command open (the DNS
+lookup included) or dies with it unanswered. It is off with `--offline`, `--no-update-check` (on
+every command's `HELP` flags, and accepted before the command name for an alias) or the `--config`
+file's `"updateCheck": false`, and is silent on any failure. `sauce mcp` prints nothing; it adds one
+note to the first tool result of the process (`mcp/src/update-note.ts`, wrapping `registerTool`,
+shared by HTTP's per-request servers). Only `main.ts` creates the check, so an in-process `runCli`
+(every test, the skills checker) reads no registry, and the bin-spawning checks
+(`transports.test.ts`, the packed check) pass `--no-update-check`. `no-embedded-rpc.test.ts` holds
+the registry's name to `npm-registry.ts`, and its importers and the check's to the command's own
+modules. `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
@@ -1091,7 +1161,8 @@ tool arguments into it.
 of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
 owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
-MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
+MCP SDK, an optional peer dependency, as zod is: `optional.ts#provide` finds or installs them first);
+`entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
 Its tools are the `sauce` command's building half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
 `sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
 `sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,

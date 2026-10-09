@@ -95,7 +95,11 @@ export interface SkillsSource {
   readonly dir: string;
   readonly packageName: string;
   readonly version: string;
-  /** The TypeScript range the package itself depends on, for a project `sauce init` writes. */
+  /**
+   * The TypeScript range the package is built and checked with (a development dependency: nothing
+   * of the package needs TypeScript at run time), for a project `sauce init` writes, whose editor
+   * runs the programs' plugin in it.
+   */
   readonly typescript?: string;
   /**
    * The exact viem version installed beside the package, which its TypeScript API is typed in:
