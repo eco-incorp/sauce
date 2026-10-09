@@ -425,8 +425,10 @@ with no `import`. The compiler holds no SDK vocabulary — no chains, tokens, in
 only generic features: static values and classes it runs while it compiles, ambient modules,
 `program(closure, scope)`, `[Symbol.dispose]`. The module exports `chainId` and each protocol
 contract's address key (`UniswapV3_Factory`); `self` (`self.USDC` the running contract's balance)
-and, on an EVM chain, `Token(address)`; every token symbol, an instance of `@sauce/names`' `Token`
-(`src/std/names`), whose writes are `@sauce/token`'s SafeERC20 functions with the token first —
+and, on an EVM chain, `Token(address)`; every token symbol, an instance of `@sauce/token`'s
+`TokenOf` (its EVM arm; `@sauce/names` was folded into it, user 2026-10-09: not `Token`, because
+`@sauce/token` is ambient and the chain's module exports `Token(address)`), whose writes are the
+module's SafeERC20 functions with the token first —
 byte for byte the program that imports and calls them — and whose `valueOf()` is its address (on
 Solana a symbol is the mint's key); every protocol namespace, a static object holding contract
 bindings at this chain's addresses by the names the registry gives them (`protocol-names.ts`: a
@@ -767,8 +769,7 @@ by every intent body's options (`programOptions`) and by the internal route buil
 (`approve`/`transfer`/`balanceOf`/…) are callable there with **zero import**. `compileSauceRoute`
 adds only the chain's module to its caller's `ambient`, so a direct `compileSauceRoute(..., {})`
 reaches `@sauce/token` only through `Token`. These resolve because `embedded/resolve.ts`'s
-`resolveSdkPackage` maps the bare `@sauce/token`, `@sauce/names`, `@sauce/hop` and
-`@sauce/router` specifiers to the embedded copies of `src/std`, and the chain modules to the text
+`resolveSdkPackage` maps the bare `@sauce/token`, `@sauce/hop` and `@sauce/router` specifiers to the embedded copies of `src/std`, and the chain modules to the text
 `chain-module.ts` wrote, ahead of any caller `resolvePackage` — an ambient module the compile can't
 resolve makes EVERY compile throw, so that list must only ever name modules the SDK resolves itself.
 Two DISTINCT mechanisms share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped
@@ -882,10 +883,10 @@ chain each part runs on (`.then`'s and `.catch`'s arguments, `receive`, and with
 follows an awaited hop), for
 diagnostics and the defines report.
 
-**`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
+**`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/token`'s `TokenOf`**, not rewrites: a WRITE
 (`transfer`/`approve`/`transferFrom`) is the `@sauce/token` function of the same name with the token
 first, and a READ (`USDC.balanceOf(holder)`, `self.USDC`) the typed `ERC20.at(token).balanceOf(holder)`
-written where it is used (through `@sauce/names`' copy of the library's ERC-20 ABI), as a program
+written where it is used (through the module's own ERC-20 ABI), as a program
 written by hand compiles it, not a call into the library's `balanceOf`, which adds a frame.
 `self.USDC` is a class getter of `self` (one per token, written by `chain-module.ts`), so it reads
 the balance where it is written, once: a `const` holding it keeps that value through a transfer. So a
