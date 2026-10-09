@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -622,9 +623,8 @@ try {
   // rent, the Kitchen's fee config and USDC's mint (`solana-rpc-stub.mjs`); --assume-balance takes
   // the rehearsal into the copy, as a cook too large for one transaction does. The command runs
   // asynchronously: the stub answers from this process.
-  if (shipsEngine) {
-    assert.ok(!existsSync(join(work, "node_modules/litesvm")), "no install brings LiteSVM");
-    const rehearsalHome = home("rehearsal");
+  // The loopback endpoint a Solana rehearsal reads (with the engine binaries only).
+  const solanaStub = async () => {
     writeFileSync(
       join(work, "solana-ids.mjs"),
       `export { deriveExecutionFeeConfigPda } from "${name}/svm";\n` +
@@ -645,7 +645,8 @@ try {
     const { solanaRpcStub } = await import(
       pathToFileURL(join(root, "sdk/scripts/solana-rpc-stub.mjs")).href
     );
-    const stub = await solanaRpcStub({
+
+    return solanaRpcStub({
       kitchen,
       feeConfig,
       fee: 85_672n,
@@ -653,18 +654,22 @@ try {
         [usdc.address]: { owner: usdc.owner, data: Buffer.from(usdc.base64Data, "base64") },
       },
     });
+  };
+  const solanaProgram = "function main(x: Uint256): Uint256 {\n  return x + 1;\n}\n";
+  const solanaOwner = "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9";
+  if (shipsEngine) {
+    assert.ok(!existsSync(join(work, "node_modules/litesvm")), "no install brings LiteSVM");
+    const rehearsalHome = home("rehearsal");
+    const stub = await solanaStub();
     try {
-      writeFileSync(
-        join(work, "solana-check.sauce.ts"),
-        "function main(x: Uint256): Uint256 {\n  return x + 1;\n}\n",
-      );
+      writeFileSync(join(work, "solana-check.sauce.ts"), solanaProgram);
       const rehearse = (cwd) =>
         promisify(execFile)(
           "npx",
           [
             ...["--no", "--", "sauce", "simulate", join(work, "solana-check.sauce.ts")],
             ...["--chain", "solana", "--rpc-url", stub.url],
-            ...["--owner", "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"],
+            ...["--owner", solanaOwner],
             ...["--assume-balance", "USDC:1", "--args", "1", "--json"],
           ],
           { cwd, encoding: "utf8", env: { ...smokeEnv, HOME: rehearsalHome } },
@@ -1101,8 +1106,9 @@ try {
   };
   // Over stdio: one JSON-RPC message per line in, one per line out, and EOF ends the server; what it
   // says besides goes to stderr, which is kept.
-  const overStdio = async (options = {}) => {
-    const stdio = mcpServer([], ["pipe", "pipe", "pipe"], options);
+  const overStdio = async ({ requests = mcpRequests, args = [], ...options } = {}) => {
+    const asked = requests.filter((message) => message.id !== undefined).length;
+    const stdio = mcpServer(args, ["pipe", "pipe", "pipe"], options);
     let stdout = "";
     let stderr = "";
     const answers = new Map();
@@ -1115,14 +1121,14 @@ try {
             const message = JSON.parse(stdout.slice(0, at));
             stdout = stdout.slice(at + 1);
             if (message.id !== undefined) answers.set(message.id, message);
-            if (answers.size === 4) resolveAll();
+            if (answers.size === asked) resolveAll();
           }
         });
         stdio.once("exit", (code) =>
           rejectAll(new Error(`sauce mcp exited ${code} before answering: ${stderr}`)),
         );
       });
-      for (const message of mcpRequests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
+      for (const message of requests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
       await within(answered, "sauce mcp over stdio");
       stdio.stdin.end();
       await within(once(stdio, "exit"), "sauce mcp ending at EOF", 30_000).catch(() => {});
@@ -1230,6 +1236,52 @@ try {
     refusal(offline, "sauce mcp --offline", offlineHome),
     `sauce mcp: ${needsMcp}, and --offline installs nothing: run \`sauce runtime install\``,
   );
+  // An --offline server is offline to its last tool: one whose runtime folder holds the MCP SDK and
+  // zod but not LiteSVM refuses a Solana sauce_simulate, and installs nothing for it.
+  if (shipsEngine) {
+    const offlineServerHome = home("offline-server");
+    mkdirSync(dirname(runtimeOf(offlineServerHome)), { recursive: true, mode: 0o700 });
+    cpSync(runtimeOf(mcpHome), runtimeOf(offlineServerHome), { recursive: true });
+    rmSync(join(runtimeOf(offlineServerHome), "node_modules/litesvm"), { recursive: true });
+    const stub = await solanaStub();
+    try {
+      const { answers: simulated } = await overStdio({
+        args: ["--offline"],
+        env: { ...smokeEnv, HOME: offlineServerHome },
+        requests: [
+          ...mcpRequests.slice(0, 2),
+          {
+            jsonrpc: "2.0",
+            id: 2,
+            method: "tools/call",
+            params: {
+              name: "sauce_simulate",
+              arguments: {
+                source: solanaProgram,
+                chain: "solana",
+                rpcUrl: stub.url,
+                owner: solanaOwner,
+                assumeBalance: ["USDC:1"],
+                args: ["1"],
+              },
+            },
+          },
+        ],
+      });
+      const result = simulated.get(2).result;
+      assert.equal(result.isError, true, JSON.stringify(result));
+      assert.match(
+        JSON.stringify(result.content),
+        /needs litesvm \S+, not installed for this sauce yet, and --offline installs nothing/,
+      );
+    } finally {
+      await stub.close();
+    }
+    assert.ok(
+      !existsSync(join(runtimeOf(offlineServerHome), "node_modules/litesvm")),
+      "the --offline server installed nothing",
+    );
+  }
   const noNpmHome = home("no-npm");
   const noNpm = spawnSync(process.execPath, [bin, "mcp"], {
     cwd: work,
