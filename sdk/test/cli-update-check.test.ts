@@ -252,16 +252,27 @@ describe("the refresh", () => {
     }
   });
 
-  it("starts from no cache, and never throws when it cannot write", async () => {
+  it("starts from no cache, and asks nothing when it cannot write one", async () => {
     const fresh = refresh(undefined, () => Promise.resolve("1.2.0"));
     await refreshCache(fresh.io, "1.0.0");
     expect(fresh.writes().map((write) => write.latest)).toEqual([undefined, "1.2.0"]);
-    const readOnly = refresh(undefined, () => Promise.resolve("1.2.0"), {
-      write: () => {
-        throw Object.assign(new Error("EROFS"), { code: "EROFS" });
+    // A cache it cannot write: the registry is not asked, since its answer would go nowhere.
+    let asked = 0;
+    const readOnly = refresh(
+      undefined,
+      () => {
+        asked++;
+
+        return Promise.resolve("1.2.0");
       },
-    });
+      {
+        write: () => {
+          throw Object.assign(new Error("EROFS"), { code: "EROFS" });
+        },
+      },
+    );
     await expect(refreshCache(readOnly.io, "1.0.0")).resolves.toBeUndefined();
+    expect(asked).toBe(0);
   });
 
   it("asks the registry for the latest dist-tag, briefly, and nothing else", async () => {

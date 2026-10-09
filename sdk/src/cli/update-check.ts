@@ -156,7 +156,8 @@ export interface RefreshIo {
  * The refresh `update-refresh.ts` runs for the copy running `version`. The attempt is written
  * first, keeping the latest version already known, so no other command starts a refresh while this
  * one asks the registry, and a registry that cannot be reached is asked again a day later; then the
- * registry's answer, when it is a version. Never throws.
+ * registry's answer, when it is a version. A cache that cannot be written is never asked about: its
+ * answer would have nowhere to go, and every command would ask again. Never throws.
  */
 export async function refreshCache(io: RefreshIo, version: string): Promise<void> {
   let known: string | undefined;
@@ -165,15 +166,17 @@ export async function refreshCache(io: RefreshIo, version: string): Promise<void
   } catch {
     known = undefined;
   }
-  const record = (latest: string | undefined): void => {
+  const record = (latest: string | undefined): boolean => {
     try {
       const checkedAt = new Date(io.now()).toISOString();
       io.write(cacheText({ checkedAt, ...(latest === undefined ? {} : { latest }), version }));
+
+      return true;
     } catch {
-      // Unwritable: the next command finds the cache as it was, and starts another refresh.
+      return false;
     }
   };
-  record(known);
+  if (!record(known)) return;
   let latest: string;
   try {
     latest = await io.latest();
