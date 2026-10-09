@@ -158,6 +158,73 @@ describe("sauce run --fund, refused before anything is sent", () => {
     );
   });
 
+  // Every `await` the compiler refuses reaches it as written: the program compiles as the user
+  // wrote it before any funding wraps it.
+  const hop =
+    "Ethereum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to })";
+  it.skip.each([
+    [
+      "in an `if` with a statement after it",
+      [`  if (amount > 1) {`, `    await ${hop};`, "  }"],
+      "a statement after an `if` whose branches `await`",
+      "5:3",
+    ],
+    [
+      "in a loop",
+      ["  for (let i = 0; i < 2; i += 1) {", `    await ${hop};`, "  }"],
+      "an `await` inside a loop",
+      "3:5",
+    ],
+    ["used as a value", [`  const x = await ${hop};`], "an `await` used as a value", "2:13"],
+    [
+      "followed by a value `return`",
+      [`  await ${hop};`, "  USDC.transfer(to, amount);", "  return amount;"],
+      "a value `return` after an `await`",
+      "4:3",
+    ],
+    [
+      "in a `try` with a statement after it",
+      [
+        "  try {",
+        `    await ${hop};`,
+        "  } catch (e) {",
+        "    USDC.transfer(to, 1);",
+        "  }",
+        "  USDC.transfer(to, 2);",
+      ],
+      "a statement after a `try` that awaits",
+      "7:3",
+    ],
+  ])(
+    "--fund on a program with an `await` %s: the compiler's refusal, at the file's line: await dropped from the compiler (v12 #554)",
+    async (_name, lines, words, at) => {
+      const file = join(work, "awaits.sauce.ts");
+      writeFileSync(
+        file,
+        [
+          "function main(to: Address, amount: Uint256): Uint256 {",
+          ...lines,
+          "  return 0;",
+          "}",
+          "",
+        ].join("\n"),
+      );
+      let stderr = "";
+      const code = await runCli(
+        [
+          ...["run", file, "--chain", "base", "--rpc-url", "http://127.0.0.1:9"],
+          ...["--private-key", OWNER_KEY, "--fund", "USDC:1", "--intent-execution-fee", "0"],
+          ...["--args", "0x6666666666666666666666666666666666666666", "5"],
+        ],
+        { ...nodeIo(), stdout: () => undefined, stderr: (text) => void (stderr += text) },
+      );
+      expect(code).toBe(1);
+      expect(stderr).toContain(words);
+      expect(stderr).toContain(`--> ${file}:${at}`);
+      expect(stderr).not.toContain("main.js");
+    },
+  );
+
   it("--fund on Solana", async () => {
     const refused = await run("--chain", "solana", "--fund", "USDC:1");
     expect(refused.code).toBe(2);
@@ -236,6 +303,22 @@ describe("the funding wrapper", () => {
   const compiles = (text: string): void => {
     expect(compileSauceProgram(base, text, { defines: {} }).bytecode.length).toBeGreaterThan(0);
   };
+
+  it.skip("wraps a program that awaits an intent in its `.then` form: the sweep runs where it opens: await dropped from the compiler (v12 #554)", () => {
+    const opened =
+      "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66, fee: 0 })";
+    const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
+    for (const source of [
+      `await ${opened};\nUSDC.transfer(0x66, 1);\n`,
+      `async function main(to: Address) {\n  await ${opened};\n  USDC.transfer(to, 1);\n}\n`,
+    ]) {
+      const wrapped = wrapProgram(source, IMPORTS, [PULL], ["// sweep"]);
+      expect(wrapped).not.toMatch(/\bawait\b/);
+      // The sweep follows the statement that opens the intent, not the body.
+      expect(wrapped.indexOf("// sweep")).toBeGreaterThan(wrapped.indexOf("}).then"));
+      expect(compileSauceProgram(base, wrapped, { defines: {}, intents }).bodies).toHaveLength(1);
+    }
+  });
 
   it("wraps a script: the pulls run before its statements and the sweeps after them", () => {
     const wrapped = wrapProgram("USDC.transfer(0x2n, 5n);\n", IMPORTS, [PULL], ["// sweep"]);
