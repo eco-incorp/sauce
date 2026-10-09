@@ -5,8 +5,18 @@
  * `sdk/test/swap-stub.ts`): nothing reaches a network.
  */
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+  getDefaultEnvironment,
+  StdioClientTransport,
+} from "@modelcontextprotocol/sdk/client/stdio.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { encodeFunctionData, type Address } from "viem";
 
 import { v12DeployedAddresses } from "../../sdk/dist/deployments/index.js";
@@ -164,6 +174,40 @@ describe("kyberSwap and ecoSwap through the tools", () => {
       assert.deepEqual(served.asked, []);
     } finally {
       await mcp.close();
+    }
+  });
+});
+
+describe("sauce mcp --offline, built, over stdio", () => {
+  const BIN = join(dirname(dirname(fileURLToPath(import.meta.url))), "../sdk/dist/cli/main.js");
+
+  it("is given none of the built-in swap APIs: kyberSwap is refused, never routed", async () => {
+    const home = mkdtempSync(join(tmpdir(), "sauce-mcp-offline-swap-"));
+    const client = new Client({ name: "swap-offline", version: "0.0.0" });
+    await client.connect(
+      new StdioClientTransport({
+        command: process.execPath,
+        args: [BIN, "mcp", "--offline"],
+        env: { ...getDefaultEnvironment(), HOME: home, USERPROFILE: home },
+        cwd: home,
+        stderr: "pipe",
+      }),
+    );
+    try {
+      const result = (await client.callTool({
+        name: "sauce_compile",
+        arguments: {
+          source: "function main(): Uint256 { return kyberSwap(USDC, WETH, 1000000000, 0); }\n",
+          chain: "base",
+        },
+      })) as CallToolResult;
+      assert.match(
+        failed(result),
+        /kyberSwap asks KyberSwap's API for its route, and none is given/,
+      );
+    } finally {
+      await client.close();
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });
