@@ -1,5 +1,6 @@
-// A sha256 of every example and recipe program an SDK tree compiles, of each intent body, and of
-// what a refused compile says, by file and chain, as JSON on stdout. Usage:
+// A sha256 of every example and recipe program an SDK tree compiles, intent-compiles-to's three
+// included, of each intent body, and of what a refused compile says, by file and chain, as JSON on
+// stdout. Usage:
 //   SAUCE_COMPILER_PKG=<compiler>/crates/sauce-wasm/pkg \
 //     node --import ./register.mjs bytes.mjs <sdk-tree> > bytes.json
 // <sdk-tree> is an eco-incorp/sauce checkout whose SDK is built (`pnpm build`). Without
@@ -17,6 +18,8 @@ const dirs = [
   join(root, "docs/examples"),
   ...readdirSync(join(root, "skills")).map((skill) => join(root, "skills", skill, "examples")),
   join(root, "sdk/src/recipes"),
+  // intent-compiles-to's programs: one hop, one in a `try`, and two hops.
+  join(root, "sdk/test/fixtures/intent-compiles-to"),
 ];
 const files = dirs
   .filter((dir) => existsSync(dir))

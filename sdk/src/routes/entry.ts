@@ -37,6 +37,8 @@ import {
   type CompactValue,
 } from "../compact-arguments.js";
 
+import type { ArgValue } from "sauce-compiler";
+
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
 
@@ -536,29 +538,46 @@ export function entryReturnType(signature: EntrySignature): string | undefined {
     : signature.returns;
 }
 
-/** An argument a program is compiled for that is not one word. */
+/** An argument a program cannot be compiled for. */
 export class EntryArgumentError extends TypeError {}
 
 /**
- * `main`'s arguments as the words a program is compiled for: the compiler's `args`, which compiles
- * `main(amount: Uint256)` given `[1000000n]` as if its body read `amount` as `1000000`, so it takes
- * none as it runs. Each is one word: an unsigned integer (a bigint, a safe integer, or its decimal
- * digits), `0x` hex (an address, or its bytes), or a `bool`. The compiler holds each to its parameter
- * (`ArgsCount`, `ArgNotWord`, `ArgOutOfRange`); anything else is refused here, naming its place.
+ * `main`'s arguments as the compiler's `args`, which compiles `main(amount: Uint256)` given
+ * `[1000000n]` as if its body read `amount` as `1000000`, so it takes none as it runs. Each is read
+ * as its parameter reads it: a word is an unsigned integer (a bigint, a safe integer, or its decimal
+ * digits), `0x` hex (a `Uint8Array` is written as its hex), or a `bool`; a `bytes` a `Uint8Array`
+ * or `0x` hex; a string its text; an array its elements; a record its fields, in order or by name. The compiler holds each to its parameter
+ * (`ArgsCount`, `ArgShape`, `ArgOutOfRange`); what no parameter reads is refused here, naming its
+ * place.
  */
-export function entryWords(values: readonly EntryValue[]): (bigint | boolean | string)[] {
-  return values.map((value, index) => {
-    if (typeof value === "bigint" || typeof value === "boolean") return value;
-    if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
-      return BigInt(value);
+export function entryArguments(values: readonly EntryValue[]): ArgValue[] {
+  const argument = (value: EntryValue, at: string): ArgValue => {
+    if (typeof value === "number") {
+      if (Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+      throw new EntryArgumentError(
+        `${at}: ${value} is not an argument: give an unsigned integer, as a bigint or its digits`,
+      );
     }
-    if (typeof value === "string" && /^(?:\d+|0x[0-9a-fA-F]+)$/.test(value)) return value;
+    // As `0x` hex, which a word and a `bytes` both read: an address's 20 bytes are a word.
     if (value instanceof Uint8Array) return bytesToHex(value);
-    throw new EntryArgumentError(
-      `args[${index}]: a program is compiled for words: an unsigned integer, an address or a bool, ` +
-        `not ${Array.isArray(value) ? "an array" : typeof value === "object" ? "a record" : JSON.stringify(value)}`,
-    );
-  });
+    if (Array.isArray(value)) {
+      return (value as readonly EntryValue[]).map((each, index) =>
+        argument(each, `${at}[${index}]`),
+      );
+    }
+    if (typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value as { readonly [field: string]: EntryValue }).map(([field, each]) => [
+          field,
+          argument(each, `${at}.${field}`),
+        ]),
+      );
+    }
+
+    return value as ArgValue;
+  };
+
+  return values.map((value, index) => argument(value, `args[${index}]`));
 }
 
 /**
