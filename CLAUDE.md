@@ -1218,8 +1218,10 @@ selector), and the `sauce` command takes a package as a program operand
 (`sauce run @sauce/<package> --chain base`, `cli/handlers.ts`). `test/std/async/evm.e2e.test.ts`
 runs it end to end with `startGatedEngine(…, { routerCreationCode })`, the explicit, test-only way
 to deploy a Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it
-skips without one, in CI too). Its `.catch` cases need an engine built from the compiler's tree:
-on the released v12-evm 1.2.0 a `catch (e)` that READS `e` loses its work.
+skips without one, in CI too). Settling reads a continuation's revert (`catch (e)` that reads
+`e`, encoded `CATCH 0x00 0xB8 <len>`), so every settling case needs an engine built from the
+compiler's tree; the released v12-evm 1.2.0 refuses it loudly, which the suite's one release case
+holds.
 
 **Randomness is `@sauce/random`** (`src/std/random/`, skill `sauce-random`), a package of that
 family over two registry protocols: `chainlink-vrf` (VRF v2.5's VRFV2PlusWrapper and coordinator,

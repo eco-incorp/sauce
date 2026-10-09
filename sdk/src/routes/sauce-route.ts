@@ -251,12 +251,13 @@ function chainModules(
   const bodies = new Map<number, CanonicalChain>();
 
   const programOptions = (scope: ProgramScope): ProgramOptions => {
-    const id = typeof scope === "bigint" ? Number(scope) : NaN;
+    const id = scopeChainId(scope) ?? NaN;
     const destination = chainById(id);
     if (destination === undefined) {
       throw new Error(
-        `program(closure, scope): the SDK compiles a closure for the chain whose id \`scope\` is; ` +
-          `${String(scope)} is no chain it knows`,
+        `program(closure, scope): the SDK compiles a closure for the chain whose id \`scope\` is ` +
+          `(an intent's body), or \`scope.continuation\` is (a promise's continuation); ` +
+          `${scopeText(scope)} is no chain it knows`,
       );
     }
     bodies.set(id, destination);
@@ -291,6 +292,32 @@ function chainModules(
     programOptions,
     bodies,
   };
+}
+
+/**
+ * The chain id a `program(closure, scope)` call compiles for: `scope` itself for an intent's body
+ * (`@sauce/hop`), `scope.continuation` for a promise's continuation (`@sauce/async`), which runs on
+ * the program's own Pot when a callback settles it and opens no intent.
+ */
+function scopeChainId(scope: ProgramScope): number | undefined {
+  if (typeof scope === "bigint") return Number(scope);
+  if (typeof scope === "object" && !Array.isArray(scope)) {
+    const continuation = scope.continuation;
+    if (typeof continuation === "bigint") return Number(continuation);
+  }
+
+  return undefined;
+}
+
+/** Whether a `program(closure, scope)` call compiled a promise's continuation, not an intent's body. */
+function isContinuation(scope: ProgramScope): boolean {
+  return typeof scope === "object" && !Array.isArray(scope) && scope.continuation !== undefined;
+}
+
+function scopeText(scope: ProgramScope): string {
+  return JSON.stringify(scope, (_, value: unknown) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
 }
 
 /**
@@ -386,6 +413,9 @@ export interface CompiledSauceProgram {
   /** The body of every intent the program opens, at any depth
    *  (`await Arbitrum.hop({ ... })`), as compiled for its chain. */
   readonly bodies: readonly CompiledBody[];
+  /** Every promise continuation the program parks (`@sauce/async`: a request's `.then`, a
+   *  combinator's), as compiled for the chain its callback lands on. No intent opens for one. */
+  readonly continuations: readonly CompiledBody[];
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
   /** The source the compiler was given: the program as written. */
@@ -449,6 +479,7 @@ export function compileSauceProgram(
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     bodies: program.bodies,
+    continuations: program.continuations,
     entrySignature: program.entrySignature,
     source: program.source,
   };
@@ -473,6 +504,7 @@ function compileForChain(
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
   readonly bodies: readonly CompiledBody[];
+  readonly continuations: readonly CompiledBody[];
   readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
@@ -536,7 +568,8 @@ function compileForChain(
   const reports: { readonly chain: CanonicalChain; readonly paths: readonly AbsentPath[] }[] = [
     { chain, paths: absentPaths },
     ...programs.flatMap((report) => {
-      const on = typeof report.scope === "bigint" ? chainById(Number(report.scope)) : undefined;
+      const id = scopeChainId(report.scope);
+      const on = id === undefined ? undefined : chainById(id);
       return on === undefined ? [] : [{ chain: on, paths: report.absentPaths }];
     }),
   ];
@@ -554,22 +587,37 @@ function compileForChain(
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
-  const bodies = programs.flatMap((report): CompiledBody[] => {
-    const on = typeof report.scope === "bigint" ? chainById(Number(report.scope)) : undefined;
-    return on === undefined
-      ? []
-      : [
-          {
-            id: report.id,
-            path: report.path,
-            destination: on,
-            bytecode: report.bytecode,
-            captures: report.captures,
-          },
-        ];
-  });
+  const reported = (continuations: boolean): CompiledBody[] =>
+    programs.flatMap((report): CompiledBody[] => {
+      if (isContinuation(report.scope) !== continuations) return [];
+      const id = scopeChainId(report.scope);
+      const on = id === undefined ? undefined : chainById(id);
+      return on === undefined
+        ? []
+        : [
+            {
+              id: report.id,
+              path: report.path,
+              destination: on,
+              bytecode: report.bytecode,
+              captures: report.captures,
+            },
+          ];
+    });
+  const bodies = reported(false);
+  const continuations = reported(true);
 
   return manifest === undefined
-    ? { chain, compiled, entryParams, source, entryEncoding, bodies, entrySignature }
-    : { chain, compiled, entryParams, source, entryEncoding, manifest, bodies, entrySignature };
+    ? { chain, compiled, entryParams, source, entryEncoding, bodies, continuations, entrySignature }
+    : {
+        chain,
+        compiled,
+        entryParams,
+        source,
+        entryEncoding,
+        manifest,
+        bodies,
+        continuations,
+        entrySignature,
+      };
 }

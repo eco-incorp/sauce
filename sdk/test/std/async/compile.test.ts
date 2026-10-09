@@ -143,9 +143,11 @@ function main(value: Uint256, to: Address) {
     evm.sstore(1, echoed + to);
   });
 }`);
-    expect(program.bodies).toHaveLength(1);
-    expect(program.bodies[0]!.destination.slug).toBe("base");
-    expect(program.bodies[0]!.captures).toEqual(["body.to"]);
+    expect(program.continuations).toHaveLength(1);
+    expect(program.continuations[0]!.destination.slug).toBe("base");
+    expect(program.continuations[0]!.captures).toEqual(["body.to"]);
+    // A continuation opens no intent: the program reports no intent body.
+    expect(program.bodies).toEqual([]);
   });
 
   it("`await`, `.catch` and a deadline fold onto the same promise", () => {
@@ -165,9 +167,9 @@ function main(value: Uint256, to: Address) {
       evm.sstore(2, to);
     });
 }`);
-    expect(awaited.bodies).toHaveLength(1);
-    expect(caught.bodies).toHaveLength(1);
-    expect(caught.bodies[0]!.captures).toEqual(["body.to"]);
+    expect(awaited.continuations).toHaveLength(1);
+    expect(caught.continuations).toHaveLength(1);
+    expect(caught.continuations[0]!.captures).toEqual(["body.to"]);
   });
 
   it("each combinator: one continuation for itself, and one per child", () => {
@@ -183,8 +185,8 @@ function main(value: Uint256, to: Address) {
     ${body}
   });
 }`);
-      expect(program.bodies).toHaveLength(3);
-      expect(program.bodies[1]!.captures).toEqual(["joinKey"]);
+      expect(program.continuations).toHaveLength(3);
+      expect(program.continuations[1]!.captures).toEqual(["joinKey"]);
     }
   });
 
@@ -208,7 +210,7 @@ function main(to: Address) {
     evm.sstore(3, r[0].length + to);
   });
 }`);
-    expect(program.bodies).toHaveLength(3);
+    expect(program.continuations).toHaveLength(3);
   });
 
   it("a race against a timeout, an already settled promise, and a deferred", () => {
@@ -222,14 +224,14 @@ function main(value: Uint256, to: Address) {
       evm.sstore(2, to);
     });
 }`);
-    expect(raced.bodies).toHaveLength(3);
+    expect(raced.continuations).toHaveLength(3);
     const settled = compile(`${ECHO}
 function main(value: Uint256, to: Address) {
   Promise.all([Promise.resolve(value), Echo.request(value)]).then((r) => {
     evm.sstore(1, r[0] + r[1] + to);
   });
 }`);
-    expect(settled.bodies).toHaveLength(2);
+    expect(settled.continuations).toHaveLength(2);
     const deferred = compile(`${ECHO}
 function main(to: Address): Uint256 {
   const d = Promise.withResolvers();
@@ -238,14 +240,14 @@ function main(to: Address): Uint256 {
   });
   return d.key;
 }`);
-    expect(deferred.bodies).toHaveLength(1);
+    expect(deferred.continuations).toHaveLength(1);
     const later = compile(`${ECHO}
 function main(key: Uint256, value: Uint256) {
   Async.resolve(key, abi.encode(value));
   Async.reject(key + 1, abi.encode(value));
   Async.expire(key + 2);
 }`);
-    expect(later.bodies).toHaveLength(0);
+    expect(later.continuations).toHaveLength(0);
   });
 
   it("a request on another chain compiles its body for that chain", () => {
@@ -269,7 +271,7 @@ function main(to: Address) {
     USDC.transfer(to, 1);
   });
 }`);
-    expect(program.bodies.map((b) => b.destination.slug)).toEqual(["ethereum"]);
+    expect(program.continuations.map((b) => b.destination.slug)).toEqual(["ethereum"]);
   });
 });
 
