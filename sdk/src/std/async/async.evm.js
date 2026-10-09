@@ -203,19 +203,36 @@ function resultSlot(key: Uint256, index: Uint256): Uint256 {
 // code is a ten-byte copier (PUSH2 <length> DUP1 PUSH1 0x0a RETURNDATASIZE CODECOPY
 // RETURNDATASIZE RETURN) and `data`, and the init code is the same copier around it: `data` may be
 // up to 24,566 bytes (EIP-170).
-function keep(data: bytes): Uint256 {
+function initOf(data: bytes): bytes {
   const length = data.length;
   require(length <= 24566, "async: more than one contract can hold");
   const code = length + 10;
-  const init = hex`61`
+  return hex`61`
     .concat(code.toBytesBe(2))
     .concat(hex`80600a3d393df361`)
     .concat(length.toBytesBe(2))
     .concat(hex`80600a3d393df3`)
     .concat(data);
+}
+
+// `data` kept as code (see `initOf`), its init code hashed here: for bytes known only as the
+// program runs, a result or captured words.
+function keep(data: bytes): Uint256 {
+  const init = initOf(data);
   const at = evm.create2Address(ctx.self(), 0, crypto.keccak256(init));
   if (ctx.codeSize(at) == 0) {
     require(evm.create2(init, 0) == at, "async: the code could not be deployed");
+  }
+  return at;
+}
+
+// `data` kept as code, its init code's hash `initHash` given: a continuation, whose code the
+// compiler knows, so `Code.initHash` works the hash out while the program compiles. The init code
+// is built only to deploy, the first time.
+function keepAt(data: bytes, initHash: Uint256): Uint256 {
+  const at = evm.create2Address(ctx.self(), 0, initHash);
+  if (ctx.codeSize(at) == 0) {
+    require(evm.create2(initOf(data), 0) == at, "async: the code could not be deployed");
   }
   return at;
 }
@@ -247,11 +264,12 @@ export function park(
   deadline: Uint256,
   catches: bool,
 ): void {
-  parkRecord(key, code, args, deadline, catches, 0, 0, false);
+  parkRecord(key, crypto.keccak256(initOf(code)), code, args, deadline, catches, 0, 0, false);
 }
 
 function parkRecord(
   key: Uint256,
+  codeHash: Uint256,
   code: bytes,
   args: bytes,
   deadline: Uint256,
@@ -269,7 +287,11 @@ function parkRecord(
   require(args.length % 32 == 0, "async: a continuation's captured values are not whole words");
   const words = args.length / 32;
   require(words < 256, "async: a continuation captures at most 255 words");
-  let word = keep(code) | (deadline << 160) | (SAUCE_ASYNC_PENDING_STATE << 200) | (words << 203);
+  let word =
+    keepAt(code, codeHash) |
+    (deadline << 160) |
+    (SAUCE_ASYNC_PENDING_STATE << 200) |
+    (words << 203);
   if (catches) {
     word = word | (1 << 202);
   }
@@ -651,6 +673,28 @@ export function isValidSignature(hash: Uint256, signature: bytes): Uint256 {
 
 // ---- the classes the compiler runs --------------------------------------------------------------
 
+// A continuation's code, as the compiler knows it.
+class Code {
+  // keccak256 of the init code `keep` deploys `code` with (`initOf`), worked out while the program
+  // compiles where the compiler can fold a hash over bytes it knows, so a park only checks the
+  // address it gives.
+  static initHash(code) {
+    if (code.length > 24566) {
+      throw new Error("a continuation compiles to more bytes than one contract can hold");
+    }
+    const size = code.length + 10;
+    const length = code.length;
+    return crypto.keccak256(
+      hex`61`
+        .concat(size.toBytesBe(2))
+        .concat(hex`80600a3d393df361`)
+        .concat(length.toBytesBe(2))
+        .concat(hex`80600a3d393df3`)
+        .concat(code),
+    );
+  }
+}
+
 // An empty list that grows while compiling.
 class Lists {
   static empty(...none) {
@@ -778,13 +822,33 @@ export class Request {
           "a request's `send` answers the key of its promise (`promiseKey(TAG, id)`); a protocol that carries its continuation back says `carries: true`",
         );
       }
-      parkRecord(key, continuation.code, continuation.args, deadline, catches, 0, 0, false);
+      parkRecord(
+        key,
+        Code.initHash(continuation.code),
+        continuation.code,
+        continuation.args,
+        deadline,
+        catches,
+        0,
+        0,
+        false,
+      );
       return;
     }
     const key = salt();
     const stored = joined == 1 || this._deadline !== undefined;
     if (stored) {
-      parkRecord(key, continuation.code, continuation.args, deadline, catches, 0, 0, true);
+      parkRecord(
+        key,
+        Code.initHash(continuation.code),
+        continuation.code,
+        continuation.args,
+        deadline,
+        catches,
+        0,
+        0,
+        true,
+      );
     }
     send({
       code: continuation.code,
@@ -965,6 +1029,7 @@ class Deferred {
           );
     parkRecord(
       this.key,
+      Code.initHash(continuation.code),
       continuation.code,
       continuation.args,
       this._deadline,
@@ -981,7 +1046,17 @@ class Deferred {
       },
       { continuation: chainId },
     );
-    parkRecord(this.key, child.code, child.args, this._deadline, true, 0, 0, true);
+    parkRecord(
+      this.key,
+      Code.initHash(child.code),
+      child.code,
+      child.args,
+      this._deadline,
+      true,
+      0,
+      0,
+      true,
+    );
   }
   _decoder() {
     // A timeout is never fulfilled: its branch of a race's continuation never runs.
@@ -1028,6 +1103,7 @@ class Join {
     const continuation = program(this._continuation(joinKey), { continuation: chainId });
     parkRecord(
       joinKey,
+      Code.initHash(continuation.code),
       continuation.code,
       continuation.args,
       0,
