@@ -141,3 +141,45 @@ to three words the body captured sit beside it, and more go into code. The body'
 once per Pot, by CREATE2 at an address its bytes decide, and shared by every request that compiles
 to it. Settling clears the word. A carried `.then` stores nothing. A combinator parks a word of its
 own and one per child, and keeps each child's value until it is decided.
+
+## Proofs: `@sauce/zk`
+
+`@sauce/zk` asks a ZK coprocessor a question now and hands its proven answer to `.then`. Its one
+coprocessor is Space and Time, on Ethereum and Base: a SQL query over Space and Time's indexed
+copies of chains, proven with Proof of SQL, which its QueryRouter verifies before its
+CallbackExecutor calls the Pot back.
+
+```js
+import { Zk } from "@sauce/zk";
+
+function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Address, amount: Uint256) {
+  Zk.sql({ query: plan, payment })
+    .then((result) => {
+      require(Zk.cell(result, 0, 0) >= minimum, "below the minimum");
+      evm.call(recipient, amount, hex``);
+    })
+    .catch((e) => {
+      Zk.cancel(e);
+    });
+}
+```
+
+- **The query** is a proof plan, the bytes Space and Time's RPC method
+  `commitments_v1_evmProofPlan` gives for the SQL, passed to `main`. `Zk.sql` asks it under the
+  `"latest"` version, the QueryRouter's own verifier. Its other fields are `parameters`,
+  `metadata`, `timeout` (3600 seconds), `gasLimit` (1,000,000) and `maxGasPrice`.
+- **The payment** is in SXT, the token `SpaceAndTime.QueryRouter.PAYMENT_TOKEN()` names, at least
+  the router's `baseCost()`; the Pot holds it, and approves the router for it. The fulfiller is
+  paid the base cost and, on Ethereum, the callback's gas; the rest comes back to the Pot.
+- **The result** is Proof of SQL's table. `Zk.cell(result, column, row)` reads a value of a
+  fixed-width column as an unsigned number (a negative BIGINT as its two's complement in 8 bytes),
+  and `Zk.rows(result)` counts the rows.
+- **The timeout.** Only Space and Time's fulfiller answers queries, and it may not answer one. A
+  query's promise expires at its timeout: anyone may then call the Pot's `expire(key)`, its
+  `.catch` runs, and `Zk.cancel(e)` there cancels the query and takes its payment back.
+- **The checks.** The handler takes calls only from the chain's CallbackExecutor, and settles only
+  the promise under a query id the Pot asked: a query someone else asked naming the Pot settles
+  nothing. Install it with `sauce run @sauce/zk --chain base --wallet <name>`.
+
+Reading a result costs gas (a four-column result read once took about 300,000 of the callback's
+gas), and the Pot keeps a query's id and payment in two words until its promise settles.

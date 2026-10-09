@@ -1223,6 +1223,22 @@ skips without one, in CI too). Settling reads a continuation's revert (`catch (e
 compiler's tree; the released v12-evm 1.2.0 refuses it loudly, which the suite's one release case
 holds.
 
+**`@sauce/zk` is Space and Time's Proof of SQL** (`src/std/zk/zk.evm.js`, skill `sauce-zk`):
+`Zk.sql({ query, payment })` asks the chain's `SpaceAndTime.QueryRouter` under the version
+`keccak256("latest")` (a version the router has no entry for is read as a verifier ADDRESS, so never
+name one), pays SXT through `@sauce/token`, and parks the promise under
+`promiseKey(keccak256("sauce.zk.sql"), queryId)`; the handler (`sql.handler.js`,
+`queryCallback(bytes32,bytes,bytes)`) takes calls from the `CallbackExecutor` only and `fulfil`s
+by the query's id, so a stranger's query naming the Pot settles nothing. The query's timeout is the
+promise's deadline, and `Zk.cancel(e)` in a `.catch` cancels it for a `Timeout` from two words the
+Pot keeps beside the promise (ERC-7201 `sauce.storage.Zk`). It was chosen after a survey of live
+ZK callbacks on Ethereum and Base: Axiom V2 is sunset (support ended 2024-12-21, nothing fulfilled
+since), Brevis has no Ethereum or Base deployment, Lagrange is dormant, Herodotus and Succinct
+have no callback; Boundless (Base only) is the next candidate. `test/std/zk/sql.e2e.test.ts` runs
+Space and Time's own contracts, deployed by replaying their creation transactions at the
+deployer's nonces (`fixtures/SpaceAndTime.json`), with only the proof and Ethereum's two Chainlink
+feeds mocked, and real results from the router's `QueryFulfilled` events.
+
 ## Agent skills
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`

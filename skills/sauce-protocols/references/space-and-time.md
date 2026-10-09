@@ -6,6 +6,11 @@ ZK-proven SQL over indexed chain data: a contract asks the QueryRouter a query, 
 
 oracle (ZK-proven SQL) | Chains and addresses: [registry/space-and-time.md](registry/space-and-time.md)
 
+## In a Sauce program
+
+A Sauce program asks a query with `@sauce/zk` (`sauce-zk`): `Zk.sql({ query, payment })`, its result
+handed to the request's `.then`, the handler that checks the callback installed on the Pot.
+
 ## How a query works
 
 1. **Off chain**, the SQL becomes a proof plan: Space and Time's RPC answers

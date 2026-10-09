@@ -11,6 +11,11 @@ ZK-proven SQL over indexed chain data: a contract asks the QueryRouter a query, 
 | Namespace | `SpaceAndTime` on ethereum, base |
 | Chains | ethereum, base |
 
+## In a Sauce program
+
+A Sauce program asks a query with `@sauce/zk` ([proofs](../../guides/async.md#proofs-saucezk)): `Zk.sql({ query, payment })`, its result
+handed to the request's `.then`, the handler that checks the callback installed on the Pot.
+
 ## How a query works
 
 1. **Off chain**, the SQL becomes a proof plan: Space and Time's RPC answers

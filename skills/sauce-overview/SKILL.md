@@ -375,6 +375,20 @@ writing a package of the family.
   family, which its own section here or its `sauce-protocols` document covers.
 - **Asked as:** "Draw a random winner with Chainlink VRF and pay them when the number arrives."
 
+### `sauce-zk`
+
+Proven answers: a SQL query over indexed chain data, proven with Space and Time's Proof of SQL,
+asked now and answered by a callback that runs the request's `.then` body (`Zk.sql`); reading the
+proven table (`Zk.cell`, `Zk.rows`); the query's timeout and `Zk.cancel` to take an unanswered
+query's payment back; installing the handler; on Ethereum and Base.
+
+- **Holds** a payment made once a query proves a value is at least a minimum, its payment taken
+  back if the query goes unanswered.
+- **Load it** when a program must act on chain history or indexed data it cannot read itself,
+  proven rather than reported; `sauce-async` explains the promise it is.
+- **Asked as:** "Release the grant once a SQL query over Base's history proves this address made
+  at least ten deposits."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

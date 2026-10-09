@@ -130,6 +130,12 @@ function main(plan: bytes, payment: Uint256, column: Uint256, bump: Uint256): vo
     });
 }`;
 
+/** The skill's example: a payment made once the proven value reaches a minimum. */
+const PROVEN_PAYOUT = readFileSync(
+  join(FIXTURES, "../../../../../skills/sauce-zk/examples/proven-payout.sauce.ts"),
+  "utf8",
+);
+
 /** The same with a timeout of a minute. */
 const QUERY_WITHIN_A_MINUTE = QUERY.replace(
   "{ query: plan, payment }",
@@ -466,6 +472,25 @@ describeOnRouter.each([
     // The fulfiller is too late: the query is gone.
     expect((await fulfil(asked, LONGITUDE)).ok).toBe(false);
   });
+
+  it.each([
+    [51n, 1_000n],
+    [52n, 0n],
+  ])(
+    "the skill's sauce-zk/examples/proven-payout, its minimum %s, pays %s",
+    async (minimum, paid) => {
+      const recipient = privateKeyToAccount(
+        keccak256(toHex(`sauce.zk.test.payee.${minimum}`)),
+      ).address;
+      const sent = await chain.cook(
+        chain.compiled(PROVEN_PAYOUT, [PLAN, PAYMENT, minimum, recipient, 1_000n]),
+      );
+      expect(sent.ok).toBe(true);
+      // Base's longitude, 51, proven.
+      expect((await fulfil(requested(sent), LONGITUDE)).ok).toBe(true);
+      expect(await chain.publicClient.getBalance({ address: recipient })).toBe(paid);
+    },
+  );
 
   it("runs `.catch` for the body's own revert, and `Zk.cancel` leaves the paid query alone", async () => {
     // A VARCHAR column has no fixed width: the body's `Zk.cell` reverts.

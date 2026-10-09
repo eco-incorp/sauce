@@ -603,7 +603,8 @@ const CHOOSING = {
     "Chainlink feeds are read on chain (`latestRoundData`): check `updatedAt` against a staleness",
     "bound and scale by the feed's decimals. Pyth is pulled: the price is updated in the same",
     "transaction (`updatePriceFeeds`, paying its fee as value) before it is read. Space and Time",
-    "answers a SQL query over indexed chain data later, proven, by calling the requester back.",
+    "answers a SQL query over indexed chain data later, proven, by calling the requester back; a",
+    "program asks it with `@sauce/zk` (`sauce-zk`).",
   ],
   payments: [
     "Sablier locks tokens into a schedule a recipient withdraws from; Superfluid streams Super Tokens",
@@ -724,6 +725,7 @@ const DOCS_FOR_SKILL = {
     "guides/solana-distributed-swap.md",
   ],
   "sauce-intents": ["intents", "guides/intents.md"],
+  "sauce-zk": ["proofs", "guides/async.md#proofs-saucezk"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],
   "sauce-actions": ["actions", "guides/actions.md"],
