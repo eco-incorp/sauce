@@ -116,6 +116,14 @@ function main(handler: bytes) {
     );
   });
 
+  it("the ERC-1271 handler, written out with no call, carries the library's constants", () => {
+    for (const name of ["NAMESPACE", "DOMAIN", "NAME", "VERSION", "MESSAGE", "HALF_ORDER"]) {
+      const value = new RegExp(`const SAUCE_ERC1271_${name} = (0x[0-9a-f]+);`).exec(SOURCE)?.[1];
+      expect(value).toBeDefined();
+      expect(ERC1271).toContain(`const SAUCE_ERC1271_HANDLER_${name} = ${value};`);
+    }
+  });
+
   it.each(["owner()", "isValidSignature(bytes32,bytes)"])(
     "%s's selector, which the ERC-1271 handler calls, is derived from its signature",
     (signature) => {

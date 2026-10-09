@@ -568,6 +568,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         "// @chain solana",
         "function main() {",
         `  const blob = hex\`${"ab".repeat(bytes)}\`;`,
+        // Logged, so the blob stays in the program: its `.length` alone is a constant the compiler
+        // answers while compiling, which would leave the blob out.
+        "  log(blob);",
         `  require(blob.length == ${length});`,
         "}",
         "",
@@ -1282,6 +1285,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         "// @chain solana",
         "function main() {",
         `  const blob = hex\`${"ab".repeat(1500)}\`;`,
+        "  log(blob);",
         "  require(blob.length == 1500);",
         "}",
         "",
@@ -1515,7 +1519,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const sizes = async (bytes: number): Promise<[number, number]> => {
       const { bytecode } = compileSauceProgram(
         "solana",
-        `function main() {\n  const blob = hex\`${"ab".repeat(bytes)}\`;\n  require(blob.length == ${bytes});\n}\n`,
+        `function main() {\n  const blob = hex\`${"ab".repeat(bytes)}\`;\n  log(blob);\n  require(blob.length == ${bytes});\n}\n`,
       );
       const bare = await client.cookTransaction(bytecode, { accounts: [] }, {}, {});
       const limited = await client.cookTransaction(
