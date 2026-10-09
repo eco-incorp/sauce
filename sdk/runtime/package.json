@@ -1,0 +1,10 @@
+{
+  "name": "sauce-runtime",
+  "private": true,
+  "description": "What the sauce command installs for itself, with npm ci, into ~/.sauce/runtime/<version>: the MCP server's packages and LiteSVM. Written by sdk/scripts/gen-runtime-lock.mjs.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "litesvm": "1.2.1",
+    "zod": "4.6.5"
+  }
+}

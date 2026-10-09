@@ -7,12 +7,13 @@
  * printed and nothing runs; a copy in npx's (or `pnpm dlx`'s, or bunx's) cache is printed the
  * command that fetches the latest; and anything else is refused with npm's command. After a global
  * update, skills installed in the current directory are brought to the new version by the NEW
- * binary's `sauce skills update`.
+ * binary's `sauce skills update`, and where the version replaced had its runtime folder installed
+ * (`optional.ts`), the NEW binary installs its own (`sauce runtime install`).
  *
- * The npm registry is the command's one network access besides a chain's endpoints, and only this
- * command reaches it, only when it runs: there is no background or automatic check. Everything that
- * touches the outside — the registry, the package managers, the filesystem it inspects — is the
- * `Updater` the executable gives it (`main.ts`); a test gives its own, so nothing installs.
+ * It reads the npm registry (`npm-registry.ts`) when it runs; the one other read of it is the update
+ * check's (`update-check.ts`), which suggests this command. Everything that touches the outside — the
+ * registry, the package managers, the filesystem it inspects — is the `Updater` the executable gives
+ * it (`main.ts`); a test gives its own, so nothing installs.
  */
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
@@ -21,14 +22,16 @@ import { fileURLToPath } from "node:url";
 
 import { CliError, UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
+import {
+  newer,
+  PACKAGE,
+  readPackument,
+  REGISTRY,
+  VERSION,
+  type Packument,
+} from "./npm-registry.js";
+import { runtimeRoot } from "./optional.js";
 import { installedTargets } from "./skills.js";
-
-/** The package this command updates. */
-export const PACKAGE = "@eco-incorp/sauce";
-
-/** Where the package is published (the root manifest's `publishConfig.registry`): the one registry
- *  this command reads. */
-export const REGISTRY = "https://registry.npmjs.org/";
 
 export type Manager = "npm" | "pnpm" | "yarn" | "bun";
 
@@ -52,12 +55,6 @@ export type Installation =
   | { readonly kind: "ephemeral"; readonly runner: "npx" | "pnpm dlx" | "bunx" }
   | { readonly kind: "unknown"; readonly path: string };
 
-/** The registry's view of the package: its dist-tags and every published version. */
-export interface Packument {
-  readonly distTags: Readonly<Record<string, string>>;
-  readonly versions: readonly string[];
-}
-
 /** A command run with no shell, its output captured. */
 export interface Captured {
   readonly status: number | null;
@@ -71,6 +68,8 @@ export interface Updater {
   readonly root: string;
   /** The directory whose installed skills follow an update. */
   readonly cwd: string;
+  /** Where the versions' runtime folders are: the new version's follows the old one's. */
+  readonly runtime?: string;
   readonly platform: NodeJS.Platform;
   /** This Node.js, which runs the new binary and, on Windows, npm's own script. */
   readonly node: string;
@@ -216,8 +215,7 @@ export function projectInstallLine(
 
 const quoted = (text: string): string => (/^[\w./:@+-]+$/.test(text) ? text : JSON.stringify(text));
 
-/** `--version`: an exact version, or a dist-tag (`latest`, `next`). */
-const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+/** `--version`: an exact version ({@link VERSION}), or a dist-tag (`latest`, `next`). */
 const TAG = /^[a-z][a-z0-9-]*$/i;
 
 /** What `sauce update` was asked. */
@@ -240,28 +238,6 @@ const describe = (installation: Installation): string => {
       return `${installation.path}, installed by no package manager this command knows`;
   }
 };
-
-/**
- * Whether version `a` is newer than `b`, by their numbers and a prerelease below its release;
- * `false` where either is no version.
- */
-export function newer(a: string, b: string): boolean {
-  const parse = (text: string) => {
-    const match = /^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?/.exec(text);
-
-    return match === null
-      ? undefined
-      : { numbers: [1, 2, 3].map((at) => BigInt(match[at]!)), pre: match[4] };
-  };
-  const [x, y] = [parse(a), parse(b)];
-  if (x === undefined || y === undefined) return false;
-  for (let at = 0; at < 3; at++) {
-    if (x.numbers[at] !== y.numbers[at]) return x.numbers[at]! > y.numbers[at]!;
-  }
-  if (x.pre === undefined || y.pre === undefined) return x.pre === undefined && y.pre !== undefined;
-
-  return x.pre.localeCompare(y.pre, "en", { numeric: true }) > 0;
-}
 
 /** The version `wanted` (a version or a dist-tag) names in `packument`. */
 function resolveVersion(packument: Packument, wanted: string): string {
@@ -422,8 +398,16 @@ export async function updateCommand(
     );
   }
 
-  // The skills installed here follow the command: the NEW binary updates them.
+  // The skills installed here follow the command: the NEW binary updates them. So does the runtime
+  // folder, where the version replaced had one: an agent's next start of `sauce mcp` waits for none.
   const skills = await followSkills(updater, installation.root);
+  const runtime = await followRuntime(updater, installation.root, current);
+  if (runtime !== undefined && runtime.status !== 0) {
+    notes.push(
+      `The new sauce did not install its runtime packages (its first sauce mcp does): ` +
+        (runtime.stderr.trim() || runtime.stdout.trim()),
+    );
+  }
 
   return {
     text: [
@@ -436,6 +420,7 @@ export async function updateCommand(
               `Skills in ${updater.cwd} were not updated:`,
               ...indented(skills.stdout + skills.stderr),
             ]),
+      ...(runtime !== undefined && runtime.status === 0 ? indented(runtime.stdout) : []),
     ].join("\n"),
     json: {
       ...base,
@@ -446,6 +431,10 @@ export async function updateCommand(
         skills === undefined
           ? null
           : { dir: updater.cwd, updated: skills.status === 0, output: skills.stdout.trim() },
+      runtime:
+        runtime === undefined
+          ? null
+          : { installed: runtime.status === 0, output: runtime.stdout.trim() },
     },
     ...(notes.length === 0 ? {} : { notes }),
     ...(skills !== undefined && skills.status !== 0 ? { exitCode: 1 } : {}),
@@ -459,10 +448,8 @@ const indented = (text: string): string[] =>
     .filter((line) => line !== "")
     .map((line) => `  ${line}`);
 
-/** `sauce skills update` in the current directory, by the binary now installed at `root`, when
- *  skills are installed there; `undefined` when none are. */
-async function followSkills(updater: Updater, root: string): Promise<Captured | undefined> {
-  if (installedTargets(updater.cwd).length === 0) return undefined;
+/** The `sauce` binary of the package installed at `root`. */
+function binaryAt(updater: Updater, root: string): string {
   let bin = "sdk/dist/cli/main.js";
   try {
     const manifest = JSON.parse(updater.readText(join(root, "package.json"))) as {
@@ -473,9 +460,35 @@ async function followSkills(updater: Updater, root: string): Promise<Captured | 
     // The binary where the package keeps it.
   }
 
+  return join(root, bin);
+}
+
+/** `sauce skills update` in the current directory, by the binary now installed at `root`, when
+ *  skills are installed there; `undefined` when none are. */
+async function followSkills(updater: Updater, root: string): Promise<Captured | undefined> {
+  if (installedTargets(updater.cwd).length === 0) return undefined;
+
   return updater.capture(
     updater.node,
-    [join(root, bin), "skills", "update", "--dir", updater.cwd],
+    [binaryAt(updater, root), "skills", "update", "--dir", updater.cwd],
+    updater.cwd,
+  );
+}
+
+/** `sauce runtime install`, by the binary now installed at `root`, when the version replaced had
+ *  its runtime folder installed; `undefined` when it had none. */
+async function followRuntime(
+  updater: Updater,
+  root: string,
+  replaced: string,
+): Promise<Captured | undefined> {
+  if (updater.runtime === undefined || !updater.exists(join(updater.runtime, replaced))) {
+    return undefined;
+  }
+
+  return updater.capture(
+    updater.node,
+    [binaryAt(updater, root), "runtime", "install"],
     updater.cwd,
   );
 }
@@ -486,24 +499,12 @@ export function nodeUpdater(): Updater {
     // Three levels above `sdk/dist/cli`: the package's own directory.
     root: realpathSync(fileURLToPath(new URL("../../../", import.meta.url))),
     cwd: process.cwd(),
+    runtime: runtimeRoot(),
     platform: process.platform,
     node: process.execPath,
     exists: existsSync,
     readText: (path) => readFileSync(path, "utf8"),
-    packument: async () => {
-      const response = await fetch(`${REGISTRY}${PACKAGE.replace("/", "%2f")}`, {
-        // The abbreviated document: dist-tags and versions, without every version's readme.
-        headers: { accept: "application/vnd.npm.install-v1+json" },
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!response.ok) throw new Error(`the registry answered ${response.status}`);
-      const body = (await response.json()) as {
-        "dist-tags"?: Record<string, string>;
-        versions?: Record<string, unknown>;
-      };
-
-      return { distTags: body["dist-tags"] ?? {}, versions: Object.keys(body.versions ?? {}) };
-    },
+    packument: () => readPackument(),
     exec: (file, args, cwd) =>
       new Promise((resolve) => {
         // No shell; the manager's output goes to stderr, so stdout stays this command's report.
