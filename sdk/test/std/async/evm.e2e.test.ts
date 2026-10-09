@@ -1,29 +1,35 @@
 /**
- * `@sauce/async` EXECUTED: a request now, a callback later, and the `.then` body run when it lands,
- * as the same Private Pot, on an anvil running the released gated engine and Kitchen with v12
- * #571's Router — the Router whose fallback runs the handler a Pot registered for a selector.
+ * `@sauce/async` EXECUTED: promises on a Private Pot, on an anvil running the released gated Kitchen
+ * with v12 #571's Router — the Router whose fallback runs the handler a Pot registered for a
+ * selector.
  *
- * The protocol is `fixtures/EchoProtocol.sol`, in the shape of every request-id protocol: a program
- * requests, the protocol answers an id, and later `fulfill(id)` calls the Pot back with
- * `echo(uint256 id, uint256 value)`. Each step runs as a user would run it:
+ * Two protocols stand in for every one a package wraps (`fixtures/*.sol`):
+ *   - `EchoProtocol`, request-id: a program requests, the protocol answers an id, and later
+ *     `fulfill(id)` calls the Pot back with `echo(uint256 id, uint256 value)`. Its promise is keyed
+ *     `promiseKey(tag, id)`, one packed word in the settlement table;
+ *   - `CarrierProtocol`, echoing: the request sends its own bytes, and later `deliver(id, value)`
+ *     calls the Pot back with `carried(bytes payload, bytes value)`, the payload as it was sent. A
+ *     plain `.then` carries its continuation and stores nothing.
+ * Each step runs as a user would run it: the owner cooks the install program the SDK writes
+ * (`routes/handlers.ts`, the two handlers and @sauce/async's public `expire(bytes32)`), then
+ * programs that request; anyone calls the protocols back, and the Router's fallback cooks the
+ * handler, which checks its caller and settles the promise, running its body in the same cook.
  *
- *   1. the owner cooks a program that `install`s the echo handler, a program compiled by the SDK
- *      for the chain, through the Router's `setHandler`;
- *   2. the owner cooks a program that requests, `Echo.request(value).then((echoed) => { … })`: the
- *      request's id is the key its body is parked under;
- *   3. anyone calls `fulfill(id)`: the Router's fallback cooks the handler, which checks its caller,
- *      `take`s the parked body and `run`s it in the same cook, handing it what arrived. The body
- *      writes the Pot's storage, with a value it captured when the request was made, and the
- *      Kitchen's fee is charged once.
- *
- * And what is refused: a second delivery of the same id, a callback from anyone but the protocol,
- * and `install` on a Shared Pot.
+ * What is held: the body writes the Pot's storage with what arrived and what it captured; the
+ * Kitchen's fee is charged once per callback; a second delivery runs nothing and returns; a forged
+ * callback reverts; `.catch` runs for a body's revert and a protocol's failure, and a rejection with
+ * no `.catch` is logged unhandled and returns; Promise.all/race/any/allSettled settle as
+ * JavaScript's do; a race against `Async.timeout` is rejected by `expire` after the deadline
+ * (refused before it, and without the fee); a deferred is resolved by its key later; a carried
+ * continuation runs with nothing stored, or once from the table with a deadline; `install` is
+ * refused on a Shared Pot and on a fixed-Router Pot. ASYNC_GAS=1 prints each path's gas.
  *
  * GATED twice. On SAUCE_V12_RUNTIME_CREATION_HEX, as every EVM execution suite is, and on
  * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code
  * (`forge inspect src/Router.sol:Router bytecode` in v12-evm at that branch): no release publishes
  * that Router yet, so CI has none to give and this suite skips there, until a kitchen-evm release
- * carries the handlers and the release's Router runs it.
+ * carries the handlers and the release's Router runs it. The cases that settle through a catch
+ * that reads the revert also need an engine built from the compiler's tree (`itCatching`).
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -53,6 +59,11 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
+import {
+  compileHandlers,
+  handlersInstallSource,
+  packageHandlers,
+} from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
   gateAnchors,
@@ -65,12 +76,34 @@ const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
 const ROUTER = routerUnderTest();
 const describeAsync = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
+/** Settling catches the continuation's revert with a `catch (e)` that reads `e`, which runs on an
+ *  engine built from the compiler's tree and not on the released one: there its work is dropped,
+ *  and a settlement inside another (a combinator's child settling it, a carried continuation)
+ *  stops the cook. Those cases skip on the release. */
+const RELEASED_ENGINE =
+  RUNTIME_HEX_PATH !== undefined &&
+  readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
+    (
+      JSON.parse(
+        readFileSync(
+          join(
+            dirname(fileURLToPath(import.meta.url)),
+            "../../../src/artifacts/V12RuntimeBytecode.json",
+          ),
+          "utf8",
+        ),
+      ) as { runtimeCreationCode: string }
+    ).runtimeCreationCode.toLowerCase();
+const itCatching = RELEASED_ENGINE ? it.skip : it;
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
-const ECHO = JSON.parse(readFileSync(join(FIXTURES, "EchoProtocol.json"), "utf8")) as {
-  abi: Abi;
-  creationCode: Hex;
-};
+const fixture = (name: string): { abi: Abi; creationCode: Hex } =>
+  JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8")) as {
+    abi: Abi;
+    creationCode: Hex;
+  };
+const ECHO = fixture("EchoProtocol");
+const CARRIER = fixture("CarrierProtocol");
 
 /** Anvil's first dev account: the Kitchen's owner and the Pot's. A second calls as a stranger. */
 const OWNER = privateKeyToAccount(
@@ -89,6 +122,11 @@ const CHAIN = "base";
 const CHAIN_ID = 8453;
 
 const ECHO_SELECTOR = toFunctionSelector("echo(uint256,uint256)");
+/** The tag the echo protocol keys its promises under. */
+const ECHO_TAG = 7n;
+const PENDING = keccak256(toHex("PromisePending(bytes32,uint256)"));
+const IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
+const UNHANDLED = keccak256(toHex("PromiseUnhandled(bytes32,bytes)"));
 const REQUEST_SELECTOR = toFunctionSelector("request(uint256)");
 /** keccak256(abi.encode(uint256(keccak256("sauce.storage.Async")) - 1)) & ~0xff. */
 const NAMESPACE = (() => {
@@ -97,6 +135,8 @@ const NAMESPACE = (() => {
 })();
 /** The Pot storage slot the body writes. */
 const ECHOED_SLOT = keccak256(toHex("async.echoed"));
+/** The Pot storage slot a \`.catch\` writes. */
+const CAUGHT_SLOT = keccak256(toHex("async.caught"));
 
 const potAbi = parseAbi([
   "function cook(address engine, bytes program) payable returns (bytes)",
@@ -107,6 +147,8 @@ const kitchenAbi = parseAbi([
   "function setExecutionFee(uint256 fee)",
   "function deploySharedPot(bytes32 salt) returns (address)",
   "function predictSharedPot(bytes32 salt) view returns (address)",
+  "function deployPot(address owner, bytes32 salt, bool routerFixed) returns (address)",
+  "function predictPot(address owner, bytes32 salt, bool routerFixed) view returns (address)",
 ]);
 
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
@@ -117,24 +159,55 @@ const slotOf = (key: bigint): Hex =>
  *  SDK for the chain, as a package's handler is. */
 const handlerSource = (
   echo: Address,
-): string => `import { requireCaller, run, take } from "@sauce/async";
+): string => `import { fulfil, promiseKey, requireCaller } from "@sauce/async";
 
-function main(caller: Address, value: Uint256, data: bytes): bytes {
+function main(caller: Address, value: Uint256, data: bytes): void {
   requireCaller(${echo}, caller);
   const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
-  return run(take(id), abi.encode(echoed));
+  fulfil(promiseKey(${ECHO_TAG}, id), abi.encode(echoed));
 }`;
 
-/** The program the owner cooks to install it: one `install` per selector. */
-const INSTALL = `import { install } from "@sauce/async";
+/** The handler `carried(bytes,bytes)` answers with, for the protocol at `carrier`: the payload the
+ *  request sent, `(key, stored, program)`, settled with what the protocol delivered. */
+const carriedSource = (
+  carrier: Address,
+): string => `import { requireCaller, settleCarried } from "@sauce/async";
 
-function main(handler: bytes): void {
-  install(${ECHO_SELECTOR}, handler, false);
+function main(caller: Address, value: Uint256, data: bytes): void {
+  requireCaller(${carrier}, caller);
+  const [payload, delivered] = abi.decode(data.slice(4, data.length), ["bytes", "bytes"]);
+  const [key, stored, program] = abi.decode(payload, ["Uint256", "Uint256", "bytes"]);
+  settleCarried(key, stored == 1, program, delivered, true);
 }`;
 
-/** The program that requests: the echo protocol in the shape a package writes one, and a body that
- *  writes what arrived plus `bump`, a value it captured when the request was made. */
-const requestSource = (echo: Address): string => `import { Request } from "@sauce/async";
+/** The program the owner cooks to install them, as the SDK writes it for a package: each handler
+ *  compiled for the chain, @sauce/async's public `expire(bytes32)` with them, one `install` each. */
+const installSource = (echo: Address, carrier: Address): string =>
+  handlersInstallSource(
+    [
+      ...compileHandlers(
+        CHAIN,
+        [
+          { selector: "echo(uint256,uint256)", program: "echo.handler.js" },
+          { selector: "carried(bytes,bytes)", program: "carried.handler.js" },
+        ],
+        (path) =>
+          path === "echo.handler.js"
+            ? handlerSource(echo)
+            : path === "carried.handler.js"
+              ? carriedSource(carrier)
+              : undefined,
+      ),
+      ...packageHandlers(CHAIN, "@sauce/async"),
+    ],
+    "the echo protocol",
+  );
+
+/** The echo protocol in the shape a package writes one. Its delivery fails the request when the
+ *  protocol echoes 13, as a protocol reporting an error does. */
+const ECHO_PROTOCOL = (
+  echo: Address,
+): string => `import { Request, promiseKey } from "@sauce/async";
 
 class EchoProtocol {
   request(value: Uint256) {
@@ -144,27 +217,118 @@ class EchoProtocol {
           evm.call(${echo}, 0, hex\`${REQUEST_SELECTOR.slice(2)}\`.concat(abi.encode(value))),
           ["Uint256"],
         );
-        return id;
+        return promiseKey(${ECHO_TAG}, id);
       },
       deliver: (input, body, fail) => {
         const [echoed] = abi.decode(input, ["Uint256"]);
-        body(echoed);
+        if (echoed == 13) {
+          fail(abi.encode(echoed));
+        } else {
+          body(echoed);
+        }
       },
     });
   }
 }
 const Echo = new EchoProtocol();
+`;
 
+/** The program that requests: a body that writes what arrived plus \`bump\`, a value it captured
+ *  when the request was made. */
+const requestSource = (echo: Address): string => `${ECHO_PROTOCOL(echo)}
 function main(value: Uint256, bump: Uint256): void {
   Echo.request(value).then((echoed) => {
     evm.sstore(${ECHOED_SLOT}, echoed + bump);
   });
 }`;
 
+/** The same request with a \`.catch\`: a body that reverts on 99 after writing, and a handler that
+ *  records the hash of what it was handed. */
+const catchingSource = (echo: Address): string => `${ECHO_PROTOCOL(echo)}
+function main(value: Uint256, bump: Uint256): void {
+  Echo.request(value)
+    .then((echoed) => {
+      evm.sstore(${ECHOED_SLOT}, echoed + bump);
+      require(echoed != 99, "unlucky");
+    })
+    .catch((e) => {
+      evm.sstore(${CAUGHT_SLOT}, crypto.keccak256(e));
+    });
+}`;
+
+/** A program over two echo requests and the combinator `combinator`, writing what its body is
+ *  handed as `write` computes it from `r`. */
+const combinedSource = (
+  echo: Address,
+  combinator: string,
+  children: string,
+  write: string,
+): string => `${ECHO_PROTOCOL(echo).replace("import { Request, promiseKey }", "import { Async, Promise, Request, promiseKey }")}
+function main(value: Uint256, bump: Uint256): void {
+  Promise.${combinator}([${children}])
+    .then((r) => {
+      evm.sstore(${ECHOED_SLOT}, ${write});
+    })
+    .catch((e) => {
+      evm.sstore(${CAUGHT_SLOT}, crypto.keccak256(e));
+    });
+}`;
+
+/** A protocol that carries the continuation back: the shape of a bridge's package. With a deadline
+ *  (\`within\`) the table holds the promise, and the message only names it. */
+const carrierSource = (
+  carrier: Address,
+  within: boolean,
+): string => `import { Request } from "@sauce/async";
+
+class CarrierProtocol {
+  send() {
+    return new Request({
+      carries: true,
+      send: (continuation) => {
+        const payload = abi.encode(continuation.key, continuation.stored ? 1 : 0, continuation.program);
+        evm.call(${carrier}, 0, hex\`2bb1ae7c\`.concat(abi.encode(payload)));
+      },
+      deliver: (input, body, fail) => {
+        const [value] = abi.decode(input, ["Uint256"]);
+        body(value);
+      },
+    });
+  }
+}
+const Carrier = new CarrierProtocol();
+
+function main(bump: Uint256): void {
+  Carrier.send()${within ? ".within(3600)" : ""}.then((value) => {
+    evm.sstore(${ECHOED_SLOT}, value + bump);
+  });
+}`;
+
+/** A deferred: its body parked, its key the program's answer and logged; settled later by key. */
+const deferredSource = `import { Promise } from "@sauce/async";
+
+function main(bump: Uint256): Uint256 {
+  const d = Promise.withResolvers();
+  d.promise.then((value) => {
+    const [v] = abi.decode(value, ["Uint256"]);
+    evm.sstore(${ECHOED_SLOT}, v + bump);
+  });
+  return d.key;
+}`;
+const resolveSource = `import { Async } from "@sauce/async";
+
+function main(key: Uint256, value: Uint256): void {
+  Async.resolve(key, abi.encode(value));
+}`;
+
+/** Gas each path costs, by name: printed with ASYNC_GAS=1. */
+const GAS: Record<string, bigint> = {};
+
 let anvil: ChildProcess;
 let publicClient: PublicClient;
 let stack: GatedEngine;
 let echo: Address;
+let carrier: Address;
 
 const owner = createWalletClient({ account: OWNER, transport: http(RPC_URL) });
 const stranger = createWalletClient({ account: STRANGER, transport: http(RPC_URL) });
@@ -233,17 +397,67 @@ async function revertOf(
   return { data: reverted, reason };
 }
 
-const parked = async (key: bigint, pot: Address = stack.pot): Promise<bigint> =>
-  BigInt((await publicClient.getStorageAt({ address: pot, slot: slotOf(key) })) ?? "0x0");
+/** The promise key the echo protocol's request `id` is: `promiseKey(ECHO_TAG, id)`. */
+const keyOf = (id: bigint): bigint =>
+  BigInt(
+    keccak256(encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [ECHO_TAG, id])),
+  );
 
-/** Requests `value` from the owner's Pot, answering the id the protocol gave it. */
-async function request(value: bigint, bump: bigint): Promise<bigint> {
+/** The settlement table's word for the echo request `id`: zero once it settled. */
+const parked = async (id: bigint, pot: Address = stack.pot): Promise<bigint> =>
+  BigInt((await publicClient.getStorageAt({ address: pot, slot: slotOf(keyOf(id)) })) ?? "0x0");
+
+/** The gas a transaction used. */
+const gasOf = async (hash: Hex): Promise<bigint> =>
+  (await publicClient.getTransactionReceipt({ hash })).gasUsed;
+
+/** Each promise a transaction parked: its key, and its deadline (zero for none). */
+const pendingOf = async (hash: Hex): Promise<{ key: bigint; deadline: bigint }[]> =>
+  (await publicClient.getTransactionReceipt({ hash })).logs
+    .filter(
+      (entry) =>
+        entry.address.toLowerCase() === stack.pot.toLowerCase() && entry.topics[0] === PENDING,
+    )
+    .map((entry) => ({ key: BigInt(entry.topics[1]!), deadline: BigInt(entry.data) }));
+
+/** The echo protocol's next `count` ids, in the order its requests will take them. */
+async function nextIds(count: number): Promise<bigint[]> {
   const before = (await publicClient.readContract({
     address: echo,
     abi: ECHO.abi,
     functionName: "requests",
   })) as bigint;
-  const { ok } = await cook(compiled(requestSource(echo), [value, bump]));
+
+  return Array.from({ length: count }, (_, i) =>
+    BigInt(
+      keccak256(
+        encodeAbiParameters(
+          [{ type: "address" }, { type: "uint256" }],
+          [echo, before + 1n + BigInt(i)],
+        ),
+      ),
+    ),
+  );
+}
+
+/** The topics of the logs a transaction's receipt holds from the Pot. */
+const potLogs = async (hash: Hex): Promise<readonly (readonly Hex[])[]> =>
+  (await publicClient.getTransactionReceipt({ hash })).logs
+    .filter((entry) => entry.address.toLowerCase() === stack.pot.toLowerCase())
+    .map((entry) => entry.topics as Hex[]);
+
+/** Requests `value` from the owner's Pot, answering the id the protocol gave it. */
+async function request(
+  value: bigint,
+  bump: bigint,
+  source: (echo: Address) => string = requestSource,
+): Promise<bigint> {
+  const before = (await publicClient.readContract({
+    address: echo,
+    abi: ECHO.abi,
+    functionName: "requests",
+  })) as bigint;
+  const { ok } = await cook(compiled(source(echo), [value, bump]));
   expect(ok).toBe(true);
 
   return BigInt(
@@ -295,19 +509,41 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       data: ECHO.creationCode,
     });
     echo = (await publicClient.waitForTransactionReceipt({ hash })).contractAddress!;
+    const carrierHash = await owner.sendTransaction({
+      account: OWNER,
+      chain: null,
+      data: CARRIER.creationCode,
+    });
+    carrier = (await publicClient.waitForTransactionReceipt({ hash: carrierHash }))
+      .contractAddress!;
 
-    const handler = compileSauceProgram(CHAIN, handlerSource(echo)).bytecode;
-    const { ok } = await cook(compiled(INSTALL, [bytesToHex(handler)]));
+    const { ok } = await cook(compiled(installSource(echo, carrier)));
     expect(ok).toBe(true);
   }, 120_000);
 
   afterAll(async () => {
+    if (process.env.ASYNC_GAS === "1") console.log(GAS);
     if (anvil !== undefined && anvil.exitCode === null) {
       const exited = once(anvil, "exit");
       anvil.kill();
       await exited;
     }
   });
+
+  const fulfill = (id: bigint) =>
+    send(
+      stranger,
+      echo,
+      encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] }),
+    );
+  const slot = async (at: Hex): Promise<Hex | undefined> =>
+    publicClient.getStorageAt({ address: stack.pot, slot: at });
+  const setSlot = (at: Hex, value: bigint): Promise<void> =>
+    createTestClient({ mode: "anvil", transport: http(RPC_URL) }).setStorageAt({
+      address: stack.pot,
+      index: at,
+      value: word(value),
+    });
 
   it("parks the body under the request's id, and the callback runs it once, for one fee", async () => {
     const id = await request(41n, 1_000n);
@@ -331,13 +567,15 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     expect(potBefore - (await publicClient.getBalance({ address: stack.pot }))).toBe(FEE);
   });
 
-  it("refuses a second delivery of the same id: the body was taken", async () => {
-    const id = await request(7n, 0n);
-    const fulfill = encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] });
-    expect((await send(stranger, echo, fulfill)).ok).toBe(true);
-    expect((await revertOf(STRANGER.address, echo, fulfill)).reason).toBe(
-      "async: nothing is parked under this key",
-    );
+  it("lets a second delivery of the same id pass and run nothing: the promise is settled", async () => {
+    const id = await request(7n, 5n);
+    expect((await fulfill(id)).ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(12n));
+    await setSlot(ECHOED_SLOT, 0n);
+    const again = await fulfill(id);
+    expect(again.ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+    expect(await potLogs(again.hash)).toContainEqual([IGNORED, word(keyOf(id))]);
   });
 
   it("refuses a callback from anyone but the protocol, and leaves the body parked", async () => {
@@ -366,6 +604,283 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     );
   });
 
+  itCatching(
+    "runs `.catch` in place of a body that reverted, with the body's writes undone",
+    async () => {
+      const before = await slot(ECHOED_SLOT);
+      const id = await request(99n, 1n, catchingSource);
+      expect((await fulfill(id)).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(before);
+      expect(await slot(CAUGHT_SLOT)).toBe(keccak256(toHex("unlucky")));
+      expect(await parked(id)).toBe(0n);
+    },
+  );
+
+  itCatching(
+    "runs `.catch` when the protocol's delivery fails the request, handed why",
+    async () => {
+      const id = await request(13n, 1n, catchingSource);
+      expect((await fulfill(id)).ok).toBe(true);
+      expect(await slot(CAUGHT_SLOT)).toBe(keccak256(word(13n)));
+    },
+  );
+
+  itCatching(
+    "settles a failed request with no `.catch` as rejected, logged unhandled, and returns",
+    async () => {
+      const id = await request(13n, 1n);
+      const delivered = await fulfill(id);
+      expect(delivered.ok).toBe(true);
+      expect(await parked(id)).toBe(0n);
+      expect(await potLogs(delivered.hash)).toContainEqual([UNHANDLED, word(keyOf(id))]);
+    },
+  );
+
+  const expire = (key: bigint, value: bigint = FEE) =>
+    send(stranger, stack.pot, concat([toFunctionSelector("expire(bytes32)"), word(key)]), value);
+  const later = async (seconds: number): Promise<void> => {
+    const test = createTestClient({ mode: "anvil", transport: http(RPC_URL) });
+    await test.increaseTime({ seconds });
+    await test.mine({ blocks: 1 });
+  };
+
+  it("measures a request-id promise: one word parked, one callback", async () => {
+    const [id] = await nextIds(1);
+    const requested = await cook(compiled(requestSource(echo), [3n, 0n]));
+    expect(requested.ok).toBe(true);
+    GAS["request-id: request (continuation already deployed)"] = await gasOf(requested.hash);
+    const delivered = await fulfill(id!);
+    expect(delivered.ok).toBe(true);
+    GAS["request-id: callback"] = await gasOf(delivered.hash);
+    expect(await slot(ECHOED_SLOT)).toBe(word(3n));
+    // The same request made bare, with no promise: what the protocol and the cook cost alone.
+    const bare = await cook(
+      compiled(
+        `function main(value: Uint256): void {
+  evm.call(${echo}, 0, hex\`${REQUEST_SELECTOR.slice(2)}\`.concat(abi.encode(value)));
+}`,
+        [3n],
+      ),
+    );
+    GAS["request-id: the same request with no promise"] = await gasOf(bare.hash);
+  });
+
+  itCatching(
+    "Promise.all runs its body once every child has settled, each value in order",
+    async () => {
+      await setSlot(ECHOED_SLOT, 0n);
+      const [first, second] = await nextIds(2);
+      const requested = await cook(
+        compiled(
+          combinedSource(
+            echo,
+            "all",
+            "Echo.request(value), Echo.request(value + 1)",
+            "r[0] * 1000 + r[1] + bump",
+          ),
+          [20n, 5n],
+        ),
+      );
+      expect(requested.ok).toBe(true);
+      GAS["all of 2: request"] = await gasOf(requested.hash);
+      const last = await fulfill(second!);
+      expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+      GAS["all of 2: a child's callback"] = await gasOf(last.hash);
+      const settling = await fulfill(first!);
+      GAS["all of 2: the last child's callback, running the body"] = await gasOf(settling.hash);
+      expect(await slot(ECHOED_SLOT)).toBe(word(20n * 1000n + 21n + 5n));
+      // Again: the three continuations are deployed already, and the request parks three words.
+      const again = await cook(
+        compiled(
+          combinedSource(
+            echo,
+            "all",
+            "Echo.request(value), Echo.request(value + 1)",
+            "r[0] * 1000 + r[1] + bump",
+          ),
+          [20n, 5n],
+        ),
+      );
+      GAS["all of 2: request, continuations already deployed"] = await gasOf(again.hash);
+    },
+  );
+
+  itCatching("Promise.race settles with the first child; the later one is ignored", async () => {
+    const [first, second] = await nextIds(2);
+    expect(
+      (
+        await cook(
+          compiled(
+            combinedSource(
+              echo,
+              "race",
+              "Echo.request(value), Echo.request(value + 1)",
+              "r + bump",
+            ),
+            [30n, 1n],
+          ),
+        )
+      ).ok,
+    ).toBe(true);
+    expect((await fulfill(second!)).ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(32n));
+    await setSlot(ECHOED_SLOT, 0n);
+    const late = await fulfill(first!);
+    expect(late.ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+  });
+
+  itCatching("Promise.any is fulfilled by the first fulfilment", async () => {
+    const [first] = await nextIds(2);
+    expect(
+      (
+        await cook(
+          compiled(
+            combinedSource(echo, "any", "Echo.request(value), Echo.request(value + 1)", "r + bump"),
+            [40n, 2n],
+          ),
+        )
+      ).ok,
+    ).toBe(true);
+    expect((await fulfill(first!)).ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(42n));
+  });
+
+  itCatching(
+    "a race against a timeout: anyone expires it after the deadline, into `.catch`",
+    async () => {
+      const [id] = await nextIds(1);
+      const requested = await cook(
+        compiled(
+          combinedSource(echo, "race", "Echo.request(value), Async.timeout(60)", "r + bump"),
+          [50n, 0n],
+        ),
+      );
+      expect(requested.ok).toBe(true);
+      const timeout = (await pendingOf(requested.hash)).find(({ deadline }) => deadline > 0n)!;
+      expect(timeout).toBeDefined();
+
+      // Refused before the deadline, and for less than the Kitchen's fee.
+      expect(
+        (
+          await revertOf(
+            STRANGER.address,
+            stack.pot,
+            concat([toFunctionSelector("expire(bytes32)"), word(timeout.key)]),
+            FEE,
+          )
+        ).reason,
+      ).toBe("async: the promise has not expired");
+      await later(61);
+      expect(
+        (
+          await revertOf(
+            STRANGER.address,
+            stack.pot,
+            concat([toFunctionSelector("expire(bytes32)"), word(timeout.key)]),
+            0n,
+          )
+        ).reason,
+      ).toBe("async: expire pays the Kitchen's fee");
+
+      await setSlot(CAUGHT_SLOT, 0n);
+      const expired = await expire(timeout.key);
+      expect(expired.ok).toBe(true);
+      GAS["expire: a race's timeout, running its .catch"] = await gasOf(expired.hash);
+      expect(await slot(CAUGHT_SLOT)).toBe(
+        keccak256(concat([toFunctionSelector("Timeout(bytes32)"), word(timeout.key)])),
+      );
+      // The request answering late settles nothing.
+      await setSlot(ECHOED_SLOT, 0n);
+      expect((await fulfill(id!)).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+      // And the timeout, expired once, is no promise any more.
+      expect((await expire(timeout.key)).ok).toBe(true);
+    },
+  );
+
+  itCatching("Promise.allSettled hands each child's state and value", async () => {
+    const [id] = await nextIds(1);
+    const requested = await cook(
+      compiled(
+        combinedSource(
+          echo,
+          "allSettled",
+          "Echo.request(value), Async.timeout(60)",
+          "r[0].status * 100 + r[1].status * 10 + r[0].value.length + bump",
+        ),
+        [60n, 0n],
+      ),
+    );
+    const timeout = (await pendingOf(requested.hash)).find(({ deadline }) => deadline > 0n)!;
+    expect((await fulfill(id!)).ok).toBe(true);
+    await later(61);
+    expect((await expire(timeout.key)).ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(2n * 100n + 3n * 10n + 32n));
+  });
+
+  it("a deferred: its key logged, its body run when the owner resolves it later", async () => {
+    const made = await cook(compiled(deferredSource, [7n]));
+    expect(made.ok).toBe(true);
+    const [deferred] = await pendingOf(made.hash);
+    expect(deferred).toBeDefined();
+    await setSlot(ECHOED_SLOT, 0n);
+    expect((await cook(compiled(resolveSource, [deferred!.key, 70n]))).ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(77n));
+    // Resolved once: again, nothing.
+    await setSlot(ECHOED_SLOT, 0n);
+    expect((await cook(compiled(resolveSource, [deferred!.key, 1n]))).ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+  });
+
+  itCatching("a carried continuation: nothing parked, run as the message lands", async () => {
+    const before = (await publicClient.readContract({
+      address: carrier,
+      abi: CARRIER.abi,
+      functionName: "sent",
+    })) as bigint;
+    const requested = await cook(compiled(carrierSource(carrier, false), [100n]));
+    expect(requested.ok).toBe(true);
+    expect(await pendingOf(requested.hash)).toEqual([]);
+    GAS["carried: request (nothing stored)"] = await gasOf(requested.hash);
+    const delivered = await send(
+      stranger,
+      carrier,
+      encodeFunctionData({
+        abi: CARRIER.abi,
+        functionName: "deliver",
+        args: [before + 1n, word(5n)],
+      }),
+    );
+    expect(delivered.ok).toBe(true);
+    GAS["carried: callback"] = await gasOf(delivered.hash);
+    expect(await slot(ECHOED_SLOT)).toBe(word(105n));
+  });
+
+  itCatching(
+    "a carried continuation with a deadline: parked, so a second delivery is ignored",
+    async () => {
+      const before = (await publicClient.readContract({
+        address: carrier,
+        abi: CARRIER.abi,
+        functionName: "sent",
+      })) as bigint;
+      const requested = await cook(compiled(carrierSource(carrier, true), [200n]));
+      expect(requested.ok).toBe(true);
+      expect(await pendingOf(requested.hash)).toHaveLength(1);
+      const deliver = encodeFunctionData({
+        abi: CARRIER.abi,
+        functionName: "deliver",
+        args: [before + 1n, word(6n)],
+      });
+      expect((await send(stranger, carrier, deliver)).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(206n));
+      await setSlot(ECHOED_SLOT, 0n);
+      expect((await send(stranger, carrier, deliver)).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+    },
+  );
+
   it("refuses `install` on a Shared Pot, which answers no selector", async () => {
     const salt = word(0x5a5an);
     expect(
@@ -383,8 +898,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       functionName: "predictSharedPot",
       args: [salt],
     })) as Address;
-    const handler = compileSauceProgram(CHAIN, handlerSource(echo)).bytecode;
-    const install = compiled(INSTALL, [bytesToHex(handler)]);
+    const install = compiled(installSource(echo, carrier));
     const refused = await revertOf(
       STRANGER.address,
       shared,
@@ -393,5 +907,39 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     );
     expect(refused.data).toBe(toFunctionSelector("SharedPot()"));
     expect((await cook(install, shared)).ok).toBe(false);
+  });
+
+  it("refuses `install` on a Private Pot whose Router is fixed", async () => {
+    const salt = word(0xf1edn);
+    expect(
+      (
+        await send(
+          owner,
+          stack.kitchen,
+          encodeFunctionData({
+            abi: kitchenAbi,
+            functionName: "deployPot",
+            args: [OWNER.address, salt, true],
+          }),
+        )
+      ).ok,
+    ).toBe(true);
+    const fixed = (await publicClient.readContract({
+      address: stack.kitchen,
+      abi: kitchenAbi,
+      functionName: "predictPot",
+      args: [OWNER.address, salt, true],
+    })) as Address;
+    const refused = await revertOf(
+      OWNER.address,
+      fixed,
+      encodeFunctionData({
+        abi: potAbi,
+        functionName: "cook",
+        args: [stack.engine, compiled(installSource(echo, carrier))],
+      }),
+      FEE,
+    );
+    expect(refused.data).toBe(toFunctionSelector("RouterFixed()"));
   });
 });

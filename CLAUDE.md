@@ -1213,6 +1213,30 @@ chain references and the manual's `docs/reference/chains.md` regenerate from the
 the README, the manual's pages and the skills that name the three (`git grep "Ethereum, Base"`). A
 test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
+**Callbacks are `@sauce/async`** (`src/std/async/async.evm.js`, EVM only): `.then` is Sauce's one
+async primitive (user, 2026-10-08). A program requests now; the protocol calls the Pot back later;
+the `.then` body, compiled by `program(body, chainId)` with the program, runs then, as the same
+Private Pot. SauceScript has no `extends` and runs no plain function at compile time, so a
+protocol package COMPOSES `new Request({ send, deliver, chain })` from a method of an object the
+program reads (`Random.vrf(…)`): `send(continuation)` makes the request at run time and answers
+the key, which `[Symbol.dispose]` `park`s `code ++ args` under (deployed as a contract's code by
+`evm.create`, its address at `keccak256(abi.encode(key, ns))`, ERC-7201 `sauce.storage.Async`), or
+`undefined` when the protocol carries the body itself; `deliver(input, body, fail)` runs in the
+body's program and decodes. The callback reaches the Router's programmable fallback (v12 #571,
+unreleased), which cooks the HANDLER the owner installed for that selector,
+`main(caller, value, data)`: `requireCaller`, `take(id)` (one-shot), `run(program, input)`
+(`evm.delegate` into the in-flight engine, one fee). `run` holds `input` in TRANSIENT storage
+(`keccak256("sauce.async.received")`), which `received()` reads: not the program's input, because
+a `.catch` runs the body in a `try` block, a frame whose `ctx.msgData()` is the block's. A package
+declares handlers in its `package.json` (`"handlers": [{ selector, program, readOnly }]`);
+`routes/handlers.ts` compiles them for a chain and writes the install program (one `install` per
+selector), and the `sauce` command takes a package as a program operand
+(`sauce run @sauce/<package> --chain base`, `cli/handlers.ts`). `test/std/async/evm.e2e.test.ts`
+runs it end to end with `startGatedEngine(…, { routerCreationCode })`, the explicit, test-only way
+to deploy a Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it
+skips without one, in CI too). Its `.catch` cases need an engine built from the compiler's tree:
+on the released v12-evm 1.2.0 a `catch (e)` that READS `e` loses its work.
+
 ## Agent skills
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`

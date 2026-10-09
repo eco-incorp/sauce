@@ -2,6 +2,13 @@
   "name": "@sauce/async",
   "version": "0.0.0",
   "private": true,
-  "description": "SauceScript's async core: a request now, a callback later, and the `.then` body run when it lands, as the same Private Pot. `Request` is the class `.then` folds on, which every protocol package's request returns; `park`/`take` store a continuation per key, taken once; `run` runs one inside the handler's cook; `requireCaller`/`requireSelf` are a handler's checks; `install` registers a handler on the Pot. `main` names the NEUTRAL BASE the compiler suffixes per target (async.evm.js); there is no SVM arm, because the handlers a callback lands on are a Private Pot's Router's.",
-  "main": "async.js"
+  "description": "SauceScript's promises: a request now, a callback later, settled once into the `.then` or `.catch` body it parked, as the same Private Pot. `Request` is the promise a protocol package's request returns; `Promise` holds all/race/any/allSettled/resolve/reject/withResolvers; `Async` settles a promise by key in a later transaction, expires one past its deadline and makes a timeout. The settlement table, `fulfil`/`reject` (once, a late callback a no-op), `settleCarried`, the handler checks and `install`/`declareInterface` are its run-time half. `handlers` is the Pot's public `expire(bytes32)`, installed with every package of the family. `main` names the NEUTRAL BASE the compiler suffixes per target (async.evm.js); there is no SVM arm, because the handlers a callback lands on are a Private Pot's Router's.",
+  "main": "async.js",
+  "handlers": [
+    {
+      "selector": "expire(bytes32)",
+      "program": "expire.handler.js",
+      "readOnly": false
+    }
+  ]
 }
