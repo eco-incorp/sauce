@@ -19,20 +19,24 @@
 // `[Symbol.dispose]()`, which compiles what runs there as a program for the destination and leaves
 // the program the run-time work: pricing the message with the bridge and sending it.
 //
-// A MESSAGE is `abi.encode(program, input)`: a whole program, and what it is handed. The receiving
-// Pot's handler for the bridge (`Receive`, which the Pot's owner installs once per chain with
-// `sauce run @sauce/remote`) checks its caller is the bridge's contract on that chain and the
-// message's sender on its origin is this same Pot, then runs the program in its own cook with
-// `@sauce/async`'s `run`. Nothing else is trusted.
+// A MESSAGE is `abi.encode(0, program, input)`, a whole program and what it is handed, or
+// `abi.encode(1, key, stored, program, value, ok)`, an answer. The receiving Pot's handler for the
+// bridge (`Receive`, which the Pot's owner installs once per chain with `sauce run @sauce/remote`)
+// checks its caller is the bridge's contract on that chain and the message's sender on its origin
+// is this same Pot, then runs the program in its own cook with `@sauce/async`'s `run`, or settles
+// the promise the answer names with `settleCarried`, once. Nothing else is trusted.
 //
-// A ROUND TRIP is `@sauce/async`'s `Request`, composed while compiling: the `.then` (and `.catch`)
-// is compiled for this chain as its continuation and travels in the message, as the input of a
-// program that runs the body there and sends the continuation back, over the same bridge, with
-// `abi.encode(1, what the body returned)` — or, with a `.catch`, `abi.encode(0, what it reverted
-// with)` when it reverts — as its input. Nothing is parked on either Pot. Each leg is paid on the
-// chain it leaves: this Pot pays the way there, the destination's Pot the way back, and each Pot the
-// Kitchen's fee for every message it runs. With no `.catch`, a body that reverts reverts the
-// delivery, which the bridge can retry.
+// A ONE-WAY message is the body alone. A body that reverts reverts the delivery, which the bridge
+// can retry.
+//
+// A ROUND TRIP is a promise: `@sauce/async`'s `Request` with `carries: true`, composed while
+// compiling. Its continuation, the `.then` and the `.catch` compiled for this chain, travels in the
+// message as the input of a program that runs the body there in a frame of its own, caught, and
+// sends back over the same bridge the answer: what the body returned, fulfilling the promise, or
+// what it reverted with, rejecting it, everything the body did undone. A plain round trip stores
+// nothing on either Pot; a deadline or a combinator keeps the promise in this Pot's table, and the
+// answer only names it. Each leg is paid on the chain it leaves: this Pot pays the way there, the
+// destination's Pot the way back, and each Pot the Kitchen's fee for every message it runs.
 //
 // The calls are written out, selector and arguments, as each bridge's ABI encodes them; the reads
 // are typed calls through the ABIs beside this file, which the SDK holds to its registry's evidenced
@@ -179,7 +183,7 @@ export class Remote {
   // As a combinator's child (`Promise.all([Base.remote(…), Optimism.remote(…)])`): a round trip whose
   // answer settles the child the combinator counts.
   _join(joinKey, index, settles) {
-    new Request(this._spec(this._via(), false))._join(joinKey, index, settles);
+    new Request(this._spec(this._via()))._join(joinKey, index, settles);
   }
 
   // How a combinator hands on what this message answered: the bytes the body returned.
@@ -240,14 +244,14 @@ export class Remote {
 
   // The body, and the `.then` back here with what it returned.
   _roundTrip(via) {
-    const request = new Request(this._spec(via, false));
+    const request = new Request(this._spec(via));
     request.then(this._then);
   }
 
   // The body, and back here the `.then` with what it returned or the `.catch` with why it was
   // rejected: the body's revert there, the `.then`'s here, or a deadline past.
   _roundTripCaught(via) {
-    const request = new Request(this._spec(via, true));
+    const request = new Request(this._spec(via));
     request.then(this._continuation()).catch(this._catch);
   }
 
@@ -261,7 +265,7 @@ export class Remote {
   // and picks its key, and `send` sends the program that runs the body there, handed the
   // continuation to carry back, or, when the table here holds the promise (a deadline, a
   // combinator), only its key.
-  _spec(via, catches) {
+  _spec(via) {
     const here = this._here;
     const there = this._there;
     const gas = this._gas();
@@ -271,10 +275,9 @@ export class Remote {
       chain: here.chainId,
       deadline: this._deadline,
       send: (continuation) => {
-        const reply = program(
-          remote._reply(via, continuation.key, continuation.stored, catches || continuation.stored),
-          there.chainId,
-        );
+        const reply = program(remote._reply(via, continuation.key, continuation.stored), {
+          continuation: there.chainId,
+        });
         Bridge.send(
           here,
           there,
@@ -291,24 +294,15 @@ export class Remote {
 
   // What runs there on a round trip: the body, then the answer sent back over the same bridge to
   // settle the promise `key`, with what it was handed (the continuation, unless the table holds the
-  // promise). When something here handles a rejection (`handles`: a `.catch`, or a table record a
-  // combinator or a deadline reads), the body runs caught, and its revert is sent back as the
-  // rejection, everything it did undone; otherwise a body that reverts reverts the delivery, which
-  // the bridge can retry.
-  _reply(via, key, stored, handles) {
+  // promise). The flag form: the body runs in a frame of its own, caught at that one call, its
+  // answer kept in transient storage, and the answer is sent after the call either way — what the
+  // body returned, fulfilling the promise, or what it reverted with, rejecting it, everything the
+  // body did undone.
+  _reply(via, key, stored) {
     const body = this._body;
     const here = this._here;
     const there = this._there;
     const gas = this._replyGas();
-    if (!handles) {
-      return () => {
-        const back = received();
-        const out = run(Reply.compiled(body, there.chainId), hex``);
-        Bridge.send(there, here, via, Message.settle(key, stored, back, out, 1), gas);
-      };
-    }
-    // The flag form: the body runs in a frame of its own, caught at that one call, its answer kept
-    // in transient storage, and the answer is sent after it either way.
     return () => {
       const back = received();
       let ok = 1;
@@ -351,7 +345,7 @@ class Message {
 class Reply {
   // `body` as a program for `chainId`, with its arguments.
   static compiled(body, chainId) {
-    const compiled = program(body, chainId);
+    const compiled = program(body, { continuation: chainId });
     return compiled.code.concat(compiled.args);
   }
 

@@ -70,6 +70,7 @@ import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
 import {
+  continuationChains,
   intentDestinations,
   previewRefusal,
   requireSupported,
@@ -324,7 +325,13 @@ export function probeProgram(input: ProgramInput, files: CliFiles): CompiledSauc
  * — what {@link requireSupported} is asked about before anything that publishes them.
  */
 export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
-  return [input.chain, ...intentDestinations(probeProgram(input, files).bodies)];
+  const program = probeProgram(input, files);
+
+  return [
+    input.chain,
+    ...intentDestinations(program.bodies),
+    ...continuationChains(program.continuations),
+  ];
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */
@@ -661,6 +668,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   requireSupported("building the cook transaction", [
     input.chain,
     ...intentDestinations(cook.program.bodies),
+    ...continuationChains(cook.program.continuations),
   ]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
@@ -765,7 +773,11 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     );
   }
   const cook = cookOf(input, files);
-  requireSupported("sending the cook", [input.chain, ...intentDestinations(cook.program.bodies)]);
+  requireSupported("sending the cook", [
+    input.chain,
+    ...intentDestinations(cook.program.bodies),
+    ...continuationChains(cook.program.continuations),
+  ]);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
   const deployAction = `deploy Pot ${cook.pot}`;

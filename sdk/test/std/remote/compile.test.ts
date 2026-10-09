@@ -198,10 +198,11 @@ describe("which bridge a message takes", () => {
 });
 
 describe("what runs where", () => {
-  it("a one-way message is the body, compiled for the destination", () => {
+  it("a one-way message is the body, compiled for the destination, and opens no intent", () => {
     const program = compile(ONE_WAY());
-    expect(program.bodies.map((body) => body.destination.slug)).toEqual(["base"]);
-    expect(program.bodies[0]!.captures).toEqual(["value"]);
+    expect(program.bodies).toEqual([]);
+    expect(program.continuations.map((body) => body.destination.slug)).toEqual(["base"]);
+    expect(program.continuations[0]!.captures).toEqual(["value"]);
   });
 
   it("a round trip is a continuation for here, and a program for there that runs the body", () => {
@@ -213,11 +214,14 @@ describe("what runs where", () => {
     evm.sstore(1, balance + bump);
   });
 }`);
-    const bySlug = program.bodies.map((body) => `${body.destination.slug}:${body.path.length}`);
-    // The continuation, for Ethereum; the program sent to Base; the body, nested in it.
-    expect(bySlug.sort()).toEqual(["base:0", "base:1", "ethereum:0"]);
+    const bySlug = program.continuations.map(
+      (body) => `${body.destination.slug}:${body.path.length}`,
+    );
+    // The continuation, for Ethereum; the program sent to Base; the frame it runs the body in,
+    // caught; the body.
+    expect(bySlug.sort()).toEqual(["base:0", "base:1", "base:2", "ethereum:0"]);
     // The body reads Base's USDC.
-    const body = program.bodies.find((each) => each.path.length === 1)!;
+    const body = program.continuations.find((each) => each.path.length === 2)!;
     const usdc = remoteBodyToken("base", "USDC");
     expect(hex(body.bytecode)).toContain(usdc);
   });
@@ -237,7 +241,7 @@ function main(bump: Uint256) {
     evm.sstore(1, r[0].length + r[1].length + bump);
   });
 }`);
-    const top = program.bodies
+    const top = program.continuations
       .filter((body) => body.path.length === 0)
       .map((body) => body.destination.slug)
       .sort();
