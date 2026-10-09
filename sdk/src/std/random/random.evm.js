@@ -20,7 +20,7 @@
 //   Random.entropy({ provider, gas, deadline })
 //       Pyth Entropy v2 (`PythEntropy.Entropy`); the body is handed one random 32-byte word.
 //
-// Each is a promise, `@sauce/async`'s `Request`: `.then`, `.catch`, `await`, `.within(seconds)`, and
+// Each is a promise, `@sauce/async`'s `Request`: `.then`, `.catch`, `.within(seconds)`, and
 // a child of `Promise.all`/`race`/`any`/`allSettled`, as `Promise.race([Random.vrf(), Async.timeout(3600)])`.
 //
 // THE REQUEST is made and paid from the Pot when the program runs, and the promise is parked under
