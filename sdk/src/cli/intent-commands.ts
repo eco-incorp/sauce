@@ -25,7 +25,13 @@ import {
   type CommandOutput,
   type ProgramInput,
 } from "./commands.js";
-import { addressLabels, effectLines, effectsJson, effectsOf, nativeSymbol } from "./effects.js";
+import {
+  addressLabels,
+  effectLines,
+  effectsJson,
+  effectsOf,
+  nativeSymbol,
+} from "../evm/effects.js";
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, type Cost } from "./receipt.js";
 import {

@@ -20,7 +20,7 @@ import { bytesToHex, formatUnits } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { sourceGlobals } from "../routes/source-globals.js";
 import type { SimulatedAccount } from "../svm/index.js";
-import { POT_HOLDS } from "./effects.js";
+import { POT_HOLDS } from "../evm/effects.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 

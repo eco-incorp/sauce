@@ -82,7 +82,7 @@ import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js"
 import { derivePotPda } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
-import { nativeSymbol, tokenInfo, wordsOf } from "./effects.js";
+import { nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
 import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";

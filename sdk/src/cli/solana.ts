@@ -109,7 +109,7 @@ import {
   revertedFirst,
   unapproved,
 } from "./commands.js";
-import { decodeReturned, returnedLine } from "./returned.js";
+import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { guardOf } from "./policy.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";

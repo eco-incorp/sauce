@@ -2063,7 +2063,7 @@ describe("what main returned", () => {
   const base = requireChain("base");
 
   it("reads the cook's return data as the type main declares", async () => {
-    const { decodeReturned, returnedLine } = await import("../src/cli/returned.js");
+    const { decodeReturned, returnedLine } = await import("../src/routes/returned.js");
     const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
     expect(decodeReturned("Address", data(BigInt(usdc)), base)).toBe(usdc);
     expect(decodeReturned("Uint256", data(42n), base)).toBe("42");
@@ -2605,7 +2605,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/intents.js"),
       await import("../src/cli/receipt.js"),
       await import("../src/cli/terminal.js"),
-      await import("../src/cli/returned.js"),
+      await import("../src/routes/returned.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;

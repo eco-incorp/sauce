@@ -10,7 +10,7 @@ import { getAddressDecoder } from "@solana/kit";
 import { bytesToHex, getAddress, hexToBytes, type Hex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { parseEntryType, type EntryType } from "../routes/entry.js";
+import { parseEntryType, type EntryType } from "./entry.js";
 
 /** A returned value as JSON: an address or key as text, a number in decimal, bytes as hex. */
 export type Returned =

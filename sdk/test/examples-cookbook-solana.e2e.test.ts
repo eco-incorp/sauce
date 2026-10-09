@@ -36,7 +36,7 @@ import {
 import { bytesToHex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { decodeReturned } from "../src/cli/returned.js";
+import { decodeReturned } from "../src/routes/returned.js";
 import { nodeIo, runCli } from "../src/cli/run.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { svmTokenRows } from "../src/routes/token-registry.js";

@@ -20,7 +20,8 @@ import {
 import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
 import { mainReturnType } from "../routes/entry.js";
-import { assumeTokenBalance, mergeOverrides } from "./assume.js";
+import { mergeOverrides } from "../evm/balance-slot.js";
+import { assumeTokenBalance } from "./assume.js";
 import { balanceReader, connectAt, kitchenFee, potState } from "./chain.js";
 import {
   type ChainAccess,
@@ -45,10 +46,10 @@ import {
   tokenInfo,
   type Effects,
   type Held,
-} from "./effects.js";
+} from "../evm/effects.js";
 import { baseUnits, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
 import { rehearse, type Rehearsal } from "./rehearse.js";
-import { decodeReturned, returnedLine } from "./returned.js";
+import { decodeReturned, returnedLine } from "../routes/returned.js";
 
 export interface SimulateInput extends CookInput, ChainAccess {
   /** `--assume-balance`: what the Pot holds, for this rehearsal only. */
