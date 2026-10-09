@@ -15,6 +15,8 @@ dev-tools/cache
 
 # Formatted by the package manager itself.
 pnpm-lock.yaml
+# The runtime packages' lockfile, as npm writes it (sdk/scripts/gen-runtime-lock.mjs).
+sdk/runtime/package-lock.json
 
 # NOTE on SauceScript (`*.sauce.ts`, `sdk/src/std`, `dev-tools/sauce`): it IS formatted. It is
 # ordinary TypeScript syntax, so prettier handles it — the stdlib's TS-annotated `.js` only needed

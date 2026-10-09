@@ -545,10 +545,12 @@ describe("sauce init", () => {
     // resolves from it.
     expect(manifest.dependencies).toEqual({ [MANIFEST.name]: MANIFEST.version, viem: VIEM });
     expect(VIEM).toMatch(/^\d+\.\d+\.\d+$/);
-    // The TypeScript the programs' editor plugin runs in: the range the package itself takes; and
-    // Node's typings, for the skills' runners.
+    // The TypeScript the programs' editor plugin runs in: the range the package is built with, a
+    // development dependency of its own; and Node's typings, for the skills' runners.
+    const built = (MANIFEST as { devDependencies?: Record<string, string> }).devDependencies;
+    expect(built?.typescript).toMatch(/^\^5\./);
     expect(manifest.devDependencies).toEqual({
-      typescript: (MANIFEST as { dependencies?: Record<string, string> }).dependencies?.typescript,
+      typescript: built?.typescript,
       "@types/node": "^24.0.0",
     });
     // The programs directory: its own TypeScript project, of SauceScript alone.
