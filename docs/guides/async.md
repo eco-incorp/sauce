@@ -4,12 +4,12 @@
 
 Some protocols answer later, in a transaction of their own: a random number, an oracle's report, a
 message from another chain, a proof. In Sauce a program asks now, and the code that uses the answer
-is the request's `.then` body, or what follows an `await` of it. The request is a promise: it
+is the request's `.then` body. The request is a promise: it
 settles exactly once, fulfilled with a value or rejected with a reason. The body is compiled with
 the program and runs when the protocol calls the Pot back, as the same Pot.
 
 ```js
-await Random.vrf({ words: 1 }).then((words) => {
+Random.vrf({ words: 1 }).then((words) => {
   USDC.transfer(words[0] % 2 == 0 ? heads : tails, prize);
 });
 ```

@@ -365,7 +365,7 @@ name resolves, and rehearsing both sides.
 
 Promises: a request whose answer arrives later, in a transaction of its own (randomness, an oracle,
 a cross-chain message, a proof), its `.then` body run when the protocol calls the Pot back;
-`.catch` and `await`; `Promise.all`, `race`, `any`, `allSettled` and `withResolvers`; deadlines,
+`.catch`; `Promise.all`, `race`, `any`, `allSettled` and `withResolvers`; deadlines,
 `Async.timeout` and the public `expire`; installing a package's handlers on a Private Pot; and
 writing a package of the family.
 

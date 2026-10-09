@@ -5,7 +5,7 @@
 // rejected with a reason, and its `.then` body, compiled while the program compiles, runs when it
 // settles, as the same Pot:
 //
-//   await Random.vrf({ words: 2 }).then((words) => {
+//   Random.vrf({ words: 2 }).then((words) => {
 //     USDC.transfer(players[words[0] % 2], prize);
 //   });
 //
@@ -16,8 +16,8 @@
 // `Random.vrf` is a protocol package's (`@sauce/random`); this package is what every such package
 // is built on, and holds no protocol of its own:
 //
-//   Request             a promise a package's request method returns, which `.then`/`.catch`/
-//                       `await` fold on
+//   Request             a promise a package's request method returns, which `.then` and `.catch`
+//                       fold on
 //   Promise             all, race, any, allSettled, resolve, reject and withResolvers, with
 //                       JavaScript's semantics, folded while the program compiles
 //   Async               resolve/reject a promise by its key in a later transaction, expire one
@@ -68,6 +68,10 @@
 // The captured words follow in the next slots, or, more than three, as code whose address the next
 // slot holds. A combinator's child results are each kept as code, the address and the child's state
 // at `keccak256(abi.encode(key, index, namespace))`.
+//
+// Every continuation is compiled with `program(closure, { continuation: chainId })`: the SDK
+// compiles it for that chain's names and reports it as a continuation (`continuations`), not as an
+// intent's body, since nothing opens an intent for it.
 //
 // SETTLING. `fulfil(key, value)` and `reject(key, reason)` clear the promise, then run its
 // continuation inside the handler's own cook (`evm.delegate` into the in-flight engine: no second
@@ -536,7 +540,7 @@ class Lists {
 //   deadline  a unix time after which anyone may `expire` the promise, rejecting it with
 //             `Timeout(bytes32)`; or call `.within(seconds)`.
 //
-// and the program gives it the body, `.then((…) => { … })`, or the code after `await`. `.catch(e)`
+// and the program gives it the body, `.then((…) => { … })`. `.catch(e)`
 // handles a rejection: the protocol's `fail`, `reject` or `expire`, and the body's own revert, with
 // everything the body did undone.
 //
@@ -595,7 +599,7 @@ export class Request {
 
   toString() {
     if (this._stage == 1) {
-      return "a request's one step is `.then((result) => { … })`, the body; or `await` it, and the body is what follows";
+      return "a request's one step is `.then((result) => { … })`, the body";
     }
     if (this._stage == 2) {
       return "after `.then(...)` its one step is `.catch(...)`";
@@ -607,10 +611,10 @@ export class Request {
   [Symbol.dispose]() {
     if (this._stage == 1) {
       throw new Error(
-        "a request has no body. Finish it with `.then((result) => { … })`, or `await` it and write the body after it: the code that runs when the callback arrives",
+        "a request has no body. Finish it with `.then((result) => { … })`: the code that runs when the callback arrives",
       );
     }
-    const continuation = program(this._continuation(), this._chainId());
+    const continuation = program(this._continuation(), { continuation: this._chainId() });
     this._make(continuation, this._handler !== undefined, 0, 0, undefined);
   }
 
@@ -660,11 +664,17 @@ export class Request {
     const handler = this._handler;
     const deliver =
       this._deliver === undefined ? (input, body, fail) => body(input) : this._deliver;
+    // With no handler, a rejection reverts the run, which the settlement logs unhandled: a carried
+    // continuation is run for a rejection too, whatever it handles.
     if (handler === undefined) {
       return () => {
-        deliver(received(), body, (reason) => {
-          revert(reason);
-        });
+        if (fulfilled()) {
+          deliver(received(), body, (reason) => {
+            revert(reason);
+          });
+        } else {
+          revert(received());
+        }
       };
     }
     return () => {
@@ -681,9 +691,12 @@ export class Request {
   // As a combinator's child `index`: its continuation records what it settled with in the
   // combinator `joinKey`, and the request is made with it.
   _join(joinKey, index, settles) {
-    const child = program(() => {
-      childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
-    }, this._chainId());
+    const child = program(
+      () => {
+        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
+      },
+      { continuation: this._chainId() },
+    );
     this._make(child, true, joinKey, 1, settles);
   }
 
@@ -793,16 +806,26 @@ class Deferred {
     const handler = this._handler;
     const continuation =
       handler === undefined
-        ? program(() => {
-            body(received());
-          }, chainId)
-        : program(() => {
-            if (fulfilled()) {
-              body(received());
-            } else {
-              handler(received());
-            }
-          }, chainId);
+        ? program(
+            () => {
+              if (fulfilled()) {
+                body(received());
+              } else {
+                revert(received());
+              }
+            },
+            { continuation: chainId },
+          )
+        : program(
+            () => {
+              if (fulfilled()) {
+                body(received());
+              } else {
+                handler(received());
+              }
+            },
+            { continuation: chainId },
+          );
     parkRecord(
       this.key,
       continuation.code,
@@ -815,9 +838,12 @@ class Deferred {
     );
   }
   _join(joinKey, index, settles) {
-    const child = program(() => {
-      childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
-    }, chainId);
+    const child = program(
+      () => {
+        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
+      },
+      { continuation: chainId },
+    );
     parkRecord(this.key, child.code, child.args, this._deadline, true, 0, 0, true);
   }
   _decoder() {
@@ -859,12 +885,10 @@ class Join {
   }
   [Symbol.dispose]() {
     if (this._stage == 1) {
-      throw new Error(
-        "a combinator has no body. Finish it with `.then((results) => { … })`, or `await` it",
-      );
+      throw new Error("a combinator has no body. Finish it with `.then((results) => { … })`");
     }
     const joinKey = salt();
-    const continuation = program(this._continuation(joinKey), chainId);
+    const continuation = program(this._continuation(joinKey), { continuation: chainId });
     parkRecord(
       joinKey,
       continuation.code,
@@ -902,7 +926,13 @@ class Join {
               Fold.first(children, 0, winner(), received(), body, fail);
             };
     if (handler === undefined) {
-      return settledBody;
+      return () => {
+        if (fulfilled()) {
+          settledBody();
+        } else {
+          revert(received());
+        }
+      };
     }
     return () => {
       if (fulfilled()) {
