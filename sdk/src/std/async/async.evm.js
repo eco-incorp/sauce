@@ -69,6 +69,10 @@
 // slot holds. A combinator's child results are each kept as code, the address and the child's state
 // at `keccak256(abi.encode(key, index, namespace))`.
 //
+// Every continuation is compiled with `program(closure, { continuation: chainId })`: the SDK
+// compiles it for that chain's names and reports it as a continuation (`continuations`), not as an
+// intent's body, since nothing opens an intent for it.
+//
 // SETTLING. `fulfil(key, value)` and `reject(key, reason)` clear the promise, then run its
 // continuation inside the handler's own cook (`evm.delegate` into the in-flight engine: no second
 // cook, no second fee), handing it what arrived through transient storage, which `received()`
@@ -610,7 +614,7 @@ export class Request {
         "a request has no body. Finish it with `.then((result) => { … })`, or `await` it and write the body after it: the code that runs when the callback arrives",
       );
     }
-    const continuation = program(this._continuation(), this._chainId());
+    const continuation = program(this._continuation(), { continuation: this._chainId() });
     this._make(continuation, this._handler !== undefined, 0, 0, undefined);
   }
 
@@ -687,9 +691,12 @@ export class Request {
   // As a combinator's child `index`: its continuation records what it settled with in the
   // combinator `joinKey`, and the request is made with it.
   _join(joinKey, index, settles) {
-    const child = program(() => {
-      childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
-    }, this._chainId());
+    const child = program(
+      () => {
+        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
+      },
+      { continuation: this._chainId() },
+    );
     this._make(child, true, joinKey, 1, settles);
   }
 
@@ -799,20 +806,26 @@ class Deferred {
     const handler = this._handler;
     const continuation =
       handler === undefined
-        ? program(() => {
-            if (fulfilled()) {
-              body(received());
-            } else {
-              revert(received());
-            }
-          }, chainId)
-        : program(() => {
-            if (fulfilled()) {
-              body(received());
-            } else {
-              handler(received());
-            }
-          }, chainId);
+        ? program(
+            () => {
+              if (fulfilled()) {
+                body(received());
+              } else {
+                revert(received());
+              }
+            },
+            { continuation: chainId },
+          )
+        : program(
+            () => {
+              if (fulfilled()) {
+                body(received());
+              } else {
+                handler(received());
+              }
+            },
+            { continuation: chainId },
+          );
     parkRecord(
       this.key,
       continuation.code,
@@ -825,9 +838,12 @@ class Deferred {
     );
   }
   _join(joinKey, index, settles) {
-    const child = program(() => {
-      childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
-    }, chainId);
+    const child = program(
+      () => {
+        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
+      },
+      { continuation: chainId },
+    );
     parkRecord(this.key, child.code, child.args, this._deadline, true, 0, 0, true);
   }
   _decoder() {
@@ -874,7 +890,7 @@ class Join {
       );
     }
     const joinKey = salt();
-    const continuation = program(this._continuation(joinKey), chainId);
+    const continuation = program(this._continuation(joinKey), { continuation: chainId });
     parkRecord(
       joinKey,
       continuation.code,
