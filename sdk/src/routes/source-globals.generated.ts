@@ -101,18 +101,18 @@ export interface SauceHopConfig {
   readonly fee?: bigint | number;
   /**
    * Calls the destination Portal's Executor makes before the delivered tokens move into the Pot: a
-   * list of closures, each one external call (a contract's method, or
+   * closure, or a list of closures, each one external call (a contract's method, or
    * `evm.call(target, value, data)`), made exactly as written. Low-level: nothing is added for
    * them, no delivery and no approve reset. A hook that reverts reverts the fill. EVM destinations
    * only.
    */
-  readonly before?: readonly (() => unknown)[];
+  readonly before?: () => unknown | readonly (() => unknown)[];
   /**
-   * Calls the destination Portal's Executor makes after the body has run, as `before`'s are: a list
-   * of closures, each one external call, made exactly as written. What the body holds in its Pot is
-   * not the Executor's to spend.
+   * Calls the destination Portal's Executor makes after the body has run, as `before`'s are: a
+   * closure, or a list of closures, each one external call, made exactly as written. What the body
+   * holds in its Pot is not the Executor's to spend.
    */
-  readonly after?: readonly (() => unknown)[];
+  readonly after?: () => unknown | readonly (() => unknown)[];
 }
 
 /** A hop waiting for its body: give the body to `.then(...)`. */

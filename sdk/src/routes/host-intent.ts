@@ -93,11 +93,12 @@ export interface HopConfig {
   /** The destination Kitchen's fee, in wei, which the body's cook pays: read it with
    *  `destinationExecutionFee()`. Else `intents.executionFee` in `compile`. */
   readonly fee?: bigint | number;
-  /** Calls the destination Portal's Executor makes before the delivered tokens move into the Pot,
-   *  each one external call, made exactly as written: no delivery, no approve reset. */
-  readonly before?: readonly HopHook[];
+  /** Calls the destination Portal's Executor makes before the delivered tokens move into the Pot:
+   *  one hook or a list, each one external call, made exactly as written: no delivery, no approve
+   *  reset. */
+  readonly before?: HopHook | readonly HopHook[];
   /** Calls the destination Portal's Executor makes after the body's cook, as `before`'s are. */
-  readonly after?: readonly HopHook[];
+  readonly after?: HopHook | readonly HopHook[];
 }
 
 /** A hook: a closure whose body is one external call, written into the program as it is declared
@@ -249,9 +250,16 @@ export function chainHop(chain: ChainRef): ChainHop {
   };
 }
 
-/** A hook list as the program writes it: each closure's own text, or a call's text in one. */
-const hooksLiteral = (hooks: readonly HopHook[]): string =>
-  `[${hooks.map((hook) => (isSauceClosure(hook) ? closureText(hook) : `() => ${hook}`)).join(", ")}]`;
+/** A hook as the program writes it: the closure's own text, or a call's text in one. */
+const hookLiteral = (hook: HopHook): string =>
+  isSauceClosure(hook) ? closureText(hook) : `() => ${hook}`;
+
+/** A hook field as the program writes it: one hook as it is, a list as a list. */
+const hooksLiteral = (hooks: HopHook | readonly HopHook[]): string =>
+  isHookList(hooks) ? `[${hooks.map(hookLiteral).join(", ")}]` : hookLiteral(hooks);
+
+const isHookList = (hooks: HopHook | readonly HopHook[]): hooks is readonly HopHook[] =>
+  Array.isArray(hooks);
 
 /** `chainHop`'s `then`: the statement written out, compiled for the source chain. */
 function hostIntent(

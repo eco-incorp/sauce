@@ -117,8 +117,8 @@ export class Level {
 //   salt            the route's salt, used as written
 //   fee             the destination Kitchen's fee the body's cook pays, in wei
 //   before, after   calls the destination Portal's Executor makes before the delivered tokens
-//                   move into the Pot, and after the body: a list of closures, each one external
-//                   call, made exactly as written
+//                   move into the Pot, and after the body: a closure, or a list of closures, each
+//                   one external call, made exactly as written
 //
 // The SDK's module for the chain makes one from each chain's `hop(config)`.
 export class Intent {
@@ -270,8 +270,8 @@ export class Intent {
     // calldata and value, a value the program computes written in where the intent opens — and
     // made by the Executor exactly as written. Nothing is added for them: no delivery, no reset of
     // an allowance. What the Executor holds when one runs is the intent's to arrange.
-    this._hooks(config.before, this._before);
-    this._hooks(config.after, this._after);
+    this._hooks("before", config.before, this._before);
+    this._hooks("after", config.after, this._after);
     const calls = new Items();
     for (const call of this._before) calls.add(call);
     for (const delivered of deliveryTokens.list) {
@@ -371,9 +371,16 @@ export class Intent {
     };
   }
 
-  // A hook's list of closures, each the one call it makes, in the order written.
-  _hooks(given, calls) {
+  // A hook's closure, or its list of closures, each the one call it makes, in the order written.
+  _hooks(field, given, calls) {
     if (given === undefined) return;
+    if (typeof given === "function") {
+      calls.push(callOf(given, this._destination.chainId));
+      return;
+    }
+    if (!Array.isArray(given)) {
+      throw new Error(`\`${field}\` is a closure or a list of closures, each one external call`);
+    }
     for (const hook of given) calls.push(callOf(hook, this._destination.chainId));
   }
 

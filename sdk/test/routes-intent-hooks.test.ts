@@ -1,6 +1,7 @@
 /**
- * A hop's hooks, `before: [() => …]` and `after: [() => …]`: calls the destination Portal's Executor
- * makes before the delivered tokens move into the Pot and after the body's cook. Each closure's body
+ * A hop's hooks, `before` and `after`, each one closure or a list of them (`before: () => …`,
+ * `after: [() => …, () => …]`): calls the destination Portal's Executor makes before the delivered
+ * tokens move into the Pot and after the body's cook. Each closure's body
  * is one external call, which `@sauce/hop` reads as data with the compiler's
  * `callOf(closure, scope)`, in the destination's scope, and the route carries exactly as written:
  * nothing is delivered for it and no allowance is reset.
@@ -9,8 +10,9 @@
  * eco-routes' real Portal (`intent-anvil.ts`) — from the `IntentPublished` the Portal logs. Asserted:
  * the route's calls in order, each call's target, calldata and value held to viem's encoding of the
  * same call, the route's native amount, a value the program measures written into a hook's call as it
- * runs, and names resolved on the destination. And what is refused, located where it is written: a
- * closure that is not one external call, and a hook that is not a list. `await` of a hop with hooks
+ * runs, and names resolved on the destination. One hook given alone is its one-item list, byte for
+ * byte. And what is refused, located where it is written: a closure that is not one external call,
+ * and a list's item that is not a closure. `await` of a hop with hooks
  * is its `.then`, byte for byte, a test skipped while the compiler has no `await` (v12 #554).
  *
  * `routes-intent-hooks.e2e.test.ts` fills such intents through the Portal's own Executor.
@@ -27,6 +29,7 @@ import {
 
 import { requireChain } from "../src/chains/canonical.js";
 import { Base, Ethereum } from "../src/index.js";
+import type { HopHook } from "../src/routes/host-intent.js";
 import { DEFAULT_REFUND_WINDOW } from "../src/routes/intent-defaults.js";
 import type { IntentDefaults } from "../src/routes/intent-defaults.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
@@ -129,10 +132,10 @@ describe("what a hook refuses, where it is written", () => {
     expect(refusal("\n    before: [5],").code).toBe("CallOfNotAClosure");
   });
 
-  it("a closure given bare, not in a list", () => {
-    // A hook is a list of closures; one closure alone is not iterated.
-    const { code } = refusal(`\n    before: () => Permit2.approve(USDC, ${SPENDER}, 5, 0),`);
-    expect(code).toBe("StaticAtRunTime");
+  it("a field that is neither a closure nor a list", () => {
+    expect(refusal("\n    after: 5,").message).toMatch(
+      "`after` is a closure or a list of closures, each one external call",
+    );
   });
 
   it("names the hooks among the fields a hop takes", () => {
@@ -148,6 +151,38 @@ describe("a hop with no hooks", () => {
     expect(bytesToHex(compile(hop("\n    before: [],\n    after: [],")).bytecode)).toBe(
       bytesToHex(compile(hop("")).bytecode),
     );
+  });
+});
+
+describe("one hook, given alone", () => {
+  const approve = `() => Permit2.approve(USDC, ${SPENDER}, 5, 0)`;
+  const tip = `() => evm.call(${HOOK}, 7, hex\`abcd\`)`;
+
+  it.each([
+    ["before", `before: ${approve},`, `before: [${approve}],`],
+    ["after", `after: ${tip},`, `after: [${tip}],`],
+    [
+      "both, beside lists",
+      `before: ${approve},\n    after: [${tip}, ${approve}],`,
+      `before: [${approve}],\n    after: [${tip}, ${approve}],`,
+    ],
+  ])("%s: its one-item list, byte for byte", (_, alone, listed) => {
+    expect(bytesToHex(compile(hop(`\n    ${alone}`)).bytecode)).toBe(
+      bytesToHex(compile(hop(`\n    ${listed}`)).bytecode),
+    );
+  });
+
+  it("is refused as a list's item is, at the closure", () => {
+    expect(
+      (() => {
+        try {
+          compile(hop(`\n    before: () => USDC.approve(${SPENDER}, 5),`));
+        } catch (error) {
+          return (error as { diagnostics?: readonly { code?: string }[] }).diagnostics?.[0]?.code;
+        }
+        throw new Error("it compiled");
+      })(),
+    ).toBe("CallOfBody");
   });
 });
 
@@ -380,6 +415,27 @@ describe("on the host", () => {
     expect(built.source).toContain(`  after: [() => Permit2.approve(USDC, ${SPENDER}, 5, 0)],\n`);
     expect(bytesToHex(built.program.bytecode)).toBe(
       bytesToHex(compileSauceProgram("ethereum", built.source, options).bytecode),
+    );
+  });
+
+  it("writes one hook given alone as it is, the program its one-item list's", () => {
+    const options = { intents: INTENTS } as const;
+    const build = (before: HopHook | readonly HopHook[], after: HopHook | readonly HopHook[]) =>
+      Base.hop({
+        source: Ethereum,
+        send: { token: `0x${"11".repeat(20)}`, amount: 1_010_000n },
+        refundee: CREATOR,
+        before,
+        after,
+        compile: options,
+      }).then("");
+    const call = () => evm.call(0x7777777777777777777777777777777777777777n, 7n, hex`abcd`);
+    const approve = `Permit2.approve(USDC, ${SPENDER}, 5, 0)`;
+    const alone = build(call, approve);
+    expect(alone.source).toMatch(/\n {2}before: \(\) => evm\.call\(0x7{40}n, 7n, hex ?`abcd`\),\n/);
+    expect(alone.source).toContain(`  after: () => ${approve},\n`);
+    expect(bytesToHex(alone.program.bytecode)).toBe(
+      bytesToHex(build([call], [approve]).program.bytecode),
     );
   });
 });
