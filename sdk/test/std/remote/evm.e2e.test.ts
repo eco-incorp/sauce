@@ -107,9 +107,11 @@ const potAbi = parseAbi([
   "function nextNonce(uint32 srcEid, bytes32 sender) view returns (uint64)",
 ]);
 
-/** `@sauce/async`'s logs: a promise parked in the table, and a callback that found it settled. */
+/** `@sauce/async`'s logs: a promise parked in the table, a callback that found it settled, and a
+ *  rejection nothing handled. */
 const PROMISE_PENDING = keccak256(toHex("PromisePending(bytes32,uint256)"));
 const PROMISE_IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
+const PROMISE_UNHANDLED = keccak256(toHex("PromiseUnhandled(bytes32,bytes)"));
 
 /** A Pot storage slot a test's body writes. */
 const slot = (name: string): Hex => keccak256(toHex(`remote.${name}`));
@@ -446,6 +448,36 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
       expect(await read(ethereum, "caught.then")).toBe(0n);
       expect(await read(ethereum, "caught.here")).toBe(BigInt(keccak256(toHex("not zero"))));
+    },
+    120_000,
+  );
+
+  itSettling(
+    "rejects a round trip with no .catch whose body reverted: logged unhandled, nothing run",
+    async () => {
+      const out = await cook(
+        ethereum,
+        `function main() {
+  Base.remote(() => {
+    evm.sstore(${slot("unhandled.there")}, 1);
+    require(false, "no");
+  }).then((r) => {
+    evm.sstore(${slot("unhandled.then")}, 1);
+  });
+}`,
+      );
+      // Delivered once, its body's write undone: the rejection goes back.
+      const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      expect(await read(base, "unhandled.there")).toBe(0n);
+      const [back] = await relayHyperlane(
+        await base.publicClient.getTransactionReceipt({ hash: there! }),
+        baseBridges,
+        ethereum,
+        ethereumBridges,
+      );
+      const receipt = await ethereum.publicClient.getTransactionReceipt({ hash: back! });
+      expect(receipt.logs.some((log) => log.topics[0] === PROMISE_UNHANDLED)).toBe(true);
+      expect(await read(ethereum, "unhandled.then")).toBe(0n);
     },
     120_000,
   );
