@@ -199,7 +199,7 @@ describe("SauceScript in an editor", () => {
   });
 
   it("keeps `await` off, as the compiler has none, and leaves TypeScript's error on one", () => {
-    // The one switch (`plugin/await.ts`, the manifest's `await`): flip it with a compiler that
+    // The one switch (`plugin/await.ts`, the manifest's `awaitSupported`): flip it with a compiler that
     // takes `await`, and the skipped tests named for v12 #554 come back.
     expect(AWAIT_SUPPORTED).toBe(false);
     const file = join(work, "awaited.sauce.ts");
