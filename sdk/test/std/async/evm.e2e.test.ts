@@ -1039,6 +1039,32 @@ function main(hash: Uint256): void {
     const typed = potMessageTypedData({ pot: stack.pot, chainId: CHAIN_ID, hash });
     const signature = await OWNER.signTypedData(typed);
     expect(await isValid(hash, signature)).toBe(MAGIC);
+    // The library's isValidSignature, which the handler writes out with no call, answers alike.
+    const library = async (signed: Hex): Promise<Hex | undefined> =>
+      (
+        await publicClient.call({
+          account: OWNER.address,
+          to: stack.pot,
+          value: FEE,
+          data: encodeFunctionData({
+            abi: potAbi,
+            functionName: "cook",
+            args: [
+              stack.engine,
+              compiled(
+                `import { isValidSignature } from "@sauce/async";
+
+function main(hash: Uint256, signature: bytes): Uint256 {
+  return isValidSignature(hash, signature);
+}`,
+                [hash, signed],
+              ),
+            ],
+          }),
+        })
+      ).data;
+    expect(await library(signature)).toBe(MAGIC);
+    expect(await library(await STRANGER.signTypedData(typed))).toBe(INVALID);
     const estimate = await publicClient.estimateGas({
       account: STRANGER.address,
       to: stack.pot,

@@ -5,7 +5,7 @@
  * ```js
  * export const chainId = 8453;
  * export const USDC = new TokenOf("USDC", 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913, 6);
- * export const UniswapV3 = new NsUniswapV3({ Factory: ABI_3.at(0x33128a8f…), Pool: (address) => ABI_4.at(address) });
+ * export const UniswapV3 = new NsUniswapV3({ Factory: ABI_3.at(0x33128a8f…), Pool: ABI_4 });
  * export const Arbitrum = new OnArbitrum(); // its chain id, its `hop(…)`, its contracts
  * ```
  *
@@ -23,7 +23,8 @@
  *  - every token symbol: a `Token` on an EVM chain, whose methods are `@sauce/token`'s SafeERC20
  *    functions, and a mint's key on Solana;
  *  - every protocol namespace (`UniswapV3`, a family's `Uniswap`), its contracts bound at their
- *    addresses on this chain, an interface as a function of an address (`UniswapV3.Pool(pool)`),
+ *    addresses on this chain, an interface as its contract import, which a program binds by calling
+ *    it with an address (`UniswapV3.Pool(pool)`, the compiler's `.at(pool)`) or with `.at`,
  *    and a protocol's one callable contract standing for the protocol (`Lido.submit(…)`);
  *  - every chain's name: its chain id where it is compared (`chainId == Ethereum`), its `hop(…)`,
  *    which opens an intent whose body runs there, and its contracts (`Base.UniswapV3.Factory`, and
@@ -338,13 +339,12 @@ class Namespaces {
     private readonly allowWidened: boolean,
   ) {}
 
-  /** One contract on `chain`, as a namespace holds it — bound at its address, an interface as a
-   *  function of an address, an address-only contract as its address — or `undefined` where the
-   *  chain has none to give: not deployed there, or its ABI widened. */
+  /** One contract on `chain`, as a namespace holds it — bound at its address, an interface as its
+   *  contract import (called with an address, the compiler binds it there, as `.at` does), an
+   *  address-only contract as its address — or `undefined` where the chain has none to give: not
+   *  deployed there, or its ABI widened. */
   contract(descriptor: ContractDescriptor, chain: CanonicalChain): string | undefined {
-    if (descriptor.kind === "interface") {
-      return `(address) => ${this.imports.abiOf(descriptor)}.at(address)`;
-    }
+    if (descriptor.kind === "interface") return this.imports.abiOf(descriptor);
     const address = addressOn(descriptor, chain);
     if (address === undefined) return undefined;
     if (descriptor.kind === "address-only") return word(address);
