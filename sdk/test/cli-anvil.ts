@@ -149,11 +149,11 @@ export interface LocalChain {
   stop(): Promise<void>;
 }
 
-/** Starts an anvil standing in for `slug` on `port` (by default one the OS hands out), refusing a
- *  port something already answers on (`anvil-process.ts`). */
-export async function startChain(slug: string, port?: number): Promise<LocalChain> {
+/** Starts an anvil standing in for `slug`, on a port the OS hands out (`anvil-process.ts`): a
+ *  suite never names one, so no two suites can share one. */
+export async function startChain(slug: string): Promise<LocalChain> {
   const chain = requireChain(slug);
-  port ??= await freePort();
+  const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
   const anvil: ChildProcess = await spawnAnvil(port, ["--chain-id", String(chain.id)]);
   // `connection: close`: pooled keep-alive sockets would outlive the suite.

@@ -139,18 +139,38 @@ describe("the watchdog", () => {
 });
 
 describe("every test anvil", () => {
-  it("starts through spawnAnvil, which refuses a taken port and leaves no orphan", () => {
-    const files = execFileSync("git", ["ls-files", "--", "sdk/test", "mcp/test"], {
-      cwd: REPO,
-      encoding: "utf8",
-    })
+  /** The tracked sources under `dirs`, but this harness's own two files. */
+  const sources = (dirs: readonly string[]): Array<readonly [string, string]> =>
+    execFileSync("git", ["ls-files", "--", ...dirs], { cwd: REPO, encoding: "utf8" })
       .split("\n")
-      .filter((file) => /\.(?:ts|mts|mjs|js)$/.test(file) && !file.endsWith("anvil-process.ts"));
-    const direct = files.filter((file) =>
-      /\bspawn(?:Sync)?\(\s*["']anvil["']\s*,\s*\[(?!\s*["']--version["'])/.test(
-        readFileSync(join(REPO, file), "utf8"),
-      ),
-    );
+      .filter(
+        (file) =>
+          /\.(?:ts|mts|mjs|js)$/.test(file) && !/\/anvil-process(?:\.test)?\.ts$/.test(file),
+      )
+      .map((file) => [file, readFileSync(join(REPO, file), "utf8")] as const);
+
+  it("starts through spawnAnvil, which refuses a taken port and leaves no orphan", () => {
+    const direct = sources(["sdk/test", "mcp/test"])
+      .filter(([, text]) =>
+        /\bspawn(?:Sync)?\(\s*["']anvil["']\s*,\s*\[(?!\s*["']--version["'])/.test(text),
+      )
+      .map(([file]) => file);
     expect(direct).toEqual([]);
+  });
+
+  it("is on a port from the OS: no suite names a fixed port, or a range by jest worker", () => {
+    // Two suites that each took `N + JEST_WORKER_ID` from overlapping N met on one port, and one
+    // asserted against the other's chain. A port from the OS cannot be shared.
+    const fixed = sources(["sdk/test", "mcp/test", "actions/tests"]).flatMap(([file, text]) => [
+      ...(/JEST_WORKER_ID/.test(text) ? [`${file}: a port by JEST_WORKER_ID`] : []),
+      ...(/\bspawnAnvil\(\s*\d/.test(text) ? [`${file}: spawnAnvil given a number`] : []),
+      ...(/\b(?:const|let)\s+\w*port\w*\s*(?::\s*number\s*)?=\s*\d/i.test(text)
+        ? [`${file}: a port that is a number`]
+        : []),
+      ...(/["']--port["']\s*,\s*(?:String\(\s*)?["']?\d/.test(text)
+        ? [`${file}: anvil given a fixed --port`]
+        : []),
+    ]);
+    expect(fixed).toEqual([]);
   });
 });

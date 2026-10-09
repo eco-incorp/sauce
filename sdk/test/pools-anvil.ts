@@ -47,7 +47,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import { sqrtPriceX96FromPrice } from "../src/price.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
-import { spawnAnvil } from "./anvil-process.js";
+import { freePort, spawnAnvil } from "./anvil-process.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const json = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
@@ -146,11 +146,9 @@ export interface PoolsChain {
   stop(): Promise<void>;
 }
 
-export { freePort } from "./anvil-process.js";
-
-/** Starts the pools' anvil on `port`, refusing one something already answers on
- *  (`anvil-process.ts`). */
-export async function startPoolsChain(port: number): Promise<PoolsChain> {
+/** Starts the pools' anvil, on a port the OS hands out (`anvil-process.ts`). */
+export async function startPoolsChain(): Promise<PoolsChain> {
+  const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
   const anvil: ChildProcess = await spawnAnvil(port, ["--chain-id", String(BASE.id)]);
   const transport = http(rpcUrl, { fetchOptions: { headers: { connection: "close" } } });
