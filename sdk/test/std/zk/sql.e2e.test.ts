@@ -55,6 +55,9 @@ import {
   type ZkChain,
 } from "./harness.js";
 
+/** A test compiles programs and replays calls on anvil: seconds each, more with other suites. */
+const TEST_TIMEOUT = 60_000;
+
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 interface Deployed {
   readonly address: Address;
@@ -313,167 +316,195 @@ describeOnRouter.each([
     await chain?.stop();
   });
 
-  it("asks the query with the Pot as its callback, under the latest version, paying SXT", async () => {
-    const potBefore = await sxt(chain.stack.pot);
-    const sent = await chain.cook(chain.compiled(QUERY, [PLAN, PAYMENT, 0n, 0n]));
-    expect(sent.ok).toBe(true);
-    const asked = requested(sent);
-    const block = await chain.publicClient.getBlock({ blockNumber: undefined });
+  it(
+    "asks the query with the Pot as its callback, under the latest version, paying SXT",
+    async () => {
+      const potBefore = await sxt(chain.stack.pot);
+      const sent = await chain.cook(chain.compiled(QUERY, [PLAN, PAYMENT, 0n, 0n]));
+      expect(sent.ok).toBe(true);
+      const asked = requested(sent);
+      const block = await chain.publicClient.getBlock({ blockNumber: undefined });
 
-    expect(asked.requester).toBe(chain.stack.pot);
-    expect(asked.query).toEqual({
-      version: LATEST,
-      innerQuery: PLAN,
-      parameters: "0x0000000000000000",
-      metadata: "0x",
-    });
-    expect(asked.callback).toEqual({
-      maxGasPrice: 2n ** 256n - 1n,
-      gasLimit: 1_000_000n,
-      callbackContract: chain.stack.pot,
-      selector: QUERY_CALLBACK,
-      callbackData: "0x",
-    });
-    expect(asked.payment).toEqual({
-      paymentAmount: PAYMENT,
-      refundTo: chain.stack.pot,
-      timeout: block.timestamp + 3_600n,
-    });
-    expect(potBefore - (await sxt(chain.stack.pot))).toBe(PAYMENT);
-    expect(await sxt(router)).toBeGreaterThanOrEqual(PAYMENT);
-  });
+      expect(asked.requester).toBe(chain.stack.pot);
+      expect(asked.query).toEqual({
+        version: LATEST,
+        innerQuery: PLAN,
+        parameters: "0x0000000000000000",
+        metadata: "0x",
+      });
+      expect(asked.callback).toEqual({
+        maxGasPrice: 2n ** 256n - 1n,
+        gasLimit: 1_000_000n,
+        callbackContract: chain.stack.pot,
+        selector: QUERY_CALLBACK,
+        callbackData: "0x",
+      });
+      expect(asked.payment).toEqual({
+        paymentAmount: PAYMENT,
+        refundTo: chain.stack.pot,
+        timeout: block.timestamp + 3_600n,
+      });
+      expect(potBefore - (await sxt(chain.stack.pot))).toBe(PAYMENT);
+      expect(await sxt(router)).toBeGreaterThanOrEqual(PAYMENT);
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("runs the body with the proven result, pays the fulfiller and refunds the rest, for one fee", async () => {
-    const asked = await ask(QUERY, 3n, 7n);
-    const kitchen = gateAnchors().kitchen;
-    const kitchenBefore = await chain.publicClient.getBalance({ address: kitchen });
-    const potBefore = await sxt(chain.stack.pot);
+  it(
+    "runs the body with the proven result, pays the fulfiller and refunds the rest, for one fee",
+    async () => {
+      const asked = await ask(QUERY, 3n, 7n);
+      const kitchen = gateAnchors().kitchen;
+      const kitchenBefore = await chain.publicClient.getBalance({ address: kitchen });
+      const potBefore = await sxt(chain.stack.pot);
 
-    const fulfilment = await fulfil(asked, STAKE);
-    expect(fulfilment.ok).toBe(true);
-    // The staking row's AMOUNT, a DECIMAL75, after an INT, a TIMESTAMP and a VARBINARY.
-    expect(await chain.slot(SLOT)).toBe(100_000_000_000_000_000_000n + 7n);
-    expect(await chain.slot(ROWS)).toBe(1n);
-    expect((await chain.publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
+      const fulfilment = await fulfil(asked, STAKE);
+      expect(fulfilment.ok).toBe(true);
+      // The staking row's AMOUNT, a DECIMAL75, after an INT, a TIMESTAMP and a VARBINARY.
+      expect(await chain.slot(SLOT)).toBe(100_000_000_000_000_000_000n + 7n);
+      expect(await chain.slot(ROWS)).toBe(1n);
+      expect((await chain.publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
 
-    const payout = eventsOf(fulfilment).find((e) => e.eventName === "PayoutOccurred")!.args as {
-      fulfillerAmount: bigint;
-      refundAmount: bigint;
-    };
-    expect(payout.fulfillerAmount + payout.refundAmount).toBe(PAYMENT);
-    expect(payout.fulfillerAmount).toBeGreaterThanOrEqual(baseCost);
-    if (chainId === 8453) expect(payout.fulfillerAmount).toBe(baseCost);
-    expect((await sxt(chain.stack.pot)) - potBefore).toBe(payout.refundAmount);
-    expect(await sxt(FULFILLER.address)).toBeGreaterThanOrEqual(payout.fulfillerAmount);
+      const payout = eventsOf(fulfilment).find((e) => e.eventName === "PayoutOccurred")!.args as {
+        fulfillerAmount: bigint;
+        refundAmount: bigint;
+      };
+      expect(payout.fulfillerAmount + payout.refundAmount).toBe(PAYMENT);
+      expect(payout.fulfillerAmount).toBeGreaterThanOrEqual(baseCost);
+      if (chainId === 8453) expect(payout.fulfillerAmount).toBe(baseCost);
+      expect((await sxt(chain.stack.pot)) - potBefore).toBe(payout.refundAmount);
+      expect(await sxt(FULFILLER.address)).toBeGreaterThanOrEqual(payout.fulfillerAmount);
 
-    const gas = await chain.callGas(fulfilment.hash, chain.stack.pot, QUERY_CALLBACK);
-    console.log(`${slug}: the callback used ${gas} gas`);
-    expect(gas).toBeLessThan(1_000_000n);
-  });
+      const gas = await chain.callGas(fulfilment.hash, chain.stack.pot, QUERY_CALLBACK);
+      console.log(`${slug}: the callback used ${gas} gas`);
+      expect(gas).toBeLessThan(1_000_000n);
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("reads a BIGINT result, Base's longitude", async () => {
-    const asked = await ask(QUERY, 0n, 0n);
-    expect((await fulfil(asked, LONGITUDE)).ok).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(51n);
-  });
+  it(
+    "reads a BIGINT result, Base's longitude",
+    async () => {
+      const asked = await ask(QUERY, 0n, 0n);
+      expect((await fulfil(asked, LONGITUDE)).ok).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(51n);
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("refuses a second fulfilment: the router answers a query once", async () => {
-    const asked = await ask(QUERY, 0n, 1n);
-    expect((await fulfil(asked, LONGITUDE)).ok).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(52n);
-    const again = encodeFunctionData({
-      abi: QueryRouterABI,
-      functionName: "fulfillQuery",
-      args: [asked.query, asked.callback, asked.payment, asked.queryNonce, STAKE],
-    });
-    expect(await chain.revertOf(FULFILLER.address, router, again)).toBe(
-      toFunctionSelector("QueryNotFound()"),
-    );
-  });
-
-  it("refuses a callback from anyone but the executor", async () => {
-    const asked = await ask(QUERY, 0n, 0n);
-    const forged = concat([
-      QUERY_CALLBACK,
-      encodeAbiParameters(
-        [{ type: "bytes32" }, { type: "bytes" }, { type: "bytes" }],
-        [asked.queryId, STAKE, "0x"],
-      ),
-    ]);
-    expect(text(await chain.revertOf(STRANGER.address, chain.stack.pot, forged))).toBe(
-      "async: the call is not from the protocol",
-    );
-    // The query's own fulfilment still runs it.
-    expect((await fulfil(asked, LONGITUDE)).ok).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(51n);
-  });
-
-  it("settles nothing for a stranger's query naming the Pot", async () => {
-    // The stranger asks a query whose callback is the Pot's, paying its own SXT: the executor calls
-    // the Pot, which finds no promise under that query's id.
-    const stranger = chain.stranger;
-    expect(
-      (
-        await chain.send(
-          stranger,
-          token,
-          encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [router, PAYMENT] }),
-        )
-      ).ok,
-    ).toBe(true);
-    const sent = await chain.send(
-      stranger,
-      router,
-      encodeFunctionData({
+  it(
+    "refuses a second fulfilment: the router answers a query once",
+    async () => {
+      const asked = await ask(QUERY, 0n, 1n);
+      expect((await fulfil(asked, LONGITUDE)).ok).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(52n);
+      const again = encodeFunctionData({
         abi: QueryRouterABI,
-        functionName: "requestQuery",
-        args: [
-          { version: LATEST, innerQuery: PLAN, parameters: "0x0000000000000000", metadata: "0x" },
-          {
-            maxGasPrice: 2n ** 256n - 1n,
-            gasLimit: 300_000n,
-            callbackContract: chain.stack.pot,
-            selector: QUERY_CALLBACK,
-            callbackData: "0x",
-          },
-          { paymentAmount: PAYMENT, refundTo: STRANGER.address, timeout: 2n ** 40n },
-        ],
-      }),
-    );
-    expect(sent.ok).toBe(true);
-    const asked = requested(sent);
-    const before = await chain.slot(SLOT);
-    const fulfilment = await fulfil(asked, STAKE);
-    expect(fulfilment.ok).toBe(true);
-    expect(ignored(fulfilment, promiseKeyOf(asked.queryId))).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(before);
-  });
+        functionName: "fulfillQuery",
+        args: [asked.query, asked.callback, asked.payment, asked.queryNonce, STAKE],
+      });
+      expect(await chain.revertOf(FULFILLER.address, router, again)).toBe(
+        toFunctionSelector("QueryNotFound()"),
+      );
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("expires a query past its timeout: its `.catch` cancels it and takes the payment back", async () => {
-    const asked = await ask(QUERY_WITHIN_A_MINUTE, 0n, 0n);
-    const key = promiseKeyOf(asked.queryId);
-    const expire = concat([EXPIRE, key]);
-    // Before the timeout the Pot refuses.
-    expect((await chain.send(chain.stranger, chain.stack.pot, expire, FEE)).ok).toBe(false);
+  it(
+    "refuses a callback from anyone but the executor",
+    async () => {
+      const asked = await ask(QUERY, 0n, 0n);
+      const forged = concat([
+        QUERY_CALLBACK,
+        encodeAbiParameters(
+          [{ type: "bytes32" }, { type: "bytes" }, { type: "bytes" }],
+          [asked.queryId, STAKE, "0x"],
+        ),
+      ]);
+      expect(text(await chain.revertOf(STRANGER.address, chain.stack.pot, forged))).toBe(
+        "async: the call is not from the protocol",
+      );
+      // The query's own fulfilment still runs it.
+      expect((await fulfil(asked, LONGITUDE)).ok).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(51n);
+    },
+    TEST_TIMEOUT,
+  );
 
-    await chain.testClient.increaseTime({ seconds: 61 });
-    await chain.testClient.mine({ blocks: 1 });
-    const potBefore = await sxt(chain.stack.pot);
-    const expired = await chain.send(chain.stranger, chain.stack.pot, expire, FEE);
-    expect(expired.ok).toBe(true);
-    expect(await chain.slot(CAUGHT)).toBe(2n);
-    expect((await sxt(chain.stack.pot)) - potBefore).toBe(PAYMENT);
-    expect(
-      await chain.publicClient.readContract({
-        address: router,
-        abi: QueryRouterABI,
-        functionName: "pendingPayments",
-        args: [asked.queryId],
-      }),
-    ).toBe(word(0n));
-    // The fulfiller is too late: the query is gone.
-    expect((await fulfil(asked, LONGITUDE)).ok).toBe(false);
-  });
+  it(
+    "settles nothing for a stranger's query naming the Pot",
+    async () => {
+      // The stranger asks a query whose callback is the Pot's, paying its own SXT: the executor calls
+      // the Pot, which finds no promise under that query's id.
+      const stranger = chain.stranger;
+      expect(
+        (
+          await chain.send(
+            stranger,
+            token,
+            encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [router, PAYMENT] }),
+          )
+        ).ok,
+      ).toBe(true);
+      const sent = await chain.send(
+        stranger,
+        router,
+        encodeFunctionData({
+          abi: QueryRouterABI,
+          functionName: "requestQuery",
+          args: [
+            { version: LATEST, innerQuery: PLAN, parameters: "0x0000000000000000", metadata: "0x" },
+            {
+              maxGasPrice: 2n ** 256n - 1n,
+              gasLimit: 300_000n,
+              callbackContract: chain.stack.pot,
+              selector: QUERY_CALLBACK,
+              callbackData: "0x",
+            },
+            { paymentAmount: PAYMENT, refundTo: STRANGER.address, timeout: 2n ** 40n },
+          ],
+        }),
+      );
+      expect(sent.ok).toBe(true);
+      const asked = requested(sent);
+      const before = await chain.slot(SLOT);
+      const fulfilment = await fulfil(asked, STAKE);
+      expect(fulfilment.ok).toBe(true);
+      expect(ignored(fulfilment, promiseKeyOf(asked.queryId))).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(before);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "expires a query past its timeout: its `.catch` cancels it and takes the payment back",
+    async () => {
+      const asked = await ask(QUERY_WITHIN_A_MINUTE, 0n, 0n);
+      const key = promiseKeyOf(asked.queryId);
+      const expire = concat([EXPIRE, key]);
+      // Before the timeout the Pot refuses.
+      expect((await chain.send(chain.stranger, chain.stack.pot, expire, FEE)).ok).toBe(false);
+
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      const potBefore = await sxt(chain.stack.pot);
+      const expired = await chain.send(chain.stranger, chain.stack.pot, expire, FEE);
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(2n);
+      expect((await sxt(chain.stack.pot)) - potBefore).toBe(PAYMENT);
+      expect(
+        await chain.publicClient.readContract({
+          address: router,
+          abi: QueryRouterABI,
+          functionName: "pendingPayments",
+          args: [asked.queryId],
+        }),
+      ).toBe(word(0n));
+      // The fulfiller is too late: the query is gone.
+      expect((await fulfil(asked, LONGITUDE)).ok).toBe(false);
+    },
+    TEST_TIMEOUT,
+  );
 
   it.each([
     [51n, 1_000n],
@@ -492,18 +523,23 @@ describeOnRouter.each([
       expect((await fulfil(requested(sent), LONGITUDE)).ok).toBe(true);
       expect(await chain.publicClient.getBalance({ address: recipient })).toBe(paid);
     },
+    TEST_TIMEOUT,
   );
 
-  it("runs `.catch` for the body's own revert, and `Zk.cancel` leaves the paid query alone", async () => {
-    // A VARCHAR column has no fixed width: the body's `Zk.cell` reverts.
-    const asked = await ask(QUERY, 0n, 0n);
-    const potBefore = await sxt(chain.stack.pot);
-    const fulfilment = await fulfil(asked, VARCHARS);
-    expect(fulfilment.ok).toBe(true);
-    expect(await chain.slot(CAUGHT)).toBe(1n);
-    const payout = eventsOf(fulfilment).find((e) => e.eventName === "PayoutOccurred")!.args as {
-      refundAmount: bigint;
-    };
-    expect((await sxt(chain.stack.pot)) - potBefore).toBe(payout.refundAmount);
-  });
+  it(
+    "runs `.catch` for the body's own revert, and `Zk.cancel` leaves the paid query alone",
+    async () => {
+      // A VARCHAR column has no fixed width: the body's `Zk.cell` reverts.
+      const asked = await ask(QUERY, 0n, 0n);
+      const potBefore = await sxt(chain.stack.pot);
+      const fulfilment = await fulfil(asked, VARCHARS);
+      expect(fulfilment.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(1n);
+      const payout = eventsOf(fulfilment).find((e) => e.eventName === "PayoutOccurred")!.args as {
+        refundAmount: bigint;
+      };
+      expect((await sxt(chain.stack.pot)) - potBefore).toBe(payout.refundAmount);
+    },
+    TEST_TIMEOUT,
+  );
 });

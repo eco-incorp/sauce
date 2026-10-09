@@ -62,6 +62,9 @@ import {
   type ZkChain,
 } from "./harness.js";
 
+/** A test compiles programs and replays calls on anvil: seconds each, more with other suites. */
+const TEST_TIMEOUT = 60_000;
+
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 interface Code {
   readonly address: Address;
@@ -446,238 +449,270 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
     await chain?.stop();
   });
 
-  it("submits the market's own request, the Pot its client and its callback, its price deposited", async () => {
-    const before = await marketBalance(chain.stack.pot);
-    const request = await ask(0n);
-    const index = request.id & 0xffff_ffffn;
+  it(
+    "submits the market's own request, the Pot its client and its callback, its price deposited",
+    async () => {
+      const before = await marketBalance(chain.stack.pot);
+      const request = await ask(0n);
+      const index = request.id & 0xffff_ffffn;
 
-    expect(request.id).toBe((1n << 192n) | (BigInt(chain.stack.pot) << 32n) | index);
-    expect(request.requirements).toEqual({
-      callback: { addr: chain.stack.pot, gasLimit: 1_000_000n },
-      predicate: { predicateType: 1, data: concat([IMAGE_ID, sha256(stdinOf(request))]) },
-      selector: "0x00000000",
-    });
-    expect(stdinOf(request)).toBe(concat([word(request.id), INPUT]));
-    expect(request.input).toEqual({ inputType: 0, data: concat(["0x00", stdinOf(request)]) });
-    expect(request.offer).toMatchObject({
-      minPrice: 0n,
-      maxPrice: MAX_PRICE,
-      rampUpPeriod: 10,
-      lockTimeout: 600,
-      timeout: 1_200,
-      lockCollateral: COLLATERAL,
-    });
-    expect((await marketBalance(chain.stack.pot)) - before).toBe(MAX_PRICE);
-  });
+      expect(request.id).toBe((1n << 192n) | (BigInt(chain.stack.pot) << 32n) | index);
+      expect(request.requirements).toEqual({
+        callback: { addr: chain.stack.pot, gasLimit: 1_000_000n },
+        predicate: { predicateType: 1, data: concat([IMAGE_ID, sha256(stdinOf(request))]) },
+        selector: "0x00000000",
+      });
+      expect(stdinOf(request)).toBe(concat([word(request.id), INPUT]));
+      expect(request.input).toEqual({ inputType: 0, data: concat(["0x00", stdinOf(request)]) });
+      expect(request.offer).toMatchObject({
+        minPrice: 0n,
+        maxPrice: MAX_PRICE,
+        rampUpPeriod: 10,
+        lockTimeout: 600,
+        timeout: 1_200,
+        lockCollateral: COLLATERAL,
+      });
+      expect((await marketBalance(chain.stack.pot)) - before).toBe(MAX_PRICE);
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("is locked by a prover the market lets through the Pot's ERC-1271 check, and nothing else", async () => {
-    const request = await ask(0n);
-    const locked = await lock(request);
-    expect(locked.ok).toBe(true);
-    expect(eventsOf(locked).some((e) => e.eventName === "RequestLocked")).toBe(true);
-    // The check, as the market makes it, within its 100,000 gas.
-    const gas = await chain.callGas(locked.hash, chain.stack.pot, SIGNATURE);
-    console.log(`base: the Pot answered isValidSignature with ${gas} gas`);
-    expect(gas).toBeLessThan(100_000n);
-    // A hash the Pot did not approve.
-    expect(
-      await chain.publicClient.readContract({
-        address: chain.stack.pot,
-        abi: signatureAbi,
-        functionName: "isValidSignature",
-        args: [keccak256(toHex("not a request of the Pot's")), "0x"],
-      }),
-    ).toBe("0xffffffff");
-  });
+  it(
+    "is locked by a prover the market lets through the Pot's ERC-1271 check, and nothing else",
+    async () => {
+      const request = await ask(0n);
+      const locked = await lock(request);
+      expect(locked.ok).toBe(true);
+      expect(eventsOf(locked).some((e) => e.eventName === "RequestLocked")).toBe(true);
+      // The check, as the market makes it, within its 100,000 gas.
+      const gas = await chain.callGas(locked.hash, chain.stack.pot, SIGNATURE);
+      console.log(`base: the Pot answered isValidSignature with ${gas} gas`);
+      expect(gas).toBeLessThan(100_000n);
+      // A hash the Pot did not approve.
+      expect(
+        await chain.publicClient.readContract({
+          address: chain.stack.pot,
+          abi: signatureAbi,
+          functionName: "isValidSignature",
+          args: [keccak256(toHex("not a request of the Pot's")), "0x"],
+        }),
+      ).toBe("0xffffffff");
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("refuses a lock of a request the Pot did not make, which would spend its balance", async () => {
-    // A stranger submits a request naming the Pot as its client: the market checks no signature at
-    // submission, but the lock asks the Pot, which never approved it.
-    const request = await ask(0n);
-    const forged: Request = { ...request, id: request.id + 1_000n };
-    expect(
-      (
-        await chain.send(
-          chain.stranger,
-          MARKET,
-          encodeFunctionData({
-            abi: BoundlessMarketABI,
-            functionName: "submitRequest",
-            args: [forged, "0x"],
-          }),
-        )
-      ).ok,
-    ).toBe(true);
-    const before = await marketBalance(chain.stack.pot);
-    expect((await lock(forged)).ok).toBe(false);
-    expect(await marketBalance(chain.stack.pot)).toBe(before);
-  });
+  it(
+    "refuses a lock of a request the Pot did not make, which would spend its balance",
+    async () => {
+      // A stranger submits a request naming the Pot as its client: the market checks no signature at
+      // submission, but the lock asks the Pot, which never approved it.
+      const request = await ask(0n);
+      const forged: Request = { ...request, id: request.id + 1_000n };
+      expect(
+        (
+          await chain.send(
+            chain.stranger,
+            MARKET,
+            encodeFunctionData({
+              abi: BoundlessMarketABI,
+              functionName: "submitRequest",
+              args: [forged, "0x"],
+            }),
+          )
+        ).ok,
+      ).toBe(true);
+      const before = await marketBalance(chain.stack.pot);
+      expect((await lock(forged)).ok).toBe(false);
+      expect(await marketBalance(chain.stack.pot)).toBe(before);
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("runs the body with the guest's journal when the market calls back, for one fee", async () => {
-    const request = await ask(5n);
-    // Past the ramp-up, the price is the offer's most.
-    await chain.testClient.increaseTime({ seconds: 11 });
-    await chain.testClient.mine({ blocks: 1 });
-    const potBefore = await marketBalance(chain.stack.pot);
-    expect((await lock(request)).ok).toBe(true);
-    expect(potBefore - (await marketBalance(chain.stack.pot))).toBe(MAX_PRICE);
-    const kitchen = gateAnchors().kitchen;
-    const kitchenBefore = await chain.publicClient.getBalance({ address: kitchen });
-    const proverBefore = await marketBalance(PROVER.address);
+  it(
+    "runs the body with the guest's journal when the market calls back, for one fee",
+    async () => {
+      const request = await ask(5n);
+      // Past the ramp-up, the price is the offer's most.
+      await chain.testClient.increaseTime({ seconds: 11 });
+      await chain.testClient.mine({ blocks: 1 });
+      const potBefore = await marketBalance(chain.stack.pot);
+      expect((await lock(request)).ok).toBe(true);
+      expect(potBefore - (await marketBalance(chain.stack.pot))).toBe(MAX_PRICE);
+      const kitchen = gateAnchors().kitchen;
+      const kitchenBefore = await chain.publicClient.getBalance({ address: kitchen });
+      const proverBefore = await marketBalance(PROVER.address);
 
-    const fulfilment = await fulfil(request, journalOf(request, 37n));
-    expect(fulfilment.ok).toBe(true);
-    expect(eventsOf(fulfilment).some((e) => e.eventName === "CallbackFailed")).toBe(false);
-    expect(await chain.slot(SLOT)).toBe(42n);
-    expect((await chain.publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
-    expect((await marketBalance(PROVER.address)) - proverBefore).toBe(MAX_PRICE);
-    const gas = await chain.callGas(fulfilment.hash, chain.stack.pot, CALLBACK);
-    console.log(`base: the callback used ${gas} gas`);
-    expect(gas).toBeLessThan(1_000_000n);
-  });
+      const fulfilment = await fulfil(request, journalOf(request, 37n));
+      expect(fulfilment.ok).toBe(true);
+      expect(eventsOf(fulfilment).some((e) => e.eventName === "CallbackFailed")).toBe(false);
+      expect(await chain.slot(SLOT)).toBe(42n);
+      expect((await chain.publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
+      expect((await marketBalance(PROVER.address)) - proverBefore).toBe(MAX_PRICE);
+      const gas = await chain.callGas(fulfilment.hash, chain.stack.pot, CALLBACK);
+      console.log(`base: the callback used ${gas} gas`);
+      expect(gas).toBeLessThan(1_000_000n);
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("refuses a callback from anyone but the market", async () => {
-    const request = await ask(0n);
-    const forged = concat([
-      CALLBACK,
-      encodeAbiParameters(
-        [{ type: "bytes32" }, { type: "bytes" }, { type: "bytes" }],
-        [IMAGE_ID, journalOf(request, 666n), "0x"],
-      ),
-    ]);
-    expect(text(await chain.revertOf(STRANGER.address, chain.stack.pot, forged))).toBe(
-      "async: the call is not from the protocol",
-    );
-  });
+  it(
+    "refuses a callback from anyone but the market",
+    async () => {
+      const request = await ask(0n);
+      const forged = concat([
+        CALLBACK,
+        encodeAbiParameters(
+          [{ type: "bytes32" }, { type: "bytes" }, { type: "bytes" }],
+          [IMAGE_ID, journalOf(request, 666n), "0x"],
+        ),
+      ]);
+      expect(text(await chain.revertOf(STRANGER.address, chain.stack.pot, forged))).toBe(
+        "async: the call is not from the protocol",
+      );
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("settles nothing for a stranger's proof of the same guest over another input", async () => {
-    // The Pot's request waits. A stranger, a client of its own signing as one, asks a proof of the
-    // same guest whose stdin differs, with the Pot as its callback, and it is fulfilled.
-    const waiting = await ask(0n);
-    const id = (BigInt(STRANGER.address) << 32n) | 1n;
-    const stdin = concat([word(id), toHex("another input")]);
-    const theirs: Request = {
-      ...waiting,
-      id,
-      requirements: {
-        ...waiting.requirements,
-        predicate: { predicateType: 1, data: concat([IMAGE_ID, sha256(stdin)]) },
-      },
-      input: { inputType: 0, data: concat(["0x00", stdin]) },
-    };
-    expect(
-      (
-        await chain.send(
-          chain.stranger,
-          MARKET,
-          encodeFunctionData({
-            abi: BoundlessMarketABI,
-            functionName: "submitRequest",
-            args: [theirs, "0x"],
-          }),
-          MAX_PRICE,
-        )
-      ).ok,
-    ).toBe(true);
-    const signature = await STRANGER.signTypedData(typedRequest(theirs));
-    expect(
-      (
-        await chain.send(
-          prover,
-          MARKET,
-          encodeFunctionData({
-            abi: BoundlessMarketABI,
-            functionName: "lockRequest",
-            args: [theirs, signature],
-          }),
-        )
-      ).ok,
-    ).toBe(true);
-    const before = await chain.slot(SLOT);
-    const fulfilment = await fulfil(theirs, concat([sha256(stdin), word(999n)]));
-    expect(fulfilment.ok).toBe(true);
-    // The Pot was called, found no promise under that guest's digest, and returned.
-    expect(eventsOf(fulfilment).some((e) => e.eventName === "CallbackFailed")).toBe(false);
-    const ignored = fulfilment.logs.some(
-      (log) =>
-        log.address.toLowerCase() === chain.stack.pot.toLowerCase() &&
-        log.topics[0] === PROMISE_IGNORED,
-    );
-    expect(ignored).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(before);
-    // Ours still waits, and its own fulfilment runs it.
-    expect((await lock(waiting)).ok).toBe(true);
-    expect((await fulfil(waiting, journalOf(waiting, 3n))).ok).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(3n);
-  });
-
-  it("runs the body once for a re-proof of the same input: the promise settled already", async () => {
-    // The Pot's request is fulfilled. A stranger then pays for a proof of the same guest over the
-    // very same stdin, with the Pot as its callback: the same journal, so the same promise, which
-    // settled; the callback returns and the body does not run again.
-    const ours = await ask(11n);
-    expect((await lock(ours)).ok).toBe(true);
-    expect((await fulfil(ours, journalOf(ours, 30n))).ok).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(41n);
-
-    const id = (BigInt(STRANGER.address) << 32n) | 2n;
-    const again: Request = { ...ours, id };
-    expect(
-      (
-        await chain.send(
-          chain.stranger,
-          MARKET,
-          encodeFunctionData({
-            abi: BoundlessMarketABI,
-            functionName: "submitRequest",
-            args: [again, "0x"],
-          }),
-          MAX_PRICE,
-        )
-      ).ok,
-    ).toBe(true);
-    const signature = await STRANGER.signTypedData(typedRequest(again));
-    expect(
-      (
-        await chain.send(
-          prover,
-          MARKET,
-          encodeFunctionData({
-            abi: BoundlessMarketABI,
-            functionName: "lockRequest",
-            args: [again, signature],
-          }),
-        )
-      ).ok,
-    ).toBe(true);
-    await chain.cook(chain.compiled(`function main(): void { evm.sstore(${SLOT}, 0); }`));
-    const replay = await fulfil(again, journalOf(ours, 30n));
-    expect(replay.ok).toBe(true);
-    expect(eventsOf(replay).some((e) => e.eventName === "CallbackFailed")).toBe(false);
-    expect(
-      replay.logs.some(
+  it(
+    "settles nothing for a stranger's proof of the same guest over another input",
+    async () => {
+      // The Pot's request waits. A stranger, a client of its own signing as one, asks a proof of the
+      // same guest whose stdin differs, with the Pot as its callback, and it is fulfilled.
+      const waiting = await ask(0n);
+      const id = (BigInt(STRANGER.address) << 32n) | 1n;
+      const stdin = concat([word(id), toHex("another input")]);
+      const theirs: Request = {
+        ...waiting,
+        id,
+        requirements: {
+          ...waiting.requirements,
+          predicate: { predicateType: 1, data: concat([IMAGE_ID, sha256(stdin)]) },
+        },
+        input: { inputType: 0, data: concat(["0x00", stdin]) },
+      };
+      expect(
+        (
+          await chain.send(
+            chain.stranger,
+            MARKET,
+            encodeFunctionData({
+              abi: BoundlessMarketABI,
+              functionName: "submitRequest",
+              args: [theirs, "0x"],
+            }),
+            MAX_PRICE,
+          )
+        ).ok,
+      ).toBe(true);
+      const signature = await STRANGER.signTypedData(typedRequest(theirs));
+      expect(
+        (
+          await chain.send(
+            prover,
+            MARKET,
+            encodeFunctionData({
+              abi: BoundlessMarketABI,
+              functionName: "lockRequest",
+              args: [theirs, signature],
+            }),
+          )
+        ).ok,
+      ).toBe(true);
+      const before = await chain.slot(SLOT);
+      const fulfilment = await fulfil(theirs, concat([sha256(stdin), word(999n)]));
+      expect(fulfilment.ok).toBe(true);
+      // The Pot was called, found no promise under that guest's digest, and returned.
+      expect(eventsOf(fulfilment).some((e) => e.eventName === "CallbackFailed")).toBe(false);
+      const ignored = fulfilment.logs.some(
         (log) =>
           log.address.toLowerCase() === chain.stack.pot.toLowerCase() &&
-          log.topics[0] === PROMISE_IGNORED &&
-          log.topics[1] === promiseKeyOf(ours),
-      ),
-    ).toBe(true);
-    expect(await chain.slot(SLOT)).toBe(0n);
-  });
+          log.topics[0] === PROMISE_IGNORED,
+      );
+      expect(ignored).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(before);
+      // Ours still waits, and its own fulfilment runs it.
+      expect((await lock(waiting)).ok).toBe(true);
+      expect((await fulfil(waiting, journalOf(waiting, 3n))).ok).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(3n);
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("hashes its request as the market's EIP-712 does: the Pot approves exactly that hash", async () => {
-    const request = await ask(0n);
-    // Recorded where the core's ERC-1271 handler reads an approval.
-    expect(await chain.slot(approvedHashSlot(hashTypedData(typedRequest(request))))).toBe(1n);
-    expect(
-      await chain.publicClient.readContract({
-        address: chain.stack.pot,
-        abi: signatureAbi,
-        functionName: "isValidSignature",
-        args: [hashTypedData(typedRequest(request)), "0x"],
-      }),
-    ).toBe("0x1626ba7e");
-  });
+  it(
+    "runs the body once for a re-proof of the same input: the promise settled already",
+    async () => {
+      // The Pot's request is fulfilled. A stranger then pays for a proof of the same guest over the
+      // very same stdin, with the Pot as its callback: the same journal, so the same promise, which
+      // settled; the callback returns and the body does not run again.
+      const ours = await ask(11n);
+      expect((await lock(ours)).ok).toBe(true);
+      expect((await fulfil(ours, journalOf(ours, 30n))).ok).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(41n);
+
+      const id = (BigInt(STRANGER.address) << 32n) | 2n;
+      const again: Request = { ...ours, id };
+      expect(
+        (
+          await chain.send(
+            chain.stranger,
+            MARKET,
+            encodeFunctionData({
+              abi: BoundlessMarketABI,
+              functionName: "submitRequest",
+              args: [again, "0x"],
+            }),
+            MAX_PRICE,
+          )
+        ).ok,
+      ).toBe(true);
+      const signature = await STRANGER.signTypedData(typedRequest(again));
+      expect(
+        (
+          await chain.send(
+            prover,
+            MARKET,
+            encodeFunctionData({
+              abi: BoundlessMarketABI,
+              functionName: "lockRequest",
+              args: [again, signature],
+            }),
+          )
+        ).ok,
+      ).toBe(true);
+      await chain.cook(chain.compiled(`function main(): void { evm.sstore(${SLOT}, 0); }`));
+      const replay = await fulfil(again, journalOf(ours, 30n));
+      expect(replay.ok).toBe(true);
+      expect(eventsOf(replay).some((e) => e.eventName === "CallbackFailed")).toBe(false);
+      expect(
+        replay.logs.some(
+          (log) =>
+            log.address.toLowerCase() === chain.stack.pot.toLowerCase() &&
+            log.topics[0] === PROMISE_IGNORED &&
+            log.topics[1] === promiseKeyOf(ours),
+        ),
+      ).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(0n);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "hashes its request as the market's EIP-712 does: the Pot approves exactly that hash",
+    async () => {
+      const request = await ask(0n);
+      // Recorded where the core's ERC-1271 handler reads an approval.
+      expect(await chain.slot(approvedHashSlot(hashTypedData(typedRequest(request))))).toBe(1n);
+      expect(
+        await chain.publicClient.readContract({
+          address: chain.stack.pot,
+          abi: signatureAbi,
+          functionName: "isValidSignature",
+          args: [hashTypedData(typedRequest(request)), "0x"],
+        }),
+      ).toBe("0x1626ba7e");
+    },
+    TEST_TIMEOUT,
+  );
 
   it.each([
     [100n, 1_000n],
@@ -706,47 +741,56 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
       expect((await fulfil(request, journalOf(request, output))).ok).toBe(true);
       expect(await chain.publicClient.getBalance({ address: recipient })).toBe(paid);
     },
+    TEST_TIMEOUT,
   );
 
-  it("expires a locked request past its deadline: Zk.reclaim slashes it and withdraws its price", async () => {
-    const request = await ask(0n, 30n, 60n);
-    expect((await lock(request)).ok).toBe(true);
-    const key = promiseKeyOf(request);
-    await chain.testClient.increaseTime({ seconds: 61 });
-    await chain.testClient.mine({ blocks: 1 });
-    const potBefore = await chain.publicClient.getBalance({ address: chain.stack.pot });
-    const expired = await chain.send(chain.stranger, chain.stack.pot, concat([EXPIRE, key]), FEE);
-    expect(expired.ok).toBe(true);
-    expect(await chain.slot(CAUGHT)).toBe(2n);
-    expect(
-      await chain.publicClient.readContract({
-        address: MARKET,
-        abi: BoundlessMarketABI,
-        functionName: "requestIsLocked",
-        args: [request.id],
-      }),
-    ).toBe(true);
-    // The price came back to the Pot, past its balance at the market.
-    expect((await chain.publicClient.getBalance({ address: chain.stack.pot })) - potBefore).toBe(
-      MAX_PRICE,
-    );
-  });
+  it(
+    "expires a locked request past its deadline: Zk.reclaim slashes it and withdraws its price",
+    async () => {
+      const request = await ask(0n, 30n, 60n);
+      expect((await lock(request)).ok).toBe(true);
+      const key = promiseKeyOf(request);
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      const potBefore = await chain.publicClient.getBalance({ address: chain.stack.pot });
+      const expired = await chain.send(chain.stranger, chain.stack.pot, concat([EXPIRE, key]), FEE);
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(2n);
+      expect(
+        await chain.publicClient.readContract({
+          address: MARKET,
+          abi: BoundlessMarketABI,
+          functionName: "requestIsLocked",
+          args: [request.id],
+        }),
+      ).toBe(true);
+      // The price came back to the Pot, past its balance at the market.
+      expect((await chain.publicClient.getBalance({ address: chain.stack.pot })) - potBefore).toBe(
+        MAX_PRICE,
+      );
+    },
+    TEST_TIMEOUT,
+  );
 
-  it("expires a request nobody locked: Zk.reclaim withdraws its price", async () => {
-    const request = await ask(0n, 30n, 60n);
-    await chain.testClient.increaseTime({ seconds: 61 });
-    await chain.testClient.mine({ blocks: 1 });
-    const potBefore = await chain.publicClient.getBalance({ address: chain.stack.pot });
-    const expired = await chain.send(
-      chain.stranger,
-      chain.stack.pot,
-      concat([EXPIRE, promiseKeyOf(request)]),
-      FEE,
-    );
-    expect(expired.ok).toBe(true);
-    expect(await chain.slot(CAUGHT)).toBe(2n);
-    expect((await chain.publicClient.getBalance({ address: chain.stack.pot })) - potBefore).toBe(
-      MAX_PRICE,
-    );
-  });
+  it(
+    "expires a request nobody locked: Zk.reclaim withdraws its price",
+    async () => {
+      const request = await ask(0n, 30n, 60n);
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      const potBefore = await chain.publicClient.getBalance({ address: chain.stack.pot });
+      const expired = await chain.send(
+        chain.stranger,
+        chain.stack.pot,
+        concat([EXPIRE, promiseKeyOf(request)]),
+        FEE,
+      );
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(2n);
+      expect((await chain.publicClient.getBalance({ address: chain.stack.pot })) - potBefore).toBe(
+        MAX_PRICE,
+      );
+    },
+    TEST_TIMEOUT,
+  );
 });
