@@ -1,6 +1,8 @@
 {
   "$comment": "The suites that EXECUTE each skills/*/examples/*.sauce.ts on an engine, beyond skills:check's compile and command lines, and the examples nothing runs yet, with why. skills:check (docs/scripts/example-programs.mjs) fails an example in neither list, an entry that is not an example, and a suite that does not exist, does not name the example, or is not one CI runs. Kept here, not in skills/, because the skills ship.",
   "executed": {
+    "sauce-async/examples/approval.sauce.ts": ["sdk/test/std/async/evm.e2e.test.ts"],
+    "sauce-async/examples/approve.sauce.ts": ["sdk/test/std/async/evm.e2e.test.ts"],
     "sauce-chains/examples/holdings.sauce.ts": ["actions/tests/holdings.mainnet.test.ts"],
     "sauce-chains/examples/payout-solana.sauce.ts": ["sdk/test/cli-solana.e2e.test.ts"],
     "sauce-cli/examples/buy.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],

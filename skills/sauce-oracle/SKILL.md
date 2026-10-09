@@ -9,8 +9,8 @@ A program asks a Chainlink CRE workflow for an answer and continues when the ans
 workflow is code its owner deployed to Chainlink's network: it can fetch an API, read chains and
 compute, and the nodes of its DON agree on the result before it is written on chain. The request is
 made now; the workflow answers in a transaction of its own, and the request's `.then` body runs
-then, on the same Pot. `.then`, `.catch`, `await` and how a Pot answers a protocol's callback are
-`sauce-script`'s (Waiting for a callback); this skill is what the oracle adds.
+then, on the same Pot. Promises themselves (`.then`, `.catch`, `await`, deadlines, combinators) and
+installing a package's handlers on a Pot are `sauce-async`'s; this skill is what the oracle adds.
 
 ```sauce chain=ethereum,base
 import { Oracle } from "@sauce/oracle";

@@ -227,8 +227,7 @@ It holds no references or examples of its own.
 
 The language: the two program forms (`main(...)` with runtime arguments, or top-level statements
 with defines), the file's header, values, calling a contract, helpers, atomic failure and `.catch`,
-waiting for a protocol's callback (`.then` on a request, the handlers a Private Pot installs), what
-a program costs, and compile errors.
+what a program costs, and compile errors.
 
 - **Holds** the language reference,
   [references/builtins.md](../sauce-script/references/builtins.md): every type, operator,
@@ -362,6 +361,20 @@ name resolves, and rehearsing both sides.
 - **Load it** whenever the work crosses chains; `sauce-chains` says which chains take intents.
 - **Asked as:** "Move my USDC from Base to Ethereum and supply it to Aave there."
 
+### `sauce-async`
+
+Promises: a request whose answer arrives later, in a transaction of its own (randomness, an oracle,
+a cross-chain message, a proof), its `.then` body run when the protocol calls the Pot back;
+`.catch` and `await`; `Promise.all`, `race`, `any`, `allSettled` and `withResolvers`; deadlines,
+`Async.timeout` and the public `expire`; installing a package's handlers on a Private Pot; and
+writing a package of the family.
+
+- **Holds** a payment that waits for the owner's approval within a day, a deferred raced against
+  a timeout, and the owner's cook that approves it by its key.
+- **Load it** when a program must wait for a callback; a callback's protocol is a package of the
+  family, which its own section here or its `sauce-protocols` document covers.
+- **Asked as:** "Draw a random winner with Chainlink VRF and pay them when the number arrives."
+
 ### `sauce-oracle`
 
 An answer from outside the chain: a program asks a Chainlink CRE workflow with `@sauce/oracle`
@@ -372,8 +385,8 @@ it on a Pot, and the gas a delivery needs.
 
 - **Holds** an example that pays USDC only if a workflow reports a price under a limit.
 - **Load it** when a program needs an API's answer, a computation or a fact the chain does not
-  have. Waiting for a callback itself, `.then`, `.catch` and the handlers a Pot installs, is
-  `sauce-script`'s.
+  have. Promises themselves, `.then`, `.catch`, deadlines and installing handlers, are
+  `sauce-async`'s.
 - **Asked as:** "Pay the invoice in USDC only if the ETH price my API reports is under 4,000."
 
 ### `sauce-solana`
