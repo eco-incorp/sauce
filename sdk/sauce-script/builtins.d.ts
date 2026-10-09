@@ -285,11 +285,12 @@ interface SauceTokenOf {
 }
 /** `@sauce/token`'s token class, `new TokenOf(symbol, address, decimals)`: `TokenOf`, not `Token`,
  *  which the chain's names export as `Token(address)`. */
-declare var TokenOf: new (
+type SauceTokenOfClass = new (
   symbol: string | undefined,
   address: SauceInt,
   decimals: SauceInt | undefined,
 ) => SauceTokenOf;
+declare const TokenOf: SauceTokenOfClass;
 
 /** The same functions, imported by name. */
 declare module "@sauce/token" {
@@ -305,7 +306,7 @@ declare module "@sauce/token" {
   export const transfer: typeof globalThis.transfer;
   export const transferChecked: typeof globalThis.transferChecked;
   export const transferFrom: typeof globalThis.transferFrom;
-  export const TokenOf: typeof globalThis.TokenOf;
+  export const TokenOf: SauceTokenOfClass;
 }
 
 // The catch-all modules — a JSON ABI beside the program, another `@sauce/` library — are declared

@@ -270,7 +270,7 @@ describe("SauceScript in an editor", () => {
     // And each is the global a program reaches with no import: a function it calls, the class
     // (`TokenOf`) it constructs.
     for (const name of functions) expect(builtins).toContain(`declare function ${name}(`);
-    for (const name of classes) expect(builtins).toContain(`declare var ${name}: new (`);
+    for (const name of classes) expect(builtins).toContain(`declare const ${name}: `);
   });
 
   it("still reports a real mistake: a misspelled builtin, a wrong argument count, an unknown method", () => {
