@@ -261,6 +261,10 @@ function parkRecord(
   const slot = slotOf(key);
   require(evm.sload(slot) == 0, "async: a promise is already parked under this key");
   require(deadline < 1 << 40, "async: the deadline is past 2^40 seconds");
+  // A continuation's captured values are whole words, each padded to 32 bytes (a bytes value
+  // too): split into words here and joined back by `takeRecord`, so a tail shorter than a word
+  // would be lost.
+  require(args.length % 32 == 0, "async: a continuation's captured values are not whole words");
   const words = args.length / 32;
   require(words < 256, "async: a continuation captures at most 255 words");
   let word = keep(code) | (deadline << 160) | (SAUCE_ASYNC_PENDING_STATE << 200) | (words << 203);
