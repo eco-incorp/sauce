@@ -375,6 +375,22 @@ writing a package of the family.
   family, which its own section here or its `sauce-protocols` document covers.
 - **Asked as:** "Draw a random winner with Chainlink VRF and pay them when the number arrives."
 
+### `sauce-signed`
+
+Owner-signed programs: a program a Private Pot's owner signs once, which anyone then submits to
+the Pot's `execute` and which runs as the Pot, once per salt, before its deadline; the typed data
+any wallet signs and `sauce sign`; a hop whose body delivers to the owner's Pot and runs its signed
+program in the fill; one signature for a program per chain; and the Pot answering EIP-1271, so
+Permit2 takes it as a signer.
+
+- **Holds** a payout signed to run only once its USDC has arrived, a program that pays into a Pot
+  and runs its owner's signed program in one transaction, and the owner's cook that cancels a
+  signature.
+- **Load it** when someone other than the owner must submit the owner's program (a relayer, a
+  hop's body, a counterparty), or a contract must check a signature with the Pot as the signer;
+  handlers in general are `sauce-async`.
+- **Asked as:** "Let a relayer run my payout on Base, so I don't need ETH there."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

@@ -34,6 +34,7 @@ import {
   createWalletClient,
   encodeAbiParameters,
   encodeFunctionData,
+  getAddress,
   hashTypedData,
   http,
   keccak256,
@@ -48,6 +49,7 @@ import {
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
+import { Base } from "../../../src/index.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
@@ -75,6 +77,11 @@ const REFERENCE = JSON.parse(
 const TOKEN = JSON.parse(
   readFileSync(join(HERE, "..", "..", "fixtures", "cli", "PoolsToken.json"), "utf8"),
 ) as { abi: Abi; creationCode: Hex };
+/** The sauce-signed skill's examples and its hop, which this suite runs as a reader would. */
+const SKILL_EXAMPLES = join(HERE, "../../../../skills/sauce-signed/examples");
+const SKILL = dirname(SKILL_EXAMPLES);
+const skillExample = (name: string): string =>
+  readFileSync(join(SKILL_EXAMPLES, `${name}.sauce.ts`), "utf8");
 const PERMIT2 = JSON.parse(
   readFileSync(join(HERE, "..", "..", "fixtures", "cli", "Permit2.json"), "utf8"),
 ) as { address: Address; runtime: Hex };
@@ -765,97 +772,149 @@ function main(token: Address, spender: Address): void {
     });
   });
 
-  describe("a hop's body", () => {
-    it("delivers to the owner's Pot and runs its signed program in the same transaction, refusing it early", async () => {
-      // The destination's Shared Pot, where a hop's body runs, and the token the solver delivered
-      // to it.
-      const sharedSalt = word(0x5a5a01n);
+  describe("the skill's examples, and a hop", () => {
+    /** Base's USDC, where the suite plants a token it can mint: the examples name USDC. */
+    const USDC = getAddress(Base.USDC.address!);
+    const recipient = "0x000000000000000000000000000000000000bEEF" as Address;
+    const usdc = (who: Address) =>
+      publicClient.readContract({
+        address: USDC,
+        abi: TOKEN.abi,
+        functionName: "balanceOf",
+        args: [who],
+      }) as Promise<bigint>;
+    const mint = async (to: Address, amount: bigint) =>
       expect(
         (
           await send(
             owner,
-            stack.kitchen,
-            encodeFunctionData({
-              abi: kitchenAbi,
-              functionName: "deploySharedPot",
-              args: [sharedSalt],
-            }),
+            USDC,
+            encodeFunctionData({ abi: TOKEN.abi, functionName: "mint", args: [to, amount] }),
           )
         ).ok,
       ).toBe(true);
-      const shared = (await publicClient.readContract({
+    /** A Shared Pot, where a hop's body runs. */
+    const sharedPot = async (salt: bigint): Promise<Address> => {
+      const deploy = encodeFunctionData({
+        abi: kitchenAbi,
+        functionName: "deploySharedPot",
+        args: [word(salt)],
+      });
+      expect((await send(owner, stack.kitchen, deploy)).ok).toBe(true);
+      return (await publicClient.readContract({
         address: stack.kitchen,
         abi: kitchenAbi,
         functionName: "predictSharedPot",
-        args: [sharedSalt],
+        args: [word(salt)],
       })) as Address;
+    };
+
+    beforeAll(async () => {
       const deployed = await send(
         owner,
         undefined,
         concat([
           TOKEN.creationCode,
-          encodeAbiParameters([{ type: "string" }, { type: "uint8" }], ["USD", 6]),
+          encodeAbiParameters([{ type: "string" }, { type: "uint8" }], ["USDC", 6]),
         ]),
       );
-      const token = deployed.created!;
-      const recipient = "0x000000000000000000000000000000000000bEEF" as Address;
-
-      // What the owner signs: pay the recipient what arrived, and only once it has.
-      const payout = `import { balanceOf, transfer } from "@sauce/token";
-function main(token: Address, recipient: Address, amount: Uint256): void {
-  require(balanceOf(token, ctx.self()) >= amount, "not delivered yet");
-  transfer(token, recipient, amount);
-}`;
-      const execution = await executionOf(compiled(payout, [token, recipient, 500n]));
-      const signature = await signExecute(execution);
-
-      // Anyone may submit it, early too: the program's own check refuses it, and the salt stays.
-      const early = encodeExecute({ ...execution, signature });
-      expect(await reasonOf(early)).toBe("not delivered yet");
-
-      // The body: send what arrived to the owner's Pot, then run the owner's program there.
-      const body = `import { transfer } from "@sauce/token";
-import { submit } from "@sauce/signed";
-function main(token: Address, pot: Address, amount: Uint256, program: bytes, salt: Uint256, deadline: Uint256, signature: bytes): void {
-  transfer(token, pot, amount);
-  submit(pot, program, salt, deadline, signature);
-}`;
-      const bodyProgram = (sig: Hex) =>
-        compiled(body, [
-          token,
-          stack.pot,
-          500n,
-          execution.program,
-          execution.salt,
-          execution.deadline,
-          sig,
-        ]);
-      const fund = encodeFunctionData({
-        abi: TOKEN.abi,
-        functionName: "mint",
-        args: [shared, 500n],
+      const code = await publicClient.getCode({ address: deployed.created! });
+      await createTestClient({ mode: "anvil", transport: http(RPC_URL) }).setCode({
+        address: USDC,
+        bytecode: code!,
       });
-      expect((await send(owner, token, fund)).ok).toBe(true);
-      const balanceOf = (who: Address) =>
-        publicClient.readContract({
-          address: token,
-          abi: TOKEN.abi,
-          functionName: "balanceOf",
-          args: [who],
+    });
+
+    it("runs pay-when-delivered once its USDC has arrived, refusing it before", async () => {
+      const execution = await executionOf(
+        compiled(skillExample("pay-when-delivered"), [recipient, 300n]),
+      );
+      const signature = await signExecute(execution);
+      const data = encodeExecute({ ...execution, signature });
+      // Anyone may submit it early: the program's own check refuses it, and the salt stays.
+      expect(await reasonOf(data)).toBe("not delivered yet");
+      expect(await used(execution.salt)).toBe(false);
+
+      // deliver-and-run, cooked by a stranger on its own Pot: pays the owner's Pot and runs it.
+      const relayerPot = await mintPot(STRANGER.address, word(0x7e1a7n));
+      await mint(relayerPot, 300n);
+      const before = await usdc(recipient);
+      const delivering = compiled(skillExample("deliver-and-run"), [
+        stack.pot,
+        300n,
+        execution.program,
+        execution.salt,
+        execution.deadline,
+        signature,
+      ]);
+      const cooked = await send(stranger, relayerPot, cookData(delivering), FEE);
+      expect(cooked.ok).toBe(true);
+      expect((await usdc(recipient)) - before).toBe(300n);
+      expect(await usdc(relayerPot)).toBe(0n);
+      expect(await used(execution.salt)).toBe(true);
+    });
+
+    it("cancels a signature with cancel-salt, the owner's cook", async () => {
+      const execution = await executionOf(compiled(WRITER, [31n]));
+      const data = encodeExecute({ ...execution, signature: await signExecute(execution) });
+      expect((await cook(compiled(skillExample("cancel-salt"), [execution.salt]))).ok).toBe(true);
+      expect(await reasonOf(data)).toBe("signed: the salt was used or cancelled");
+    });
+
+    it("runs the skill's hop: its body, cooked on a Shared Pot as a fill does, pays the owner's Pot and runs its signed program", async () => {
+      // The skill's hop, as an intent file on Ethereum whose body runs on Base.
+      const skill = readFileSync(join(SKILL, "SKILL.md"), "utf8");
+      const block = /```sauce chain=ethereum\n([\s\S]*?)```/.exec(skill)?.[1];
+      expect(block).toContain("Base.hop(");
+      const hop = (signed: Hex) => {
+        const source = block!.replace(
+          /const SIGNED = hex`[0-9a-f]*`;/,
+          `const SIGNED = hex\`${signed.slice(2)}\`;`,
+        );
+        expect(source).toContain(signed.slice(2));
+        const program = compileSauceProgram("ethereum", source, {
+          intents: { deadline: 1n << 40n, executionFee: FEE },
         });
+        expect(program.bodies).toHaveLength(1);
+        return program.bodies[0]!;
+      };
+      const amount = 1_000_000n;
+      const delivered = amount - (amount * 10n) / 10_000n;
+
+      // The owner signs a payout of what the hop delivers, for its Pot on Base.
+      const execution = await executionOf(
+        compiled(skillExample("pay-when-delivered"), [recipient, delivered]),
+      );
+      const signed = encodeExecute({ ...execution, signature: await signExecute(execution) });
+      const forged = encodeExecute({
+        ...execution,
+        signature: await signExecute(execution, STRANGER),
+      });
+
+      // The body as the fill cooks it: the Base program, with what it captured appended.
+      const bodyOf = (signedCall: Hex): Hex => {
+        const body = hop(signedCall);
+        expect(body.destination.slug).toBe("base");
+        const values: Record<string, bigint> = { pot: BigInt(stack.pot), delivered };
+        expect([...body.captures].sort()).toEqual(["delivered", "pot"]);
+        return concat([toHex(body.bytecode), ...body.captures.map((name) => word(values[name]!))]);
+      };
+      const shared = await sharedPot(0x5a5a01n);
+      await mint(shared, delivered);
+      const before = await usdc(recipient);
 
       // A body carrying a forged signature fails whole: nothing leaves the Shared Pot.
-      const forged = await signExecute(execution, STRANGER);
-      expect((await send(stranger, shared, cookData(bodyProgram(forged)), FEE)).ok).toBe(false);
-      expect(await balanceOf(shared)).toBe(500n);
+      expect((await send(stranger, shared, cookData(bodyOf(forged)), FEE)).ok).toBe(false);
+      expect(await usdc(shared)).toBe(delivered);
 
-      // The fill: anyone cooks the body on the Shared Pot.
-      const filled = await send(stranger, shared, cookData(bodyProgram(signature)), FEE);
+      const filled = await send(stranger, shared, cookData(bodyOf(signed)), FEE);
       expect(filled.ok).toBe(true);
-      costs.set("a hop body on the Shared Pot: transfer to the Private Pot + execute", filled.gas);
-      expect(await balanceOf(recipient)).toBe(500n);
-      expect(await balanceOf(shared)).toBe(0n);
-      expect(await balanceOf(stack.pot)).toBe(0n);
+      costs.set(
+        "a hop's body on a Shared Pot: transfer to the Private Pot, then execute",
+        filled.gas,
+      );
+      expect((await usdc(recipient)) - before).toBe(delivered);
+      expect(await usdc(shared)).toBe(0n);
       expect(await used(execution.salt)).toBe(true);
     });
   });
