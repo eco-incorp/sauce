@@ -33,8 +33,7 @@
 // `publishAndFund(…,bool)` send the intent, `intentVaultAddress(…)` reads its vault, a route call
 // moves a delivered token with ERC-20's `transfer(address,uint256)` and cooks the body with the Pot's
 // `cook(address,bytes)`. The SDK's intent suites execute each of them against eco-routes' own Portal.
-import { Token } from "@sauce/names";
-import { approve, transfer } from "@sauce/token";
+import { approve, TokenOf as Token, transfer } from "@sauce/token";
 
 // The transient-storage slot (EIP-1153) counting the intents a transaction has opened:
 // keccak256("sauce.intents.nonce"). Transient, so it starts at zero in every transaction and

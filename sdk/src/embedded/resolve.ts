@@ -27,7 +27,6 @@ const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/token": "token",
   "@sauce/router": "router",
   "@sauce/hop": "hop",
-  "@sauce/names": "names",
 };
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */
