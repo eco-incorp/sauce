@@ -2,7 +2,7 @@
 
 # Intent defaults
 
-An intent opened with `await Chain.hop({ send, receive, refundee })` may give each of these
+An intent opened with `Chain.hop({ send, receive, refundee }).then(…)` may give each of these
 fields in the same object. Left out, each but the refundee is what Eco's Portal app gives an
 intent:
 

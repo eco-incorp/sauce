@@ -5,8 +5,8 @@
 // it is whatever the swap, bridge or transfer just before it produced — which is the reason to
 // build the intent here rather than off-chain.
 //
-// `await Ethereum.hop({ send, receive, refundee })` is the whole of it: the reward this program
-// escrows, what a solver delivers on Ethereum, and, after it, what runs there. `amount` is
+// `Ethereum.hop({ send, receive, refundee }).then(() => { … })` is the whole of it: the reward this
+// program escrows, what a solver delivers on Ethereum, and, in `.then`, what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the program encodes the intent as it runs, with their values, and the SDK fills
 // in the Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`,
@@ -30,10 +30,11 @@ function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= minAmount, "nothing to forward");
 
-  await Ethereum.hop({
+  Ethereum.hop({
     send: { token: USDC, amount },
     receive: { token: USDC, amount },
     refundee: refundTo,
+  }).then(() => {
+    USDC.transfer(recipient, amount); // on Ethereum
   });
-  USDC.transfer(recipient, amount); // on Ethereum
 }

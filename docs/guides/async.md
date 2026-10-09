@@ -122,16 +122,34 @@ A declaration's `requires` lists the contracts it needs (`Namespace.Contract`), 
 one skips that handler. `interfaces` lists the ERC-165 ids the Pot declares, for a protocol that
 checks its receiver before it calls back.
 
-| `@sauce/async`                                                            | Does                                                                       |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `fulfil(key, value)`, `reject(key, reason)`                               | Settle a promise and run its body or its `.catch`; a settled key, nothing. |
-| `settleCarried(key, stored, program, value, ok)`                          | The same, for a protocol that carried the body back.                       |
-| `promiseKey(tag, id)`                                                     | A protocol's id as a promise's key.                                        |
-| `requireCaller(expected, actual)`, `requireSelf(sender)`                  | A handler's checks: the protocol called; this Pot sent the message.        |
-| `expire(key)`                                                             | Reject a promise past its deadline with `Timeout(bytes32)`.                |
-| `install(selector, program, readOnly)`, `declareInterface(id, supported)` | What installing a package's handlers calls.                                |
-| `received()`, `fulfilled()`                                               | In a running body: what settled it, and how.                               |
-| `park`, `run`, `salt`, `isPending`                                        | The settlement table's parts, for a package that needs them directly.      |
+| `@sauce/async`                                                                       | Does                                                                       |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `fulfil(key, value)`, `reject(key, reason)`                                          | Settle a promise and run its body or its `.catch`; a settled key, nothing. |
+| `settleCarried(key, stored, program, value, ok)`                                     | The same, for a protocol that carried the body back.                       |
+| `promiseKey(tag, id)`                                                                | A protocol's id as a promise's key.                                        |
+| `requireCaller(expected, actual)`, `requireSelf(sender)`                             | A handler's checks: the protocol called; this Pot sent the message.        |
+| `expire(key)`                                                                        | Reject a promise past its deadline with `Timeout(bytes32)`.                |
+| `install(selector, program, readOnly)`, `declareInterface(id, supported)`            | What installing a package's handlers calls.                                |
+| `received()`, `fulfilled()`                                                          | In a running body: what settled it, and how.                               |
+| `park`, `run`, `salt`, `isPending`                                                   | The settlement table's parts, for a package that needs them directly.      |
+| `Erc1271.approve(hash)`, `Erc1271.revoke(hash)`, `isValidSignature(hash, signature)` | The Pot as an ERC-1271 signer (above).                                     |
+
+## The Pot as a signer
+
+A Pot answers ERC-1271's `isValidSignature(bytes32 hash, bytes signature)` with one handler the
+core ships, `@sauce/async/erc1271.handler.js`, which a package that needs the Pot to sign declares
+as its own (a view). Installing two such packages installs it once. It is valid for:
+
+- a hash a program running as the Pot approved, `Erc1271.approve(hash)` (and `Erc1271.revoke`),
+  kept in the ERC-7201 namespace `sauce.storage.Erc1271`, whatever the signature bytes, since the
+  approval is the authorization: a request the Pot made itself, which a
+  market checks with at most 100,000 gas before it spends the Pot's deposit. The check is one
+  storage read, about 42,000 gas for the call;
+- the owner's signature over the hash bound to the Pot, EIP-712's `PotMessage { hash: bytes32 }`
+  under the domain `{ name: "Sauce Pot", version: "1", chainId, verifyingContract: the Pot }`: never
+  over the bare hash, so a signature the owner made for its own account or another Pot is not this
+  Pot's. A malleable signature (an upper-half `s`) is refused, and an owner that is a contract is
+  asked ERC-1271 itself, as OpenZeppelin's `SignatureChecker` does.
 
 ## Storage and cost
 

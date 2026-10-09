@@ -18,7 +18,9 @@
  *   "interfaces": ["0x805f2132"]
  *
  * `selector` is the function's signature (or its four bytes, `0x1fe543e3`); `program` is a file of
- * the package, compiled for the chain the Pot is on with that chain's names, so a handler names the
+ * the package (or another's, `@sauce/async/erc1271.handler.js`, the Pot's one ERC-1271 handler that
+ * every package needing the Pot to sign declares), compiled for the chain the Pot is on with that
+ * chain's names, so a handler names the
  * protocol's contract as the program's registry does; `readOnly` runs it as a view, static and with
  * no fee; `requires` names the contracts (`Namespace.Contract`) it needs, so a chain without one of
  * them skips it. `interfaces` are the ERC-165 ids the Pot declares for the package, which its Router
@@ -152,6 +154,19 @@ export function packageInterfaces(specifier: string): readonly Hex[] {
   return interfaces.map((id) => String(id).toLowerCase() as Hex);
 }
 
+/**
+ * The files of the standard-library package `from`, by their path in it, and another's by
+ * `@sauce/<package>/<path>`: a handler a package declares may be one another package ships, as the
+ * Pot's one ERC-1271 handler is `@sauce/async/erc1271.handler.js`.
+ */
+export function packageReader(from: string): (path: string) => string | undefined {
+  return (path) => {
+    const other = /^(@sauce\/[\w-]+)\/(.+)$/.exec(path);
+
+    return other === null ? sdkPackageFile(from, path) : sdkPackageFile(other[1]!, other[2]!);
+  };
+}
+
 /** The first of `requires` that `chain` does not have, or `undefined` when it has them all. */
 function missingOn(
   chain: CanonicalChain,
@@ -246,7 +261,7 @@ export function packageInstall(
       return [];
     }
 
-    return compileHandlers(resolved, [declaration], (path) => sdkPackageFile(from, path), options);
+    return compileHandlers(resolved, [declaration], packageReader(from), options);
   });
 
   return { handlers, interfaces: packageInterfaces(specifier), skipped };

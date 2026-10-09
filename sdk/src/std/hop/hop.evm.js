@@ -6,14 +6,14 @@
 // cooks on, so nothing persists on it between transactions: a body keeps no state, and moves what
 // it receives on within its own transaction.
 //
-//   await Arbitrum.hop({
+//   Arbitrum.hop({
 //     send: { token: USDC, amount },
 //     receive: { token: USDC, amount: delivered },
 //     refundee: owner,
+//   }).then(() => {
+//     USDC.transfer(recipient, delivered); // runs on Arbitrum
 //   });
-//   USDC.transfer(recipient, delivered); // runs on Arbitrum
 //
-// which is, as in JavaScript, `Arbitrum.hop({ … }).then(() => { USDC.transfer(recipient, delivered); })`.
 // `Arbitrum.hop` is a method of the chain's name in the SDK's module for the chain the program is
 // compiled for, which knows that pair of chains: both Portals, the prover, the destination's Shared
 // Pot, its engine and its Kitchen fee, and its tokens by symbol. It returns an `Intent`, whose steps
@@ -193,7 +193,7 @@ export class Intent {
 
   toString() {
     if (this._stage == 1) {
-      return "after `hop({ … })` its one step is `.then(() => { … })`, the body; or `await` it, and the body is what follows";
+      return "after `hop({ … })` its one step is `.then(() => { … })`, the body";
     }
     if (this._stage == 2) {
       return "after `.then(...)` its one step is `.catch(...)`";
@@ -205,7 +205,7 @@ export class Intent {
   [Symbol.dispose]() {
     if (this._stage == 1) {
       throw new Error(
-        "`<Chain>.hop({ … })` has no body. Finish it with `.then(() => { … })`, or `await` it and write the body after it: the code that runs on its destination with what was received",
+        "`<Chain>.hop({ … })` has no body. Finish it with `.then(() => { … })`: the code that runs on its destination with what was received",
       );
     }
     const config = this._config;

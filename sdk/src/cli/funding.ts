@@ -40,6 +40,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
+import { AWAIT_SUPPORTED } from "../plugin/await.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { mainSignature } from "../routes/entry.js";
 import type { AstNode } from "../routes/ast-walk.js";
@@ -903,14 +904,14 @@ const blank = (text: string, start: number, end: number): string =>
   `${text.slice(0, start)}${Array.from(text.slice(start, end), (char) => (char === "\n" ? char : " ")).join("")}${text.slice(end)}`;
 
 /**
- * `text` with every `await` written as the `.then` it is: `await x; rest` is
- * `x.then(() => { rest });`, and inside a `try` that `try`'s handler is the `.catch(...)` that
- * follows it — the compiler's own reading, so the program is the same, byte for byte. It works on
- * the parse `routes/parse.ts` makes, and moves nothing: the `await` is blanked, and `.then(() => {`,
- * ` })` and the `.catch` are written around the user's statements where they stand. The last
- * `await` is written first, so one in the rest of another is already a `.then` when the outer one
- * takes it in. A program with an `await` the compiler refuses is returned as it is, for the compiler
- * to refuse at its own line.
+ * `text` with every `await` written as the `.then` it is, for when `await` is on
+ * (`plugin/await.ts`): `await x; rest` is `x.then(() => { rest });`, and inside a `try` that
+ * `try`'s handler is the `.catch(...)` that follows it — the compiler's own reading, so the program
+ * is the same, byte for byte. It works on the parse `routes/parse.ts` makes, and moves nothing: the
+ * `await` is blanked, and `.then(() => {`, ` })` and the `.catch` are written around the user's
+ * statements where they stand. The last `await` is written first, so one in the rest of another is
+ * already a `.then` when the outer one takes it in. A program with an `await` the compiler refuses
+ * is returned as it is, for the compiler to refuse at its own line.
  */
 export function thenForm(given: string): string {
   let text = given;
@@ -973,10 +974,11 @@ export function wrapProgram(
   pulls: readonly string[],
   sweeps: readonly string[],
 ): string {
-  // After an `await` every statement is an intent's body, which runs on its destination: a sweep
-  // appended there would move the destination's shared Pot, and a renamed `main` cannot await. So
-  // the program is wrapped in its `.then` form, the same program, and the sweeps follow it here.
-  const text = thenForm(given);
+  // With `await` on (`plugin/await.ts`), every statement after one is an intent's body, which runs
+  // on its destination: a sweep appended there would move the destination's shared Pot, and a
+  // renamed `main` cannot await. So the program is wrapped in its `.then` form, the same program,
+  // and the sweeps follow it here.
+  const text = AWAIT_SUPPORTED ? thenForm(given) : given;
   const head =
     imports.size === 0 ? [] : [`import { ${[...imports].join(", ")} } from "@sauce/token";`];
   const signature = mainSignature(text);

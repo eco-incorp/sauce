@@ -394,7 +394,7 @@ export const rejections = [
     src: "function f<T>(a: Uint256): Uint256 { return a; } function main(): Uint256 { return 0n; }",
   },
   {
-    row: "`async function`, `await` used as a value",
+    row: "`async function`, `await`",
     targets: ["evm"],
     src: "function main(): Uint256 { const x = await 1n; return x; }",
   },
@@ -866,7 +866,7 @@ export const rejections = [
   },
   {
     quotes: [
-      "a .catch() handler compiles to N bytes, over the 254-byte limit — shorten the handler",
+      "a .catch() handler compiles to N bytes, over the 255-byte limit — shorten the handler",
     ],
     targets: ["evm"],
     contracts,
