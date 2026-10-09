@@ -1,0 +1,25 @@
+{
+  "name": "@sauce/signed",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript's owner-signed programs: a program a Private Pot's owner signs (EIP-712, over the program with its arguments, a salt and a deadline), which anyone may submit to the Pot's `execute` and which runs as the Pot, once per salt. `executeAcross` takes one signature over an execution per chain. `isValidSignature` answers EIP-1271 for the Pot with its owner's signature over a message bound to the Pot. `cancel` and `invalidate` cancel salts, in a program the owner cooks; `submit` calls a Pot's `execute` from another program, a hop's body. `main` names the NEUTRAL BASE the compiler suffixes per target (signed.evm.js); there is no SVM arm, because the handlers the calls land on are a Private Pot's Router's.",
+  "main": "signed.js",
+  "promises": false,
+  "handlers": [
+    {
+      "selector": "execute(bytes,bytes32,uint256,bytes)",
+      "program": "execute.handler.js",
+      "readOnly": false
+    },
+    {
+      "selector": "executeAcross(bytes,bytes32,uint256,bytes32[],uint256,bytes)",
+      "program": "execute-across.handler.js",
+      "readOnly": false
+    },
+    {
+      "selector": "isValidSignature(bytes32,bytes)",
+      "program": "signature.handler.js",
+      "readOnly": true
+    }
+  ]
+}
