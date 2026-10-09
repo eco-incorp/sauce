@@ -6,9 +6,9 @@
  *   - `litesvm`: a Solana cook rehearsed in a local copy of its accounts (`svm-fork.ts`).
  *
  * npm installs optional dependencies by default, so `npx @eco-incorp/sauce mcp` and a Solana
- * rehearsal need nothing else. A library install leaves them out with `--omit=optional`, and a
- * platform LiteSVM ships no binary for no longer fails the install; the command that needs one then
- * stops with {@link optionalMissing}'s message, which gives the line that installs it.
+ * rehearsal need nothing else. A library install leaves them out with `--omit=optional`; the command
+ * that needs one then stops with {@link optionalMissing}'s message, which gives the line that
+ * installs it.
  */
 import { readFileSync } from "node:fs";
 
