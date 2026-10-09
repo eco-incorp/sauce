@@ -111,12 +111,15 @@ export type {
 export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
 export {
+  ASYNC_PACKAGE,
   compileHandlers,
   handlersInstallSource,
   packageHandlerDeclarations,
   packageHandlers,
+  packageInstall,
+  packageInterfaces,
 } from "./handlers.js";
-export type { CompiledHandler, HandlerDeclaration } from "./handlers.js";
+export type { CompiledHandler, HandlerDeclaration, PackageInstall } from "./handlers.js";
 
 export {
   ECO_ROUTES_VAULT_PROXY_CREATION_CODE,
