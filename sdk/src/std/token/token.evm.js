@@ -154,3 +154,37 @@ export function permitTransferFrom(
     signature,
   );
 }
+
+// An ERC-20 token as a chain's names hold one: each registry symbol (`USDC`) and `Token(address)`
+// are instances, which the SDK's module for the chain makes. The compiler runs this class while it
+// compiles, so `USDC.transfer(to, amount)` is the same program as `transfer(<USDC's address>, to,
+// amount)`. `symbol` is the registry's, or undefined for a token named by its address; an intent's
+// delivery names the destination's token of the same symbol. The writes are this module's, with
+// SafeERC20 semantics, and return nothing. A read is the typed call where it is used, the program a
+// hand-written `ERC20.at(token).balanceOf(holder)` is, rather than a call into `balanceOf` above,
+// which adds a frame. It is `TokenOf`, not `Token`: this module is ambient, and the chain's module
+// exports `Token(address)`, which makes one.
+export class TokenOf {
+  constructor(symbol, address, decimals) {
+    this.symbol = symbol;
+    this.address = address;
+    this.decimals = decimals;
+  }
+  valueOf() {
+    return this.address;
+  }
+  // A missing argument is the compiler's own error ("`amount` is `undefined`, so it has no run-time
+  // value here"): no guard here, so each method is the function above, byte for byte.
+  transfer(to, amount) {
+    transfer(this.address, to, amount);
+  }
+  approve(spender, amount) {
+    approve(this.address, spender, amount);
+  }
+  transferFrom(from, to, amount) {
+    transferFrom(this.address, from, to, amount);
+  }
+  balanceOf(holder) {
+    return ERC20.at(this.address).balanceOf(holder);
+  }
+}
