@@ -92,6 +92,20 @@ bytes message)`, and nothing is paid on the source. Someone fetches the log's pr
   cook of that Pot), and on a round trip the bridge's fee for the way back. Fund it before the
   message arrives.
 
+Gas, measured on a local chain through the engine and Kitchen-made Pots, over Hyperlane's own
+Mailbox with stand-ins for its hooks and an interchain security module that checks nothing: on a
+live chain its hooks add to the send, and its checks to each delivery, which the relayer pays:
+
+| What                                                     | Gas, about |
+| -------------------------------------------------------- | ---------- |
+| The cook that sends a message                            | 215,000    |
+| Delivering a one-way message whose body writes one word  | 170,000    |
+| The far leg of a round trip: the body, and sending back  | 410,000    |
+| Delivering the answer back, the `.then` writing one word | 210,000    |
+
+`gas` is what the destination's handler is given out of that; 500,000 covers these bodies, and a
+body that does more needs more.
+
 ## Install the handlers on both Pots
 
 A bridge delivers a message by calling the Pot with its own callback. A Private Pot answers a call
