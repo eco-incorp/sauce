@@ -302,6 +302,20 @@ function main(to: Address): Uint256 {
   return d.key;
 }`);
     expect(deferred.continuations).toHaveLength(1);
+    // `resolve` and `reject` are the deferred's fields, called as methods.
+    const settledHere = compile(`${ECHO}
+function main(to: Address, value: Uint256) {
+  const d = Promise.withResolvers();
+  d.promise.then((got) => {
+    evm.sstore(1, got.length + to);
+  });
+  if (value == 0) {
+    d.reject(abi.encode(value));
+  } else {
+    d.resolve(abi.encode(value));
+  }
+}`);
+    expect(settledHere.continuations).toHaveLength(1);
     const later = compile(`${ECHO}
 function main(key: Uint256, value: Uint256) {
   Async.resolve(key, abi.encode(value));
