@@ -1334,8 +1334,9 @@ try {
   }
   console.log(
     "Clean package install: a project with its own zod 3 and MCP SDK 1.29.0 installs the " +
-      "package, and its copies are passed over; --offline, no npm " +
-      "and no registry each refuse on one line, leaving nothing; sauce mcp setup installs the folder",
+      "package, and its copies are passed over; --offline (a server's Solana sauce_simulate " +
+      "included), no npm and no registry each refuse on one line, leaving nothing; sauce mcp " +
+      "setup installs the folder",
   );
   // Over Streamable HTTP, self-hosted with the same one command and a port it picks: initialize
   // and tools/list, each a POST of its own to the stateless /mcp.
