@@ -26,6 +26,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce init`     | Scaffold a project that uses this package                                         |
 | `sauce skills`   | Install, update or check this package's agent skills in a project                 |
 | `sauce update`   | Update this `sauce` command to the latest release, the way it was installed       |
+| `sauce runtime`  | Install or check the packages `sauce mcp` and Solana rehearsals load              |
 
 Every command takes `--help`. A mistyped invocation exits 2. A program that does not compile, a
 cook that reverts, a rejected settle, an outdated skills install and a transaction on a
@@ -46,8 +47,8 @@ installed: a global install by npm, pnpm, yarn or bun is installed again by that
 installed in the current directory are then updated by the new `sauce`. A project's own copy is
 the project's to update, so `sauce update` prints the command its package manager takes and changes
 nothing; a copy in npx's cache prints the `npx -y` command. `sauce update --check` says which
-version is installed and which is the latest, and installs nothing. It reads the npm registry, and
-only then: `sauce` never checks for updates by itself.
+version is installed and which is the latest, and installs nothing. Every other command says when
+a newer release is out ([The update notice](#the-update-notice)).
 
 Two other ways run the same command:
 
@@ -75,6 +76,52 @@ resolves only a project's own. It also writes an `AGENTS.md` with the project's 
 local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
 ([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](skills.md)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
+
+### The update notice
+
+After a command, one line on stderr says when a newer release of the package is published:
+
+```text
+sauce 0.99.12 → 0.99.13 is available: run `sauce update`
+```
+
+It never slows a command down. The line comes from a cache, `~/.sauce/update-check.json`
+(owner-only, beside the runtime folders), which `sauce` refreshes from the npm registry at most
+once a day, in a process of its own that no command waits for, so the first command after a
+release may say nothing yet. The registry is the only host it reads. The line goes to stderr only,
+so `--json` output and anything piped from stdout stay as they are. It names a newer release only:
+a prerelease only to a prerelease.
+
+Nothing is shown, and nothing read, with `--offline`. To turn it off:
+
+- pass `--no-update-check`. Every command takes it, and so does `sauce` before the command, so a
+  shell alias can carry it: `alias sauce='sauce --no-update-check'`;
+- or add `"updateCheck": false` to the `--config` file a command is given
+  (`{ "rpcUrls": { … }, "updateCheck": false }`).
+
+`sauce mcp` prints no notice: it puts one note in its first tool result instead
+([MCP server](mcp.md#a-newer-version)).
+
+### Runtime packages
+
+Two commands load packages that no install of `@eco-incorp/sauce` brings, being its optional peer
+dependencies: `sauce mcp` (the MCP SDK and zod) and a Solana rehearsal in a local copy (LiteSVM).
+Each takes your own copies where they are exactly the versions the package pins. Otherwise its
+first use installs them for itself, once per version, into `~/.sauce/runtime/<version>`: `npm ci`
+on the lockfile the package ships, so every package is the one pinned, checked by its integrity
+hash, and LiteSVM's native binary is your platform's. The command says so on stderr. The folder is
+owner-only and installed whole or not at all, and the command refuses to load from it if another
+user owns it, if it is not owner-only any more, or if anyone else can write a folder above it. Older versions' folders are
+removed, except the newest of them; a newer version's is never touched.
+
+- `sauce runtime` says where each command's packages come from. `sauce runtime install` installs
+  the folder now.
+- `sauce mcp setup` installs it too, so an agent's first start of the server does not wait.
+  `sauce update` has the new version install its own folder where the version it replaces had one.
+- `sauce mcp --offline` installs nothing. Without npm, or without its registry, the command
+  refuses and says why.
+
+npm reaches the registry your npm configuration names, a mirror or a proxy included.
 
 ## Endpoints and signers
 

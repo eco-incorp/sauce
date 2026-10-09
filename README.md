@@ -18,6 +18,11 @@ npm install @eco-incorp/sauce
 Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compiler.md#in-a-browser) and the
 same code compiles the same bytes.
 
+That install is the library alone. The MCP SDK, zod and LiteSVM, which only `sauce mcp` and Solana
+rehearsals load, are optional peer dependencies it never brings: those commands install them for
+themselves, once per version, into `~/.sauce/runtime/`
+([Runtime packages](docs/guides/cli.md#runtime-packages)).
+
 For the [`sauce` command](docs/guides/cli.md), install the package once globally:
 
 ```sh
@@ -29,7 +34,7 @@ sauce --version
 other ways to run it.
 
 A coding agent uses Sauce through its MCP server, `sauce mcp`, which the agent starts on your
-machine. Add it once:
+machine. Install its packages once with `sauce runtime install`, then add it:
 
 ```sh
 claude mcp add sauce -- sauce mcp    # Claude Code

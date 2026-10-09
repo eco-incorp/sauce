@@ -6,9 +6,10 @@
  * cook names read from the cluster as it is now (a program's code from its program data), and the
  * clock set to the cluster's. Nothing is signed: the copy checks no signature.
  *
- * LiteSVM is a dependency of the package, imported here only when a rehearsal needs it, so no other
- * command loads it and nothing outside the CLI reaches it. It is native code: on a platform it ships
- * no binary for, the import fails, and the error says so.
+ * LiteSVM is an optional peer dependency of the package, imported here only when a rehearsal needs
+ * it, so no other command loads it and nothing outside the CLI reaches it: the user's own copy at
+ * the version pinned, else this version's runtime folder, installed on first use (`optional.ts`).
+ * It is native code: on a platform it ships no binary for, the import fails, and the error says so.
  */
 import {
   getAddressDecoder,
@@ -25,6 +26,7 @@ import type { SimulatedAccount } from "../svm/index.js";
 
 import { svmEnginePath, svmKitchenPath } from "../svm/engine-artifacts.js";
 import { CliError } from "./args.js";
+import { LITESVM_EXTRA, provide } from "./optional.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -214,6 +216,7 @@ export async function openFork(
   kitchen: Address,
   snapshot: ForkSnapshot = forkSnapshot(),
 ): Promise<Fork> {
+  await provide(LITESVM_EXTRA);
   let litesvm: typeof import("litesvm");
   try {
     litesvm = await import("litesvm");
