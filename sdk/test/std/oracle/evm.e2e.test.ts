@@ -32,8 +32,8 @@
  * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code (with its native ERC-165),
  * which no release publishes yet. Every delivery needs an engine built from the compiler's tree:
  * `@sauce/async` settles a promise by running its continuation under `evm.delegate(…).catch(…)`,
- * which the released engine runs out of stack on in this handler, and a `.catch` that reads the
- * error it is handed loses its work there. The deliveries skip on the released engine.
+ * whose handler reads the error, and the released engine refuses that encoding of a `catch`. The
+ * deliveries skip on the released engine.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -84,8 +84,8 @@ const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
 const ROUTER = routerUnderTest();
 const describeOracle = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
-/** A promise settles through a `.catch` that reads the error, which the released engine does not
- *  run as written: every delivery skips there. */
+/** A promise settles through a `.catch` that reads the error, which the released engine refuses:
+ *  every delivery skips there. */
 const RELEASED_ENGINE =
   RUNTIME_HEX_PATH !== undefined &&
   readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
