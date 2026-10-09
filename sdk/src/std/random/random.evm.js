@@ -74,6 +74,9 @@ const SAUCE_RANDOM_VRF_NATIVE = hex`92fd1338000000000000000000000000000000000000
 const SAUCE_RANDOM_LANDING_GAS = 150000;
 // The allowance per byte of the continuation as compiled, its captured values included.
 const SAUCE_RANDOM_GAS_PER_BYTE = 600;
+// What a combinator's child adds to its callback before the combinator's continuation runs:
+// recording the child's settlement, keeping its value as code until the last child settles.
+const SAUCE_RANDOM_CHILD_GAS = 120000;
 
 // The event the handlers log, from the Pot, before settling: what the provider delivered for the
 // promise `key`, `abi.encode` of it. keccak256("RandomDelivered(bytes32,bytes)").
@@ -173,19 +176,24 @@ class Requests {
     });
   }
 
-  // The callback's gas limit a request asks for: `gas`, else sized from what settling runs: the
-  // continuation, and for a combinator's child the combinator's continuation too (`settles`).
+  // The callback's gas limit a request asks for: `gas`, else sized from what settling runs. For a
+  // plain request that is its continuation, the body; for a combinator's child it is the child's
+  // part, the core's own settling (a fixed allowance: most of its code is branches one settlement
+  // does not take), and then the combinator's continuation (`settles`), which holds the body.
   _callbackGas(gas, continuation) {
     if (gas !== undefined) return gas;
     const settles = continuation.settles;
-    const bytes =
-      settles === undefined
-        ? continuation.code.length + continuation.args.length
-        : continuation.code.length +
-          continuation.args.length +
-          settles.code.length +
-          settles.args.length;
-    return SAUCE_RANDOM_LANDING_GAS + SAUCE_RANDOM_GAS_PER_BYTE * bytes;
+    if (settles === undefined) {
+      return (
+        SAUCE_RANDOM_LANDING_GAS +
+        SAUCE_RANDOM_GAS_PER_BYTE * (continuation.code.length + continuation.args.length)
+      );
+    }
+    return (
+      SAUCE_RANDOM_LANDING_GAS +
+      SAUCE_RANDOM_CHILD_GAS +
+      SAUCE_RANDOM_GAS_PER_BYTE * (settles.code.length + settles.args.length)
+    );
   }
 
   // The Pot pays `price` now and keeps the Kitchen's fee for the callback's cook.

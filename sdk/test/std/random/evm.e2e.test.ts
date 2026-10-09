@@ -261,6 +261,16 @@ function main(bump: Uint256): void {
     });
 }`;
 
+/** VRF's words and Entropy's number, joined: the body runs once both have arrived. */
+const ALL_SOURCE = `import { Promise } from "@sauce/async";
+import { Random } from "@sauce/random";
+
+function main(bump: Uint256): void {
+  Promise.all([Random.vrf({ words: 2 }), Random.entropy()]).then((r) => {
+    evm.sstore(${SLOT}, r[0][0] + r[0][1] + r[1] + bump);
+  });
+}`;
+
 /** An Entropy request from the default provider, whose body writes the number plus `bump`. */
 const ENTROPY_SOURCE = `import { Random } from "@sauce/random";
 
@@ -939,6 +949,41 @@ function main(bump: Uint256): void {
       },
     );
   });
+
+  itOnStackEngine(
+    "joins VRF and Entropy with Promise.all: the body runs once, when the last arrives, sized for it",
+    async () => {
+      await testClient.setStorageAt({ address: stack.pot, index: SLOT, value: word(0n) });
+      const receipt = await cook(compiled(ALL_SOURCE, [100n]));
+      expect(receipt.status).toBe("success");
+      const id = (eventsOf(receipt, WRAPPER, WRAPPER_MOCK.abi)[0]!.args as { requestId: bigint })
+        .requestId;
+      const sequence = (
+        eventsOf(receipt, ENTROPY, ENTROPY_MOCK.abi)[0]!.args as { sequenceNumber: bigint }
+      ).sequenceNumber;
+
+      // Entropy first: kept, and nothing runs.
+      const revealed = await send(
+        stranger,
+        ENTROPY,
+        encodeFunctionData({
+          abi: ENTROPY_MOCK.abi,
+          functionName: "reveal",
+          args: [PROVIDER, sequence, word(1_000n)],
+        }),
+      );
+      expect(revealed.status).toBe("success");
+      expect(await storage(SLOT)).toBe(0n);
+
+      // VRF last: its callback runs the join's body, and asked for enough gas to.
+      const asked = await callbackGasOf(id);
+      const least = await leastCallbackGas(id, [20n, 3n]);
+      expect(least).toBeLessThanOrEqual(asked);
+      expect(asked).toBeLessThan(least * 3n);
+      expect((await send(stranger, WRAPPER, fulfill(id, [20n, 3n]))).status).toBe("success");
+      expect(await storage(SLOT)).toBe(1_123n);
+    },
+  );
 
   describe("the sauce-random skill's examples", () => {
     const HEADS = "0x00000000000000000000000000000000000000c1" as Address;
