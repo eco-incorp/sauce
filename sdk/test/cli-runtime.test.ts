@@ -33,7 +33,7 @@ import {
   type RuntimeInstaller,
 } from "../src/cli/optional.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import { installRuntime, npmCommand, npmReason, NPM_CI, prune } from "../src/cli/runtime.js";
+import { installRuntime, npmCi, npmCommand, npmReason, prune } from "../src/cli/runtime.js";
 
 let work: string;
 let root: string;
@@ -198,7 +198,8 @@ describe("the runtime folder's installer", () => {
   const npm =
     (status = 0, stderr = "") =>
     async (args: readonly string[], cwd: string) => {
-      expect(args).toEqual(NPM_CI);
+      expect(args).toEqual(npmCi(cwd));
+      expect(args).toEqual(expect.arrayContaining(["--workspaces=false", "--prefix", cwd]));
       if (status === 0) installed(cwd);
 
       return { status, stderr };
@@ -236,14 +237,18 @@ describe("the runtime folder's installer", () => {
     expect(readdirSync(root)).toEqual(["1.0.0"]);
   });
 
-  it("keeps this version's folder and the newest older one, and an install still running", () => {
+  it("removes only older versions' folders, but the newest of them, and stale temporaries", () => {
     for (const name of ["0.9.0", "0.99.12", "1.0.0", "1.1.0", ".1.0.0.old", ".1.0.0.running"]) {
       mkdirSync(join(root, name), { recursive: true });
     }
     const longAgo = new Date(Date.now() - 2 * 3_600_000);
     utimesSync(join(root, ".1.0.0.old"), longAgo, longAgo);
     prune(root, "1.0.0");
-    expect(readdirSync(root).sort()).toEqual([".1.0.0.running", "0.99.12", "1.0.0"]);
+    // 1.1.0 is a newer sauce's, which may be serving from it: never this one's to remove.
+    expect(readdirSync(root).sort()).toEqual([".1.0.0.running", "0.99.12", "1.0.0", "1.1.0"]);
+    // The newer one, pruning, takes this one's as the newest older, and the rest older goes.
+    prune(root, "1.1.0");
+    expect(readdirSync(root).sort()).toEqual([".1.0.0.running", "1.0.0", "1.1.0"]);
   });
 
   it("says why npm failed in one line", () => {

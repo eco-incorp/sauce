@@ -7,8 +7,8 @@
  *
  * The install is whole or nothing: npm runs in a temporary directory beside the folder, which is
  * renamed into place only once npm succeeded, so a crash leaves nothing half-installed. Both are
- * created owner-only (0700), as `~/.sauce` is. Afterwards the folders of other versions go, but the
- * newest one older than this.
+ * created owner-only (0700), as `~/.sauce` is. Afterwards the folders of older versions go, but the
+ * newest of them; a newer version's is left to that version.
  */
 import { spawn } from "node:child_process";
 import {
@@ -40,17 +40,25 @@ export type RunNpm = (
   cwd: string,
 ) => Promise<{ readonly status: number | null; readonly stderr: string; readonly error?: string }>;
 
-/** `npm ci`'s arguments: exactly the lockfile, no scripts, every platform binary it pins for this
- *  platform (whatever a user's `omit=optional` says), quietly. */
-export const NPM_CI = [
-  "ci",
-  "--ignore-scripts",
-  "--include=optional",
-  "--prefer-offline",
-  "--no-audit",
-  "--no-fund",
-  "--loglevel=error",
-] as const;
+/**
+ * `npm ci`'s arguments in `dir`: exactly the lockfile, no scripts, every platform binary it pins for
+ * this platform (whatever a user's `omit=optional` says), quietly — and in `dir` itself, never in a
+ * workspace root above it whose `workspaces` glob happens to match the temporary directory.
+ */
+export function npmCi(dir: string): readonly string[] {
+  return [
+    "ci",
+    "--ignore-scripts",
+    "--include=optional",
+    "--prefer-offline",
+    "--no-audit",
+    "--no-fund",
+    "--loglevel=error",
+    "--workspaces=false",
+    "--prefix",
+    dir,
+  ];
+}
 
 /** Version folders are named by version; anything else under the root is left alone, but for the
  *  temporary directories an install leaves only if it was killed. */
@@ -120,7 +128,7 @@ export async function installRuntime(dir: string, runNpm: RunNpm): Promise<void>
   try {
     copyFileSync(join(RUNTIME_SOURCE, "package.json"), join(temp, "package.json"));
     copyFileSync(join(RUNTIME_SOURCE, "package-lock.json"), join(temp, "package-lock.json"));
-    const ran = await runNpm(NPM_CI, temp);
+    const ran = await runNpm(npmCi(temp), temp);
     if (ran.status !== 0) throw new Error(npmReason(ran.status, ran.stderr, ran.error));
     try {
       renameSync(temp, dir);
@@ -140,22 +148,24 @@ export async function installRuntime(dir: string, runNpm: RunNpm): Promise<void>
   prune(root, basename(dir));
 }
 
-/** Removes every version folder under `root` but `current` and the newest older one, and the
- *  temporary directories of installs killed over an hour ago. */
+/**
+ * Removes the version folders under `root` older than `current`, but the newest of them, and the
+ * temporary directories of installs killed over an hour ago. A NEWER version's folder is never
+ * this one's to remove: an older sauce (a project's pinned copy) runs beside a newer one (the
+ * global install) whose server may be loading from it.
+ */
 export function prune(root: string, current: string): void {
   const entries = readdirSync(root);
-  const versions = entries.filter((name) => VERSION.test(name));
-  const previous = VERSION.test(current)
-    ? versions
-        .filter((name) => newer(current, name))
+  const older = VERSION.test(current)
+    ? entries
+        .filter((name) => VERSION.test(name) && newer(current, name))
         .sort((a, b) => (newer(a, b) ? 1 : -1))
-        .at(-1)
-    : undefined;
+    : [];
   const hourAgo = Date.now() - 3_600_000;
   for (const name of entries) {
     const path = join(root, name);
     const stale = VERSION.test(name)
-      ? name !== current && name !== previous
+      ? older.slice(0, -1).includes(name)
       : name.startsWith(".") && statSync(path).mtimeMs < hourAgo;
     if (stale) rmSync(path, { recursive: true, force: true });
   }
