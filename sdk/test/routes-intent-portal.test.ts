@@ -191,7 +191,7 @@ describe("the intents a program opens, as compiled", () => {
     for (const body of bound.bodies) expect(body.captures).toEqual([]);
   });
 
-  it("an `await` of the intent makes the statements after it its body, byte for byte", () => {
+  it.skip("an `await` of the intent makes the statements after it its body, byte for byte: await dropped from the compiler (v12 #554)", () => {
     const opened = `Arbitrum.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
     const body = "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);";
     expectSame(
@@ -200,7 +200,7 @@ describe("the intents a program opens, as compiled", () => {
     );
   });
 
-  it("a `try` around awaited hops is each body's `.catch`, byte for byte, two and three deep", () => {
+  it.skip("a `try` around awaited hops is each body's `.catch`, byte for byte, two and three deep: await dropped from the compiler (v12 #554)", () => {
     const hop = (chain: string) =>
       `${chain}.hop({ send: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
     const pay = "USDC.transfer(RECIPIENT, 1000000);";
@@ -892,7 +892,7 @@ describe("what the lowering refuses", () => {
   });
 
   it.each([
-    [`${hop(whole)};`, /has no body\. Finish it with `\.then\(\(\) => \{ … \}\)`, or `await` it/],
+    [`${hop(whole)};`, /has no body\. Finish it with `\.then\(\(\) => \{ … \}\)`: the code/],
     [`Arbitrum.hop()${then};`, /`hop\(\.\.\.\)` takes one object/],
     [`Arbitrum.hop([${item}])${then};`, /`hop\(\.\.\.\)` takes one object/],
     [`${hop(`receive: ${item}, refundee: ${CREATOR}`)}${then};`, /a hop needs a `send`/],

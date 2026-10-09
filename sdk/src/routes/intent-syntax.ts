@@ -1,7 +1,7 @@
 /**
- * The intent a program opens, `await Chain.hop({ send, receive, refundee })` or
- * `Chain.hop({ … }).then(() => { … })`, as data: the fields its one config object takes, what each
- * holds and the per-level option it overrides, and the steps on what `hop` returns.
+ * The intent a program opens, `Chain.hop({ send, receive, refundee }).then(() => { … })`, as data:
+ * the fields its one config object takes, what each holds and the per-level option it overrides,
+ * and the steps on what `hop` returns.
  *
  * One table, read by everything on the host that has to agree on the syntax: the generator that
  * writes the editor's declarations (`scripts/gen-source-globals.mjs`, `SauceHopConfig` and the
@@ -121,14 +121,12 @@ export type HopFieldName = keyof typeof HOP_FIELDS;
 /** What `hop({ … })` returns, and what `.then` returns, by their types in the declarations. */
 export const HOP_STAGES = {
   SauceHop: {
-    doc:
-      "A hop waiting for its body: `await` it, and the code after it is the body, or give the body " +
-      "to `.then(...)`.",
+    doc: "A hop waiting for its body: give the body to `.then(...)`.",
     steps: {
       then: {
         doc:
           "The body: runs on the destination with what was received. It is never invoked here: it " +
-          "is compiled for that chain. As in JavaScript, `await x; rest` is `x.then(() => { rest })`.",
+          "is compiled for that chain.",
         params: [{ name: "body", ts: "() => void" }],
         returns: "SauceHopOpened",
       },

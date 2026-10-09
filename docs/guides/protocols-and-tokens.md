@@ -137,8 +137,8 @@ compiles it for both.
   still resolve.
 - A name the registry does not know on any chain is the compiler's unknown name, not zero, so a typo
   cannot quietly drop a branch. A program that declares the name owns it.
-- Inside an intent to another chain, after `await Arbitrum.hop({ … })`, it is decided for that
-  chain.
+- Inside an intent to another chain, in `Arbitrum.hop({ … }).then(() => { … })`'s body, it is
+  decided for that chain.
 
 In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
 token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is a type error.

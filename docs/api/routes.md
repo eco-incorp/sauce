@@ -157,8 +157,8 @@ After the fill, the same module builds the rest of an intent's life, each as a r
 
 ## Nested intents
 
-A nested intent is written in the program: `await Chain.hop({ … })`, or
-`Chain.hop({ … }).then(() => { ... })`, in a body opens an intent when that body runs, at any depth.
+A nested intent is written in the program: `Chain.hop({ … }).then(() => { ... })` in a body opens
+an intent when that body runs, at any depth.
 In a typed closure the chain is the imported export, whose `hop` takes SauceScript values beside the
 host's (`SauceHopConfig`) — see [nested intents](../guides/nested-intents.md) and
 [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program). Its fields set

@@ -56,8 +56,8 @@ export interface SauceIntentNative {
 
 /**
  * What a chain's `hop` takes:
- * `await Base.hop({ send: { token, amount }, receive: { token, amount }, refundee })`. Each field
- * left out but `send` and `refundee` has its default.
+ * `Base.hop({ send: { token, amount }, receive: { token, amount }, refundee })`. Each field left
+ * out but `send` and `refundee` has its default.
  */
 export interface SauceHopConfig {
   /**
@@ -115,14 +115,11 @@ export interface SauceHopConfig {
   readonly after?: readonly (() => unknown)[];
 }
 
-/**
- * A hop waiting for its body: `await` it, and the code after it is the body, or give the body to
- * `.then(...)`.
- */
+/** A hop waiting for its body: give the body to `.then(...)`. */
 export interface SauceHop {
   /**
    * The body: runs on the destination with what was received. It is never invoked here: it is
-   * compiled for that chain. As in JavaScript, `await x; rest` is `x.then(() => { rest })`.
+   * compiled for that chain.
    */
   then(body: () => void): SauceHopOpened;
 }
@@ -139,8 +136,8 @@ export interface SauceHopOpened {
 
 /**
  * A chain in compiled source: `hop` opens an intent whose body runs there,
- * `await Ethereum.hop({ send: { token, amount }, refundee })`, and `Portal` is its eco-routes
- * Portal contract. The one definition of that SauceScript: a `.sauce.ts` file's chains
+ * `Ethereum.hop({ send: { token, amount }, refundee }).then(() => { … })`, and `Portal` is
+ * its eco-routes Portal contract. The one definition of that SauceScript: a `.sauce.ts` file's chains
  * (`sauce-script/index.d.ts`'s `SauceChain`) extend it. A package chain export carries the host's
  * `hop` instead (`host-intent.ts#ChainHop`), which takes these values as well as its own, so a
  * typed closure inside `Base.hop({ … }).then(() => { ... })` opens one with the chain it imports.

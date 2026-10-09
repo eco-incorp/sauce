@@ -6,20 +6,19 @@ An Eco intent is an offer: _run this program on that chain, and the reward escro
 yours_. A program opens one by hopping to that chain:
 
 ```js
-await Base.hop({
+Base.hop({
   send: { token: USDC, amount: 1010000 },
   receive: { token: USDC, amount: 1000000 },
   refundee: refundTo,
+}).then(() => {
+  USDC.transfer(recipient, 1000000); // runs on Base
 });
-USDC.transfer(recipient, 1000000); // runs on Base
 ```
 
-The chain you hop to is the **destination**, where the body runs: the code after the `await`, and
-therefore which compiler target, token addresses and protocol deployments apply. `send` is
+The chain you hop to is the **destination**, where the body runs: the code in `.then(() => { … })`,
+and therefore which compiler target, token addresses and protocol deployments apply. `send` is
 escrowed on the **source**, the chain the program runs on, until someone earns it; `receive` names
-what a solver delivers on the destination for the body to use. As in JavaScript, `await x; rest` is
-`x.then(() => { rest })`, so `Base.hop({ … }).then(() => { … })` is the same intent with its body
-written out.
+what a solver delivers on the destination for the body to use.
 
 TypeScript builds one with the same object, naming the source as well. Every chain is a named
 export; import the ones you use.
@@ -74,7 +73,7 @@ A hop's one object sets both sides of the intent, each field at most once and in
 | `fee`            | The destination Kitchen's fee the body's cook pays                             | See [the fee](#where-each-value-comes-from)                |
 | `deadline`       | The last second the intent may be filled                                       | Five minutes after the intent opens                        |
 | `salt`           | The route's salt                                                               | 32 random bytes, picked per compile                        |
-| `.then(body)`    | The body: a closure, or the statements of one                                  | In a program, what follows `await`                         |
+| `.then(body)`    | The body: a closure, or the statements of one                                  | Required: a hop with no body is refused                    |
 
 `send` and `receive` each take one item or a list of them.
 
@@ -211,27 +210,6 @@ _while_ it is running, which is what you want when the amount is the output of t
 ```js
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  await Arbitrum.hop({
-    send: { token: USDC, amount },
-    receive: { token: USDC, amount },
-    refundee: refundTo,
-  });
-  USDC.transfer(recipient, amount);
-}
-```
-
-The same object as the TypeScript builder, written in the program, where the chain it runs on is
-the source. No Portal, prover, selector, encoding or approval appears, because none of them is a
-decision you are making. The fields are the same, and so are their
-[defaults](../reference/intent-defaults.md); a field's value may be one the program computes, such
-as `deadline: ctx.timestamp() + 3600`.
-
-Everything after the `await` is the body, compiled for Arbitrum. Written without `await`, the body
-is the argument of `.then(...)`, and this is the same program:
-
-```js
-function main(recipient: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
   Arbitrum.hop({
     send: { token: USDC, amount },
     receive: { token: USDC, amount },
@@ -242,8 +220,16 @@ function main(recipient: Address, refundTo: Address) {
 }
 ```
 
-A hop in a body is the next hop, from that body's chain: that is how intents are nested, and a
-cascade reads as one `await` after another ([nested intents](nested-intents.md)).
+The same object as the TypeScript builder, written in the program, where the chain it runs on is
+the source. No Portal, prover, selector, encoding or approval appears, because none of them is a
+decision you are making. The fields are the same, and so are their
+[defaults](../reference/intent-defaults.md); a field's value may be one the program computes, such
+as `deadline: ctx.timestamp() + 3600`.
+
+The argument of `.then(...)` is the body, compiled for Arbitrum.
+
+A hop in a body is the next hop, from that body's chain: that is how intents are nested
+([nested intents](nested-intents.md)).
 
 ### The body is a Sauce program
 
@@ -303,13 +289,14 @@ function fee(amount: Uint256): Uint256 {
 
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  await Arbitrum.hop({
+  Arbitrum.hop({
     send: { token: USDC, amount },
     receive: { token: USDC, amount },
     refundee: refundTo,
+  }).then(() => {
+    USDC.transfer(recipient, amount - fee(amount));
+    transfer(USDC, refundTo, fee(amount));
   });
-  USDC.transfer(recipient, amount - fee(amount));
-  transfer(USDC, refundTo, fee(amount));
 }
 ```
 
@@ -331,14 +318,14 @@ of hops, each paying the next what it was delivered, is written; see
 
 ### Names resolve per chain
 
-Two chains meet in `await Arbitrum.hop({ send, receive, refundee })`, and each part belongs to
-one of them. A token symbol resolves on the chain where its part runs:
+Two chains meet in `Arbitrum.hop({ send, receive, refundee }).then(() => { … })`, and each part
+belongs to one of them. A token symbol resolves on the chain where its part runs:
 
-| Part                                                     | Computed on                   | `USDC` is                              |
-| -------------------------------------------------------- | ----------------------------- | -------------------------------------- |
-| The body, what follows `await` or `.then(() => { ... })` | Arbitrum, the destination     | Arbitrum's                             |
-| `receive`, what is delivered                             | The chain the program runs on | Arbitrum's: a token is looked up again |
-| `send` and every other field                             | The chain the program runs on | That chain's                           |
+| Part                             | Computed on                   | `USDC` is                              |
+| -------------------------------- | ----------------------------- | -------------------------------------- |
+| The body, `.then(() => { ... })` | Arbitrum, the destination     | Arbitrum's                             |
+| `receive`, what is delivered     | The chain the program runs on | Arbitrum's: a token is looked up again |
+| `send` and every other field     | The chain the program runs on | That chain's                           |
 
 The reward belongs to the enclosing chain because the program escrows it there: it pays the reward
 token into the intent's vault on that chain's Portal and publishes the intent in the same
@@ -373,41 +360,40 @@ therefore leaves nothing behind, and a measurement below its floor cannot strand
 
 ### A handler for the body
 
-On an EVM destination, a `try` around the hop handles its body. When the body reverts, everything
-it did is undone, the handler runs in its place, and the fill still succeeds. Here a supply that
-fails hands the delivered USDC to the beneficiary instead:
+On an EVM destination, `.catch(...)` after `.then(...)` handles the body. When the body reverts,
+everything it did is undone, the handler runs in its place, and the fill still succeeds. Here a
+supply that fails hands the delivered USDC to the beneficiary instead:
 
 ```js
 function main(beneficiary: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  try {
-    await Ethereum.hop({
-      send: { token: USDC, amount },
-      receive: { token: USDC, amount },
-      refundee: refundTo,
+  Ethereum.hop({
+    send: { token: USDC, amount },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  })
+    .then(() => {
+      USDC.approve(AaveV3.Pool, amount);
+      AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+    })
+    .catch((e) => {
+      USDC.transfer(beneficiary, amount);
     });
-    USDC.approve(AaveV3.Pool, amount);
-    AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
-  } catch (e) {
-    USDC.transfer(beneficiary, amount);
-  }
 }
 ```
 
-Without `await`, the handler is `.catch(...)` after `.then(...)`:
-`Ethereum.hop({ … }).then(() => { … }).catch((e) => { … })`. `e` is what the body reverted with, as
-`bytes`: at most its first 256 bytes, the error's selector first. Write `.catch(() => { ... })` when
-the handler does not read it. A handled body is always a program, so its cook pays the
-destination's Kitchen fee.
+`e` is what the body reverted with, as `bytes`: at most its first 256 bytes, the error's selector
+first. Write `.catch(() => { ... })` when the handler does not read it. A handled body is always a
+program, so its cook pays the destination's Kitchen fee.
 
 ### Calls around the body
 
 A hop's `before` and `after` are calls the destination Portal's Executor makes before the delivered
 tokens move into the Pot and after the body's cook. They run on the DESTINATION, as the route's own
-calls around the cook, never inside the body's program: the hop's `.catch` (or the `try` around an
-`await`) covers the body only, and a hook that reverts reverts the whole fill. Use one for a call that must come from the
-Executor rather than the Pot, for calldata built elsewhere, or for a call a solver reads straight off
-the route. Here the Executor pays the referrer a tip in the native coin after the body has run:
+calls around the cook, never inside the body's program: the hop's `.catch` covers the body only, and
+a hook that reverts reverts the whole fill. Use one for a call that must come from the Executor
+rather than the Pot, for calldata built elsewhere, or for a call a solver reads straight off the
+route. Here the Executor pays the referrer a tip in the native coin after the body has run:
 
 ```js
 function main(
@@ -418,14 +404,15 @@ function main(
   reward: Uint256,
   refundTo: Address,
 ) {
-  await Ethereum.hop({
+  Ethereum.hop({
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount },
     refundee: refundTo,
     after: [() => evm.call(referrer, tip, hex``)],
+  }).then(() => {
+    USDC.approve(AaveV3.Pool, amount);
+    AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
   });
-  USDC.approve(AaveV3.Pool, amount);
-  AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
 }
 ```
 
@@ -449,65 +436,12 @@ deliveries, no approve resets. What the Executor holds when a hook runs is up to
   `after` cannot spend what the body holds there. The native an `evm.call` hook sends is the one
   thing added: every hook's value is summed with the cook's fee into the route's `nativeAmount`,
   which the solver brings, as it does the tip above.
-- **A hook is outside the body's `try`.** The handler covers the body's program only. A hook that
+- **A hook is outside the hop's `.catch`.** The handler covers the body's program only. A hook that
   reverts reverts the whole fill, and the handler does not run in its place.
 - **Its arguments are fixed when the intent is published.** A literal, a compile-time value, or a
   variable of the program opening the hop, written in where the hop opens. Nothing the body
   computes reaches a hook. A computed value fills a whole word only: an `address`, a `bytes32`, or
   an integer of 160 bits or more; a narrower argument and an `evm.call`'s calldata are literals.
-
-### Where an `await` stands
-
-No `async` is needed: the `await` is a statement of `main`'s body, and everything after it is the
-body of the intent, compiled for the destination. Names after it resolve on the destination. Values
-from before it are captured, and the body cannot assign them, nor declare a name again: `main` is
-still one scope. A `return` after it is the body's. An `await` in the body opens the next hop from
-the destination, so a cascade reads top to bottom.
-
-An `await` stands directly in `main`'s body, a script's top level, a body, a `try` block there, or a
-branch of an `if` there that ends its body: `if (change > 0) { await Ethereum.hop({ … }); … }`,
-where the rest of the branch is that hop's body. Nothing may follow such an `if`, since it would run
-wherever the branch taken continued. An `await` cannot be inside a loop or another block, in another
-function, or used as a value; each of these is a compile error that names it. Start the hop on the
-`await`'s line: in `main` or a body, as in JavaScript outside an `async` function, `await` followed
-by `(`, `[` or a line break reads as a name, and is refused.
-
-A `try` around awaited hops handles each of their bodies, and what runs before them:
-
-```js
-function main(recipient: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
-  const delivered = amount - amount / 1000;
-  try {
-    await Ethereum.hop({
-      send: { token: USDC, amount },
-      receive: { token: USDC, amount: delivered },
-      refundee: refundTo,
-    });
-    USDC.approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(USDC, delivered, recipient, 0);
-  } catch (e) {
-    if (chainId == Ethereum) {
-      USDC.transfer(refundTo, delivered);
-    } else {
-      USDC.transfer(refundTo, amount);
-    }
-  }
-}
-```
-
-`try { S1; await a; S2 } catch (e) { H }` is
-`try { S1; a.then(() => { S2 }).catch((e) => { H }); } catch (e) { H }`, at every `await` in it:
-the handler runs on whichever chain failed, and resolves its names there. It is compiled once per
-chain, and `chainId == Ethereum` is decided as it is, so each chain keeps only its own branch: a
-supply that fails on Ethereum returns what this intent delivered there, from the Pot every intent to
-Ethereum shares; a failure on Base, where the intent opens, returns `amount` from the program's own
-Pot. `chainId` tells chains apart, not hops: a cascade that visits a chain twice runs that chain's
-branch on both visits, so the branch must be right for each of them, such as the smaller amount.
-Nothing may follow such a `try`, and its handler cannot `await`.
-
-In an editor, an `await` at a script's top level is plain TypeScript. One in `main` needs the
-SauceScript plugin that `sauce init` configures, which accepts it where the compiler does.
 
 ### Where each value comes from
 
@@ -628,8 +562,8 @@ rather than the vault's balance. `allowPartial` applies only here.
 Each of these is a compile error naming the construct, never a silently different intent:
 
 - An identifier that is neither a compile-time value nor a variable of the enclosing program.
-- A hop with no body (no `.then(() => { ... })` and nothing after an `await`), or a step after the
-  wrong one, such as `.catch(...)` before `.then(...)`.
+- A hop with no body (no `.then(() => { ... })`), or a step after the wrong one, such as
+  `.catch(...)` before `.then(...)`.
 - A hop with no `send`, an empty `send: []`, an item missing `token` or `amount`, or a
   `{ native }` item in `receive`.
 - A missing refundee: every intent names its own. A missing fee for a program body that nothing
