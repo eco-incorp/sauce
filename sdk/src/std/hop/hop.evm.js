@@ -116,6 +116,9 @@ export class Level {
 //   prover          the prover on this chain
 //   salt            the route's salt, used as written
 //   fee             the destination Kitchen's fee the body's cook pays, in wei
+//   before, after   calls the destination Portal's Executor makes before the delivered tokens
+//                   move into the Pot, and after the body: a closure, or a list of closures, each
+//                   one external call, made exactly as written
 //
 // The SDK's module for the chain makes one from each chain's `hop(config)`.
 export class Intent {
@@ -136,6 +139,8 @@ export class Intent {
       prover: true,
       salt: true,
       fee: true,
+      before: true,
+      after: true,
     };
     // A field under its former name says what it is called now.
     const renamed = { reward: "what the source sends is `send`" };
@@ -147,7 +152,7 @@ export class Intent {
         throw new Error(
           "a hop takes no `" +
             key +
-            "`: its fields are send, receive, refundee, deadline, rewardDeadline, prover, salt and fee",
+            "`: its fields are send, receive, refundee, deadline, rewardDeadline, prover, salt, fee, before and after",
         );
       }
     }
@@ -157,7 +162,7 @@ export class Intent {
     // 1 after `hop`, 2 after `then`, 3 after `catch`.
     this._stage = 1;
     // Raw route calls the Executor makes before the delivered tokens move into the Pot, and after
-    // the cook, as written. None yet: a field that adds them is a later one.
+    // the cook, as written: the hooks' (`before`, `after`).
     this._before = Lists.empty();
     this._after = Lists.empty();
   }
@@ -261,6 +266,12 @@ export class Intent {
       );
     }
     const body = program(this._run(), this._destination.chainId);
+    // The hooks: each closure's one call, read as data in the destination's scope — its target,
+    // calldata and value, a value the program computes written in where the intent opens — and
+    // made by the Executor exactly as written. Nothing is added for them: no delivery, no reset of
+    // an allowance. What the Executor holds when one runs is the intent's to arrange.
+    this._hooks("before", config.before, this._before);
+    this._hooks("after", config.after, this._after);
     const calls = new Items();
     for (const call of this._before) calls.add(call);
     for (const delivered of deliveryTokens.list) {
@@ -299,7 +310,7 @@ export class Intent {
         salt: config.salt === undefined ? this._defaultSalt() : config.salt,
         deadline: routeDeadline,
         portal: this._destination.portal,
-        nativeAmount: fee,
+        nativeAmount: this._native(fee),
         tokens: deliveryTokens.value(),
         calls: calls.value(),
       },
@@ -358,6 +369,30 @@ export class Intent {
         handler(e);
       }
     };
+  }
+
+  // A hook's closure, or its list of closures, each the one call it makes, in the order written.
+  _hooks(field, given, calls) {
+    if (given === undefined) return;
+    if (typeof given === "function") {
+      calls.push(callOf(given, this._destination.chainId));
+      return;
+    }
+    if (!Array.isArray(given)) {
+      throw new Error(`\`${field}\` is a closure or a list of closures, each one external call`);
+    }
+    for (const hook of given) calls.push(callOf(hook, this._destination.chainId));
+  }
+
+  // The native the solver brings, which the Portal hands the Executor to pay the route's calls:
+  // the body's cook its fee, and each hook what it sends.
+  _native(fee) {
+    // A hop with no hook is the program it was before hooks: its native is the fee.
+    if (this._before.length == 0 && this._after.length == 0) return fee;
+    let total = fee;
+    for (const call of this._before) total = total + call.value;
+    for (const call of this._after) total = total + call.value;
+    return total;
   }
 
   // A salt the intent was not given: the compile's, mixed with how many intents this transaction

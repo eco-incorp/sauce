@@ -41,6 +41,8 @@ export interface HopStage {
 
 const SEND_ITEM = "SauceIntentTokenAmount | SauceIntentNative";
 const DELIVERY_ITEM = "SauceIntentTokenAmount";
+/** A hook: a closure whose body is one external call, read as data, never run here. */
+const HOOK = "() => unknown";
 
 export const HOP_FIELDS = {
   send: {
@@ -94,6 +96,22 @@ export const HOP_FIELDS = {
     doc:
       "The destination Kitchen's fee the body's cook pays, in wei. Defaults to what the compile is " +
       "given for that destination.",
+  },
+  before: {
+    ts: `${HOOK} | readonly (${HOOK})[]`,
+    doc:
+      "Calls the destination Portal's Executor makes before the delivered tokens move into the " +
+      "Pot: a closure, or a list of closures, each one external call (a contract's method, or " +
+      "`evm.call(target, value, data)`), made exactly as written. Low-level: " +
+      "nothing is added for them, no delivery and no approve reset. A hook that reverts reverts " +
+      "the fill. EVM destinations only.",
+  },
+  after: {
+    ts: `${HOOK} | readonly (${HOOK})[]`,
+    doc:
+      "Calls the destination Portal's Executor makes after the body has run, as `before`'s are: " +
+      "a closure, or a list of closures, each one external call, made exactly as written. What the body holds in its Pot " +
+      "is not the Executor's to spend.",
   },
 } as const satisfies Readonly<Record<string, HopField>>;
 
