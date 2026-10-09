@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { encodeAbiParameters, keccak256, toFunctionSelector, toHex } from "viem";
 
 import { deployments } from "../../../src/protocols/space-and-time/addresses.js";
+import { ERC1271_HANDLER } from "../../../src/routes/erc1271.js";
 import { packageInstall } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 
@@ -104,12 +105,8 @@ describe("what the library writes out by hand", () => {
         readOnly: false,
         requires: ["Boundless.Market"],
       },
-      {
-        selector: "isValidSignature(bytes32,bytes)",
-        program: "@sauce/async/erc1271.handler.js",
-        readOnly: true,
-        requires: ["Boundless.Market"],
-      },
+      // The core's one ERC-1271 handler, as the core declares it, where Boundless's market is.
+      { ...ERC1271_HANDLER, requires: ["Boundless.Market"] },
     ]);
     expect(toFunctionSelector(PROOF_CALLBACK)).toBe("0xa12da43f");
   });

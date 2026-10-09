@@ -49,6 +49,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BoundlessMarketABI } from "../../../src/protocols/boundless/abis.js";
+import { approvedHashSlot } from "../../../src/routes/erc1271.js";
 import { gateAnchors } from "../../evm/gated-engine.js";
 import {
   describeOnRouter,
@@ -666,6 +667,8 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
 
   it("hashes its request as the market's EIP-712 does: the Pot approves exactly that hash", async () => {
     const request = await ask(0n);
+    // Recorded where the core's ERC-1271 handler reads an approval.
+    expect(await chain.slot(approvedHashSlot(hashTypedData(typedRequest(request))))).toBe(1n);
     expect(
       await chain.publicClient.readContract({
         address: chain.stack.pot,
