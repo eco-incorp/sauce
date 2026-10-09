@@ -1225,22 +1225,30 @@ on the released v12-evm 1.2.0 a `catch (e)` that READS `e` loses its work.
 `@sauce/async`): `Base.remote(body, { via, gas, replyGas })`, a method every chain's module gives
 every other EVM chain's name (`chain-module.ts`, with both chains' `Link`s from
 `routes/remote-link.ts`: each bridge's contract and its id for the chain, from the registry's
-`hyperlane`, `layerzero`, `metalayer`, `polymer` and their `HYPERLANE_DOMAIN`/`LAYERZERO_EID`/
-`METALAYER_DOMAIN` tables). A message is `abi.encode(program, input)` sent to `ctx.self()` on the
-other chain: a Private Pot has one address on every chain its owner mints it on. A one-way message
-is `program(body)`; with `.then`/`.catch` it is a `Request` whose continuation (compiled for this
-chain) TRAVELS as the input of a program that runs the body there and sends the continuation back
-with `abi.encode(ok, data)`, so nothing is parked. Each leg is quoted on chain when sent and paid
-from the sending Pot. Its handlers (`hyperlane.handler.js` etc., one per bridge callback, LayerZero's
-`allowInitializePath`/`nextNonce` read-only) check the caller is the bridge's registry contract and
-the origin sender is the Pot; Polymer's `deliver(bytes proof)` keys each proven log by its place in
-ERC-7201 `sauce.storage.Remote`. A string a method binds to a `const` is a RUN-TIME value, so the
-bridge name is passed as an argument, never held in a `const`. `test/std/remote/evm.e2e.test.ts`
-runs every bridge on two anvils (chain ids 1 and 8453) against each bridge's OWN code planted at
-its registry address with its storage (`bridges.ts`, fixtures in `test/evm/fixtures/remote/`):
-Hyperlane's Mailbox, LayerZero's EndpointV2 with its SimpleMessageLib, Metalayer's router behind
-its proxy, and Polymer's deployed CrossL2ProverV2 runtime with its sequencer rewritten to a test
-key; gated like `@sauce/async`'s suite.
+`hyperlane`, `layerzero`, `metalayer`, `polymer` and their
+`HYPERLANE_DOMAIN`/`LAYERZERO_EID`/`METALAYER_DOMAIN` tables). A message is sent to `ctx.self()` on
+the other chain (a Private Pot has one address on every chain its owner mints it on): `abi.encode(0,
+program, input)` to run, or `abi.encode(1, key, stored, program, value, ok)`, an answer the handler
+settles with `@sauce/async`'s `settleCarried`. A one-way message is `program(body)`. A round trip is
+a `Request` with `carries: true`: its continuation, compiled for this chain, travels as the input of
+a program that runs the body there and sends the answer back (nothing stored for a plain `.then`; a
+deadline or a combinator keeps the promise in the table). When something handles a rejection (a
+`.catch`, `stored`), the body runs in the FLAG form (`evm.delegate(…).catch((e) => { ok = 0; value =
+e; })`, its output kept in transient storage, the answer sent after), so its revert comes back as
+the rejection; a plain `.then` runs it uncaught, so a revert reverts the delivery and the bridge
+retries. A `Remote` is a combinator's child (`_join`, `_decoder`). Each leg is quoted on chain when
+sent and paid from the sending Pot. Its handlers (`hyperlane.handler.js` etc., one per bridge
+callback, each with the core's `requires`; LayerZero's `allowInitializePath`/`nextNonce` read-only)
+check the caller is the bridge's registry contract and the origin sender is the Pot; Polymer's
+`deliver(bytes proof)` keys each proven log by its place in ERC-7201 `sauce.storage.Remote`. A
+string a method binds to a `const` is a RUN-TIME value, so the bridge name is passed as an argument,
+never held in a `const`. `test/std/remote/evm.e2e.test.ts` runs every bridge on three anvils
+(Ethereum, Base, Optimism) against each bridge's OWN code planted at its registry address with its
+storage (`bridges.ts`, fixtures in `test/evm/fixtures/remote/`): Hyperlane's Mailbox, LayerZero's
+EndpointV2 with its SimpleMessageLib, Metalayer's router behind its proxy, and Polymer's deployed
+CrossL2ProverV2 runtime with its sequencer rewritten to a test key. It is gated like
+`@sauce/async`'s suite, and its round trips settle through a catch that reads the revert, so they
+need an engine built from the compiler's tree.
 
 ## Agent skills
 

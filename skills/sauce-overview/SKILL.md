@@ -378,9 +378,10 @@ writing a package of the family.
 ### `sauce-remote`
 
 Code run on your own Pot on another chain: `Base.remote(() => { … })` sends a program to the same
-Pot there over a bridge (Hyperlane, LayerZero, Metalayer or Polymer), `.then` brings its answer
-back, `await` and `.catch` work as with any request; which bridge, what each leg costs and which Pot
-pays, the handlers both Pots install, and pairing a message with an intent that brings the money.
+Pot there over a bridge (Hyperlane, LayerZero, Metalayer or Polymer); a round trip is a promise,
+`.then` back with its answer and `.catch` with its revert, and `Promise.all` or `race` take
+messages to several chains; which bridge, what each leg costs and which Pot pays, the handlers both
+Pots install, and pairing a message with an intent that brings the money.
 
 - **Holds** compiled programs: a body sent one way, a round trip with its answer, a bridge named,
   and a message that waits for an intent's money.

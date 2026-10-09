@@ -141,3 +141,90 @@ to three words the body captured sit beside it, and more go into code. The body'
 once per Pot, by CREATE2 at an address its bytes decide, and shared by every request that compiles
 to it. Settling clears the word. A carried `.then` stores nothing. A combinator parks a word of its
 own and one per child, and keeps each child's value until it is decided.
+
+## Messages across chains: `@sauce/remote`
+
+A Private Pot has the same address on every chain its owner mints it on. `@sauce/remote` sends a
+program to that same Pot on another chain, over a bridge, and the Pot there runs it when the bridge
+delivers it, with the storage and balances it holds there. With a `.then`, the answer comes back,
+and the message is a promise like any other:
+
+```js
+// Compiled for Ethereum.
+function main(bump: Uint256) {
+  Base.remote(() => {
+    return USDC.balanceOf(self); // on Base, as this same Pot: Base's USDC
+  })
+    .then((result) => {
+      // Back on Ethereum: the bytes the body returned, one word here.
+      const [balance] = abi.decode(result, ["Uint256"]);
+      evm.sstore(2, balance + bump);
+    })
+    .catch((e) => {
+      // Back on Ethereum: the body reverted on Base, everything it did undone there.
+      evm.sstore(3, crypto.keccak256(e));
+    });
+}
+```
+
+`<Chain>.remote(body, options)` is a method of every chain's name. The body is compiled for that
+chain, with its names, and reads the program around it as it was when the message was sent.
+
+- **One way.** With no `.then` or `.catch`, nothing comes back. A body that reverts reverts the
+  delivery, and the bridge can deliver the message again later, when it may succeed.
+- **A round trip.** The body runs there in a frame of its own. What it returns is sent back over
+  the same bridge and fulfils the promise here; when something here handles a rejection (a
+  `.catch`, a deadline, a combinator), what it reverted with is sent back instead and rejects it.
+  A plain `.then` with no `.catch` runs the body uncaught, so a revert there is retried.
+- **Combinators and deadlines.** A remote message is a promise among others:
+  `Promise.all([Base.remote(…), Optimism.remote(…)])` runs its body once both chains answered, each
+  answer in the order listed, and `Promise.race` takes the first, the later answer delivered and
+  ignored. `.within(seconds)` gives it a deadline after which anyone may `expire` it, and an answer
+  that comes later is ignored.
+- **The bridge.** A message takes the first of Hyperlane, LayerZero, Metalayer and Polymer that both
+  chains have, or the one `via` names: `Base.remote(body, { via: "layerzero", gas: 400000 })`. `gas`
+  is what the destination's handler is given, `replyGas` the same for the way back. Hyperlane,
+  LayerZero and Metalayer relay a paid message on their own. Polymer relays nothing: the sending Pot
+  emits a log, and someone fetches its proof from Polymer's prove API and calls the destination
+  Pot's `deliver(bytes proof)`. Each bridge's deployments are in
+  [Protocols](../reference/protocols.md).
+- **What it costs, and where.** Each leg is paid on the chain it leaves, from that chain's Pot: the
+  bridge's fee, which the program reads from the bridge as it sends, and on the receiving side the
+  Kitchen's fee for each message the handler runs. Fund both Pots before you send.
+
+Install `@sauce/remote`'s handlers on the Pot on every chain it sends to or hears from:
+`sauce run @sauce/remote --chain base --wallet <name>`. A chain installs a handler for each bridge
+it has:
+
+| Bridge    | The Pot answers                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------- |
+| Hyperlane | `handle(uint32,bytes32,bytes)`, from the chain's Mailbox                                             |
+| Metalayer | `handle(uint32,bytes32,bytes,(uint32,address,bytes)[],bytes[])`, from the chain's MetalayerRouter    |
+| LayerZero | `lzReceive(...)`, from the chain's EndpointV2, and, read-only, `allowInitializePath` and `nextNonce` |
+| Polymer   | `deliver(bytes proof)`, from anyone                                                                  |
+
+Each handler checks that its caller is the bridge's contract on that chain and that the message's
+sender on its origin chain is this same Pot before it runs anything. A Polymer proof is checked by
+Polymer's prover on that chain, must be of a log this Pot emitted for this chain, and runs once.
+
+An intent moves money to another chain; a remote message does the stateful part on the Pot that
+owns it. They arrive in no set order, so a one-way message's body checks what it needs and reverts
+until it is there:
+
+```js
+function main(amount: Uint256, owner: Address) {
+  const pot = ctx.self(); // this Pot's address, the same on Base
+  Base.hop({
+    send: { token: USDC, amount: amount + amount / 100 },
+    receive: { token: USDC, amount },
+    refundee: owner,
+  }).then(() => {
+    USDC.transfer(pot, amount); // on Base, from the intent's Pot to this one
+  });
+  Base.remote(() => {
+    require(USDC.balanceOf(self) >= amount, "not arrived yet");
+    USDC.approve(AaveV3.Pool, amount);
+    AaveV3.Pool.supply(USDC, amount, self, 0);
+  });
+}
+```

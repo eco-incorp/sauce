@@ -39,8 +39,6 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
   it measured.
 - [Waiting for a callback](guides/async.md): ask a protocol now and continue when it calls the Pot
   back, with `.then` and the handlers a package installs on a Private Pot.
-- [Remote messages](guides/remote.md): run a program on the same Pot on another chain, over a
-  bridge, and get its answer back.
 - [Compiling programs](guides/compiling.md): compile a standalone program and pass it runtime
   arguments.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several

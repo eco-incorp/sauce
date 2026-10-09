@@ -1,6 +1,6 @@
 ---
 name: sauce-remote
-description: Remote messages written in Sauce — a program that runs code on your own Private Pot on another chain, Base.remote(() => { … }) in main, the body compiled for that chain and run there as the same Pot when a bridge delivers it; .then((result) => { … }) runs back here with what the body returned, await runs the rest of main back here, .catch((e) => { … }) with what it reverted with; the bridge (Hyperlane, LayerZero, Metalayer or Polymer, the first both chains have, or via), the gas each leg gives the handler; what each leg costs and which Pot pays it; the handlers both Pots install with sauce run @sauce/remote, what each checks, and what is refused; Polymer proofs anyone submits; a message that waits for money an intent brings. Use when a program should run code on the same Pot on another chain, read or change its state there, get an answer back from another chain, or when the user mentions remote messages, cross-chain calls or messaging, Hyperlane, LayerZero, Metalayer or Polymer.
+description: Remote messages written in Sauce — a program that runs code on your own Private Pot on another chain, Base.remote(() => { … }) in main, the body compiled for that chain and run there as the same Pot when a bridge delivers it; a round trip as a promise, .then((result) => { … }) back here with what the body returned, .catch((e) => { … }) with what it reverted with there, await, .within, Promise.all and race over several chains; the bridge (Hyperlane, LayerZero, Metalayer or Polymer, the first both chains have, or via) and each leg's gas; which Pot pays what; the handlers both Pots install with sauce run @sauce/remote and what each checks; Polymer proofs anyone submits; a message that waits for money an intent brings. Use when a program should run code on the same Pot on another chain, read or change its state there, get an answer back from one or several chains, or when the user mentions remote messages, cross-chain calls or messaging, Hyperlane, LayerZero, Metalayer or Polymer.
 ---
 
 # Remote messages in Sauce
@@ -31,33 +31,74 @@ assign it. Every input is one of `main`'s typed parameters, passed with `--args`
 
 ## Get the answer back
 
+A round trip is a **promise** (`sauce-async`): it settles once, fulfilled with what the body
+returned or rejected with what it reverted with.
+
 ```sauce chain=ethereum
 function main(bump: Uint256) {
   Base.remote(() => {
     return USDC.balanceOf(self); // Base's USDC, held by this Pot on Base
-  }).then((result) => {
-    // Back on Ethereum: what the body returned, as the bytes its program answered.
-    const [balance] = abi.decode(result, ["Uint256"]);
-    evm.sstore(crypto.keccak256("base.usdc"), balance + bump);
-  });
+  })
+    .then((result) => {
+      // Back on Ethereum: what the body returned, as the bytes its program answered.
+      const [balance] = abi.decode(result, ["Uint256"]);
+      evm.sstore(crypto.keccak256("base.usdc"), balance + bump);
+    })
+    .catch((e) => {
+      // Back on Ethereum: the body reverted on Base, and everything it did there is undone.
+      evm.sstore(crypto.keccak256("base.failed"), crypto.keccak256(e));
+    });
 }
 ```
 
 - **`.then((result) => { … })`** runs back here once the body ran there. `result` is what the body
   returned, as bytes: one word for a number (decode it as above), the bytes themselves for bytes,
   nothing for a body that returns nothing.
+- **`.catch((e) => { … })`** runs back here when the body reverts there, handed what it reverted
+  with (at most its first 256 bytes), everything the body did there undone; and here, in place of
+  the `.then`, when that reverts.
 - **`await`** is `.then` with the code after it: what follows `await Base.remote(() => { … });` runs
   back here, once the body ran there. An `await` cannot give a value (`const r = await …` is a
   compile error): take the result through `.then`.
-- **`.catch((e) => { … })`** runs back here when the body reverts there, handed what it reverted
-  with (at most its first 256 bytes), everything the body did undone; and here, in place of the
-  `.then`, when that reverts.
-- **With no `.catch`, a body that reverts reverts the delivery**: the message stays undelivered,
-  and the bridge can deliver it again, when it may succeed.
+- **A plain `.then` with no `.catch`** runs the body there uncaught: a revert reverts the delivery,
+  the message stays undelivered, and the bridge can deliver it again, when it may succeed. With no
+  `.then` or `.catch` at all, a message is one way, nothing comes back, and the same holds.
 
-A round trip is two messages, one each way, each paid on the chain it leaves. The `.then` and the
-`.catch` are compiled for this chain while the program compiles, and travel there and back inside
-the messages: nothing waits on either Pot in between.
+Each way is a message of its own, paid on the chain it leaves. A plain round trip stores nothing:
+the `.then` and the `.catch` are compiled for this chain while the program compiles, and travel
+there and back inside the messages.
+
+## Several chains, and deadlines
+
+A remote message is a promise among others, so `@sauce/async`'s combinators take it:
+
+```sauce chain=ethereum
+import { Promise } from "@sauce/async";
+
+function main(bump: Uint256) {
+  Promise.all([
+    Base.remote(() => {
+      return USDC.balanceOf(self);
+    }),
+    Optimism.remote(() => {
+      return USDC.balanceOf(self);
+    }),
+  ]).then((r) => {
+    // Back on Ethereum, once both answered: each answer in the order listed.
+    const [onBase] = abi.decode(r[0], ["Uint256"]);
+    const [onOptimism] = abi.decode(r[1], ["Uint256"]);
+    evm.sstore(crypto.keccak256("usdc.elsewhere"), onBase + onOptimism + bump);
+  });
+}
+```
+
+- **`Promise.race`** takes the first answer; a later one is delivered and changes nothing.
+  `Promise.any` and `Promise.allSettled` work the same way.
+- **`.within(seconds)`** gives the answer a deadline: after it, anyone may call this Pot's
+  `expire(bytes32 key)`, paying the Kitchen's fee, which rejects the promise into its `.catch`, and
+  an answer that comes later is ignored.
+- A deadline or a combinator keeps the promise in this Pot's storage until it settles
+  (`sauce-async`), and the body there always runs caught: its revert comes back as the rejection.
 
 ## Choose the bridge
 
@@ -77,9 +118,10 @@ function main(value: Uint256) {
 - **Hyperlane, LayerZero and Metalayer** relay a message whose fee was paid: their relayers carry it
   and call the destination Pot. The fee pays for the `gas` named, so too little gas leaves the
   message undelivered until someone delivers it with more.
-- **Polymer** relays nothing. The sending Pot emits a log, `RemoteMessage(uint256 indexed chainId,
-bytes message)`, and nothing is paid on the source. Someone fetches the log's proof from Polymer's
-  prove API and calls the destination Pot's `deliver(bytes proof)`, paying that transaction's gas.
+- **Polymer** relays nothing. The sending Pot emits a RemoteMessage log, naming the chain whose Pot
+  may run it and holding the message, and nothing is paid on the source. Someone fetches the log's proof
+  from Polymer's prove API and calls the destination Pot's `deliver(bytes proof)`, paying that
+  transaction's gas.
 - A bridge one chain lacks is a compile error naming the chain, and so is a chain with no bridge to
   this one.
 
@@ -92,16 +134,17 @@ bytes message)`, and nothing is paid on the source. Someone fetches the log's pr
   cook of that Pot), and on a round trip the bridge's fee for the way back. Fund it before the
   message arrives.
 
-Gas, measured on a local chain through the engine and Kitchen-made Pots, over Hyperlane's own
+Gas, measured on local chains through the engine and Kitchen-made Pots, over Hyperlane's own
 Mailbox with stand-ins for its hooks and an interchain security module that checks nothing: on a
 live chain its hooks add to the send, and its checks to each delivery, which the relayer pays:
 
 | What                                                     | Gas, about |
 | -------------------------------------------------------- | ---------- |
-| The cook that sends a message                            | 215,000    |
+| The cook that sends a message                            | 220,000    |
 | Delivering a one-way message whose body writes one word  | 170,000    |
-| The far leg of a round trip: the body, and sending back  | 410,000    |
-| Delivering the answer back, the `.then` writing one word | 210,000    |
+| The far leg of a round trip: the body, and sending back  | 405,000    |
+| The same with a `.catch`, the body run caught            | 430,000    |
+| Delivering the answer back, the `.then` writing one word | 200,000    |
 
 `gas` is what the destination's handler is given out of that; 500,000 covers these bodies, and a
 body that does more needs more.
@@ -135,8 +178,8 @@ runs between Private Pots only.
 ## With an intent
 
 An intent brings the money; a remote message does the stateful part on your Pot. They arrive in no
-set order, so the body checks what it needs: until it is there the body reverts, the message stays
-undelivered, and it is delivered again later. The intent's body moves what it received from the
+set order, so a one-way message's body checks what it needs: until it is there the body reverts,
+the message stays undelivered, and it is delivered again later. The intent's body moves what it received from the
 shared Pot to yours, whose address is this one's:
 
 ```sauce chain=ethereum
