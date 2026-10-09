@@ -1,7 +1,0 @@
-{
-  "name": "@sauce/names",
-  "version": "0.0.0",
-  "private": true,
-  "description": "The class a chain's tokens are instances of: an ERC-20 token. The SDK writes one module per chain from its registry whose tokens are instances of these, and hands it to every program compiled for that chain as an ambient module. `main` names the NEUTRAL BASE the compiler suffixes per target (names.evm.js); there is no SVM arm, because a Solana token is a mint's key, with no token methods.",
-  "main": "names.js"
-}
