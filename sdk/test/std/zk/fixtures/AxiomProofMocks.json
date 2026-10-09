@@ -1,0 +1,90 @@
+{
+  "source": "sdk/test/std/zk/fixtures/AxiomProofMocks.sol",
+  "solc": "0.8.36+commit.8a079791 --optimize",
+  "AxiomHeaderVerifierMock": {
+    "abi": [
+      {
+        "inputs": [
+          {
+            "internalType": "uint64",
+            "name": "sourceChainId_",
+            "type": "uint64"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "inputs": [],
+        "name": "getSourceChainId",
+        "outputs": [
+          {
+            "internalType": "uint64",
+            "name": "",
+            "type": "uint64"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "sourceChainId",
+        "outputs": [
+          {
+            "internalType": "uint64",
+            "name": "",
+            "type": "uint64"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "bytes32",
+            "name": "",
+            "type": "bytes32"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint32",
+                "name": "snapshotPmmrSize",
+                "type": "uint32"
+              },
+              {
+                "internalType": "bytes32[]",
+                "name": "proofMmrPeaks",
+                "type": "bytes32[]"
+              },
+              {
+                "internalType": "bytes32[]",
+                "name": "mmrComplementOrPeaks",
+                "type": "bytes32[]"
+              }
+            ],
+            "internalType": "struct MmrWitness",
+            "name": "",
+            "type": "tuple"
+          }
+        ],
+        "name": "verifyQueryHeaders",
+        "outputs": [],
+        "stateMutability": "pure",
+        "type": "function"
+      }
+    ],
+    "creationCode": "0x60a0604052348015600e575f5ffd5b506040516101b73803806101b7833981016040819052602b91603b565b6001600160401b03166080526066565b5f60208284031215604a575f5ffd5b81516001600160401b0381168114605f575f5ffd5b9392505050565b6080516101346100835f395f818160420152609401526101345ff3fe6080604052348015600e575f5ffd5b5060043610603a575f3560e01c80631544298e14603e578063edc55b94146081578063fe428ed3146092575b5f5ffd5b60647f000000000000000000000000000000000000000000000000000000000000000081565b60405167ffffffffffffffff909116815260200160405180910390f35b6090608c36600460b7565b5050565b005b7f00000000000000000000000000000000000000000000000000000000000000006064565b5f5f6040838503121560c7575f5ffd5b82359150602083013567ffffffffffffffff81111560e3575f5ffd5b83016060818603121560f3575f5ffd5b80915050925092905056fea2646970667358221220660539bb5b90949754c8e3992ecaf897fcd3f3c3eb87a204d34de56600f8f9ae64736f6c63430008240033"
+  },
+  "AxiomVerifierMock": {
+    "abi": [
+      {
+        "stateMutability": "nonpayable",
+        "type": "fallback"
+      }
+    ],
+    "creationCode": "0x6080604052348015600e575f5ffd5b50604680601a5f395ff3fe6080604052348015600e575f5ffd5b00fea26469706673582212201fcc952ee044e15d39b3109b88db1aa5289556ba02700416b79c5052ba31d44364736f6c63430008240033"
+  }
+}
