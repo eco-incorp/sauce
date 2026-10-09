@@ -145,6 +145,8 @@ export interface SauceServerOptions {
   /** A newer version's note, asked after each tool result and added to it when it says something:
    *  `update-note.ts#once` of the `sauce` command's note, shared by every server of the process. */
   readonly updateNote?: () => string | undefined;
+  /** The newer version the update check's cache names, which `sauce_skills` returns as `latest`. */
+  readonly newerVersion?: () => string | undefined;
 }
 
 export function createSauceServer(options: SauceServerOptions): McpServer {
@@ -173,7 +175,7 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
   registerIntentTools(server, tools);
   if (options.wallets !== undefined)
     registerWalletTools(server, { ...tools, wallets: options.wallets });
-  registerSkillTools(server, options.skillsDir);
+  registerSkillTools(server, options.skillsDir, options.newerVersion);
   registerResources(server, options.skillsDir);
   registerPrompts(server, options.skillsDir);
 

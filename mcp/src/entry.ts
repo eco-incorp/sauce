@@ -60,7 +60,10 @@ async function serve(options: McpServeOptions): Promise<void> {
       ? DEFAULT_MAX_BODY
       : wholeNumber("max-body", options.maxBody, 1, 64 * 1024 * 1024);
   // One note for the process: over HTTP every request has a server of its own.
-  const updateNote = options.updateNote === undefined ? undefined : once(options.updateNote);
+  const update = {
+    ...(options.updateNote === undefined ? {} : { updateNote: once(options.updateNote) }),
+    ...(options.newerVersion === undefined ? {} : { newerVersion: options.newerVersion }),
+  };
   if (options.http === undefined) {
     if (options.host !== undefined) throw new UsageError("--host goes with --http");
     if (options.allowedHosts.length > 0) throw new UsageError("--allowed-host goes with --http");
@@ -84,7 +87,7 @@ async function serve(options: McpServeOptions): Promise<void> {
       endpoints,
       local: true,
       ...(wallets === undefined ? {} : { wallets }),
-      ...(updateNote === undefined ? {} : { updateNote }),
+      ...update,
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     if (wallets !== undefined) {
       options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
@@ -114,8 +117,7 @@ async function serve(options: McpServeOptions): Promise<void> {
     host,
     allowedHosts: options.allowedHosts,
     maxBody,
-    server: () =>
-      createSauceServer({ endpoints, guard, ...(updateNote === undefined ? {} : { updateNote }) }),
+    server: () => createSauceServer({ endpoints, guard, ...update }),
     log: options.log,
   });
   options.log(

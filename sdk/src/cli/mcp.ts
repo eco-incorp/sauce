@@ -18,9 +18,9 @@
  * no key and every transaction it builds comes back unsigned.
  *
  * It prints no update notice — over stdio its stdout is the protocol — but notes a newer version in
- * the first tool result of its life instead, from the same cache the command's notice reads
- * (`update-check.ts`), refreshed the same way; `--no-update-check` or the config's
- * `"updateCheck": false` turns that off.
+ * the first tool result of its life instead, and `sauce_skills` returns it as `latest`, from the
+ * same cache the command's notice reads (`update-check.ts`), refreshed the same way;
+ * `--no-update-check` or the config's `"updateCheck": false` turns both off.
  */
 import {
   CliError,
@@ -61,6 +61,9 @@ export interface McpServeOptions {
    * `--no-update-check`, the config's `"updateCheck": false`, or in a test.
    */
   readonly updateNote?: () => string | undefined;
+  /** The newer version the update check's cache names, or `undefined`, as it is when asked:
+   *  `sauce_skills` returns it as `latest`. Absent when `updateNote` is. */
+  readonly newerVersion?: () => string | undefined;
 }
 
 /** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
@@ -226,6 +229,7 @@ export async function mcpCommand(
 
             return latest === undefined ? undefined : updateNote(check.version, latest);
           },
+          newerVersion: () => check.latest(),
         }),
   });
 

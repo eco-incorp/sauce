@@ -1,9 +1,10 @@
 /**
  * A newer version, noted by the MCP server once: in the first tool result of the process's life,
  * in its structured `notes` and in the JSON text that repeats them, and never again — over HTTP,
- * once across every request's server. Then `sauce mcp` itself, built, over stdio, with a home of
- * its own whose fresh cache names a newer version: the note in the first result, none after, and
- * no refresh started, so nothing reads the registry. The SDK and this workspace must be built.
+ * once across every request's server — and returned by `sauce_skills` as `latest`, on every call.
+ * Then `sauce mcp` itself, built, over stdio, with a home of its own whose fresh cache names a newer
+ * version: the note in the first result, none after, `latest` in `sauce_skills`, and no refresh
+ * started, so nothing reads the registry. The SDK and this workspace must be built.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -31,10 +32,17 @@ const json = (value: Record<string, unknown>): CallToolResult => ({
   content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
 });
 
-/** A server in process with `updateNote`, and a client that has listed its tools, so it holds
- *  each result to the tool's output schema. */
-async function connected(updateNote: () => string | undefined) {
-  const server = createSauceServer({ endpoints: NO_ENDPOINTS, updateNote });
+/** A server in process with `updateNote` (and `newerVersion`), and a client that has listed its
+ *  tools, so it holds each result to the tool's output schema. */
+async function connected(
+  updateNote: () => string | undefined,
+  newerVersion?: () => string | undefined,
+) {
+  const server = createSauceServer({
+    endpoints: NO_ENDPOINTS,
+    updateNote,
+    ...(newerVersion === undefined ? {} : { newerVersion }),
+  });
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "update-note-test", version: "0.0.0" });
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
@@ -158,6 +166,34 @@ describe("the update note", () => {
   });
 });
 
+describe("sauce_skills' latest", () => {
+  it("is the newer version, when there is one, beside the version the server runs", async () => {
+    let latest: string | undefined = "999.0.0";
+    const server = await connected(
+      () => undefined,
+      () => latest,
+    );
+    try {
+      for (let i = 0; i < 2; i++) {
+        const listed = (await server.call("sauce_skills")).structuredContent!;
+        assert.deepEqual([listed.version, listed.latest], [packageInfo().version, "999.0.0"]);
+      }
+      // Nothing newer: no `latest` at all.
+      latest = undefined;
+      assert.equal("latest" in (await server.call("sauce_skills")).structuredContent!, false);
+    } finally {
+      await server.close();
+    }
+    // With the check off, the server is given no newer version.
+    const off = await connected(() => undefined);
+    try {
+      assert.equal("latest" in (await off.call("sauce_skills")).structuredContent!, false);
+    } finally {
+      await off.close();
+    }
+  });
+});
+
 describe("sauce mcp, built, over stdio", () => {
   const MCP = dirname(dirname(fileURLToPath(import.meta.url)));
   const BIN = join(MCP, "../sdk/dist/cli/main.js");
@@ -178,7 +214,8 @@ describe("sauce mcp, built, over stdio", () => {
   });
   after(() => rmSync(home, { recursive: true, force: true }));
 
-  /** The results of calling `sauce_chains` twice on `sauce mcp …argv`, at home in `home`. */
+  /** The results of calling `sauce_chains` twice, then `sauce_skills`, on `sauce mcp …argv`, at
+   *  home in `home`. */
   async function twice(...argv: string[]): Promise<CallToolResult[]> {
     const transport = new StdioClientTransport({
       command: process.execPath,
@@ -194,6 +231,7 @@ describe("sauce mcp, built, over stdio", () => {
       for (let i = 0; i < 2; i++) {
         results.push((await client.callTool({ name: "sauce_chains" })) as CallToolResult);
       }
+      results.push((await client.callTool({ name: "sauce_skills" })) as CallToolResult);
 
       return results;
     } finally {
@@ -202,13 +240,15 @@ describe("sauce mcp, built, over stdio", () => {
   }
 
   it("notes the newer version its cache names in the first result, and refreshes nothing", async () => {
-    const [first, second] = await twice();
+    const [first, second, skills] = await twice();
     assert.equal(noted(first!), true);
     assert.match(
       (first!.structuredContent as { notes: string[] }).notes.at(-1)!,
       new RegExp(`^${NOTE} \\(this server runs ${packageInfo().version.replace(/\./g, "\\.")}\\)`),
     );
     assert.equal(noted(second!), false);
+    assert.equal(noted(skills!), false);
+    assert.equal(skills!.structuredContent!.latest, "999.0.0");
     assert.equal(readFileSync(cache, "utf8"), fresh, "a fresh cache starts no refresh");
   });
 
@@ -218,7 +258,8 @@ describe("sauce mcp, built, over stdio", () => {
     const results = await twice("--config", config);
     assert.deepEqual(
       results.map((result) => noted(result)),
-      [false, false],
+      [false, false, false],
     );
+    assert.equal("latest" in results[2]!.structuredContent!, false);
   });
 });
