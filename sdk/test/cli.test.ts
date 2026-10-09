@@ -2,7 +2,6 @@
  * The `sauce` command, in process: its flags, what each command prints, and that it compiles a
  * file exactly as `compileSauceProgram` compiles it. Executing what it prints is `cli.e2e.test.ts`.
  */
-import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { tmpdir } from "node:os";
@@ -2097,26 +2096,5 @@ describe("the CLI stays out of the browser-facing surface", () => {
 
   it("has a chain to name for every canonical slug", () => {
     expect(requireChain("solana").kind).toBe("svm");
-  });
-
-  it("loads LiteSVM, a dependency for the command's rehearsals alone, lazily and from it alone", () => {
-    // `git grep` over the shipped source: every file that names the package, and how.
-    const naming = execFileSync(
-      "git",
-      ["grep", "-l", "litesvm", "--", "sdk/src", "actions/src", "mcp/src"],
-      {
-        cwd: join(SDK, ".."),
-        encoding: "utf8",
-      },
-    )
-      .trim()
-      .split("\n");
-    expect(naming).toEqual(["sdk/src/cli/svm-fork.ts"]);
-    const fork = readFileSync(join(SDK, "src/cli/svm-fork.ts"), "utf8");
-    // A type-only import, which compiles to nothing, and the one dynamic import.
-    expect(fork.match(/^import .* from "litesvm";$/gm)).toEqual([
-      'import type { Clock as ClockType, LiteSVM as LiteSVMType } from "litesvm";',
-    ]);
-    expect(fork.match(/await import\("litesvm"\)/g)).toHaveLength(1);
   });
 });

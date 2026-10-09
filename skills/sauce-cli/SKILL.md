@@ -14,7 +14,9 @@ and reads a chain through a built-in public endpoint unless given one of its own
 
 **Getting the command.** Install it once with `npm i -g @eco-incorp/sauce` (Node.js 24 or newer);
 `sauce --version` checks it, and `sauce update` upgrades it the way it was installed
-(`sauce update --check` only reports the latest). Without an
+(`sauce update --check` only reports the latest). A line on stderr after a command saying a newer
+`sauce` is available means a newer release is published, and `sauce update` updates to it; the line
+changes nothing the command did or printed on stdout (`--no-update-check` leaves it out). Without an
 install, run `npx -y @eco-incorp/sauce <command>` in its place. Never run a bare `npx sauce`
 outside a project that depends on the package: npx then fetches and runs npm's unrelated `sauce`
 package.
