@@ -124,17 +124,18 @@ A declaration's `requires` lists the contracts it needs (`Namespace.Contract`), 
 one skips that handler. `interfaces` lists the ERC-165 ids the Pot declares, for a protocol that
 checks its receiver before it calls back.
 
-| `@sauce/async`                                                                       | Does                                                                       |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `fulfil(key, value)`, `reject(key, reason)`                                          | Settle a promise and run its body or its `.catch`; a settled key, nothing. |
-| `settleCarried(key, stored, program, value, ok)`                                     | The same, for a protocol that carried the body back.                       |
-| `promiseKey(tag, id)`                                                                | A protocol's id as a promise's key.                                        |
-| `requireCaller(expected, actual)`, `requireSelf(sender)`                             | A handler's checks: the protocol called; this Pot sent the message.        |
-| `expire(key)`                                                                        | Reject a promise past its deadline with `Timeout(bytes32)`.                |
-| `install(selector, program, readOnly)`, `declareInterface(id, supported)`            | What installing a package's handlers calls.                                |
-| `received()`, `fulfilled()`                                                          | In a running body: what settled it, and how.                               |
-| `park`, `run`, `salt`, `isPending`                                                   | The settlement table's parts, for a package that needs them directly.      |
-| `Erc1271.approve(hash)`, `Erc1271.revoke(hash)`, `isValidSignature(hash, signature)` | The Pot as an ERC-1271 signer (above).                                     |
+| `@sauce/async`                                                                       | Does                                                                                  |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `fulfil(key, value)`, `reject(key, reason)`                                          | Settle a promise and run its body or its `.catch`; a settled key, nothing.            |
+| `settleCarried(key, stored, program, value, ok)`                                     | The same, for a protocol that carried the body back.                                  |
+| `promiseKey(tag, id)`                                                                | A protocol's id as a promise's key.                                                   |
+| `requireCaller(expected, actual)`, `requireSelf(sender)`                             | A handler's checks: the protocol called; this Pot sent the message.                   |
+| `expire(key)`                                                                        | Reject a promise past its deadline with `Timeout(bytes32)`.                           |
+| `install(selector, program, readOnly)`, `declareInterface(id, supported)`            | What installing a package's handlers calls.                                           |
+| `winner()`                                                                           | In a race's or an any's continuation: the child that settled it.                      |
+| `received()`, `fulfilled()`                                                          | Deprecated: what `run` handed its program. A continuation takes it as its parameters. |
+| `park`, `run`, `salt`, `isPending`                                                   | The settlement table's parts, for a package that needs them directly.                 |
+| `Erc1271.approve(hash)`, `Erc1271.revoke(hash)`, `isValidSignature(hash, signature)` | The Pot as an ERC-1271 signer (above).                                                |
 
 ## The Pot as a signer
 
