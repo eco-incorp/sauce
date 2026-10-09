@@ -37,6 +37,8 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
   chain.
 - [Nested intents](guides/nested-intents.md): open an intent inside another's body, from an amount
   it measured.
+- [Remote messages](guides/remote.md): run a program on the same Pot on another chain, over a
+  bridge, and get its answer back.
 - [Compiling programs](guides/compiling.md): compile a standalone program and pass it runtime
   arguments.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several
