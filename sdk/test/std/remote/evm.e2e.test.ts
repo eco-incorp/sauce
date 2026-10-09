@@ -426,7 +426,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
   );
 
   // Skipped: await dropped from the compiler (v12 #554). Kept so it can come back if await does.
-  it.skip("runs what follows an await back on Ethereum, once the body ran on Base (await dropped from the compiler, v12 #554)", async () => {
+  it.skip("runs what follows an await back on Ethereum, once the body ran on Base (await dropped from the compiler (v12 #554))", async () => {
     const out = await cook(
       ethereum,
       `function main(value: Uint256) {
