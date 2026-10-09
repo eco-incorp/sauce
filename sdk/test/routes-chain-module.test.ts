@@ -59,9 +59,7 @@ describe("a chain's module", () => {
       module.split("Contract 'DegenBox' (abracadabra) is not deployed on '\" + missingOn + \"'")
         .length - 1,
     ).toBe(1);
-    expect(module).toMatch(
-      /new NsAbracadabra\(\{ Cauldron: \(address\) => ABI_\d+\.at\(address\) \}, undefined, "optimism"\)/,
-    );
+    expect(module).toMatch(/new NsAbracadabra\(\{ Cauldron: ABI_\d+ \}, undefined, "optimism"\)/);
     expect(() =>
       compileSauceProgram("base", "function main(): Uint256 { return Optimism.Abracadabra + 1; }"),
     ).toThrow(
