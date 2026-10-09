@@ -38,7 +38,6 @@ import {
   registered,
   sauce,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
 
@@ -126,7 +125,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-fill-e2e-"));
-    base = await startChain("base", 9300 + WORKER);
+    base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     // The real Portal, deployed wherever it lands, then moved to the registry's address.
     const placed = await placePortal(base);
@@ -390,7 +389,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   }, 60_000);
 
   it("names the destination when --rpc-url serves another chain", async () => {
-    const other = await startChain("arbitrum", 9350 + WORKER);
+    const other = await startChain("arbitrum");
     try {
       const run = await sauce(
         ...["intent", "fill", file("cooked.sauce.ts", COOKED), "--chain", "arbitrum"],

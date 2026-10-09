@@ -29,7 +29,7 @@
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX, like every other executing EVM suite here.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -93,6 +93,7 @@ import type { Intent } from "../src/routes/types.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { predictIntentVault } from "../src/routes/portal.js";
 import { BODY_TO_ARBITRUM } from "./fixtures/routes/bodies.js";
+import { freePortSync, spawnAnvil } from "./anvil-process.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -135,7 +136,8 @@ const DEPLOYER = privateKeyToAccount(
 const CHAIN_ID = 8453;
 const CHILD_DESTINATION = 42161n; // Arbitrum: the child's own execution chain, never reached here
 
-const PORT = 8700 + (Number(process.env.JEST_WORKER_ID ?? "1") % 100);
+/** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const GAS_LIMIT = 30_000_000n;
 const STARTUP_TIMEOUT_MS = 20_000;
@@ -263,16 +265,6 @@ let liar: Address;
  * creation copies a 5-byte runtime and returns it; the runtime is `PUSH1 0 PUSH1 0 REVERT`.
  */
 const REVERTING_ERC20_CREATION = "0x6005600c60003960056000f360006000fd" as Hex;
-
-const waitForRpc = (deadline: number): Promise<void> =>
-  Date.now() >= deadline
-    ? Promise.reject(new Error(`anvil did not come up on ${RPC_URL}`))
-    : publicClient
-        .getChainId()
-        .then(() => undefined)
-        .catch(() =>
-          new Promise((resolve) => setTimeout(resolve, 100)).then(() => waitForRpc(deadline)),
-        );
 
 const deploy = async (data: Hex): Promise<Address> => {
   const hash = await walletClient.sendTransaction({
@@ -472,12 +464,7 @@ const portalEventsIn = (logs: readonly Log[]): { name: string; at: number }[] =>
   });
 
 const startEvm = async (): Promise<ChildProcess> => {
-  const anvil = spawn(
-    "anvil",
-    ["--port", String(PORT), "--chain-id", String(CHAIN_ID), "--silent"],
-    { stdio: "ignore" },
-  );
-  await waitForRpc(Date.now() + STARTUP_TIMEOUT_MS);
+  const anvil = await spawnAnvil(PORT, ["--chain-id", String(CHAIN_ID)], STARTUP_TIMEOUT_MS);
 
   const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
   sauce = await startGatedEngine(

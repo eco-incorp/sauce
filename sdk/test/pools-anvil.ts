@@ -16,11 +16,10 @@
  *
  * Needs `anvil` on PATH; each suite gates on it. Uses no test runner's globals.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
@@ -48,6 +47,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import { sqrtPriceX96FromPrice } from "../src/price.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { spawnAnvil } from "./anvil-process.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const json = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
@@ -146,36 +146,17 @@ export interface PoolsChain {
   stop(): Promise<void>;
 }
 
-/** A port nothing listens on. */
-export async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+export { freePort } from "./anvil-process.js";
 
-  return port;
-}
-
+/** Starts the pools' anvil on `port`, refusing one something already answers on
+ *  (`anvil-process.ts`). */
 export async function startPoolsChain(port: number): Promise<PoolsChain> {
   const rpcUrl = `http://127.0.0.1:${port}`;
-  const anvil: ChildProcess = spawn(
-    "anvil",
-    ["--port", String(port), "--chain-id", String(BASE.id), "--silent"],
-    { stdio: "ignore" },
-  );
+  const anvil: ChildProcess = await spawnAnvil(port, ["--chain-id", String(BASE.id)]);
   const transport = http(rpcUrl, { fetchOptions: { headers: { connection: "close" } } });
   const publicClient = createPublicClient({ transport });
   const testClient = createTestClient({ mode: "anvil", transport });
   const wallet = createWalletClient({ account: DEPLOYER, transport });
-  for (const deadline = Date.now() + 20_000; ;) {
-    try {
-      await publicClient.getChainId();
-      break;
-    } catch {
-      if (Date.now() > deadline) throw new Error(`anvil did not come up on ${rpcUrl}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
   // Every transaction carries its own gas limit rather than an estimate. An estimate is made
   // against the pending block, and a mint mined a second later may need more than it — the likely
   // reason `PoolsLiquidity.mint` reverted here now and then, which a fixed limit stopped.

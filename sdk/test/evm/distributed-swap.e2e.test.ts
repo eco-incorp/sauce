@@ -41,7 +41,6 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure
  * without it in CI.
  */
-import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -77,6 +76,7 @@ import { compileSauceProgram } from "../../src/routes/sauce-route.js";
 import { Base } from "../../src/index.js";
 import { startGatedEngine } from "./gated-engine.js";
 import type { GatedEngine } from "./gated-engine.js";
+import { freePortSync, spawnAnvil } from "../anvil-process.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -129,7 +129,8 @@ const OWNER = privateKeyToAccount(
 );
 const RECIPIENT = getAddress("0x7777777777777777777777777777777777777777");
 const REFUND_TO = getAddress("0x8888888888888888888888888888888888888888");
-const PORT = 9800 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
+/** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const GAS_LIMIT = 15_000_000n;
 
@@ -432,19 +433,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
   let snapshot: Hex;
 
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--chain-id", "8453", "--silent"], {
-      stdio: "ignore",
-    });
-    const deadline = Date.now() + 20_000;
-    for (;;) {
-      try {
-        await publicClient.getChainId();
-        break;
-      } catch {
-        if (Date.now() > deadline) throw new Error(`anvil did not come up on ${RPC_URL}`);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
+    anvil = await spawnAnvil(PORT, ["--chain-id", "8453"]);
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
     sauce = await startGatedEngine(
       { publicClient, testClient, walletClient },
