@@ -32,6 +32,12 @@ const cases = [
     file("skills/sauce-intents/examples/swap-on-base.sauce.ts"),
   ],
   [
+    "one-hop-in-a-try@ethereum",
+    "ethereum",
+    file("sdk/test/fixtures/intent-compiles-to/one-hop-in-a-try.sauce.ts"),
+  ],
+  ["two-hops@ethereum", "ethereum", file("sdk/test/fixtures/intent-compiles-to/two-hops.sauce.ts")],
+  [
     "distributed-swap@base",
     "base",
     file("skills/sauce-distributed-swap/examples/distributed-swap.sauce.ts"),

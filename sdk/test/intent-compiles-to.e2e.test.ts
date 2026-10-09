@@ -47,36 +47,14 @@ const SALT = `0x${"5a".repeat(32)}` as Hex;
 const OPTIONS = { intents: { executionFee: 777n, openedAt: 1_900_000_000n, salt: SALT } };
 const MAIN =
   "function main(amount: Uint256, delivered: Uint256, beneficiary: Address, refundTo: Address)";
-const HOP =
-  "Base.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount: delivered }, refundee: refundTo })";
 
-const PROGRAMS = {
-  "one-hop": `${MAIN} {
-  ${HOP}.then(() => {
-    USDC.transfer(beneficiary, delivered);
-  });
-}`,
-  "one-hop-in-a-try": `${MAIN} {
-  try {
-    ${HOP}
-      .then(() => {
-        USDC.transfer(beneficiary, delivered);
-      })
-      .catch((e) => {
-        USDC.transfer(refundTo, delivered);
-      });
-  } catch (e) {
-    USDC.transfer(refundTo, delivered);
-  }
-}`,
-  "two-hops": `${MAIN} {
-  ${HOP}.then(() => {
-    Optimism.hop({ send: { token: USDC, amount: delivered }, receive: { token: USDC, amount: delivered - 1000 }, refundee: refundTo }).then(() => {
-      USDC.transfer(beneficiary, delivered - 1000);
-    });
-  });
-}`,
-} as const;
+/** The programs, each written once, as `fixtures/intent-compiles-to/<name>.sauce.ts`. */
+const PROGRAMS = Object.fromEntries(
+  ["one-hop", "one-hop-in-a-try", "two-hops"].map((name) => [
+    name,
+    readFileSync(join(FIXTURES, `${name}.sauce.ts`), "utf8"),
+  ]),
+) as Record<"one-hop" | "one-hop-in-a-try" | "two-hops", string>;
 
 /** Three sets of `main`'s arguments, each its own intent: two to find the holes, one to compare. */
 const REFUND_TO = 0x4444444444444444444444444444444444444444n;

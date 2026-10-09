@@ -175,8 +175,9 @@ removed:
   template literal is a string the compiler builds while compiling: every `${…}` in it must be a
   value it knows, never one read at run time.
 - Arrays and records: `[a, b]`, `new Array(n)`, `xs[i] = v`, `xs.length`, `{ amount: 1 }`.
-  Destructuring, `const [a, b] = …`, needs an initializer that produces a record (a multi-output
-  call, `abi.decode`); an array is indexed instead.
+  Destructuring takes a record by position (`const [a, b] = …` of a multi-output call or
+  `abi.decode`), fields by name (`const { qty, price } = order`), and an array the compiler knows;
+  an array known only at run time is indexed instead.
 - `Account` parameters, with roles such as `Account<Writable>`, are `main`'s alone. On Solana they
   are the transaction's accounts; on an EVM chain only a bare `Account` compiles, and it is an
   address.
@@ -318,7 +319,7 @@ The full list, with what each rejection says, is section 14 of
 | `finally`                                                                                                          | code after the `try`; to survive a failure on EVM, `try`/`catch` (below)    |
 | arrow functions and nested functions, except an intent's body, `.then(() => { ... })`, and `.catch(() => { ... })` | top-level function declarations                                             |
 | a template literal with a run-time `${…}`, comparing bytes with `==`                                               | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each |
-| `as` casts, default parameters, spread of a run-time array, object destructuring                                   | explicit values and field access                                            |
+| `as` casts, spread of a run-time array, destructuring at module scope or in an assignment                          | explicit values and field access                                            |
 | `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                         | `new Array(n)` and an index; `if`; `**`                                     |
 
 ```sauce fails
