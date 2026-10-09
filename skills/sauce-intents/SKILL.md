@@ -477,7 +477,7 @@ function main(
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount },
     refundee: refundTo,
-    after: [() => evm.call(referrer, tip, hex``)],
+    after: () => evm.call(referrer, tip, hex``),
   }).then(() => {
     USDC.approve(AaveV3.Pool, amount);
     AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
@@ -485,9 +485,10 @@ function main(
 }
 ```
 
-Each is a list of closures, one even for a single call, and each closure's body is one external
-call: a contract's method, through its namespace (`Permit2.approve(…)`), `.at(address)`, an
-interface (`Erc20.ERC20(token).approve(…)`) or an imported ABI, or `evm.call(target, value, data)`.
+Each takes one closure, `after: () => …`, or a list of them for several calls,
+`before: [() => …, () => …]`, and each closure's body is one external call: a contract's method,
+through its namespace (`Permit2.approve(…)`), `.at(address)`, an interface
+(`Erc20.ERC20(token).approve(…)`) or an imported ABI, or `evm.call(target, value, data)`.
 Anything else in one (a second call, a branch, another effect) is a compile error at the closure.
 The route's calls are every `before` call, then the delivered tokens' move into the Pot and the
 body's cook, then every `after` call, in the order written.

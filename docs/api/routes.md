@@ -47,7 +47,7 @@ know, and the builder refuses one at run time.
 | `prover`         | The reward's prover                                                | `ecoRoutesProver(source, destination)`                                     |
 | `salt`           | The route's salt                                                   | 32 random bytes per compile, mixed with the transaction's count of intents |
 | `fee`            | The destination Kitchen's fee the body's cook pays                 | `intents.executionFee` in `compile`; else refused                          |
-| `before`         | Hooks: a list of closures (`routes.HopHook`), each one call        | None                                                                       |
+| `before`         | Hooks: a closure or a list (`routes.HopHook`), each one call       | None                                                                       |
 | `after`          | Hooks made after the body's cook, as `before`'s are                | None                                                                       |
 
 A hook is a closure written into the statement as it is declared, or the text of its one call

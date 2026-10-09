@@ -408,7 +408,7 @@ function main(
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount },
     refundee: refundTo,
-    after: [() => evm.call(referrer, tip, hex``)],
+    after: () => evm.call(referrer, tip, hex``),
   }).then(() => {
     USDC.approve(AaveV3.Pool, amount);
     AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
@@ -416,9 +416,10 @@ function main(
 }
 ```
 
-Each is a list of closures, one even for a single call, and each closure's body is one external
-call: a contract's method, through its namespace (`Permit2.approve(…)`), `.at(address)`, an
-interface (`Erc20.ERC20(token).approve(…)`) or an imported ABI, or `evm.call(target, value, data)`.
+Each takes one closure, `after: () => …`, or a list of them for several calls,
+`before: [() => …, () => …]`, and each closure's body is one external call: a contract's method,
+through its namespace (`Permit2.approve(…)`), `.at(address)`, an interface
+(`Erc20.ERC20(token).approve(…)`) or an imported ABI, or `evm.call(target, value, data)`.
 The route's calls are every `before` call, then the delivered tokens' move into the Pot and the
 body's cook, then every `after` call, in the order written.
 
@@ -570,8 +571,8 @@ Each of these is a compile error naming the construct, never a silently differen
   supplies.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
-- A hook that is not a list of closures, or a closure whose body is not one external call (the
-  compiler's error, at the closure).
+- A hook field that is neither a closure nor a list of closures.
+- A hook whose body is not one external call (the compiler's error, at the closure).
 
 A field a hop does not take is not refused by the compile: it is ignored, as TypeScript's editor
 declarations flag it, and the TypeScript builder refuses it.
