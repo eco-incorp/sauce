@@ -65,13 +65,13 @@ const ORACLE_CRE = 0xe0c066f41c1dc7e55f8fdb9c65959880975a5253ce7ee0f0fe9c8196947
 const SAUCE_ORACLE_NAMESPACE = 0xfb914c48cb718df1ddac58f9ecf041e1351f5cba973af6506236543b47c9ff00;
 
 // The requests a program makes: `Oracle.cre(config)`, one per oracle network this package speaks.
-class Requests {
+export class Oracle {
   // A request to a Chainlink CRE workflow, which `config` names:
   //
   //   owner     the workflow owner whose report alone settles it; required
   //   args      what the workflow reads, as bytes (`abi.encode(…)` of it); none when left out
   //   deadline  a unix time after which anyone may expire the request; or `.within(seconds)`
-  cre(config) {
+  static cre(config) {
     if (config === undefined) {
       throw new Error("`Oracle.cre(...)` takes one object: `Oracle.cre({ owner, args })`");
     }
@@ -102,8 +102,6 @@ class Requests {
     });
   }
 }
-
-export const Oracle = new Requests();
 
 // The body of the handler for `onReport(bytes metadata, bytes report)`, the call a CRE report lands
 // on: from `forwarder` alone, it settles the request the report answers, under the key the report's
