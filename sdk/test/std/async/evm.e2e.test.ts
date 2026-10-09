@@ -97,6 +97,13 @@ const RELEASED_ENGINE =
 const itCatching = RELEASED_ENGINE ? it.skip : it;
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+/** The sauce-async skill's examples, run here as a reader runs them. */
+const SKILL_EXAMPLES = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../../skills/sauce-async/examples",
+);
+const skillExample = (name: string): string =>
+  readFileSync(join(SKILL_EXAMPLES, `${name}.sauce.ts`), "utf8");
 const fixture = (name: string): { abi: Abi; creationCode: Hex } =>
   JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8")) as {
     abi: Abi;
@@ -878,6 +885,32 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       await setSlot(ECHOED_SLOT, 0n);
       expect((await send(stranger, carrier, deliver)).ok).toBe(true);
       expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+    },
+  );
+
+  itCatching(
+    "the skill's sauce-async/examples/approval pays once approve resolves it, and never after the day",
+    async () => {
+      const recipient = "0x00000000000000000000000000000000000a5a5a" as Address;
+      const waiting = await cook(compiled(skillExample("approval"), [recipient, 1_000n]));
+      expect(waiting.ok).toBe(true);
+      // Parked in order: the race, the approval, and the timeout, the one with a deadline.
+      const [race, approval, timeout] = await pendingOf(waiting.hash);
+      expect([race!.deadline, approval!.deadline]).toEqual([0n, 0n]);
+      expect(timeout!.deadline).toBeGreaterThan(0n);
+      const key = approval!.key;
+      expect((await cook(compiled(skillExample("approve"), [key]))).ok).toBe(true);
+      expect(await publicClient.getBalance({ address: recipient })).toBe(1_000n);
+      // Approved once: again, nothing.
+      expect((await cook(compiled(skillExample("approve"), [key]))).ok).toBe(true);
+      expect(await publicClient.getBalance({ address: recipient })).toBe(1_000n);
+
+      // A second payment, never approved: after the day anyone expires it, and nothing is paid.
+      const unpaid = await cook(compiled(skillExample("approval"), [recipient, 5n]));
+      const day = (await pendingOf(unpaid.hash)).find(({ deadline }) => deadline > 0n)!;
+      await later(86_401);
+      expect((await expire(day.key)).ok).toBe(true);
+      expect(await publicClient.getBalance({ address: recipient })).toBe(1_000n);
     },
   );
 

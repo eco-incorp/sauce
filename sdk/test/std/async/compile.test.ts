@@ -188,6 +188,29 @@ function main(value: Uint256, to: Address) {
     }
   });
 
+  it("a combinator's child is handed the combinator's continuation, to size its callback", () => {
+    const program = compile(`import { Promise, Request, promiseKey } from "@sauce/async";
+
+class Sized {
+  request(id: Uint256) {
+    return new Request({
+      send: (continuation) => {
+        evm.sstore(id, continuation.code.length + continuation.settles.code.length);
+        return promiseKey(7, id);
+      },
+    });
+  }
+}
+const S = new Sized();
+
+function main(to: Address) {
+  Promise.all([S.request(1), S.request(2)]).then((r) => {
+    evm.sstore(3, r[0].length + to);
+  });
+}`);
+    expect(program.bodies).toHaveLength(3);
+  });
+
   it("a race against a timeout, an already settled promise, and a deferred", () => {
     const raced = compile(`${ECHO}
 function main(value: Uint256, to: Address) {
