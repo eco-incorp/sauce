@@ -58,7 +58,7 @@
 // `isValidSignature(requestHash, signature)` (ERC-1271), static, with 100,000 gas, and the lock spends
 // the client's balance at the market. When it submits a request the Pot hashes it as the market does
 // (EIP-712, under the market's own domain) and approves the hash (`@sauce/async`'s `Erc1271`), and
-// the Pot's one ERC-1271 handler, `@sauce/async`'s, says yes for it, in about 40,000 of the 100,000.
+// the Pot's one ERC-1271 handler, `@sauce/async`'s, says yes for it, in about 38,000 of the 100,000.
 // An approval is left in place once the request settles: it names one request of one market, which
 // is locked once.
 //

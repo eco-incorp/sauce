@@ -212,7 +212,7 @@ gas), and the Pot keeps a query's id and payment in two words until its promise 
   sha256 of its whole stdin as the first 32 bytes of its journal. The body is handed the rest.
 - **The Pot signs its own requests.** A prover's lock asks the client `isValidSignature` (ERC-1271)
   with 100,000 gas. The program hashes each request as the market does and approves the hash
-  (`Erc1271.approve`, above), and the Pot's one ERC-1271 handler answers yes for it, in about 39,000
+  (`Erc1271.approve`, above), and the Pot's one ERC-1271 handler answers yes for it, in about 38,000
   gas, so nobody else's request can spend the Pot's balance at the market.
 - **The checks.** The callback carries no request id: the handler takes calls only from the market,
   and settles the promise the proof's image id and its journal's first word name, so a proof of

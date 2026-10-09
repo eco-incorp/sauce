@@ -1242,7 +1242,7 @@ and Succinct have no callback.
   callback the Pot, id `1 << 192 | pot << 32 | index`), hashes it as the market does (EIP-712 under
   `eip712DomainSeparator()`) and approves the hash with `@sauce/async`'s `approveHash`, which the
   Pot's one ERC-1271 handler (`@sauce/async/erc1271.handler.js`, declared READ-ONLY in the
-  package's manifest) answers for in about 39k of the market's 100k-gas STATICCALL; so only the
+  package's manifest) answers for in about 38k of the market's 100k-gas STATICCALL; so only the
   Pot's own requests can spend its market balance. An approval stays once the request settles: it
   names one request of one market, locked once. The guest's
   stdin is the request id then the input, its journal must begin with `sha256(stdin)` (a

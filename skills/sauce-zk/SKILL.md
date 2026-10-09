@@ -159,7 +159,7 @@ A prover locks a request by asking its client, the Pot, `isValidSignature(hash, 
 (ERC-1271), static, with 100,000 gas, and the lock spends the Pot's balance at the market. When the
 program submits a request it hashes it as the market does (EIP-712, under the market's domain) and
 approves the hash as one the Pot signed (`@sauce/async`'s `Erc1271`); the Pot's one ERC-1271
-handler answers yes for an approved hash, in about 39,000 gas. A request someone else submits naming
+handler answers yes for an approved hash, in about 38,000 gas. A request someone else submits naming
 the Pot as its client was never approved, and cannot be locked.
 
 ### What the callback is trusted with
