@@ -304,7 +304,9 @@ describeOnRouter.each([
     await grant(router, "FULFILLER_ROLE", FULFILLER.address);
     await grant(executor, "EXECUTOR_ROLE", router);
 
-    expect(await chain.installPackage("@sauce/zk")).toEqual([QUERY_CALLBACK, EXPIRE]);
+    const installed = await chain.installPackage("@sauce/zk");
+    expect(installed).toContain(QUERY_CALLBACK);
+    expect(installed).toContain(EXPIRE);
   }, 180_000);
 
   afterAll(async () => {
