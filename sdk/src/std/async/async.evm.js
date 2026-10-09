@@ -890,6 +890,12 @@ class Deferred {
     this._deadline = deadline;
     this._timeout = timeout;
     this._stage = 1;
+    // Fields, not methods, so `const { promise, resolve, reject } = Promise.withResolvers()` takes
+    // them: fulfil it with `value`, or reject it with `reason`, at run time. Its body is parked when
+    // the block that holds it ends, so in the transaction that made it, settle it after that block;
+    // later, `Async.resolve(key, v)` or `Async.reject(key, reason)`.
+    this.resolve = (value) => fulfil(this.key, value);
+    this.reject = (reason) => reject(this.key, reason);
   }
   then(body) {
     if (this._stage > 1) {
@@ -912,15 +918,6 @@ class Deferred {
   // The promise itself, as `Promise.withResolvers()` answers it: `d.promise.then(…)`.
   get promise() {
     return this;
-  }
-  // Fulfil it with `value`, at run time. Its body is parked when the block that holds it ends, so
-  // in the transaction that made it, resolve it after that block; later, `Async.resolve(key, v)`.
-  resolve(value) {
-    fulfil(this.key, value);
-  }
-  // Reject it with `reason`, at run time, as `resolve`.
-  reject(reason) {
-    reject(this.key, reason);
   }
   [Symbol.dispose]() {
     if (this._stage == 1) {
