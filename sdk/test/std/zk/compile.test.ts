@@ -106,7 +106,7 @@ describe("what the library writes out by hand", () => {
       },
       {
         selector: "isValidSignature(bytes32,bytes)",
-        program: "signature.handler.js",
+        program: "@sauce/async/erc1271.handler.js",
         readOnly: true,
         requires: ["Boundless.Market"],
       },
@@ -207,12 +207,16 @@ describe("what compiles where", () => {
     ]);
   });
 
-  it("Boundless's handlers, on Base, the callback's naming its market", () => {
+  it("Boundless's callback handler, on Base, names its market", () => {
     const callback = compile(readFileSync(join(DIR, "risc0.handler.js"), "utf8"), "base");
     expect(hex(callback.bytecode)).toContain("fd152dadc5183870710fe54f939eae3ab9f0fe82");
-    expect(
-      compile(readFileSync(join(DIR, "signature.handler.js"), "utf8"), "base").bytecode.length,
-    ).toBeGreaterThan(0);
+  });
+
+  it("approves a request's hash with @sauce/async's ERC-1271, whose one handler answers for it", () => {
+    expect(SOURCE).toContain("approveHash(");
+    const install = packageInstall("base", "@sauce/zk");
+    const erc1271 = install.handlers.find((h) => h.signature.startsWith("isValidSignature"))!;
+    expect(erc1271.program).toBe("@sauce/async/erc1271.handler.js");
   });
 
   it("a query's `.catch` with Zk.cancel names no Boundless contract on Ethereum, which has none", () => {

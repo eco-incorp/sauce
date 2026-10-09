@@ -16,7 +16,8 @@
  * slashing.
  *
  *   1. the owner cooks the program the SDK writes to install `@sauce/zk`'s handlers: Space and
- *      Time's callback, Boundless's `handleProof`, the read-only `isValidSignature`, and
+ *      Time's callback, Boundless's `handleProof`, `@sauce/async`'s read-only `isValidSignature`
+ *      (the Pot's one ERC-1271 answer), and
  *      `@sauce/async`'s `expire(bytes32)`;
  *   2. the owner cooks a program that requests, `Zk.risc0({ … }).then((journal) => { … })`: the Pot
  *      deposits the price, submits the request and approves its hash;

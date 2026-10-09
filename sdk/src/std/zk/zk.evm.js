@@ -56,10 +56,11 @@
 //
 // THE POT SIGNS ITS OWN REQUESTS. A prover locks a request by asking its client
 // `isValidSignature(requestHash, signature)` (ERC-1271), static, with 100,000 gas, and the lock spends
-// the client's balance at the market. The Pot answers with the read-only handler whose body is
-// `isValidSignature` below: yes only for a request hash it stored when it submitted the request,
-// which it hashes as the market does (EIP-712, under the market's own domain). It takes about 40,000
-// of the 100,000.
+// the client's balance at the market. When it submits a request the Pot hashes it as the market does
+// (EIP-712, under the market's own domain) and approves the hash (`@sauce/async`'s `Erc1271`), and
+// the Pot's one ERC-1271 handler, `@sauce/async`'s, says yes for it, in about 40,000 of the 100,000.
+// An approval is left in place once the request settles: it names one request of one market, which
+// is locked once.
 //
 // THE CALLBACK carries no request id: the market calls `handleProof(bytes32 imageId, bytes journal,
 // bytes seal)`. The promise's key is the image id with the journal's first word, the sha256 of the
@@ -80,7 +81,7 @@
 // (0x5b07fdd8), `requestIsLocked(uint256)` (0xcb74db11), `requestIsFulfilled(uint256)` (0x81bf6c24),
 // `slash(uint256)` (0x45bc4d10) and `withdraw(uint256)` (0x2e1a7d4d). The SDK's tests derive each
 // from its signature and run them against the contracts as deployed.
-import { Request, fulfil, promiseKey, requireCaller } from "@sauce/async";
+import { Request, approveHash, fulfil, promiseKey, requireCaller } from "@sauce/async";
 import { approve } from "@sauce/token";
 
 // The tag a query's promise key is made under: keccak256("sauce.zk.sql").
@@ -109,8 +110,8 @@ const SAUCE_ZK_RISC0 = 0xb99128647b7cf726b7c5d344394fa65fa7c24e2e70f54d99faf3927
 // The ERC-7201 namespace of the Boundless requests, in the Pot's storage:
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.ZkRisc0")) - 1)) & ~bytes32(uint256(0xff)).
 // Its first word counts the requests the Pot has made, each request's index. At
-// `keccak256(abi.encode(x, namespace))`: under a request hash, 1 while the Pot approves it; under a
-// promise's key, the request's index and its price above it, until the promise settles.
+// `keccak256(abi.encode(key, namespace))`, under a promise's key: the request's index and its price
+// above it, until the promise settles.
 const SAUCE_ZK_RISC0_NAMESPACE = 0x569afbd4b1cedd4b9d4b5b614f8f04991e23581bad9d682bc2052921d7763600;
 
 // The EIP-712 type hashes of the market's `ProofRequest` and the structs in it, each the keccak256 of
@@ -404,8 +405,8 @@ function requestIdOf(index: Uint256): Uint256 {
   return (1 << 192) | (ctx.self() << 32) | index;
 }
 
-// Submit the request `Zk.risc0` describes, its price deposited, its hash approved as the Pot's, and
-// answer its promise's key.
+// Submit the request `Zk.risc0` describes, its price deposited, its hash approved as the Pot's
+// (ERC-1271), and answer its promise's key.
 export function requestProof(
   market: Address,
   imageId: Uint256,
@@ -462,7 +463,7 @@ export function requestProof(
     ),
   );
   const [domain] = abi.decode(evm.static(market, hex`5b07fdd8`), ["Uint256"]);
-  evm.sstore(risc0SlotOf(crypto.keccak256(hex`1901`.concat(abi.encode(domain, structHash)))), 1);
+  approveHash(crypto.keccak256(hex`1901`.concat(abi.encode(domain, structHash))), true);
   evm.call(
     market,
     maxPrice,
@@ -494,17 +495,6 @@ export function requestProof(
   const key = promiseKey(SAUCE_ZK_RISC0, crypto.keccak256(abi.encode(imageId, digest)));
   evm.sstore(risc0SlotOf(key), index | (maxPrice << 32));
   return key;
-}
-
-// The body of the read-only handler for `isValidSignature(bytes32,bytes)` (ERC-1271): the magic
-// value `0x1626ba7e` for a request hash the Pot approved when it submitted the request, and
-// `0xffffffff` for any other. The signature is not read: the Pot's own record is the approval.
-export function isValidSignature(data: bytes): bytes {
-  const hash = data.slice(4, 36).toBe();
-  if (evm.sload(risc0SlotOf(hash)) == 1) {
-    return hex`1626ba7e00000000000000000000000000000000000000000000000000000000`;
-  }
-  return hex`ffffffff00000000000000000000000000000000000000000000000000000000`;
 }
 
 // The body of the handler for `handleProof(bytes32,bytes,bytes)`, the call a fulfilled request lands

@@ -1240,9 +1240,11 @@ and Succinct have no callback.
   keeps beside the promise (ERC-7201 `sauce.storage.Zk`).
 - **Boundless** (`Zk.risc0`, Base only): the program builds the market's `ProofRequest` (client and
   callback the Pot, id `1 << 192 | pot << 32 | index`), hashes it as the market does (EIP-712 under
-  `eip712DomainSeparator()`) and stores the hash, which the READ-ONLY handler
-  `isValidSignature(bytes32,bytes)` (`signature.handler.js`) approves, in about 36k of the market's
-  100k-gas STATICCALL; so only the Pot's own requests can spend its market balance. The guest's
+  `eip712DomainSeparator()`) and approves the hash with `@sauce/async`'s `approveHash`, which the
+  Pot's one ERC-1271 handler (`@sauce/async/erc1271.handler.js`, declared READ-ONLY in the
+  package's manifest) answers for in about 39k of the market's 100k-gas STATICCALL; so only the
+  Pot's own requests can spend its market balance. An approval stays once the request settles: it
+  names one request of one market, locked once. The guest's
   stdin is the request id then the input, its journal must begin with `sha256(stdin)` (a
   `PrefixMatch` predicate), and the promise key is `promiseKey(keccak256("sauce.zk.risc0"),
 keccak256(abi.encode(imageId, digest)))`, which `handleProof` recomputes from the callback alone.
@@ -1255,8 +1257,7 @@ The suites (`test/std/zk/sql.e2e.test.ts`, `risc0.e2e.test.ts`) run each protoco
 Space and Time's deployed by replaying their creation transactions at the deployer's nonces
 (`fixtures/SpaceAndTime.json`), Boundless's market as its captured proxy, implementation, legacy
 implementation and ZKC (`fixtures/Boundless.json`); only the proof is mocked (Space and Time's
-verifier, Boundless's router) and Ethereum's two Chainlink feeds. A Pot answering ERC-1271 with a
-read-only handler conflicts with any other package that wants `isValidSignature`.
+verifier, Boundless's router) and Ethereum's two Chainlink feeds.
 
 ## Agent skills
 

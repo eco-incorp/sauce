@@ -44,8 +44,9 @@ proven output reaches a minimum; each has the command that runs it.
 - **A Private Pot with the package's handlers installed.** The coprocessor calls the Pot back with
   a selector of its own, which the Pot answers with `@sauce/zk`'s handler for it: Space and Time's
   `queryCallback(bytes32 queryId, bytes result, bytes callbackData)`, and on Base Boundless's
-  `handleProof(bytes32 imageId, bytes journal, bytes seal)` and the read-only
-  `isValidSignature(bytes32 hash, bytes signature)` that approves the Pot's own requests. Install
+  `handleProof(bytes32 imageId, bytes journal, bytes seal)`, and `@sauce/async`'s read-only
+  `isValidSignature(bytes32 hash, bytes signature)`, the Pot's one ERC-1271 answer, which approves
+  the Pot's own requests. Install
   them once per Pot, with `@sauce/async`'s public `expire(bytes32)`:
   `sauce run @sauce/zk --chain base --wallet <name> --password-env <NAME>`; a chain without one of
   the coprocessors gets the others'. A Shared Pot answers no callback.
@@ -157,8 +158,9 @@ request a proof answers. The body is handed the rest of the journal.
 A prover locks a request by asking its client, the Pot, `isValidSignature(hash, signature)`
 (ERC-1271), static, with 100,000 gas, and the lock spends the Pot's balance at the market. When the
 program submits a request it hashes it as the market does (EIP-712, under the market's domain) and
-keeps the hash; the read-only handler answers yes for those hashes and no for any other, in about
-36,000 gas. A request someone else submits naming the Pot as its client cannot be locked.
+approves the hash as one the Pot signed (`@sauce/async`'s `Erc1271`); the Pot's one ERC-1271
+handler answers yes for an approved hash, in about 39,000 gas. A request someone else submits naming
+the Pot as its client was never approved, and cannot be locked.
 
 ### What the callback is trusted with
 
