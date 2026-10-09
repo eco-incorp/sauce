@@ -150,7 +150,8 @@ describe("every test anvil", () => {
       .map((file) => [file, readFileSync(join(REPO, file), "utf8")] as const);
 
   it("starts through spawnAnvil, which refuses a taken port and leaves no orphan", () => {
-    const direct = sources(["sdk/test", "mcp/test"])
+    // The actions suites' too (`actions/tests/anvil.ts`, the mainnet replay in `mainnet.ts`).
+    const direct = sources(["sdk/test", "mcp/test", "actions/tests"])
       .filter(([, text]) =>
         /\bspawn(?:Sync)?\(\s*["']anvil["']\s*,\s*\[(?!\s*["']--version["'])/.test(text),
       )

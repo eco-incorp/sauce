@@ -144,11 +144,13 @@ const RPC_CHAIN_ID = '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]
  * Starts anvil with `args` on `port` and resolves once it answers there: refused when something
  * already answers on the port, and failed when this anvil exits before it answers. A watchdog stops
  * it if this process goes first; the suite stops it otherwise, as ever (`kill`, then its `exit`).
+ * `env` is anvil's environment, this process's by default.
  */
 export async function spawnAnvil(
   port: number,
   args: readonly string[] = [],
   timeout = 20_000,
+  env?: NodeJS.ProcessEnv,
 ): Promise<ChildProcess> {
   if (await answers(port)) {
     throw new Error(
@@ -158,6 +160,7 @@ export async function spawnAnvil(
   }
   const anvil = spawn("anvil", ["--port", String(port), ...args, "--silent"], {
     stdio: ["ignore", "ignore", "pipe"],
+    ...(env === undefined ? {} : { env }),
   });
   let said = "";
   anvil.stderr!.on("data", (chunk: Buffer) => {
