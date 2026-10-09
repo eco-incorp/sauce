@@ -40,6 +40,8 @@ import * as beefyAbis from "../protocols/beefy/abis.js";
 import { deployments as beefyDeployments } from "../protocols/beefy/addresses.js";
 import * as benqiAbis from "../protocols/benqi/abis.js";
 import { deployments as benqiDeployments } from "../protocols/benqi/addresses.js";
+import * as boundlessAbis from "../protocols/boundless/abis.js";
+import { deployments as boundlessDeployments } from "../protocols/boundless/addresses.js";
 import * as camelotAbis from "../protocols/camelot/abis.js";
 import { deployments as camelotDeployments } from "../protocols/camelot/addresses.js";
 import * as cbethAbis from "../protocols/cbeth/abis.js";
@@ -297,6 +299,7 @@ export const PROTOCOL_SOURCES = {
   "baseswap": { abis: baseswapAbis, deployments: baseswapDeployments },
   "beefy": { abis: beefyAbis, deployments: beefyDeployments },
   "benqi": { abis: benqiAbis, deployments: benqiDeployments },
+  "boundless": { abis: boundlessAbis, deployments: boundlessDeployments },
   "camelot": { abis: camelotAbis, deployments: camelotDeployments },
   "cbeth": { abis: cbethAbis, deployments: cbethDeployments },
   "cctp": { abis: cctpAbis, deployments: cctpDeployments },
@@ -417,7 +420,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 318 contracts across 136 protocols. */
+/** One entry per contract: 319 contracts across 137 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -480,6 +483,7 @@ export const CONTRACT_LINKS = [
   { protocol: "beefy", contract: "BIFI", kind: "address-only", roleKey: "BIFI", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "benqi", contract: "Comptroller", kind: "singleton", roleKey: "comptroller", abiExport: "BenqiComptrollerABI" },
   { protocol: "benqi", contract: "QiToken", kind: "interface", abiExport: "QiTokenABI" },
+  { protocol: "boundless", contract: "Market", kind: "singleton", roleKey: "market", abiExport: "BoundlessMarketABI" },
   { protocol: "camelot", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "CamelotV2RouterABI" },
   { protocol: "camelot", contract: "V3SwapRouter", kind: "singleton", roleKey: "v3SwapRouter", abiExport: "CamelotV3SwapRouterABI" },
   { protocol: "camelot", contract: "V2Factory", kind: "singleton", roleKey: "v2Factory", abiExport: "CamelotV2FactoryABI" },
@@ -852,6 +856,10 @@ export interface BeefyContracts {
 export interface BenqiContracts {
   readonly Comptroller: Contract<typeof benqiAbis.BenqiComptrollerABI>;
   readonly QiToken: InterfaceContract<typeof benqiAbis.QiTokenABI>;
+}
+
+export interface BoundlessContracts {
+  readonly Market: Contract<typeof boundlessAbis.BoundlessMarketABI>;
 }
 
 export interface CamelotContracts {
@@ -1599,6 +1607,7 @@ export interface ChainContracts {
   readonly Baseswap: BaseswapContracts;
   readonly Beefy: BeefyContracts;
   readonly Benqi: BenqiContracts;
+  readonly Boundless: BoundlessContracts;
   readonly Camelot: CamelotContracts;
   readonly Cbeth: CbethContracts;
   readonly Cctp: CctpContracts;

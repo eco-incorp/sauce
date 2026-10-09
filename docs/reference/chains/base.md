@@ -82,6 +82,7 @@ address.
 | [Base Native Bridge](../protocols/base-bridge.md) | l2StandardBridge | `0x4200000000000000000000000000000000000010` | `BaseBridge.L2StandardBridge` |
 | [BaseSwap](../protocols/baseswap.md) | v2Router | `0x327Df1E6de05895d2ab08513aaDD9313Fe505d86` | `Baseswap.V2Router` |
 | [Beefy Finance](../protocols/beefy.md) | BIFI | `0xc55E93C62874D8100dBd2DfE307EDc1036ad5434` | `Beefy.BIFI` |
+| [Boundless](../protocols/boundless.md) | market | `0xfd152dadc5183870710fe54f939eae3ab9f0fe82` | `Boundless.Market` |
 | [Coinbase Wrapped Staked ETH](../protocols/cbeth.md) | cbETH | `0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22` | `Cbeth.CbETH` |
 | [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Chainlink CCIP](../protocols/chainlink-ccip.md) | router | `0x881e3A65B4d4a04dD529061dd0071cf975F58bCD` | `ChainlinkCcip.Router` |

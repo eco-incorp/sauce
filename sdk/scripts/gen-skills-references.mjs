@@ -615,7 +615,9 @@ const CHOOSING = {
     "Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),",
     "ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,",
     "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer",
-    "(`sauce-intents`).",
+    "(`sauce-intents`). Boundless is RISC Zero's proof market, on Base: it proves a guest program",
+    "ran and calls the requester back with its journal; a program waits on it with `@sauce/zk`",
+    "(`sauce-zk`).",
   ],
 };
 

@@ -67,6 +67,7 @@ and in each chain's file in `sauce-chains`.
 - `Baseswap.V2Router` ([`baseswap`](../../sauce-protocols/references/registry/baseswap.md), default)
 - `Beefy.BIFI` ([`beefy`](../../sauce-protocols/references/registry/beefy.md))
 - `Benqi.Comptroller` ([`benqi`](../../sauce-protocols/references/registry/benqi.md), default)
+- `Boundless.Market` ([`boundless`](../../sauce-protocols/references/registry/boundless.md), default)
 - `Camelot.V2Factory` ([`camelot`](../../sauce-protocols/references/registry/camelot.md))
 - `Camelot.V2Router` ([`camelot`](../../sauce-protocols/references/registry/camelot.md))
 - `Camelot.V3Factory` ([`camelot`](../../sauce-protocols/references/registry/camelot.md))

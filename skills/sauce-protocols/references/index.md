@@ -340,17 +340,20 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (9)
+## Infrastructure and standards (10)
 
 ### Choosing between them
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
 ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
-(`sauce-intents`).
+(`sauce-intents`). Boundless is RISC Zero's proof market, on Base: it proves a guest program
+ran and calls the requester back with its journal; a program waits on it with `@sauce/zk`
+(`sauce-zk`).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
+| [Boundless](boundless.md) ([registry](registry/boundless.md)) | — | `Boundless`: base | base |
 | Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](ens.md) ([registry](registry/ens.md)) | — | `Ens`: ethereum | ethereum |
 | [ERC20](erc20.md) ([registry](registry/erc20.md)) | — | — | none recorded |

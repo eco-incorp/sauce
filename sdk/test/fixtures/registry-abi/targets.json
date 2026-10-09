@@ -217,6 +217,17 @@
         ]
       }
     },
+    "boundless": {
+      "BoundlessMarketABI": {
+        "roles": ["market"],
+        "required": {
+          "submitRequest((uint256,((address,uint96),(uint8,bytes),bytes4),string,(uint8,bytes),(uint256,uint256,uint64,uint32,uint32,uint32,uint256)),bytes)": "std/zk/zk.evm.js Zk.risc0, the call a program's proof request is submitted and its price deposited with",
+          "eip712DomainSeparator()": "std/zk/zk.evm.js Zk.risc0, which hashes the request as the market does, to approve it as the Pot's own (ERC-1271)",
+          "slash(uint256)": "std/zk/zk.evm.js Zk.cancel, which slashes an expired locked request so its price comes back",
+          "withdraw(uint256)": "std/zk/zk.evm.js Zk.cancel, which withdraws an unanswered request's price"
+        }
+      }
+    },
     "camelot": {
       "CamelotV2RouterABI": {
         "roles": ["v2Router"]
