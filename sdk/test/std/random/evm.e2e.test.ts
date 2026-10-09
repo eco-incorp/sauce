@@ -1,7 +1,8 @@
 /**
  * `@sauce/random` EXECUTED: a program requests randomness and pays for it, the provider calls the
- * Pot back, and the `.then` body runs with what arrived — on an anvil running the released gated
- * engine and Kitchen with v12 #571's Router, whose fallback runs the handler a Pot registered.
+ * Pot back, and the promise settles: its `.then` body runs with what arrived — on an anvil running
+ * the gated engine and Kitchen with v12 #571's Router, whose fallback runs the handler a Pot
+ * registered.
  *
  * The providers are mocks at their own Base addresses, so the package compiles and its handlers
  * authenticate exactly as on Base:
@@ -15,11 +16,18 @@
  * package's handlers (`sauce run @sauce/random`'s), the owner cooks a program that requests, and the
  * mock calls back as the provider would.
  *
- * And what is refused: a callback from anyone but the provider, an id delivered again or never
- * requested, and a callback given less gas than the body needs.
+ * What is refused: a callback from anyone but the provider (it reverts), a request the Pot cannot pay
+ * for and still keep the Kitchen's fee for its callback, and a callback given less gas than the body
+ * needs. What is a no-op, the callback returning: an id delivered again or never requested, and a
+ * fulfilment after the promise expired. A body that reverts is undone and the callback still
+ * returns: `.catch` runs, or the core logs it unhandled, and the delivered value stays in the
+ * package's `RandomDelivered` log. A request no provider fulfils rejects by its deadline, through
+ * the Pot's `expire(bytes32)`, and `Promise.race` against `Async.timeout` settles either way.
  *
  * GATED twice, as `std/async/evm.e2e.test.ts` is: on SAUCE_V12_RUNTIME_CREATION_HEX and on
- * SAUCE_V12_ROUTER_CREATION_HEX, #571's Router, which no release publishes yet.
+ * SAUCE_V12_ROUTER_CREATION_HEX, #571's Router, which no release publishes yet. A `.catch` that
+ * reads its reason needs an engine built from the compiler's tree, not the released one: those cases
+ * skip on the released engine.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -33,6 +41,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  decodeAbiParameters,
   decodeEventLog,
   encodeAbiParameters,
   encodeFunctionData,
@@ -46,6 +55,7 @@ import {
   type Address,
   type Hex,
   type PublicClient,
+  type TestClient,
   type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -66,6 +76,25 @@ const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
 const ROUTER = routerUnderTest();
 const describeRandom = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
+/** The core runs a body under `.catch((e) => …)` to settle it whatever it does, and a catch that
+ *  reads `e` loses its work on the released engine (see `std/async`'s suite): a body that reverts, a
+ *  `.catch` handed its reason, and a combinator settling need an engine built from the compiler's
+ *  tree, and skip on the released one. */
+const RELEASED_ENGINE =
+  RUNTIME_HEX_PATH !== undefined &&
+  readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
+    (
+      JSON.parse(
+        readFileSync(
+          join(
+            dirname(fileURLToPath(import.meta.url)),
+            "../../../src/artifacts/V12RuntimeBytecode.json",
+          ),
+          "utf8",
+        ),
+      ) as { runtimeCreationCode: string }
+    ).runtimeCreationCode.toLowerCase();
+const itOnStackEngine = RELEASED_ENGINE ? it.skip : it;
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "evm", "fixtures");
 const fixture = (name: string) =>
@@ -118,24 +147,35 @@ const NAMESPACE = (() => {
 /** The Pot storage slots the bodies write. */
 const SLOT = keccak256(toHex("random.result"));
 const CAUGHT = keccak256(toHex("random.caught"));
-const GATE = keccak256(toHex("random.gate"));
 
-const potAbi = parseAbi(["function cook(address engine, bytes program) payable returns (bytes)"]);
+/** The Pot's events: the core's, and the package's `RandomDelivered`. */
+const PENDING = keccak256(toHex("PromisePending(bytes32,uint256)"));
+const SETTLED = keccak256(toHex("PromiseSettled(bytes32,uint256)"));
+const IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
+const UNHANDLED = keccak256(toHex("PromiseUnhandled(bytes32,bytes)"));
+const DELIVERED = keccak256(toHex("RandomDelivered(bytes32,bytes)"));
+
+const potAbi = parseAbi([
+  "function cook(address engine, bytes program) payable returns (bytes)",
+  "function expire(bytes32 key)",
+]);
 const kitchenAbi = parseAbi(["function setExecutionFee(uint256 fee)"]);
 
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
 const slotOf = (key: bigint): Hex =>
   keccak256(encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [key, NAMESPACE]));
-/** The key a VRF request parks under: the wrapper and the request id. */
-const vrfKey = (id: bigint): bigint =>
-  BigInt(keccak256(encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [WRAPPER, id])));
-/** The key an Entropy request parks under: Entropy, the provider and the sequence number. */
+/** `promiseKey(tag, id)`: keccak256(abi.encode(tag, id)). */
+const promiseKey = (tag: Address, id: bigint): bigint =>
+  BigInt(keccak256(encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [tag, id])));
+/** A VRF request's promise: its id under the wrapper. */
+const vrfKey = (id: bigint): bigint => promiseKey(WRAPPER, id);
+/** An Entropy request's promise: the provider and sequence number under Entropy. */
 const entropyKey = (provider: Address, sequence: bigint): bigint =>
-  BigInt(
-    keccak256(
-      encodeAbiParameters(
-        [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-        [ENTROPY, provider, sequence],
+  promiseKey(
+    ENTROPY,
+    BigInt(
+      keccak256(
+        encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [provider, sequence]),
       ),
     ),
   );
@@ -149,7 +189,7 @@ function main(bump: Uint256): void {
   });
 }`;
 
-/** A VRF request with a body that reverts, and a `.catch` that records it. */
+/** A VRF request whose body reverts above `limit`, and a `.catch` that records the reason's length. */
 const VRF_CATCH_SOURCE = `import { Random } from "@sauce/random";
 
 function main(limit: Uint256): void {
@@ -159,8 +199,18 @@ function main(limit: Uint256): void {
       evm.sstore(${SLOT}, words[0]);
     })
     .catch((e) => {
-      evm.sstore(${CAUGHT}, 1);
+      evm.sstore(${CAUGHT}, e.length);
     });
+}`;
+
+/** A VRF request whose body reverts above `limit`, with no `.catch`. */
+const VRF_UNHANDLED_SOURCE = `import { Random } from "@sauce/random";
+
+function main(limit: Uint256): void {
+  Random.vrf({ words: 2 }).then((words) => {
+    require(words[0] < limit, "above the limit");
+    evm.sstore(${SLOT}, words[0]);
+  });
 }`;
 
 /** A VRF request whose callback gas is given, too little for the body. */
@@ -172,6 +222,35 @@ function main(bump: Uint256): void {
   });
 }`;
 
+/** A VRF request that anyone may expire a minute after it is made. */
+const VRF_WITHIN_SOURCE = `import { Random } from "@sauce/random";
+
+function main(bump: Uint256): void {
+  Random.vrf({ words: 1 })
+    .within(60)
+    .then((words) => {
+      evm.sstore(${SLOT}, words[0] + bump);
+    })
+    .catch((e) => {
+      evm.sstore(${CAUGHT}, e.length);
+    });
+}`;
+
+/** A VRF request raced against a one-minute timeout. A raced request's callback runs the race's
+ *  body too, which the request's own sizing does not see: its gas is given. */
+const VRF_RACE_SOURCE = `import { Async, Promise } from "@sauce/async";
+import { Random } from "@sauce/random";
+
+function main(bump: Uint256): void {
+  Promise.race([Random.vrf({ words: 1, gas: 500000 }), Async.timeout(60)])
+    .then((words) => {
+      evm.sstore(${SLOT}, words[0] + bump);
+    })
+    .catch((e) => {
+      evm.sstore(${CAUGHT}, e.length);
+    });
+}`;
+
 /** An Entropy request from the default provider, whose body writes the number plus `bump`. */
 const ENTROPY_SOURCE = `import { Random } from "@sauce/random";
 
@@ -181,18 +260,19 @@ function main(bump: Uint256): void {
   });
 }`;
 
-/** An Entropy request whose body reverts until the Pot's gate is open, with no `.catch`. */
-const ENTROPY_GATED_SOURCE = `import { Random } from "@sauce/random";
+/** An Entropy request whose body reverts below `floor`, with no `.catch`. */
+const ENTROPY_FLOOR_SOURCE = `import { Random } from "@sauce/random";
 
-function main(bump: Uint256): void {
+function main(floor: Uint256): void {
   Random.entropy().then((value) => {
-    require(evm.sload(${GATE}) == 1, "closed");
-    evm.sstore(${SLOT}, value + bump);
+    require(value >= floor, "below the floor");
+    evm.sstore(${SLOT}, value);
   });
 }`;
 
 let anvil: ChildProcess;
 let publicClient: PublicClient;
+let testClient: TestClient;
 let stack: GatedEngine;
 let token: Address;
 
@@ -234,12 +314,14 @@ const cook = (program: Hex) =>
     FEE,
   );
 
-/** What a call answers or reverts with, replayed as an `eth_call` from `from`, with `gas`. */
+/** What a call answers or reverts with, replayed as an `eth_call` from `from`, with `gas` and
+ *  `value`. */
 async function callAs(
   from: Address,
   to: Address,
   data: Hex,
   gas = 15_000_000n,
+  value = 0n,
 ): Promise<{ ok: boolean; data: Hex; reason: string }> {
   const response = (await (
     await fetch(RPC_URL, {
@@ -249,7 +331,7 @@ async function callAs(
         jsonrpc: "2.0",
         id: 1,
         method: "eth_call",
-        params: [{ from, to, data, gas: toHex(gas) }, "latest"],
+        params: [{ from, to, data, gas: toHex(gas), value: toHex(value) }, "latest"],
       }),
     })
   ).json()) as { result?: Hex; error?: { data?: Hex } };
@@ -284,6 +366,36 @@ function eventsOf(
         },
     );
 }
+
+/** The Pot's logs in `receipt`, as `[topic0, …topics, data]`. */
+const potLogs = (receipt: TransactionReceipt): readonly (readonly Hex[])[] =>
+  receipt.logs
+    .filter((log) => log.address.toLowerCase() === stack.pot.toLowerCase())
+    .map((log) => [...(log.topics as Hex[]), log.data]);
+
+/** The value the package logged as delivered for `key` in `receipt`: `abi.encode` of it. */
+function deliveredIn(receipt: TransactionReceipt, key: bigint): Hex | undefined {
+  const found = potLogs(receipt).find(([topic, of]) => topic === DELIVERED && of === word(key));
+  if (found === undefined) return undefined;
+  const [value] = decodeAbiParameters([{ type: "bytes" }], found[found.length - 1]!);
+
+  return value;
+}
+
+/** Moves the chain `seconds` on, and mines a block there. */
+async function warp(seconds: number): Promise<void> {
+  await testClient.increaseTime({ seconds });
+  await testClient.mine({ blocks: 1 });
+}
+
+/** A stranger calls the Pot's `expire(key)`, paying the Kitchen's fee for its cook. */
+const expire = (key: bigint) =>
+  send(
+    stranger,
+    stack.pot,
+    encodeFunctionData({ abi: potAbi, functionName: "expire", args: [word(key)] }),
+    FEE,
+  );
 
 /** Cooks a VRF request program, answering the request id the wrapper gave it and the receipt. */
 async function requestVrf(
@@ -367,7 +479,7 @@ describeRandom("@sauce/random on the EVM, through the Router's handlers", () => 
     });
     const transport = http(RPC_URL);
     publicClient = createPublicClient({ transport });
-    const testClient = createTestClient({ mode: "anvil", transport });
+    testClient = createTestClient({ mode: "anvil", transport });
     for (const deadline = Date.now() + 20_000; ;) {
       try {
         await publicClient.getChainId();
@@ -451,6 +563,10 @@ describeRandom("@sauce/random on the EVM, through the Router's handlers", () => 
       const fulfilled = await send(stranger, WRAPPER, fulfill(id, [7n, 35n]));
       expect(fulfilled.status).toBe("success");
       expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+      expect(deliveredIn(fulfilled, vrfKey(id))).toBe(
+        encodeAbiParameters([{ type: "uint256[]" }], [[7n, 35n]]),
+      );
+      expect(potLogs(fulfilled)).toContainEqual([SETTLED, word(vrfKey(id)), word(2n)]);
 
       expect(await storage(SLOT)).toBe(1_042n);
       expect(await parked(vrfKey(id))).toBe(0n);
@@ -535,39 +651,60 @@ function main(bump: Uint256): void {
       expect(await storage(SLOT)).toBe(3n);
     });
 
-    it("refuses an id delivered again, or never requested: the wrapper's callback fails", async () => {
+    it("lets an id delivered again, or never requested, pass and run nothing", async () => {
       const { id } = await requestVrf(VRF_SOURCE, [0n]);
       expect((await send(stranger, WRAPPER, fulfill(id, [5n, 5n]))).status).toBe("success");
       expect(await storage(SLOT)).toBe(10n);
       for (const again of [id, id + 1n]) {
-        const deliver = encodeFunctionData({
-          abi: WRAPPER_MOCK.abi,
-          functionName: "deliver",
-          args: [stack.pot, again, [9n, 9n], 1_000_000],
-        });
-        const replayed = await send(stranger, WRAPPER, deliver);
+        const replayed = await send(
+          stranger,
+          WRAPPER,
+          encodeFunctionData({
+            abi: WRAPPER_MOCK.abi,
+            functionName: "deliver",
+            args: [stack.pot, again, [9n, 9n], 1_000_000],
+          }),
+        );
         expect(replayed.status).toBe("success");
-        expect(eventsOf(replayed, WRAPPER, WRAPPER_MOCK.abi).map((e) => e.eventName)).toEqual([
-          "WrapperFulfillmentFailed",
-        ]);
+        // The callback returned: the wrapper logs no failure, and the Pot logs the promise ignored.
+        expect(eventsOf(replayed, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect(potLogs(replayed)).toContainEqual([IGNORED, word(vrfKey(again)), word(0n)]);
         expect(await storage(SLOT)).toBe(10n);
       }
-      // The handler's own refusal, as the wrapper's call sees it.
-      const replay = concat([
-        VRF_CALLBACK,
-        encodeAbiParameters([{ type: "uint256" }, { type: "uint256[]" }], [id, [9n, 9n]]),
-      ]);
-      expect((await callAs(WRAPPER, stack.pot, replay)).reason).toBe(
-        "async: nothing is parked under this key",
-      );
     });
 
-    it("runs `.catch` in the body's place when the body reverts", async () => {
-      const { id } = await requestVrf(VRF_CATCH_SOURCE, [100n]);
-      expect((await send(stranger, WRAPPER, fulfill(id, [500n]))).status).toBe("success");
-      expect(await storage(CAUGHT)).toBe(1n);
-      expect(await parked(vrfKey(id))).toBe(0n);
-    });
+    itOnStackEngine(
+      "runs `.catch` in the body's place when the body reverts, with its reason",
+      async () => {
+        const { id } = await requestVrf(VRF_CATCH_SOURCE, [100n]);
+        const fulfilled = await send(stranger, WRAPPER, fulfill(id, [500n]));
+        expect(fulfilled.status).toBe("success");
+        expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect(await storage(CAUGHT)).toBe(BigInt("above the limit".length));
+        expect(await parked(vrfKey(id))).toBe(0n);
+      },
+    );
+
+    itOnStackEngine(
+      "returns from a callback whose body reverts with no `.catch`, the words kept in its log",
+      async () => {
+        const before = await storage(SLOT);
+        const { id } = await requestVrf(VRF_UNHANDLED_SOURCE, [100n]);
+        const fulfilled = await send(stranger, WRAPPER, fulfill(id, [500n, 1n]));
+        expect(fulfilled.status).toBe("success");
+        // Not spent as a failure: the wrapper saw the callback return.
+        expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect(await storage(SLOT)).toBe(before);
+        expect(
+          potLogs(fulfilled).some(([topic, of]) => topic === UNHANDLED && of === word(vrfKey(id))),
+        ).toBe(true);
+        // What arrived, for the owner to act on.
+        expect(deliveredIn(fulfilled, vrfKey(id))).toBe(
+          encodeAbiParameters([{ type: "uint256[]" }], [[500n, 1n]]),
+        );
+        expect(await parked(vrfKey(id))).toBe(0n);
+      },
+    );
 
     it("spends a request whose callback runs out of the gas it asked for: the body stays parked", async () => {
       const before = await storage(SLOT);
@@ -580,6 +717,98 @@ function main(bump: Uint256): void {
       ]);
       expect(await storage(SLOT)).toBe(before);
       expect(await parked(vrfKey(id))).not.toBe(0n);
+    });
+
+    it("refuses a request the Pot cannot pay and still keep the Kitchen's fee for its callback", async () => {
+      const balance = await publicClient.getBalance({ address: stack.pot });
+      await testClient.setBalance({ address: stack.pot, value: 0n });
+      const program = compiled(VRF_SOURCE, [0n]);
+      const refused = await callAs(
+        OWNER.address,
+        stack.pot,
+        encodeFunctionData({ abi: potAbi, functionName: "cook", args: [stack.engine, program] }),
+        15_000_000n,
+        FEE,
+      );
+      expect(refused.ok).toBe(false);
+      expect(refused.reason).toContain(
+        "random: the Pot cannot pay the request and keep the Kitchen's fee for its callback",
+      );
+      expect((await cook(program)).status).toBe("reverted");
+      await testClient.setBalance({ address: stack.pot, value: balance });
+    });
+
+    itOnStackEngine(
+      "rejects a request past its deadline through the Pot's expire; a late fulfilment is a no-op",
+      async () => {
+        const before = await storage(SLOT);
+        const { id } = await requestVrf(VRF_WITHIN_SOURCE, [0n]);
+        const key = vrfKey(id);
+        // Not yet.
+        expect((await expire(key)).status).toBe("reverted");
+        expect(await parked(key)).not.toBe(0n);
+
+        await warp(61);
+        const expired = await expire(key);
+        expect(expired.status).toBe("success");
+        expect(await storage(CAUGHT)).toBe(36n); // Timeout(bytes32): a selector and the key
+        expect(await parked(key)).toBe(0n);
+
+        // The words arrive after all: the callback returns and runs nothing.
+        const late = await send(stranger, WRAPPER, fulfill(id, [77n]));
+        expect(late.status).toBe("success");
+        expect(eventsOf(late, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect(potLogs(late)).toContainEqual([IGNORED, word(key), word(0n)]);
+        expect(await storage(SLOT)).toBe(before);
+      },
+    );
+
+    describe("raced against Async.timeout", () => {
+      /** Requests, answering the request id and the timeout's key: the one promise parked with a
+       *  deadline. */
+      async function race(): Promise<{ id: bigint; timeout: bigint }> {
+        const { id, receipt } = await requestVrf(VRF_RACE_SOURCE, [1_000n]);
+        const timed = potLogs(receipt).filter(
+          ([topic, , data]) => topic === PENDING && BigInt(data!) !== 0n,
+        );
+        expect(timed).toHaveLength(1);
+
+        return { id, timeout: BigInt(timed[0]![1]!) };
+      }
+
+      itOnStackEngine(
+        "settles with the words when they arrive first; the timeout, expired later, is a no-op",
+        async () => {
+          await testClient.setStorageAt({ address: stack.pot, index: SLOT, value: word(0n) });
+          await testClient.setStorageAt({ address: stack.pot, index: CAUGHT, value: word(0n) });
+          const { id, timeout } = await race();
+          expect((await send(stranger, WRAPPER, fulfill(id, [5n]))).status).toBe("success");
+          expect(await storage(SLOT)).toBe(1_005n);
+
+          await warp(61);
+          const expired = await expire(timeout);
+          expect(expired.status).toBe("success");
+          expect(await storage(CAUGHT)).toBe(0n);
+          expect(await storage(SLOT)).toBe(1_005n);
+        },
+      );
+
+      itOnStackEngine(
+        "rejects with the timeout when it expires first; the words, arriving late, are a no-op",
+        async () => {
+          await testClient.setStorageAt({ address: stack.pot, index: SLOT, value: word(0n) });
+          await testClient.setStorageAt({ address: stack.pot, index: CAUGHT, value: word(0n) });
+          const { id, timeout } = await race();
+          await warp(61);
+          expect((await expire(timeout)).status).toBe("success");
+          expect(await storage(CAUGHT)).toBe(36n);
+
+          const late = await send(stranger, WRAPPER, fulfill(id, [5n]));
+          expect(late.status).toBe("success");
+          expect(eventsOf(late, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+          expect(await storage(SLOT)).toBe(0n);
+        },
+      );
     });
   });
 
@@ -614,16 +843,17 @@ function main(bump: Uint256): void {
       expect(await parked(key)).toBe(0n);
     });
 
-    it("refuses a callback from anyone but Entropy, and an id delivered again", async () => {
+    it("refuses a callback from anyone but Entropy; one delivered again, or for another provider, is a no-op", async () => {
       const { sequence } = await requestEntropy(ENTROPY_SOURCE, [0n]);
-      const callback = concat([
-        ENTROPY_CALLBACK,
-        encodeAbiParameters(
-          [{ type: "uint64" }, { type: "address" }, { type: "bytes32" }],
-          [sequence, PROVIDER, word(1n)],
-        ),
-      ]);
-      expect((await callAs(STRANGER.address, stack.pot, callback)).reason).toBe(
+      const callback = (seq: bigint, provider: Address) =>
+        concat([
+          ENTROPY_CALLBACK,
+          encodeAbiParameters(
+            [{ type: "uint64" }, { type: "address" }, { type: "bytes32" }],
+            [seq, provider, word(1n)],
+          ),
+        ]);
+      expect((await callAs(STRANGER.address, stack.pot, callback(sequence, PROVIDER))).reason).toBe(
         "async: the call is not from the protocol",
       );
       const reveal = encodeFunctionData({
@@ -633,46 +863,50 @@ function main(bump: Uint256): void {
       });
       expect((await send(stranger, ENTROPY, reveal)).status).toBe("success");
       expect(await storage(SLOT)).toBe(42n);
-      expect((await callAs(ENTROPY, stack.pot, callback)).reason).toBe(
-        "async: nothing is parked under this key",
-      );
-      // Another provider's request of the same number is another key.
-      expect(
-        (
-          await callAs(
-            ENTROPY,
-            stack.pot,
-            concat([
-              ENTROPY_CALLBACK,
-              encodeAbiParameters(
-                [{ type: "uint64" }, { type: "address" }, { type: "bytes32" }],
-                [sequence + 1n, STRANGER.address, word(1n)],
-              ),
-            ]),
-          )
-        ).reason,
-      ).toBe("async: nothing is parked under this key");
+      for (const [seq, provider] of [
+        [sequence, PROVIDER],
+        [sequence, STRANGER.address],
+      ] as const) {
+        const again = await send(
+          stranger,
+          ENTROPY,
+          encodeFunctionData({
+            abi: ENTROPY_MOCK.abi,
+            functionName: "deliver",
+            args: [stack.pot, seq, provider, word(9n)],
+          }),
+        );
+        expect(again.status).toBe("success");
+        expect(potLogs(again)).toContainEqual([IGNORED, word(entropyKey(provider, seq)), word(0n)]);
+        expect(await storage(SLOT)).toBe(42n);
+      }
     });
 
-    it("leaves a request whose body reverts open, and its body parked, to be revealed again", async () => {
-      const { sequence } = await requestEntropy(ENTROPY_GATED_SOURCE, [1n]);
-      const key = entropyKey(PROVIDER, sequence);
-      const reveal = encodeFunctionData({
-        abi: ENTROPY_MOCK.abi,
-        functionName: "reveal",
-        args: [PROVIDER, sequence, word(41n)],
-      });
-      const failed = await send(stranger, ENTROPY, reveal);
-      expect(failed.status).toBe("success");
-      const [event] = eventsOf(failed, ENTROPY, ENTROPY_MOCK.abi);
-      expect((event!.args as { callbackFailed: boolean }).callbackFailed).toBe(true);
-      expect(await parked(key)).not.toBe(0n);
-      // The gate opens, and the same number revealed again — Entropy's recovery path, with no gas
-      // limit — runs the body.
-      expect((await cook(compiled(`evm.sstore(${GATE}, 1);`))).status).toBe("success");
-      expect((await send(stranger, ENTROPY, reveal)).status).toBe("success");
-      expect(await storage(SLOT)).toBe(42n);
-      expect(await parked(key)).toBe(0n);
-    });
+    itOnStackEngine(
+      "returns from a callback whose body reverts, so Entropy records no failure, the number kept in its log",
+      async () => {
+        const before = await storage(SLOT);
+        const { sequence } = await requestEntropy(ENTROPY_FLOOR_SOURCE, [1_000n]);
+        const key = entropyKey(PROVIDER, sequence);
+        const revealed = await send(
+          stranger,
+          ENTROPY,
+          encodeFunctionData({
+            abi: ENTROPY_MOCK.abi,
+            functionName: "reveal",
+            args: [PROVIDER, sequence, word(7n)],
+          }),
+        );
+        expect(revealed.status).toBe("success");
+        const [event] = eventsOf(revealed, ENTROPY, ENTROPY_MOCK.abi);
+        expect((event!.args as { callbackFailed: boolean }).callbackFailed).toBe(false);
+        expect(await storage(SLOT)).toBe(before);
+        expect(
+          potLogs(revealed).some(([topic, of]) => topic === UNHANDLED && of === word(key)),
+        ).toBe(true);
+        expect(deliveredIn(revealed, key)).toBe(word(7n));
+        expect(await parked(key)).toBe(0n);
+      },
+    );
   });
 });
