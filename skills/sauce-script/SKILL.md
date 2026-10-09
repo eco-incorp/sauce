@@ -171,8 +171,9 @@ removed:
   one.
 - `bytes`: `` hex`a9059cbb` ``, `"text"`, `.concat`, `.slice(a, b)`, `.length`, `b[i]`,
   `x.toBytesBe(32)`, `x.toBytesLe(8)`, `abi.encode`/`abi.decode` (EVM). Bind a literal before
-  calling a method on it: ``const selector = hex`a9059cbb`; selector.concat(data)``. `hex` is the
-  only template form: every untagged template literal is rejected, with or without `${}`.
+  calling a method on it: ``const selector = hex`a9059cbb`; selector.concat(data)``. An untagged
+  template literal is a string the compiler builds while compiling: every `${…}` in it must be a
+  value it knows, never one read at run time.
 - Arrays and records: `[a, b]`, `new Array(n)`, `xs[i] = v`, `xs.length`, `{ amount: 1 }`.
   Destructuring, `const [a, b] = …`, needs an initializer that produces a record (a multi-output
   call, `abi.decode`); an array is indexed instead.
@@ -316,8 +317,8 @@ The full list, with what each rejection says, is section 14 of
 | `switch`, `for...in`, `enum`, `type` aliases, `await`                                                              | `if` chains, arrays, inline object types, plain functions                   |
 | `finally`                                                                                                          | code after the `try`; to survive a failure on EVM, `try`/`catch` (below)    |
 | arrow functions and nested functions, except an intent's body, `.then(() => { ... })`, and `.catch(() => { ... })` | top-level function declarations                                             |
-| template literals, comparing bytes with `==`                                                                       | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each |
-| `as` casts, default parameters, spread, object destructuring                                                       | explicit values and field access                                            |
+| a template literal with a run-time `${…}`, comparing bytes with `==`                                               | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each |
+| `as` casts, default parameters, spread of a run-time array, object destructuring                                   | explicit values and field access                                            |
 | `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                         | `new Array(n)` and an index; `if`; `**`                                     |
 
 ```sauce fails
