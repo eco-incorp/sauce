@@ -160,7 +160,7 @@ export function globalsIndex(sdk, ecoRoutes, support) {
     for (const ns of globals.protocols) {
       for (const contract of ns.contracts) {
         // The Portal and its provers are left to the intent syntax: a program opens an intent with
-        // `await Arbitrum.hop({ ... })` (`sauce-intents`), never by calling them by name.
+        // `Arbitrum.hop({ ... }).then(...)` (`sauce-intents`), never by calling them by name.
         if (contract.protocol === INTENT_PROTOCOL) continue;
         const name = `${ns.namespace}.${contract.name}`;
         if (ns.kind === "protocol") {
@@ -915,7 +915,7 @@ function renderGlobals(data) {
     "",
     "A chain name is its chain id, so `chainId == Ethereum` is decided while compiling and a program",
     "keeps only the branch of the chain it is compiled for. It opens an intent from inside a program",
-    "(`await Ethereum.hop({ send, receive, refundee })`) and qualifies a contract",
+    "(`Ethereum.hop({ send, receive, refundee }).then(() => { … })`) and qualifies a contract",
     "address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains",
     "to take intents; each line says whether its chain does. Each line also says whether the initial",
     "release supports the chain: a program compiles and simulates on every chain, and its transactions",
@@ -1724,8 +1724,8 @@ const INTENT_DEFAULTS_SKILL = "sauce-intents/references/defaults.md";
 const INTENT_DEFAULTS_DOCS = "intent-defaults.md";
 
 /**
- * What each of a hop's fields is when it is left out — `await Chain.hop({ send, receive,
- * refundee, … })` — and why, as one table both audiences read. From the SDK's constants, so a
+ * What each of a hop's fields is when it is left out — `Chain.hop({ send, receive, refundee, … })`
+ * — and why, as one table both audiences read. From the SDK's constants, so a
  * changed window changes both.
  */
 function renderIntentDefaults(data) {
@@ -1737,7 +1737,7 @@ function renderIntentDefaults(data) {
     "",
     "# Intent defaults",
     "",
-    "An intent opened with `await Chain.hop({ send, receive, refundee })` may give each of these",
+    "An intent opened with `Chain.hop({ send, receive, refundee }).then(…)` may give each of these",
     "fields in the same object. Left out, each but the refundee is what Eco's Portal app gives an",
     "intent:",
     "",

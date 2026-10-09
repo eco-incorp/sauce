@@ -14,6 +14,7 @@ import {
   packageHandlerDeclarations,
   packageInstall,
   packageInterfaces,
+  packageReader,
 } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 
@@ -84,6 +85,22 @@ describe("compiling them for a chain", () => {
     expect(() =>
       compileHandlers("base", [{ ...declarations[1]!, requires: ["Router"] }], read),
     ).toThrow("a handler requires a contract as Namespace.Contract, not Router");
+  });
+
+  it("takes a handler another package ships, as the Pot's one ERC-1271 handler", () => {
+    const [handler] = compileHandlers(
+      "base",
+      [
+        {
+          selector: "isValidSignature(bytes32,bytes)",
+          program: "@sauce/async/erc1271.handler.js",
+          readOnly: true,
+        },
+      ],
+      packageReader("@sauce/hop"),
+    );
+    expect(handler!.selector).toBe(toFunctionSelector("isValidSignature(bytes32,bytes)"));
+    expect(handler!.readOnly).toBe(true);
   });
 
   it("refuses two handlers for one selector, a file it cannot read and a bad selector", () => {

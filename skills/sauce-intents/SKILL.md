@@ -1,39 +1,25 @@
 ---
 name: sauce-intents
-description: Cross-chain intents written in Sauce — a file that hops to another chain, await Base.hop({ send, receive, refundee }) in main, the code after it running there, its inputs main's parameters passed with --args; the deadlines, refundee, prover, salt and Kitchen fee as fields of the hop, and their defaults; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each; the intent hash, the vault, isIntentFunded); every way to publish and fund it (a cook on your Pot, sauce intent publish --fund or sauce run; a transfer into the vault; cascades; quoted intents); amounts measured on chain; the body, a program cooked on the destination's shared Pot, and the Kitchen fee the solver pays; on which chain each name resolves; rehearsing both sides. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers or Executors.
+description: Cross-chain intents written in Sauce — a file that hops to another chain, Base.hop({ send, receive, refundee }).then(() => { … }) in main, the body running there, its inputs main's parameters passed with --args; the deadlines, refundee, prover, salt and Kitchen fee as fields of the hop, and their defaults; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each; the intent hash, the vault, isIntentFunded); every way to publish and fund it (a cook on your Pot, sauce intent publish --fund or sauce run; a transfer into the vault; cascades; quoted intents); amounts measured on chain; the body, a program cooked on the destination's shared Pot, and the Kitchen fee the solver pays; on which chain each name resolves; rehearsing both sides. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers or Executors.
 ---
 
 # Cross-chain intents in Sauce
 
 An intent is an **offer**: run this on the destination chain, and the reward escrowed on this chain
-is yours. An intent file is a program like any other. `await <Chain>.hop({ … })` opens an intent
-to that chain: `send` names what this chain escrows for the solver, `receive` what the solver
-delivers on the destination, and everything after the `await` is the body that runs there. Every
+is yours. An intent file is a program like any other. `<Chain>.hop({ … })` opens an intent to that
+chain: `send` names what this chain escrows for the solver, `receive` what the solver delivers on
+the destination, and `.then(() => { … })` takes the body that runs there. Every
 value the file does not compute is one of `main`'s typed parameters, passed with `--args`
 (`sauce-script`).
 
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {
-  await Ethereum.hop({
+  Ethereum.hop({
     send: { token: USDC, amount: reward }, // Base's USDC, escrowed here
     receive: { token: USDC, amount }, // Ethereum's USDC, brought by the solver
     refundee: refundTo, // the refund address: an unfilled intent's reward goes back there
-  });
-  USDC.transfer(recipient, amount); // Ethereum's USDC: from here on, the code runs there
-}
-```
-
-As in JavaScript, `await x; rest` is `x.then(() => { rest })`. The same intent with its body written
-out, the same program:
-
-```sauce chain=base
-function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {
-  Ethereum.hop({
-    send: { token: USDC, amount: reward },
-    receive: { token: USDC, amount },
-    refundee: refundTo,
   }).then(() => {
-    USDC.transfer(recipient, amount);
+    USDC.transfer(recipient, amount); // Ethereum's USDC: the body runs there
   });
 }
 ```
@@ -132,14 +118,15 @@ Deadlines are Unix seconds.
 
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {
-  await Ethereum.hop({
+  Ethereum.hop({
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount },
     refundee: refundTo, // may reclaim the reward if no fill is proven
     rewardDeadline: ctx.timestamp() + 86400 * 14, // refundable after two weeks
     deadline: ctx.timestamp() + 1800, // filled within half an hour, or never
+  }).then(() => {
+    USDC.transfer(recipient, amount);
   });
-  USDC.transfer(recipient, amount);
 }
 ```
 
@@ -245,8 +232,8 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   compiled: a symbol, or `Token(<address on the source chain>)`. Its amount may be a measured
   value. The deadlines, salt and fee are computed on the source chain too, where the intent is
   built.
-- **In the body**, after the `await` or inside `.then(...)`, the code runs on the destination, and
-  every name a chain supplies resolves there: after `await Ethereum.hop(...)`, `USDC` is Ethereum's
+- **In the body**, inside `.then(...)`, the code runs on the destination, and every name a chain
+  supplies resolves there: in `Ethereum.hop(...).then(...)`'s body, `USDC` is Ethereum's
   USDC, `AaveV3.Pool` is Ethereum's pool, and `chainId` and a `Namespace_Contract` name are
   Ethereum's. The tokens a destination has are listed in
   [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md), with their
@@ -367,13 +354,14 @@ solver brings on Ethereum what the Pot holds on Base, less 0.1%:
 function main(beneficiary: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   const delivered = amount - (amount * 10) / 10000;
-  await Ethereum.hop({
+  Ethereum.hop({
     send: { token: USDC, amount },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
+  }).then(() => {
+    USDC.approve(AaveV3.Pool, delivered);
+    AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
   });
-  USDC.approve(AaveV3.Pool, delivered);
-  AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
 }
 ```
 
@@ -382,8 +370,8 @@ margin. Make it worth filling.
 
 ## A whole program as the body
 
-The body can be any program for the destination. It is written after the `await` (or inside
-`.then`'s braces) and uses `main`'s parameters as values. It may also use what the file declares: its imports (an ABI, a library)
+The body can be any program for the destination. It is written inside `.then`'s braces and uses
+`main`'s parameters as values. It may also use what the file declares: its imports (an ABI, a library)
 and its helper functions, each compiled into the body's program for the destination. It calls
 contracts as any program does (`sauce-script`): by namespace (`UniswapV3.Factory.getPool(...)`),
 through a registry ABI import, or through an ABI of the file's own imported at its top. A swap is a
@@ -412,21 +400,22 @@ function main(
   recipient: Address,
   refundTo: Address,
 ) {
-  await Base.hop({
+  Base.hop({
     send: { token: WETH, amount: reward }, // the source chain's WETH
     receive: { token: WETH, amount: amountIn }, // Base's WETH
     refundee: refundTo,
+  }).then(() => {
+    const pool = UniswapV3.Factory.getPool(WETH, USDC, 500); // Base's 0.05% tier
+    require(pool != 0, "no WETH/USDC pool at 0.05%");
+    // Pays the recipient the USDC, and reverts the whole fulfilment below minOut.
+    const before = WETH.balanceOf(ctx.self());
+    uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
+    // What this intent delivered and the pool did not take: never the shared Pot's balance.
+    const unsold = amountIn - (before - WETH.balanceOf(ctx.self()));
+    if (unsold > 0) {
+      WETH.transfer(refundTo, unsold);
+    }
   });
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500); // Base's 0.05% tier
-  require(pool != 0, "no WETH/USDC pool at 0.05%");
-  // Pays the recipient the USDC, and reverts the whole fulfilment below minOut.
-  const before = WETH.balanceOf(ctx.self());
-  uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
-  // What this intent delivered and the pool did not take: never the shared Pot's balance.
-  const unsold = amountIn - (before - WETH.balanceOf(ctx.self()));
-  if (unsold > 0) {
-    WETH.transfer(refundTo, unsold);
-  }
 }
 ```
 
@@ -443,29 +432,10 @@ has no liquidity or is past that limit. It swaps through `@sauce/router`, finds 
 ## When the body reverts
 
 A body that reverts fails the fill: the solver's transaction reverts, and the reward stays
-escrowed until it is refunded. On an EVM destination, a `try` around the hop handles the body
-instead. When the body reverts, everything it did is undone, the handler runs on the destination in
-its place, and the fill succeeds. Here a supply that fails hands the delivered USDC to the
-beneficiary:
-
-```sauce chain=base
-function main(beneficiary: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
-  try {
-    await Ethereum.hop({
-      send: { token: USDC, amount },
-      receive: { token: USDC, amount },
-      refundee: refundTo,
-    });
-    USDC.approve(AaveV3.Pool, amount);
-    AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
-  } catch (e) {
-    USDC.transfer(beneficiary, amount);
-  }
-}
-```
-
-Without `await`, the handler is `.catch(...)` after `.then(...)`:
+escrowed until it is refunded. On an EVM destination, `.catch(...)` after `.then(...)` handles the
+body instead: when the body reverts, everything it did is undone, the handler runs on the
+destination in its place, and the fill succeeds. Here a supply that fails hands the delivered USDC
+to the beneficiary:
 
 ```sauce chain=base
 function main(beneficiary: Address, refundTo: Address) {
@@ -490,26 +460,28 @@ first (`e.slice(0, 4)`). Write `.catch(() => { … })` when the handler does not
 
 ## Cascades
 
-An intent's body can open the next one, so hops read top to bottom: each `await` is the next hop,
-and the code after it runs on the chain it hopped to. Each level pays the next solver what it was
-delivered, so every amount follows from the first, and each solver keeps its margin (0.1% here).
+An intent's body can open the next one: each hop's `.then` opens the next, and its body runs on
+the chain it hopped to. Each level pays the next solver what it was delivered, so every amount
+follows from the first, and each solver keeps its margin (0.1% here).
 
 ```sauce chain=base
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self()); // this Pot's own, on Base
   const onEthereum = amount - amount / 1000; // what the first solver delivers
   const onBase = onEthereum - onEthereum / 1000; // what the second delivers
-  await Ethereum.hop({
+  Ethereum.hop({
     send: { token: USDC, amount },
     receive: { token: USDC, amount: onEthereum },
     refundee: refundTo,
+  }).then(() => {
+    Base.hop({
+      send: { token: USDC, amount: onEthereum }, // Ethereum's: what this level received
+      receive: { token: USDC, amount: onBase },
+      refundee: refundTo, // every level names its own
+    }).then(() => {
+      USDC.transfer(recipient, onBase); // Base's USDC
+    });
   });
-  await Base.hop({
-    send: { token: USDC, amount: onEthereum }, // Ethereum's: what this level received
-    receive: { token: USDC, amount: onBase },
-    refundee: refundTo, // every level names its own
-  });
-  USDC.transfer(recipient, onBase); // Base's USDC
 }
 ```
 
@@ -520,72 +492,6 @@ vault on Ethereum's Portal from what that level was delivered, in Ethereum's USD
 `publish`, so the child is published like any other intent and any solver can discover it. Keep
 every level on a supported chain, as here (Base, Ethereum, then Base again): the command checks the
 first level's chains only.
-
-The same cascade with each body written out with `.then(...)` compiles to the same program:
-
-```sauce chain=base
-function main(recipient: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
-  const onEthereum = amount - amount / 1000;
-  const onBase = onEthereum - onEthereum / 1000;
-  Ethereum.hop({
-    send: { token: USDC, amount },
-    receive: { token: USDC, amount: onEthereum },
-    refundee: refundTo,
-  }).then(() => {
-    Base.hop({
-      send: { token: USDC, amount: onEthereum },
-      receive: { token: USDC, amount: onBase },
-      refundee: refundTo,
-    }).then(() => {
-      USDC.transfer(recipient, onBase);
-    });
-  });
-}
-```
-
-No `async` is needed. An `await` is a statement directly in `main`'s body, in the body of an
-intent, in a `try` block there, or in a branch of an `if` there that ends its body. Everything after
-it, to the end of that body (or of that branch), runs on its destination: names resolve there,
-values from before it are captured and cannot be assigned or declared again, and a `return` is the
-body's. A hop opened on a condition is `if (change > 0) { await Ethereum.hop({ … }); … }` with
-nothing after the `if`: a statement there would run wherever the branch taken continued, so it is a
-compile error. So is an `await` in a loop or another block, in another function, or used as a
-value, and `await` followed by `(`, `[` or a line break in `main` or a body, where it reads as a
-name: start the hop on the `await`'s line.
-
-A `try` around awaited hops handles each body, and what runs before them. The handler runs on
-whichever chain failed and resolves its names there. It is compiled once per chain, and
-`chainId == Ethereum` is decided as it is (a chain's name is its id), so each chain keeps only its
-own branch, which moves only what that chain can account for:
-
-```sauce chain=base
-function main(recipient: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
-  const delivered = amount - amount / 1000;
-  try {
-    await Ethereum.hop({
-      send: { token: USDC, amount },
-      receive: { token: USDC, amount: delivered },
-      refundee: refundTo,
-    });
-    USDC.approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(USDC, delivered, recipient, 0);
-  } catch (e) {
-    if (chainId == Ethereum) {
-      USDC.transfer(refundTo, delivered); // what this intent delivered, from the shared Pot
-    } else {
-      USDC.transfer(refundTo, amount); // on Base, where it opens: this Pot's own
-    }
-  }
-}
-```
-
-`try { S1; await a; S2 } catch (e) { H }` is
-`try { S1; a.then(() => { S2 }).catch((e) => { H }); } catch (e) { H }`, at every `await` in it.
-`chainId` tells chains apart, not hops: a cascade that visits a chain twice runs that chain's branch
-on both visits, so the branch must be right for each of them, such as the smaller amount. Nothing
-may follow such a `try`, and its handler cannot `await`.
 
 Each level's hop takes its own fields, and each it leaves out takes its default for that level:
 
@@ -629,7 +535,7 @@ string (`"1000000000000000000"`): a JSON number loses precision.
 
 Refused at compile time, never silently changed: a name the program does not declare, a hop with
 no `refundee` or no `send`, a program body's fee nothing supplies (offline with no fee), a hop
-with no body (nothing after its `await`, no `.then(...)`), a step after the wrong one, a chain with
+with no body (no `.then(...)`), a step after the wrong one, a chain with
 no eco-routes deployment, a pair with no prover deployed on both sides.
 
 ## The destination side
@@ -685,7 +591,7 @@ destination's and works when every intent goes to one chain; `--config` names th
 what it reports and rehearse again before `sauce intent publish` or `sauce run`. With `--send` and
 a signer, `sauce intent fill` then fills it for real (above).
 
-- **The body alone, as a program**: copy the body (what follows the `await`) into a file of its own,
+- **The body alone, as a program**: copy the body (what `.then` holds) into a file of its own,
   in a `main` taking the parameters it reads, and rehearse it as a program for the destination, with
   the delivered tokens assumed in the Pot. It runs on your Pot instead of the shared one, but
   executes the same calls, shows what moves, and gives the gas:

@@ -436,21 +436,29 @@ const HOP =
   "Base.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount: delivered }, refundee: refundTo })";
 const PROGRAMS: Record<string, string> = {
   "one-hop": `${MAIN} {
-  await ${HOP};
-  USDC.transfer(beneficiary, delivered);
+  ${HOP}.then(() => {
+    USDC.transfer(beneficiary, delivered);
+  });
 }`,
   "one-hop-in-a-try": `${MAIN} {
   try {
-    await ${HOP};
-    USDC.transfer(beneficiary, delivered);
+    ${HOP}
+      .then(() => {
+        USDC.transfer(beneficiary, delivered);
+      })
+      .catch((e) => {
+        USDC.transfer(refundTo, delivered);
+      });
   } catch (e) {
     USDC.transfer(refundTo, delivered);
   }
 }`,
   "two-hops": `${MAIN} {
-  await ${HOP};
-  await Optimism.hop({ send: { token: USDC, amount: delivered }, receive: { token: USDC, amount: delivered - 1000 }, refundee: refundTo });
-  USDC.transfer(beneficiary, delivered - 1000);
+  ${HOP}.then(() => {
+    Optimism.hop({ send: { token: USDC, amount: delivered }, receive: { token: USDC, amount: delivered - 1000 }, refundee: refundTo }).then(() => {
+      USDC.transfer(beneficiary, delivered - 1000);
+    });
+  });
 }`,
 };
 const ARGUMENTS = [

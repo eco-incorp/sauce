@@ -262,7 +262,7 @@ export function sauceScriptDeclarations(): string {
     `type SauceOpensIntent = ${sources}.SauceIntentChain;`,
     "",
     "/** A chain: its `hop` opens an intent there",
-    " *  (`await Base.hop({ send: { token, amount }, receive: { token, amount }, refundee })`); its",
+    " *  (`Base.hop({ send: { token, amount }, receive: { token, amount }, refundee }).then(…)`); its",
     " *  `remote` runs a program on the same Pot there (`Base.remote(() => { … }).then(…)`); its",
     " *  namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
     "interface SauceChain extends SauceOpensIntent {",
