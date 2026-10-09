@@ -255,6 +255,30 @@ describe("refused on a preview chain, before any network call", () => {
     expect(recorded()).toEqual([]);
   });
 
+  it("a cook that sends a remote message to a preview chain", async () => {
+    const { config, recorded } = await endpoints(8453, 10);
+    const toOptimism = file(
+      "remote-to-optimism.sauce.ts",
+      "function main(value: Uint256) {\n  Optimism.remote(() => {\n    evm.sstore(1, value);\n  });\n}\n",
+    );
+    expectRefused(
+      await sauce(
+        ...["tx", toOptimism, "--chain", "base", "--owner", OWNER, "--config", config],
+        ...["--args", "1"],
+      ),
+      "optimism",
+    );
+    expectRefused(
+      await sauce(
+        ...["run", toOptimism, "--chain", "base", "--config", config, "--args", "1"],
+        ...["--keystore", join(work, "missing.json")],
+      ),
+      "optimism",
+      /^sauce run: sending the cook is refused/,
+    );
+    expect(recorded()).toEqual([]);
+  });
+
   it("sauce pot --deploy, and a pot's deployment as a cast line", async () => {
     const { config, recorded } = await endpoints(42161);
     expectRefused(
