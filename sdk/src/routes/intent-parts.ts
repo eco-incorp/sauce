@@ -1,11 +1,14 @@
 /**
  * Where the parts of a program run that a hop sends to another chain: the body of each intent
- * opened with a chain's `hop`, the argument of `Arbitrum.hop({ … }).then(…)`, its handler,
+ * opened with a chain's `hop` — the argument of `Arbitrum.hop({ … }).then(…)`, or, with `await` on
+ * (`plugin/await.ts`), what follows `await Arbitrum.hop({ … });` in its block — its handler,
  * `.catch(…)` after that `.then`, and its config's `receive`, which names the destination's tokens.
- * Read from the program's text, for what the compile does not report: which chain a diagnostic, or
- * a name a program reads, is on.
+ * The handler of a `try` around awaited hops runs on each of their destinations and where the `try`
+ * is written. Read from the program's text, for what the compile does not report: which chain a
+ * diagnostic, or a name a program reads, is on.
  */
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { AWAIT_SUPPORTED } from "../plugin/await.js";
 import { chainSlugForKey, isChainKey } from "./accessor-index.js";
 import { walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
@@ -15,12 +18,38 @@ export interface IntentPart {
   readonly chain: CanonicalChain;
   readonly start: number;
   readonly end: number;
+  /** It runs where it is written too: a `try`'s handler, for each hop the `try` awaits. */
+  readonly alsoHere?: true;
 }
 
 /** Every intent part of `program`, an AST of the program's text. */
 export function intentParts(program: AstNode): IntentPart[] {
   const parts: IntentPart[] = [];
   walk(program, (node) => {
+    // `await X.hop({ … });` and the statements after it in its block.
+    const statements =
+      AWAIT_SUPPORTED && (node.type === "Program" || node.type === "BlockStatement")
+        ? (node.body as AstNode[] | undefined)
+        : undefined;
+    statements?.forEach((statement, i) => {
+      const chain = awaitedHop(statement);
+      const rest = statements.slice(i + 1);
+      if (chain !== undefined && rest.length > 0) {
+        parts.push({ chain, start: rest[0]!.start, end: rest[rest.length - 1]!.end });
+      }
+    });
+    // `try { …; await X.hop({ … }); … } catch { H }`: H runs on each hop's destination, in order,
+    // as `.catch` of its body, and where the `try` is written.
+    if (AWAIT_SUPPORTED && node.type === "TryStatement") {
+      const handler = (node.handler as AstNode | undefined)?.body as AstNode | undefined;
+      const tried = ((node.block as AstNode).body as AstNode[] | undefined) ?? [];
+      for (const statement of tried) {
+        const chain = awaitedHop(statement);
+        if (chain !== undefined && handler !== undefined) {
+          parts.push({ chain, start: handler.start, end: handler.end, alsoHere: true });
+        }
+      }
+    }
     if (node.type !== "CallExpression") return;
     const callee = node.callee as AstNode;
     if (callee.type !== "MemberExpression") return;
@@ -65,16 +94,35 @@ function chainOf(node: AstNode): CanonicalChain | undefined {
     : undefined;
 }
 
+/** The chain `statement`, `await X.hop({ … });`, hops to, or `undefined`. */
+function awaitedHop(statement: AstNode): CanonicalChain | undefined {
+  const awaited = statement.type === "ExpressionStatement" ? statement.expression : undefined;
+  if ((awaited as AstNode | undefined)?.type !== "AwaitExpression") return undefined;
+
+  return hopChain((awaited as AstNode).argument as AstNode);
+}
+
 /**
- * The chain path the range `start`..`end` runs on: the chain of each part around it, from the
- * outermost. The empty path is the program's own chain.
+ * Every chain path the range `start`..`end` runs on, each from the outermost part around it: one
+ * path for a range in bodies alone, and for one in a `try`'s handler, also each path that stops
+ * before a hop the `try` awaits. The empty path is the program's own chain.
  */
-export function pathAt(parts: readonly IntentPart[], start: number, end: number): CanonicalChain[] {
-  return parts
+export function pathsAt(
+  parts: readonly IntentPart[],
+  start: number,
+  end: number,
+): CanonicalChain[][] {
+  const around = parts
     .map((part, order) => ({ part, order }))
     .filter(({ part }) => part.start <= start && end <= part.end)
-    .sort((a, b) => b.part.end - b.part.start - (a.part.end - a.part.start) || a.order - b.order)
-    .map(({ part }) => part.chain);
+    .sort((a, b) => b.part.end - b.part.start - (a.part.end - a.part.start) || a.order - b.order);
+  let paths: CanonicalChain[][] = [[]];
+  for (const { part } of around) {
+    const entered = paths.map((path) => [...path, part.chain]);
+    paths = part.alsoHere === true ? [...paths, ...entered] : entered;
+  }
+
+  return paths;
 }
 
 /** The chain `node`, a call of a chain's `hop`, opens its hop to, or `undefined`. */
