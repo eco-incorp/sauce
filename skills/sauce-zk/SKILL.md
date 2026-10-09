@@ -1,6 +1,6 @@
 ---
 name: sauce-zk
-description: Proven answers in a Sauce program with @sauce/zk — asked now, answered later by a callback that runs the request's .then body on the same Private Pot — a SQL query over indexed chain data proven with Space and Time's Proof of SQL (Zk.sql, Ethereum and Base), or a RISC Zero guest program proven run on an input by Boundless's market (Zk.risc0, Base). Covers each request's fields and payment (SXT, or ETH and a proving node's ZKC collateral), reading a proven SQL table (Zk.cell, Zk.rows), the journal a guest must commit, how the Pot signs its own Boundless requests, timeouts and taking an unanswered request's payment back (Zk.cancel, Zk.reclaim), installing the handlers (sauce run @sauce/zk), what each handler checks and why only the Pot's own requests settle, and what each costs. Use when a program must act on chain history or a computation it cannot run itself, proven rather than reported, or when the user mentions ZK, a coprocessor, Proof of SQL, Space and Time, SXT, RISC Zero, Boundless or a zkVM.
+description: Proven answers in a Sauce program with @sauce/zk — asked now, answered later by a callback that runs the request's .then body on the same Private Pot — a SQL query over indexed chain data proven with Space and Time's Proof of SQL (Zk.sql, Ethereum and Base), or a RISC Zero guest program proven run on an input by Boundless's market (Zk.risc0, Base). Covers each request's fields and payment (SXT, or ETH and a prover's ZKC collateral), reading a proven SQL table (Zk.cell, Zk.rows), the journal a guest must commit, how the Pot signs its own Boundless requests, timeouts and taking an unanswered request's payment back (Zk.cancel, Zk.reclaim), installing the handlers (sauce run @sauce/zk), what each handler checks and why only the Pot's own requests settle, and what each costs. Use when a program must act on chain history or a computation it cannot run itself, proven rather than reported, or when the user mentions ZK, a coprocessor, Proof of SQL, Space and Time, SXT, RISC Zero, Boundless or a zkVM.
 ---
 
 # Proven answers with `@sauce/zk`
@@ -11,13 +11,13 @@ it out off chain and proves it, and a contract checks the proof before it calls 
 `@sauce/zk` makes the request a promise of `@sauce/async`'s (`sauce-async`): the program asks now,
 and its `.then` body runs on the same Private Pot when the proven answer arrives. It speaks two:
 
-| Coprocessor    | Asks                                                    | Pays                            | Chains         |
-| -------------- | ------------------------------------------------------- | ------------------------------- | -------------- |
-| Space and Time | `Zk.sql`: a SQL query over its indexed copies of chains | SXT                             | Ethereum, Base |
-| Boundless      | `Zk.risc0`: a RISC Zero guest program, run on an input  | ETH; the proving node locks ZKC | Base           |
+| Coprocessor    | Asks                                                    | Pays                      | Chains         |
+| -------------- | ------------------------------------------------------- | ------------------------- | -------------- |
+| Space and Time | `Zk.sql`: a SQL query over its indexed copies of chains | SXT                       | Ethereum, Base |
+| Boundless      | `Zk.risc0`: a RISC Zero guest program, run on an input  | ETH; the prover locks ZKC | Base           |
 
 Space and Time answers questions about chains' history in SQL, and only its own fulfiller answers.
-Boundless proves any program written for RISC Zero's zkVM, and any proving node may answer, bidding for
+Boundless proves any program written for RISC Zero's zkVM, and any prover may answer, bidding for
 the price.
 
 ```sauce chain=base,ethereum
@@ -132,15 +132,15 @@ function main(imageId: Uint256, imageUrl: bytes, input: bytes, maxPrice: Uint256
 }
 ```
 
-| Field      | What it is                                                                                                                                                                                               | Left out  |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `imageId`  | The guest program's image id                                                                                                                                                                             | required  |
-| `imageUrl` | Where proving nodes download the guest, its UTF-8 bytes                                                                                                                                                  | required  |
-| `input`    | What the guest reads from stdin after the request's id                                                                                                                                                   | none      |
-| `offer`    | The price and its timing: `maxPrice` (wei, deposited), `rampUpPeriod`, `lockTimeout` and `timeout` (seconds from now), `lockCollateral` (ZKC's base units, which the proving node locks), `minPrice` (0) | required  |
-| `gasLimit` | The callback's gas                                                                                                                                                                                       | `1000000` |
+| Field      | What it is                                                                                                                                                                                         | Left out  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `imageId`  | The guest program's image id                                                                                                                                                                       | required  |
+| `imageUrl` | Where provers download the guest, its UTF-8 bytes                                                                                                                                                  | required  |
+| `input`    | What the guest reads from stdin after the request's id                                                                                                                                             | none      |
+| `offer`    | The price and its timing: `maxPrice` (wei, deposited), `rampUpPeriod`, `lockTimeout` and `timeout` (seconds from now), `lockCollateral` (ZKC's base units, which the prover locks), `minPrice` (0) | required  |
+| `gasLimit` | The callback's gas                                                                                                                                                                                 | `1000000` |
 
-The price rises from `minPrice` to `maxPrice` over `rampUpPeriod`; a proving node locks the request at the
+The price rises from `minPrice` to `maxPrice` over `rampUpPeriod`; a prover locks the request at the
 price of that moment by `lockTimeout`, posting `lockCollateral`, and must fulfil it by `timeout`.
 Boundless's own tooling recommends an offer from the guest's cycle count; the Pot deposits
 `maxPrice` and is charged the price the request was locked at.
@@ -154,7 +154,7 @@ request a proof answers. The body is handed the rest of the journal.
 
 ### The Pot signs its own requests
 
-A proving node locks a request by asking its client, the Pot, `isValidSignature(hash, signature)`
+A prover locks a request by asking its client, the Pot, `isValidSignature(hash, signature)`
 (ERC-1271), static, with 100,000 gas, and the lock spends the Pot's balance at the market. When the
 program submits a request it hashes it as the market does (EIP-712, under the market's domain) and
 keeps the hash; the read-only handler answers yes for those hashes and no for any other, in about
@@ -172,9 +172,9 @@ settled. The market verifies the proof before it calls back.
 
 The request's promise expires at its deadline (`timeout` after it was made). After it, anyone may
 call the Pot's `expire(bytes32 key)`, and in the `.catch`, `Zk.reclaim(e)` takes the price back: it
-slashes the request if a proving node locked it and failed (the market refunds the price and keeps
-the node's collateral), then withdraws the price from the Pot's balance at the market. A request no
-node locked cost nothing; its deposit is withdrawn the same way. It answers whether it took the
+slashes the request if a prover locked it and failed (the market refunds the price and keeps
+the prover's collateral), then withdraws the price from the Pot's balance at the market. A request no
+prover locked cost nothing; its deposit is withdrawn the same way. It answers whether it took the
 price back, and does nothing for any other rejection.
 
 ## What it costs

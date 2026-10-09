@@ -2,7 +2,7 @@
 // run on `input`, output at least `minimum`. The guest is `imageId`, published at `imageUrl`; it
 // reads the request's id (32 bytes) and then `input` from stdin, and commits the sha256 of its whole
 // stdin and then its output, one 32-byte word. The request pays at most `maxPrice` wei, which the
-// Pot deposits, and asks the proving node that takes it to lock 15 ZKC as collateral. If none fulfils it within half
+// Pot deposits, and asks the prover that takes it to lock 15 ZKC as collateral. If no prover fulfils it within half
 // an hour, anyone may expire it, and its price comes back to the Pot. Base only; the Pot must be a
 // Private Pot with @sauce/zk's handlers installed (`sauce run @sauce/zk --chain base`).
 //
@@ -10,7 +10,7 @@
 //     --args <imageId> <imageUrl> <input> <maxPrice> <minimum> <recipient> <amount>
 //
 //   imageId: Uint256  the guest's image id
-//   imageUrl: bytes  where proving nodes download the guest, its UTF-8 bytes
+//   imageUrl: bytes  where provers download the guest, its UTF-8 bytes
 //   input: bytes  what the guest reads after the request's id
 //   maxPrice: Uint256  the most the proof is paid, in wei
 //   minimum: Uint256  the least the guest's output may be
