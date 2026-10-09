@@ -505,27 +505,29 @@ describe("sauce compile", () => {
     }
   });
 
-  it("reads an awaited intent's body on its destination, as its `.then(...)` form", async () => {
+  it("reads an intent's body on its destination", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
       "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
     const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
     const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
     // Where each part runs is the compile's to say.
-    const report = (text: string) =>
-      appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"]));
-    const awaited = report([`await ${opened};`, ...body, ""].join("\n"));
-    expect(awaited.defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
+    const { defines } = appliedDefines(
+      [`${opened}.then(() => {`, ...body, "});", ""].join("\n"),
+      requireChain("base"),
+      user,
+      new Set(["RECIPIENT"]),
+    );
+    expect(defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
       "RECIPIENT@arbitrum",
       "USDC@arbitrum",
       "USDC@base",
       "WETH@arbitrum",
       "chainId@arbitrum",
     ]);
-    expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
   });
 
-  it("reads a handler on every chain it runs on", async () => {
+  it("reads a body's handler on its destination", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
       "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
@@ -540,26 +542,6 @@ describe("sauce compile", () => {
         `${opened}.then(() => { require(WETH != 0); }).catch((e) => { USDC.transfer(RECIPIENT, 1); });\n`,
       ),
     ).toEqual(["RECIPIENT@arbitrum", "USDC@arbitrum", "USDC@base", "WETH@arbitrum"]);
-    // A `try`'s handles the hop it awaits, on its destination, and the program it is written in.
-    expect(
-      read(
-        [
-          "try {",
-          `  await ${opened};`,
-          "  require(WETH != 0);",
-          "} catch (e) {",
-          "  USDC.transfer(RECIPIENT, 1);",
-          "}",
-          "",
-        ].join("\n"),
-      ),
-    ).toEqual([
-      "RECIPIENT@arbitrum",
-      "RECIPIENT@base",
-      "USDC@arbitrum",
-      "USDC@base",
-      "WETH@arbitrum",
-    ]);
   });
 
   it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
@@ -887,34 +869,6 @@ describe("sauce compile", () => {
     expect(run.stderr).toContain(
       "hint: if RECIPIENT is a value you supply, make it a parameter of main (`RECIPIENT: Uint256`, or `Address`) and pass it with --args",
     );
-    expect(run.stderr).not.toContain("main.js");
-  });
-
-  it("reports a value returned after an await at the file's own line, the await it follows drawn", async () => {
-    const program = file(
-      "returns.sauce.ts",
-      [
-        "// A hop whose body returns a value.",
-        "function main(to: Address, amount: Uint256): Uint256 {",
-        "  await Ethereum.hop({",
-        "    send: { token: USDC, amount },",
-        "    receive: { token: USDC, amount },",
-        "    refundee: to,",
-        "  });",
-        "  USDC.transfer(to, amount);",
-        "  return amount;",
-        "}",
-        "",
-      ].join("\n"),
-    );
-    const run = await sauce(
-      ...["compile", program, "--chain", "base", "--intent-execution-fee", "0", "--offline"],
-    );
-    expect(run.code).toBe(1);
-    expect(run.stderr).toContain("a value `return` after an `await`");
-    expect(run.stderr).toContain(`--> ${program}:9:3`);
-    expect(run.stderr).toContain("9 |     return amount;");
-    expect(run.stderr).toContain("the `await` it follows");
     expect(run.stderr).not.toContain("main.js");
   });
 
@@ -1524,32 +1478,6 @@ describe("sauce intent publish, offline", () => {
       ...["--from", OWNER, "--format", "json"],
     );
     expect(measured.code).toBe(0);
-  });
-
-  it("publishes an awaited intent with main's arguments as its `.then(...)` form", async () => {
-    const form = (opened: string, body: string) =>
-      [
-        "function main(recipient: Address, amount: Uint256) {",
-        `  ${opened}`,
-        `  ${body}`,
-        "}",
-        "",
-      ].join("\n");
-    const intent = `Base.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })`;
-    const cook = async (text: string): Promise<string> => {
-      const run = await sauce(
-        ...["intent", "publish", file("awaited.sauce.ts", text), "--chain", "ethereum"],
-        ...FLAGS.slice(2),
-        ...PRINTED,
-        ...["--from", OWNER, "--format", "json", "--args", RECIPIENT, "1000000"],
-      );
-      expect(run.code).toBe(0);
-
-      return (JSON.parse(run.stdout) as { data: string }).data;
-    };
-    expect(await cook(form(`await ${intent};`, "USDC.transfer(recipient, amount);"))).toBe(
-      await cook(form(`${intent}.then(() => { USDC.transfer(recipient, amount); });`, "")),
-    );
   });
 
   it("refuses a file with no intent, or with main's arguments not given, before any network", async () => {
