@@ -779,10 +779,11 @@ compiler runs while it compiles. A hop is the intent-based way to move money (us
 Eco intent whose body runs on the destination's public Shared Pot, where nothing persists between
 transactions. The package was `@sauce/intents`; the `Intent` class, `sauce intent …`, the MCP
 intent tools and the `sauce-intents` skill keep the word, because they are about Eco intents.
-The syntax is ONE verb with ONE config object (user,
-2026-10-06): `await Optimism.hop({ send, receive?, refundee, deadline?, rewardDeadline?, prover?,
-salt?, fee? })`, the code after the `await` running on Optimism, or `Optimism.hop({ … }).then(() =>
-{ … })`, and `.catch((e) => …)` on what `.then` returns. `send`/`receive` take one item or a list:
+The syntax is ONE verb with ONE config object (user, 2026-10-06): `Optimism.hop({ send, receive?,
+refundee, deadline?, rewardDeadline?, prover?, salt?, fee? }).then(() => { … })`, the body running on
+Optimism, and `.catch((e) => …)` on what `.then` returns. SauceScript has no `await` (user,
+2026-10-08: the compiler's await work, v12 #554, was dropped), so a cascade nests each hop in the
+body above it. `send`/`receive` take one item or a list:
 `send` is what leaves the source chain, escrowed there to pay the solver (the Portal's reward, so
 `rewardDeadline` and every Portal struct keep the name), and `receive` what arrives on the
 destination. `send` was `reward` until the user renamed it (2026-10-08); a hop given `reward` is
@@ -832,11 +833,7 @@ destination lacks too is the chain's refusal (`unknown-global.ts`, the compiler'
 `try` a program would write (EVM only); `e` is the body's revert data, and a handler that names no
 parameter drops it, as an arrow called in place does. A handler that reads `e` needs v12-evm 2.0.0,
 the major that carries `CATCH_READS` (#553): the releases.json row of the compiler with #553 pairs
-with it. `await x; rest` is the compiler's
-`x.then(() => { rest })`, inside a `try` at every `await` with its `catch`, so a cascade is one
-`await` per hop. An `await` may stand in the branches of an `if` that ends its body (each branch's
-rest is its own `.then`; a statement after such an `if` is refused), not in a loop or another block;
-`funding.ts#thenForm` reads them as the compiler does.
+with it.
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
@@ -872,7 +869,7 @@ is a namespace (`chain`, `hop`, `Portal`, contracts, tokens), not a function.
 `hop` and `Portal`); the class is what compiles, so change them together;
 `routes-intent-portal.test.ts` holds the bytes each field builds, and the TypeScript intent's cook
 to what the same statement in a file publishes. `intent-parts.ts` reads from a program's text which
-chain each part runs on (what follows `await X.hop(…)`, `.then`'s argument, `receive`), for
+chain each part runs on (`.then`'s and `.catch`'s arguments, `receive`), for
 diagnostics and the defines report.
 
 **`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
@@ -1065,13 +1062,7 @@ it (every test, the skills checker) reads no chain it is not given, so CI stays 
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
-statement; a program that awaits an intent is wrapped in its `.then` form (`funding.ts#thenForm`,
-the compiler's own reading, byte for byte), so the sweeps run where it opens, not in the body.
-`thenForm` works on `routes/parse.ts`'s AST and moves nothing: it blanks each `await`, writes
-`.then(() => {`, ` })` and a `try`'s `.catch` around the statements where they stand, and leaves a
-program with an `await` the compiler refuses untouched; the file is compiled as written before any
-funding wraps it, so such a program fails with the compiler's own error at the file's line —
-signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
+statement — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
 mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM

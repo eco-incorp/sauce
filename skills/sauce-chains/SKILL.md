@@ -115,7 +115,7 @@ function main(): Address {
 - **A token is never qualified.** `Base.USDC` is refused (`a token is never qualified by a chain`);
   the symbol is always the compiled-for chain's, and another chain's token is an address.
 - **To act on another chain, open an intent** (`sauce-intents`):
-  `await Ethereum.hop({ send, receive, refundee })`, the code after it running on Ethereum. In
+  `Ethereum.hop({ send, receive, refundee }).then(() => { … })`, the body running on Ethereum. In
   the body every name is the destination's, and in `receive` only the tokens are, looked up again
   by symbol; every other value, there and in `send`, is computed on the chain the file is
   compiled for, which funds it. Both chains must take intents (each chain's file says).
