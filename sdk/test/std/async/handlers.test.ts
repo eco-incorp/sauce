@@ -3,6 +3,8 @@
  * command taking a package as its operand (`src/cli/handlers.ts`). Executing the install, and a
  * handler answering its protocol, is `evm.e2e.test.ts`'s.
  */
+import { join } from "node:path";
+
 import { bytesToHex, toFunctionSelector } from "viem";
 
 import { runCli, nodeIo, type CliIo } from "../../../src/cli/run.js";
@@ -166,5 +168,22 @@ describe("the `sauce` command, given a package", () => {
 
     const installed = await sauce("compile", "@sauce/async", "--chain", "base", "--json");
     expect(installed.code).toBe(0);
+  });
+
+  it("compiles a program that parks promises as one that opens no intent", async () => {
+    const compiled = await sauce(
+      "compile",
+      join(process.cwd(), "..", "skills", "sauce-async", "examples", "approval.sauce.ts"),
+      "--chain",
+      "base",
+      "--json",
+    );
+    expect(compiled.code).toBe(0);
+    const report = JSON.parse(compiled.out.slice(compiled.out.indexOf("{"))) as Record<
+      string,
+      unknown
+    >;
+    expect(report.intentPots).toBeUndefined();
+    expect(compiled.out).not.toContain("the intent to");
   });
 });
