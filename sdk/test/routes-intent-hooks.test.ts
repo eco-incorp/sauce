@@ -11,7 +11,7 @@
  * same call, the route's native amount, a value the program measures written into a hook's call as it
  * runs, and names resolved on the destination. And what is refused, located where it is written: a
  * closure that is not one external call, and a hook that is not a list. `await` of a hop with hooks
- * is its `.then`, byte for byte.
+ * is its `.then`, byte for byte, a test skipped while the compiler has no `await` (v12 #554).
  *
  * `routes-intent-hooks.e2e.test.ts` fills such intents through the Portal's own Executor.
  */
@@ -152,7 +152,7 @@ describe("a hop with no hooks", () => {
 });
 
 describe("`await` of a hop with hooks", () => {
-  it("is its `.then`, byte for byte", () => {
+  it.skip("is its `.then`, byte for byte: await dropped from the compiler (v12 #554)", () => {
     const fields = `{
     send: { token: USDC, amount: 1010000 },
     receive: { token: USDC, amount: 1000000 },
