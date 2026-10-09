@@ -1,64 +1,326 @@
 /**
- * The package's OPTIONAL dependencies: what one command of the `sauce` bin loads when it runs, and
- * nothing else does — no export of the package reaches them (`optional-dependencies.test.ts`).
+ * The packages one command of the `sauce` bin needs and nothing else does — the MCP SDK and zod for
+ * `sauce mcp`, LiteSVM for a Solana rehearsal in a local copy — and how that command finds them.
+ * They are OPTIONAL PEER dependencies of the package: a library install gets none of them, with no
+ * flag, and no export reaches them (`optional-dependencies.test.ts`). The command that needs them
+ * takes, in this order ({@link provide}):
  *
- *   - `@modelcontextprotocol/sdk` and `zod`: the MCP server, `sauce mcp` (`mcp.ts` loads `mcp/dist`).
- *   - `litesvm`: a Solana cook rehearsed in a local copy of its accounts (`svm-fork.ts`).
+ *   1. the user's own copies, where the package's modules resolve them, when each is exactly the
+ *      version the package pins;
+ *   2. else this version's runtime folder, `~/.sauce/runtime/<version>`;
+ *   3. else it installs that folder first, with `npm ci` on the lockfile the package ships
+ *      (`sdk/runtime/`, every package pinned with its integrity hash) — only where the process was
+ *      given the installer ({@link useRuntime}, by `main.ts`), so an in-process run (every test,
+ *      the skills checker) installs nothing and reaches no registry.
  *
- * npm installs optional dependencies by default, so `npx @eco-incorp/sauce mcp` and a Solana
- * rehearsal need nothing else. A library install leaves them out with `--omit=optional`; the command
- * that needs one then stops with {@link optionalMissing}'s message, which gives the line that
- * installs it.
+ * From the runtime folder they load through a resolve hook: an import of one of them by the
+ * package's own modules resolves there, and their own imports go on from there.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import * as nodeModule from "node:module";
+import { homedir } from "node:os";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-/** What `sauce mcp` loads: the MCP SDK, and the schemas its tools declare their inputs in. */
-export const MCP_DEPENDENCIES = ["@modelcontextprotocol/sdk", "zod"] as const;
+import { CliError, UsageError } from "./args.js";
+import type { CommandOutput } from "./commands.js";
 
-/** What rehearses a Solana cook in a local copy of its accounts. */
-export const LITESVM_DEPENDENCY = "litesvm";
+/** Runtime packages one command needs, taken together from one place. */
+export interface Extra {
+  /** The command that loads them, as `sauce runtime status` lists it. */
+  readonly command: string;
+  /** What needs them, as a message says it: "the MCP server". */
+  readonly what: string;
+  readonly packages: readonly string[];
+  /** The directory of the modules that import them: where the user's own copies are looked for. */
+  readonly importer: string;
+}
 
-/** Every optional dependency the package declares, as its manifest lists them. */
-export const OPTIONAL_DEPENDENCIES = [...MCP_DEPENDENCIES, LITESVM_DEPENDENCY].sort();
+const here = (path: string): string => fileURLToPath(new URL(path, import.meta.url));
+
+/** The MCP server's packages, imported by `mcp/dist` (beside `sdk/dist` in the package). */
+export const MCP_EXTRA: Extra = {
+  command: "sauce mcp",
+  what: "the MCP server",
+  packages: ["@modelcontextprotocol/sdk", "zod"],
+  importer: here("../../../mcp/dist/"),
+};
+
+/** A Solana rehearsal's, imported by `svm-fork.ts`. */
+export const LITESVM_EXTRA: Extra = {
+  command: "Solana rehearsals",
+  what: "rehearsing this cook in a local copy of the accounts it names",
+  packages: ["litesvm"],
+  importer: here("./"),
+};
+
+/** Where the package ships the runtime packages' manifest and lockfile. */
+export const RUNTIME_SOURCE = here("../../runtime/");
+
+/** The package's own directory, three levels above `sdk/{src,dist}/cli`. */
+const PACKAGE_ROOT = here("../../../");
+
+const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
+
+/** The runtime packages and the version of each the package pins: its shipped manifest's. */
+export function pinned(): Readonly<Record<string, string>> {
+  return readJson<{ dependencies: Record<string, string> }>(join(RUNTIME_SOURCE, "package.json"))
+    .dependencies;
+}
+
+/** `name 1.2.3`, joined: what a message says is needed. */
+export function specs(packages: readonly string[]): string {
+  const pins = pinned();
+  const each = packages.map((name) => `${name} ${pins[name]}`);
+
+  return each.length === 1 ? each[0]! : `${each.slice(0, -1).join(", ")} and ${each.at(-1)}`;
+}
+
+/** Installs the shipped lockfile's packages into a runtime folder, whole or not at all. */
+export interface RuntimeInstaller {
+  install(dir: string): Promise<void>;
+}
+
+let installer: RuntimeInstaller | undefined;
+let rootOverride: string | undefined;
 
 /**
- * The package among `packages` that `error`, thrown by an `import()`, could not find: `undefined`
- * for any other failure — a module of the package's own that is missing, or a native binary that
- * does not load.
+ * What this process may do with runtime folders: `main.ts` gives the installer (`runtime.ts`), the
+ * one place that runs `npm ci`; a test gives a folder of its own in place of `~/.sauce/runtime`.
  */
-export function missingPackage(error: unknown, packages: readonly string[]): string | undefined {
-  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
-  if (code !== "ERR_MODULE_NOT_FOUND" || typeof message !== "string") return undefined;
-  // "Cannot find package 'zod' imported from …": the package's name, whatever subpath was asked.
-  const name = /^Cannot find package '([^']+)'/.exec(message)?.[1];
+export function useRuntime(options: { installer?: RuntimeInstaller; root?: string }): void {
+  if ("installer" in options) installer = options.installer;
+  if ("root" in options) rootOverride = options.root;
+}
 
-  return packages.find((each) => each === name);
+/** Where every version's runtime folder is: `~/.sauce/runtime`. */
+export function runtimeRoot(): string {
+  return rootOverride ?? join(homedir(), ".sauce", "runtime");
+}
+
+/** This version's runtime folder, named by the package's version. */
+export function runtimeDir(): string {
+  return join(
+    runtimeRoot(),
+    readJson<{ version: string }>(join(PACKAGE_ROOT, "package.json")).version,
+  );
+}
+
+/** The copy of `name` that modules in `from` resolve, as Node.js looks for it; `undefined` where
+ *  there is none. */
+export function ownCopy(
+  name: string,
+  from: string,
+): { readonly path: string; readonly version: string | undefined } | undefined {
+  for (let dir = from; ; dir = dirname(dir)) {
+    // Node.js never looks in `node_modules/node_modules`.
+    const manifest = join(dir, "node_modules", name, "package.json");
+    if (basename(dir) !== "node_modules" && existsSync(manifest)) {
+      try {
+        return {
+          path: dirname(manifest),
+          version: readJson<{ version?: string }>(manifest).version,
+        };
+      } catch {
+        return { path: dirname(manifest), version: undefined };
+      }
+    }
+    if (dirname(dir) === dir) return undefined;
+  }
+}
+
+/** Whether `dir` holds the shipped lockfile's install, with each of `packages` at its pin. */
+export function installedAt(
+  dir: string,
+  packages: readonly string[] = Object.keys(pinned()),
+): boolean {
+  try {
+    const lock = (path: string) => readFileSync(join(path, "package-lock.json"), "utf8");
+    if (lock(dir) !== lock(RUNTIME_SOURCE)) return false;
+    const pins = pinned();
+
+    return packages.every(
+      (name) =>
+        readJson<{ version?: string }>(join(dir, "node_modules", name, "package.json")).version ===
+        pins[name],
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Where `extra`'s packages come from: the user's own copies, the runtime folder, or nowhere yet. */
+export function sourceOf(extra: Extra): "own" | "runtime" | "missing" {
+  const pins = pinned();
+  if (extra.packages.every((name) => ownCopy(name, extra.importer)?.version === pins[name])) {
+    return "own";
+  }
+
+  return installedAt(runtimeDir(), extra.packages) ? "runtime" : "missing";
 }
 
 /**
- * Why `what` cannot run here: it needs `packages`, optional dependencies this install left out. The
- * line that installs them names the versions the package pins.
+ * Makes `extra`'s packages importable by the package's modules, installing this version's runtime
+ * folder first where it must and may. Progress goes to `log` (stderr: stdout is the MCP protocol's);
+ * every failure is one line.
  */
-export function optionalMissing(what: string, packages: readonly string[]): string {
-  const manifest = JSON.parse(
-    readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
-  ) as { name: string; optionalDependencies?: Record<string, string> };
-  const pinned = manifest.optionalDependencies ?? {};
-  // A range a shell would read (`^1.2.1`) in double quotes, which every shell keeps as written.
-  const specs = packages.map((each) => {
-    const spec = `${each}@${pinned[each] ?? "latest"}`;
+export async function provide(
+  extra: Extra,
+  options: { readonly offline?: boolean; readonly log?: (text: string) => void } = {},
+): Promise<void> {
+  const source = sourceOf(extra);
+  if (source === "own") return;
+  const dir = runtimeDir();
+  if (source === "missing") {
+    const needs = `${extra.what} needs ${specs(extra.packages)}, not installed for this sauce yet`;
+    if (options.offline === true) {
+      throw new CliError(`${needs}, and --offline installs nothing: run \`sauce runtime install\``);
+    }
+    if (installer === undefined) throw new CliError(`${needs}: run \`sauce runtime install\``);
+    const log = options.log ?? ((text: string) => void process.stderr.write(text));
+    log(`sauce: ${needs}. Installing them into ${dir}, once for this version…\n`);
+    const started = Date.now();
+    try {
+      await installer.install(dir);
+    } catch (error) {
+      throw new CliError(
+        `${needs}, and installing them into ${dir} failed: ${(error as Error).message}. Nothing ` +
+          "was left half-installed: `sauce runtime install` tries again",
+      );
+    }
+    if (!installedAt(dir, extra.packages)) {
+      throw new CliError(`${needs}: npm ci finished, but ${dir} does not hold them`);
+    }
+    log(`sauce: installed in ${Math.round((Date.now() - started) / 1000)}s\n`);
+  }
+  loadFrom(extra.packages, dir);
+}
 
-    return /^[\w@./:-]+$/.test(spec) ? spec : `"${spec}"`;
+/** `module.registerHooks` (Node.js 22.15 and 23.5), typed here: the SDK's Node typings predate it. */
+const { registerHooks } = nodeModule as unknown as {
+  registerHooks(hooks: {
+    resolve(
+      specifier: string,
+      context: { parentURL?: string },
+      nextResolve: (specifier: string, context?: { parentURL?: string }) => unknown,
+    ): unknown;
+  }): unknown;
+};
+
+/** Each runtime package loaded from a runtime folder, and a URL in that folder to resolve it from. */
+const redirected = new Map<string, string>();
+
+/** The package a bare specifier names (`zod/v4` is `zod`); `undefined` for any other. */
+function packageOf(specifier: string): string | undefined {
+  if (/^(?:[./]|[a-z][a-z0-9+.-]*:)/i.test(specifier)) return undefined;
+  const [first, second] = specifier.split("/");
+
+  return first!.startsWith("@") ? `${first}/${second}` : first;
+}
+
+/** Resolves the package's own imports of `packages` in `dir` from now on. */
+function loadFrom(packages: readonly string[], dir: string): void {
+  const hooked = redirected.size > 0;
+  const from = pathToFileURL(join(dir, "package.json")).href;
+  for (const name of packages) redirected.set(name, from);
+  if (hooked) return;
+  const ours = pathToFileURL(PACKAGE_ROOT).href;
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      const target = redirected.get(packageOf(specifier) ?? "");
+      const parent = context.parentURL;
+      // The package's own modules (not a package installed under it): theirs resolve as ever.
+      if (
+        target !== undefined &&
+        parent?.startsWith(ours) === true &&
+        !parent.slice(ours.length).includes("node_modules/")
+      ) {
+        return nextResolve(specifier, { ...context, parentURL: target });
+      }
+
+      return nextResolve(specifier, context);
+    },
   });
-  const one = packages.length === 1;
-  const names = one
-    ? packages[0]
-    : `${packages.slice(0, -1).join(", ")} and ${packages[packages.length - 1]}`;
+}
 
-  return (
-    `${what} needs ${names}, ${one ? "an optional dependency" : "optional dependencies"} of ` +
-    `${manifest.name} that this install left out (--omit=optional): install ` +
-    `${one ? "it" : "them"} with \`npm i ${specs.join(" ")}\`, or install ${manifest.name} ` +
-    "without --omit=optional"
+/** Every command's runtime packages. */
+const EXTRAS = [MCP_EXTRA, LITESVM_EXTRA];
+
+/** `sauce runtime [status | install]`. */
+export async function runtimeCommand(
+  sub: string | undefined,
+  log: (text: string) => void,
+): Promise<CommandOutput> {
+  if (sub !== undefined && sub !== "status" && sub !== "install") {
+    throw new UsageError(`unknown subcommand '${sub}': status or install`);
+  }
+  const dir = runtimeDir();
+  const all = Object.keys(pinned());
+  if (sub === "install") {
+    if (installedAt(dir)) {
+      return {
+        text: `${specs(all)}: already installed in ${dir}`,
+        json: { dir, installed: true, changed: false },
+      };
+    }
+    if (installer === undefined) {
+      throw new CliError("sauce runtime install runs this machine's npm: run it as a command");
+    }
+    log(`Installing ${specs(all)} into ${dir}…\n`);
+    try {
+      await installer.install(dir);
+    } catch (error) {
+      throw new CliError(
+        `installing ${specs(all)} into ${dir} failed: ${(error as Error).message}. Nothing was ` +
+          "left half-installed",
+      );
+    }
+
+    return {
+      text: `${specs(all)}: installed in ${dir}`,
+      json: { dir, installed: true, changed: true },
+    };
+  }
+  const installed = installedAt(dir);
+  const pins = pinned();
+  const owns = Object.fromEntries(
+    EXTRAS.flatMap((extra) =>
+      extra.packages.map((name) => [name, ownCopy(name, extra.importer) ?? null] as const),
+    ),
   );
+  const uses = EXTRAS.map((extra) => {
+    const source = sourceOf(extra);
+    const mismatched = extra.packages.filter(
+      (name) => owns[name] !== null && owns[name]!.version !== pins[name],
+    );
+    const said =
+      source === "own"
+        ? "your own copies"
+        : source === "runtime"
+          ? "the runtime folder"
+          : "not installed: its first use installs them, or sauce runtime install now";
+    const ignored = mismatched.map(
+      (name) => `your ${name} is ${owns[name]!.version ?? "unreadable"}, not ${pins[name]}`,
+    );
+
+    return { extra, source, ignored, line: `${specs(extra.packages)}: ${said}` };
+  });
+
+  return {
+    text: [
+      `Runtime packages, in ${dir} (${installed ? "installed" : "not installed"}):`,
+      ...uses.flatMap(({ extra, line, ignored }) => [
+        `  ${extra.command.padEnd(18)} ${line}`,
+        ...ignored.map((each) => `  ${"".padEnd(18)} (${each}: that copy is not used)`),
+      ]),
+    ].join("\n"),
+    json: {
+      dir,
+      installed,
+      packages: Object.fromEntries(
+        all.map((name) => [name, { pinned: pins[name], own: owns[name] ?? null }]),
+      ),
+      uses: Object.fromEntries(uses.map(({ extra, source }) => [extra.command, source])),
+    },
+  };
 }

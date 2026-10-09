@@ -109,6 +109,7 @@ import {
   type Endpoints,
 } from "./intents.js";
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
+import { runtimeCommand } from "./optional.js";
 import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
@@ -3693,7 +3694,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  npx's cache         the npx -y command that runs the latest is printed",
       "  anything else       refused, with npm's global install of it",
       "After a global update, skills installed in the current directory (sauce skills status) are",
-      "updated by the NEW sauce, and what changed is printed.",
+      "updated by the NEW sauce, and what changed is printed; and where the version replaced had",
+      "its runtime packages installed (sauce runtime), the NEW sauce installs its own.",
       "",
       "The version comes from the npm registry, read when this command runs and at no other time:",
       "sauce never checks for updates by itself. --check reads it and installs nothing.",
@@ -3710,6 +3712,35 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         { check: args.values.check === true, ...(version === undefined ? {} : { version }) },
         io.updater,
       );
+    },
+  },
+  runtime: {
+    usage: ["sauce runtime [status] [--json]", "sauce runtime install [--json]"],
+    summary: "Install or check the packages sauce mcp and Solana rehearsals load",
+    flags: { ...JSON_FLAG, ...HELP },
+    details: [
+      "Two commands load packages a library install of this package leaves out, being its",
+      "optional peer dependencies: sauce mcp (the MCP SDK and zod) and a Solana rehearsal in a",
+      "local copy (LiteSVM). Each takes your own copies, where the package resolves them at",
+      "exactly the versions it pins; else this version's runtime folder, ~/.sauce/runtime/<version>,",
+      "which the first use installs with npm ci from the lockfile the package ships (every package",
+      "pinned with its integrity hash), into a temporary directory renamed into place. Other",
+      "versions' folders go then, but the newest older one. sauce mcp setup and sauce update",
+      "install it ahead of the first use.",
+      "",
+      "  status   Where each command's packages come from, and whether the folder is installed.",
+      "  install  Installs the folder now, if it is not; npm reaches the registry your npm",
+      "           configuration names.",
+      "",
+      "Examples:",
+      "  sauce runtime",
+      "  sauce runtime install",
+    ].join("\n"),
+    run: async (args, io) => {
+      const [sub, ...rest] = args.positionals;
+      if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
+
+      return runtimeCommand(sub, io.stderr);
     },
   },
   init: {
@@ -3799,7 +3830,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   mcp: {
     usage: [
-      "sauce mcp [--config <file>]",
+      "sauce mcp [--config <file> | --offline]",
       "sauce mcp --wallets [<dir>] (--password-env <NAME> | --password-file <path> | --password-command <command>) [--config <file>]",
       "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
       "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
@@ -3842,6 +3873,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "setup adds the server to a project for each agent, in the file its vendor documents:",
       ".mcp.json (claude), .codex/config.toml (codex), .cursor/mcp.json (cursor),",
       ".vscode/mcp.json (copilot) and .gemini/settings.json (gemini), keeping what else each holds.",
+      "",
+      "The server's packages, the MCP SDK and zod, are the package's optional peer dependencies:",
+      "your own copies at the versions pinned, else this version's runtime folder (sauce runtime),",
+      "which the first start installs, and setup ahead of it. --offline installs nothing, and",
+      "reads a chain only through a caller's rpcUrl.",
       "",
       "Examples:",
       "  sauce mcp",

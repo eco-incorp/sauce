@@ -86,6 +86,7 @@
   "files": [
     "LICENSE.md",
     "sdk/dist",
+    "sdk/runtime",
     "actions/dist",
     "mcp/dist",
     "actions/action-program.schema.json",
@@ -119,10 +120,21 @@
     "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.5.0",
     "viem": "^2.45.3"
   },
-  "optionalDependencies": {
+  "peerDependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
-    "litesvm": "^1.2.1",
+    "litesvm": "1.2.1",
     "zod": "4.6.5"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "litesvm": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

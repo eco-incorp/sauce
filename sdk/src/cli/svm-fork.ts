@@ -6,10 +6,10 @@
  * cook names read from the cluster as it is now (a program's code from its program data), and the
  * clock set to the cluster's. Nothing is signed: the copy checks no signature.
  *
- * LiteSVM is an optional dependency of the package (`optional.ts`), imported here only when a
- * rehearsal needs it, so no other command loads it and nothing outside the CLI reaches it. An
- * install that left it out (`--omit=optional`) is told how to install it. It is native code: on a
- * platform it ships no binary for, the import fails, and the error says so.
+ * LiteSVM is an optional peer dependency of the package, imported here only when a rehearsal needs
+ * it, so no other command loads it and nothing outside the CLI reaches it: the user's own copy at
+ * the version pinned, else this version's runtime folder, installed on first use (`optional.ts`).
+ * It is native code: on a platform it ships no binary for, the import fails, and the error says so.
  */
 import {
   getAddressDecoder,
@@ -26,7 +26,7 @@ import type { SimulatedAccount } from "../svm/index.js";
 
 import { svmEnginePath, svmKitchenPath } from "../svm/engine-artifacts.js";
 import { CliError } from "./args.js";
-import { LITESVM_DEPENDENCY, missingPackage, optionalMissing } from "./optional.js";
+import { LITESVM_EXTRA, provide } from "./optional.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -216,22 +216,16 @@ export async function openFork(
   kitchen: Address,
   snapshot: ForkSnapshot = forkSnapshot(),
 ): Promise<Fork> {
+  await provide(LITESVM_EXTRA);
   let litesvm: typeof import("litesvm");
   try {
     litesvm = await import("litesvm");
   } catch (error) {
-    const otherwise =
-      "Send the cook with `sauce run`, which stages it and rehearses the staged cook on the " +
-      "cluster first";
-    if (missingPackage(error, [LITESVM_DEPENDENCY]) !== undefined) {
-      const what = "rehearsing this cook in a local copy of the accounts it names";
-      throw new CliError(`${optionalMissing(what, [LITESVM_DEPENDENCY])}. ${otherwise}`);
-    }
     throw new CliError(
       "rehearsing this cook runs it in a local copy of the accounts it names, with LiteSVM, which " +
         `does not load here (${(error as Error).message.split("\n")[0]}): it ships native ` +
-        "binaries for Linux and macOS on x64 and arm64, each an optional dependency of its own, " +
-        `which an install with --omit=optional leaves out too. ${otherwise}`,
+        "binaries for Linux and macOS on x64 and arm64. Send the cook with `sauce run`, " +
+        "which stages it and rehearses the staged cook on the cluster first",
     );
   }
   const { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM, Rent } = litesvm;

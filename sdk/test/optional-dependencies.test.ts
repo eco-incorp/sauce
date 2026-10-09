@@ -3,11 +3,13 @@
  *
  *   - Its `dependencies` are what a library import loads: every package the module graph of every
  *     export reaches is one of them, and nothing else is.
- *   - Its `optionalDependencies` are the MCP SDK and zod (`sauce mcp`) and LiteSVM (a Solana
- *     rehearsal), at the versions the workspaces that use them pin. No export reaches them, nor any
- *     module of the `sauce` command or the MCP server; the command loads each by a dynamic import
- *     only when it needs it, so a library install leaves them out with `--omit=optional`
- *     (`cli/optional.ts`), and `check-packed-package.mjs` proves it on the installed tarball.
+ *   - Its OPTIONAL PEER dependencies are the MCP SDK and zod (`sauce mcp`) and LiteSVM (a Solana
+ *     rehearsal), at exact pins, the versions the workspaces that use them pin. A library install
+ *     gets none of them. No export reaches them, nor any module of the `sauce` command or the MCP
+ *     server; the command takes the user's own copies at those versions, else installs them for
+ *     itself into a runtime folder from the lockfile the package ships, `sdk/runtime/`
+ *     (`cli/optional.ts`, `cli/runtime.ts`), which this holds to the pins and to completeness:
+ *     `npm ci` installs exactly it, every package by its integrity hash.
  *   - Nothing it ships imports TypeScript or dotenv: neither is a dependency. The TypeScript plugin
  *     for SauceScript is handed the editor's own TypeScript, and the project `sauce init` writes
  *     depends on TypeScript itself.
@@ -21,22 +23,20 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-import {
-  LITESVM_DEPENDENCY,
-  MCP_DEPENDENCIES,
-  OPTIONAL_DEPENDENCIES,
-  missingPackage,
-  optionalMissing,
-} from "../src/cli/optional.js";
+import { LITESVM_EXTRA, MCP_EXTRA, pinned } from "../src/cli/optional.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (file: string) => readFileSync(join(REPO, file), "utf8");
 const manifestOf = (file: string) =>
   JSON.parse(read(file)) as {
     exports: Record<string, string | { default?: string }>;
+    files?: string[];
     dependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    peerDependenciesMeta?: Record<string, { optional?: boolean }>;
     devDependencies?: Record<string, string>;
+    publishConfig?: { registry?: string };
   };
 const ROOT = manifestOf("package.json");
 
@@ -171,17 +171,109 @@ function shippedModules(): string[] {
   ];
 }
 
+/** The runtime packages: each command's, together. */
+const RUNTIME = [...MCP_EXTRA.packages, ...LITESVM_EXTRA.packages].sort();
+
+/** The shipped lockfile's entries: each package's path in the tree and what npm recorded of it. */
+interface LockEntry {
+  readonly name?: string;
+  readonly version?: string;
+  readonly resolved?: string;
+  readonly integrity?: string;
+  readonly optional?: boolean;
+  readonly os?: readonly string[];
+  readonly cpu?: readonly string[];
+  readonly dependencies?: Record<string, string>;
+  readonly optionalDependencies?: Record<string, string>;
+  readonly peerDependencies?: Record<string, string>;
+  readonly peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+}
+const LOCK = JSON.parse(read("sdk/runtime/package-lock.json")) as {
+  name: string;
+  lockfileVersion: number;
+  packages: Record<string, LockEntry>;
+};
+
+/** Where npm finds `name` for the package at `path` in the lockfile: as Node.js would, upwards. */
+function lockedAt(path: string, name: string): string | undefined {
+  for (let at = path; ; at = at.replace(/\/?node_modules\/(?:@[^/]+\/)?[^/]+$/, "")) {
+    const candidate = `${at === "" ? "" : `${at}/`}node_modules/${name}`;
+    if (LOCK.packages[candidate] !== undefined) return candidate;
+    if (at === "") return undefined;
+  }
+}
+
 describe("the package's dependencies", () => {
-  it("declares the MCP SDK, zod and LiteSVM optional, at the versions their workspaces pin", () => {
-    expect(Object.keys(ROOT.optionalDependencies ?? {}).sort()).toEqual(OPTIONAL_DEPENDENCIES);
+  it("are what a library import loads; the runtime packages are exact optional peers", () => {
+    expect(ROOT.optionalDependencies).toBeUndefined();
+    expect(Object.keys(ROOT.peerDependencies ?? {}).sort()).toEqual(RUNTIME);
+    for (const name of RUNTIME) {
+      expect([name, ROOT.peerDependencies![name]]).toEqual([name, pinned()[name]]);
+      expect(pinned()[name]).toMatch(/^\d+\.\d+\.\d+$/);
+      expect([name, ROOT.peerDependenciesMeta?.[name]?.optional]).toEqual([name, true]);
+    }
+    // The workspaces that import them take exactly those versions.
     const mcp = manifestOf("mcp/package.json").dependencies ?? {};
     const sdk = manifestOf("sdk/package.json").dependencies ?? {};
-    for (const name of MCP_DEPENDENCIES) {
-      expect([name, ROOT.optionalDependencies?.[name]]).toEqual([name, mcp[name]]);
+    for (const name of MCP_EXTRA.packages)
+      expect([name, mcp[name]]).toEqual([name, pinned()[name]]);
+    for (const name of LITESVM_EXTRA.packages) {
+      expect([name, sdk[name]]).toEqual([name, pinned()[name]]);
     }
-    expect(ROOT.optionalDependencies?.[LITESVM_DEPENDENCY]).toBe(sdk[LITESVM_DEPENDENCY]);
-    for (const name of [...OPTIONAL_DEPENDENCIES, "typescript", "dotenv"]) {
+    for (const name of [...RUNTIME, "typescript", "dotenv"]) {
       expect([name, ROOT.dependencies?.[name]]).toEqual([name, undefined]);
+    }
+    expect(ROOT.files).toContain("sdk/runtime");
+  });
+
+  it("the runtime lockfile is the pins', complete, and every package in it has its integrity", () => {
+    const manifest = JSON.parse(read("sdk/runtime/package.json")) as {
+      dependencies: Record<string, string>;
+    };
+    // Written by gen-runtime-lock.mjs from the root's peers: a pin changed without it is stale.
+    expect(manifest.dependencies).toEqual(
+      Object.fromEntries(RUNTIME.map((name) => [name, ROOT.peerDependencies![name]])),
+    );
+    expect(LOCK.lockfileVersion).toBe(3);
+    expect(LOCK.packages[""]?.dependencies).toEqual(manifest.dependencies);
+    for (const name of RUNTIME) {
+      expect([name, LOCK.packages[`node_modules/${name}`]?.version]).toEqual([
+        name,
+        manifest.dependencies[name],
+      ]);
+    }
+    const entries = Object.entries(LOCK.packages).filter(([path]) => path !== "");
+    expect(entries.length).toBeGreaterThan(100);
+    const registry = ROOT.publishConfig!.registry!;
+    for (const [path, entry] of entries) {
+      expect([path, entry.resolved?.startsWith(registry)]).toEqual([path, true]);
+      expect([path, entry.integrity]).toEqual([path, expect.stringMatching(/^sha512-/)]);
+    }
+    // Complete: every package's dependencies are in it where npm looks, optional ones included,
+    // so `npm ci` installs it as written.
+    const missing = entries.flatMap(([path, entry]) =>
+      [
+        ...Object.keys(entry.dependencies ?? {}),
+        ...Object.keys(entry.optionalDependencies ?? {}),
+        ...Object.keys(entry.peerDependencies ?? {}).filter(
+          (peer) => entry.peerDependenciesMeta?.[peer]?.optional !== true,
+        ),
+      ]
+        .filter((name) => lockedAt(path, name) === undefined)
+        .map((name) => `${path} -> ${name}`),
+    );
+    expect(missing).toEqual([]);
+    // LiteSVM's native binary for every platform it ships one for, each npm's to pick by os and cpu.
+    const binaries = Object.keys(LOCK.packages["node_modules/litesvm"]!.optionalDependencies ?? {});
+    expect(binaries.length).toBeGreaterThanOrEqual(4);
+    for (const binary of binaries) {
+      const entry = LOCK.packages[`node_modules/${binary}`];
+      expect([binary, entry?.optional, entry?.os?.length, entry?.cpu?.length]).toEqual([
+        binary,
+        true,
+        1,
+        1,
+      ]);
     }
   });
 
@@ -208,9 +300,7 @@ describe("the package's dependencies", () => {
 
   it("the MCP SDK and zod are the MCP server's alone", () => {
     const importers = shippedModules().filter((file) =>
-      importsOf(file).some((each) =>
-        (MCP_DEPENDENCIES as readonly string[]).includes(packageOf(each.specifier) ?? ""),
-      ),
+      importsOf(file).some((each) => MCP_EXTRA.packages.includes(packageOf(each.specifier) ?? "")),
     );
     expect(importers.length).toBeGreaterThan(0);
     expect(importers.filter((file) => !file.startsWith("mcp/src/"))).toEqual([]);
@@ -222,19 +312,20 @@ describe("the package's dependencies", () => {
   it("LiteSVM loads only when a Solana rehearsal needs it", () => {
     const uses = shippedModules().flatMap((file) =>
       importsOf(file)
-        .filter((each) => packageOf(each.specifier) === LITESVM_DEPENDENCY)
+        .filter((each) => LITESVM_EXTRA.packages.includes(packageOf(each.specifier) ?? ""))
         .map((each) => ({ file, ...each })),
     );
+    // A type-only import, which compiles to nothing, and the one dynamic import.
     expect(uses.filter((each) => !each.typeOnly)).toEqual([
       { file: "sdk/src/cli/svm-fork.ts", specifier: "litesvm", dynamic: true, typeOnly: false },
     ]);
     expect(uses.every((each) => each.file === "sdk/src/cli/svm-fork.ts")).toBe(true);
   });
 
-  it("the sauce command loads no optional dependency until a command needs it", () => {
+  it("the sauce command loads no runtime package until a command needs it", () => {
     const { packages } = graph(["sdk/src/cli/main.ts"], false);
     expect(packages.size).toBeGreaterThan(0);
-    for (const name of [...OPTIONAL_DEPENDENCIES, "typescript", "dotenv"]) {
+    for (const name of [...RUNTIME, "typescript", "dotenv"]) {
       expect([name, packages.get(name)]).toEqual([name, undefined]);
     }
   });
@@ -248,49 +339,5 @@ describe("the package's dependencies", () => {
         .map((each) => `${file}: ${each.specifier}`),
     );
     expect(found).toEqual([]);
-  });
-});
-
-describe("a command whose optional dependency was left out", () => {
-  it("knows Node's refusal of a missing package, and nothing else, for one", () => {
-    // Node's own words, as an import of a package that is not installed throws them.
-    const thrown = JSON.parse(
-      execFileSync(
-        process.execPath,
-        [
-          "--input-type=module",
-          "-e",
-          'try { await import("sauce-not-installed/sub/path.js"); } catch (e) { ' +
-            "console.log(JSON.stringify({ code: e.code, message: e.message })); }",
-        ],
-        { cwd: REPO, encoding: "utf8" },
-      ),
-    ) as { code: string; message: string };
-    expect(missingPackage(thrown, ["sauce-not-installed"])).toBe("sauce-not-installed");
-    expect(missingPackage(thrown, MCP_DEPENDENCIES)).toBeUndefined();
-    // A module of the package's own (an unbuilt mcp/dist), or a native binary that fails to load.
-    const own = {
-      code: "ERR_MODULE_NOT_FOUND",
-      message: "Cannot find module '/x/mcp/dist/entry.js'",
-    };
-    expect(missingPackage(own, MCP_DEPENDENCIES)).toBeUndefined();
-    expect(
-      missingPackage(new Error("Cannot find package 'zod'"), MCP_DEPENDENCIES),
-    ).toBeUndefined();
-  });
-
-  it("says what needs which package, and the line that installs it at the version pinned", () => {
-    const pins = ROOT.optionalDependencies!;
-    expect(optionalMissing("the MCP server", MCP_DEPENDENCIES)).toBe(
-      "the MCP server needs @modelcontextprotocol/sdk and zod, optional dependencies of " +
-        "@eco-incorp/sauce that this install left out (--omit=optional): install them with " +
-        `\`npm i @modelcontextprotocol/sdk@${pins["@modelcontextprotocol/sdk"]} zod@${pins.zod}\`, ` +
-        "or install @eco-incorp/sauce without --omit=optional",
-    );
-    // A range is quoted, as every shell keeps it.
-    expect(optionalMissing("rehearsing", [LITESVM_DEPENDENCY])).toContain(
-      `an optional dependency of @eco-incorp/sauce that this install left out (--omit=optional): ` +
-        `install it with \`npm i "litesvm@${pins.litesvm}"\``,
-    );
   });
 });
