@@ -62,6 +62,11 @@ import { privateKeyToAccount } from "viem/accounts";
 
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import {
+  approvedHashSlot,
+  ERC1271_HANDLER,
+  potMessageTypedData,
+} from "../../../src/routes/erc1271.js";
+import {
   compileHandlers,
   handlersInstallSource,
   packageHandlers,
@@ -212,17 +217,7 @@ const installSource = (echo: Address, carrier: Address): string =>
               : undefined,
       ),
       ...packageHandlers(CHAIN, "@sauce/async"),
-      ...compileHandlers(
-        CHAIN,
-        [
-          {
-            selector: "isValidSignature(bytes32,bytes)",
-            program: "@sauce/async/erc1271.handler.js",
-            readOnly: true,
-          },
-        ],
-        packageReader("@sauce/async"),
-      ),
+      ...compileHandlers(CHAIN, [ERC1271_HANDLER], packageReader("@sauce/async")),
     ],
     "the echo protocol",
   );
@@ -1015,7 +1010,10 @@ function main(hash: Uint256): void {
   Erc1271.${verb}(hash);
 }`;
     expect((await cook(compiled(approve("approve"), [hash]))).ok).toBe(true);
+    expect(await slot(approvedHashSlot(hash))).toBe(word(1n));
+    // The approval is the authorization: whatever the signature bytes.
     expect(await isValid(hash, "0x")).toBe(MAGIC);
+    expect(await isValid(hash, `0x${"ab".repeat(65)}`)).toBe(MAGIC);
     // A market's check gives the call 100,000 gas: what it uses, the transaction's 21,000 and its
     // calldata aside.
     const data = encodeFunctionData({
@@ -1038,12 +1036,7 @@ function main(hash: Uint256): void {
 
   it("answers ERC-1271 for the owner's signature over the hash bound to the Pot, and no other", async () => {
     const hash = keccak256(toHex("a permit the Pot signs"));
-    const typed = {
-      domain: { name: "Sauce Pot", version: "1", chainId: CHAIN_ID, verifyingContract: stack.pot },
-      types: { PotMessage: [{ name: "hash", type: "bytes32" }] },
-      primaryType: "PotMessage" as const,
-      message: { hash },
-    };
+    const typed = potMessageTypedData({ pot: stack.pot, chainId: CHAIN_ID, hash });
     const signature = await OWNER.signTypedData(typed);
     expect(await isValid(hash, signature)).toBe(MAGIC);
     const estimate = await publicClient.estimateGas({
