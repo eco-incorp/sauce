@@ -1,13 +1,13 @@
 ---
 name: sauce-async
-description: Promises in a Sauce program with @sauce/async — a request whose answer arrives later, in a transaction of its own, its .then body compiled with the program and run when the protocol calls the Pot back, as the same Private Pot. Covers .then, .catch and await on a request; Promise.all, race, any, allSettled, resolve, reject and withResolvers with JavaScript's semantics; deadlines, Async.timeout and the public expire(key) anyone may call after one; settling a promise by its key in a later transaction (Async.resolve, Async.reject); installing a package's handlers on a Pot (sauce run @sauce/<package>); and writing a package of the family (Request, a handler that settles by key, the handlers manifest). Use when a program must wait for randomness, an oracle, a cross-chain message or a proof, when the user mentions a callback, a promise, then, await, a timeout or a deadline, or when writing a protocol package with a callback.
+description: Promises in a Sauce program with @sauce/async — a request whose answer arrives later, in a transaction of its own, its .then body compiled with the program and run when the protocol calls the Pot back, as the same Private Pot. Covers .then and .catch on a request; Promise.all, race, any, allSettled, resolve, reject and withResolvers with JavaScript's semantics; deadlines, Async.timeout and the public expire(key) anyone may call after one; settling a promise by its key in a later transaction (Async.resolve, Async.reject); installing a package's handlers on a Pot (sauce run @sauce/<package>); and writing a package of the family (Request, a handler that settles by key, the handlers manifest). Use when a program must wait for randomness, an oracle, a cross-chain message or a proof, when the user mentions a callback, a promise, then, a timeout or a deadline, or when writing a protocol package with a callback.
 ---
 
 # Promises with `@sauce/async`
 
 Some protocols answer later, in a transaction of their own: a random number, an oracle's report, a
 message from another chain, a proof. In Sauce a program asks now, and the code that uses the answer
-is the request's `.then` body, or what follows an `await` of it. The request is a **promise**: it
+is the request's `.then` body. The request is a **promise**: it
 settles exactly once, fulfilled with a value or rejected with a reason. Its body is compiled with
 the program and runs when the protocol calls the Pot back, as the same Pot, in the callback's
 transaction.
@@ -69,8 +69,8 @@ function main(protocol: Address, value: Uint256, recipient: Address) {
   reported a failure, or the deadline passed) and when the body reverts, everything the body did
   undone; `e` is what it reverted with, its first 256 bytes. With no `.catch`, a rejection is logged
   and the callback still returns.
-- **`await`** is `.then` on what follows it, as a statement: `await Echo.request(protocol, value);`.
-  A value comes only as `.then`'s parameter.
+- **A value comes only as `.then`'s parameter**: there is no `await`, so the code that uses the
+  answer is the body, and `Promise.all([a, b]).then((r) => { … })` joins several.
 
 ## Promise's combinators
 

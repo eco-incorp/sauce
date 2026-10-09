@@ -1,7 +1,7 @@
 /**
  * A package's handlers, and the program that installs them on a Pot.
  *
- * A request a program makes with `@sauce/async` (`await Random.vrf(…).then((words) => { … })`) is
+ * A request a program makes with `@sauce/async` (`Random.vrf(…).then((words) => { … })`) is
  * answered later by the protocol calling the Pot back with a selector of its own. A Private Pot
  * answers such a selector with the program its owner registered for it, which its Router's
  * fallback runs: the HANDLER, a SauceScript program
