@@ -464,46 +464,6 @@ function main(protocol: Address, value: Uint256, recipient: Address) {
   the protocol reports the request failed, handed why. With no `.catch`, the callback reverts and
   the body stays parked.
 
-### An off-chain answer: `@sauce/oracle`
-
-`Oracle.cre(...)` asks a Chainlink CRE workflow, code its owner deployed to Chainlink's network
-that fetches APIs, reads chains and computes, for an answer its DON agrees on. The body runs when
-the workflow's report reaches the Pot:
-
-```sauce chain=ethereum,base
-import { Oracle } from "@sauce/oracle";
-
-function main(owner: Address, pair: bytes, limit: Uint256, recipient: Address, amount: Uint256) {
-  Oracle.cre({ owner, args: pair })
-    .then((report) => {
-      const [price] = abi.decode(report, ["Uint256"]);
-      require(price <= limit, "above the limit");
-      USDC.transfer(recipient, amount);
-    })
-    .catch((err) => {
-      log(err);
-    });
-}
-```
-
-- **The request** is a log from the Pot, `OracleRequest(bytes32 indexed id, address indexed owner,
-bytes args)`, which the workflow's EVM Log trigger listens for. `args` is what the workflow
-  reads; leave it out for none.
-- **The answer** is a report whose payload is `abi.encode(bytes32 id, bool ok, bytes data)`,
-  written to the Pot through Chainlink's forwarder (`Chainlink.KeystoneForwarder`). `ok` runs the
-  body with `data`; a report that is not `ok` runs `.catch` with `data`, the workflow's error.
-- **`owner` is required: it is who may answer.** Any workflow's report can reach the forwarder, so
-  the request is bound to the workflow owner, and a report from any other owner finds no request.
-  A report for a request already settled changes nothing either.
-- **A request nobody answers** expires: give it `deadline` (a unix time) or `.within(seconds)`, and
-  after it anyone may call the Pot's `expire(bytes32 key)`, which runs `.catch` with a timeout
-  error naming the key.
-- **Install once per Pot**, on Ethereum or Base: `sauce run @sauce/oracle --chain <chain> --wallet
-<name>`. It registers the handler for `onReport(bytes,bytes)`, the call the forwarder makes, and
-  declares the Pot an `IReceiver` for the ERC-165 check the forwarder makes before it.
-- **The delivery is the workflow's transaction**, and the forwarder runs the body in it: give the
-  workflow's report write a gas limit of about 250,000 plus what the body spends.
-
 ## What a program costs
 
 On an EVM chain, a cook's gas is the transaction's own, the Kitchen's and the Pot's, plus the

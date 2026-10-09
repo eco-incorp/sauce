@@ -362,6 +362,20 @@ name resolves, and rehearsing both sides.
 - **Load it** whenever the work crosses chains; `sauce-chains` says which chains take intents.
 - **Asked as:** "Move my USDC from Base to Ethereum and supply it to Aave there."
 
+### `sauce-oracle`
+
+An answer from outside the chain: a program asks a Chainlink CRE workflow with `@sauce/oracle`
+(`Oracle.cre({ owner, args })`), and its `.then` runs on the Pot when the workflow's report
+arrives through Chainlink's forwarder. Covers the request log a workflow listens for, the report it
+writes, the workflow owner as who may answer, failures and deadlines reaching `.catch`, installing
+it on a Pot, and the gas a delivery needs.
+
+- **Holds** an example that pays USDC only if a workflow reports a price under a limit.
+- **Load it** when a program needs an API's answer, a computation or a fact the chain does not
+  have. Waiting for a callback itself, `.then`, `.catch` and the handlers a Pot installs, is
+  `sauce-script`'s.
+- **Asked as:** "Pay the invoice in USDC only if the ETH price my API reports is under 4,000."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

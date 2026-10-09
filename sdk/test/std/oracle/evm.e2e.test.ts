@@ -66,10 +66,12 @@ import {
 } from "viem";
 import { privateKeyToAccount, sign } from "viem/accounts";
 
+import { requireChain } from "../../../src/chains/canonical.js";
 import { chainlink } from "../../../src/protocols/index.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageInstall } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import { registryTokenAddress } from "../../../src/routes/token-registry.js";
 import {
   gateAnchors,
   routerUnderTest,
@@ -98,6 +100,14 @@ const fixture = <T>(name: string): T =>
   JSON.parse(readFileSync(join(HERE, "fixtures", name), "utf8")) as T;
 const FORWARDER_CODE = fixture<{ codeHash: Hex; runtime: Hex }>("KeystoneForwarder.json");
 const PROBE = fixture<{ abi: Abi; creationCode: Hex }>("Erc165Probe.json");
+const MOCK_ERC20 = JSON.parse(
+  readFileSync(join(HERE, "../token/fixtures/MockERC20.json"), "utf8"),
+) as { abi: Abi; creationCode: Hex };
+/** The `sauce-oracle` skill's example, executed as it is written. */
+const PRICE_GATE = readFileSync(
+  join(HERE, "../../../../skills/sauce-oracle/examples/price-gate.sauce.ts"),
+  "utf8",
+);
 
 /** Anvil's first dev account: the Kitchen's owner, the Pot's and the forwarder's. */
 const OWNER = privateKeyToAccount(
@@ -227,9 +237,16 @@ const cook = (program: Hex) =>
   );
 
 /** Requests a price from `WORKFLOW_OWNER`'s workflow, answering the request's id as logged. */
-async function request(limit: bigint, source = REQUEST): Promise<Hex> {
+async function request(
+  limit: bigint,
+  source = REQUEST,
+  more: readonly (bigint | Hex)[] = [],
+): Promise<Hex> {
+  // What the workflow reads: the pair's name as one ABI-encoded string, which the skill's example
+  // takes as a `string` and encodes itself.
   const pair = encodeAbiParameters([{ type: "string" }], ["ETH/USD"]);
-  const { ok, hash } = await cook(compiled(source, [WORKFLOW_OWNER, pair, limit]));
+  const given = source === PRICE_GATE ? "ETH/USD" : pair;
+  const { ok, hash } = await cook(compiled(source, [WORKFLOW_OWNER, given as Hex, limit, ...more]));
   expect(ok).toBe(true);
   const receipt = await publicClient.getTransactionReceipt({ hash });
   const logged = receipt.logs
@@ -312,6 +329,15 @@ async function delivered(
 /** Whether `onReport` succeeded for a report of `payload`. */
 const report = async (payload: Hex, workflowOwner: Address = WORKFLOW_OWNER): Promise<boolean> =>
   (await delivered(payload, workflowOwner)).result;
+
+/** The data of the Pot's logs with no topic in a transaction: what a program's `log(data)` wrote. */
+async function potData(hash: Hex): Promise<Hex[]> {
+  const receipt = await publicClient.getTransactionReceipt({ hash });
+
+  return receipt.logs
+    .filter((l) => getAddress(l.address) === getAddress(stack.pot) && l.topics.length === 0)
+    .map((l) => l.data);
+}
 
 /** The Pot's logs in a transaction, as [topic0, topic1]. */
 async function potLogs(hash: Hex): Promise<Hex[][]> {
@@ -564,6 +590,53 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
       expect(late.result).toBe(true);
       expect(await potLogs(late.hash)).toContainEqual([IGNORED, keyOf(id)]);
       expect(await slot(PRICE_SLOT)).toBe(before);
+    },
+  );
+
+  itSettling(
+    "the skill's example pays USDC when the price is at most the limit, and logs why when it is not",
+    async () => {
+      // Base's USDC, as the program names it: a mock token at its address, holding the Pot's USDC.
+      const usdc = getAddress(
+        toHex(registryTokenAddress(requireChain(CHAIN), "USDC")!, { size: 20 }),
+      );
+      const deployed = await owner.sendTransaction({
+        account: OWNER,
+        chain: null,
+        data: MOCK_ERC20.creationCode,
+      });
+      const mock = (await publicClient.waitForTransactionReceipt({ hash: deployed }))
+        .contractAddress!;
+      await testClient.setCode({
+        address: usdc,
+        bytecode: (await publicClient.getCode({ address: mock }))!,
+      });
+      const mint = encodeFunctionData({
+        abi: MOCK_ERC20.abi,
+        functionName: "mint",
+        args: [stack.pot, 10_000_000n],
+      });
+      expect((await send(owner, usdc, mint)).ok).toBe(true);
+      const recipient = getAddress("0x00000000000000000000000000000000000beef1");
+      const balance = async () =>
+        (await publicClient.readContract({
+          address: usdc,
+          abi: MOCK_ERC20.abi,
+          functionName: "balanceOf",
+          args: [recipient],
+        })) as bigint;
+
+      const paid = await request(4_000n * 10n ** 8n, PRICE_GATE, [recipient, 1_000_000n]);
+      expect((await delivered(payloadOf(paid, true, priceOf(3_999n * 10n ** 8n)))).result).toBe(
+        true,
+      );
+      expect(await balance()).toBe(1_000_000n);
+
+      const refused = await request(4_000n * 10n ** 8n, PRICE_GATE, [recipient, 1_000_000n]);
+      const over = await delivered(payloadOf(refused, true, priceOf(4_001n * 10n ** 8n)));
+      expect(over.result).toBe(true);
+      expect(await potData(over.hash)).toContainEqual(toHex("above the limit"));
+      expect(await balance()).toBe(1_000_000n);
     },
   );
 });

@@ -34,12 +34,13 @@
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
+    "sauce-oracle/examples/price-gate.sauce.ts": ["sdk/test/std/oracle/evm.e2e.test.ts"],
+    "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
+      "sdk/test/svm/distributed-swap.e2e.test.ts"
+    ],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
-    ],
-    "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
-      "sdk/test/svm/distributed-swap.e2e.test.ts"
     ]
   },
   "compileOnly": {
