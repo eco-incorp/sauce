@@ -28,7 +28,8 @@
  * selector, with each handler's bytecode written into it, and `declareInterface` once per id, which
  * {@link handlersInstallSource} writes and the `sauce` command takes as a program operand
  * (`sauce run @sauce/random --chain base`). `@sauce/async`'s own handlers (the public
- * `expire(bytes32)`) are installed with every package's. The Pot's Router deploys each handler as
+ * `expire(bytes32)`) are installed with every package's, but for one whose manifest says
+ * `"promises": false` (it parks none). The Pot's Router deploys each handler as
  * code and records it per selector; it refuses on a Shared Pot and on a Pot whose Router is fixed.
  */
 import { bytesToHex, isHex, toFunctionSelector, type Hex } from "viem";
@@ -90,6 +91,7 @@ function selectorOf(selector: string): Hex {
 function manifestOf(specifier: string): {
   readonly handlers?: unknown;
   readonly interfaces?: unknown;
+  readonly promises?: unknown;
 } {
   if (resolveSdkPackage(specifier) === undefined) {
     throw new Error(`${specifier} is no package of the SDK's`);
@@ -98,6 +100,7 @@ function manifestOf(specifier: string): {
   return JSON.parse(sdkPackageFile(specifier, "package.json") ?? "{}") as {
     readonly handlers?: unknown;
     readonly interfaces?: unknown;
+    readonly promises?: unknown;
   };
 }
 
@@ -228,8 +231,9 @@ export function packageInstall(
     package: specifier,
   }));
   const taken = new Set(own.map(({ declaration }) => selectorOf(declaration.selector)));
+  // A package that parks no promises says `"promises": false`, and takes no `expire`.
   const core =
-    specifier === ASYNC_PACKAGE
+    specifier === ASYNC_PACKAGE || manifestOf(specifier).promises === false
       ? []
       : packageHandlerDeclarations(ASYNC_PACKAGE)
           .filter((declaration) => !taken.has(selectorOf(declaration.selector)))

@@ -519,7 +519,10 @@ class Lists {
 // `.then` folds on. The package gives it
 //
 //   send      `(continuation) => key`: makes the request, at run time, and answers the key of the
-//             promise it is — `promiseKey(TAG, id)`, under the id the request answered. With
+//             promise it is — `promiseKey(TAG, id)`, under the id the request answered.
+//             `continuation` is `{ code, args, settles }`: the program settling it runs, and, for a
+//             combinator's child, `settles`, the combinator's own `{ code, args }`, which the same
+//             callback may run after it (a package sizing its callback's gas counts both). With
 //             `carries`, the protocol carries the continuation back itself: the key is picked
 //             first (`continuation.key`), and `continuation.stored` says whether the table holds
 //             the promise (a deadline or a combinator needs it) or the message must carry
@@ -608,7 +611,7 @@ export class Request {
       );
     }
     const continuation = program(this._continuation(), this._chainId());
-    this._make(continuation, this._handler !== undefined, 0, 0);
+    this._make(continuation, this._handler !== undefined, 0, 0, undefined);
   }
 
   _chainId() {
@@ -619,13 +622,14 @@ export class Request {
     return this._deadline === undefined ? 0 : this._deadline;
   }
 
-  // Make the request with `continuation` as its continuation; `joinKey`/`index` when it is a
-  // combinator's child (`joinKey` zero otherwise), so the table always holds it.
-  _make(continuation, catches, joinKey, joined) {
+  // Make the request with `continuation` as its continuation; `joined` 1 when it is a combinator's
+  // child, so the table always holds it, and `settles` the combinator's continuation, which settling
+  // it may run too.
+  _make(continuation, catches, joinKey, joined, settles) {
     const deadline = this._deadlineOr0();
     const send = this._send;
     if (!this._carries) {
-      const key = send(continuation);
+      const key = send({ code: continuation.code, args: continuation.args, settles });
       if (key === undefined) {
         throw new Error(
           "a request's `send` answers the key of its promise (`promiseKey(TAG, id)`); a protocol that carries its continuation back says `carries: true`",
@@ -645,6 +649,7 @@ export class Request {
       program: continuation.code.concat(continuation.args),
       key,
       stored,
+      settles,
     });
   }
 
@@ -675,11 +680,11 @@ export class Request {
 
   // As a combinator's child `index`: its continuation records what it settled with in the
   // combinator `joinKey`, and the request is made with it.
-  _join(joinKey, index) {
+  _join(joinKey, index, settles) {
     const child = program(() => {
       childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
     }, this._chainId());
-    this._make(child, true, joinKey, 1);
+    this._make(child, true, joinKey, 1, settles);
   }
 
   // How a combinator's continuation decodes what this child settled with.
@@ -721,7 +726,7 @@ class Settled {
       handler(this._value);
     }
   }
-  _join(joinKey, index) {
+  _join(joinKey, index, settles) {
     childSettled(
       joinKey,
       index,
@@ -809,7 +814,7 @@ class Deferred {
       true,
     );
   }
-  _join(joinKey, index) {
+  _join(joinKey, index, settles) {
     const child = program(() => {
       childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
     }, chainId);
@@ -870,7 +875,7 @@ class Join {
       this._children.length,
       true,
     );
-    Fold.join(this._children, 0, joinKey);
+    Fold.join(this._children, 0, joinKey, continuation);
   }
   _continuation(joinKey) {
     const kind = this._kind;
@@ -887,7 +892,7 @@ class Join {
     const settledBody =
       kind == SAUCE_ASYNC_ALL
         ? () => {
-            Fold.all(children, 0, Lists.empty(), joinKey, body, fail);
+            Fold.all(children, 0, undefined, joinKey, body, fail);
           }
         : kind == SAUCE_ASYNC_ALL_SETTLED
           ? () => {
@@ -912,17 +917,21 @@ class Join {
 // What a combinator's continuation hands its body, built while the program compiles.
 class Fold {
   // Each child made as the combinator's child `index`.
-  static join(children, index, joinKey) {
+  static join(children, index, joinKey, settles) {
     if (index == children.length) {
       return;
     }
-    children[index]._join(joinKey, index);
-    Fold.join(children, index + 1, joinKey);
+    children[index]._join(joinKey, index, settles);
+    Fold.join(children, index + 1, joinKey, settles);
   }
 
   // Every child's value, decoded by its own decoder, in order: what `Promise.all` hands its body.
-  static all(children, index, values, joinKey, body, fail) {
+  // A decoder may hand on its value inside an `if`, where a list made outside cannot grow, so the
+  // values travel as a chain of new objects, and the list is made where the last one arrives.
+  static all(children, index, chain, joinKey, body, fail) {
     if (index == children.length) {
+      const values = Lists.empty();
+      Fold.fill(values, chain);
       body(values);
       return;
     }
@@ -930,11 +939,19 @@ class Fold {
     decode(
       result(joinKey, index),
       (value) => {
-        values.push(value);
-        Fold.all(children, index + 1, values, joinKey, body, fail);
+        Fold.all(children, index + 1, { value, rest: chain }, joinKey, body, fail);
       },
       fail,
     );
+  }
+
+  // `chain`'s values into `values`, first first.
+  static fill(values, chain) {
+    if (chain === undefined) {
+      return;
+    }
+    Fold.fill(values, chain.rest);
+    values.push(chain.value);
   }
 
   // Each child's `{ status, value }`, as it arrived: what `Promise.allSettled` hands its body.

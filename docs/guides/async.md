@@ -2,15 +2,15 @@
 
 [Documentation](../README.md) · [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md)
 
-Some protocols answer later, in a transaction of their own: a random number, an oracle's response,
-a message from another chain, a proof. In Sauce a program asks now, and the code that uses the
-answer is the request's `.then` body, or what follows an `await` of it. The body is compiled with
-the program. It runs when the protocol calls the Pot back, as the same Pot, in the callback's
-transaction.
+Some protocols answer later, in a transaction of their own: a random number, an oracle's report, a
+message from another chain, a proof. In Sauce a program asks now, and the code that uses the answer
+is the request's `.then` body, or what follows an `await` of it. The request is a promise: it
+settles exactly once, fulfilled with a value or rejected with a reason. The body is compiled with
+the program and runs when the protocol calls the Pot back, as the same Pot.
 
 ```js
-await Random.vrf({ words: 2 }).then((words) => {
-  USDC.transfer(players[words[0] % 2], prize);
+await Random.vrf({ words: 1 }).then((words) => {
+  USDC.transfer(words[0] % 2 == 0 ? heads : tails, prize);
 });
 ```
 
@@ -21,8 +21,8 @@ library this page describes, which the SDK resolves with no install.
 
 - **A Private Pot with the package's handlers installed.** The protocol calls the Pot with a
   selector of its own. The Pot's Router answers it with the program its owner registered for that
-  selector: the handler, which checks the call came from the protocol, takes the parked body and
-  runs it. A Shared Pot answers no callback.
+  selector: the handler, which checks the call came from the protocol and settles the promise the
+  callback names. A Shared Pot, and a Private Pot whose Router is fixed, answer no callback.
 - **The native coin for the fee.** Each callback is a cook, and the Router pays the Kitchen's fee
   from the Pot's own balance.
 
@@ -33,8 +33,9 @@ sauce run @sauce/<package> --chain base --wallet <name>
 ```
 
 `sauce compile`, `sauce tx` and `sauce simulate` take the package the same way: one cook, an
-`install` for each selector the package answers. From TypeScript, `routes.packageHandlers(chain,
-specifier)` compiles a package's handlers for a chain, and `routes.handlersInstallSource(handlers)`
+`install` for each selector the package answers and each ERC-165 interface it declares, with the
+Pot's public `expire(bytes32)`. From TypeScript, `routes.packageInstall(chain, specifier)` compiles
+a package's handlers for a chain, and `routes.handlersInstallSource(handlers, name, interfaces)`
 writes the program that installs them.
 
 ## What the body sees
@@ -42,119 +43,101 @@ writes the program that installs them.
 - **The program around it, as it was at the request.** Every value the body reads from the program
   is carried into it when the request is made, and the body cannot assign it. What the protocol
   delivers arrives as the body's parameters, decoded by the package.
-- **One run per answer.** The body is taken when it runs. The same answer delivered again is
-  refused, and so is a call from anyone but the protocol.
-- **`.catch` in its place.** `.catch((e) => { … })` runs instead when the body reverts, with
-  everything the body did undone, or when the protocol reports that the request failed, handed why.
-  With no `.catch`, the callback reverts and the body stays parked.
+- **One settlement.** The same answer delivered again, or one arriving after the promise settled,
+  runs nothing and returns, so the protocol's transaction never fails for it. A call from anyone
+  but the protocol is refused.
+- **`.catch` in its place.** `.catch((e) => { … })` runs when the promise is rejected and when the
+  body reverts, with everything the body did undone. With no `.catch`, the rejection is logged and
+  the callback still returns.
+
+## Combinators, timeouts and deferreds
+
+`Promise.all`, `race`, `any`, `allSettled`, `resolve`, `reject` and `withResolvers` behave as
+JavaScript's, folded while the program compiles:
+
+```js
+import { Async, Promise } from "@sauce/async";
+
+Promise.race([Oracle.price(feed), Async.timeout(3600)])
+  .then((price) => { … })
+  .catch((e) => { … }); // the oracle failed, or an hour passed
+```
+
+- A request's `.within(seconds)` gives it a deadline. After it, anyone may call the Pot's
+  `expire(bytes32 key)`, which rejects the promise with `Timeout(bytes32 key)`. The caller pays
+  the Kitchen's fee as the call's value: the Router pays every handler's cook from the Pot's
+  balance, so a handler anyone could call for free would let anyone drain the Pot, one fee a call.
+- `Promise.withResolvers()` makes a promise the program settles itself in a later transaction. The
+  Pot logs its key, `PromisePending(bytes32 key, uint256 deadline)`, and a later cook of the owner
+  settles it with `Async.resolve(key, value)` or `Async.reject(key, reason)`.
 
 ## Writing a package
 
-A package's request is a method on an object the program reads, returning a `Request` from
-`@sauce/async`:
+A package's request is a method on an object the program reads, returning a `Request`:
 
 ```js
-import { Request } from "@sauce/async";
+import { Request, promiseKey } from "@sauce/async";
 
 class EchoProtocol {
   request(protocol, value) {
     return new Request({
-      // At run time, when the statement ends: make the request, and answer the key the body is
-      // parked under (the protocol's request id).
+      // At run time, when the statement ends: make the request, and answer the promise's key, the
+      // protocol's id under a tag naming the protocol.
       send: (continuation) => {
         const asked = evm.call(protocol, 0, hex`d845a4b3`.concat(abi.encode(value))); // request(uint256)
-        return abi.decode(asked, ["Uint256"])[0];
+        return promiseKey(7, abi.decode(asked, ["Uint256"])[0]);
       },
-      // In the body's program, when the callback lands: decode what arrived into the body's
-      // parameters, or report the request failed.
+      // In the body's program, when the promise is fulfilled: decode what arrived, or fail.
       deliver: (input, body, fail) => body(abi.decode(input, ["Uint256"])[0]),
     });
   }
 }
 ```
 
-The request runs first and parks the body second, so the callback has to come in a later
-transaction. A protocol that carries data back to the Pot, such as a bridge's message, can carry
-the body itself: `send` puts `continuation.code.concat(continuation.args)` in the message and
-answers `undefined`, and the handler checks with `requireSelf` that this Pot sent it.
+A protocol that carries the requester's bytes back, such as a bridge's message, says `carries:
+true`. Its `send` is then handed the promise's key and the body's program to carry, and a plain
+`.then` stores nothing on the Pot.
 
-The package declares its handlers in its `package.json`:
+The package lists its handlers in its `package.json`. Each is a program
+`main(caller: Address, value: Uint256, data: bytes)`, compiled for the Pot's chain:
 
 ```json
 {
-  "handlers": [
-    { "selector": "echo(uint256,uint256)", "program": "echo.handler.js", "readOnly": false }
-  ]
+  "handlers": [{ "selector": "echo(uint256,uint256)", "program": "echo.handler.js" }],
+  "interfaces": []
 }
 ```
 
-Each handler is a program `main(caller: Address, value: Uint256, data: bytes)`, compiled for the
-Pot's chain:
-
 ```js
-import { requireCaller, run, take } from "@sauce/async";
+import { fulfil, promiseKey, requireCaller } from "@sauce/async";
 
-function main(caller: Address, value: Uint256, data: bytes): bytes {
+function main(caller: Address, value: Uint256, data: bytes): void {
   requireCaller(Echo, caller); // the protocol's contract, as the chain names it
   const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
-  return run(take(id), abi.encode(echoed));
+  fulfil(promiseKey(7, id), abi.encode(echoed));
 }
 ```
 
-A handler marked `readOnly` runs under a static call with no fee: a view the protocol asks the Pot.
+A declaration's `requires` lists the contracts it needs (`Namespace.Contract`), so a chain without
+one skips that handler. `interfaces` lists the ERC-165 ids the Pot declares, for a protocol that
+checks its receiver before it calls back.
 
-| `@sauce/async`                         | Does                                                                            |
-| -------------------------------------- | ------------------------------------------------------------------------------- |
-| `park(key, program)`                   | Stores a body under a key, deployed as a contract's code. A key parks once.     |
-| `take(key)`                            | Returns the body parked under a key and clears it. Refused when none is parked. |
-| `run(program, input)`                  | Runs a body as this Pot, in the handler's cook, handing it `input`.             |
-| `received()`                           | In a running body: the `input` it was handed.                                   |
-| `requireCaller(expected, actual)`      | The handler's check that the protocol called.                                   |
-| `requireSelf(sender)`                  | The handler's check that a message came from this Pot.                          |
-| `install(selector, program, readOnly)` | Registers a handler on this Pot, from a cooked program.                         |
+| `@sauce/async`                                                            | Does                                                                       |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `fulfil(key, value)`, `reject(key, reason)`                               | Settle a promise and run its body or its `.catch`; a settled key, nothing. |
+| `settleCarried(key, stored, program, value, ok)`                          | The same, for a protocol that carried the body back.                       |
+| `promiseKey(tag, id)`                                                     | A protocol's id as a promise's key.                                        |
+| `requireCaller(expected, actual)`, `requireSelf(sender)`                  | A handler's checks: the protocol called; this Pot sent the message.        |
+| `expire(key)`                                                             | Reject a promise past its deadline with `Timeout(bytes32)`.                |
+| `install(selector, program, readOnly)`, `declareInterface(id, supported)` | What installing a package's handlers calls.                                |
+| `received()`, `fulfilled()`                                               | In a running body: what settled it, and how.                               |
+| `park`, `run`, `salt`, `isPending`                                        | The settlement table's parts, for a package that needs them directly.      |
 
-## Randomness
+## Storage and cost
 
-`@sauce/random` asks for verifiable randomness and hands it to the body: `Random.vrf` from
-Chainlink VRF, on Ethereum and Base, and `Random.entropy` from Pyth Entropy, on Base. A coin flip
-for a prize:
-
-```js
-import { Random } from "@sauce/random";
-
-function main(heads: Address, tails: Address, prize: Uint256) {
-  Random.vrf({ words: 1 }).then((words) => {
-    USDC.transfer(words[0] % 2 == 0 ? heads : tails, prize);
-  });
-}
-```
-
-| Request                                     | The body receives                     | Defaults                                              |
-| ------------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
-| `Random.vrf({ words, confirmations, gas })` | `words` random numbers, a `Uint256[]` | 1 word, 3 confirmations, `gas` sized from the body    |
-| `Random.entropy({ provider, gas })`         | one random 32-byte number             | Entropy's default provider, `gas` sized from the body |
-
-- **The Pot pays twice.** The request pays the provider's price in the native coin from the Pot's
-  balance when the program runs: VRF's wrapper price at the transaction's gas price, or Entropy's
-  fee. Exactly the price is paid, since both providers keep any excess. The callback's cook then
-  pays the Kitchen's fee.
-- **`gas` is the callback's gas limit,** fixed and paid for with the request. Left out, the package
-  sizes it from the body as compiled: what reaching the body costs, about 100,000 gas, plus an
-  allowance for each byte of the body. That covers writes, hashing and a few token transfers; a
-  body that loops, or calls out more than its size suggests, needs `gas` given.
-- **A callback that fails** is final with VRF: the wrapper gives the callback exactly `gas`, and a
-  callback that reverts or runs out is spent, paid for and never retried. Pyth Entropy keeps the
-  request open, and anyone may reveal it again.
-- **The body reads numbers, addresses and booleans** from the program around it, not arrays: choose
-  among fixed parameters, as the coin flip does.
-- **Requests are keyed by the provider's own id.** VRF's request id, bound to the wrapper, and
-  Entropy's sequence number, bound to the Entropy contract and its provider, since sequence numbers
-  count per provider.
-
-Install the handlers, which answer `rawFulfillRandomWords` from the chain's VRF wrapper and
-`_entropyCallback` from its Entropy contract, once per Pot. On a chain with one provider, only its
-handler installs:
-
-```sh
-sauce run @sauce/random --chain base --wallet <name>
-```
+A pending promise is one word in the Pot's storage, in the ERC-7201 namespace
+`sauce.storage.Async`: the address of its body's code, its deadline, its state and its flags. Up
+to three words the body captured sit beside it, and more go into code. The body's code is deployed
+once per Pot, by CREATE2 at an address its bytes decide, and shared by every request that compiles
+to it. Settling clears the word. A carried `.then` stores nothing. A combinator parks a word of its
+own and one per child, and keeps each child's value until it is decided.
