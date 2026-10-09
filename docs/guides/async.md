@@ -173,9 +173,10 @@ chain, with its names, and reads the program around it as it was when the messag
 - **One way.** With no `.then` or `.catch`, nothing comes back. A body that reverts reverts the
   delivery, and the bridge can deliver the message again later, when it may succeed.
 - **A round trip.** The body runs there in a frame of its own. What it returns is sent back over
-  the same bridge and fulfils the promise here; when something here handles a rejection (a
-  `.catch`, a deadline, a combinator), what it reverted with is sent back instead and rejects it.
-  A plain `.then` with no `.catch` runs the body uncaught, so a revert there is retried.
+  the same bridge and fulfils the promise here; what it reverted with is sent back instead and
+  rejects it, everything it did there undone. With no `.catch`, the rejection runs nothing and is
+  logged as unhandled: a body that should wait and be delivered again belongs in a one-way
+  message.
 - **Combinators and deadlines.** A remote message is a promise among others:
   `Promise.all([Base.remote(…), Optimism.remote(…)])` runs its body once both chains answered, each
   answer in the order listed, and `Promise.race` takes the first, the later answer delivered and

@@ -60,9 +60,12 @@ function main(bump: Uint256) {
 - **`await`** is `.then` with the code after it: what follows `await Base.remote(() => { … });` runs
   back here, once the body ran there. An `await` cannot give a value (`const r = await …` is a
   compile error): take the result through `.then`.
-- **A plain `.then` with no `.catch`** runs the body there uncaught: a revert reverts the delivery,
-  the message stays undelivered, and the bridge can deliver it again, when it may succeed. With no
-  `.then` or `.catch` at all, a message is one way, nothing comes back, and the same holds.
+- **With no `.catch`**, a body that reverts there still rejects the promise: nothing runs back
+  here, and the rejection is logged as unhandled. The message is delivered once either way.
+- **With no `.then` or `.catch` at all**, a message is one way and nothing comes back. Its body
+  runs uncaught: a revert reverts the delivery, the message stays undelivered, and the bridge can
+  deliver it again, when it may succeed. A body that waits for something (money an intent brings)
+  is a one-way message.
 
 Each way is a message of its own, paid on the chain it leaves. A plain round trip stores nothing:
 the `.then` and the `.catch` are compiled for this chain while the program compiles, and travel
@@ -98,7 +101,7 @@ function main(bump: Uint256) {
   `expire(bytes32 key)`, paying the Kitchen's fee, which rejects the promise into its `.catch`, and
   an answer that comes later is ignored.
 - A deadline or a combinator keeps the promise in this Pot's storage until it settles
-  (`sauce-async`), and the body there always runs caught: its revert comes back as the rejection.
+  (`sauce-async`), so a late or second answer is ignored.
 
 ## Choose the bridge
 
