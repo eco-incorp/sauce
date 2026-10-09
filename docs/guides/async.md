@@ -144,10 +144,11 @@ own and one per child, and keeps each child's value until it is decided.
 
 ## Proofs: `@sauce/zk`
 
-`@sauce/zk` asks a ZK coprocessor a question now and hands its proven answer to `.then`. Its one
-coprocessor is Space and Time, on Ethereum and Base: a SQL query over Space and Time's indexed
-copies of chains, proven with Proof of SQL, which its QueryRouter verifies before its
-CallbackExecutor calls the Pot back.
+`@sauce/zk` asks a ZK coprocessor a question now and hands its proven answer to `.then`. It speaks
+two: Space and Time, on Ethereum and Base, answers a SQL query over its indexed copies of chains,
+proven with Proof of SQL, which its QueryRouter verifies before its CallbackExecutor calls the Pot
+back; Boundless, on Base, proves a RISC Zero guest program ran on an input, which its market
+verifies before it calls the Pot back with the guest's journal.
 
 ```js
 import { Zk } from "@sauce/zk";
@@ -183,3 +184,20 @@ function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Addres
 
 Reading a result costs gas (a four-column result read once took about 300,000 of the callback's
 gas), and the Pot keeps a query's id and payment in two words until its promise settles.
+
+`Zk.risc0({ imageId, imageUrl, input, offer })` asks Boundless instead:
+
+- **The request** is the market's own `ProofRequest`, the Pot its client and its callback. The
+  offer is the market's: `maxPrice` (wei, which the Pot deposits), `rampUpPeriod`, `lockTimeout`,
+  `timeout` and `lockCollateral` (the ZKC a prover locks), and `minPrice`. Any prover may lock it.
+- **The guest** reads the request's id, 32 bytes, then `input`, from stdin, and must commit the
+  sha256 of its whole stdin as the first 32 bytes of its journal. The body is handed the rest.
+- **The Pot signs its own requests.** A prover's lock asks the client `isValidSignature` (ERC-1271)
+  with 100,000 gas. The program hashes each request as the market does and keeps the hash, and a
+  read-only handler answers yes for those alone, in about 36,000 gas, so nobody else's request
+  can spend the Pot's balance at the market.
+- **The checks.** The callback carries no request id: the handler takes calls only from the market,
+  and settles the promise the proof's image id and its journal's first word name, so a proof of
+  the same guest over another input settles nothing.
+- **The deadline.** At `timeout` the promise expires; `Zk.reclaim(e)` in its `.catch` slashes the
+  request if a prover locked it and failed, and withdraws its price.

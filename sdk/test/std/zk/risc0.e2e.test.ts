@@ -133,6 +133,12 @@ function main(imageId: Uint256, imageUrl: bytes, input: bytes, maxPrice: Uint256
     });
 }`;
 
+/** The skill's example: a payment made once the guest's proven output reaches a minimum. */
+const PROVEN_GUEST = readFileSync(
+  join(FIXTURES, "../../../../../skills/sauce-zk/examples/proven-guest.sauce.ts"),
+  "utf8",
+);
+
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
 
 /** A request as EIP-712 typed data under the market's domain, as viem hashes and signs it. */
@@ -614,6 +620,35 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
       }),
     ).toBe("0x1626ba7e");
   });
+
+  it.each([
+    [100n, 1_000n],
+    [99n, 0n],
+  ])(
+    "the skill's sauce-zk/examples/proven-guest, the guest's output %s, pays %s",
+    async (output, paid) => {
+      const recipient = privateKeyToAccount(
+        keccak256(toHex(`sauce.zk.test.guest.payee.${output}`)),
+      ).address;
+      const sent = await chain.cook(
+        chain.compiled(PROVEN_GUEST, [
+          BigInt(IMAGE_ID),
+          IMAGE_URL,
+          INPUT,
+          MAX_PRICE,
+          100n,
+          recipient,
+          1_000n,
+        ]),
+      );
+      expect(sent.ok).toBe(true);
+      const request = submitted(sent);
+      expect(request.offer.lockCollateral).toBe(COLLATERAL);
+      expect((await lock(request)).ok).toBe(true);
+      expect((await fulfil(request, journalOf(request, output))).ok).toBe(true);
+      expect(await chain.publicClient.getBalance({ address: recipient })).toBe(paid);
+    },
+  );
 
   it("expires a locked request past its deadline: Zk.reclaim slashes it and withdraws its price", async () => {
     const request = await ask(0n, 30n, 60n);

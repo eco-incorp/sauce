@@ -1223,21 +1223,38 @@ skips without one, in CI too). Settling reads a continuation's revert (`catch (e
 compiler's tree; the released v12-evm 1.2.0 refuses it loudly, which the suite's one release case
 holds.
 
-**`@sauce/zk` is Space and Time's Proof of SQL** (`src/std/zk/zk.evm.js`, skill `sauce-zk`):
-`Zk.sql({ query, payment })` asks the chain's `SpaceAndTime.QueryRouter` under the version
-`keccak256("latest")` (a version the router has no entry for is read as a verifier ADDRESS, so never
-name one), pays SXT through `@sauce/token`, and parks the promise under
-`promiseKey(keccak256("sauce.zk.sql"), queryId)`; the handler (`sql.handler.js`,
-`queryCallback(bytes32,bytes,bytes)`) takes calls from the `CallbackExecutor` only and `fulfil`s
-by the query's id, so a stranger's query naming the Pot settles nothing. The query's timeout is the
-promise's deadline, and `Zk.cancel(e)` in a `.catch` cancels it for a `Timeout` from two words the
-Pot keeps beside the promise (ERC-7201 `sauce.storage.Zk`). It was chosen after a survey of live
-ZK callbacks on Ethereum and Base: Axiom V2 is sunset (support ended 2024-12-21, nothing fulfilled
-since), Brevis has no Ethereum or Base deployment, Lagrange is dormant, Herodotus and Succinct
-have no callback; Boundless (Base only) is the next candidate. `test/std/zk/sql.e2e.test.ts` runs
-Space and Time's own contracts, deployed by replaying their creation transactions at the
-deployer's nonces (`fixtures/SpaceAndTime.json`), with only the proof and Ethereum's two Chainlink
-feeds mocked, and real results from the router's `QueryFulfilled` events.
+**`@sauce/zk` is two coprocessors** (`src/std/zk/zk.evm.js`, skill `sauce-zk`), chosen after a
+survey of live ZK callbacks on Ethereum and Base: Axiom V2 is sunset (support ended 2024-12-21,
+nothing fulfilled since), Brevis has no Ethereum or Base deployment, Lagrange is dormant, Herodotus
+and Succinct have no callback.
+
+- **Space and Time** (`Zk.sql`, Ethereum and Base): asks `SpaceAndTime.QueryRouter` under the
+  version `keccak256("latest")` (a version the router has no entry for is read as a verifier
+  ADDRESS, so never name one), pays SXT through `@sauce/token`, and parks the promise under
+  `promiseKey(keccak256("sauce.zk.sql"), queryId)`; the handler (`sql.handler.js`,
+  `queryCallback(bytes32,bytes,bytes)`) takes calls from the `CallbackExecutor` only and `fulfil`s
+  by the query's id, so a stranger's query naming the Pot settles nothing. The query's timeout is
+  the promise's deadline, and `Zk.cancel(e)` cancels it for a `Timeout` from two words the Pot
+  keeps beside the promise (ERC-7201 `sauce.storage.Zk`).
+- **Boundless** (`Zk.risc0`, Base only): the program builds the market's `ProofRequest` (client and
+  callback the Pot, id `1 << 192 | pot << 32 | index`), hashes it as the market does (EIP-712 under
+  `eip712DomainSeparator()`) and stores the hash, which the READ-ONLY handler
+  `isValidSignature(bytes32,bytes)` (`signature.handler.js`) approves, in about 36k of the market's
+  100k-gas STATICCALL; so only the Pot's own requests can spend its market balance. The guest's
+  stdin is the request id then the input, its journal must begin with `sha256(stdin)` (a
+  `PrefixMatch` predicate), and the promise key is `promiseKey(keccak256("sauce.zk.risc0"),
+keccak256(abi.encode(imageId, digest)))`, which `handleProof` recomputes from the callback alone.
+  `Zk.reclaim(e)` slashes and withdraws after the deadline. The two have separate cancel methods so
+  a program names only the contracts of the coprocessor it asks: a library module cannot name a
+  namespace the chain lacks (it is "not a declared variable" there, where a program folds it to
+  zero), and a module-constant instance cannot record what a program asked.
+
+The suites (`test/std/zk/sql.e2e.test.ts`, `risc0.e2e.test.ts`) run each protocol's own contracts:
+Space and Time's deployed by replaying their creation transactions at the deployer's nonces
+(`fixtures/SpaceAndTime.json`), Boundless's market as its captured proxy, implementation, legacy
+implementation and ZKC (`fixtures/Boundless.json`); only the proof is mocked (Space and Time's
+verifier, Boundless's router) and Ethereum's two Chainlink feeds. A Pot answering ERC-1271 with a
+read-only handler conflicts with any other package that wants `isValidSignature`.
 
 ## Agent skills
 

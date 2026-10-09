@@ -377,14 +377,16 @@ writing a package of the family.
 
 ### `sauce-zk`
 
-Proven answers: a SQL query over indexed chain data, proven with Space and Time's Proof of SQL,
-asked now and answered by a callback that runs the request's `.then` body (`Zk.sql`); reading the
-proven table (`Zk.cell`, `Zk.rows`); the query's timeout and `Zk.cancel` to take an unanswered
-query's payment back; installing the handler; on Ethereum and Base.
+Proven answers: a SQL query over indexed chain data, proven with Space and Time's Proof of SQL
+(`Zk.sql`, Ethereum and Base), or a RISC Zero guest program proven run by Boundless's market
+(`Zk.risc0`, Base), asked now and answered by a callback that runs the request's `.then` body;
+reading the proven table (`Zk.cell`, `Zk.rows`), the journal a guest commits, the Pot signing its
+own proof requests, timeouts and taking an unanswered request's payment back (`Zk.cancel`,
+`Zk.reclaim`), and installing the handlers.
 
-- **Holds** a payment made once a query proves a value is at least a minimum, its payment taken
-  back if the query goes unanswered.
-- **Load it** when a program must act on chain history or indexed data it cannot read itself,
+- **Holds** a payment made once a query proves a value is at least a minimum, and one made once a
+  guest's proven output is, each taking its payment back if it goes unanswered.
+- **Load it** when a program must act on chain history or a computation it cannot run itself,
   proven rather than reported; `sauce-async` explains the promise it is.
 - **Asked as:** "Release the grant once a SQL query over Base's history proves this address made
   at least ten deposits."

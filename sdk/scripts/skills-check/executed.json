@@ -43,6 +43,7 @@
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
     ],
+    "sauce-zk/examples/proven-guest.sauce.ts": ["sdk/test/std/zk/risc0.e2e.test.ts"],
     "sauce-zk/examples/proven-payout.sauce.ts": ["sdk/test/std/zk/sql.e2e.test.ts"]
   },
   "compileOnly": {
