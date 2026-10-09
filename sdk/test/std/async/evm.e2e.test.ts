@@ -28,8 +28,9 @@
  * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code
  * (`forge inspect src/Router.sol:Router bytecode` in v12-evm at that branch): no release publishes
  * that Router yet, so CI has none to give and this suite skips there, until a kitchen-evm release
- * carries the handlers and the release's Router runs it. The cases that settle through a catch
- * that reads the revert also need an engine built from the compiler's tree (`itCatching`).
+ * carries the handlers and the release's Router runs it. Settling catches a continuation's revert
+ * with a `catch (e)` that reads `e`, so every case that settles needs an engine built from the
+ * compiler's tree; the released engine refuses that, loudly, and the one case run there holds it.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -77,10 +78,10 @@ const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
 const ROUTER = routerUnderTest();
 const describeAsync = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
-/** Settling catches the continuation's revert with a `catch (e)` that reads `e`, which runs on an
- *  engine built from the compiler's tree and not on the released one: there its work is dropped,
- *  and a settlement inside another (a combinator's child settling it, a carried continuation)
- *  stops the cook. Those cases skip on the release. */
+/** Settling a promise catches its continuation's revert with a `catch (e)` that reads `e`, which an
+ *  engine built from the compiler's tree runs and the released one refuses, loudly: every case that
+ *  settles runs on the first (`itSettling`), and on the release one case holds that refusal
+ *  (`itOnRelease`). */
 const RELEASED_ENGINE =
   RUNTIME_HEX_PATH !== undefined &&
   readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
@@ -95,7 +96,8 @@ const RELEASED_ENGINE =
         ),
       ) as { runtimeCreationCode: string }
     ).runtimeCreationCode.toLowerCase();
-const itCatching = RELEASED_ENGINE ? it.skip : it;
+const itSettling = RELEASED_ENGINE ? it.skip : it;
+const itOnRelease = RELEASED_ENGINE ? it : it.skip;
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 /** The sauce-async skill's examples, run here as a reader runs them. */
@@ -185,7 +187,9 @@ function main(caller: Address, value: Uint256, data: bytes): void {
   requireCaller(${carrier}, caller);
   const [payload, delivered] = abi.decode(data.slice(4, data.length), ["bytes", "bytes"]);
   const [key, stored, program] = abi.decode(payload, ["Uint256", "Uint256", "bytes"]);
-  settleCarried(key, stored == 1, program, delivered, true);
+  // The protocol reports a failure as 13.
+  const [outcome] = abi.decode(delivered, ["Uint256"]);
+  settleCarried(key, stored == 1, program, delivered, outcome != 13);
 }`;
 
 /** The program the owner cooks to install them, as the SDK writes it for a package: each handler
@@ -563,66 +567,75 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       value: word(value),
     });
 
-  it("parks the body under the request's id, and the callback runs it once, for one fee", async () => {
-    const id = await request(41n, 1_000n);
-    expect(await parked(id)).not.toBe(0n);
+  itSettling(
+    "parks the body under the request's id, and the callback runs it once, for one fee",
+    async () => {
+      const id = await request(41n, 1_000n);
+      expect(await parked(id)).not.toBe(0n);
 
-    const kitchen = gateAnchors().kitchen;
-    const kitchenBefore = await publicClient.getBalance({ address: kitchen });
-    const potBefore = await publicClient.getBalance({ address: stack.pot });
-    const { ok } = await send(
-      stranger,
-      echo,
-      encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] }),
-    );
-    expect(ok).toBe(true);
+      const kitchen = gateAnchors().kitchen;
+      const kitchenBefore = await publicClient.getBalance({ address: kitchen });
+      const potBefore = await publicClient.getBalance({ address: stack.pot });
+      const { ok } = await send(
+        stranger,
+        echo,
+        encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] }),
+      );
+      expect(ok).toBe(true);
 
-    expect(await publicClient.getStorageAt({ address: stack.pot, slot: ECHOED_SLOT })).toBe(
-      word(1_041n),
-    );
-    expect(await parked(id)).toBe(0n);
-    expect((await publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
-    expect(potBefore - (await publicClient.getBalance({ address: stack.pot }))).toBe(FEE);
-  });
+      expect(await publicClient.getStorageAt({ address: stack.pot, slot: ECHOED_SLOT })).toBe(
+        word(1_041n),
+      );
+      expect(await parked(id)).toBe(0n);
+      expect((await publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
+      expect(potBefore - (await publicClient.getBalance({ address: stack.pot }))).toBe(FEE);
+    },
+  );
 
-  it("lets a second delivery of the same id pass and run nothing: the promise is settled", async () => {
-    const id = await request(7n, 5n);
-    expect((await fulfill(id)).ok).toBe(true);
-    expect(await slot(ECHOED_SLOT)).toBe(word(12n));
-    await setSlot(ECHOED_SLOT, 0n);
-    const again = await fulfill(id);
-    expect(again.ok).toBe(true);
-    expect(await slot(ECHOED_SLOT)).toBe(word(0n));
-    expect(await potLogs(again.hash)).toContainEqual([IGNORED, word(keyOf(id))]);
-  });
+  itSettling(
+    "lets a second delivery of the same id pass and run nothing: the promise is settled",
+    async () => {
+      const id = await request(7n, 5n);
+      expect((await fulfill(id)).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(12n));
+      await setSlot(ECHOED_SLOT, 0n);
+      const again = await fulfill(id);
+      expect(again.ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+      expect(await potLogs(again.hash)).toContainEqual([IGNORED, word(keyOf(id))]);
+    },
+  );
 
-  it("refuses a callback from anyone but the protocol, and leaves the body parked", async () => {
-    const id = await request(9n, 0n);
-    const forged = concat([
-      ECHO_SELECTOR,
-      encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [id, 666n]),
-    ]);
-    expect((await revertOf(STRANGER.address, stack.pot, forged)).reason).toBe(
-      "async: the call is not from the protocol",
-    );
-    expect((await send(stranger, stack.pot, forged)).ok).toBe(false);
-    expect(await parked(id)).not.toBe(0n);
-    // The protocol's own delivery still runs it.
-    expect(
-      (
-        await send(
-          stranger,
-          echo,
-          encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] }),
-        )
-      ).ok,
-    ).toBe(true);
-    expect(await publicClient.getStorageAt({ address: stack.pot, slot: ECHOED_SLOT })).toBe(
-      word(9n),
-    );
-  });
+  itSettling(
+    "refuses a callback from anyone but the protocol, and leaves the body parked",
+    async () => {
+      const id = await request(9n, 0n);
+      const forged = concat([
+        ECHO_SELECTOR,
+        encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [id, 666n]),
+      ]);
+      expect((await revertOf(STRANGER.address, stack.pot, forged)).reason).toBe(
+        "async: the call is not from the protocol",
+      );
+      expect((await send(stranger, stack.pot, forged)).ok).toBe(false);
+      expect(await parked(id)).not.toBe(0n);
+      // The protocol's own delivery still runs it.
+      expect(
+        (
+          await send(
+            stranger,
+            echo,
+            encodeFunctionData({ abi: ECHO.abi, functionName: "fulfill", args: [id] }),
+          )
+        ).ok,
+      ).toBe(true);
+      expect(await publicClient.getStorageAt({ address: stack.pot, slot: ECHOED_SLOT })).toBe(
+        word(9n),
+      );
+    },
+  );
 
-  itCatching(
+  itSettling(
     "runs `.catch` in place of a body that reverted, with the body's writes undone",
     async () => {
       const before = await slot(ECHOED_SLOT);
@@ -634,7 +647,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     },
   );
 
-  itCatching(
+  itSettling(
     "runs `.catch` when the protocol's delivery fails the request, handed why",
     async () => {
       const id = await request(13n, 1n, catchingSource);
@@ -643,7 +656,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     },
   );
 
-  itCatching(
+  itSettling(
     "settles a failed request with no `.catch` as rejected, logged unhandled, and returns",
     async () => {
       const id = await request(13n, 1n);
@@ -662,7 +675,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     await test.mine({ blocks: 1 });
   };
 
-  it("measures a request-id promise: one word parked, one callback", async () => {
+  itSettling("measures a request-id promise: one word parked, one callback", async () => {
     const [id] = await nextIds(1);
     const requested = await cook(compiled(requestSource(echo), [3n, 0n]));
     expect(requested.ok).toBe(true);
@@ -683,7 +696,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     GAS["request-id: the same request with no promise"] = await gasOf(bare.hash);
   });
 
-  itCatching(
+  itSettling(
     "Promise.all runs its body once every child has settled, each value in order",
     async () => {
       await setSlot(ECHOED_SLOT, 0n);
@@ -723,7 +736,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     },
   );
 
-  itCatching("Promise.race settles with the first child; the later one is ignored", async () => {
+  itSettling("Promise.race settles with the first child; the later one is ignored", async () => {
     const [first, second] = await nextIds(2);
     expect(
       (
@@ -748,7 +761,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     expect(await slot(ECHOED_SLOT)).toBe(word(0n));
   });
 
-  itCatching("Promise.any is fulfilled by the first fulfilment", async () => {
+  itSettling("Promise.any is fulfilled by the first fulfilment", async () => {
     const [first] = await nextIds(2);
     expect(
       (
@@ -764,7 +777,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     expect(await slot(ECHOED_SLOT)).toBe(word(42n));
   });
 
-  itCatching(
+  itSettling(
     "a race against a timeout: anyone expires it after the deadline, into `.catch`",
     async () => {
       const [id] = await nextIds(1);
@@ -817,7 +830,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     },
   );
 
-  itCatching("Promise.allSettled hands each child's state and value", async () => {
+  itSettling("Promise.allSettled hands each child's state and value", async () => {
     const [id] = await nextIds(1);
     const requested = await cook(
       compiled(
@@ -837,21 +850,24 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     expect(await slot(ECHOED_SLOT)).toBe(word(2n * 100n + 3n * 10n + 32n));
   });
 
-  it("a deferred: its key logged, its body run when the owner resolves it later", async () => {
-    const made = await cook(compiled(deferredSource, [7n]));
-    expect(made.ok).toBe(true);
-    const [deferred] = await pendingOf(made.hash);
-    expect(deferred).toBeDefined();
-    await setSlot(ECHOED_SLOT, 0n);
-    expect((await cook(compiled(resolveSource, [deferred!.key, 70n]))).ok).toBe(true);
-    expect(await slot(ECHOED_SLOT)).toBe(word(77n));
-    // Resolved once: again, nothing.
-    await setSlot(ECHOED_SLOT, 0n);
-    expect((await cook(compiled(resolveSource, [deferred!.key, 1n]))).ok).toBe(true);
-    expect(await slot(ECHOED_SLOT)).toBe(word(0n));
-  });
+  itSettling(
+    "a deferred: its key logged, its body run when the owner resolves it later",
+    async () => {
+      const made = await cook(compiled(deferredSource, [7n]));
+      expect(made.ok).toBe(true);
+      const [deferred] = await pendingOf(made.hash);
+      expect(deferred).toBeDefined();
+      await setSlot(ECHOED_SLOT, 0n);
+      expect((await cook(compiled(resolveSource, [deferred!.key, 70n]))).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(77n));
+      // Resolved once: again, nothing.
+      await setSlot(ECHOED_SLOT, 0n);
+      expect((await cook(compiled(resolveSource, [deferred!.key, 1n]))).ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+    },
+  );
 
-  itCatching("a carried continuation: nothing parked, run as the message lands", async () => {
+  itSettling("a carried continuation: nothing parked, run as the message lands", async () => {
     const before = (await publicClient.readContract({
       address: carrier,
       abi: CARRIER.abi,
@@ -875,7 +891,33 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     expect(await slot(ECHOED_SLOT)).toBe(word(105n));
   });
 
-  itCatching(
+  itSettling(
+    "a carried continuation rejected with no `.catch` runs nothing, and is logged unhandled",
+    async () => {
+      const before = (await publicClient.readContract({
+        address: carrier,
+        abi: CARRIER.abi,
+        functionName: "sent",
+      })) as bigint;
+      const requested = await cook(compiled(carrierSource(carrier, false), [300n]));
+      expect(requested.ok).toBe(true);
+      await setSlot(ECHOED_SLOT, 0n);
+      const rejected = await send(
+        stranger,
+        carrier,
+        encodeFunctionData({
+          abi: CARRIER.abi,
+          functionName: "deliver",
+          args: [before + 1n, await sentPayload(requested.hash), word(13n)],
+        }),
+      );
+      expect(rejected.ok).toBe(true);
+      expect(await slot(ECHOED_SLOT)).toBe(word(0n));
+      expect((await potLogs(rejected.hash)).map((topics) => topics[0])).toContain(UNHANDLED);
+    },
+  );
+
+  itSettling(
     "a carried continuation with a deadline: parked, so a second delivery is ignored",
     async () => {
       const before = (await publicClient.readContract({
@@ -899,7 +941,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
     },
   );
 
-  itCatching(
+  itSettling(
     "the skill's sauce-async/examples/approval pays once approve resolves it, and never after the day",
     async () => {
       const recipient = "0x00000000000000000000000000000000000a5a5a" as Address;
@@ -922,6 +964,17 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       await later(86_401);
       expect((await expire(day.key)).ok).toBe(true);
       expect(await publicClient.getBalance({ address: recipient })).toBe(1_000n);
+    },
+  );
+
+  itOnRelease(
+    "on the released engine a callback that settles reverts, and the promise stays pending",
+    async () => {
+      const [id] = await nextIds(1);
+      expect((await cook(compiled(requestSource(echo), [1n, 0n]))).ok).toBe(true);
+      expect(await parked(id!)).not.toBe(0n);
+      expect((await fulfill(id!)).ok).toBe(false);
+      expect(await parked(id!)).not.toBe(0n);
     },
   );
 

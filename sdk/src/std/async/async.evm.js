@@ -660,11 +660,17 @@ export class Request {
     const handler = this._handler;
     const deliver =
       this._deliver === undefined ? (input, body, fail) => body(input) : this._deliver;
+    // With no handler, a rejection reverts the run, which the settlement logs unhandled: a carried
+    // continuation is run for a rejection too, whatever it handles.
     if (handler === undefined) {
       return () => {
-        deliver(received(), body, (reason) => {
-          revert(reason);
-        });
+        if (fulfilled()) {
+          deliver(received(), body, (reason) => {
+            revert(reason);
+          });
+        } else {
+          revert(received());
+        }
       };
     }
     return () => {
@@ -794,7 +800,11 @@ class Deferred {
     const continuation =
       handler === undefined
         ? program(() => {
-            body(received());
+            if (fulfilled()) {
+              body(received());
+            } else {
+              revert(received());
+            }
           }, chainId)
         : program(() => {
             if (fulfilled()) {
@@ -902,7 +912,13 @@ class Join {
               Fold.first(children, 0, winner(), received(), body, fail);
             };
     if (handler === undefined) {
-      return settledBody;
+      return () => {
+        if (fulfilled()) {
+          settledBody();
+        } else {
+          revert(received());
+        }
+      };
     }
     return () => {
       if (fulfilled()) {
