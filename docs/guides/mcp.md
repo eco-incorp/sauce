@@ -158,6 +158,22 @@ command pays for it.
 Over stdio the server writes nothing but the protocol to stdout. A message larger than `--max-body`
 (2 MiB by default) closes the connection.
 
+### A newer version
+
+The server prints no update notice. Instead, the first tool result of its life carries one note, in
+`notes` and in the result's text, when the `sauce` command's update cache names a newer release
+([The update notice](cli.md#the-update-notice)): which version is out, which one the server runs,
+and how to move to it. `sauce_skills` returns that version as `latest`, beside the `version` the
+server runs, on every call. `sauce update` updates the command, or says how for the way it was
+installed. A project's MCP entry pins its version, so
+`npx -y @eco-incorp/sauce@latest mcp setup --force` rewrites it. The new version serves once the
+agent restarts the server.
+
+The server reads that cache when it starts, and refreshes a cache a day old the way the command
+does, in a process of its own, so neither starting nor answering waits for the registry. Over HTTP
+the note is said once for the process, in whichever request is first. `--no-update-check`, or
+`"updateCheck": false` in the `--config` file, turns it off.
+
 ## Endpoints
 
 A tool that reads a chain needs no endpoint from you or the server's operator: it reads the chain
@@ -272,7 +288,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 
 | Tool                   | Like                   | Returns                                                                                                                                                                                                                                                                                                    |
 | ---------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sauce_skills`         | —                      | Every agent skill with when to use it and its files' sizes, and the package version                                                                                                                                                                                                                        |
+| `sauce_skills`         | —                      | Every agent skill with when to use it and its files' sizes, the package version, and `latest` when a newer one is published                                                                                                                                                                                |
 | `sauce_skill`          | —                      | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                                                                                                                                        |
 | `sauce_dev`            | —                      | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                                                                                                                                            |
 | `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                                                                  |

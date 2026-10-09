@@ -497,15 +497,16 @@ try {
 
   // The `sauce` bin, run the way a consumer runs it — through npx, from the install, with nothing
   // but the tarball's files. It compiles the example its own agent skill ships, builds the Pot and
-  // the transaction, and scaffolds a project whose skills then report up to date.
+  // the transaction, and scaffolds a project whose skills then report up to date. Each run passes
+  // --no-update-check, so none starts a refresh that would read the npm registry.
   const sauce = (...args) =>
-    execFileSync("npx", ["--no", "--", "sauce", ...args], {
+    execFileSync("npx", ["--no", "--", "sauce", "--no-update-check", ...args], {
       cwd: work,
       encoding: "utf8",
       env: smokeEnv,
     });
   assert.equal(
-    execFileSync("npx", ["--no", "--", name, "--version"], {
+    execFileSync("npx", ["--no", "--", name, "--no-update-check", "--version"], {
       cwd: work,
       encoding: "utf8",
       env: smokeEnv,
@@ -513,6 +514,37 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
+  // The update check, from the install: a fresh cache in a home of its own naming a newer version
+  // is noticed on stderr, after stdout's own output, and starts no refresh (the cache is a minute
+  // old), so nothing reads the registry. The refresh's script ships beside the bin.
+  assert.ok(
+    existsSync(join(installedRoot, "sdk/dist/cli/update-refresh.js")),
+    "the update check's refresh script ships",
+  );
+  {
+    const updateHome = home("update-check");
+    const cache = join(updateHome, ".sauce", "update-check.json");
+    mkdirSync(dirname(cache), { recursive: true, mode: 0o700 });
+    const fresh = JSON.stringify({
+      checkedAt: new Date(Date.now() - 60_000).toISOString(),
+      latest: "999.0.0",
+      version: installedManifest.version,
+    });
+    writeFileSync(cache, fresh, { mode: 0o600 });
+    const ran = spawnSync("npx", ["--no", "--", "sauce", "--version"], {
+      cwd: work,
+      encoding: "utf8",
+      env: { ...smokeEnv, HOME: updateHome, USERPROFILE: updateHome },
+    });
+    assert.equal(ran.stdout, `${name} ${installedManifest.version}\n`);
+    assert.equal(
+      ran.stderr,
+      `sauce ${installedManifest.version} → 999.0.0 is available: run \`sauce update\`\n`,
+      "the installed sauce notices a newer version from its cache",
+    );
+    assert.equal(readFileSync(cache, "utf8"), fresh, "a fresh cache starts no refresh");
+  }
+  console.log("Clean package install: sauce notices a newer version from its update cache");
   // The skill's `buy.sauce.ts` names no chain, starts with a `#!` line, imports `@sauce/router`
   // and takes `main(token, budget, sqrtPriceLimitX96, minOut, recipient)` at run time.
   // `--offline`: the bin reads a chain through its built-in public endpoints otherwise, and this
@@ -576,7 +608,7 @@ try {
 
   // The plain install runs every command that builds: none of them needs a runtime package.
   const librarySauce = (...args) =>
-    execFileSync("npx", ["--no", "--", "sauce", ...args], {
+    execFileSync("npx", ["--no", "--", "sauce", "--no-update-check", ...args], {
       cwd: library,
       encoding: "utf8",
       env: smokeEnv,
@@ -668,7 +700,8 @@ try {
         promisify(execFile)(
           "npx",
           [
-            ...["--no", "--", "sauce", "simulate", join(work, "solana-check.sauce.ts")],
+            ...["--no", "--", "sauce", "--no-update-check", "simulate"],
+            join(work, "solana-check.sauce.ts"),
             ...["--chain", "solana", "--rpc-url", stub.url],
             ...["--owner", solanaOwner],
             ...["--assume-balance", "USDC:1", "--args", "1", "--json"],
@@ -1034,9 +1067,10 @@ try {
 
   // `sauce mcp`, from the install, the way `sauce mcp setup` launches it — `npx @eco-incorp/sauce
   // mcp`, here with `--no` so nothing is fetched — over both transports: the tools, a compile, and
-  // every shipped skill file as a resource. Nothing here reaches a chain. No install brought the
-  // MCP SDK: the first start installs this version's runtime folder, and later ones take it as is.
-  const mcpLaunch = ["--no", "--", name, "mcp"];
+  // every shipped skill file as a resource. Nothing here reaches a chain, nor (--no-update-check)
+  // starts an update check's refresh. No install brought the MCP SDK: the first start installs this
+  // version's runtime folder, and later ones take it as is.
+  const mcpLaunch = ["--no", "--", name, "mcp", "--no-update-check"];
   const mcpProgram =
     "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";
   writeFileSync(join(work, "mcp-check.sauce.ts"), mcpProgram);
@@ -1078,7 +1112,12 @@ try {
     { cwd = work, env = smokeEnv, direct = false, launch = mcpLaunch } = {},
   ) =>
     direct
-      ? spawn(process.execPath, [bin, "mcp", ...args], { cwd, env, stdio, detached: true })
+      ? spawn(process.execPath, [bin, "mcp", "--no-update-check", ...args], {
+          cwd,
+          env,
+          stdio,
+          detached: true,
+        })
       : spawn("npx", [...launch, ...args], { cwd, env, stdio, detached: true });
   const stopServer = async (child) => {
     if (child.exitCode === null && child.signalCode === null) {
@@ -1210,7 +1249,10 @@ try {
     const status = JSON.parse(
       execFileSync(
         process.execPath,
-        [join(mismatch, "node_modules", name, installedManifest.bin.sauce), "runtime", "--json"],
+        [
+          join(mismatch, "node_modules", name, installedManifest.bin.sauce),
+          ...["--no-update-check", "runtime", "--json"],
+        ],
         {
           cwd: mismatch,
           encoding: "utf8",
@@ -1286,7 +1328,7 @@ try {
     );
   }
   const noNpmHome = home("no-npm");
-  const noNpm = spawnSync(process.execPath, [bin, "mcp"], {
+  const noNpm = spawnSync(process.execPath, [bin, "mcp", "--no-update-check"], {
     cwd: work,
     env: { ...smokeEnv, HOME: noNpmHome, PATH: noPath },
     encoding: "utf8",
@@ -1298,7 +1340,7 @@ try {
       "not on PATH. Nothing was left half-installed: `sauce runtime install` tries again",
   );
   const noRegistryHome = home("no-registry");
-  const noRegistry = spawnSync(process.execPath, [bin, "mcp"], {
+  const noRegistry = spawnSync(process.execPath, [bin, "mcp", "--no-update-check"], {
     cwd: work,
     env: {
       ...smokeEnv,
@@ -1320,7 +1362,7 @@ try {
   try {
     execFileSync(
       process.execPath,
-      [bin, "mcp", "setup", "--agent", "claude", "--dir", setupProject],
+      [bin, "--no-update-check", "mcp", "setup", "--agent", "claude", "--dir", setupProject],
       {
         cwd: setupProject,
         env: { ...smokeEnv, HOME: setupHome },
@@ -1407,7 +1449,10 @@ try {
       );
     });
   try {
-    const npxLaunch = ["-y", "--prefer-offline", "--package", join(work, filename), "--", "sauce"];
+    const npxLaunch = [
+      ...["-y", "--prefer-offline", "--package", join(work, filename), "--", "sauce"],
+      "--no-update-check",
+    ];
     const npx = (...args) =>
       execFileSync("npx", [...npxLaunch, ...args], { cwd: empty, encoding: "utf8", env: smokeEnv });
     assert.match(npx("mcp", "--help"), /^Serve the commands and the agent skills to coding agents/);

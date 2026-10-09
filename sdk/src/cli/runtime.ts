@@ -24,7 +24,7 @@ import {
 import { basename, dirname, join } from "node:path";
 
 import { installedAt, RUNTIME_SOURCE, type RuntimeInstaller } from "./optional.js";
-import { newer } from "./update.js";
+import { newer } from "./npm-registry.js";
 
 /** How npm is run: `npm` itself, or, on Windows, its script with this Node.js (npm is a `.cmd`
  *  there, which only a shell runs, and this runs no shell). */

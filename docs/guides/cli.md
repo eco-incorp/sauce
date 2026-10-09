@@ -47,8 +47,8 @@ installed: a global install by npm, pnpm, yarn or bun is installed again by that
 installed in the current directory are then updated by the new `sauce`. A project's own copy is
 the project's to update, so `sauce update` prints the command its package manager takes and changes
 nothing; a copy in npx's cache prints the `npx -y` command. `sauce update --check` says which
-version is installed and which is the latest, and installs nothing. It reads the npm registry, and
-only then: `sauce` never checks for updates by itself.
+version is installed and which is the latest, and installs nothing. Every other command says when
+a newer release is out ([The update notice](#the-update-notice)).
 
 Two other ways run the same command:
 
@@ -76,6 +76,31 @@ resolves only a project's own. It also writes an `AGENTS.md` with the project's 
 local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
 ([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](skills.md)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
+
+### The update notice
+
+After a command, one line on stderr says when a newer release of the package is published:
+
+```text
+sauce 0.99.12 → 0.99.13 is available: run `sauce update`
+```
+
+It never slows a command down. The line comes from a cache, `~/.sauce/update-check.json`
+(owner-only, beside the runtime folders), which `sauce` refreshes from the npm registry at most
+once a day, in a process of its own that no command waits for, so the first command after a
+release may say nothing yet. The registry is the only host it reads. The line goes to stderr only,
+so `--json` output and anything piped from stdout stay as they are. It names a newer release only:
+a prerelease only to a prerelease.
+
+Nothing is shown, and nothing read, with `--offline`. To turn it off:
+
+- pass `--no-update-check`. Every command takes it, and so does `sauce` before the command, so a
+  shell alias can carry it: `alias sauce='sauce --no-update-check'`;
+- or add `"updateCheck": false` to the `--config` file a command is given
+  (`{ "rpcUrls": { … }, "updateCheck": false }`).
+
+`sauce mcp` prints no notice: it puts one note in its first tool result instead
+([MCP server](mcp.md#a-newer-version)).
 
 ### Runtime packages
 

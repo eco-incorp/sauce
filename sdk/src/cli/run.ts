@@ -8,9 +8,11 @@
  * entry, and no barrel imports it. It reads the environment once, deliberately, and only the
  * variable `--password-env <NAME>` names (`nodeIo().readEnv`). The network is reached only through
  * `--rpc-url` or a `--config` file named on the command line, or else through the built-in public
- * endpoints the process is given (`CliIo.publicRpcs`; none with `--offline`), and a key only through
- * `--wallet`, `--keystore`, `--private-key` or `--keypair` — and every byte printed passes through
- * `signer.ts#scrub` on the way out.
+ * endpoints the process is given (`CliIo.publicRpcs`; none with `--offline`); besides a chain, only
+ * the npm registry is read, by `sauce update` and by the update check's refresh, in a process of its
+ * own (`CliIo.updateCheck`; none with `--offline` or `--no-update-check`). A key is reached only
+ * through `--wallet`, `--keystore`, `--private-key` or `--keypair` — and every byte printed passes
+ * through `signer.ts#scrub` on the way out.
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
@@ -167,6 +169,7 @@ import {
   passwordOn,
   writeToTerminal,
 } from "./terminal.js";
+import { updateCheckOff, updateNotice, type UpdateCheck } from "./update-check.js";
 import { updateCommand, type Updater } from "./update.js";
 import {
   AGENTS,
@@ -223,6 +226,11 @@ export interface CliIo extends CliFiles {
    * is updated.
    */
   readonly updater?: Updater | undefined;
+  /**
+   * The update check (`update-check.ts`): a newer version, from its cache, noticed on stderr after a
+   * command. The executable gives it (`main.ts`); without it, as in a test, nothing is checked.
+   */
+  readonly updateCheck?: UpdateCheck | undefined;
 }
 
 /** The real process's streams, filesystem, children and terminal. */
@@ -360,7 +368,14 @@ const skillsSource = (): SkillsSource => {
 // Flags
 // ---------------------------------------------------------------------------------------------
 
-const HELP: FlagSpecs = { help: { type: "boolean", short: "h", help: "Show this help" } };
+/** Every command's: its help, and the update check's opt-out (`update-check.ts`). */
+const HELP: FlagSpecs = {
+  help: { type: "boolean", short: "h", help: "Show this help" },
+  "no-update-check": {
+    type: "boolean",
+    help: "No notice of a newer sauce, and no registry read for one",
+  },
+};
 
 const PROGRAM: FlagSpecs = {
   chain: {
@@ -3697,8 +3712,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "updated by the NEW sauce, and what changed is printed; and where the version replaced had",
       "its runtime packages installed (sauce runtime), the NEW sauce installs its own.",
       "",
-      "The version comes from the npm registry, read when this command runs and at no other time:",
-      "sauce never checks for updates by itself. --check reads it and installs nothing.",
+      "The version comes from the npm registry, read when this command runs. --check reads it and",
+      "installs nothing. Every other command says, on stderr, when its update check has seen a",
+      "newer version (sauce --help says how), and suggests this command.",
       "",
       "Examples:",
       "  sauce update --check",
@@ -3974,6 +3990,12 @@ function mainHelp(): string {
     "--password-env NAME (that variable, the one read of the environment), --password-file or",
     "--password-command; else it is asked for.",
     "",
+    "After a command, one line on stderr says when a newer sauce is published, suggesting `sauce",
+    "update`. It comes from a cache (~/.sauce/update-check.json) that is refreshed from the npm",
+    "registry once a day, in the background, never delaying a command. It is off with --offline,",
+    "with --no-update-check (any command takes it, before the command too), and for a command",
+    'whose --config file says "updateCheck": false.',
+    "",
     ...wrapped(previewChainsNote()),
     "",
     "A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain",
@@ -4108,6 +4130,16 @@ function rememberSecrets(given: readonly string[]): void {
   });
 }
 
+/** The commands that print no update notice: `sauce update` is the update, and `sauce mcp` puts it
+ *  in its first tool result instead (`mcp.ts`), its stdout being the protocol's over stdio. */
+const NO_NOTICE = new Set(["update", "mcp"]);
+
+/** The update check's notice, on stderr after what the command printed (`update-check.ts`). */
+function printNotice(io: CliIo, check: UpdateCheck | undefined): void {
+  const latest = check?.latest();
+  if (latest !== undefined) io.stderr(`${updateNotice(check!.version, latest)}\n`);
+}
+
 /** Runs `sauce <argv…>`, returning the exit code: 0, 1 for a failure, 2 for a usage error. */
 export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<number> {
   rememberSecrets(argv);
@@ -4117,7 +4149,11 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
     stdout: (text) => rawIo.stdout(scrub(text)),
     stderr: (text) => rawIo.stderr(scrub(text)),
   };
-  const [name, ...rest] = argv;
+  // `--no-update-check` may come before the command too, so a shell alias can carry it.
+  let lead = 0;
+  while (argv[lead] === "--no-update-check") lead++;
+  const words = argv.slice(lead);
+  const [name, ...rest] = words;
   if (name === undefined) {
     io.stderr(mainHelp());
 
@@ -4131,10 +4167,11 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
   if (name === "--version") {
     const { name: pkg, version } = packageInfo();
     io.stdout(`${pkg} ${version}\n`);
+    printNotice(io, lead === 0 && !rest.includes("--no-update-check") ? io.updateCheck : undefined);
 
     return 0;
   }
-  const named = commandOf(name === "help" ? rest : argv);
+  const named = commandOf(name === "help" ? rest : words);
   if (name === "help" && (rest[0] === undefined || named !== undefined)) {
     io.stdout(named === undefined ? mainHelp() : commandHelp(named.command));
 
@@ -4149,10 +4186,14 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
     return 2;
   }
   const { label, command } = named;
+  let check: UpdateCheck | undefined;
 
   try {
     const { flags, trailing } = splitArgv(named.rest, command);
     const args = parseFlags(flags, ANY_FLAG);
+    if (lead === 0 && !NO_NOTICE.has(label) && !updateCheckOff(args.values, io.readText)) {
+      check = io.updateCheck;
+    }
     if (args.values.help === true) {
       io.stdout(commandHelp(command));
 
@@ -4185,5 +4226,8 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
     io.stderr(`sauce ${label}: ${message}\n`);
 
     return 1;
+  } finally {
+    // Whatever the command's exit: from the cache, and never waiting on its refresh.
+    printNotice(io, check);
   }
 }

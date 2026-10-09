@@ -20,6 +20,11 @@
  * the wallets of that directory alone: the password is read here, once, before the server starts,
  * and never reaches a tool's input or result. Without `--wallets`, and always over HTTP, it holds
  * no key and every transaction it builds comes back unsigned.
+ *
+ * It prints no update notice — over stdio its stdout is the protocol — but notes a newer version in
+ * the first tool result of its life instead, and `sauce_skills` returns it as `latest`, from the
+ * same cache the command's notice reads (`update-check.ts`), refreshed the same way;
+ * `--no-update-check` or the config's `"updateCheck": false` turns both off.
  */
 import {
   CliError,
@@ -33,6 +38,7 @@ import type { CommandOutput } from "./commands.js";
 import { MCP_EXTRA, provide, useRuntime } from "./optional.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
+import { updateCheckOff, updateNote, type UpdateCheck } from "./update-check.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
 import { defaultWalletsDir } from "./wallets.js";
 
@@ -54,6 +60,15 @@ export interface McpServeOptions {
   readonly log: (text: string) => void;
   /** `--wallets`, over stdio only: the wallets its tools create, list and send from. */
   readonly wallets?: McpWallets;
+  /**
+   * The update check's note on a newer version, or `undefined`, from its cache as it is when asked
+   * (`update-check.ts`). The server asks once, for the first tool result of its life. Absent with
+   * `--no-update-check`, the config's `"updateCheck": false`, or in a test.
+   */
+  readonly updateNote?: () => string | undefined;
+  /** The newer version the update check's cache names, or `undefined`, as it is when asked:
+   *  `sauce_skills` returns it as `latest`. Absent when `updateNote` is. */
+  readonly newerVersion?: () => string | undefined;
 }
 
 /** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
@@ -173,6 +188,7 @@ export async function mcpCommand(
   io: {
     readonly stderr: (text: string) => void;
     readonly publicRpcs?: PublicEndpoints | undefined;
+    readonly updateCheck?: UpdateCheck | undefined;
   } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
@@ -204,6 +220,9 @@ export async function mcpCommand(
   const host = stringFlag(args, "host");
   const maxBody = stringFlag(args, "max-body");
   const wallets = await walletsOf(args, io, http !== undefined);
+  const check = updateCheckOff(args.values, io.readText) ? undefined : io.updateCheck;
+  // Asked now as well, so a cache a day old is refreshed before the first tool call reads it.
+  check?.latest();
   await (
     await loadMcp(offline, io.stderr)
   ).serve({
@@ -216,6 +235,16 @@ export async function mcpCommand(
     allowPrivateRpc: args.values["allow-private-rpc"] === true,
     log: io.stderr,
     ...(wallets === undefined ? {} : { wallets }),
+    ...(check === undefined
+      ? {}
+      : {
+          updateNote: () => {
+            const latest = check.latest();
+
+            return latest === undefined ? undefined : updateNote(check.version, latest);
+          },
+          newerVersion: () => check.latest(),
+        }),
   });
 
   return undefined;
