@@ -63,8 +63,6 @@ describe("what the library writes out by hand", () => {
   });
 
   it.each([
-    ["SAUCE_ASYNC_RECEIVED", "sauce.async.received"],
-    ["SAUCE_ASYNC_MODE", "sauce.async.mode"],
     ["SAUCE_ASYNC_INDEX", "sauce.async.index"],
     ["SAUCE_ASYNC_SALT", "sauce.async.salt"],
     ["SAUCE_ASYNC_PENDING", "PromisePending(bytes32,uint256)"],
@@ -182,14 +180,13 @@ function main(hash: Uint256): bool {
   });
 
   it("the table's own parts, for a package that needs them directly", () => {
-    const parts = compile(`import { isPending, park, received, run, salt } from "@sauce/async";
+    const parts = compile(`import { isPending, park, run, salt, winner } from "@sauce/async";
 
 function main(code: bytes, args: bytes, program: bytes): bytes {
   const key = salt();
   park(key, code, args, 0, false);
-  require(isPending(key));
-  run(program, hex\`01\`);
-  return received();
+  require(isPending(key) && winner() == 0);
+  return run(program, hex\`01\`);
 }`);
     expect(parts.bytecode.length).toBeGreaterThan(0);
   });
