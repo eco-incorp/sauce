@@ -16,7 +16,7 @@
  * From the runtime folder they load through a resolve hook: an import of one of them by the
  * package's own modules resolves there, and their own imports go on from there.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import * as nodeModule from "node:module";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -82,14 +82,22 @@ export interface RuntimeInstaller {
 }
 
 let installer: RuntimeInstaller | undefined;
+let offlineProcess = false;
 let rootOverride: string | undefined;
 
 /**
  * What this process may do with runtime folders: `main.ts` gives the installer (`runtime.ts`), the
- * one place that runs `npm ci`; a test gives a folder of its own in place of `~/.sauce/runtime`.
+ * one place that runs `npm ci`; `sauce mcp --offline` makes the whole process install nothing, so a
+ * Solana rehearsal one of its tools runs later refuses as the server's start would; a test gives a
+ * folder of its own in place of `~/.sauce/runtime`.
  */
-export function useRuntime(options: { installer?: RuntimeInstaller; root?: string }): void {
+export function useRuntime(options: {
+  installer?: RuntimeInstaller;
+  offline?: boolean;
+  root?: string;
+}): void {
   if ("installer" in options) installer = options.installer;
+  if ("offline" in options) offlineProcess = options.offline === true;
   if ("root" in options) rootOverride = options.root;
 }
 
@@ -149,6 +157,42 @@ export function installedAt(
   }
 }
 
+/**
+ * Refuses to load code from the runtime folder `dir` unless it and each folder above it up to the
+ * one holding the runtime root (`~/.sauce`), each resolved through symlinks, belongs to this user
+ * and can be written by no one else. What it loads runs in a process that may hold a wallet's
+ * password (`sauce mcp --wallets`), so it must be the user's alone, as the password file and a
+ * wallet's policy must be. A folder not there yet is passed over: an install creates it 0700.
+ * Windows has no owner or mode to read this way, and is not checked.
+ */
+export function assertPrivate(dir: string, uid: number | undefined = process.getuid?.()): void {
+  if (uid === undefined) return;
+  const root = runtimeRoot();
+  const folders = [dir, root, dirname(root)].filter(
+    (each, at, all) => all.indexOf(each) === at && existsSync(each),
+  );
+  for (const folder of folders) {
+    const real = realpathSync(folder);
+    const { uid: owner, mode } = statSync(real);
+    const shown = real === folder ? folder : `${folder} (${real})`;
+    if (owner !== uid) {
+      throw new CliError(
+        `${shown} belongs to another user (uid ${owner}): sauce loads code only from folders that ` +
+          `are yours alone. Remove ${dir} to have it installed again`,
+      );
+    }
+    if ((mode & 0o022) !== 0) {
+      const who = [mode & 0o020 ? "its group" : "", mode & 0o002 ? "others" : ""]
+        .filter((each) => each !== "")
+        .join(" and ");
+      throw new CliError(
+        `${shown} can be written by ${who} (mode ${(mode & 0o777).toString(8)}): sauce loads ` +
+          `code only from folders no one else can write. Run chmod go-w ${real}`,
+      );
+    }
+  }
+}
+
 /** Where `extra`'s packages come from: the user's own copies, the runtime folder, or nowhere yet. */
 export function sourceOf(extra: Extra): "own" | "runtime" | "missing" {
   const pins = pinned();
@@ -171,9 +215,11 @@ export async function provide(
   const source = sourceOf(extra);
   if (source === "own") return;
   const dir = runtimeDir();
+  // The folders above it first: nothing is installed into, or loaded from, one another can write.
+  assertPrivate(dir);
   if (source === "missing") {
     const needs = `${extra.what} needs ${specs(extra.packages)}, not installed for this sauce yet`;
-    if (options.offline === true) {
+    if (options.offline === true || offlineProcess) {
       throw new CliError(`${needs}, and --offline installs nothing: run \`sauce runtime install\``);
     }
     if (installer === undefined) throw new CliError(`${needs}: run \`sauce runtime install\``);
@@ -192,6 +238,7 @@ export async function provide(
       throw new CliError(`${needs}: npm ci finished, but ${dir} does not hold them`);
     }
     log(`sauce: installed in ${Math.round((Date.now() - started) / 1000)}s\n`);
+    assertPrivate(dir);
   }
   loadFrom(extra.packages, dir);
 }
@@ -266,6 +313,7 @@ export async function runtimeCommand(
     if (installer === undefined) {
       throw new CliError("sauce runtime install runs this machine's npm: run it as a command");
     }
+    assertPrivate(dir);
     log(`Installing ${specs(all)} into ${dir}…\n`);
     try {
       await installer.install(dir);

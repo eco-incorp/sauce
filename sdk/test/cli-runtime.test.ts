@@ -5,13 +5,16 @@
  * runs the real `npm ci` on the shipped lockfile, from the installed tarball.
  */
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -19,6 +22,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  assertPrivate,
   installedAt,
   LITESVM_EXTRA,
   MCP_EXTRA,
@@ -39,13 +43,14 @@ let work: string;
 let root: string;
 
 beforeEach(() => {
-  work = mkdtempSync(join(tmpdir(), "sauce-runtime-"));
+  // Its real path: macOS's temporary directory is under a symlink, which messages resolve.
+  work = realpathSync(mkdtempSync(join(tmpdir(), "sauce-runtime-")));
   root = join(work, "runtime");
-  useRuntime({ root, installer: undefined });
+  useRuntime({ root, installer: undefined, offline: false });
 });
 
 afterEach(() => {
-  useRuntime({ root: undefined, installer: undefined });
+  useRuntime({ root: undefined, installer: undefined, offline: false });
   rmSync(work, { recursive: true, force: true });
 });
 
@@ -138,6 +143,75 @@ describe("where a command's runtime packages come from", () => {
     expect(logged).toEqual([
       `sauce: ${needs}. Installing them into ${runtimeDir()}, once for this version…\n`,
     ]);
+  });
+
+  it("installs nothing offline: neither the call's --offline nor the process's", async () => {
+    const importer = join(work, "app");
+    mkdirSync(importer);
+    let installs = 0;
+    useRuntime({
+      installer: {
+        install: async () => {
+          installs++;
+          throw new Error("npm is not on PATH");
+        },
+      },
+    });
+    await expect(provide(extra(importer))).rejects.toThrow("npm is not on PATH");
+    expect(installs).toBe(1);
+    await expect(provide(extra(importer), { offline: true })).rejects.toThrow(
+      "--offline installs nothing",
+    );
+    // `sauce mcp --offline` makes the process offline: a Solana rehearsal one of its tools runs
+    // later, which asks without an offline of its own, installs nothing either.
+    const run = await sauce("mcp", "--offline", "--agent", "claude");
+    expect(run.code).toBe(2);
+    await expect(provide(extra(importer))).rejects.toThrow("--offline installs nothing");
+    expect(installs).toBe(1);
+  });
+
+  it("loads nothing from a folder, or one above it, that another user owns or can write", () => {
+    if (process.platform === "win32") return;
+    installed(runtimeDir());
+    const uid = process.getuid!();
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
+    expect(() => assertPrivate(runtimeDir(), uid + 1)).toThrow(
+      `${runtimeDir()} belongs to another user (uid ${uid}): sauce loads code only from folders ` +
+        `that are yours alone. Remove ${runtimeDir()} to have it installed again`,
+    );
+    chmodSync(runtimeDir(), 0o775);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${runtimeDir()} can be written by its group (mode 775)`,
+    );
+    chmodSync(runtimeDir(), 0o700);
+    chmodSync(root, 0o777);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${root} can be written by its group and others (mode 777)`,
+    );
+    chmodSync(root, 0o700);
+    // Through a symlink: the folder it resolves to is the one checked.
+    const elsewhere = join(work, "elsewhere");
+    mkdirSync(elsewhere, { mode: 0o700 });
+    installed(join(elsewhere, "1.0.0"));
+    chmodSync(join(elsewhere, "1.0.0"), 0o757);
+    const linked = join(work, "linked");
+    symlinkSync(elsewhere, linked);
+    useRuntime({ root: linked });
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(/can be written by others \(mode 757\)/);
+  });
+
+  it("refuses a folder another can write before it installs into it or loads from it", async () => {
+    if (process.platform === "win32") return;
+    const importer = join(work, "app");
+    mkdirSync(importer);
+    mkdirSync(root, { mode: 0o700 });
+    chmodSync(root, 0o777);
+    let installs = 0;
+    useRuntime({ installer: { install: async () => void installs++ } });
+    await expect(provide(extra(importer))).rejects.toThrow(
+      /can be written by its group and others/,
+    );
+    expect(installs).toBe(0);
   });
 
   it("returns at once where the user's own copies are the pinned ones", async () => {

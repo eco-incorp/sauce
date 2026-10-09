@@ -30,7 +30,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import type { CommandOutput } from "./commands.js";
-import { MCP_EXTRA, provide } from "./optional.js";
+import { MCP_EXTRA, provide, useRuntime } from "./optional.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
@@ -182,6 +182,8 @@ export async function mcpCommand(
   const given = (flags: readonly string[]) => flags.find((flag) => args.values[flag] !== undefined);
   const config = stringFlag(args, "config");
   const offline = args.values.offline === true;
+  // The whole process installs nothing: a tool's Solana rehearsal later refuses as the start does.
+  if (offline) useRuntime({ offline: true });
   if (sub === "setup") {
     const serving = given(SERVE_ONLY);
     if (serving !== undefined) throw new UsageError(`--${serving} is for serving, not setup`);
