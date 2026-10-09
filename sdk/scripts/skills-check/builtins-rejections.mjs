@@ -133,9 +133,12 @@ export const rejections = [
     src: "function main(): Uint256 { const xs = [1n, true]; return 0n; }",
   },
   {
-    row: "template strings",
+    row: "a template string with a run-time `${…}`",
+    quotes: [
+      "a template literal's `${…}` needs a value known while compiling, and this one is known only when the program runs",
+    ],
     targets: ["evm", "svm"],
-    src: "function main(): bytes { return `text`; }",
+    src: "function main(x: Uint256): bytes { return `a${x}`; }",
   },
 
   // Operators
@@ -189,12 +192,12 @@ export const rejections = [
     src: "function main(a: Account, b: Account): bool { return a < b; }",
   },
   {
-    row: "`>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+`",
+    row: "`>>>`, `in`, `delete`, `void`, unary `+`",
     targets: ["evm"],
     src: "function main(a: Uint256, b: Uint256): Uint256 { return a >>> b; }",
   },
   {
-    row: "`>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+`",
+    row: "`>>>`, `in`, `delete`, `void`, unary `+`",
     targets: ["evm"],
     src: "function main(a: Uint256): Uint256 { return +a; }",
   },
@@ -364,9 +367,24 @@ export const rejections = [
     src: "function f(...a: Uint256[]): Uint256 { return 0n; } function main(): Uint256 { return f(2n); }",
   },
   {
-    row: "spread `[...xs]`, `f(...xs)`",
+    row: "spread of a run-time array, `f(...xs)`",
+    quotes: [
+      "a spread of an array needs a value known while compiling, and this one is known only when the program runs",
+    ],
     targets: ["evm"],
-    src: "function main(): Uint256 { const a = [1n]; const b = [...a]; return b[0]; }",
+    src: "function main(a: Uint256[]): Uint256 { const b = [...a]; return b[0]; }",
+  },
+  {
+    row: "spread of a run-time array, `f(...xs)`",
+    targets: ["evm"],
+    src: "function f(a: Uint256, b: Uint256): Uint256 { return a + b; } function main(): Uint256 { const xs = [1n, 2n]; return f(...xs); }",
+  },
+  {
+    quotes: [
+      "`.map` needs a value known while compiling, and this one is known only when the program runs",
+    ],
+    targets: ["evm"],
+    src: "function main(xs: Uint256[]): Uint256 { const ys = xs.map((x) => x * 2n); return ys[0]; }",
   },
   {
     row: "function expressions, nested `function` declarations",
@@ -736,7 +754,9 @@ export const rejections = [
     src: "function main(): Uint256 { let xs = [1n, 2n]; const ys = xs.slice(0n, 1n); return 0n; }",
   },
   {
-    quotes: ["`.slice` takes exactly 2 arguments (start, end), got N"],
+    quotes: [
+      "`.slice` at run time takes exactly 2 positions (start, end), but this call passes N; one position, as JavaScript takes it, is answered only for a string the compiler knows, in code it runs, such as a class's method",
+    ],
     targets: ["evm"],
     src: "function main(b: bytes): bytes { return b.slice(1n); }",
   },
@@ -784,6 +804,20 @@ export const rejections = [
     targets: ["evm"],
     contracts,
     src: "function main(t: Uint256, to: Uint256): bool { return ERC20.at(t).transfer(to, 5n); }",
+  },
+  {
+    quotes: [
+      "`ERC20(…)` binds the contract to the address it is called with, so it takes exactly 1 argument, but this call passes N",
+    ],
+    targets: ["evm"],
+    contracts,
+    src: "function main(t: Uint256, w: Uint256): Uint256 { return ERC20(t, w).balanceOf(w); }",
+  },
+  {
+    quotes: ["a binding of `ERC20` is not a function, so it cannot be called"],
+    targets: ["evm"],
+    contracts,
+    src: "function main(t: Uint256, w: Uint256): Uint256 { const b = ERC20.at(t); return b(w).balanceOf(w); }",
   },
   {
     quotes: ["`ERC20` has no method named `totalSupply`"],

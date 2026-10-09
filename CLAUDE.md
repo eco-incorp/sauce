@@ -429,8 +429,8 @@ and, on an EVM chain, `Token(address)`; every token symbol, an instance of `@sau
 byte for byte the program that imports and calls them — and whose `valueOf()` is its address (on
 Solana a symbol is the mint's key); every protocol namespace, a static object holding contract
 bindings at this chain's addresses by the names the registry gives them (`protocol-names.ts`: a
-family alias, a protocol's one contract), an interface a function of an address
-(`UniswapV3.Pool(pool)`, exactly `.at(pool)`); and every chain's name — its id where compared
+family alias, a protocol's one contract), an interface its contract import, which the compiler
+binds when called with an address (`UniswapV3.Pool(pool)`, exactly `.at(pool)`); and every chain's name — its id where compared
 (`chainId == Ethereum` folds), its `Portal`, its contracts (`Base.UniswapV3.Factory`). The compiler
 evaluates a module constant only when a program reads it, so Ethereum's two thousand names cost a
 program its parsing and nothing else.
