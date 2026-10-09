@@ -735,7 +735,7 @@ sauce run swap.json --chain base --keystore ~/.keys/me.json \
 ## Intents: `sauce run` or `sauce intent`
 
 A program can open an intent on another chain —
-`await Base.hop({ send, receive, refundee: refundTo })`, the code after it running on Base. Every
+`Base.hop({ send, receive, refundee: refundTo }).then(() => { … })`, the body running on Base. Every
 hop names its refundee, the refund address: it is published by a program a Pot runs, and
 the Pot may be shared, so nothing defaults it, not even the wallet that sends the cook. The
 command supplies the rest the file leaves out ([Intent defaults](../reference/intent-defaults.md)):

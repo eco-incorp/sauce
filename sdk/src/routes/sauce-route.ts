@@ -8,10 +8,10 @@
  * delegates call encoding to `buildSauceEvmCall` or `buildSauceSvmCall`. One body produces one
  * bytecode segment and one call.
  *
- * An intent a program opens (`await Arbitrum.hop({ … })`, `Arbitrum.hop({ … }).then(() => { … })`) is
- * `@sauce/hop`'s classes, which the compiler runs while it compiles. Its body is compiled as a
- * program of its own, `program(body, chainId)`, with the options `programOptions` gives that chain:
- * its own module of names, its target, and the caller's defines.
+ * An intent a program opens (`Arbitrum.hop({ … }).then(() => { … })`) is `@sauce/hop`'s classes,
+ * which the compiler runs while it compiles. Its body is compiled as a program of its own,
+ * `program(body, chainId)`, with the options `programOptions` gives that chain: its own module of
+ * names, its target, and the caller's defines.
  *
  * EVM calls carry the program bytes and invoke the supplied Pot with the supplied engine.
  * SVM calls name a finalized CODE account through `execution.code`; this module does not stage
@@ -102,7 +102,7 @@ export interface SauceCompileOptions {
    */
   ambient?: string[];
   /**
-   * Settings for `await Chain.hop({ ... })` written inside the
+   * Settings for `Chain.hop({ ... }).then(...)` written inside the
    * program — creating an intent from a program, rather than compiling a program into one.
    * Everything the SDK can look up it looks up; these are the fields it cannot, plus overrides, for
    * every intent that does not set its own. See `@sauce/hop`.
@@ -413,7 +413,7 @@ export interface CompiledSauceProgram {
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
   /** The body of every intent the program opens, at any depth
-   *  (`await Arbitrum.hop({ ... })`), as compiled for its chain. */
+   *  (`Arbitrum.hop({ ... }).then(...)`), as compiled for its chain. */
   readonly bodies: readonly CompiledBody[];
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
@@ -446,7 +446,7 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * It gets everything an intent's body gets except the intent around it: the chain's names
  * (tokens, protocols, `self`, chains and their hops) and the `@sauce/token` functions with no
  * import, and intents the program itself opens
- * (`await Arbitrum.hop({ ... })`), which take their deadline and
+ * (`Arbitrum.hop({ ... }).then(...)`), which take their deadline and
  * creator from `options.intents`. So one source compiles, unchanged, for any chain whose names it
  * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
  * `encodeEntryArguments` encodes values for them.

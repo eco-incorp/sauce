@@ -81,8 +81,8 @@ an intent carrying it onward.
 // it is whatever the swap, bridge or transfer just before it produced — which is the reason to
 // build the intent here rather than off-chain.
 //
-// `await Ethereum.hop({ send, receive, refundee })` is the whole of it: the reward this program
-// escrows, what a solver delivers on Ethereum, and, after it, what runs there. `amount` is
+// `Ethereum.hop({ send, receive, refundee }).then(() => { … })` is the whole of it: the reward this
+// program escrows, what a solver delivers on Ethereum, and, in `.then`, what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the program encodes the intent as it runs, with their values, and the SDK fills
 // in the Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`,
@@ -106,12 +106,13 @@ function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= minAmount, "nothing to forward");
 
-  await Ethereum.hop({
+  Ethereum.hop({
     send: { token: USDC, amount },
     receive: { token: USDC, amount },
     refundee: refundTo,
+  }).then(() => {
+    USDC.transfer(recipient, amount); // on Ethereum
   });
-  USDC.transfer(recipient, amount); // on Ethereum
 }
 ```
 
@@ -130,9 +131,8 @@ Without Sauce, this step is either a contract you write and deploy (read the bal
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
 a second transaction you build yourself after reading what the first produced.
 
-`await Ethereum.hop({ … })` opens the intent, and the statements after it are the body, which runs
-on Ethereum, so a hop to one chain and on to the next reads top to bottom. As in JavaScript, it is
-`Ethereum.hop({ … }).then(() => { … })`.
+`Ethereum.hop({ … })` opens the intent, and `.then(() => { … })` takes the body, which runs on
+Ethereum; a body can open the next hop the same way.
 
 `USDC` is a registered token symbol. In the body it means **Ethereum's** USDC, because that is where
 the body runs, and in `receive` only the tokens are Ethereum's, looked up again there by symbol,
