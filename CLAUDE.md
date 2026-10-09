@@ -110,6 +110,11 @@ pnpm docs:check     # manual links and shape, README snippet, executable example
 pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
 
+`sdk/scripts/sizes/` holds the tools a compiler bump is held with, run by hand against a built tree
+(its README): every example and recipe's bytecode size against a baseline (`sizes.mjs`, `diff.mjs`),
+a hash of every output and refusal for proving a change alters none (`bytes.mjs`, `refusals.mjs`),
+and compile time (`times.mjs`, `ab.mjs`, `profile.mjs`, and recordings any build replays).
+
 `lint` and `format:check` gate every PR (`.github/workflows/lint.yml`) and both run over the
 WHOLE tree, so there is no backlog to work around — a new file has to be clean. Prettier and
 ESLint are pinned to exact versions rather than caret ranges: a formatter that drifts between
