@@ -494,6 +494,10 @@ bytes args)`, which the workflow's EVM Log trigger listens for. `args` is what t
   body with `data`; a report that is not `ok` runs `.catch` with `data`, the workflow's error.
 - **`owner` is required: it is who may answer.** Any workflow's report can reach the forwarder, so
   the request is bound to the workflow owner, and a report from any other owner finds no request.
+  A report for a request already settled changes nothing either.
+- **A request nobody answers** expires: give it `deadline` (a unix time) or `.within(seconds)`, and
+  after it anyone may call the Pot's `expire(bytes32 key)`, which runs `.catch` with a timeout
+  error naming the key.
 - **Install once per Pot**, on Ethereum or Base: `sauce run @sauce/oracle --chain <chain> --wallet
 <name>`. It registers the handler for `onReport(bytes,bytes)`, the call the forwarder makes, and
   declares the Pot an `IReceiver` for the ERC-165 check the forwarder makes before it.
