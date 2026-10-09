@@ -35,8 +35,8 @@
 //
 // WHERE A CALLBACK LANDS. A Private Pot answers a selector neither it nor its Router declares with
 // the program its owner registered for it (the Router's `setHandler`, which `install` calls): the
-// Router runs that handler as a cook of the Pot, paying the Kitchen's fee from the Pot's balance, as
-// `main(caller: Address, value: Uint256, data: bytes)`. A handler authenticates its caller and
+// Router runs that handler as a cook of the Pot, paying the Kitchen's fee from the Pot's balance,
+// as `main(caller: Address, value: Uint256, data: bytes)`. A handler authenticates its caller and
 // settles the promise the callback names:
 //
 //   import { fulfil, promiseKey, requireCaller } from "@sauce/async";
@@ -53,9 +53,9 @@
 // THE SETTLEMENT TABLE. Each pending promise is one word in the Pot's storage, in the ERC-7201
 // namespace `sauce.storage.Async`, at `keccak256(abi.encode(key, namespace))`:
 //
-//   bits   0..159  the continuation's code: a contract holding the program `.then`/`.catch` compiled
-//                  to, deployed once by CREATE2 from the Pot (salt zero, so its address is its
-//                  bytes'), and shared by every request that compiles to it
+//   bits   0..159  the continuation's code: a contract holding the program `.then`/`.catch`
+//                  compiled to, deployed once by CREATE2 from the Pot (salt zero, so its address
+//                  is its bytes'), and shared by every request that compiles to it
 //   bits 160..199  the deadline, a unix time after which `expire` rejects it; zero for none
 //   bits 200..201  the state: 1 pending (settled promises are cleared, or marked 2 fulfilled and
 //                  3 rejected where their key is one the Pot picked, so it is never picked again)
@@ -120,8 +120,8 @@
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.Async")) - 1)) & ~bytes32(uint256(0xff)).
 const SAUCE_ASYNC_NAMESPACE = 0x4dfff1aabf079bde1221d3a9fbfbe12f9d81161876e97fa9b85215e9f7a8b300;
 
-// Transient storage (EIP-1153), the Pot's in every frame of the transaction. What a settlement hands
-// its continuation, `keccak256("sauce.async.received")`: its length, then its words.
+// Transient storage (EIP-1153), the Pot's in every frame of the transaction. What a settlement
+// hands its continuation, `keccak256("sauce.async.received")`: its length, then its words.
 const SAUCE_ASYNC_RECEIVED = 0xe0834bde068556530c4cc9d3e560d8055ab88b322f2d933c8fac9a037dbe690e;
 // How it settled, `keccak256("sauce.async.mode")`: 2 fulfilled, 3 rejected.
 const SAUCE_ASYNC_MODE = 0x93281666bb76cfd6e9531316fbd9a988b1822676b7d07d7f32d40d855f438c9d;
@@ -163,7 +163,7 @@ const SAUCE_ASYNC_RACE = 2;
 const SAUCE_ASYNC_ANY = 3;
 const SAUCE_ASYNC_ALL_SETTLED = 4;
 
-// ---- keys -----------------------------------------------------------------------------------------
+// ---- keys ---------------------------------------------------------------------------------------
 
 // The key of the promise a protocol's request `id` is, under the package's `tag` (a word naming
 // the protocol, so two protocols' ids never meet): `keccak256(abi.encode(tag, id))`.
@@ -194,7 +194,7 @@ function resultSlot(key: Uint256, index: Uint256): Uint256 {
   return crypto.keccak256(abi.encode(key, index, SAUCE_ASYNC_NAMESPACE));
 }
 
-// ---- code -----------------------------------------------------------------------------------------
+// ---- code ---------------------------------------------------------------------------------------
 
 // `data` as the code of a contract that answers any call with it, deployed by CREATE2 from the Pot
 // with salt zero, so its address is a function of `data` and the same bytes are deployed once. The
@@ -229,7 +229,7 @@ function inFlightEngine(): Address {
   return engine;
 }
 
-// ---- the table ------------------------------------------------------------------------------------
+// ---- the table ----------------------------------------------------------------------------------
 
 function stateOf(word: Uint256): Uint256 {
   return (word >> 200) & 3;
@@ -290,8 +290,8 @@ export function isPending(key: Uint256): bool {
 }
 
 // Take the pending promise under `key` out of the table: its continuation with its captured words,
-// ready to run, and its word. Settled promises are cleared, but for a key the Pot picked, which keeps
-// its state so it is never picked again.
+// ready to run, and its word. Settled promises are cleared, but for a key the Pot picked, which
+// keeps its state so it is never picked again.
 function takeRecord(key: Uint256, state: Uint256): bytes {
   const slot = slotOf(key);
   const word = evm.sload(slot);
@@ -315,7 +315,7 @@ function takeRecord(key: Uint256, state: Uint256): bytes {
   return kept(word & ((1 << 160) - 1)).concat(args);
 }
 
-// ---- what arrives ---------------------------------------------------------------------------------
+// ---- what arrives -------------------------------------------------------------------------------
 
 // Hold `input` and how it settled where the continuation reads them, in every frame of the cook.
 function hand(input: bytes, mode: Uint256): void {
@@ -360,7 +360,7 @@ export function run(program: bytes, input: bytes): bytes {
   return evm.delegate(inFlightEngine(), program);
 }
 
-// ---- settling -------------------------------------------------------------------------------------
+// ---- settling -----------------------------------------------------------------------------------
 
 // Settle the promise under `key` as fulfilled with `value` (`abi.encode(…)` of what arrived), and
 // run its `.then`. Once: a promise unknown or already settled is left alone, the call logged as
@@ -369,13 +369,14 @@ export function fulfil(key: Uint256, value: bytes): void {
   settle(key, SAUCE_ASYNC_FULFILLED, value);
 }
 
-// Settle the promise under `key` as rejected with `reason`, and run its `.catch`. Once, as `fulfil`.
+// Settle the promise under `key` as rejected with `reason`, and run its `.catch`. Once, as
+// `fulfil`.
 export function reject(key: Uint256, reason: bytes): void {
   settle(key, SAUCE_ASYNC_REJECTED, reason);
 }
 
-// A promise past its deadline, rejected with `Timeout(bytes32 key)`. Anyone may call it, through the
-// Pot's `expire(bytes32)` handler; refused before the deadline, and for a promise with none.
+// A promise past its deadline, rejected with `Timeout(bytes32 key)`. Anyone may call it, through
+// the Pot's `expire(bytes32)` handler; refused before the deadline, and for a promise with none.
 export function expire(key: Uint256): void {
   const word = evm.sload(slotOf(key));
   if (stateOf(word) != SAUCE_ASYNC_PENDING_STATE) {
@@ -458,7 +459,7 @@ export function settleCarried(
   runSettled(key, program, state, value, true);
 }
 
-// ---- combinators, at run time ---------------------------------------------------------------------
+// ---- combinators, at run time -------------------------------------------------------------------
 
 // A combinator's child settled: record it, and settle the combinator when it is decided. Called by
 // the child's continuation, which a combinator compiles in place of the child's own.
@@ -510,7 +511,7 @@ export function resultState(joinKey: Uint256, index: Uint256): Uint256 {
   return (evm.sload(resultSlot(joinKey, index)) >> 160) & 3;
 }
 
-// ---- a handler's checks, and installing ------------------------------------------------------------
+// ---- a handler's checks, and installing ---------------------------------------------------------
 
 // The call came from `expected`: a handler's first check, on its `caller`. Anyone can send the Pot
 // any calldata, so a handler that skips it settles promises for whoever asks.
@@ -551,7 +552,7 @@ export function kitchenFee(): Uint256 {
   return fee;
 }
 
-// ---- the Pot as a signer (ERC-1271) ---------------------------------------------------------------
+// ---- the Pot as a signer (ERC-1271) -------------------------------------------------------------
 
 function approvedSlot(hash: Uint256): Uint256 {
   return crypto.keccak256(abi.encode(hash, SAUCE_ERC1271_NAMESPACE));
@@ -587,12 +588,28 @@ export function potMessageDigest(hash: Uint256): Uint256 {
 
 // ERC-1271's answer for the Pot: the magic value, left-aligned, for a hash the Pot approved or the
 // owner signed for this Pot, and 0xffffffff otherwise. See "THE POT AS A SIGNER" above. Written
-// flat, each check inline: it runs under a market's gas cap.
+// flat, the approved slot and the digest inline rather than through `approvedSlot` and
+// `potMessageDigest`: a helper call costs a frame, and this runs under a market's gas cap.
 export function isValidSignature(hash: Uint256, signature: bytes): Uint256 {
-  if (evm.sload(approvedSlot(hash)) == 1) {
+  if (evm.sload(crypto.keccak256(abi.encode(hash, SAUCE_ERC1271_NAMESPACE))) == 1) {
     return 0x1626ba7e00000000000000000000000000000000000000000000000000000000;
   }
-  const digest = potMessageDigest(hash);
+  const digest = crypto.keccak256(
+    hex`1901`.concat(
+      abi.encode(
+        crypto.keccak256(
+          abi.encode(
+            SAUCE_ERC1271_DOMAIN,
+            SAUCE_ERC1271_NAME,
+            SAUCE_ERC1271_VERSION,
+            ctx.chainId(),
+            ctx.self(),
+          ),
+        ),
+        crypto.keccak256(abi.encode(SAUCE_ERC1271_MESSAGE, hash)),
+      ),
+    ),
+  );
   const [signer] = abi.decode(evm.static(ctx.self(), hex`8da5cb5b`), ["Address"]);
   let valid = false;
   if (signature.length == 65) {
@@ -612,7 +629,7 @@ export function isValidSignature(hash: Uint256, signature: bytes): Uint256 {
   return 0xffffffff00000000000000000000000000000000000000000000000000000000;
 }
 
-// ---- the classes the compiler runs ----------------------------------------------------------------
+// ---- the classes the compiler runs --------------------------------------------------------------
 
 // An empty list that grows while compiling.
 class Lists {
@@ -729,8 +746,8 @@ export class Request {
   }
 
   // Make the request with `continuation` as its continuation; `joined` 1 when it is a combinator's
-  // child, so the table always holds it, and `settles` the combinator's continuation, which settling
-  // it may run too.
+  // child, so the table always holds it, and `settles` the combinator's continuation, which
+  // settling it may run too.
   _make(continuation, catches, joinKey, joined, settles) {
     const deadline = this._deadlineOr0();
     const send = this._send;
@@ -808,8 +825,9 @@ export class Request {
   }
 }
 
-// A promise already settled: `Promise.resolve(value)` fulfilled with a word, `Promise.reject(reason)`
-// rejected with bytes. Composes with the combinators; on its own, its body runs where it is written.
+// A promise already settled: `Promise.resolve(value)` fulfilled with a word,
+// `Promise.reject(reason)` rejected with bytes. Composes with the combinators; on its own, its
+// body runs where it is written.
 class Settled {
   constructor(state, value) {
     this._state = state;
@@ -858,8 +876,8 @@ class Settled {
 }
 
 // A promise the program settles itself, later: `Promise.withResolvers()`'s, and `Async.timeout`'s.
-// Its key is picked when it is made (`deferred.key`), and logged with `PromisePending` when its body
-// is parked, so a later transaction names it: `Async.resolve(key, value)`, `Async.reject(key,
+// Its key is picked when it is made (`deferred.key`), and logged with `PromisePending` when its
+// body is parked, so a later transaction names it: `Async.resolve(key, value)`, `Async.reject(key,
 // reason)`, from the owner's cook or from a handler the owner installed. It is its own resolvers:
 // `const d = Promise.withResolvers(); d.promise.then((value) => { … });`, the value as bytes.
 class Deferred {
