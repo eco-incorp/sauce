@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -1242,6 +1243,8 @@ try {
     const offlineServerHome = home("offline-server");
     mkdirSync(dirname(runtimeOf(offlineServerHome)), { recursive: true, mode: 0o700 });
     cpSync(runtimeOf(mcpHome), runtimeOf(offlineServerHome), { recursive: true });
+    // Owner-only, as an install leaves it: the command loads from no other.
+    chmodSync(runtimeOf(offlineServerHome), 0o700);
     rmSync(join(runtimeOf(offlineServerHome), "node_modules/litesvm"), { recursive: true });
     const stub = await solanaStub();
     try {

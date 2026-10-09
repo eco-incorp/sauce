@@ -61,9 +61,10 @@ function place(dir: string, name: string, version: string): void {
   writeFileSync(join(dir, "node_modules", name, "package.json"), JSON.stringify({ name, version }));
 }
 
-/** What `npm ci` leaves in `dir`: the shipped lockfile, and every runtime package at its pin. */
+/** What an install leaves in `dir`: owner-only, the shipped lockfile, and every runtime package
+ *  at its pin. */
 function installed(dir: string): void {
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
   copyFileSync(join(RUNTIME_SOURCE, "package-lock.json"), join(dir, "package-lock.json"));
   for (const [name, version] of Object.entries(pinned())) place(dir, name, version);
 }
@@ -180,25 +181,48 @@ describe("where a command's runtime packages come from", () => {
       `${runtimeDir()} belongs to another user (uid ${uid}): sauce loads code only from folders ` +
         `that are yours alone. Remove ${runtimeDir()} to have it installed again`,
     );
-    chmodSync(runtimeDir(), 0o775);
+    // The version folder is the user's alone: one merely open to others (755, writable by none of
+    // them) is refused too, since a folder inside it someone loosened would be reachable.
+    chmodSync(runtimeDir(), 0o755);
+    mkdirSync(join(runtimeDir(), "node_modules", "loosened"), { recursive: true });
+    chmodSync(join(runtimeDir(), "node_modules", "loosened"), 0o777);
     expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
-      `${runtimeDir()} can be written by its group (mode 775)`,
+      `${runtimeDir()} is open to its group and others (mode 755): sauce loads code only from a ` +
+        `runtime folder that is yours alone. Run chmod 700 ${runtimeDir()}`,
+    );
+    chmodSync(runtimeDir(), 0o770);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${runtimeDir()} is open to its group (mode 770)`,
     );
     chmodSync(runtimeDir(), 0o700);
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
+    // A folder above it need only be written by no one else.
+    chmodSync(root, 0o755);
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
     chmodSync(root, 0o777);
     expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
       `${root} can be written by its group and others (mode 777)`,
     );
     chmodSync(root, 0o700);
-    // Through a symlink: the folder it resolves to is the one checked.
+    // Through a symlink: the folder it resolves to is the one checked, the root's and the version
+    // folder's alike.
     const elsewhere = join(work, "elsewhere");
     mkdirSync(elsewhere, { mode: 0o700 });
     installed(join(elsewhere, "1.0.0"));
-    chmodSync(join(elsewhere, "1.0.0"), 0o757);
+    chmodSync(join(elsewhere, "1.0.0"), 0o700);
     const linked = join(work, "linked");
     symlinkSync(elsewhere, linked);
     useRuntime({ root: linked });
-    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(/can be written by others \(mode 757\)/);
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
+    chmodSync(elsewhere, 0o757);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${linked} (${elsewhere}) can be written by others (mode 757)`,
+    );
+    chmodSync(elsewhere, 0o700);
+    chmodSync(join(elsewhere, "1.0.0"), 0o705);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${join(linked, "1.0.0")} (${join(elsewhere, "1.0.0")}) is open to others (mode 705)`,
+    );
   });
 
   it("a ~/.sauce the intent store creates stays the user's alone, whatever the umask", () => {

@@ -86,7 +86,7 @@ first use installs them for itself, once per version, into `~/.sauce/runtime/<ve
 on the lockfile the package ships, so every package is the one pinned, checked by its integrity
 hash, and LiteSVM's native binary is your platform's. The command says so on stderr. The folder is
 owner-only and installed whole or not at all, and the command refuses to load from it if another
-user owns it, or anyone else can write it or a folder above it. Older versions' folders are
+user owns it, if it is not owner-only any more, or if anyone else can write a folder above it. Older versions' folders are
 removed, except the newest of them; a newer version's is never touched.
 
 - `sauce runtime` says where each command's packages come from. `sauce runtime install` installs

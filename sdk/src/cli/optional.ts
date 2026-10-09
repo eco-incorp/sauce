@@ -160,7 +160,8 @@ export function installedAt(
 /**
  * Refuses to load code from the runtime folder `dir` unless it and each folder above it up to the
  * one holding the runtime root (`~/.sauce`), each resolved through symlinks, belongs to this user
- * and can be written by no one else. What it loads runs in a process that may hold a wallet's
+ * and can be written by no one else — and `dir` itself is open to no one else at all (0700, as an
+ * install creates it), so no folder inside it that someone loosened can be reached either. What it loads runs in a process that may hold a wallet's
  * password (`sauce mcp --wallets`), so it must be the user's alone, as the password file and a
  * wallet's policy must be. A folder not there yet is passed over: an install creates it 0700.
  * Windows has no owner or mode to read this way, and is not checked.
@@ -181,17 +182,27 @@ export function assertPrivate(dir: string, uid: number | undefined = process.get
           `are yours alone. Remove ${dir} to have it installed again`,
       );
     }
-    if ((mode & 0o022) !== 0) {
-      const who = [mode & 0o020 ? "its group" : "", mode & 0o002 ? "others" : ""]
-        .filter((each) => each !== "")
-        .join(" and ");
+    const octal = (mode & 0o777).toString(8);
+    if (folder === dir && (mode & 0o077) !== 0) {
       throw new CliError(
-        `${shown} can be written by ${who} (mode ${(mode & 0o777).toString(8)}): sauce loads ` +
-          `code only from folders no one else can write. Run chmod go-w ${real}`,
+        `${shown} is open to ${whom(mode & 0o070, mode & 0o007)} (mode ${octal}): sauce loads ` +
+          `code only from a runtime folder that is yours alone. Run chmod 700 ${real}`,
+      );
+    }
+    if ((mode & 0o022) !== 0) {
+      throw new CliError(
+        `${shown} can be written by ${whom(mode & 0o020, mode & 0o002)} (mode ${octal}): sauce ` +
+          `loads code only from folders no one else can write. Run chmod go-w ${real}`,
       );
     }
   }
 }
+
+/** "its group", "others", or both: whom a mode's group and other bits let in. */
+const whom = (group: number, others: number): string =>
+  [group !== 0 ? "its group" : "", others !== 0 ? "others" : ""]
+    .filter((each) => each !== "")
+    .join(" and ");
 
 /** Where `extra`'s packages come from: the user's own copies, the runtime folder, or nowhere yet. */
 export function sourceOf(extra: Extra): "own" | "runtime" | "missing" {

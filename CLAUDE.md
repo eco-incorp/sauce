@@ -38,7 +38,8 @@ renamed into place, after which older
 versions' folders are pruned but the newest of them. A newer version's folder is never pruned: a
 project's older pinned copy runs beside a newer global one. `optional.ts#assertPrivate` refuses to
 install into or load from a folder, or one above it up to `~/.sauce` (symlinks resolved), that
-another user owns or anyone else can write, because the process may hold a wallet password. The packages then load from the
+another user owns or anyone else can write, and a version folder that is not 0700, because the
+process may hold a wallet password. The packages then load from the
 folder through a `module.registerHooks` resolve hook, limited to the package's own modules' imports.
 Only `main.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
 test, the skills checker) never runs npm and refuses with `sauce runtime install` instead. In this
