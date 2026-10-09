@@ -16,6 +16,10 @@ import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 
 /** jest's cwd is `sdk/`. */
 const SOURCE = readFileSync(join(process.cwd(), "src", "std", "async", "async.evm.js"), "utf8");
+const ERC1271 = readFileSync(
+  join(process.cwd(), "src", "std", "async", "erc1271.handler.js"),
+  "utf8",
+);
 const EXPIRE = readFileSync(
   join(process.cwd(), "src", "std", "async", "expire.handler.js"),
   "utf8",
@@ -90,6 +94,37 @@ function main(handler: bytes) {
     },
   );
 
+  it.each([
+    [
+      "SAUCE_ERC1271_DOMAIN",
+      "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+    ],
+    ["SAUCE_ERC1271_NAME", "Sauce Pot"],
+    ["SAUCE_ERC1271_VERSION", "1"],
+    ["SAUCE_ERC1271_MESSAGE", "PotMessage(bytes32 hash)"],
+    ["SAUCE_ERC1271_APPROVED", "SignatureApproved(bytes32,bool)"],
+  ])("%s is keccak256 of %s", (name, text) => {
+    expect(SOURCE).toContain(`const ${name} = ${keccak256(toHex(text))};`);
+  });
+
+  it("the approved hashes' namespace is ERC-7201's location for sauce.storage.Erc1271", () => {
+    const inner = BigInt(keccak256(toHex("sauce.storage.Erc1271"))) - 1n;
+    const location =
+      BigInt(keccak256(encodeAbiParameters([{ type: "uint256" }], [inner]))) & ~0xffn;
+    expect(SOURCE).toContain(
+      `const SAUCE_ERC1271_NAMESPACE = 0x${location.toString(16).padStart(64, "0")};`,
+    );
+  });
+
+  it.each(["owner()", "isValidSignature(bytes32,bytes)"])(
+    "%s's selector, which the ERC-1271 handler calls, is derived from its signature",
+    (signature) => {
+      const selector = toFunctionSelector(signature).slice(2);
+      expect(SOURCE).toContain(`hex\`${selector}\``);
+      expect(hex(compile(ERC1271).bytecode)).toContain(selector);
+    },
+  );
+
   it.each(["Timeout(bytes32)", "AggregateError(bytes32)"])(
     "the %s a rejection carries is that error's selector",
     (signature) => {
@@ -123,6 +158,21 @@ function main(caller: Address, value: Uint256, data: bytes): void {
     expect(handler.entryParams.map((p) => p.type)).toEqual(["Address", "Uint256", "bytes"]);
   });
 
+  it("the Pot as a signer: approving and revoking a hash, and the ERC-1271 handler", () => {
+    const approves = compile(`import { Erc1271 } from "@sauce/async";
+function main(hash: Uint256): bool {
+  Erc1271.approve(hash);
+  Erc1271.revoke(hash + 1);
+  return Erc1271.approved(hash);
+}`);
+    expect(approves.entryParams.map((p) => p.type)).toEqual(["Uint256"]);
+    expect(compile(ERC1271).entryParams.map((p) => p.type)).toEqual([
+      "Address",
+      "Uint256",
+      "bytes",
+    ]);
+  });
+
   it("the table's own parts, for a package that needs them directly", () => {
     const parts = compile(`import { isPending, park, received, run, salt } from "@sauce/async";
 
@@ -148,6 +198,15 @@ function main(value: Uint256, to: Address) {
     expect(program.continuations[0]!.captures).toEqual(["body.to"]);
     // A continuation opens no intent: the program reports no intent body.
     expect(program.bodies).toEqual([]);
+  });
+
+  it.skip("`await` folds onto the same `then` (await dropped from the compiler (v12 #554))", () => {
+    const awaited = compile(`${ECHO}
+function main(value: Uint256, to: Address) {
+  await Echo.request(value);
+  evm.sstore(1, to);
+}`);
+    expect(awaited.continuations).toHaveLength(1);
   });
 
   it("`.catch` and a deadline fold onto the same promise", () => {

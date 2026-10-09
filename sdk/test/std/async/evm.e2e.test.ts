@@ -62,9 +62,15 @@ import { privateKeyToAccount } from "viem/accounts";
 
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import {
+  approvedHashSlot,
+  ERC1271_HANDLER,
+  potMessageTypedData,
+} from "../../../src/routes/erc1271.js";
+import {
   compileHandlers,
   handlersInstallSource,
   packageHandlers,
+  packageReader,
 } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
@@ -211,6 +217,7 @@ const installSource = (echo: Address, carrier: Address): string =>
               : undefined,
       ),
       ...packageHandlers(CHAIN, "@sauce/async"),
+      ...compileHandlers(CHAIN, [ERC1271_HANDLER], packageReader("@sauce/async")),
     ],
     "the echo protocol",
   );
@@ -977,6 +984,96 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       expect(await parked(id!)).not.toBe(0n);
     },
   );
+
+  const MAGIC = "0x1626ba7e00000000000000000000000000000000000000000000000000000000";
+  const INVALID = "0xffffffff00000000000000000000000000000000000000000000000000000000";
+  const isValid = async (hash: Hex, signature: Hex): Promise<Hex | undefined> =>
+    (
+      await publicClient.call({
+        to: stack.pot,
+        data: encodeFunctionData({
+          abi: parseAbi([
+            "function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)",
+          ]),
+          functionName: "isValidSignature",
+          args: [hash, signature],
+        }),
+      })
+    ).data;
+
+  it("answers ERC-1271 for a hash a program approved, until it is revoked, under 100k gas", async () => {
+    const hash = keccak256(toHex("a request the Pot made"));
+    expect(await isValid(hash, "0x")).toBe(INVALID);
+    const approve = (verb: string) => `import { Erc1271 } from "@sauce/async";
+
+function main(hash: Uint256): void {
+  Erc1271.${verb}(hash);
+}`;
+    expect((await cook(compiled(approve("approve"), [hash]))).ok).toBe(true);
+    expect(await slot(approvedHashSlot(hash))).toBe(word(1n));
+    // The approval is the authorization: whatever the signature bytes.
+    expect(await isValid(hash, "0x")).toBe(MAGIC);
+    expect(await isValid(hash, `0x${"ab".repeat(65)}`)).toBe(MAGIC);
+    // A market's check gives the call 100,000 gas: what it uses, the transaction's 21,000 and its
+    // calldata aside.
+    const data = encodeFunctionData({
+      abi: parseAbi([
+        "function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)",
+      ]),
+      functionName: "isValidSignature",
+      args: [hash, "0x"],
+    });
+    const estimate = await publicClient.estimateGas({
+      account: STRANGER.address,
+      to: stack.pot,
+      data,
+    });
+    GAS["erc1271: an approved hash, the whole call"] = estimate;
+    expect(estimate - 21_000n).toBeLessThan(100_000n);
+    expect((await cook(compiled(approve("revoke"), [hash]))).ok).toBe(true);
+    expect(await isValid(hash, "0x")).toBe(INVALID);
+  });
+
+  it("answers ERC-1271 for the owner's signature over the hash bound to the Pot, and no other", async () => {
+    const hash = keccak256(toHex("a permit the Pot signs"));
+    const typed = potMessageTypedData({ pot: stack.pot, chainId: CHAIN_ID, hash });
+    const signature = await OWNER.signTypedData(typed);
+    expect(await isValid(hash, signature)).toBe(MAGIC);
+    const estimate = await publicClient.estimateGas({
+      account: STRANGER.address,
+      to: stack.pot,
+      data: encodeFunctionData({
+        abi: parseAbi([
+          "function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)",
+        ]),
+        functionName: "isValidSignature",
+        args: [hash, signature],
+      }),
+    });
+    GAS["erc1271: the owner's signature, the whole call"] = estimate;
+
+    // Its malleable twin: s flipped to the upper half, v to the other parity.
+    const order = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+    const r = signature.slice(0, 66);
+    const s = BigInt(`0x${signature.slice(66, 130)}`);
+    const v = Number.parseInt(signature.slice(130, 132), 16);
+    const twin =
+      `${r}${(order - s).toString(16).padStart(64, "0")}${(v === 27 ? 28 : 27).toString(16)}` as Hex;
+    expect(await isValid(hash, twin)).toBe(INVALID);
+    // Another signer's, and the owner's over the bare hash rather than the Pot's message.
+    expect(await isValid(hash, await STRANGER.signTypedData(typed))).toBe(INVALID);
+    expect(await isValid(hash, await OWNER.sign({ hash }))).toBe(INVALID);
+    // And the same message for another Pot.
+    expect(
+      await isValid(
+        hash,
+        await OWNER.signTypedData({
+          ...typed,
+          domain: { ...typed.domain, verifyingContract: echo },
+        }),
+      ),
+    ).toBe(INVALID);
+  });
 
   it("refuses `install` on a Shared Pot, which answers no selector", async () => {
     const salt = word(0x5a5an);

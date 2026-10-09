@@ -505,7 +505,7 @@ describe("sauce compile", () => {
     }
   });
 
-  it("reads an awaited intent's body on its destination, as its `.then(...)` form", async () => {
+  it.skip("reads an awaited intent's body on its destination, as its `.then(...)` form: await dropped from the compiler (v12 #554)", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
       "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
@@ -525,7 +525,29 @@ describe("sauce compile", () => {
     expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
   });
 
-  it("reads a handler on every chain it runs on", async () => {
+  it("reads an intent's body on its destination", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const opened =
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
+    const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
+    const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    // Where each part runs is the compile's to say.
+    const { defines } = appliedDefines(
+      [`${opened}.then(() => {`, ...body, "});", ""].join("\n"),
+      requireChain("base"),
+      user,
+      new Set(["RECIPIENT"]),
+    );
+    expect(defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
+      "RECIPIENT@arbitrum",
+      "USDC@arbitrum",
+      "USDC@base",
+      "WETH@arbitrum",
+      "chainId@arbitrum",
+    ]);
+  });
+
+  it.skip("reads a handler on every chain it runs on: await dropped from the compiler (v12 #554)", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
       "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
@@ -560,6 +582,23 @@ describe("sauce compile", () => {
       "USDC@base",
       "WETH@arbitrum",
     ]);
+  });
+
+  it("reads a body's handler on its destination", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const opened =
+      "Arbitrum.hop({ send: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";
+    const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    const read = (text: string) =>
+      appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"])).defines.map(
+        (d) => `${d.name}@${d.chain}`,
+      );
+    // A body's own handler runs on its destination alone.
+    expect(
+      read(
+        `${opened}.then(() => { require(WETH != 0); }).catch((e) => { USDC.transfer(RECIPIENT, 1); });\n`,
+      ),
+    ).toEqual(["RECIPIENT@arbitrum", "USDC@arbitrum", "USDC@base", "WETH@arbitrum"]);
   });
 
   it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
@@ -890,7 +929,7 @@ describe("sauce compile", () => {
     expect(run.stderr).not.toContain("main.js");
   });
 
-  it("reports a value returned after an await at the file's own line, the await it follows drawn", async () => {
+  it.skip("reports a value returned after an await at the file's own line, the await it follows drawn: await dropped from the compiler (v12 #554)", async () => {
     const program = file(
       "returns.sauce.ts",
       [
@@ -1526,7 +1565,7 @@ describe("sauce intent publish, offline", () => {
     expect(measured.code).toBe(0);
   });
 
-  it("publishes an awaited intent with main's arguments as its `.then(...)` form", async () => {
+  it.skip("publishes an awaited intent with main's arguments as its `.then(...)` form: await dropped from the compiler (v12 #554)", async () => {
     const form = (opened: string, body: string) =>
       [
         "function main(recipient: Address, amount: Uint256) {",

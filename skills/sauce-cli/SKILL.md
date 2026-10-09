@@ -478,7 +478,7 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 ## Intents and Solana
 
-- **A file that opens intents** (`await Ethereum.hop({ send, receive, refundee: refundTo })`)
+- **A file that opens intents** (`Ethereum.hop({ send, receive, refundee: refundTo }).then(…)`)
   names each hop's refundee, the refund address: no intent has a default refundee, since the Pot
   it is published from may be shared. The rest default, and the file may set each as a field of the
   hop (`sauce-intents`): the deadlines from when the command builds the

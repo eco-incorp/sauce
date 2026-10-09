@@ -43,32 +43,33 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
   require(amount > 0, "no USDC in the Pot");
   const delivered = amount - (amount * solverBps) / 10000;
 
-  await Base.hop({
+  Base.hop({
     send: { token: USDC, amount }, // Ethereum's
     receive: { token: USDC, amount: delivered }, // Base's USDC, which the solver delivers
     refundee: refundTo,
+  }).then(() => {
+    // On Base, in the fill.
+    // The Pot is shared by every intent to Base: this body moves only `delivered`.
+    const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
+    const owed = Token(debtToken).balanceOf(borrower);
+    const repay = delivered < owed ? delivered : owed;
+    let used = 0;
+    if (repay > 0) {
+      const before = USDC.balanceOf(ctx.self());
+      USDC.approve(AaveV3.Pool, repay);
+      AaveV3.Pool.repay(USDC, repay, 2, borrower);
+      used = before - USDC.balanceOf(ctx.self());
+    }
+    const change = delivered - used;
+    if (change > 0) {
+      const paid = change - (change * solverBps) / 10000;
+      Ethereum.hop({
+        send: { token: USDC, amount: change }, // Base's: it funds this level
+        receive: { token: USDC, amount: paid }, // Ethereum's
+        refundee: refundTo,
+      }).then(() => {
+        USDC.transfer(borrower, paid); // Ethereum's USDC
+      });
+    }
   });
-  // On Base, in the fill.
-  // The Pot is shared by every intent to Base: this body moves only `delivered`.
-  const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
-  const owed = Token(debtToken).balanceOf(borrower);
-  const repay = delivered < owed ? delivered : owed;
-  let used = 0;
-  if (repay > 0) {
-    const before = USDC.balanceOf(ctx.self());
-    USDC.approve(AaveV3.Pool, repay);
-    AaveV3.Pool.repay(USDC, repay, 2, borrower);
-    used = before - USDC.balanceOf(ctx.self());
-  }
-  const change = delivered - used;
-  if (change > 0) {
-    const paid = change - (change * solverBps) / 10000;
-    // An `await` in a branch of the `if` that ends the body: the rest of the branch runs there.
-    await Ethereum.hop({
-      send: { token: USDC, amount: change }, // Base's: it funds this level
-      receive: { token: USDC, amount: paid }, // Ethereum's
-      refundee: refundTo,
-    });
-    USDC.transfer(borrower, paid); // Ethereum's USDC
-  }
 }

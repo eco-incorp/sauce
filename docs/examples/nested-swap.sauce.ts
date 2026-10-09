@@ -23,20 +23,22 @@ function main(
   minOut: Uint256,
   refundTo: Address,
 ) {
-  await Base.hop({
+  Base.hop({
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
+  }).then(() => {
+    // On Base: buy WETH with what was delivered, and hop on with it.
+    const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
+    const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
+    const payout = bought - bought / 1000;
+    Ethereum.hop({
+      send: { token: WETH, amount: bought },
+      receive: { token: WETH, amount: payout },
+      refundee: refundTo,
+    }).then(() => {
+      // On Ethereum.
+      WETH.transfer(recipient, payout);
+    });
   });
-  // On Base: buy WETH with what was delivered, and hop on with it.
-  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
-  const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
-  const payout = bought - bought / 1000;
-  await Ethereum.hop({
-    send: { token: WETH, amount: bought },
-    receive: { token: WETH, amount: payout },
-    refundee: refundTo,
-  });
-  // On Ethereum.
-  WETH.transfer(recipient, payout);
 }

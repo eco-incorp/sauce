@@ -30,6 +30,8 @@
 //   park, run, received the settlement table's parts, for a package that needs them directly
 //   requireCaller, requireSelf  a handler's checks
 //   install, declareInterface   what installing a package's handlers on the Pot calls
+//   isValidSignature, Erc1271   the Pot as an ERC-1271 signer: a hash a program approved, or its
+//                               owner's signature over the hash bound to the Pot
 //
 // WHERE A CALLBACK LANDS. A Private Pot answers a selector neither it nor its Router declares with
 // the program its owner registered for it (the Router's `setHandler`, which `install` calls): the
@@ -88,10 +90,31 @@
 // uint256 state)`, `PromiseIgnored(bytes32 indexed key, uint256 state)` for a callback that found
 // nothing pending, and `PromiseUnhandled(bytes32 indexed key, bytes reason)`.
 //
+// THE POT AS A SIGNER. A Pot answers ERC-1271's `isValidSignature(bytes32 hash, bytes signature)`
+// with one handler, `erc1271.handler.js`, which every package that needs the Pot to sign declares
+// (`"program": "@sauce/async/erc1271.handler.js"`), registered as a view (static, no fee). It is
+// valid, with the magic value 0x1626ba7e, for
+//   (a) a hash a program running as the Pot approved, `Erc1271.approve(hash)` (and `revoke`), kept
+//       in the ERC-7201 namespace `sauce.storage.Erc1271`, WHATEVER the signature bytes: the
+//       approval is the authorization, as a Safe's approved hash is, and a market that checks a
+//       request the Pot made passes whatever signature the Pot gave it;
+//   (b) the owner's signature over `hash` bound to the Pot, EIP-712's
+//         domain      { name: "Sauce Pot", version: "1", chainId, verifyingContract: the Pot }
+//         PotMessage  { hash: bytes32 }
+//       never over `hash` itself, so a signature the owner made for its own account, or for another
+//       Pot it owns, is no signature of this Pot's. A 65-byte `r ‖ s ‖ v` is checked with
+//       `crypto.ecdsaVerify`, refusing first a malleable one (`s` in the upper half of the curve's
+//       order) and any `v` but 27 and 28; an owner with code is asked EIP-1271 itself, with the
+//       signature as it is (OpenZeppelin's `SignatureChecker` order).
+// and 0xffffffff otherwise. (a) is checked first: one storage read, well under the 100,000 gas a
+// market's check gives it.
+//
 // The calls are written out, selector and arguments, as the Pot, its Router and its Kitchen
 // declare them: `inFlightEngine()` (0x9fd004e1), `setHandler(bytes4,address,bytes,bool)`
-// (0xeb45e5d0), `setInterface(bytes4,bool)` (0xc0a43a7c), `kitchen()` (0xba0909dd) and
-// `executionFee()` (0x40e9903b). The SDK's tests derive each from its signature.
+// (0xeb45e5d0), `setInterface(bytes4,bool)` (0xc0a43a7c), `kitchen()` (0xba0909dd),
+// `executionFee()` (0x40e9903b), `owner()` (0x8da5cb5b) and EIP-1271's
+// `isValidSignature(bytes32,bytes)` (0x1626ba7e). The SDK's tests derive each from its signature,
+// and each EIP-712 hash from its type.
 
 // The ERC-7201 namespace of the settlement table, in the Pot's storage:
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.Async")) - 1)) & ~bytes32(uint256(0xff)).
@@ -112,6 +135,24 @@ const SAUCE_ASYNC_PENDING = 0xa9fed18a6daa7ac27b0c8841db87de302152eef27a9dee4fee
 const SAUCE_ASYNC_SETTLED = 0x342fcbff839055def4dafe8765f6f8399033786c2c76c3ee0a036fd6bef23a54;
 const SAUCE_ASYNC_IGNORED = 0xb78a14745c133668926b46e976911778cad8e45d0b3c54ff164aac96531f8b45;
 const SAUCE_ASYNC_UNHANDLED = 0x8f909674cc09cc463bd1460b4e447d647049a064ca7f9d175f9ff541bea55c1f;
+
+// The ERC-7201 namespace of the hashes the Pot approved as signed (ERC-1271):
+// keccak256(abi.encode(uint256(keccak256("sauce.storage.Erc1271")) - 1)) & ~bytes32(uint256(0xff)).
+const SAUCE_ERC1271_NAMESPACE = 0x3ecee999f28b5e8fad18912a6f2e29ef0ffcf6ba8ef27fb61168d26e4308d900;
+// keccak256 of each EIP-712 type and domain field of the owner's signature for the Pot.
+// EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)
+const SAUCE_ERC1271_DOMAIN = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
+// "Sauce Pot"
+const SAUCE_ERC1271_NAME = 0x65e82c940f55e84d80e8c004a4c586bf80f61f10a7c0218cc8c7ca657f1e4edd;
+// "1"
+const SAUCE_ERC1271_VERSION = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6;
+// PotMessage(bytes32 hash)
+const SAUCE_ERC1271_MESSAGE = 0x285c77bc77dfca76b6f099853b19373bb19a687adfc951011417a67ac42dded3;
+// Half the order of secp256k1: a signature's `s` above it is the malleable twin of one below.
+const SAUCE_ERC1271_HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
+// The event `Erc1271.approve`/`revoke` logs, from the Pot: SignatureApproved(bytes32 indexed hash,
+// bool approved).
+const SAUCE_ERC1271_APPROVED = 0xcb06a503ad3aecd2681872ad5ca2bd35af8bd0d65247dedef3505baa3f031f43;
 
 // The states, and the combinators' kinds.
 const SAUCE_ASYNC_PENDING_STATE = 1;
@@ -508,6 +549,67 @@ export function kitchenFee(): Uint256 {
   const [kitchen] = abi.decode(evm.static(ctx.self(), hex`ba0909dd`), ["Address"]);
   const [fee] = abi.decode(evm.static(kitchen, hex`40e9903b`), ["Uint256"]);
   return fee;
+}
+
+// ---- the Pot as a signer (ERC-1271) ---------------------------------------------------------------
+
+function approvedSlot(hash: Uint256): Uint256 {
+  return crypto.keccak256(abi.encode(hash, SAUCE_ERC1271_NAMESPACE));
+}
+
+// Approve (`approved` true) or revoke `hash` as one the Pot signed: `Erc1271.approve`/`revoke`.
+export function approveHash(hash: Uint256, approved: bool): void {
+  evm.sstore(approvedSlot(hash), approved ? 1 : 0);
+  log(abi.encode(approved), SAUCE_ERC1271_APPROVED, hash);
+}
+
+// Whether a program running as the Pot approved `hash`.
+export function isApprovedHash(hash: Uint256): bool {
+  return evm.sload(approvedSlot(hash)) == 1;
+}
+
+// What the owner signs for the Pot to answer ERC-1271 for `hash`: `hash` bound to this Pot and this
+// chain (`PotMessage` under the Pot's EIP-712 domain).
+export function potMessageDigest(hash: Uint256): Uint256 {
+  const domain = crypto.keccak256(
+    abi.encode(
+      SAUCE_ERC1271_DOMAIN,
+      SAUCE_ERC1271_NAME,
+      SAUCE_ERC1271_VERSION,
+      ctx.chainId(),
+      ctx.self(),
+    ),
+  );
+  return crypto.keccak256(
+    hex`1901`.concat(abi.encode(domain, crypto.keccak256(abi.encode(SAUCE_ERC1271_MESSAGE, hash)))),
+  );
+}
+
+// ERC-1271's answer for the Pot: the magic value, left-aligned, for a hash the Pot approved or the
+// owner signed for this Pot, and 0xffffffff otherwise. See "THE POT AS A SIGNER" above. Written
+// flat, each check inline: it runs under a market's gas cap.
+export function isValidSignature(hash: Uint256, signature: bytes): Uint256 {
+  if (evm.sload(approvedSlot(hash)) == 1) {
+    return 0x1626ba7e00000000000000000000000000000000000000000000000000000000;
+  }
+  const digest = potMessageDigest(hash);
+  const [signer] = abi.decode(evm.static(ctx.self(), hex`8da5cb5b`), ["Address"]);
+  let valid = false;
+  if (signature.length == 65) {
+    const s = signature.slice(32, 64).toBe();
+    const v = signature.slice(64, 65).toBe();
+    if (s <= SAUCE_ERC1271_HALF_ORDER && (v == 27 || v == 28)) {
+      valid = crypto.ecdsaVerify(digest, signature, signer);
+    }
+  }
+  if (!valid && ctx.codeSize(signer) > 0) {
+    const answer = evm.static(signer, hex`1626ba7e`.concat(abi.encode(digest, signature)));
+    valid = answer.length >= 32 && answer.slice(0, 4).toBe() == 0x1626ba7e;
+  }
+  if (valid) {
+    return 0x1626ba7e00000000000000000000000000000000000000000000000000000000;
+  }
+  return 0xffffffff00000000000000000000000000000000000000000000000000000000;
 }
 
 // ---- the classes the compiler runs ----------------------------------------------------------------
@@ -1062,5 +1164,21 @@ export class Async {
   // anyone calls `expire`. For `Promise.race([request, Async.timeout(3600)])`.
   static timeout(seconds) {
     return new Deferred(ctx.timestamp() + seconds, true);
+  }
+}
+
+// The Pot as an ERC-1271 signer, from a program running as the Pot.
+export class Erc1271 {
+  // Approve `hash` as one the Pot signed: `isValidSignature(hash, …)` is valid until revoked.
+  static approve(hash) {
+    approveHash(hash, true);
+  }
+  // Revoke `hash`.
+  static revoke(hash) {
+    approveHash(hash, false);
+  }
+  // Whether the Pot approved `hash`.
+  static approved(hash) {
+    return isApprovedHash(hash);
   }
 }
