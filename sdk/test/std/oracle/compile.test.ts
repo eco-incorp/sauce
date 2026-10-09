@@ -58,6 +58,13 @@ describe("what the library writes out by hand", () => {
     expect(hex(compile(REQUEST).bytecode)).toContain(location);
   });
 
+  it("its promise tag is keccak256 of sauce.oracle.cre, in the request and the handler", () => {
+    const tag = keccak256(toHex("sauce.oracle.cre")).slice(2);
+    expect(SOURCE).toContain(`const ORACLE_CRE = 0x${tag};`);
+    expect(hex(compile(REQUEST).bytecode)).toContain(tag);
+    expect(hex(compile(HANDLER).bytecode)).toContain(tag);
+  });
+
   it("the call it answers is IReceiver's onReport(bytes,bytes)", () => {
     expect(SOURCE).toContain(
       `\`onReport(bytes,bytes)\` (${toFunctionSelector("onReport(bytes,bytes)")})`,
@@ -79,7 +86,8 @@ describe("what compiles", () => {
     const program = compile(REQUEST);
     expect(program.bodies).toHaveLength(1);
     expect(program.bodies[0]!.destination.slug).toBe("base");
-    expect(program.bodies[0]!.captures).toEqual(["body.limit"]);
+    expect(program.bodies[0]!.captures).toHaveLength(1);
+    expect(program.bodies[0]!.captures[0]).toMatch(/\blimit$/);
   });
 
   it("`await` folds onto the same `then`, and `args` may be left out", () => {
@@ -90,6 +98,26 @@ function main(owner: Address): void {
   evm.sstore(1, 1);
 }`);
     expect(program.bodies).toHaveLength(1);
+  });
+
+  it("a deadline, given or as `.within(seconds)`", () => {
+    for (const call of [
+      "Oracle.cre({ owner, deadline: 1900000000 })",
+      "Oracle.cre({ owner }).within(600)",
+    ]) {
+      const program = compile(`import { Oracle } from "@sauce/oracle";
+
+function main(owner: Address): void {
+  ${call}
+    .then((report) => {
+      evm.sstore(1, report.length);
+    })
+    .catch((err) => {
+      evm.sstore(2, err.length);
+    });
+}`);
+      expect(program.bodies).toHaveLength(1);
+    }
   });
 
   it("the handler takes the Router's arguments", () => {
@@ -118,7 +146,7 @@ function main(owner: Address): void {
   it("a field it does not take, by its name", () => {
     refuses(
       program("Oracle.cre({ owner, source: hex`01` })"),
-      "`Oracle.cre` takes no `source`: its fields are owner and args",
+      "`Oracle.cre` takes no `source`: its fields are owner, args and deadline",
     );
   });
 

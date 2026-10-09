@@ -22,33 +22,42 @@
 //
 //   OracleRequest(bytes32 indexed id, address indexed owner, bytes args)
 //
-// which a workflow's EVM Log trigger listens for, and parks the body under the request's key. `id`
-// is the request's own: the chain, the Pot and the Pot's count of the requests it has made, so no
-// two requests share one and a report for one chain names nothing on another. `owner` is the
+// which a workflow's EVM Log trigger listens for, and parks the body as a promise (`@sauce/async`).
+// `id` is the request's own: the chain, the Pot and the Pot's count of the requests it has made, so
+// no two requests share one and a report for one chain names nothing on another. `owner` is the
 // workflow owner the request is for. `args` is what the workflow reads, as the program encodes it.
+// A `deadline` (or `.within(seconds)`) lets anyone reject a request no report answered in time,
+// through the Pot's `expire(bytes32 key)`, which runs `.catch` with `Timeout(bytes32 key)`.
 //
 // THE REPORT. The workflow answers with a report whose payload is
 //
 //   abi.encode(bytes32 id, bool ok, bytes data)
 //
 // `ok` true fulfils the request, and the body is handed `data`; false rejects it, and `.catch` is
-// handed `data`, the workflow's error. Chainlink's KeystoneForwarder checks the DON's signatures and
-// calls the Pot's `onReport(bytes metadata, bytes report)`, which the Pot answers with the handler
-// this package's `onReport` is the body of.
+// handed `data`, the workflow's error. Chainlink's KeystoneForwarder checks the DON's signatures,
+// asks the Pot over ERC-165 whether it is an `IReceiver` (0x805f2132, which installing this package
+// declares), and calls its `onReport(bytes metadata, bytes report)`, which the Pot answers with the
+// handler this package's `onReport` is the body of. A report for a request already settled, or for
+// none, changes nothing and returns.
 //
 // WHO MAY ANSWER. Any workflow's DON can reach the forwarder, so the forwarder as the caller proves
 // only that a workflow signed the report. The workflow owner in the report's metadata is the
-// authentication: a request's key is `keccak256(abi.encode(id, owner))`, and the handler derives the
-// key from the owner the metadata names, so a report from any other owner finds no request.
+// authentication: a request's promise key is `promiseKey(ORACLE_CRE, keccak256(abi.encode(owner,
+// id)))`, and the handler derives it from the owner the metadata names, so a report from any other
+// owner finds no request.
 //
 // The forwarder's call is written out, selector and arguments, as Chainlink's `IReceiver` declares
 // it: `onReport(bytes,bytes)` (0x805f2132), whose `metadata` is the 64 bytes `workflowId` (32),
 // `workflowName` (10), `workflowOwner` (20), `reportId` (2). The SDK's tests run it through the
 // forwarder deployed on Ethereum and Base, its runtime as captured.
-import { Request, requireCaller, run, take } from "@sauce/async";
+import { Request, fulfil, promiseKey, reject, requireCaller } from "@sauce/async";
 
 // The event a request logs: keccak256("OracleRequest(bytes32,address,bytes)").
 const ORACLE_REQUEST = 0xc110c892d7bf322caf684db2c33c898be8770bb1a502d0845097c8672c9874ed;
+
+// The tag of this package's promise keys, keccak256("sauce.oracle.cre"), so its ids never meet
+// another protocol's.
+const ORACLE_CRE = 0xe0c066f41c1dc7e55f8fdb9c65959880975a5253ce7ee0f0fe9c8196947500dd;
 
 // The ERC-7201 namespace this package keeps in the Pot's storage:
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.Oracle")) - 1)) & ~bytes32(uint256(0xff)).
@@ -59,16 +68,19 @@ const SAUCE_ORACLE_NAMESPACE = 0xfb914c48cb718df1ddac58f9ecf041e1351f5cba973af65
 class Requests {
   // A request to a Chainlink CRE workflow, which `config` names:
   //
-  //   owner  the workflow owner whose report alone settles it; required
-  //   args   what the workflow reads, as bytes (`abi.encode(…)` of it); none when left out
+  //   owner     the workflow owner whose report alone settles it; required
+  //   args      what the workflow reads, as bytes (`abi.encode(…)` of it); none when left out
+  //   deadline  a unix time after which anyone may expire the request; or `.within(seconds)`
   cre(config) {
     if (config === undefined) {
       throw new Error("`Oracle.cre(...)` takes one object: `Oracle.cre({ owner, args })`");
     }
-    const fields = { owner: true, args: true };
+    const fields = { owner: true, args: true, deadline: true };
     for (const key of Object.keys(config)) {
       if (fields[key] === undefined) {
-        throw new Error("`Oracle.cre` takes no `" + key + "`: its fields are owner and args");
+        throw new Error(
+          "`Oracle.cre` takes no `" + key + "`: its fields are owner, args and deadline",
+        );
       }
     }
     const owner = config.owner;
@@ -79,20 +91,13 @@ class Requests {
     }
     const args = config.args === undefined ? hex`` : config.args;
     return new Request({
+      deadline: config.deadline,
       send: (continuation) => {
         const count = evm.sload(SAUCE_ORACLE_NAMESPACE) + 1;
         evm.sstore(SAUCE_ORACLE_NAMESPACE, count);
         const id = crypto.keccak256(abi.encode(ctx.chainId(), ctx.self(), count));
         log(abi.encode(args), ORACLE_REQUEST, id, owner);
-        return crypto.keccak256(abi.encode(id, owner));
-      },
-      deliver: (input, body, fail) => {
-        const [ok, data] = abi.decode(input, ["bool", "bytes"]);
-        if (ok) {
-          body(data);
-        } else {
-          fail(data);
-        }
+        return promiseKey(ORACLE_CRE, crypto.keccak256(abi.encode(owner, id)));
       },
     });
   }
@@ -101,13 +106,19 @@ class Requests {
 export const Oracle = new Requests();
 
 // The body of the handler for `onReport(bytes metadata, bytes report)`, the call a CRE report lands
-// on: from `forwarder` alone, it finds the request the report answers under the key the report's
-// id and the metadata's workflow owner derive, and runs its continuation with what the report says.
+// on: from `forwarder` alone, it settles the request the report answers, under the key the report's
+// id and the metadata's workflow owner derive — fulfilled with the report's data, or rejected with
+// it when the report is not `ok`.
 export function onReport(forwarder: Address, caller: Address, data: bytes): void {
   requireCaller(forwarder, caller);
   const [metadata, report] = abi.decode(data.slice(4, data.length), ["bytes", "bytes"]);
   require(metadata.length >= 62, "oracle: the report's metadata names no workflow owner");
   const owner = metadata.slice(42, 62).toBe();
   const [id, ok, result] = abi.decode(report, ["Uint256", "bool", "bytes"]);
-  run(take(crypto.keccak256(abi.encode(id, owner))), abi.encode(ok, result));
+  const key = promiseKey(ORACLE_CRE, crypto.keccak256(abi.encode(owner, id)));
+  if (ok) {
+    fulfil(key, result);
+  } else {
+    reject(key, result);
+  }
 }

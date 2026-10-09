@@ -14,26 +14,26 @@
  * `IReceiver` (OpenZeppelin's checker: three static calls of 30,000 gas), and calls its
  * `onReport(metadata, report)`. Each step runs as a user would run it:
  *
- *   1. the owner cooks the program the SDK writes to install `@sauce/oracle`'s handlers;
+ *   1. the owner cooks the program the SDK writes to install `@sauce/oracle`: the `onReport`
+ *      handler, `@sauce/async`'s public `expire`, and the `IReceiver` interface the Router answers
+ *      ERC-165 for;
  *   2. the owner cooks a program that requests: `Oracle.cre({ owner, args }).then(…).catch(…)`,
- *      which logs `OracleRequest(id, owner, args)` and parks the body;
+ *      which logs `OracleRequest(id, owner, args)` and parks the body as a promise;
  *   3. the DON's report reaches the Pot through the forwarder: the handler checks its caller,
- *      derives the request's key from the report's id and the metadata's workflow owner, and runs
- *      the body, or `.catch` for a failure report or a body that reverted.
+ *      derives the promise's key from the report's id and the metadata's workflow owner, and
+ *      fulfils it (the body runs) or rejects it (`.catch` runs, as it does for a body that reverted).
  *
- * And what is refused: a report from another workflow owner, which finds no request; a call to
- * `onReport` from anyone but the forwarder; a second report for a request already settled.
- *
- * THE ERC-165 CHECK needs the Router to answer `supportsInterface` itself: no Sauce program run by
- * the Router's fallback fits in 30,000 gas. Until the Router under test does, the forwarder marks
- * the Pot an invalid receiver (asserted here), and the deliveries are made as the forwarder makes
- * them, from its address, past that check; once it does, every delivery goes through `report(...)`
- * and the check's three calls are held to 30,000 gas each.
+ * And what changes nothing: a report from another workflow owner, which names no promise; a second
+ * report, or one after the request expired, for a promise already settled; a call to `onReport`
+ * from anyone but the forwarder, refused. A request nobody answers is expired after its deadline,
+ * by anyone, rejecting it with `Timeout(bytes32 key)`.
  *
  * GATED twice, as `@sauce/async`'s suite is: on SAUCE_V12_RUNTIME_CREATION_HEX, and on
- * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code, which no release publishes
- * yet. The `.catch` cases read the error they are handed, which needs an engine built from the
- * compiler's tree: on the released one such a block loses its work, and they skip there.
+ * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code (with its native ERC-165),
+ * which no release publishes yet. Every delivery needs an engine built from the compiler's tree:
+ * `@sauce/async` settles a promise by running its continuation under `evm.delegate(…).catch(…)`,
+ * which the released engine runs out of stack on in this handler, and a `.catch` that reads the
+ * error it is handed loses its work there. The deliveries skip on the released engine.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -68,7 +68,7 @@ import { privateKeyToAccount, sign } from "viem/accounts";
 
 import { chainlink } from "../../../src/protocols/index.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
-import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
+import { handlersInstallSource, packageInstall } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
   gateAnchors,
@@ -82,7 +82,8 @@ const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
 const ROUTER = routerUnderTest();
 const describeOracle = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
-/** A `catch (e)` that reads `e` loses its work on the released engine: those cases skip there. */
+/** A promise settles through a `.catch` that reads the error, which the released engine does not
+ *  run as written: every delivery skips there. */
 const RELEASED_ENGINE =
   RUNTIME_HEX_PATH !== undefined &&
   readFileSync(RUNTIME_HEX_PATH, "utf8").trim().toLowerCase() ===
@@ -91,7 +92,7 @@ const RELEASED_ENGINE =
         readFileSync(join(HERE, "../../../src/artifacts/V12RuntimeBytecode.json"), "utf8"),
       ) as { runtimeCreationCode: string }
     ).runtimeCreationCode.toLowerCase();
-const itCatching = RELEASED_ENGINE ? it.skip : it;
+const itSettling = RELEASED_ENGINE ? it.skip : it;
 
 const fixture = <T>(name: string): T =>
   JSON.parse(readFileSync(join(HERE, "fixtures", name), "utf8")) as T;
@@ -126,6 +127,22 @@ const FORWARDER = getAddress(
 );
 
 const ON_REPORT = toFunctionSelector("onReport(bytes,bytes)");
+const EXPIRE = toFunctionSelector("expire(bytes32)");
+/** `@sauce/oracle`'s promise tag, and the key of the promise a request is. */
+const ORACLE_CRE = keccak256(toHex("sauce.oracle.cre"));
+const keyOf = (id: Hex, workflowOwner: Address = WORKFLOW_OWNER): Hex =>
+  keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "bytes32" }],
+      [
+        ORACLE_CRE,
+        keccak256(
+          encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [workflowOwner, id]),
+        ),
+      ],
+    ),
+  );
+const IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
 const IERC165 = toFunctionSelector("supportsInterface(bytes4)");
 /** The Pot storage slots the bodies write. */
 const PRICE_SLOT = keccak256(toHex("oracle.price"));
@@ -161,13 +178,17 @@ function main(owner: Address, pair: bytes, limit: Uint256): void {
     });
 }`;
 
+/** The same request, which anyone may expire 60 seconds after it is made. */
+const REQUEST_WITHIN = REQUEST.replace(
+  "Oracle.cre({ owner, args: pair })",
+  "Oracle.cre({ owner, args: pair }).within(60)",
+);
+
 let anvil: ChildProcess;
 let publicClient: PublicClient;
 let testClient: TestClient;
 let stack: GatedEngine;
 let probe: Address;
-/** Whether the Pot answers ERC-165 for `IReceiver` within the forwarder's 30,000 gas. */
-let receives = false;
 
 const owner = createWalletClient({ account: OWNER, transport: http(RPC_URL) });
 const stranger = createWalletClient({ account: STRANGER, transport: http(RPC_URL) });
@@ -206,13 +227,17 @@ const cook = (program: Hex) =>
   );
 
 /** Requests a price from `WORKFLOW_OWNER`'s workflow, answering the request's id as logged. */
-async function request(limit: bigint): Promise<Hex> {
+async function request(limit: bigint, source = REQUEST): Promise<Hex> {
   const pair = encodeAbiParameters([{ type: "string" }], ["ETH/USD"]);
-  const { ok, hash } = await cook(compiled(REQUEST, [WORKFLOW_OWNER, pair, limit]));
+  const { ok, hash } = await cook(compiled(source, [WORKFLOW_OWNER, pair, limit]));
   expect(ok).toBe(true);
   const receipt = await publicClient.getTransactionReceipt({ hash });
   const logged = receipt.logs
-    .filter((l) => getAddress(l.address) === getAddress(stack.pot))
+    .filter(
+      (l) =>
+        getAddress(l.address) === getAddress(stack.pot) &&
+        l.topics[0] === keccak256(toHex("OracleRequest(bytes32,address,bytes)")),
+    )
     .map((l) => decodeEventLog({ abi: requestEvent, data: l.data, topics: l.topics }));
   expect(logged).toHaveLength(1);
   expect(logged[0].args.owner).toBe(WORKFLOW_OWNER);
@@ -240,12 +265,12 @@ function rawReportOf(payload: Hex, workflowOwner: Address, executionId: Hex): He
 }
 
 /** A DON's report of `payload` from `workflowOwner`'s workflow, signed by F + 1 of the DON's
- *  signers and transmitted by a stranger through `report(...)`: whether the Pot's `onReport`
- *  succeeded, and whether the forwarder found the Pot an invalid receiver. */
-async function transmit(
+ *  signers and transmitted by a stranger through the forwarder's `report(...)`: whether the Pot's
+ *  `onReport` succeeded, the forwarder having found the Pot a receiver. */
+async function delivered(
   payload: Hex,
-  workflowOwner: Address,
-): Promise<{ result: boolean; invalidReceiver: boolean }> {
+  workflowOwner: Address = WORKFLOW_OWNER,
+): Promise<{ result: boolean; hash: Hex }> {
   executions += 1n;
   const executionId = keccak256(toHex(executions));
   const rawReport = rawReportOf(payload, workflowOwner, executionId);
@@ -279,39 +304,22 @@ async function transmit(
     functionName: "getTransmissionInfo",
     args: [stack.pot, executionId, "0x0001"],
   });
+  expect(info.invalidReceiver).toBe(false);
 
-  return { result: processed.args.result, invalidReceiver: info.invalidReceiver };
+  return { result: processed.args.result, hash };
 }
 
-/** The forwarder's call on the Pot, made from its address as its `route` makes it: the metadata
- *  slice of the report's header, then the payload. Whether it succeeded. */
-async function routed(payload: Hex, workflowOwner: Address): Promise<boolean> {
-  executions += 1n;
-  const rawReport = rawReportOf(payload, workflowOwner, keccak256(toHex(executions)));
-  const metadata = `0x${rawReport.slice(2 + 45 * 2, 2 + 109 * 2)}` as Hex;
-  const data = concat([
-    ON_REPORT,
-    encodeAbiParameters([{ type: "bytes" }, { type: "bytes" }], [metadata, payload]),
-  ]);
-  await testClient.impersonateAccount({ address: FORWARDER });
-  await testClient.setBalance({ address: FORWARDER, value: parseEther("1") });
-  const hash = (await testClient.request({
-    method: "eth_sendTransaction" as never,
-    params: [{ from: FORWARDER, to: stack.pot, data, gas: toHex(15_000_000n) }] as never,
-  })) as Hex;
-  await testClient.stopImpersonatingAccount({ address: FORWARDER });
+/** Whether `onReport` succeeded for a report of `payload`. */
+const report = async (payload: Hex, workflowOwner: Address = WORKFLOW_OWNER): Promise<boolean> =>
+  (await delivered(payload, workflowOwner)).result;
 
-  return (await publicClient.waitForTransactionReceipt({ hash })).status === "success";
-}
+/** The Pot's logs in a transaction, as [topic0, topic1]. */
+async function potLogs(hash: Hex): Promise<Hex[][]> {
+  const receipt = await publicClient.getTransactionReceipt({ hash });
 
-/** A report of `payload` from `workflowOwner`'s workflow reaching the Pot: through the forwarder's
- *  `report(...)` when the Pot passes its ERC-165 check, else as the forwarder's own call. */
-async function report(payload: Hex, workflowOwner: Address = WORKFLOW_OWNER): Promise<boolean> {
-  if (!receives) return routed(payload, workflowOwner);
-  const { result, invalidReceiver } = await transmit(payload, workflowOwner);
-  expect(invalidReceiver).toBe(false);
-
-  return result;
+  return receipt.logs
+    .filter((l) => getAddress(l.address) === getAddress(stack.pot))
+    .map((l) => l.topics.slice(0, 2) as Hex[]);
 }
 
 const payloadOf = (id: Hex, ok: boolean, data: Hex): Hex =>
@@ -409,14 +417,9 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
     });
     probe = (await publicClient.waitForTransactionReceipt({ hash: deployed })).contractAddress!;
 
-    const install = handlersInstallSource(packageHandlers(CHAIN, "@sauce/oracle"), "@sauce/oracle");
+    const { handlers, interfaces } = packageInstall(CHAIN, "@sauce/oracle");
+    const install = handlersInstallSource(handlers, "@sauce/oracle", interfaces);
     expect((await cook(compiled(install))).ok).toBe(true);
-    receives = (await publicClient.readContract({
-      address: probe,
-      abi: PROBE.abi,
-      functionName: "supportsInterface",
-      args: [stack.pot, ON_REPORT],
-    })) as boolean;
   }, 120_000);
 
   afterAll(async () => {
@@ -427,42 +430,51 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
     }
   });
 
-  it("installs one handler, `onReport`, run as a cook", () => {
-    const handlers = packageHandlers(CHAIN, "@sauce/oracle");
-    expect(handlers.map((h) => [h.selector, h.readOnly])).toEqual([[ON_REPORT, false]]);
+  it("installs `onReport` and the public `expire`, run as cooks, and declares `IReceiver`", () => {
+    const { handlers, interfaces, skipped } = packageInstall(CHAIN, "@sauce/oracle");
+    expect(handlers.map((h) => [h.selector, h.readOnly])).toEqual([
+      [ON_REPORT, false],
+      [EXPIRE, false],
+    ]);
+    expect(interfaces).toEqual([ON_REPORT]);
+    expect(skipped).toEqual([]);
   });
 
-  it("the forwarder's ERC-165 check: each of its three calls answers within 30,000 gas, or the Pot is no receiver", async () => {
+  it("skips `onReport` on a chain with no forwarder", () => {
+    const { handlers, skipped } = packageInstall("optimism", "@sauce/oracle");
+    expect(handlers.map((h) => h.selector)).toEqual([EXPIRE]);
+    expect(skipped.map((s) => s.selector)).toEqual(["onReport(bytes,bytes)"]);
+  });
+
+  it("the forwarder's ERC-165 check: each of its three calls answers within 30,000 gas", async () => {
     // Each call is given exactly 30,000 gas, as the forwarder gives it: an answer is one that fit.
-    const [erc165] = await query(IERC165);
-    const [invalid] = await query("0xffffffff");
-    const [wanted] = await query(ON_REPORT);
-    if (receives) {
-      expect([erc165, invalid, wanted]).toEqual([true, false, true]);
-    } else {
-      // No answer within 30,000 gas: the forwarder marks the Pot an invalid receiver for the
-      // report, and never delivers it.
-      expect(erc165 && !invalid && wanted).toBe(false);
-      const id = await request(10n ** 30n);
-      const { result, invalidReceiver } = await transmit(
-        payloadOf(id, true, priceOf(1n)),
-        WORKFLOW_OWNER,
-      );
-      expect([result, invalidReceiver]).toEqual([false, true]);
-    }
+    expect((await query(IERC165))[0]).toBe(true);
+    expect((await query("0xffffffff"))[0]).toBe(false);
+    expect((await query(ON_REPORT))[0]).toBe(true);
+    expect(
+      await publicClient.readContract({
+        address: probe,
+        abi: PROBE.abi,
+        functionName: "supportsInterface",
+        args: [stack.pot, ON_REPORT],
+      }),
+    ).toBe(true);
   });
 
-  it("a report from the workflow asked runs the body with its data, once, for one fee", async () => {
-    const id = await request(4_000n * 10n ** 8n);
-    const kitchen = gateAnchors().kitchen;
-    const kitchenBefore = await publicClient.getBalance({ address: kitchen });
+  itSettling(
+    "a report from the workflow asked runs the body with its data, once, for one fee",
+    async () => {
+      const id = await request(4_000n * 10n ** 8n);
+      const kitchen = gateAnchors().kitchen;
+      const kitchenBefore = await publicClient.getBalance({ address: kitchen });
 
-    expect(await report(payloadOf(id, true, priceOf(3_456n * 10n ** 8n)))).toBe(true);
-    expect(await slot(PRICE_SLOT)).toBe(priceOf(3_456n * 10n ** 8n));
-    expect((await publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
-  });
+      expect(await report(payloadOf(id, true, priceOf(3_456n * 10n ** 8n)))).toBe(true);
+      expect(await slot(PRICE_SLOT)).toBe(priceOf(3_456n * 10n ** 8n));
+      expect((await publicClient.getBalance({ address: kitchen })) - kitchenBefore).toBe(FEE);
+    },
+  );
 
-  itCatching("a failure report runs `.catch` with the workflow's error", async () => {
+  itSettling("a failure report runs `.catch` with the workflow's error", async () => {
     const id = await request(1n);
     const error = toHex("upstream API returned 503");
 
@@ -470,7 +482,7 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
     expect(await slot(ERROR_SLOT)).toBe(keccak256(error));
   });
 
-  itCatching(
+  itSettling(
     "a body that reverts runs `.catch` with its reason, everything it did undone",
     async () => {
       const id = await request(1n);
@@ -482,45 +494,76 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
     },
   );
 
-  it("a report from another workflow owner finds no request, and leaves it waiting", async () => {
-    const id = await request(10n ** 30n);
-    const before = await slot(PRICE_SLOT);
+  itSettling(
+    "a report from another workflow owner finds no request, and leaves it waiting",
+    async () => {
+      const id = await request(10n ** 30n);
+      const before = await slot(PRICE_SLOT);
 
-    await report(payloadOf(id, true, priceOf(1n)), OTHER_OWNER);
-    expect(await slot(PRICE_SLOT)).toBe(before);
+      const other = await delivered(payloadOf(id, true, priceOf(1n)), OTHER_OWNER);
+      expect(other.result).toBe(true);
+      expect(await potLogs(other.hash)).toContainEqual([IGNORED, keyOf(id, OTHER_OWNER)]);
+      expect(await slot(PRICE_SLOT)).toBe(before);
 
-    // The owner's own report still settles it.
-    expect(await report(payloadOf(id, true, priceOf(77n)))).toBe(true);
-    expect(await slot(PRICE_SLOT)).toBe(priceOf(77n));
-  });
+      // The owner's own report still settles it.
+      expect(await report(payloadOf(id, true, priceOf(77n)))).toBe(true);
+      expect(await slot(PRICE_SLOT)).toBe(priceOf(77n));
+    },
+  );
 
-  it("refuses `onReport` from anyone but the forwarder, and leaves the request waiting", async () => {
-    const id = await request(10n ** 30n);
-    const metadata = concat([
-      keccak256(toHex("workflow id")),
-      pad(toHex("prices"), { size: 10, dir: "right" }),
-      WORKFLOW_OWNER,
-      "0x0001",
-    ]);
-    const forged = concat([
-      ON_REPORT,
-      encodeAbiParameters(
-        [{ type: "bytes" }, { type: "bytes" }],
-        [metadata, payloadOf(id, true, priceOf(1n))],
-      ),
-    ]);
-    expect((await send(stranger, stack.pot, forged)).ok).toBe(false);
+  itSettling(
+    "refuses `onReport` from anyone but the forwarder, and leaves the request waiting",
+    async () => {
+      const id = await request(10n ** 30n);
+      const metadata = concat([
+        keccak256(toHex("workflow id")),
+        pad(toHex("prices"), { size: 10, dir: "right" }),
+        WORKFLOW_OWNER,
+        "0x0001",
+      ]);
+      const forged = concat([
+        ON_REPORT,
+        encodeAbiParameters(
+          [{ type: "bytes" }, { type: "bytes" }],
+          [metadata, payloadOf(id, true, priceOf(1n))],
+        ),
+      ]);
+      expect((await send(stranger, stack.pot, forged)).ok).toBe(false);
 
-    expect(await report(payloadOf(id, true, priceOf(88n)))).toBe(true);
-    expect(await slot(PRICE_SLOT)).toBe(priceOf(88n));
-  });
+      expect(await report(payloadOf(id, true, priceOf(88n)))).toBe(true);
+      expect(await slot(PRICE_SLOT)).toBe(priceOf(88n));
+    },
+  );
 
-  it("a second report for a settled request changes nothing", async () => {
+  itSettling("a second report for a settled request changes nothing", async () => {
     const id = await request(10n ** 30n);
     expect(await report(payloadOf(id, true, priceOf(5n)))).toBe(true);
     expect(await slot(PRICE_SLOT)).toBe(priceOf(5n));
 
-    await report(payloadOf(id, true, priceOf(6n)));
+    const again = await delivered(payloadOf(id, true, priceOf(6n)));
+    expect(again.result).toBe(true);
+    expect(await potLogs(again.hash)).toContainEqual([IGNORED, keyOf(id)]);
     expect(await slot(PRICE_SLOT)).toBe(priceOf(5n));
   });
+
+  itSettling(
+    "a request nobody answers in time rejects with Timeout through `expire`, and a late report changes nothing",
+    async () => {
+      const id = await request(10n ** 30n, REQUEST_WITHIN);
+      const expire = concat([EXPIRE, keyOf(id)]);
+      // Before the deadline, refused.
+      expect((await send(stranger, stack.pot, expire, FEE)).ok).toBe(false);
+
+      await testClient.increaseTime({ seconds: 61 });
+      await testClient.mine({ blocks: 1 });
+      const before = await slot(PRICE_SLOT);
+      expect((await send(stranger, stack.pot, expire, FEE)).ok).toBe(true);
+      expect(await slot(ERROR_SLOT)).toBe(keccak256(concat(["0xe6cc9dd0", keyOf(id)])));
+
+      const late = await delivered(payloadOf(id, true, priceOf(9n)));
+      expect(late.result).toBe(true);
+      expect(await potLogs(late.hash)).toContainEqual([IGNORED, keyOf(id)]);
+      expect(await slot(PRICE_SLOT)).toBe(before);
+    },
+  );
 });
