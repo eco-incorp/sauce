@@ -1221,12 +1221,34 @@ to deploy a Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER
 skips without one, in CI too). Its `.catch` cases need an engine built from the compiler's tree:
 on the released v12-evm 1.2.0 a `catch (e)` that READS `e` loses its work.
 
+**Remote messages are `@sauce/remote`** (`src/std/remote/remote.evm.js`, EVM only, on
+`@sauce/async`): `Base.remote(body, { via, gas, replyGas })`, a method every chain's module gives
+every other EVM chain's name (`chain-module.ts`, with both chains' `Link`s from
+`routes/remote-link.ts`: each bridge's contract and its id for the chain, from the registry's
+`hyperlane`, `layerzero`, `metalayer`, `polymer` and their `HYPERLANE_DOMAIN`/`LAYERZERO_EID`/
+`METALAYER_DOMAIN` tables). A message is `abi.encode(program, input)` sent to `ctx.self()` on the
+other chain: a Private Pot has one address on every chain its owner mints it on. A one-way message
+is `program(body)`; with `.then`/`.catch` it is a `Request` whose continuation (compiled for this
+chain) TRAVELS as the input of a program that runs the body there and sends the continuation back
+with `abi.encode(ok, data)`, so nothing is parked. Each leg is quoted on chain when sent and paid
+from the sending Pot. Its handlers (`hyperlane.handler.js` etc., one per bridge callback, LayerZero's
+`allowInitializePath`/`nextNonce` read-only) check the caller is the bridge's registry contract and
+the origin sender is the Pot; Polymer's `deliver(bytes proof)` keys each proven log by its place in
+ERC-7201 `sauce.storage.Remote`. A string a method binds to a `const` is a RUN-TIME value, so the
+bridge name is passed as an argument, never held in a `const`. `test/std/remote/evm.e2e.test.ts`
+runs every bridge on two anvils (chain ids 1 and 8453) against each bridge's OWN code planted at
+its registry address with its storage (`bridges.ts`, fixtures in `test/evm/fixtures/remote/`):
+Hyperlane's Mailbox, LayerZero's EndpointV2 with its SimpleMessageLib, Metalayer's router behind
+its proxy, and Polymer's deployed CrossL2ProverV2 runtime with its sequencer rewritten to a test
+key; gated like `@sauce/async`'s suite.
+
 ## Agent skills
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
 `sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`,
-`sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
+`sauce-remote`, `sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the
+`sauce-examples` index.
 Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents — or a
 contract ABI, a JSON array, that a program beside it imports — and `.mts` runners) and, for six of
 them, `references/`.
