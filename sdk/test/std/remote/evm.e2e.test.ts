@@ -425,6 +425,26 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     120_000,
   );
 
+  // Skipped: await dropped from the compiler (v12 #554). Kept so it can come back if await does.
+  it.skip("runs what follows an await back on Ethereum, once the body ran on Base (await dropped from the compiler, v12 #554)", async () => {
+    const out = await cook(
+      ethereum,
+      `function main(value: Uint256) {
+  await Base.remote(() => {
+    evm.sstore(${slot("awaited.there")}, value);
+  }, { via: "layerzero" });
+  evm.sstore(${slot("awaited.here")}, value + 1);
+}`,
+      [9n],
+    );
+    const [there] = await relayLayerZero(out, ethereumBridges, base, baseBridges);
+    expect(await read(base, "awaited.there")).toBe(9n);
+    expect(await read(ethereum, "awaited.here")).toBe(0n);
+    const back = await base.publicClient.getTransactionReceipt({ hash: there! });
+    await relayLayerZero(back, baseBridges, ethereum, ethereumBridges);
+    expect(await read(ethereum, "awaited.here")).toBe(10n);
+  }, 120_000);
+
   itSettling(
     "runs the .catch back on Ethereum with what the body reverted with on Base",
     async () => {
