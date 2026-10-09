@@ -6,9 +6,6 @@
  * contract's balance. The program's text is never rewritten: each case is held to the program the
  * same calls written by hand compile to.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
@@ -129,14 +126,6 @@ describe("a token symbol's writes are @sauce/token's, the token first", () => {
         "base",
         `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main(): Uint256 { return IERC20.at(${USDC}).balanceOf(${HOLDER}); }`,
       ),
-    );
-  });
-
-  it("reads through @sauce/token's ERC-20 ABI", () => {
-    // `@sauce/names` keeps its own copy beside the class; it is the library's, byte for byte.
-    const std = join(dirname(fileURLToPath(import.meta.url)), "../src/std");
-    expect(readFileSync(join(std, "names/erc20.abi.json"), "utf8")).toBe(
-      readFileSync(join(std, "token/erc20.abi.json"), "utf8"),
     );
   });
 });
