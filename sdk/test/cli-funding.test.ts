@@ -162,7 +162,7 @@ describe("sauce run --fund, refused before anything is sent", () => {
   // wrote it before any funding wraps it, and `thenForm` leaves such a program untouched.
   const hop =
     "Ethereum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to })";
-  it.each([
+  it.skip.each([
     [
       "in an `if` with a statement after it",
       [`  if (amount > 1) {`, `    await ${hop};`, "  }"],
@@ -196,7 +196,7 @@ describe("sauce run --fund, refused before anything is sent", () => {
       "7:3",
     ],
   ])(
-    "--fund on a program with an `await` %s: the compiler's refusal, at the file's line",
+    "--fund on a program with an `await` %s: the compiler's refusal, at the file's line: await dropped from the compiler (v12 #554)",
     async (_name, lines, words, at) => {
       const file = join(work, "awaits.sauce.ts");
       writeFileSync(
@@ -304,7 +304,7 @@ describe("the funding wrapper", () => {
     expect(compileSauceProgram(base, text, { defines: {} }).bytecode.length).toBeGreaterThan(0);
   };
 
-  it("wraps a program that awaits an intent in its `.then` form: the sweep runs where it opens", () => {
+  it.skip("wraps a program that awaits an intent in its `.then` form: the sweep runs where it opens: await dropped from the compiler (v12 #554)", () => {
     const opened =
       "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66, fee: 0 })";
     const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
@@ -320,7 +320,7 @@ describe("the funding wrapper", () => {
     }
   });
 
-  it("leaves a program untouched where the compiler refuses one of its `await`s", () => {
+  it.skip("leaves a program untouched where the compiler refuses one of its `await`s: await dropped from the compiler (v12 #554)", () => {
     const hop =
       "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: to, fee: 0 })";
     const main = (...body: string[]) =>
@@ -347,7 +347,7 @@ describe("the funding wrapper", () => {
     }
   });
 
-  it("moves nothing: the user's statements keep their lines", () => {
+  it.skip("moves nothing: the user's statements keep their lines: await dropped from the compiler (v12 #554)", () => {
     const source = [
       "function main(to: Address, amount: Uint256) {",
       "  await Arbitrum.hop({ send: { token: USDC, amount }, refundee: to, fee: 0 });",
@@ -367,7 +367,7 @@ describe("the funding wrapper", () => {
     );
   });
 
-  it("an `await` is its `.then` form, byte for byte, in a `try`, nested, and in an `if`'s branches", () => {
+  it.skip("an `await` is its `.then` form, byte for byte, in a `try`, nested, and in an `if`'s branches: await dropped from the compiler (v12 #554)", () => {
     const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
     const hop = (chain: string) =>
       `await ${chain}.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to, fee: 0 });`;

@@ -1437,7 +1437,7 @@ describeEvm("intent bodies, executed", () => {
       }
     });
 
-    describe("a `try` around awaited hops handles each body, two and three deep", () => {
+    describe.skip("a `try` around awaited hops handles each body, two and three deep: await dropped from the compiler (v12 #554)", () => {
       // `try { S1; await a; S2 } catch (e) { H }` is each body's `.catch`: the last hop's body
       // reverts, everything it did is undone, and the handler runs there in its place.
       const FALLBACK = "0x0000000000000000000000000000000000000fb2" as Address;
@@ -1459,6 +1459,136 @@ describeEvm("intent bodies, executed", () => {
     ${handler}
   }
 }`;
+
+      /** Fills the one intent `logs` show published, delivering `SEEDED`, and returns the fill. */
+      const fill = async (token: Address, logs: readonly Log[]) => {
+        const [published] = publishedIn(logs);
+        expect(published).toBeDefined();
+        const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.route) as unknown as [
+          EvmRoute,
+        ];
+        await mintTo(token, DEPLOYER.address, SEEDED);
+        const approve = await walletClient.sendTransaction({
+          account: DEPLOYER,
+          chain: null,
+          to: token,
+          data: encodeFunctionData({
+            abi: erc20ApproveAbi,
+            functionName: "approve",
+            args: [portal, SEEDED],
+          }),
+          gas: GAS_LIMIT,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approve });
+        const filled = await fulfilRoute(route, rewardOf(published!).rewardHash);
+        expect(filled.status).toBe("success");
+
+        return filled;
+      };
+
+      for (const depth of [2, 3]) {
+        for (const [name, last, handler, toRecipient, toFallback] of [
+          [
+            "the last body reverts: undone, and the handler forwards",
+            'require(false, "no");',
+            FORWARD,
+            0n,
+            SEEDED,
+          ],
+          ["every body succeeds: the handler never runs", "", FORWARD, 1n, 0n],
+          // `require(false, "no")` reverts with its message's bytes, "no": two of them.
+          [
+            "the handler reads what the last body reverted with",
+            'require(false, "no");',
+            "Token(TOKEN).transfer(FALLBACK, e.length);",
+            0n,
+            2n,
+          ],
+        ] as const) {
+          // Pending the engine: a handler that reads `e` runs on v12-evm 2.0.0, the major that
+          // carries `CATCH_READS` (v12 #553). Against an engine built from #553
+          // (SAUCE_V12_RUNTIME_CREATION_HEX), it passes.
+          (handler === FORWARD ? it : it.failing)(
+            `${depth} hops: ${name}`,
+            async () => {
+              const token = await deploy(MOCK_ERC20.creationCode);
+              const recipient = await balanceOf(token, FINAL_RECIPIENT);
+              const fallback = await balanceOf(token, FALLBACK);
+              const compiled = compileSauceRoute(
+                "base",
+                tried(depth, last, handler),
+                { pot: executorPot, engine: sauce.engine },
+                {
+                  defines: {
+                    TOKEN: BigInt(token),
+                    RECIPIENT: BigInt(FINAL_RECIPIENT),
+                    FALLBACK: BigInt(FALLBACK),
+                  },
+                  intents: {
+                    deadline: 4_000_000_000n,
+                    prover: PROVER,
+                    sourcePortal: portal,
+                    destinationPortal: portal,
+                    pot: executorPot,
+                    engine: sauce.engine,
+                    executionFee: 0n,
+                    salt: `0x${(depth * 16 + (toFallback === 0n ? 1 : toFallback === 2n ? 3 : 2)).toString(16).repeat(32)}` as Hex,
+                  },
+                },
+              );
+              // The first hop, opened from the Pot; then each hop's fill opens the next.
+              let logs = (
+                await fulfil([
+                  {
+                    target: token,
+                    data: encodeFunctionData({
+                      abi: erc20Abi,
+                      functionName: "mint",
+                      args: [executorPot, SEEDED],
+                    }),
+                    value: 0n,
+                  },
+                  {
+                    target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+                    data: compiled.calls[0]!.data,
+                    value: 0n,
+                  },
+                ])
+              ).logs;
+              for (let level = 1; level <= depth; level++) {
+                logs = (await fill(token, logs)).logs;
+              }
+              // As strings: a failed bigint comparison cannot cross jest's worker boundary.
+              expect(String((await balanceOf(token, FINAL_RECIPIENT)) - recipient)).toBe(
+                String(toRecipient),
+              );
+              expect(String((await balanceOf(token, FALLBACK)) - fallback)).toBe(
+                String(toFallback),
+              );
+            },
+            300_000,
+          );
+        }
+      }
+    });
+
+    describe("a handled hop opens another handled hop, two and three deep", () => {
+      // Each hop's `.then(...)` opens the next, and each `.catch(...)` handles its own body: the
+      // last hop's body reverts, everything it did is undone, and the handler runs there in its
+      // place.
+      const FALLBACK = "0x0000000000000000000000000000000000000fb2" as Address;
+      const hop = (amount: string) =>
+        `Base.hop({ send: [{ token: TOKEN, amount: ${amount} }], receive: [{ token: Token(TOKEN), amount: ${amount} }], refundee: 0x3333333333333333333333333333333333333333 })`;
+      const FORWARD = "Token(TOKEN).transfer(FALLBACK, Token(TOKEN).balanceOf(ctx.self()));";
+      const handled = (amount: string, body: string, handler: string): string =>
+        `${hop(amount)}.then(() => {\n${body}\n}).catch((e) => {\n${handler}\n});`;
+      const tried = (depth: number, last: string, handler: string) => {
+        let body = `Token(TOKEN).transfer(RECIPIENT, 1n);\n${last}`;
+        for (let level = depth - 2; level >= 0; level--) {
+          body = `const got${level} = Token(TOKEN).balanceOf(ctx.self());\n${handled(`got${level}`, body, handler)}`;
+        }
+        return `function main() {\nconst amount = Token(TOKEN).balanceOf(ctx.self());\n${handled("amount", body, handler)}\n}`;
+      };
 
       /** Fills the one intent `logs` show published, delivering `SEEDED`, and returns the fill. */
       const fill = async (token: Address, logs: readonly Log[]) => {

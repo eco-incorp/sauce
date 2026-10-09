@@ -659,7 +659,7 @@ Rules and errors:
 - The value form needs exactly `return <constant>;`:
   - "a captured `.catch()` requires exactly `return <constant scalar>;` in its handler";
   - "the `.catch()` fallback must be a constant scalar that fits the declared ABI result width".
-- A long block can be too large ("a .catch() handler compiles to N bytes, over the 254-byte limit — shorten the handler"). Move the work into a
+- A long block can be too large ("a .catch() handler compiles to N bytes, over the 255-byte limit — shorten the handler"). Move the work into a
   function and call it.
 - On anything other than an external EVM call, the compiler rejects it ("a `.catch()` on something other than an
   external contract call …"). On SVM: "`.catch()` is not available on the svm target".
@@ -701,7 +701,7 @@ function main(x: Uint256): Uint256 {
 | `finally`                                                        | `try`/`catch` (§13) for what fails on EVM, and the code after it                                                  |
 | function expressions, nested `function` declarations             | top-level `function` declarations, or an arrow function (§4)                                                      |
 | `enum`, `type` aliases, generics, `namespace`                    | records, `interface`, constants                                                                                   |
-| `async function`, `await` used as a value                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
+| `async function`, `await`                                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
 | default parameters, rest parameters, destructuring parameters    | plain parameters                                                                                                  |
 | object destructuring `const { a } = t`                           | `const a = t.a;`                                                                                                  |
 | spread `[...xs]`, `f(...xs)`                                     | explicit elements, or a loop                                                                                      |
@@ -722,9 +722,6 @@ function main(x: Uint256): Uint256 {
 | computed object keys, object methods                             | plain named fields                                                                                                |
 
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
-
-`await x;` as a statement is JavaScript's: it is `x.then(() => { … })`, the statements after it
-the closure, for a value whose `then` takes one, such as an intent.
 
 ## 15. Limits
 

@@ -3,23 +3,25 @@
 [Documentation](../README.md) · [Create an intent](intents.md) · [Routes API](../api/routes.md)
 
 A nested intent is an intent opened inside another intent's body: a hop from the chain the body
-runs on. In SauceScript the hops read top to bottom, each `await` the next:
+runs on. In SauceScript each hop's `.then` holds the body, which opens the next:
 
 ```js
-await Base.hop({
+Base.hop({
   send: { token: USDC, amount: reward },
   receive: { token: USDC, amount: delivered },
   refundee: refundTo,
+}).then(() => {
+  // On Base, in the fill of the first intent:
+  const payout = delivered - delivered / 1000;
+  Ethereum.hop({
+    send: { token: USDC, amount: delivered },
+    receive: { token: USDC, amount: payout },
+    refundee: refundTo,
+  }).then(() => {
+    // On Ethereum, in the fill of the second:
+    USDC.transfer(recipient, payout);
+  });
 });
-// On Base, in the fill of the first intent:
-const payout = delivered - delivered / 1000;
-await Ethereum.hop({
-  send: { token: USDC, amount: delivered },
-  receive: { token: USDC, amount: payout },
-  refundee: refundTo,
-});
-// On Ethereum, in the fill of the second:
-USDC.transfer(recipient, payout);
 ```
 
 When a solver fills the outer intent, its body runs on Base, and in that same fulfilment it pays the
@@ -101,20 +103,22 @@ into the Pot itself:
 // Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
-  await Base.hop({
+  Base.hop({
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
+  }).then(() => {
+    // On Base, in the fill of the outer intent.
+    const payout = delivered - delivered / 1000;
+    Ethereum.hop({
+      send: { token: USDC, amount: delivered },
+      receive: { token: USDC, amount: payout },
+      refundee: refundTo, // every intent a program opens names its refundee
+    }).then(() => {
+      // On Ethereum, in the fill of the inner one.
+      USDC.transfer(recipient, payout);
+    });
   });
-  // On Base, in the fill of the outer intent.
-  const payout = delivered - delivered / 1000;
-  await Ethereum.hop({
-    send: { token: USDC, amount: delivered },
-    receive: { token: USDC, amount: payout },
-    refundee: refundTo, // every intent a program opens names its refundee
-  });
-  // On Ethereum, in the fill of the inner one.
-  USDC.transfer(recipient, payout);
 }
 ```
 
@@ -212,22 +216,24 @@ function main(
   minOut: Uint256,
   refundTo: Address,
 ) {
-  await Base.hop({
+  Base.hop({
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
+  }).then(() => {
+    // On Base: buy WETH with what was delivered, and hop on with it.
+    const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
+    const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
+    const payout = bought - bought / 1000;
+    Ethereum.hop({
+      send: { token: WETH, amount: bought },
+      receive: { token: WETH, amount: payout },
+      refundee: refundTo,
+    }).then(() => {
+      // On Ethereum.
+      WETH.transfer(recipient, payout);
+    });
   });
-  // On Base: buy WETH with what was delivered, and hop on with it.
-  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
-  const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
-  const payout = bought - bought / 1000;
-  await Ethereum.hop({
-    send: { token: WETH, amount: bought },
-    receive: { token: WETH, amount: payout },
-    refundee: refundTo,
-  });
-  // On Ethereum.
-  WETH.transfer(recipient, payout);
 }
 ```
 
@@ -269,13 +275,13 @@ its own.
 ## Three levels
 
 Hops chain as far as you write them. Three, each paying the next what it was delivered: to Base,
-then Ethereum, then back to Base, each line after an `await` running on the chain it hopped to. It
+then Ethereum, then back to Base, each body running on the chain it hopped to. It
 is published like the file above, by a cook on your Pot on Ethereum
 ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) compiles it):
 
 ```js
-// Three hops, one `await` each: Base, then Ethereum, then Base again. The code after each `await`
-// runs on the chain it hopped to, in the fill of that hop, and opens the next.
+// Three hops, each opened in the body of the one before: Base, then Ethereum, then Base again. Each
+// body runs on the chain it hopped to, in the fill of that hop, and opens the next.
 // All of it is SauceScript, opened on Ethereum and published by a cook on your Pot:
 //   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum --keystore <keystore> \
 //     --fund USDC:<amount> --args <recipient> <delivered> <reward> <refundTo>
@@ -300,27 +306,30 @@ is published like the file above, by a cook on your Pot on Ethereum
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
 // Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
-  await Base.hop({
+  Base.hop({
     send: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
+  }).then(() => {
+    // On Base, in the fill of the first hop.
+    const second = delivered - delivered / 1000;
+    Ethereum.hop({
+      send: { token: USDC, amount: delivered },
+      receive: { token: USDC, amount: second },
+      refundee: refundTo,
+    }).then(() => {
+      // On Ethereum, in the fill of the second.
+      const third = second - second / 1000;
+      Base.hop({
+        send: { token: USDC, amount: second },
+        receive: { token: USDC, amount: third },
+        refundee: refundTo,
+      }).then(() => {
+        // On Base again, in the fill of the third.
+        USDC.transfer(recipient, third);
+      });
+    });
   });
-  // On Base, in the fill of the first hop.
-  const second = delivered - delivered / 1000;
-  await Ethereum.hop({
-    send: { token: USDC, amount: delivered },
-    receive: { token: USDC, amount: second },
-    refundee: refundTo,
-  });
-  // On Ethereum, in the fill of the second.
-  const third = second - second / 1000;
-  await Base.hop({
-    send: { token: USDC, amount: second },
-    receive: { token: USDC, amount: third },
-    refundee: refundTo,
-  });
-  // On Base again, in the fill of the third.
-  USDC.transfer(recipient, third);
 }
 ```
 

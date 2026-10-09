@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 import { sauceScriptTsconfig } from "../src/cli/skills.js";
+import { AWAIT_SUPPORTED } from "../src/plugin/await.js";
 import { sauceScriptDeclarations } from "../src/sauce-script/declarations.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +38,6 @@ const plugin = createRequire(import.meta.url)("../sauce-script/ts-plugin.cjs") a
   isFalsePositive(
     diagnostic: ts.Diagnostic,
     flatten: typeof ts.flattenDiagnosticMessageText,
-    typescript?: typeof ts,
   ): boolean;
 };
 
@@ -154,15 +154,14 @@ describe("SauceScript in an editor", () => {
     const bare = service(textOf(CORPUS), false);
     const left = CORPUS.flatMap((file) => bare.getSemanticDiagnostics(file));
     expect(left.length).toBeGreaterThan(0);
-    // Each is a bigint index, a number beside a bigint or an `await` with no `async` — and the
-    // plugin says so of every one.
+    // Each is a bigint index or a number beside a bigint — and the plugin says so of every one.
     for (const diagnostic of left) {
-      expect([2538, 2365, 2367, 2322, 2345, 1308]).toContain(diagnostic.code);
-      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText, ts)).toBe(true);
+      expect([2538, 2365, 2367, 2322, 2345]).toContain(diagnostic.code);
+      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText)).toBe(true);
     }
   });
 
-  it("takes an `await` in main's body, a body a call takes, a `try` or an `if` there, and nowhere else", () => {
+  it.skip("takes an `await` in main's body, a body a call takes, a `try` or an `if` there, and nowhere else: await dropped from the compiler (v12 #554)", () => {
     const file = join(work, "awaited.sauce.ts");
     const opened =
       "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x44 })";
@@ -197,6 +196,20 @@ describe("SauceScript in an editor", () => {
     ]) {
       expect(codes(body)).toEqual([1308]);
     }
+  });
+
+  it("keeps `await` off, as the compiler has none, and leaves TypeScript's error on one", () => {
+    // The one switch (`plugin/await.ts`, the manifest's `awaitSupported`): flip it with a compiler that
+    // takes `await`, and the skipped tests named for v12 #554 come back.
+    expect(AWAIT_SUPPORTED).toBe(false);
+    const file = join(work, "awaited.sauce.ts");
+    const opened =
+      "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x44 })";
+    const body = `function main() {\n  await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`;
+    const codes = service({ [file]: body })
+      .getSemanticDiagnostics(file)
+      .map((diagnostic) => diagnostic.code);
+    expect(codes).toContain(1308);
   });
 
   it("types a chain's name as its id, beside its Portal and namespaces", () => {

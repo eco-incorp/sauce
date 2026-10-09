@@ -3141,7 +3141,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
       ),
       "",
-      "An intent is published from a file that opens one (`await Base.hop({ … })`),",
+      "An intent is published from a file that opens one (`Base.hop({ … }).then(…)`),",
       "and every later verb takes it as published: its hash once the store keeps it (`publish`, `fill`",
       "and `import` store every intent they touch: --store, default ~/.sauce/intents), or --tx, the",
       "transaction that published it, on --chain. With no verb, at a terminal: a list of the",
