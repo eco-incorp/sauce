@@ -27,7 +27,7 @@
 //                       returns
 //   settleCarried       the same for a protocol that carries the continuation in its message
 //   promiseKey, salt    a promise's key: a protocol's id under its tag, or one the Pot picks
-//   park, run, winner  the settlement table's parts, for a package that needs them directly
+//   park, run, received the settlement table's parts, for a package that needs them directly
 //   requireCaller, requireSelf  a handler's checks
 //   install, declareInterface   what installing a package's handlers on the Pot calls
 //   isValidSignature, Erc1271   the Pot as an ERC-1271 signer: a hash a program approved, or its
@@ -73,20 +73,19 @@
 // address of the code that keeps it in bits 0..159; a word or less is in the next slot, as a
 // number, those bits zero and its length in bytes at bits 168..173.
 //
-// Every continuation is compiled with `program((input: bytes, mode: Uint256) => …, { continuation:
-// chainId })`: the SDK compiles it for that chain's names and reports it as a continuation
-// (`continuations`), not as an intent's body, since nothing opens an intent for it. It is run with
-// what settled it, the value or the reason, and how, 2 fulfilled or 3 rejected, appended as its
-// parameters: `code ++ captured words ++ abi.encode(input, mode)`.
+// Every continuation is compiled with `program(closure, { continuation: chainId })`: the SDK
+// compiles it for that chain's names and reports it as a continuation (`continuations`), not as an
+// intent's body, since nothing opens an intent for it.
 //
 // SETTLING. `fulfil(key, value)` and `reject(key, reason)` clear the promise, then run its
 // continuation inside the handler's own cook (`evm.delegate` into the in-flight engine: no second
-// cook, no second fee), handing it what arrived as its parameters, which the request's `deliver`
-// decodes into the body's parameters. The body's revert is caught at that call: everything it did
-// is undone and, with a `.catch`, the continuation runs again for the catch with the revert's data
-// (its first 256 bytes). A promise rejected with no `.catch`, or whose `.catch` reverts, is logged
-// unhandled. Either way the callback RETURNS: a protocol that retries a failed delivery must not
-// retry forever, and a late or duplicate callback is no failure of the protocol's.
+// cook, no second fee), handing it what arrived through transient storage, which `received()`
+// reads and the request's `deliver` decodes into the body's parameters. The body's revert is caught
+// at that call: everything it did is undone and, with a `.catch`, the continuation runs again for
+// the catch with the revert's data (its first 256 bytes). A promise rejected with no `.catch`, or
+// whose `.catch` reverts, is logged unhandled. Either way the callback RETURNS: a protocol that
+// retries a failed delivery must not retry forever, and a late or duplicate callback is no failure
+// of the protocol's.
 //
 // EVENTS, from the Pot: `PromisePending(bytes32 indexed key, uint256 deadline)` when a promise is
 // parked (how a later transaction learns a deferred's key), `PromiseSettled(bytes32 indexed key,
@@ -123,8 +122,12 @@
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.Async")) - 1)) & ~bytes32(uint256(0xff)).
 const SAUCE_ASYNC_NAMESPACE = 0x4dfff1aabf079bde1221d3a9fbfbe12f9d81161876e97fa9b85215e9f7a8b300;
 
-// Transient storage (EIP-1153), the Pot's in every frame of the transaction. Which child settled a
-// race or an any, `keccak256("sauce.async.index")`.
+// Transient storage (EIP-1153), the Pot's in every frame of the transaction. What a settlement
+// hands its continuation, `keccak256("sauce.async.received")`: its length, then its words.
+const SAUCE_ASYNC_RECEIVED = 0xe0834bde068556530c4cc9d3e560d8055ab88b322f2d933c8fac9a037dbe690e;
+// How it settled, `keccak256("sauce.async.mode")`: 2 fulfilled, 3 rejected.
+const SAUCE_ASYNC_MODE = 0x93281666bb76cfd6e9531316fbd9a988b1822676b7d07d7f32d40d855f438c9d;
+// Which child settled a race or an any, `keccak256("sauce.async.index")`.
 const SAUCE_ASYNC_INDEX = 0x58535832c2900ad8740d61598b790aecc898c95082de61b7d5227f24e856e89e;
 // How many keys this transaction has picked, `keccak256("sauce.async.salt")`.
 const SAUCE_ASYNC_SALT = 0x075e4a5084d2dc043a0243230720d8dd0648fb9056883a1705a9af977d762a05;
@@ -342,18 +345,47 @@ function takeRecord(key: Uint256, state: Uint256): bytes {
 
 // ---- what arrives -------------------------------------------------------------------------------
 
+// Hold `input` and how it settled where the continuation reads them, in every frame of the cook.
+function hand(input: bytes, mode: Uint256): void {
+  const length = input.length;
+  evm.tstore(SAUCE_ASYNC_RECEIVED, length);
+  evm.tstore(SAUCE_ASYNC_MODE, mode);
+  // Whole words: the last one padded with zeros.
+  const padded = input.concat(hex`00000000000000000000000000000000000000000000000000000000000000`);
+  for (let i = 0; i * 32 < length; i += 1) {
+    const [w] = abi.decode(padded.slice(i * 32, i * 32 + 32), ["Uint256"]);
+    evm.tstore(SAUCE_ASYNC_RECEIVED + 1 + i, w);
+  }
+}
+
+// In a running continuation: what settled it, the value or the reason. Empty anywhere else.
+export function received(): bytes {
+  const length = evm.tload(SAUCE_ASYNC_RECEIVED);
+  let out = hex``;
+  for (let i = 0; i * 32 < length; i += 1) {
+    const w = evm.tload(SAUCE_ASYNC_RECEIVED + 1 + i);
+    out = out.concat(w.toBytesBe(32));
+  }
+  return out.slice(0, length);
+}
+
+// In a running continuation: whether it runs for a fulfilment (true) or a rejection.
+export function fulfilled(): bool {
+  return evm.tload(SAUCE_ASYNC_MODE) == SAUCE_ASYNC_FULFILLED;
+}
+
 // In a race's or an any's continuation: the child that settled it.
 export function winner(): Uint256 {
   return evm.tload(SAUCE_ASYNC_INDEX);
 }
 
 // Run `program` as this Pot, writable, inside the cook in flight — no second cook, no second fee —
-// handing it `input` as a fulfilment: a continuation, `program((input: bytes, mode: Uint256) =>
-// …)`, run with `abi.encode(input, 2)` appended. Answers what it returns.
+// handing it `input` as a fulfilment, which it reads with `received()`. Answers what it returns.
 // For a continuation a protocol carried and no table holds; a handler calls it only after it has
 // authenticated its caller, since the program runs with everything the Pot holds.
 export function run(program: bytes, input: bytes): bytes {
-  return evm.delegate(inFlightEngine(), program.concat(abi.encode(input, SAUCE_ASYNC_FULFILLED)));
+  hand(input, SAUCE_ASYNC_FULFILLED);
+  return evm.delegate(inFlightEngine(), program);
 }
 
 // ---- settling -----------------------------------------------------------------------------------
@@ -409,12 +441,11 @@ function runSettled(
   let failed = 0;
   let reason = input;
   if (state == SAUCE_ASYNC_FULFILLED) {
-    evm
-      .delegate(inFlightEngine(), program.concat(abi.encode(input, SAUCE_ASYNC_FULFILLED)))
-      .catch((e) => {
-        failed = 1;
-        reason = e;
-      });
+    hand(input, SAUCE_ASYNC_FULFILLED);
+    evm.delegate(inFlightEngine(), program).catch((e) => {
+      failed = 1;
+      reason = e;
+    });
     if (failed == 0) {
       return;
     }
@@ -424,12 +455,11 @@ function runSettled(
     return;
   }
   failed = 0;
-  evm
-    .delegate(inFlightEngine(), program.concat(abi.encode(reason, SAUCE_ASYNC_REJECTED)))
-    .catch((e) => {
-      failed = 1;
-      reason = e;
-    });
+  hand(reason, SAUCE_ASYNC_REJECTED);
+  evm.delegate(inFlightEngine(), program).catch((e) => {
+    failed = 1;
+    reason = e;
+  });
   if (failed == 1) {
     log(abi.encode(reason), SAUCE_ASYNC_UNHANDLED, key);
   }
@@ -840,23 +870,23 @@ export class Request {
     // With no handler, a rejection reverts the run, which the settlement logs unhandled: a carried
     // continuation is run for a rejection too, whatever it handles.
     if (handler === undefined) {
-      return (input: bytes, mode: Uint256) => {
-        if (mode == 2) {
-          deliver(input, body, (reason) => {
+      return () => {
+        if (fulfilled()) {
+          deliver(received(), body, (reason) => {
             revert(reason);
           });
         } else {
-          revert(input);
+          revert(received());
         }
       };
     }
-    return (input: bytes, mode: Uint256) => {
-      if (mode == 2) {
-        deliver(input, body, (reason) => {
+    return () => {
+      if (fulfilled()) {
+        deliver(received(), body, (reason) => {
           revert(reason);
         });
       } else {
-        handler(input);
+        handler(received());
       }
     };
   }
@@ -865,8 +895,8 @@ export class Request {
   // combinator `joinKey`, and the request is made with it.
   _join(joinKey, index, settles) {
     const child = program(
-      (input: bytes, mode: Uint256) => {
-        childSettled(joinKey, index, mode, input);
+      () => {
+        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
       },
       { continuation: this._chainId() },
     );
@@ -978,21 +1008,21 @@ class Deferred {
     const continuation =
       handler === undefined
         ? program(
-            (input: bytes, mode: Uint256) => {
-              if (mode == 2) {
-                body(input);
+            () => {
+              if (fulfilled()) {
+                body(received());
               } else {
-                revert(input);
+                revert(received());
               }
             },
             { continuation: chainId },
           )
         : program(
-            (input: bytes, mode: Uint256) => {
-              if (mode == 2) {
-                body(input);
+            () => {
+              if (fulfilled()) {
+                body(received());
               } else {
-                handler(input);
+                handler(received());
               }
             },
             { continuation: chainId },
@@ -1011,8 +1041,8 @@ class Deferred {
   }
   _join(joinKey, index, settles) {
     const child = program(
-      (input: bytes, mode: Uint256) => {
-        childSettled(joinKey, index, mode, input);
+      () => {
+        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
       },
       { continuation: chainId },
     );
@@ -1098,30 +1128,30 @@ class Join {
     };
     const settledBody =
       kind == SAUCE_ASYNC_ALL
-        ? (input) => {
+        ? () => {
             Fold.all(children, 0, undefined, joinKey, body, fail);
           }
         : kind == SAUCE_ASYNC_ALL_SETTLED
-          ? (input) => {
+          ? () => {
               Fold.settled(children, 0, Lists.empty(), joinKey, body);
             }
-          : (input) => {
-              Fold.first(children, 0, winner(), input, body, fail);
+          : () => {
+              Fold.first(children, 0, winner(), received(), body, fail);
             };
     if (handler === undefined) {
-      return (input: bytes, mode: Uint256) => {
-        if (mode == 2) {
-          settledBody(input);
+      return () => {
+        if (fulfilled()) {
+          settledBody();
         } else {
-          revert(input);
+          revert(received());
         }
       };
     }
-    return (input: bytes, mode: Uint256) => {
-      if (mode == 2) {
-        settledBody(input);
+    return () => {
+      if (fulfilled()) {
+        settledBody();
       } else {
-        handler(input);
+        handler(received());
       }
     };
   }

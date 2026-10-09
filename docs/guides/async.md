@@ -132,7 +132,7 @@ checks its receiver before it calls back.
 | `requireCaller(expected, actual)`, `requireSelf(sender)`                             | A handler's checks: the protocol called; this Pot sent the message.        |
 | `expire(key)`                                                                        | Reject a promise past its deadline with `Timeout(bytes32)`.                |
 | `install(selector, program, readOnly)`, `declareInterface(id, supported)`            | What installing a package's handlers calls.                                |
-| `winner()`                                                                           | In a race's or an any's continuation: the child that settled it.           |
+| `received()`, `fulfilled()`                                                          | In a running body: what settled it, and how.                               |
 | `park`, `run`, `salt`, `isPending`                                                   | The settlement table's parts, for a package that needs them directly.      |
 | `Erc1271.approve(hash)`, `Erc1271.revoke(hash)`, `isValidSignature(hash, signature)` | The Pot as an ERC-1271 signer (above).                                     |
 
