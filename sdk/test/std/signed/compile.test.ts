@@ -18,7 +18,7 @@ import {
   type Hex,
 } from "viem";
 
-import { packageHandlers } from "../../../src/routes/handlers.js";
+import { packageHandlers, packageReader } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
   SIGNED_NAMESPACE,
@@ -82,7 +82,6 @@ describe("what the library writes out by hand", () => {
       "SAUCE_SIGNED_EXECUTIONS",
       "Executions(Execution[] executions)Execution(uint256 chainId,bytes program,bytes32 salt,uint256 deadline)",
     ],
-    ["SAUCE_SIGNED_MESSAGE", "PotMessage(bytes32 hash)"],
     ["SAUCE_SIGNED_CANCELLED", "SaltsCancelled(uint256,uint256)"],
   ])("%s is keccak256 of %s", (name, text) => {
     expect(constant(name)).toBe(keccak256(toHex(text)));
@@ -141,9 +140,21 @@ describe("the handlers", () => {
     });
   });
 
+  it("isValidSignature is @sauce/async's one ERC-1271 handler, byte for byte", () => {
+    const declared = MANIFEST.handlers.find(
+      ({ selector }) => selector === "isValidSignature(bytes32,bytes)",
+    );
+    expect(declared?.program).toBe("@sauce/async/erc1271.handler.js");
+    const ours = packageHandlers("base", "@sauce/signed").find(
+      ({ signature }) => signature === "isValidSignature(bytes32,bytes)",
+    );
+    const core = compile(packageReader("@sauce/signed")(declared!.program)!);
+    expect(hex(ours!.bytecode)).toBe(hex(core.bytecode));
+  });
+
   it("each handler reads `main(caller, value, data)`", () => {
     for (const { program } of MANIFEST.handlers) {
-      const handler = compile(readFileSync(join(DIR, program), "utf8"));
+      const handler = compile(packageReader("@sauce/signed")(program)!);
       expect(handler.entryParams.map((p) => p.type)).toEqual(["Address", "Uint256", "bytes"]);
     }
   });
@@ -250,6 +261,44 @@ describe("the SDK's side", () => {
     );
     expect(() => encodeExecuteAcross({ pot: POT, executions, signature: "0x" }, 10)).toThrow(
       "the signature runs nothing on chain 10",
+    );
+  });
+
+  it("signs the PotMessage the core's ERC-1271 handler checks, under this package's domain", () => {
+    const core = readFileSync(join(process.cwd(), "src", "std", "async", "async.evm.js"), "utf8");
+    const coreConstant = (name: string): string =>
+      new RegExp(`const ${name} = (0x[0-9a-f]{64});`).exec(core)![1]!;
+    expect(coreConstant("SAUCE_ERC1271_DOMAIN")).toBe(constant("SAUCE_SIGNED_DOMAIN"));
+    expect(coreConstant("SAUCE_ERC1271_NAME")).toBe(constant("SAUCE_SIGNED_NAME"));
+    expect(coreConstant("SAUCE_ERC1271_VERSION")).toBe(constant("SAUCE_SIGNED_VERSION"));
+    expect(coreConstant("SAUCE_ERC1271_HALF_ORDER")).toBe(constant("SAUCE_SIGNED_HALF_ORDER"));
+    const hash = keccak256(toHex("permit"));
+    const domain = keccak256(
+      encodeAbiParameters(
+        [
+          { type: "bytes32" },
+          { type: "bytes32" },
+          { type: "bytes32" },
+          { type: "uint256" },
+          { type: "address" },
+        ],
+        [
+          coreConstant("SAUCE_ERC1271_DOMAIN") as Hex,
+          coreConstant("SAUCE_ERC1271_NAME") as Hex,
+          coreConstant("SAUCE_ERC1271_VERSION") as Hex,
+          8453n,
+          POT,
+        ],
+      ),
+    );
+    const message = keccak256(
+      encodeAbiParameters(
+        [{ type: "bytes32" }, { type: "bytes32" }],
+        [coreConstant("SAUCE_ERC1271_MESSAGE") as Hex, hash],
+      ),
+    );
+    expect(hashTypedData(potMessageTypedData({ pot: POT, chainId: 8453, hash }))).toBe(
+      keccak256(`0x1901${domain.slice(2)}${message.slice(2)}`),
     );
   });
 

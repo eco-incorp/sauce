@@ -733,6 +733,39 @@ function main(token: Address, spender: Address): void {
       expect(await balanceOf(stack.pot)).toBe(400n);
     });
 
+    it("is @sauce/async's one handler: a hash a program the owner signed approved is valid too", async () => {
+      const approved = keccak256(toHex("an order the Pot placed"));
+      expect(await isValid("0x")).toEqual({ ok: true, result: NOT });
+      const before = await callOf(
+        STRANGER.address,
+        stack.pot,
+        encodeFunctionData({
+          abi: potAbi,
+          functionName: "isValidSignature",
+          args: [approved, "0x"],
+        }),
+      );
+      expect(before).toEqual({ ok: true, result: NOT });
+      // The owner signs a program approving it, and a stranger submits it.
+      const approving = `import { Erc1271 } from "@sauce/async";
+function main(hash: Uint256): void {
+  Erc1271.approve(hash);
+}`;
+      const execution = await executionOf(compiled(approving, [BigInt(approved)]));
+      const data = encodeExecute({ ...execution, signature: await signExecute(execution) });
+      expect((await send(stranger, stack.pot, data)).ok).toBe(true);
+      const after = await callOf(
+        STRANGER.address,
+        stack.pot,
+        encodeFunctionData({
+          abi: potAbi,
+          functionName: "isValidSignature",
+          args: [approved, "0x"],
+        }),
+      );
+      expect(after).toEqual({ ok: true, result: MAGIC });
+    });
+
     it("answers for a contract wallet owner through its own EIP-1271", async () => {
       // The wallet's Pot from the suite above is installed already; read it fresh here.
       const deployed = await send(

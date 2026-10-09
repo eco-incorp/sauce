@@ -47,22 +47,19 @@
 // domain on each. The caller submits this chain's execution and the EIP-712 hash of every one, in
 // the order signed, and the index of this chain's: the Pot hashes its own and checks it sits there.
 //
-// THE POT AS A SIGNER. `isValidSignature(bytes32 hash, bytes signature)`, registered as a VIEW (a
-// static run with no fee), answers EIP-1271 for the Pot with its owner's signature over
-//
-//   domain      { name: "Sauce Pot", version: "1", chainId, verifyingContract: the Pot }
-//   PotMessage  { hash: bytes32 }
-//
-// and never over `hash` itself: a signature the owner made for its own account, or for another Pot
-// it owns, is no signature of this Pot's, so a Permit2 permit signed for one is never spent from
-// the other. Permit2, and any contract that checks signatures with EIP-1271, then takes the Pot as
-// a signer.
+// THE POT AS A SIGNER. The package also declares `isValidSignature(bytes32 hash, bytes signature)`,
+// a view: @sauce/async's one ERC-1271 handler (`@sauce/async/erc1271.handler.js`), which every
+// package that needs the Pot to sign declares and which is installed once. It answers for the
+// owner's signature over `PotMessage { hash: bytes32 }` under the Pot's domain above (never over
+// `hash` itself), and for a hash a program running as the Pot approved. Its digest is @sauce/async's
+// `potMessageDigest`, and the domain is this package's: the same constants, held equal by the SDK's
+// tests.
 //
 // The calls are written out, selector and arguments, as the Pot declares them: `owner()`
 // (0x8da5cb5b) and `inFlightEngine()` (0x9fd004e1), EIP-1271's `isValidSignature(bytes32,bytes)`
-// (0x1626ba7e) and this package's own `execute(bytes,bytes32,uint256,bytes)` (0x82bf0988) and
-// `executeAcross(bytes,bytes32,uint256,bytes32[],uint256,bytes)` (0xdf288b73). The SDK's tests
-// derive each from its signature, and each EIP-712 hash from its type.
+// (0x1626ba7e), which a contract owner answers, and this package's own
+// `execute(bytes,bytes32,uint256,bytes)` (0x82bf0988), which `submit` calls. The SDK's tests derive
+// each from its signature, and each EIP-712 hash from its type.
 
 // The ERC-7201 namespace of the salt bitmap, in the Pot's storage:
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.Signed")) - 1)) & ~bytes32(uint256(0xff)).
@@ -83,8 +80,6 @@ const SAUCE_SIGNED_EXECUTE = 0x89e03dcfdebad3c03a97fd75644f624e7003c04209b5a9ff2
 const SAUCE_SIGNED_EXECUTION = 0x9859a820c2b89e30fbe7395e35a8eaf6d4e0bf861940d81f63f85eb813bd1f43;
 // Executions(Execution[] executions)Execution(uint256 chainId,bytes program,bytes32 salt,uint256 deadline)
 const SAUCE_SIGNED_EXECUTIONS = 0xba0c072019a30ebf425f382274e4c73194ddb72abaadf0fc36009f9a7240bfc9;
-// PotMessage(bytes32 hash)
-const SAUCE_SIGNED_MESSAGE = 0x285c77bc77dfca76b6f099853b19373bb19a687adfc951011417a67ac42dded3;
 
 // The event `cancel` and `invalidate` log, from the Pot: SaltsCancelled(uint256 indexed word,
 // uint256 mask).
@@ -150,12 +145,6 @@ export function acrossDigest(executions: Uint256[]): Uint256 {
   );
 }
 
-// What the owner signs for the Pot to answer EIP-1271 for `hash`: `hash` bound to this Pot and this
-// chain, so no signature the owner made for anything else is one of the Pot's.
-export function messageDigest(hash: Uint256): Uint256 {
-  return typedDigest(domainSeparator(), crypto.keccak256(abi.encode(SAUCE_SIGNED_MESSAGE, hash)));
-}
-
 // ---- who signed -----------------------------------------------------------------------------------
 
 // The Pot's owner, who signs for it.
@@ -219,9 +208,8 @@ export function cancel(salt: Uint256): void {
 
 // ---- running --------------------------------------------------------------------------------------
 //
-// `execute`, `executeAcross` and `isValidSignature` are each written FLAT, every check inline: a
-// call into a helper costs the engine a frame, and the three are what the Pot's handlers run on
-// every call. The helpers above compute the same values for a program that wants one of them.
+// `execute` and `executeAcross` are each written FLAT, every check inline: a call into a helper
+// costs the engine a frame, and the two are what the Pot's handlers run on every call. The helpers above compute the same values for a program that wants one of them.
 
 // `execute`: run `program` as this Pot, in the cook in flight, when the Pot's owner signed it for
 // this Pot on this chain (`executeDigest`) with `signature`, before `deadline`, under a `salt` not
@@ -327,44 +315,6 @@ export function executeAcross(
   evm.sstore(slot, used | bit);
   const [engine] = abi.decode(evm.static(ctx.self(), hex`9fd004e1`), ["Address"]);
   return evm.delegate(engine, program);
-}
-
-// EIP-1271's answer for the Pot: `isValidSignature`'s magic value, left-aligned, when the owner
-// signed `hash` for this Pot (`messageDigest`), and 0xffffffff otherwise.
-export function isValidSignature(hash: Uint256, signature: bytes): Uint256 {
-  const digest = crypto.keccak256(
-    hex`1901`.concat(
-      abi.encode(
-        crypto.keccak256(
-          abi.encode(
-            SAUCE_SIGNED_DOMAIN,
-            SAUCE_SIGNED_NAME,
-            SAUCE_SIGNED_VERSION,
-            ctx.chainId(),
-            ctx.self(),
-          ),
-        ),
-        crypto.keccak256(abi.encode(SAUCE_SIGNED_MESSAGE, hash)),
-      ),
-    ),
-  );
-  const [signer] = abi.decode(evm.static(ctx.self(), hex`8da5cb5b`), ["Address"]);
-  let valid = false;
-  if (signature.length == 65) {
-    const s = signature.slice(32, 64).toBe();
-    const v = signature.slice(64, 65).toBe();
-    if (s <= SAUCE_SIGNED_HALF_ORDER && (v == 27 || v == 28)) {
-      valid = crypto.ecdsaVerify(digest, signature, signer);
-    }
-  }
-  if (!valid && ctx.codeSize(signer) > 0) {
-    const answer = evm.static(signer, hex`1626ba7e`.concat(abi.encode(digest, signature)));
-    valid = answer.length >= 32 && answer.slice(0, 4).toBe() == 0x1626ba7e;
-  }
-  if (valid) {
-    return 0x1626ba7e00000000000000000000000000000000000000000000000000000000;
-  }
-  return 0xffffffff00000000000000000000000000000000000000000000000000000000;
 }
 
 // ---- submitting -----------------------------------------------------------------------------------
