@@ -255,7 +255,15 @@ export function linesMatching(text: string, query: string, limit = 40): string {
 /** Where each agent reads skills from, per the `sauce skills` command (the one source). */
 const INSTALL_AGENTS = ["claude", "codex", "cursor", "copilot", "gemini", "agents-md"] as const;
 
-export function registerSkillTools(server: McpServer, root: string = PACKAGED_SKILLS): void {
+/**
+ * Registers the skill tools, serving the skills under `root`. `newerVersion` is the update check's
+ * newer version, which `sauce_skills` returns as `latest` beside the version it runs.
+ */
+export function registerSkillTools(
+  server: McpServer,
+  root: string = PACKAGED_SKILLS,
+  newerVersion?: () => string | undefined,
+): void {
   const skills = shippedSkills(root);
   const { name: packageName, version } = packageInfo();
   const bytes = (path: string): number => statSync(join(root, path)).size;
@@ -266,7 +274,8 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
       title: "List the Sauce agent skills",
       description:
         "Lists every agent skill this server carries: each skill's name, when to use it, and " +
-        "its files with their sizes, with the package and version they belong to. Start here " +
+        "its files with their sizes, with the package and version they belong to (and `latest`, " +
+        "when a newer version of the package is published). Start here " +
         "before writing a Sauce program: read sauce-overview first, then the skill the task " +
         "needs, with sauce_skill (which can return one section, or the lines matching a term, " +
         "of a large file). A skill with many references (one document per protocol) lists a " +
@@ -277,13 +286,17 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
       outputSchema: z.looseObject({
         package: z.string(),
         version: z.string(),
+        latest: z.string().optional(),
         skills: z.array(z.looseObject({ name: z.string(), description: z.string() })),
       }),
     },
-    () =>
-      json({
+    () => {
+      const latest = newerVersion?.();
+
+      return json({
         package: packageName,
         version,
+        ...(latest === undefined ? {} : { latest }),
         index: SKILLS_INDEX,
         skills: skills.map((skill) => {
           const files = skill.files.map((file) => ({
@@ -315,7 +328,8 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
               : {}),
           };
         }),
-      }),
+      });
+    },
   );
 
   server.registerTool(
