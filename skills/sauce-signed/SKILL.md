@@ -210,7 +210,9 @@ there.
 ## The Pot as a signer
 
 `isValidSignature(hash, signature)` answers EIP-1271's magic value when the owner signed `hash` for
-this Pot. The owner signs `hash` bound to the Pot, never `hash` itself:
+this Pot. It is the Pot's one EIP-1271 handler, `@sauce/async`'s, which this package installs, and
+which also answers for a hash a program running as the Pot approved (`Erc1271.approve(hash)`, in
+`sauce-async`). The owner signs `hash` bound to the Pot, never `hash` itself:
 
 ```json
 {
@@ -247,8 +249,8 @@ Measured on a local chain, a program that returns a number, whole transactions:
 | the owner cooks the program itself                 | ~48,000  |
 | `execute`, the salt's word new to the Pot          | ~138,000 |
 | `execute`, the salt's word already written         | ~121,000 |
-| `isValidSignature` on the Pot                      | ~77,000  |
-| installing the package (three calls), once per Pot | ~760,000 |
+| `isValidSignature` on the Pot                      | ~83,000  |
+| installing the package (three calls), once per Pot | ~780,000 |
 
 Salts that share a word (the same `salt >> 8`) are cheaper after the first: pick them in a run when
 signing many.

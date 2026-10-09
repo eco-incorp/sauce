@@ -179,11 +179,11 @@ sauce run @sauce/signed --chain base --wallet <name>
 
 The Pot then answers three calls:
 
-| Call                                                                                                                 | Mode                      | Does                                                                   |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------- |
-| `execute(bytes program, bytes32 salt, uint256 deadline, bytes signature)`                                            | cook, paid by the Pot     | Runs `program` when the owner signed it, and returns what it returns   |
-| `executeAcross(bytes program, bytes32 salt, uint256 deadline, bytes32[] executions, uint256 index, bytes signature)` | cook, paid by the Pot     | The same, from one signature over a program per chain                  |
-| `isValidSignature(bytes32 hash, bytes signature)`                                                                    | view, static, with no fee | EIP-1271 for the Pot: the owner's signature of `hash` bound to the Pot |
+| Call                                                                                                                 | Mode                      | Does                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `execute(bytes program, bytes32 salt, uint256 deadline, bytes signature)`                                            | cook, paid by the Pot     | Runs `program` when the owner signed it, and returns what it returns                       |
+| `executeAcross(bytes program, bytes32 salt, uint256 deadline, bytes32[] executions, uint256 index, bytes signature)` | cook, paid by the Pot     | The same, from one signature over a program per chain                                      |
+| `isValidSignature(bytes32 hash, bytes signature)`                                                                    | view, static, with no fee | EIP-1271 for the Pot, the core's handler: the owner's signature of `hash` bound to the Pot |
 
 ### Signing from TypeScript
 
@@ -260,12 +260,12 @@ once the USDC is there.
   same address on every chain. `routes.executeAcrossTypedData` and `routes.encodeExecuteAcross`
   build both sides.
 
-### The Pot as a signer
+### Permit2 and EIP-1271
 
-`isValidSignature` checks the owner's signature over `PotMessage { bytes32 hash }` under the Pot's
-domain (`routes.potMessageTypedData`), never over `hash` itself. Permit2 then takes the Pot as a
-signer. A permit the owner signs for its own account is never spent from the Pot, nor one bound to
-another of its Pots.
+`@sauce/signed` installs the core's ERC-1271 handler ([The Pot as a signer](#the-pot-as-a-signer)).
+Its owner signs `PotMessage { bytes32 hash }` under the Pot's domain (`routes.potMessageTypedData`),
+never `hash` itself. Permit2 then takes the Pot as a signer. A permit the owner signs for its own
+account is never spent from the Pot, nor one bound to another of its Pots.
 
 ### What it costs
 
@@ -277,8 +277,8 @@ Whole transactions on a local chain, the program returning a number:
 | `execute`, a salt whose word is new to the Pot         | ~138,000 |
 | `execute`, a salt whose word is already written        | ~121,000 |
 | The same check written in Solidity, then the same cook | ~75,000  |
-| `isValidSignature` on the Pot                          | ~77,000  |
-| Installing the package, once per Pot                   | ~760,000 |
+| `isValidSignature` on the Pot                          | ~83,000  |
+| Installing the package, once per Pot                   | ~780,000 |
 
 The difference from Solidity has three parts:
 
