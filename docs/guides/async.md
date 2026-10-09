@@ -152,7 +152,8 @@ function main(heads: Address, tails: Address, prize: Uint256) {
   count per provider.
 
 Install the handlers, which answer `rawFulfillRandomWords` from the chain's VRF wrapper and
-`_entropyCallback` from its Entropy contract, once per Pot:
+`_entropyCallback` from its Entropy contract, once per Pot. On a chain with one provider, only its
+handler installs:
 
 ```sh
 sauce run @sauce/random --chain base --wallet <name>

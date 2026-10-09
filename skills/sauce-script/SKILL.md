@@ -495,6 +495,7 @@ function main(heads: Address, tails: Address, prize: Uint256) {
 - **The body reads numbers, addresses and bools** from the program around it, not an array: pick
   among fixed parameters, as `heads` and `tails` above.
 - **Install the handlers once per Pot:** `sauce run @sauce/random --chain base --wallet <name>`.
+  On Ethereum only VRF's handler installs, since Entropy is not there.
 
 ## What a program costs
 
