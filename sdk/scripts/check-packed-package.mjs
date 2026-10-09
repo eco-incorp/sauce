@@ -2,9 +2,11 @@
 // Exercise the published entry points from a clean consumer, without workspace
 // dependencies or a separately installed compiler hiding a broken bundle.
 import assert from "node:assert/strict";
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import {
+  chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -12,6 +14,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -28,6 +31,22 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // the shipped examples against the same typings the repo builds them with and a bump moves both.
 const TYPES_NODE_VERSION = JSON.parse(readFileSync(resolve(root, "sdk/package.json"), "utf8"))
   .devDependencies["@types/node"];
+// The package needs no TypeScript at run time, and depends on none: a consumer that typechecks
+// installs its own, as the project `sauce init` writes does, at the range the package is built with
+// (its devDependency), which is the one this consumer takes.
+const TYPESCRIPT_VERSION = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"))
+  .devDependencies.typescript;
+// What only the `sauce` command loads, for one command each: optional peer dependencies, which no
+// install of the package brings. The command takes the user's own copies at the versions pinned,
+// else installs them for itself into ~/.sauce/runtime/<version> (`sdk/src/cli/optional.ts`).
+const RUNTIME = ["@modelcontextprotocol/sdk", "litesvm", "zod"];
+// What a plain install of the package never brings: those, the web servers the MCP SDK brings, and
+// TypeScript and dotenv, which it once depended on and nothing of it imports.
+const NEVER_IN_A_LIBRARY_INSTALL = [...RUNTIME, "express", "hono", "typescript", "dotenv"];
+// The runtime packages' own install, as the package ships it: the versions it pins.
+const RUNTIME_PINS = JSON.parse(
+  readFileSync(resolve(root, "sdk/runtime/package.json"), "utf8"),
+).dependencies;
 // The SVM engine binaries ship only when a `--fetch-v12-engines` sync has placed them (CI does; a
 // bare local checkout may not). Assert they resolve from the clean install when they are here, and
 // skip that check otherwise rather than failing a credential-less local run.
@@ -63,6 +82,31 @@ if (!shipsAddresses) {
   );
 }
 const work = mkdtempSync(join(tmpdir(), "sauce-package-check-"));
+// A library install of the same tarball, a plain `npm install` of it and nothing else: outside
+// `work`, so nothing installed there resolves from it.
+const library = mkdtempSync(join(tmpdir(), "sauce-library-install-"));
+// The homes every `sauce` this check runs is given, one per state of ~/.sauce/runtime it needs, so
+// the check never writes the developer's own; npm keeps its cache where it is.
+const homes = mkdtempSync(join(tmpdir(), "sauce-homes-"));
+const home = (name) => {
+  const dir = join(homes, name);
+  mkdirSync(dir);
+
+  return dir;
+};
+const npmCache = execFileSync("npm", ["config", "get", "cache"], { encoding: "utf8" }).trim();
+/** The packages an install put on disk (its lockfile's, where each landed) and their bytes. */
+const installedSize = (dir) => {
+  const lock = JSON.parse(readFileSync(join(dir, "package-lock.json"), "utf8"));
+  const packages = Object.keys(lock.packages).filter(
+    (path) => path !== "" && existsSync(join(dir, path, "package.json")),
+  ).length;
+  const bytes = readdirSync(join(dir, "node_modules"), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .reduce((sum, entry) => sum + statSync(join(entry.parentPath, entry.name)).size, 0);
+
+  return { packages, bytes, text: `${packages} packages, ${(bytes / 2 ** 20).toFixed(1)} MiB` };
+};
 try {
   const output = execFileSync(
     "npm",
@@ -92,6 +136,9 @@ try {
       // This cannot weaken the check. `@types/node` ships no runtime code, so it cannot stand in
       // for anything missing from the tarball; a broken bundle still fails here exactly as before.
       `@types/node@${TYPES_NODE_VERSION}`,
+      // And the consumer's own TypeScript, which typechecks the examples below and serves the
+      // editor on the project `sauce init` writes: no module of the package imports it.
+      `typescript@${TYPESCRIPT_VERSION}`,
     ],
     {
       cwd: work,
@@ -113,6 +160,93 @@ try {
     "the installed package must ship the repository license verbatim",
   );
   console.log("Clean package install: license metadata and full license text ship");
+
+  // What a library import loads is a dependency; what only the `sauce` command loads, for one
+  // command each, is an optional peer of any version, which no install brings and no project's own
+  // version conflicts with (the mismatched MCP SDK below installs beside it).
+  assert.equal(installedManifest.optionalDependencies, undefined);
+  for (const each of RUNTIME) {
+    assert.equal(installedManifest.peerDependencies[each], "*");
+    assert.deepEqual(installedManifest.peerDependenciesMeta[each], { optional: true });
+  }
+  for (const each of NEVER_IN_A_LIBRARY_INSTALL) {
+    assert.equal(installedManifest.dependencies[each], undefined, `${each} is not a dependency`);
+  }
+  writeFileSync(join(library, "package.json"), JSON.stringify({ private: true, type: "module" }));
+  execFileSync(
+    "npm",
+    [
+      "install",
+      "--engine-strict",
+      "--ignore-scripts",
+      "--prefer-offline",
+      "--no-audit",
+      "--no-fund",
+      join(work, filename),
+    ],
+    { cwd: library, stdio: "inherit" },
+  );
+  for (const each of NEVER_IN_A_LIBRARY_INSTALL) {
+    assert.ok(!existsSync(join(library, "node_modules", each)), `a plain install has no ${each}`);
+    if (each !== "typescript") {
+      assert.ok(!existsSync(join(work, "node_modules", each)), `nor does the consumer's: ${each}`);
+    }
+  }
+  // Every export of the package loads there, a protocol's for each protocol, and each works.
+  const librarySubpaths = Object.entries(installedManifest.exports).flatMap(([key, value]) => {
+    const target = typeof value === "string" ? value : value.default;
+    if (target === undefined || !target.endsWith(".js")) return [];
+    if (!key.includes("*")) return [key];
+    const [before, after] = target.split("*");
+
+    return readdirSync(join(installedRoot, before))
+      .filter((dir) => existsSync(join(installedRoot, before, dir + after)))
+      .map((dir) => key.replace("*", dir));
+  });
+  assert.ok(
+    librarySubpaths.includes("./protocols/uniswap-v3"),
+    "the protocols' exports are listed",
+  );
+  writeFileSync(
+    join(library, "library.mjs"),
+    `
+    import assert from 'node:assert/strict';
+    for (const subpath of ${JSON.stringify(librarySubpaths)}) {
+      await import(subpath === '.' ? '${name}' : '${name}' + subpath.slice(1));
+    }
+    const { Base } = await import('${name}');
+    assert.equal(Base.chain.id, 8453);
+    const { compile } = await import('${name}/compiler');
+    const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
+    assert.ok(compile({ target: 'evm', resolve: () => source }).bytecode.length > 0);
+    const { chainBySlug } = await import('${name}/chains');
+    assert.equal(chainBySlug('solana').kind, 'svm');
+    const { protocolInfo, deployments } = await import('${name}/protocols/uniswap-v3');
+    assert.ok(protocolInfo && Object.keys(deployments).length > 0);
+    const actions = await import('${name}/actions');
+    const program = actions.parseProgram({
+      version: 1,
+      chainId: 1,
+      actions: [{ type: 'approve', amount: '1', token: '0x1000000000000000000000000000000000000001', spender: '0x2000000000000000000000000000000000000001' }],
+    });
+    assert.ok(actions.compileProgram(program).bytecode.length > 0);
+    ${
+      shipsAddresses
+        ? `const { v12KitchenAddress } = await import('${name}/deployments');
+    assert.match(v12KitchenAddress(), /^0x[0-9a-fA-F]{40}$/);`
+        : ""
+    }
+  `,
+  );
+  execFileSync(process.execPath, [join(library, "library.mjs")], {
+    cwd: library,
+    stdio: "inherit",
+  });
+  console.log(
+    `Clean package install: a plain npm install is ${installedSize(library).text}, with no ` +
+      `${NEVER_IN_A_LIBRARY_INSTALL.join(", ")}, and every one of its ${librarySubpaths.length} ` +
+      "exports loads and works",
+  );
 
   // Public consumers cannot rely on this private repository. Verify the actual
   // tarball includes the complete manual and all of its local navigation targets.
@@ -273,7 +407,8 @@ try {
   // Force the packaged path: the resolvers read no environment, and scrubbing CI's SAUCE_* paths
   // keeps this smoke proving the shipped binary resolves (what a credential-less consumer sees) even
   // if an env read ever crept back in.
-  const smokeEnv = { ...process.env };
+  // And a home of its own: a `sauce` that installs its runtime packages does so there.
+  const smokeEnv = { ...process.env, HOME: home("default"), npm_config_cache: npmCache };
   for (const k of [
     "SAUCE_ENGINE_SO",
     "SAUCE_RUST_ENGINE_SO",
@@ -353,15 +488,16 @@ try {
 
   // The `sauce` bin, run the way a consumer runs it — through npx, from the install, with nothing
   // but the tarball's files. It compiles the example its own agent skill ships, builds the Pot and
-  // the transaction, and scaffolds a project whose skills then report up to date.
+  // the transaction, and scaffolds a project whose skills then report up to date. Each run passes
+  // --no-update-check, so none starts a refresh that would read the npm registry.
   const sauce = (...args) =>
-    execFileSync("npx", ["--no", "--", "sauce", ...args], {
+    execFileSync("npx", ["--no", "--", "sauce", "--no-update-check", ...args], {
       cwd: work,
       encoding: "utf8",
       env: smokeEnv,
     });
   assert.equal(
-    execFileSync("npx", ["--no", "--", name, "--version"], {
+    execFileSync("npx", ["--no", "--", name, "--no-update-check", "--version"], {
       cwd: work,
       encoding: "utf8",
       env: smokeEnv,
@@ -369,6 +505,37 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
+  // The update check, from the install: a fresh cache in a home of its own naming a newer version
+  // is noticed on stderr, after stdout's own output, and starts no refresh (the cache is a minute
+  // old), so nothing reads the registry. The refresh's script ships beside the bin.
+  assert.ok(
+    existsSync(join(installedRoot, "sdk/dist/cli/update-refresh.js")),
+    "the update check's refresh script ships",
+  );
+  {
+    const updateHome = home("update-check");
+    const cache = join(updateHome, ".sauce", "update-check.json");
+    mkdirSync(dirname(cache), { recursive: true, mode: 0o700 });
+    const fresh = JSON.stringify({
+      checkedAt: new Date(Date.now() - 60_000).toISOString(),
+      latest: "999.0.0",
+      version: installedManifest.version,
+    });
+    writeFileSync(cache, fresh, { mode: 0o600 });
+    const ran = spawnSync("npx", ["--no", "--", "sauce", "--version"], {
+      cwd: work,
+      encoding: "utf8",
+      env: { ...smokeEnv, HOME: updateHome, USERPROFILE: updateHome },
+    });
+    assert.equal(ran.stdout, `${name} ${installedManifest.version}\n`);
+    assert.equal(
+      ran.stderr,
+      `sauce ${installedManifest.version} → 999.0.0 is available: run \`sauce update\`\n`,
+      "the installed sauce notices a newer version from its cache",
+    );
+    assert.equal(readFileSync(cache, "utf8"), fresh, "a fresh cache starts no refresh");
+  }
+  console.log("Clean package install: sauce notices a newer version from its update cache");
   // The skill's `buy.sauce.ts` names no chain, starts with a `#!` line, imports `@sauce/router`
   // and takes `main(token, budget, sqrtPriceLimitX96, minOut, recipient)` at run time.
   // `--offline`: the bin reads a chain through its built-in public endpoints otherwise, and this
@@ -430,16 +597,58 @@ try {
       `and builds its Pot and cook transactions`,
   );
 
-  // A Solana cook rehearsed in the local copy from the tarball alone: LiteSVM is the package's own
-  // dependency, so `npx sauce simulate` needs nothing else installed. The endpoint is a loopback stub
-  // holding the Rent sysvar at mainnet's rent, the Kitchen's fee config and USDC's mint
-  // (`solana-rpc-stub.mjs`); --assume-balance takes the rehearsal into the copy, as a cook too large
-  // for one transaction does. The command runs asynchronously: the stub answers from this process.
-  if (shipsEngine) {
-    assert.ok(
-      existsSync(join(work, "node_modules/litesvm/package.json")),
-      "installing the package installs LiteSVM",
+  // The plain install runs every command that builds: none of them needs a runtime package.
+  const librarySauce = (...args) =>
+    execFileSync("npx", ["--no", "--", "sauce", "--no-update-check", ...args], {
+      cwd: library,
+      encoding: "utf8",
+      env: smokeEnv,
+    });
+  assert.equal(librarySauce("compile", example, ...chain).trim(), bytecode);
+  assert.deepEqual(
+    JSON.parse(
+      librarySauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--offline", ...args),
+    ),
+    tx,
+  );
+  const libraryGlobals = JSON.parse(librarySauce("globals", "--chain", "base", "--json"));
+  assert.equal(libraryGlobals.chain.id, 8453);
+  assert.ok(libraryGlobals.tokens.some((token) => token.symbol === "USDC"));
+  assert.ok(!existsSync(join(smokeEnv.HOME, ".sauce")), "and installs nothing for itself");
+  console.log(
+    "Clean package install: a plain install's sauce compile, tx and globals print what the " +
+      "consumer's do, and install nothing",
+  );
+  // `sauce`, run by this Node.js with no npx in between, so PATH can lack npm.
+  const bin = join(installedRoot, installedManifest.bin.sauce);
+  const runtimeOf = (dir) => join(dir, ".sauce", "runtime", installedManifest.version);
+  // A command that cannot have its runtime packages ends on one line that says why: exit 1, nothing
+  // on stdout, never a stack trace, and nothing half-installed.
+  const refusal = ({ status, stdout, stderr }, what, homeDir) => {
+    assert.equal(status, 1, `${what} exits 1: ${stderr}`);
+    assert.equal(stdout, "", `${what} prints nothing on stdout`);
+    assert.doesNotMatch(stderr, /^\s+at /m, `${what} prints no stack trace`);
+    const runtimeRoot = dirname(runtimeOf(homeDir));
+    assert.deepEqual(
+      existsSync(runtimeRoot) ? readdirSync(runtimeRoot) : [],
+      [],
+      `${what} leaves nothing in ${runtimeRoot}`,
     );
+
+    return stderr.trimEnd().split("\n").at(-1);
+  };
+  const needsMcp =
+    `the MCP server needs @modelcontextprotocol/sdk ${RUNTIME_PINS["@modelcontextprotocol/sdk"]} ` +
+    `and zod ${RUNTIME_PINS.zod}, not installed for this sauce yet`;
+
+  // A Solana cook rehearsed in the local copy from the tarball alone: no install brings LiteSVM, so
+  // the first rehearsal installs this version's runtime folder, npm picking LiteSVM's binary for this
+  // platform, and runs in it. The endpoint is a loopback stub holding the Rent sysvar at mainnet's
+  // rent, the Kitchen's fee config and USDC's mint (`solana-rpc-stub.mjs`); --assume-balance takes
+  // the rehearsal into the copy, as a cook too large for one transaction does. The command runs
+  // asynchronously: the stub answers from this process.
+  // The loopback endpoint a Solana rehearsal reads (with the engine binaries only).
+  const solanaStub = async () => {
     writeFileSync(
       join(work, "solana-ids.mjs"),
       `export { deriveExecutionFeeConfigPda } from "${name}/svm";\n` +
@@ -460,7 +669,8 @@ try {
     const { solanaRpcStub } = await import(
       pathToFileURL(join(root, "sdk/scripts/solana-rpc-stub.mjs")).href
     );
-    const stub = await solanaRpcStub({
+
+    return solanaRpcStub({
       kitchen,
       feeConfig,
       fee: 85_672n,
@@ -468,20 +678,34 @@ try {
         [usdc.address]: { owner: usdc.owner, data: Buffer.from(usdc.base64Data, "base64") },
       },
     });
+  };
+  const solanaProgram = "function main(x: Uint256): Uint256 {\n  return x + 1;\n}\n";
+  const solanaOwner = "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9";
+  if (shipsEngine) {
+    assert.ok(!existsSync(join(work, "node_modules/litesvm")), "no install brings LiteSVM");
+    const rehearsalHome = home("rehearsal");
+    const stub = await solanaStub();
     try {
-      writeFileSync(
-        join(work, "solana-check.sauce.ts"),
-        "function main(x: Uint256): Uint256 {\n  return x + 1;\n}\n",
-      );
-      const { stdout } = await promisify(execFile)(
-        "npx",
-        [
-          ...["--no", "--", "sauce", "simulate", join(work, "solana-check.sauce.ts")],
-          ...["--chain", "solana", "--rpc-url", stub.url],
-          ...["--owner", "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"],
-          ...["--assume-balance", "USDC:1", "--args", "1", "--json"],
-        ],
-        { cwd: work, encoding: "utf8", env: smokeEnv },
+      writeFileSync(join(work, "solana-check.sauce.ts"), solanaProgram);
+      const rehearse = (cwd) =>
+        promisify(execFile)(
+          "npx",
+          [
+            ...["--no", "--", "sauce", "--no-update-check", "simulate"],
+            join(work, "solana-check.sauce.ts"),
+            ...["--chain", "solana", "--rpc-url", stub.url],
+            ...["--owner", solanaOwner],
+            ...["--assume-balance", "USDC:1", "--args", "1", "--json"],
+          ],
+          { cwd, encoding: "utf8", env: { ...smokeEnv, HOME: rehearsalHome } },
+        ).then(
+          ({ stdout, stderr }) => ({ status: 0, stdout, stderr }),
+          ({ code, stdout, stderr }) => ({ status: code, stdout, stderr }),
+        );
+      const { stdout, stderr } = await rehearse(work);
+      assert.ok(
+        stderr.includes(`Installing them into ${runtimeOf(rehearsalHome)}, once for this version`),
+        `the first rehearsal installs its runtime folder: ${stderr}`,
       );
       const rehearsal = JSON.parse(stdout);
       assert.equal(rehearsal.ok, true, `the rehearsal succeeds: ${rehearsal.reason}`);
@@ -494,9 +718,30 @@ try {
     } finally {
       await stub.close();
     }
+    // The folder: owner-only, LiteSVM at its pin, and its native binary, exactly this platform's.
+    const folder = runtimeOf(rehearsalHome);
+    if (process.platform !== "win32") {
+      assert.equal(statSync(folder).mode & 0o777, 0o700, "the runtime folder is owner-only");
+    }
+    const litesvm = JSON.parse(
+      readFileSync(join(folder, "node_modules/litesvm/package.json"), "utf8"),
+    );
+    assert.equal(litesvm.version, RUNTIME_PINS.litesvm);
+    const binaries = readdirSync(join(folder, "node_modules")).filter((each) =>
+      each.startsWith("litesvm-"),
+    );
+    assert.equal(binaries.length, 1, `one LiteSVM binary: ${binaries}`);
+    const binary = JSON.parse(
+      readFileSync(join(folder, "node_modules", binaries[0], "package.json"), "utf8"),
+    );
+    assert.ok(
+      binary.os.includes(process.platform) && binary.cpu.includes(process.arch),
+      `${binaries[0]} is ${process.platform}-${process.arch}'s`,
+    );
     console.log(
-      "Clean package install: npx sauce simulate rehearses a Solana cook in its local copy, with " +
-        "the LiteSVM the package installs",
+      "Clean package install: npx sauce simulate installs its runtime folder " +
+        `(${installedSize(folder).text}, ${binaries[0]} among it) and rehearses a Solana cook in ` +
+        "its local copy",
     );
   }
 
@@ -812,8 +1057,10 @@ try {
 
   // `sauce mcp`, from the install, the way `sauce mcp setup` launches it — `npx @eco-incorp/sauce
   // mcp`, here with `--no` so nothing is fetched — over both transports: the tools, a compile, and
-  // every shipped skill file as a resource. Nothing here reaches a chain.
-  const mcpLaunch = ["--no", "--", name, "mcp"];
+  // every shipped skill file as a resource. Nothing here reaches a chain, nor (--no-update-check)
+  // starts an update check's refresh. No install brought the MCP SDK: the first start installs this
+  // version's runtime folder, and later ones take it as is.
+  const mcpLaunch = ["--no", "--", name, "mcp", "--no-update-check"];
   const mcpProgram =
     "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";
   writeFileSync(join(work, "mcp-check.sauce.ts"), mcpProgram);
@@ -847,8 +1094,21 @@ try {
   // Each server runs in a process group of its own — npx, the shell it may start, node — so it is
   // stopped whole: killing npx alone can leave the server running, holding this script's pipes
   // open, and the check would never end. Every wait is bounded for the same reason.
-  const mcpServer = (args, stdio) =>
-    spawn("npx", [...mcpLaunch, ...args], { cwd: work, env: smokeEnv, stdio, detached: true });
+  // `direct`: the bin run by this Node.js, with no npx, so PATH may lack npm.
+  // `launch`: npx's arguments in place of `mcpLaunch`.
+  const mcpServer = (
+    args,
+    stdio,
+    { cwd = work, env = smokeEnv, direct = false, launch = mcpLaunch } = {},
+  ) =>
+    direct
+      ? spawn(process.execPath, [bin, "mcp", "--no-update-check", ...args], {
+          cwd,
+          env,
+          stdio,
+          detached: true,
+        })
+      : spawn("npx", [...launch, ...args], { cwd, env, stdio, detached: true });
   const stopServer = async (child) => {
     if (child.exitCode === null && child.signalCode === null) {
       const exited = once(child, "exit");
@@ -874,32 +1134,48 @@ try {
 
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   };
-  // Over stdio: one JSON-RPC message per line in, one per line out, and EOF ends the server.
-  const stdio = mcpServer([], ["pipe", "pipe", "inherit"]);
-  let stdout = "";
-  const answers = new Map();
-  try {
-    const answered = new Promise((resolveAll, rejectAll) => {
-      stdio.stdout.on("data", (chunk) => {
-        stdout += chunk.toString();
-        for (let at = stdout.indexOf("\n"); at >= 0; at = stdout.indexOf("\n")) {
-          const message = JSON.parse(stdout.slice(0, at));
-          stdout = stdout.slice(at + 1);
-          if (message.id !== undefined) answers.set(message.id, message);
-          if (answers.size === 4) resolveAll();
-        }
+  // Over stdio: one JSON-RPC message per line in, one per line out, and EOF ends the server; what it
+  // says besides goes to stderr, which is kept.
+  const overStdio = async ({ requests = mcpRequests, args = [], ...options } = {}) => {
+    const asked = requests.filter((message) => message.id !== undefined).length;
+    const stdio = mcpServer(args, ["pipe", "pipe", "pipe"], options);
+    let stdout = "";
+    let stderr = "";
+    const answers = new Map();
+    stdio.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+    try {
+      const answered = new Promise((resolveAll, rejectAll) => {
+        stdio.stdout.on("data", (chunk) => {
+          stdout += chunk.toString();
+          for (let at = stdout.indexOf("\n"); at >= 0; at = stdout.indexOf("\n")) {
+            const message = JSON.parse(stdout.slice(0, at));
+            stdout = stdout.slice(at + 1);
+            if (message.id !== undefined) answers.set(message.id, message);
+            if (answers.size === asked) resolveAll();
+          }
+        });
+        stdio.once("exit", (code) =>
+          rejectAll(new Error(`sauce mcp exited ${code} before answering: ${stderr}`)),
+        );
       });
-      stdio.once("exit", (code) =>
-        rejectAll(new Error(`sauce mcp exited ${code} before answering`)),
-      );
-    });
-    for (const message of mcpRequests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
-    await within(answered, "sauce mcp over stdio");
-    stdio.stdin.end();
-    await within(once(stdio, "exit"), "sauce mcp ending at EOF", 30_000).catch(() => {});
-  } finally {
-    await stopServer(stdio);
-  }
+      for (const message of requests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
+      await within(answered, "sauce mcp over stdio");
+      stdio.stdin.end();
+      await within(once(stdio, "exit"), "sauce mcp ending at EOF", 30_000).catch(() => {});
+    } finally {
+      await stopServer(stdio);
+    }
+
+    return { answers, stderr };
+  };
+  // The first start, in a home with no runtime folder: it installs one, saying so on stderr alone.
+  const mcpHome = home("mcp");
+  const first = await overStdio({ env: { ...smokeEnv, HOME: mcpHome } });
+  const answers = first.answers;
+  assert.ok(
+    first.stderr.includes(`${needsMcp}. Installing them into ${runtimeOf(mcpHome)}`),
+    `the first sauce mcp installs its runtime folder: ${first.stderr}`,
+  );
   assert.equal(answers.get(1).result.serverInfo.version, installedManifest.version);
   const toolNames = answers.get(2).result.tools.map((tool) => tool.name);
   for (const tool of [
@@ -924,9 +1200,184 @@ try {
   for (const file of shippedSkills) {
     assert.ok(resourceUris.includes(`sauce://skills/${file}`), `sauce mcp serves skills/${file}`);
   }
+  const sameTools = (other, what) =>
+    assert.deepEqual(
+      other.get(2).result.tools.map((tool) => tool.name),
+      toolNames,
+      `${what}: the same tools`,
+    );
+  // The second start takes the folder as it is, with npm unreachable: not on PATH, and its
+  // registry a closed port.
+  const noPath = home("no-path");
+  const unreachable = { npm_config_registry: "http://127.0.0.1:9/", PATH: noPath };
+  const second = await overStdio({
+    env: { ...smokeEnv, HOME: mcpHome, ...unreachable },
+    direct: true,
+  });
+  sameTools(second.answers, "a second start with no npm");
+  assert.equal(second.stderr, "", "a second start installs nothing");
+  console.log(
+    `Clean package install: the first sauce mcp installs its runtime folder ` +
+      `(${installedSize(runtimeOf(mcpHome)).text}), and the second needs no npm`,
+  );
+  // A project that already has its own zod 3 and MCP SDK 1.29.0, both outside the pins, then
+  // installs the package. That is the case where an exact optional peer made npm refuse the install
+  // (ERESOLVE); the peers are any version's, so it installs beside them, and the command passes those
+  // copies over for the pinned ones.
+  const mismatch = mkdtempSync(join(tmpdir(), "sauce-mismatch-"));
+  try {
+    writeFileSync(join(mismatch, "package.json"), JSON.stringify({ private: true }));
+    const npmInstall = (...specs) =>
+      execFileSync(
+        "npm",
+        ["install", "--ignore-scripts", "--prefer-offline", "--no-audit", "--no-fund", ...specs],
+        { cwd: mismatch, stdio: "inherit" },
+      );
+    npmInstall("zod@3.25.76", "@modelcontextprotocol/sdk@1.29.0");
+    npmInstall(join(work, filename));
+    const env = { ...smokeEnv, HOME: mcpHome };
+    const status = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [
+          join(mismatch, "node_modules", name, installedManifest.bin.sauce),
+          ...["--no-update-check", "runtime", "--json"],
+        ],
+        {
+          cwd: mismatch,
+          encoding: "utf8",
+          env,
+        },
+      ),
+    );
+    assert.equal(status.packages["@modelcontextprotocol/sdk"].own.version, "1.29.0");
+    assert.equal(status.packages.zod.own.version, "3.25.76");
+    assert.equal(status.uses["sauce mcp"], "runtime", "the runtime folder's, not the user's");
+    sameTools((await overStdio({ cwd: mismatch, env })).answers, "beside a mismatched MCP SDK");
+  } finally {
+    rmSync(mismatch, { recursive: true, force: true });
+  }
+  // Where it may not install, it refuses on one line: --offline; no npm; npm with no registry.
+  const offlineHome = home("offline");
+  const offline = spawnSync(process.execPath, [bin, "mcp", "--offline"], {
+    cwd: work,
+    env: { ...smokeEnv, HOME: offlineHome },
+    encoding: "utf8",
+    input: "",
+  });
+  assert.equal(
+    refusal(offline, "sauce mcp --offline", offlineHome),
+    `sauce mcp: ${needsMcp}, and --offline installs nothing: run \`sauce runtime install\``,
+  );
+  // An --offline server is offline to its last tool: one whose runtime folder holds the MCP SDK and
+  // zod but not LiteSVM refuses a Solana sauce_simulate, and installs nothing for it.
+  if (shipsEngine) {
+    const offlineServerHome = home("offline-server");
+    mkdirSync(dirname(runtimeOf(offlineServerHome)), { recursive: true, mode: 0o700 });
+    cpSync(runtimeOf(mcpHome), runtimeOf(offlineServerHome), { recursive: true });
+    // Owner-only, as an install leaves it: the command loads from no other.
+    chmodSync(runtimeOf(offlineServerHome), 0o700);
+    rmSync(join(runtimeOf(offlineServerHome), "node_modules/litesvm"), { recursive: true });
+    const stub = await solanaStub();
+    try {
+      const { answers: simulated } = await overStdio({
+        args: ["--offline"],
+        env: { ...smokeEnv, HOME: offlineServerHome },
+        requests: [
+          ...mcpRequests.slice(0, 2),
+          {
+            jsonrpc: "2.0",
+            id: 2,
+            method: "tools/call",
+            params: {
+              name: "sauce_simulate",
+              arguments: {
+                source: solanaProgram,
+                chain: "solana",
+                rpcUrl: stub.url,
+                owner: solanaOwner,
+                assumeBalance: ["USDC:1"],
+                args: ["1"],
+              },
+            },
+          },
+        ],
+      });
+      const result = simulated.get(2).result;
+      assert.equal(result.isError, true, JSON.stringify(result));
+      assert.match(
+        JSON.stringify(result.content),
+        /needs litesvm \S+, not installed for this sauce yet, and --offline installs nothing/,
+      );
+    } finally {
+      await stub.close();
+    }
+    assert.ok(
+      !existsSync(join(runtimeOf(offlineServerHome), "node_modules/litesvm")),
+      "the --offline server installed nothing",
+    );
+  }
+  const noNpmHome = home("no-npm");
+  const noNpm = spawnSync(process.execPath, [bin, "mcp", "--no-update-check"], {
+    cwd: work,
+    env: { ...smokeEnv, HOME: noNpmHome, PATH: noPath },
+    encoding: "utf8",
+    input: "",
+  });
+  assert.equal(
+    refusal(noNpm, "sauce mcp with no npm", noNpmHome),
+    `sauce mcp: ${needsMcp}, and installing them into ${runtimeOf(noNpmHome)} failed: npm is ` +
+      "not on PATH. Nothing was left half-installed: `sauce runtime install` tries again",
+  );
+  const noRegistryHome = home("no-registry");
+  const noRegistry = spawnSync(process.execPath, [bin, "mcp", "--no-update-check"], {
+    cwd: work,
+    env: {
+      ...smokeEnv,
+      HOME: noRegistryHome,
+      npm_config_registry: unreachable.npm_config_registry,
+      npm_config_cache: home("empty-npm-cache"),
+      npm_config_fetch_retries: "0",
+    },
+    encoding: "utf8",
+    input: "",
+  });
+  assert.match(
+    refusal(noRegistry, "sauce mcp with no registry", noRegistryHome),
+    /failed: npm ci exited with status \d+ \(.*ECONNREFUSED.*\)\. Nothing was left half-installed/,
+  );
+  // `sauce mcp setup` installs the folder before any agent starts the server.
+  const setupHome = home("setup");
+  const setupProject = mkdtempSync(join(tmpdir(), "sauce-mcp-setup-"));
+  try {
+    execFileSync(
+      process.execPath,
+      [bin, "--no-update-check", "mcp", "setup", "--agent", "claude", "--dir", setupProject],
+      {
+        cwd: setupProject,
+        env: { ...smokeEnv, HOME: setupHome },
+        stdio: ["ignore", "ignore", "pipe"],
+      },
+    );
+    assert.ok(existsSync(join(setupProject, ".mcp.json")), "sauce mcp setup writes .mcp.json");
+    assert.ok(
+      existsSync(join(runtimeOf(setupHome), "node_modules/@modelcontextprotocol/sdk")),
+      "and installs the server's runtime folder",
+    );
+  } finally {
+    rmSync(setupProject, { recursive: true, force: true });
+  }
+  console.log(
+    "Clean package install: a project with its own zod 3 and MCP SDK 1.29.0 installs the " +
+      "package, and its copies are passed over; --offline (a server's Solana sauce_simulate " +
+      "included), no npm and no registry each refuse on one line, leaving nothing; sauce mcp " +
+      "setup installs the folder",
+  );
   // Over Streamable HTTP, self-hosted with the same one command and a port it picks: initialize
   // and tools/list, each a POST of its own to the stateless /mcp.
-  const http = mcpServer(["--http", "0"], ["ignore", "ignore", "pipe"]);
+  const http = mcpServer(["--http", "0"], ["ignore", "ignore", "pipe"], {
+    env: { ...smokeEnv, HOME: mcpHome },
+  });
   try {
     let httpLog = "";
     const url = await within(
@@ -972,6 +1423,55 @@ try {
       `${shippedSkills.length} skill files over stdio and Streamable HTTP`,
   );
 
+  // `npx -y` in a directory with nothing in it, as an agent launches the server: npx installs the
+  // tarball into its own cache, as plainly as any install, and its `sauce mcp` takes the runtime
+  // folder of its version, which the first start above installed. That npx install is found by the
+  // tarball it names and removed after.
+  const empty = mkdtempSync(join(tmpdir(), "sauce-npx-"));
+  const npxDir = join(npmCache, "_npx");
+  const npxInstalls = () =>
+    (existsSync(npxDir) ? readdirSync(npxDir) : []).filter((dir) => {
+      const manifest = join(npxDir, dir, "package.json");
+
+      return (
+        existsSync(manifest) &&
+        JSON.parse(readFileSync(manifest, "utf8"))._npx?.packages?.includes(join(work, filename))
+      );
+    });
+  try {
+    const npxLaunch = [
+      ...["-y", "--prefer-offline", "--package", join(work, filename), "--", "sauce"],
+      "--no-update-check",
+    ];
+    const npx = (...args) =>
+      execFileSync("npx", [...npxLaunch, ...args], { cwd: empty, encoding: "utf8", env: smokeEnv });
+    assert.match(npx("mcp", "--help"), /^Serve the commands and the agent skills to coding agents/);
+    writeFileSync(join(empty, "mcp-check.sauce.ts"), mcpProgram);
+    assert.equal(
+      npx("compile", "mcp-check.sauce.ts", "--chain", "ethereum").trim(),
+      sauce("compile", join(work, "mcp-check.sauce.ts"), "--chain", "ethereum").trim(),
+    );
+    const [npxInstall] = npxInstalls();
+    assert.ok(npxInstall !== undefined, `npx installed the tarball under ${npxDir}`);
+    for (const each of NEVER_IN_A_LIBRARY_INSTALL) {
+      assert.ok(!existsSync(join(npxDir, npxInstall, "node_modules", each)), `npx has no ${each}`);
+    }
+    const npxServer = await overStdio({
+      cwd: empty,
+      env: { ...smokeEnv, HOME: mcpHome },
+      launch: [...npxLaunch, "mcp"],
+    });
+    sameTools(npxServer.answers, "npx -y's sauce mcp");
+    assert.equal(npxServer.stderr, "", "npx -y's sauce mcp takes the version's runtime folder");
+    console.log(
+      `Clean package install: npx -y runs sauce mcp --help, sauce compile and sauce mcp from an ` +
+        `empty directory, its own install ${installedSize(join(npxDir, npxInstall)).text}`,
+    );
+  } finally {
+    for (const dir of npxInstalls()) rmSync(join(npxDir, dir), { recursive: true, force: true });
+    rmSync(empty, { recursive: true, force: true });
+  }
+
   // The same browser gates the repository runs, against the INSTALLED package and resolved from
   // this consumer by name, so what they prove is the shipped `exports` map: every browser-facing
   // export bundles for the browser without Node, and compiles in headless Chromium to the bytes
@@ -980,9 +1480,12 @@ try {
     execFileSync(
       process.execPath,
       [join(root, "sdk/scripts", script), "--package-root", installedRoot, "--consumer", work],
-      { cwd: work, stdio: "inherit", env: smokeEnv },
+      // The real home: no `sauce` runs here, and Playwright keeps its browser under it.
+      { cwd: work, stdio: "inherit", env: { ...smokeEnv, HOME: process.env.HOME } },
     );
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
+  rmSync(library, { recursive: true, force: true });
+  rmSync(homes, { recursive: true, force: true });
 }
