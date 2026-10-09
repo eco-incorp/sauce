@@ -9,7 +9,7 @@
  *   as a module whose contract is typed from its ABI;
  * - every `@sauce/` library the SDK serves but `@sauce/token` (`@sauce/router`), as a module of
  *   its exported functions, typed from their own SauceScript annotations, and its exported classes
- *   (`@sauce/async`'s `Promise`), whose members take and answer anything;
+ *   (`@sauce/async`'s `Promise`) and values, whose members take and answer anything;
  * - then the catch-alls: another JSON ABI, another `@sauce/` library.
  *
  * The language itself — types, builtins, value methods, `@sauce/token` — is the hand-written
@@ -183,6 +183,15 @@ function libraryModules(): string[] {
       const declared = statement.declaration as AstNode | undefined;
       if (statement.type === "ExportNamedDeclaration" && declared?.type === "ClassDeclaration") {
         functions.add(classDeclaration(declared));
+        continue;
+      }
+      // An exported value (`export const Random = new RandomProtocol();`), which the compiler runs:
+      // anything, as a class's members are.
+      if (statement.type === "ExportNamedDeclaration" && declared?.type === "VariableDeclaration") {
+        for (const declarator of declared.declarations as AstNode[]) {
+          const id = declarator.id as AstNode;
+          if (typeof id.name === "string") functions.add(`  export const ${id.name}: any;`);
+        }
         continue;
       }
       if (statement.type !== "ExportNamedDeclaration" || declared?.type !== "FunctionDeclaration") {
