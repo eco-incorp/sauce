@@ -7,17 +7,11 @@
   "handlers": [
     {
       "selector": "rawFulfillRandomWords(uint256,uint256[])",
-      "program": "vrf.handler.js",
-      "requires": [
-        "ChainlinkVrf.Wrapper"
-      ]
+      "program": "vrf.handler.js"
     },
     {
       "selector": "_entropyCallback(uint64,address,bytes32)",
-      "program": "entropy.handler.js",
-      "requires": [
-        "PythEntropy.Entropy"
-      ]
+      "program": "entropy.handler.js"
     }
   ]
 }

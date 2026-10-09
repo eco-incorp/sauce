@@ -71,16 +71,8 @@ describe("what the library writes out by hand", () => {
 
   it("the package answers each provider's callback, by its signature", () => {
     expect(packageHandlerDeclarations("@sauce/random")).toEqual([
-      {
-        selector: "rawFulfillRandomWords(uint256,uint256[])",
-        program: "vrf.handler.js",
-        requires: ["ChainlinkVrf.Wrapper"],
-      },
-      {
-        selector: "_entropyCallback(uint64,address,bytes32)",
-        program: "entropy.handler.js",
-        requires: ["PythEntropy.Entropy"],
-      },
+      { selector: "rawFulfillRandomWords(uint256,uint256[])", program: "vrf.handler.js" },
+      { selector: "_entropyCallback(uint64,address,bytes32)", program: "entropy.handler.js" },
     ]);
     for (const [signature, selector] of [
       ["rawFulfillRandomWords(uint256,uint256[])", "0x1fe543e3"],
@@ -107,24 +99,6 @@ describe("what the library writes out by hand", () => {
         "bytes",
       ]);
     }
-  });
-});
-
-describe("which handlers a chain installs", () => {
-  it("each provider's where the registry has it: Base both, Ethereum VRF's alone", () => {
-    expect(packageHandlers("base", "@sauce/random").map((h) => h.signature)).toEqual([
-      "rawFulfillRandomWords(uint256,uint256[])",
-      "_entropyCallback(uint64,address,bytes32)",
-    ]);
-    expect(packageHandlers("ethereum", "@sauce/random").map((h) => h.signature)).toEqual([
-      "rawFulfillRandomWords(uint256,uint256[])",
-    ]);
-  });
-
-  it("none on a chain with neither provider, saying which contracts it lacks", () => {
-    expect(() => packageHandlers("arbitrum", "@sauce/random")).toThrow(
-      "@sauce/random answers no callback on arbitrum: its handlers name ChainlinkVrf.Wrapper, PythEntropy.Entropy, which arbitrum's registry does not have",
-    );
   });
 });
 
