@@ -30,8 +30,6 @@ import * as arrakisAbis from "../protocols/arrakis/abis.js";
 import { deployments as arrakisDeployments } from "../protocols/arrakis/addresses.js";
 import * as axelarAbis from "../protocols/axelar/abis.js";
 import { deployments as axelarDeployments } from "../protocols/axelar/addresses.js";
-import * as axiomV2Abis from "../protocols/axiom-v2/abis.js";
-import { deployments as axiomV2Deployments } from "../protocols/axiom-v2/addresses.js";
 import * as balancerV2Abis from "../protocols/balancer-v2/abis.js";
 import { deployments as balancerV2Deployments } from "../protocols/balancer-v2/addresses.js";
 import * as baseBridgeAbis from "../protocols/base-bridge/abis.js";
@@ -292,7 +290,6 @@ export const PROTOCOL_SOURCES = {
   "arbitrum-bridge": { abis: arbitrumBridgeAbis, deployments: arbitrumBridgeDeployments },
   "arrakis": { abis: arrakisAbis, deployments: arrakisDeployments },
   "axelar": { abis: axelarAbis, deployments: axelarDeployments },
-  "axiom-v2": { abis: axiomV2Abis, deployments: axiomV2Deployments },
   "balancer-v2": { abis: balancerV2Abis, deployments: balancerV2Deployments },
   "base-bridge": { abis: baseBridgeAbis, deployments: baseBridgeDeployments },
   "baseswap": { abis: baseswapAbis, deployments: baseswapDeployments },
@@ -417,7 +414,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 317 contracts across 136 protocols. */
+/** One entry per contract: 316 contracts across 135 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -472,7 +469,6 @@ export const CONTRACT_LINKS = [
   { protocol: "axelar", contract: "GasService", kind: "singleton", roleKey: "gasService", abiExport: "AxelarGasServiceABI" },
   { protocol: "axelar", contract: "Gateway", kind: "singleton", roleKey: "gateway", abiExport: "AxelarGatewayABI" },
   { protocol: "axelar", contract: "ITS", kind: "singleton", roleKey: "its", abiExport: "AxelarITSABI" },
-  { protocol: "axiom-v2", contract: "Query", kind: "singleton", roleKey: "query", abiExport: "AxiomV2QueryABI" },
   { protocol: "balancer-v2", contract: "Vault", kind: "singleton", roleKey: "vault", abiExport: "BalancerV2VaultABI" },
   { protocol: "base-bridge", contract: "L1StandardBridge", kind: "singleton", roleKey: "l1StandardBridge", abiExport: "BaseL1StandardBridgeABI" },
   { protocol: "base-bridge", contract: "L2StandardBridge", kind: "address-only", roleKey: "l2StandardBridge", caveats: ["the registry has no ABI for this contract: its address only"] },
@@ -828,10 +824,6 @@ export interface AxelarContracts {
   readonly GasService: Contract<typeof axelarAbis.AxelarGasServiceABI>;
   readonly Gateway: Contract<typeof axelarAbis.AxelarGatewayABI>;
   readonly ITS: Contract<typeof axelarAbis.AxelarITSABI>;
-}
-
-export interface AxiomV2Contracts {
-  readonly Query: Contract<typeof axiomV2Abis.AxiomV2QueryABI>;
 }
 
 export interface BalancerV2Contracts {
@@ -1489,10 +1481,6 @@ export interface AaveFamilyContracts {
   readonly EquitiesHub: AaveV4Contracts["EquitiesHub"];
 }
 
-export interface AxiomFamilyContracts {
-  readonly Query: AxiomV2Contracts["Query"];
-}
-
 export interface BalancerFamilyContracts {
   readonly Vault: BalancerV2Contracts["Vault"];
 }
@@ -1596,7 +1584,6 @@ export interface ChainContracts {
   readonly ArbitrumBridge: ArbitrumBridgeContracts;
   readonly Arrakis: ArrakisContracts;
   readonly Axelar: AxelarContracts;
-  readonly AxiomV2: AxiomV2Contracts;
   readonly BalancerV2: BalancerV2Contracts;
   readonly BaseBridge: BaseBridgeContracts;
   readonly Baseswap: BaseswapContracts;
@@ -1720,7 +1707,6 @@ export interface ChainContracts {
   readonly Zerox: ZeroxContracts;
   readonly ZksyncBridge: ZksyncBridgeContracts;
   readonly Aave: AaveFamilyContracts;
-  readonly Axiom: AxiomFamilyContracts;
   readonly Balancer: BalancerFamilyContracts;
   readonly Compound: CompoundFamilyContracts;
   readonly Euler: EulerFamilyContracts;

@@ -61,7 +61,6 @@ and in each chain's file in `sauce-chains`.
 - `Axelar.GasService` ([`axelar`](../../sauce-protocols/references/registry/axelar.md))
 - `Axelar.Gateway` ([`axelar`](../../sauce-protocols/references/registry/axelar.md))
 - `Axelar.ITS` ([`axelar`](../../sauce-protocols/references/registry/axelar.md))
-- `AxiomV2.Query` ([`axiom-v2`](../../sauce-protocols/references/registry/axiom-v2.md), default)
 - `BalancerV2.Vault` ([`balancer-v2`](../../sauce-protocols/references/registry/balancer-v2.md), default)
 - `BaseBridge.L1StandardBridge` ([`base-bridge`](../../sauce-protocols/references/registry/base-bridge.md), default)
 - `BaseBridge.L2StandardBridge` ([`base-bridge`](../../sauce-protocols/references/registry/base-bridge.md))
@@ -363,7 +362,6 @@ other name, such as one that two members share, is ambiguous: name the versioned
 - `Aave.PrimeHub` → `AaveV4.PrimeHub`: ethereum
 - `Aave.UsdgMapleESpoke` → `AaveV4.UsdgMapleESpoke`: ethereum
 - `Aave.UsdgPendleSpoke` → `AaveV4.UsdgPendleSpoke`: ethereum
-- `Axiom.Query` → `AxiomV2.Query`: ethereum, base
 - `Balancer.Vault` → `BalancerV2.Vault`: ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche
 - `Compound.CETH` → `CompoundV2.CETH`: ethereum
 - `Compound.CUSDC` → `CompoundV2.CUSDC`: ethereum

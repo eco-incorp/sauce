@@ -336,19 +336,17 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](protocols/seaport.md) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (10)
+## Infrastructure and standards (9)
 
 ### Choosing between them
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
 ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
-([intents](../guides/intents.md)). Axiom V2, a ZK coprocessor that calls a requester back with proven results over
-a chain's history, is still deployed but no longer fulfils queries: its document says why.
+([intents](../guides/intents.md)).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Axiom V2](protocols/axiom-v2.md) | `Axiom` | `AxiomV2`: ethereum, base | ethereum, base |
 | [Eco Routes](protocols/eco-routes.md) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](protocols/ens.md) | — | `Ens`: ethereum | ethereum |
 | [ERC20](protocols/erc20.md) | — | — | none recorded |
@@ -391,7 +389,6 @@ ambiguous, and a program names the versioned namespace instead.
 | `Aave.PrimeHub` | `AaveV4.PrimeHub` | ethereum |
 | `Aave.UsdgMapleESpoke` | `AaveV4.UsdgMapleESpoke` | ethereum |
 | `Aave.UsdgPendleSpoke` | `AaveV4.UsdgPendleSpoke` | ethereum |
-| `Axiom.Query` | `AxiomV2.Query` | ethereum, base |
 | `Balancer.Vault` | `BalancerV2.Vault` | ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
 | `Compound.CETH` | `CompoundV2.CETH` | ethereum |
 | `Compound.CUSDC` | `CompoundV2.CUSDC` | ethereum |

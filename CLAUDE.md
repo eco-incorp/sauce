@@ -875,22 +875,6 @@ to what the same statement in a file publishes. `intent-parts.ts` reads from a p
 chain each part runs on (what follows `await X.hop(…)`, `.then`'s argument, `receive`), for
 diagnostics and the defines report.
 
-**`@sauce/zk` delivers a ZK coprocessor's proven answer to a `.then`** (`src/std/zk/zk.evm.js`,
-built on `@sauce/async`, resolved like `@sauce/token`). `Zk.axiom({ dataQueryHash, dataQuery,
-computeQuery, maxFeePerGas, … }).then((results) => …)` sends an Axiom V2 query from the Pot, paying
-exactly the escrow AxiomV2Query takes (its `axiomQueryFee()` and `proofVerificationGas()` read at
-run time), with the body as the callback's `extraData`. Nothing is parked: the query id commits to
-`keccak256(target ++ extraData)`, so once the handler has checked that `msg.sender` is the chain's
-`AxiomV2.Query` and that the reported `caller` is the Pot, the extra data is the Pot's own program.
-Measured against parking the body under the query id, carrying it is about 98k gas cheaper to send
-and 10k cheaper to call back (`test/std/zk/axiom.e2e.test.ts`). The handler (`axiom.handler.js`,
-declared in the package's `package.json` `handlers`) is compiled per chain with the registry's
-`AxiomV2.Query`. **Axiom ended V2 support on 2024-12-21**: AxiomV2Query is deployed and unfrozen on
-Ethereum and Base, but no prover fulfils a query. The suite therefore runs AxiomV2Query's own
-deployed implementation (`fixtures/AxiomV2Query.json`) with only its two proof verifiers mocked.
-Brevis is not in the package: its current BrevisRequest has no Ethereum or Base deployment, and its
-callback carries no request id.
-
 **`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
 (`transfer`/`approve`/`transferFrom`) is the `@sauce/token` function of the same name with the token
 first, and a READ (`USDC.balanceOf(holder)`, `self.USDC`) the typed `ERC20.at(token).balanceOf(holder)`

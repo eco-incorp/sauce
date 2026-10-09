@@ -613,8 +613,7 @@ const CHOOSING = {
     "Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),",
     "ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,",
     "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer",
-    "(`sauce-intents`). Axiom V2, a ZK coprocessor that calls a requester back with proven results over",
-    "a chain's history, is still deployed but no longer fulfils queries: its document says why.",
+    "(`sauce-intents`).",
   ],
 };
 

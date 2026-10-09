@@ -337,19 +337,17 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (10)
+## Infrastructure and standards (9)
 
 ### Choosing between them
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
 ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
-(`sauce-intents`). Axiom V2, a ZK coprocessor that calls a requester back with proven results over
-a chain's history, is still deployed but no longer fulfils queries: its document says why.
+(`sauce-intents`).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Axiom V2](axiom-v2.md) ([registry](registry/axiom-v2.md)) | `Axiom` | `AxiomV2`: ethereum, base | ethereum, base |
 | Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](ens.md) ([registry](registry/ens.md)) | — | `Ens`: ethereum | ethereum |
 | [ERC20](erc20.md) ([registry](registry/erc20.md)) | — | — | none recorded |

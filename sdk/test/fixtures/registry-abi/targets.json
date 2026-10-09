@@ -167,16 +167,6 @@
         "roles": ["its"]
       }
     },
-    "axiom-v2": {
-      "AxiomV2QueryABI": {
-        "roles": ["query"],
-        "required": {
-          "sendQuery(uint64,bytes32,(uint8,uint16,bytes32[],bytes),(address,bytes),(uint64,uint32,uint256),bytes32,address,bytes)": "std/zk/zk.evm.js Zk.axiom, the call a program's query is sent with, its continuation as the callback's extra data",
-          "axiomQueryFee()": "std/zk/zk.evm.js Zk.axiom, which pays sendQuery exactly what it escrows",
-          "proofVerificationGas()": "std/zk/zk.evm.js Zk.axiom, which pays sendQuery exactly what it escrows"
-        }
-      }
-    },
     "balancer-v2": {
       "BalancerV2VaultABI": {
         "roles": ["vault"]

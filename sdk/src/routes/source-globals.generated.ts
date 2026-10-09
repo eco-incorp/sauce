@@ -293,21 +293,6 @@ export interface AxelarITSMethods {
   "interchainTransfer"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: bigint, arg4: (string | SauceBytes), arg5: bigint): void;
 }
 
-export interface AxiomV2QueryMethods {
-  "sendQuery"(arg0: bigint, arg1: bigint, arg2: { "k": bigint; "resultLen": bigint; "vkey": (readonly (bigint)[] | SauceArray<bigint>); "computeProof": (string | SauceBytes) }, arg3: { "target": bigint; "extraData": (string | SauceBytes) }, arg4: { "maxFeePerGas": bigint; "callbackGasLimit": bigint; "overrideAxiomQueryFee": bigint }, arg5: bigint, arg6: bigint, arg7: (string | SauceBytes)): bigint;
-  "increaseQueryGas"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "refundQuery"(arg0: { "caller": bigint; "userSalt": bigint; "queryHash": bigint; "callbackHash": bigint; "refundee": bigint }): void;
-  "deposit"(arg0: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint): void;
-  "axiomQueryFee"(): bigint;
-  "proofVerificationGas"(): bigint;
-  "minMaxFeePerGas"(): bigint;
-  "queryDeadlineInterval"(): bigint;
-  "queries"(arg0: bigint): [bigint, bigint, bigint, bigint, bigint] & { "state": bigint; "deadlineBlockNumber": bigint; "callbackGasLimit": bigint; "payee": bigint; "payment": bigint };
-  "balances"(arg0: bigint): bigint;
-  "frozen"(): boolean;
-}
-
 export interface BalancerV2VaultMethods {
   "swap"(arg0: { "poolId": bigint; "kind": bigint; "assetIn": bigint; "assetOut": bigint; "amount": bigint; "userData": (string | SauceBytes) }, arg1: { "sender": bigint; "fromInternalBalance": boolean; "recipient": bigint; "toInternalBalance": boolean }, arg2: bigint, arg3: bigint): bigint;
   "batchSwap"(arg0: bigint, arg1: (readonly ({ "poolId": bigint; "assetInIndex": bigint; "assetOutIndex": bigint; "amount": bigint; "userData": (string | SauceBytes) })[] | SauceArray<{ "poolId": bigint; "assetInIndex": bigint; "assetOutIndex": bigint; "amount": bigint; "userData": (string | SauceBytes) }>), arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: { "sender": bigint; "fromInternalBalance": boolean; "recipient": bigint; "toInternalBalance": boolean }, arg4: (readonly (bigint)[] | SauceArray<bigint>), arg5: bigint): SauceArray<bigint>;
@@ -1701,10 +1686,6 @@ export interface AxelarSource {
   readonly ITS: SauceContract<AxelarITSMethods>;
 }
 
-export interface AxiomV2Source extends AxiomV2QueryMethods {
-  readonly Query: SauceContract<AxiomV2QueryMethods>;
-}
-
 export interface BalancerV2Source extends BalancerV2VaultMethods {
   readonly Vault: SauceContract<BalancerV2VaultMethods>;
 }
@@ -2360,10 +2341,6 @@ export interface AaveFamilySource {
   readonly EquitiesHub: AaveV4Source["EquitiesHub"];
 }
 
-export interface AxiomFamilySource {
-  readonly Query: AxiomV2Source["Query"];
-}
-
 export interface BalancerFamilySource {
   readonly Vault: BalancerV2Source["Vault"];
 }
@@ -2464,7 +2441,6 @@ declare global {
   const ArbitrumBridge: ArbitrumBridgeSource;
   const Arrakis: ArrakisSource;
   const Axelar: AxelarSource;
-  const AxiomV2: AxiomV2Source;
   const BalancerV2: BalancerV2Source;
   const BaseBridge: BaseBridgeSource;
   const Baseswap: BaseswapSource;
@@ -2588,7 +2564,6 @@ declare global {
   const Zerox: ZeroxSource;
   const ZksyncBridge: ZksyncBridgeSource;
   const Aave: AaveFamilySource;
-  const Axiom: AxiomFamilySource;
   const Balancer: BalancerFamilySource;
   const Compound: CompoundFamilySource;
   const Euler: EulerFamilySource;
