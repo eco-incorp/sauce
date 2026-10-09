@@ -31,8 +31,14 @@ import { TOOL_NAMES } from "../src/tools.js";
 import { WALLET_TOOL_NAMES } from "../src/wallets.js";
 
 const MCP = dirname(dirname(fileURLToPath(import.meta.url)));
-/** `sauce mcp`, from the build: the `sauce` bin, which loads this workspace's `dist/entry.js`. */
-const BIN = [process.execPath, join(MCP, "../sdk/dist/cli/main.js"), "mcp"] as const;
+/** `sauce mcp`, from the build: the `sauce` bin, which loads this workspace's `dist/entry.js` —
+ *  with `--no-update-check`, so no server here starts a refresh that would read the npm registry. */
+const BIN = [
+  process.execPath,
+  join(MCP, "../sdk/dist/cli/main.js"),
+  "mcp",
+  "--no-update-check",
+] as const;
 const SECRET = "stdio-provider-key-1a2b3c";
 const PROGRAM = "function main(): Uint256 {\n  return chainId;\n}\n";
 
