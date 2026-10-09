@@ -95,8 +95,16 @@ const RELEASED_ENGINE =
         ),
       ) as { runtimeCreationCode: string }
     ).runtimeCreationCode.toLowerCase();
-const itSettling = RELEASED_ENGINE ? it.skip : it;
-const itOnRelease = RELEASED_ENGINE ? it : it.skip;
+/** Each case compiles programs and sends several transactions: beside the whole SDK suite, more than
+ *  jest's five seconds. */
+const TIMEOUT = 60_000;
+const testing =
+  (runs: boolean) =>
+  (name: string, fn: () => Promise<void>): void =>
+    (runs ? it : it.skip)(name, fn, TIMEOUT);
+const itAlways = testing(true);
+const itSettling = testing(!RELEASED_ENGINE);
+const itOnRelease = testing(RELEASED_ENGINE);
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "evm", "fixtures");
 const fixture = (name: string) =>
@@ -672,6 +680,7 @@ function main(bump: Uint256): void {
         expect(await parked(vrfKey(id))).toBe(0n);
         if (body.includes("transfer(")) expect(await paid()).toBeGreaterThan(before);
       },
+      TIMEOUT,
     );
 
     itSettling(
@@ -748,18 +757,21 @@ function main(bump: Uint256): void {
       },
     );
 
-    it("spends a request whose callback runs out of the gas it asked for: the body stays parked", async () => {
-      const before = await storage(SLOT);
-      const { id } = await requestVrf(VRF_STARVED_SOURCE, [0n]);
-      expect(await callbackGasOf(id)).toBe(60_000n);
-      const starved = await send(stranger, WRAPPER, fulfill(id, [11n]));
-      expect(starved.status).toBe("success");
-      expect(eventsOf(starved, WRAPPER, WRAPPER_MOCK.abi).map((e) => e.eventName)).toEqual([
-        "WrapperFulfillmentFailed",
-      ]);
-      expect(await storage(SLOT)).toBe(before);
-      expect(await parked(vrfKey(id))).not.toBe(0n);
-    });
+    itAlways(
+      "spends a request whose callback runs out of the gas it asked for: the body stays parked",
+      async () => {
+        const before = await storage(SLOT);
+        const { id } = await requestVrf(VRF_STARVED_SOURCE, [0n]);
+        expect(await callbackGasOf(id)).toBe(60_000n);
+        const starved = await send(stranger, WRAPPER, fulfill(id, [11n]));
+        expect(starved.status).toBe("success");
+        expect(eventsOf(starved, WRAPPER, WRAPPER_MOCK.abi).map((e) => e.eventName)).toEqual([
+          "WrapperFulfillmentFailed",
+        ]);
+        expect(await storage(SLOT)).toBe(before);
+        expect(await parked(vrfKey(id))).not.toBe(0n);
+      },
+    );
 
     itOnRelease(
       "on the released engine the callback reverts, so the wrapper spends it, and the promise stays pending",
@@ -774,24 +786,27 @@ function main(bump: Uint256): void {
       },
     );
 
-    it("refuses a request the Pot cannot pay and still keep the Kitchen's fee for its callback", async () => {
-      const balance = await publicClient.getBalance({ address: stack.pot });
-      await testClient.setBalance({ address: stack.pot, value: 0n });
-      const program = compiled(VRF_SOURCE, [0n]);
-      const refused = await callAs(
-        OWNER.address,
-        stack.pot,
-        encodeFunctionData({ abi: potAbi, functionName: "cook", args: [stack.engine, program] }),
-        15_000_000n,
-        FEE,
-      );
-      expect(refused.ok).toBe(false);
-      expect(refused.reason).toContain(
-        "random: the Pot cannot pay the request and keep the Kitchen's fee for its callback",
-      );
-      expect((await cook(program)).status).toBe("reverted");
-      await testClient.setBalance({ address: stack.pot, value: balance });
-    });
+    itAlways(
+      "refuses a request the Pot cannot pay and still keep the Kitchen's fee for its callback",
+      async () => {
+        const balance = await publicClient.getBalance({ address: stack.pot });
+        await testClient.setBalance({ address: stack.pot, value: 0n });
+        const program = compiled(VRF_SOURCE, [0n]);
+        const refused = await callAs(
+          OWNER.address,
+          stack.pot,
+          encodeFunctionData({ abi: potAbi, functionName: "cook", args: [stack.engine, program] }),
+          15_000_000n,
+          FEE,
+        );
+        expect(refused.ok).toBe(false);
+        expect(refused.reason).toContain(
+          "random: the Pot cannot pay the request and keep the Kitchen's fee for its callback",
+        );
+        expect((await cook(program)).status).toBe("reverted");
+        await testClient.setBalance({ address: stack.pot, value: balance });
+      },
+    );
 
     itSettling(
       "rejects a request past its deadline through the Pot's expire; a late fulfilment is a no-op",
