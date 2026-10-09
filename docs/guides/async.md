@@ -204,7 +204,7 @@ function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Addres
   the promise under a query id the Pot asked: a query someone else asked naming the Pot settles
   nothing. Install it with `sauce run @sauce/zk --chain base --wallet <name>`.
 
-Reading a result costs gas (a four-column result read once took about 300,000 of the callback's
+Reading a result costs gas (a four-column result read once took about 250,000 of the callback's
 gas), and the Pot keeps a query's id and payment in two words until its promise settles.
 
 `Zk.risc0({ imageId, imageUrl, input, offer })` asks Boundless instead:

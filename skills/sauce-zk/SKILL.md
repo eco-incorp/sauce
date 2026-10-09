@@ -86,7 +86,7 @@ The body is handed the proven table, as bytes. Read it with:
   after it, but not read: `Zk.cell` reverts on one.
 - `Zk.rows(result)`: how many rows it has.
 
-Reading costs gas: a callback whose body read one value of a four-column result used about 300,000
+Reading costs gas: a callback whose body read one value of a four-column result used about 250,000
 gas in all, which is why the default `gasLimit` is 1,000,000. Only what the callback uses is charged.
 
 ### Unanswered: the timeout and `Zk.cancel`
