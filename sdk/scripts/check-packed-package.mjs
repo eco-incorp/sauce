@@ -2,7 +2,7 @@
 // Exercise the published entry points from a clean consumer, without workspace
 // dependencies or a separately installed compiler hiding a broken bundle.
 import assert from "node:assert/strict";
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import {
   existsSync,
@@ -12,6 +12,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -28,6 +29,17 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // the shipped examples against the same typings the repo builds them with and a bump moves both.
 const TYPES_NODE_VERSION = JSON.parse(readFileSync(resolve(root, "sdk/package.json"), "utf8"))
   .devDependencies["@types/node"];
+// The package needs no TypeScript at run time, and depends on none: a consumer that typechecks
+// installs its own, as the project `sauce init` writes does, at the range the package is built with
+// (its devDependency), which is the one this consumer takes.
+const TYPESCRIPT_VERSION = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"))
+  .devDependencies.typescript;
+// What only the `sauce` command loads, for one command each (`sdk/src/cli/optional.ts`): installed
+// by default, left out by a library install with --omit=optional.
+const OPTIONAL = ["@modelcontextprotocol/sdk", "litesvm", "zod"];
+// What none of the package's code imports, so no install of it brings: TypeScript and dotenv, which
+// it once depended on, and the web servers the MCP SDK brings.
+const NEVER_IN_A_LIBRARY_INSTALL = [...OPTIONAL, "typescript", "dotenv", "express", "hono"];
 // The SVM engine binaries ship only when a `--fetch-v12-engines` sync has placed them (CI does; a
 // bare local checkout may not). Assert they resolve from the clean install when they are here, and
 // skip that check otherwise rather than failing a credential-less local run.
@@ -63,6 +75,21 @@ if (!shipsAddresses) {
   );
 }
 const work = mkdtempSync(join(tmpdir(), "sauce-package-check-"));
+// A library install of the same tarball, with --omit=optional: outside `work`, so nothing of the
+// default install there resolves from it.
+const library = mkdtempSync(join(tmpdir(), "sauce-library-install-"));
+/** The packages an install put on disk (its lockfile's, where each landed) and their bytes. */
+const installedSize = (dir) => {
+  const lock = JSON.parse(readFileSync(join(dir, "package-lock.json"), "utf8"));
+  const packages = Object.keys(lock.packages).filter(
+    (path) => path !== "" && existsSync(join(dir, path, "package.json")),
+  ).length;
+  const bytes = readdirSync(join(dir, "node_modules"), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .reduce((sum, entry) => sum + statSync(join(entry.parentPath, entry.name)).size, 0);
+
+  return { packages, bytes, text: `${packages} packages, ${(bytes / 2 ** 20).toFixed(1)} MiB` };
+};
 try {
   const output = execFileSync(
     "npm",
@@ -92,6 +119,9 @@ try {
       // This cannot weaken the check. `@types/node` ships no runtime code, so it cannot stand in
       // for anything missing from the tarball; a broken bundle still fails here exactly as before.
       `@types/node@${TYPES_NODE_VERSION}`,
+      // And the consumer's own TypeScript, which typechecks the examples below and serves the
+      // editor on the project `sauce init` writes: no module of the package imports it.
+      `typescript@${TYPESCRIPT_VERSION}`,
     ],
     {
       cwd: work,
@@ -113,6 +143,97 @@ try {
     "the installed package must ship the repository license verbatim",
   );
   console.log("Clean package install: license metadata and full license text ship");
+
+  // What a library import loads is a dependency; what only the `sauce` command loads, for one
+  // command each, is optional: a default install brings it, a library install leaves it out.
+  assert.deepEqual(Object.keys(installedManifest.optionalDependencies ?? {}).sort(), OPTIONAL);
+  for (const each of NEVER_IN_A_LIBRARY_INSTALL) {
+    assert.equal(installedManifest.dependencies[each], undefined, `${each} is not a dependency`);
+  }
+  for (const each of OPTIONAL) {
+    assert.ok(
+      existsSync(join(work, "node_modules", each, "package.json")),
+      `a default install installs ${each}`,
+    );
+  }
+  writeFileSync(join(library, "package.json"), JSON.stringify({ private: true, type: "module" }));
+  execFileSync(
+    "npm",
+    [
+      "install",
+      "--omit=optional",
+      "--engine-strict",
+      "--ignore-scripts",
+      "--prefer-offline",
+      "--no-audit",
+      "--no-fund",
+      join(work, filename),
+    ],
+    { cwd: library, stdio: "inherit" },
+  );
+  for (const each of NEVER_IN_A_LIBRARY_INSTALL) {
+    assert.ok(
+      !existsSync(join(library, "node_modules", each)),
+      `--omit=optional leaves out ${each}`,
+    );
+  }
+  // Every export of the package loads there, a protocol's for each protocol, and each works.
+  const librarySubpaths = Object.entries(installedManifest.exports).flatMap(([key, value]) => {
+    const target = typeof value === "string" ? value : value.default;
+    if (target === undefined || !target.endsWith(".js")) return [];
+    if (!key.includes("*")) return [key];
+    const [before, after] = target.split("*");
+
+    return readdirSync(join(installedRoot, before))
+      .filter((dir) => existsSync(join(installedRoot, before, dir + after)))
+      .map((dir) => key.replace("*", dir));
+  });
+  assert.ok(
+    librarySubpaths.includes("./protocols/uniswap-v3"),
+    "the protocols' exports are listed",
+  );
+  writeFileSync(
+    join(library, "library.mjs"),
+    `
+    import assert from 'node:assert/strict';
+    for (const subpath of ${JSON.stringify(librarySubpaths)}) {
+      await import(subpath === '.' ? '${name}' : '${name}' + subpath.slice(1));
+    }
+    const { Base } = await import('${name}');
+    assert.equal(Base.chain.id, 8453);
+    const { compile } = await import('${name}/compiler');
+    const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
+    assert.ok(compile({ target: 'evm', resolve: () => source }).bytecode.length > 0);
+    const { chainBySlug } = await import('${name}/chains');
+    assert.equal(chainBySlug('solana').kind, 'svm');
+    const { protocolInfo, deployments } = await import('${name}/protocols/uniswap-v3');
+    assert.ok(protocolInfo && Object.keys(deployments).length > 0);
+    const actions = await import('${name}/actions');
+    const program = actions.parseProgram({
+      version: 1,
+      chainId: 1,
+      actions: [{ type: 'approve', amount: '1', token: '0x1000000000000000000000000000000000000001', spender: '0x2000000000000000000000000000000000000001' }],
+    });
+    assert.ok(actions.compileProgram(program).bytecode.length > 0);
+    ${
+      shipsAddresses
+        ? `const { v12KitchenAddress } = await import('${name}/deployments');
+    assert.match(v12KitchenAddress(), /^0x[0-9a-fA-F]{40}$/);`
+        : ""
+    }
+  `,
+  );
+  execFileSync(process.execPath, [join(library, "library.mjs")], {
+    cwd: library,
+    stdio: "inherit",
+  });
+  const defaultSize = installedSize(work);
+  const librarySize = installedSize(library);
+  console.log(
+    `Clean package install: with --omit=optional, ${librarySize.text} (by default ` +
+      `${defaultSize.text}, the consumer's TypeScript and Node typings included), and every one ` +
+      `of its ${librarySubpaths.length} exports loads and works without what it left out`,
+  );
 
   // Public consumers cannot rely on this private repository. Verify the actual
   // tarball includes the complete manual and all of its local navigation targets.
@@ -439,8 +560,51 @@ try {
       `and builds its Pot and cook transactions`,
   );
 
+  // The library install runs every command that builds: none needs what it left out.
+  const librarySauce = (...args) =>
+    execFileSync("npx", ["--no", "--", "sauce", ...args], {
+      cwd: library,
+      encoding: "utf8",
+      env: smokeEnv,
+    });
+  assert.equal(librarySauce("compile", example, ...chain).trim(), bytecode);
+  assert.deepEqual(
+    JSON.parse(
+      librarySauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--offline", ...args),
+    ),
+    tx,
+  );
+  const libraryGlobals = JSON.parse(librarySauce("globals", "--chain", "base", "--json"));
+  assert.equal(libraryGlobals.chain.id, 8453);
+  assert.ok(libraryGlobals.tokens.some((token) => token.symbol === "USDC"));
+  console.log(
+    "Clean package install: with --omit=optional, sauce compile, tx and globals print what they " +
+      "print by default",
+  );
+  // A command that needs what it left out says so, on one line, with the line that installs it:
+  // exit 1, never a stack trace.
+  const pinned = installedManifest.optionalDependencies;
+  const leftOut = ({ status, stdout, stderr }, what, needs) => {
+    assert.equal(status, 1, `${what} exits 1: ${stderr}`);
+    assert.equal(stdout, "", `${what} prints nothing on stdout`);
+    assert.doesNotMatch(stderr, /^\s+at /m, `${what} prints no stack trace`);
+    assert.equal(stderr.trimEnd().split("\n").length, 1, `${what} prints one line: ${stderr}`);
+    assert.ok(
+      stderr.includes(
+        `needs ${needs.join(" and ")}, ${needs.length === 1 ? "an optional dependency" : "optional dependencies"} ` +
+          `of ${name} that this install left out (--omit=optional): install`,
+      ),
+      `${what} names what it needs and why it is not here: ${stderr}`,
+    );
+    for (const each of needs) {
+      assert.ok(stderr.includes(`${each}@${pinned[each]}`), `${what} pins ${each}: ${stderr}`);
+    }
+
+    return stderr;
+  };
+
   // A Solana cook rehearsed in the local copy from the tarball alone: LiteSVM is the package's own
-  // dependency, so `npx sauce simulate` needs nothing else installed. The endpoint is a loopback stub
+  // (optional) dependency, so `npx sauce simulate` needs nothing else installed. The endpoint is a loopback stub
   // holding the Rent sysvar at mainnet's rent, the Kitchen's fee config and USDC's mint
   // (`solana-rpc-stub.mjs`); --assume-balance takes the rehearsal into the copy, as a cook too large
   // for one transaction does. The command runs asynchronously: the stub answers from this process.
@@ -482,16 +646,21 @@ try {
         join(work, "solana-check.sauce.ts"),
         "function main(x: Uint256): Uint256 {\n  return x + 1;\n}\n",
       );
-      const { stdout } = await promisify(execFile)(
-        "npx",
-        [
-          ...["--no", "--", "sauce", "simulate", join(work, "solana-check.sauce.ts")],
-          ...["--chain", "solana", "--rpc-url", stub.url],
-          ...["--owner", "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"],
-          ...["--assume-balance", "USDC:1", "--args", "1", "--json"],
-        ],
-        { cwd: work, encoding: "utf8", env: smokeEnv },
-      );
+      const rehearse = (cwd) =>
+        promisify(execFile)(
+          "npx",
+          [
+            ...["--no", "--", "sauce", "simulate", join(work, "solana-check.sauce.ts")],
+            ...["--chain", "solana", "--rpc-url", stub.url],
+            ...["--owner", "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"],
+            ...["--assume-balance", "USDC:1", "--args", "1", "--json"],
+          ],
+          { cwd, encoding: "utf8", env: smokeEnv },
+        ).then(
+          ({ stdout, stderr }) => ({ status: 0, stdout, stderr }),
+          ({ code, stdout, stderr }) => ({ status: code, stdout, stderr }),
+        );
+      const { stdout } = await rehearse(work);
       const rehearsal = JSON.parse(stdout);
       assert.equal(rehearsal.ok, true, `the rehearsal succeeds: ${rehearsal.reason}`);
       assert.equal(rehearsal.path, "local copy (LiteSVM)", "in the local copy");
@@ -500,12 +669,14 @@ try {
         stub.methods.has("getMultipleAccounts"),
         "the copy read its accounts from the stub",
       );
+      // The library install compiles and plans the same cook, and stops where the copy opens.
+      leftOut(await rehearse(library), "a Solana rehearsal without LiteSVM", ["litesvm"]);
     } finally {
       await stub.close();
     }
     console.log(
       "Clean package install: npx sauce simulate rehearses a Solana cook in its local copy, with " +
-        "the LiteSVM the package installs",
+        "the LiteSVM the package installs; with --omit=optional, it says how to install LiteSVM",
     );
   }
 
@@ -857,8 +1028,8 @@ try {
   // Each server runs in a process group of its own — npx, the shell it may start, node — so it is
   // stopped whole: killing npx alone can leave the server running, holding this script's pipes
   // open, and the check would never end. Every wait is bounded for the same reason.
-  const mcpServer = (args, stdio) =>
-    spawn("npx", [...mcpLaunch, ...args], { cwd: work, env: smokeEnv, stdio, detached: true });
+  const mcpServer = (args, stdio, cwd = work) =>
+    spawn("npx", [...mcpLaunch, ...args], { cwd, env: smokeEnv, stdio, detached: true });
   const stopServer = async (child) => {
     if (child.exitCode === null && child.signalCode === null) {
       const exited = once(child, "exit");
@@ -885,31 +1056,36 @@ try {
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   };
   // Over stdio: one JSON-RPC message per line in, one per line out, and EOF ends the server.
-  const stdio = mcpServer([], ["pipe", "pipe", "inherit"]);
-  let stdout = "";
-  const answers = new Map();
-  try {
-    const answered = new Promise((resolveAll, rejectAll) => {
-      stdio.stdout.on("data", (chunk) => {
-        stdout += chunk.toString();
-        for (let at = stdout.indexOf("\n"); at >= 0; at = stdout.indexOf("\n")) {
-          const message = JSON.parse(stdout.slice(0, at));
-          stdout = stdout.slice(at + 1);
-          if (message.id !== undefined) answers.set(message.id, message);
-          if (answers.size === 4) resolveAll();
-        }
+  const overStdio = async (cwd) => {
+    const stdio = mcpServer([], ["pipe", "pipe", "inherit"], cwd);
+    let stdout = "";
+    const answers = new Map();
+    try {
+      const answered = new Promise((resolveAll, rejectAll) => {
+        stdio.stdout.on("data", (chunk) => {
+          stdout += chunk.toString();
+          for (let at = stdout.indexOf("\n"); at >= 0; at = stdout.indexOf("\n")) {
+            const message = JSON.parse(stdout.slice(0, at));
+            stdout = stdout.slice(at + 1);
+            if (message.id !== undefined) answers.set(message.id, message);
+            if (answers.size === 4) resolveAll();
+          }
+        });
+        stdio.once("exit", (code) =>
+          rejectAll(new Error(`sauce mcp exited ${code} before answering`)),
+        );
       });
-      stdio.once("exit", (code) =>
-        rejectAll(new Error(`sauce mcp exited ${code} before answering`)),
-      );
-    });
-    for (const message of mcpRequests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
-    await within(answered, "sauce mcp over stdio");
-    stdio.stdin.end();
-    await within(once(stdio, "exit"), "sauce mcp ending at EOF", 30_000).catch(() => {});
-  } finally {
-    await stopServer(stdio);
-  }
+      for (const message of mcpRequests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
+      await within(answered, "sauce mcp over stdio");
+      stdio.stdin.end();
+      await within(once(stdio, "exit"), "sauce mcp ending at EOF", 30_000).catch(() => {});
+    } finally {
+      await stopServer(stdio);
+    }
+
+    return answers;
+  };
+  const answers = await overStdio(work);
   assert.equal(answers.get(1).result.serverInfo.version, installedManifest.version);
   const toolNames = answers.get(2).result.tools.map((tool) => tool.name);
   for (const tool of [
@@ -934,6 +1110,42 @@ try {
   for (const file of shippedSkills) {
     assert.ok(resourceUris.includes(`sauce://skills/${file}`), `sauce mcp serves skills/${file}`);
   }
+  // The library install left the MCP SDK out: `sauce mcp` says so, and how to install it. That line,
+  // run as given (with --omit=optional, as a project keeping it in .npmrc installs), brings exactly
+  // what the server needs, and the server then answers as the default install's does.
+  const refused = leftOut(
+    spawnSync("npx", [...mcpLaunch], { cwd: library, env: smokeEnv, encoding: "utf8", input: "" }),
+    "sauce mcp without the MCP SDK",
+    ["@modelcontextprotocol/sdk", "zod"],
+  );
+  assert.ok(refused.startsWith("sauce mcp: the MCP server needs "), refused);
+  const installLine = /`(npm i [^`]+)`/.exec(refused)[1];
+  assert.equal(
+    installLine,
+    `npm i @modelcontextprotocol/sdk@${pinned["@modelcontextprotocol/sdk"]} zod@${pinned.zod}`,
+  );
+  execFileSync(
+    "npm",
+    [
+      ...installLine.split(" ").slice(1),
+      "--omit=optional",
+      "--prefer-offline",
+      "--no-audit",
+      "--no-fund",
+    ],
+    { cwd: library, stdio: "inherit" },
+  );
+  assert.ok(!existsSync(join(library, "node_modules/litesvm")), "and only what the line names");
+  const libraryAnswers = await overStdio(library);
+  assert.deepEqual(
+    libraryAnswers.get(2).result.tools.map((tool) => tool.name),
+    answers.get(2).result.tools.map((tool) => tool.name),
+    "the same tools as the default install's",
+  );
+  console.log(
+    `Clean package install: with --omit=optional, sauce mcp says it needs the MCP SDK and zod and ` +
+      `how to install them, and \`${installLine}\` is all it then needs`,
+  );
   // Over Streamable HTTP, self-hosted with the same one command and a port it picks: initialize
   // and tools/list, each a POST of its own to the stateless /mcp.
   const http = mcpServer(["--http", "0"], ["ignore", "ignore", "pipe"]);
@@ -982,6 +1194,53 @@ try {
       `${shippedSkills.length} skill files over stdio and Streamable HTTP`,
   );
 
+  // `npx -y` in a directory with nothing in it, as an agent launches the server: npx installs the
+  // tarball into its own cache, optional dependencies included. That install is found by the
+  // tarball it names and removed after.
+  const empty = mkdtempSync(join(tmpdir(), "sauce-npx-"));
+  const npxDir = join(
+    execFileSync("npm", ["config", "get", "cache"], { encoding: "utf8" }).trim(),
+    "_npx",
+  );
+  const npxInstalls = () =>
+    (existsSync(npxDir) ? readdirSync(npxDir) : []).filter((dir) => {
+      const manifest = join(npxDir, dir, "package.json");
+
+      return (
+        existsSync(manifest) &&
+        JSON.parse(readFileSync(manifest, "utf8"))._npx?.packages?.includes(join(work, filename))
+      );
+    });
+  try {
+    const npx = (...args) =>
+      execFileSync(
+        "npx",
+        ["-y", "--prefer-offline", "--package", join(work, filename), "--", "sauce", ...args],
+        { cwd: empty, encoding: "utf8", env: smokeEnv },
+      );
+    assert.match(npx("mcp", "--help"), /^Serve the commands and the agent skills to coding agents/);
+    writeFileSync(join(empty, "mcp-check.sauce.ts"), mcpProgram);
+    assert.equal(
+      npx("compile", "mcp-check.sauce.ts", "--chain", "ethereum").trim(),
+      sauce("compile", join(work, "mcp-check.sauce.ts"), "--chain", "ethereum").trim(),
+    );
+    const [npxInstall] = npxInstalls();
+    assert.ok(npxInstall !== undefined, `npx installed the tarball under ${npxDir}`);
+    for (const each of OPTIONAL) {
+      assert.ok(
+        existsSync(join(npxDir, npxInstall, "node_modules", each, "package.json")),
+        `npx -y installs ${each}`,
+      );
+    }
+    console.log(
+      `Clean package install: npx -y runs sauce mcp --help and sauce compile from an empty ` +
+        `directory, its install ${installedSize(join(npxDir, npxInstall)).text}`,
+    );
+  } finally {
+    for (const dir of npxInstalls()) rmSync(join(npxDir, dir), { recursive: true, force: true });
+    rmSync(empty, { recursive: true, force: true });
+  }
+
   // The same browser gates the repository runs, against the INSTALLED package and resolved from
   // this consumer by name, so what they prove is the shipped `exports` map: every browser-facing
   // export bundles for the browser without Node, and compiles in headless Chromium to the bytes
@@ -995,4 +1254,5 @@ try {
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
+  rmSync(library, { recursive: true, force: true });
 }
