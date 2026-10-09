@@ -1,0 +1,13 @@
+{
+  "name": "@sauce/zk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript's ZK-coprocessor requests: a query about a chain's history now, and the `.then` body run on the same Private Pot when the proven results are called back. `Zk.axiom(query)` sends an Axiom V2 query whose callback carries the body as its extra data; `axiomV2Callback` is the body of the handler the Pot answers AxiomV2Query's callback with, which checks the caller and the query's sender before it runs the body. Built on @sauce/async. `main` names the NEUTRAL BASE the compiler suffixes per target (zk.evm.js); there is no SVM arm, because the coprocessors' contracts are EVM contracts.",
+  "main": "zk.js",
+  "handlers": [
+    {
+      "selector": "axiomV2Callback(uint64,address,bytes32,uint256,bytes32[],bytes)",
+      "program": "axiom.handler.js"
+    }
+  ]
+}
