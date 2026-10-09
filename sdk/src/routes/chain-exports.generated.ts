@@ -25,8 +25,8 @@
 // `Token(addr).approve(...)` typecheck in a TYPED CLOSURE body and not only in one
 // supplied as source text. It is intersected here rather than declared on `TokenApi`
 // because the runtime `Token` value is a frozen object and is not callable -- the
-// `Token(x)` spelling is the chain module's (`@sauce/names`' `Token`: a write is
-// `@sauce/token`'s SafeERC20 function, a read its `balanceOf`) and is never invoked by the host.
+// `Token(x)` spelling is the chain module's (`@sauce/token`'s `TokenOf`: a write is its
+// SafeERC20 function, a read the typed `balanceOf` call) and is never invoked by the host.
 import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
