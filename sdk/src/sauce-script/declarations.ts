@@ -8,7 +8,8 @@
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
  * - every `@sauce/` library the SDK serves but `@sauce/token` (`@sauce/router`), as a module of
- *   its exported functions, typed from their own SauceScript annotations;
+ *   its exported functions, typed from their own SauceScript annotations, and its exported classes
+ *   (`@sauce/async`'s `Promise`) and values, whose members take and answer anything;
  * - then the catch-alls: another JSON ABI, another `@sauce/` library.
  *
  * The language itself — types, builtins, value methods, `@sauce/token` — is the hand-written
@@ -133,6 +134,35 @@ function annotatedType(annotation: string | undefined, input: boolean): string {
 }
 
 /**
+ * An exported class of a library, as the compiler runs it while it compiles: its constructor, its
+ * methods and getters, static or not, each taking and answering anything, since the class works on
+ * values the compiler knows rather than typed ones. A member whose name starts with `_`, and a
+ * computed one (`[Symbol.dispose]`), is the class's own and left out.
+ */
+function classDeclaration(declared: AstNode): string {
+  const members = ((declared.body as AstNode).body as AstNode[]).flatMap((member) => {
+    const key = member.key as AstNode | undefined;
+    const name = typeof key?.name === "string" ? key.name : undefined;
+    if (member.type !== "MethodDefinition" || member.computed === true || name === undefined) {
+      return [];
+    }
+    if (member.kind === "constructor") return ["    constructor(...args: any[]);"];
+    if (name.startsWith("_")) return [];
+    const statics = member.static === true ? "static " : "";
+    if (member.kind === "get") return [`    ${statics}readonly ${name}: any;`];
+
+    return [`    ${statics}${name}(...args: any[]): any;`];
+  });
+
+  return [
+    `  export class ${(declared.id as AstNode).name as string} {`,
+    "    [field: string]: any;",
+    ...members,
+    "  }",
+  ].join("\n");
+}
+
+/**
  * The `@sauce/<name>` libraries the SDK serves, each as a module of its exported functions, every
  * target's arm merged (a function whose arms differ is overloaded). `@sauce/token` is left to
  * builtins.d.ts, which declares its functions as the globals a program calls with no import.
@@ -151,6 +181,19 @@ function libraryModules(): string[] {
     };
     for (const statement of (parseSauce(source) as unknown as { body: AstNode[] }).body) {
       const declared = statement.declaration as AstNode | undefined;
+      if (statement.type === "ExportNamedDeclaration" && declared?.type === "ClassDeclaration") {
+        functions.add(classDeclaration(declared));
+        continue;
+      }
+      // An exported value (`export const Random = new RandomProtocol();`), which the compiler runs:
+      // anything, as a class's members are.
+      if (statement.type === "ExportNamedDeclaration" && declared?.type === "VariableDeclaration") {
+        for (const declarator of declared.declarations as AstNode[]) {
+          const id = declarator.id as AstNode;
+          if (typeof id.name === "string") functions.add(`  export const ${id.name}: any;`);
+        }
+        continue;
+      }
       if (statement.type !== "ExportNamedDeclaration" || declared?.type !== "FunctionDeclaration") {
         continue;
       }
