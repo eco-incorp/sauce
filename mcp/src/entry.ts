@@ -7,7 +7,9 @@
  * chain through the `--config` file's endpoint for it, else the built-in public endpoints the
  * `sauce` command hands it (`McpServeOptions.publicRpcs`). It holds no key unless it serves stdio
  * with `--wallets`, whose password the `sauce` command has already read from the source it was
- * given; then its wallet tools sign with those wallets alone. Over HTTP it never signs.
+ * given; then its wallet tools sign with those wallets alone. Over HTTP it never signs. A newer
+ * version the `sauce` command's update check has seen is noted once, in the process's first tool
+ * result (`update-note.ts`).
  */
 import { readFileSync } from "node:fs";
 
@@ -25,6 +27,7 @@ import {
 } from "./sdk.js";
 import { createSauceServer, packageInfo } from "./server.js";
 import { parseSetupAgents, setupLines, setupProject } from "./setup.js";
+import { once } from "./update-note.js";
 
 function readConfig(path: string | undefined): Endpoints {
   if (path === undefined) return NO_ENDPOINTS;
@@ -56,6 +59,8 @@ async function serve(options: McpServeOptions): Promise<void> {
     options.maxBody === undefined
       ? DEFAULT_MAX_BODY
       : wholeNumber("max-body", options.maxBody, 1, 64 * 1024 * 1024);
+  // One note for the process: over HTTP every request has a server of its own.
+  const updateNote = options.updateNote === undefined ? undefined : once(options.updateNote);
   if (options.http === undefined) {
     if (options.host !== undefined) throw new UsageError("--host goes with --http");
     if (options.allowedHosts.length > 0) throw new UsageError("--allowed-host goes with --http");
@@ -79,6 +84,7 @@ async function serve(options: McpServeOptions): Promise<void> {
       endpoints,
       local: true,
       ...(wallets === undefined ? {} : { wallets }),
+      ...(updateNote === undefined ? {} : { updateNote }),
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     if (wallets !== undefined) {
       options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
@@ -108,7 +114,8 @@ async function serve(options: McpServeOptions): Promise<void> {
     host,
     allowedHosts: options.allowedHosts,
     maxBody,
-    server: () => createSauceServer({ endpoints, guard }),
+    server: () =>
+      createSauceServer({ endpoints, guard, ...(updateNote === undefined ? {} : { updateNote }) }),
     log: options.log,
   });
   options.log(

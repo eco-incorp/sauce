@@ -11,14 +11,12 @@ import { join } from "node:path";
 
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { INSTALL_RECORD } from "../src/cli/skills.js";
+import { newer, PACKAGE, type Packument } from "../src/cli/npm-registry.js";
 import {
   globalInstall,
   installationOf,
-  newer,
-  PACKAGE,
   type Captured,
   type Installation,
-  type Packument,
   type Updater,
 } from "../src/cli/update.js";
 

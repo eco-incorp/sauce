@@ -2,7 +2,7 @@
 // Exercise the published entry points from a clean consumer, without workspace
 // dependencies or a separately installed compiler hiding a broken bundle.
 import assert from "node:assert/strict";
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import {
   existsSync,
@@ -362,15 +362,16 @@ try {
 
   // The `sauce` bin, run the way a consumer runs it — through npx, from the install, with nothing
   // but the tarball's files. It compiles the example its own agent skill ships, builds the Pot and
-  // the transaction, and scaffolds a project whose skills then report up to date.
+  // the transaction, and scaffolds a project whose skills then report up to date. Each run passes
+  // --no-update-check, so none starts a refresh that would read the npm registry.
   const sauce = (...args) =>
-    execFileSync("npx", ["--no", "--", "sauce", ...args], {
+    execFileSync("npx", ["--no", "--", "sauce", "--no-update-check", ...args], {
       cwd: work,
       encoding: "utf8",
       env: smokeEnv,
     });
   assert.equal(
-    execFileSync("npx", ["--no", "--", name, "--version"], {
+    execFileSync("npx", ["--no", "--", name, "--no-update-check", "--version"], {
       cwd: work,
       encoding: "utf8",
       env: smokeEnv,
@@ -378,6 +379,38 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
+  // The update check, from the install: a fresh cache in a home of its own naming a newer version
+  // is noticed on stderr, after stdout's own output, and starts no refresh (the cache is a minute
+  // old), so nothing reads the registry. The refresh's script ships beside the bin.
+  assert.ok(
+    existsSync(join(installedRoot, "sdk/dist/cli/update-refresh.js")),
+    "the update check's refresh script ships",
+  );
+  {
+    const home = mkdtempSync(join(tmpdir(), "sauce-packed-home-"));
+    const cache = join(home, ".sauce", "update-check.json");
+    mkdirSync(dirname(cache), { recursive: true });
+    const fresh = JSON.stringify({
+      checkedAt: new Date(Date.now() - 60_000).toISOString(),
+      latest: "999.0.0",
+      version: installedManifest.version,
+    });
+    writeFileSync(cache, fresh);
+    const ran = spawnSync("npx", ["--no", "--", "sauce", "--version"], {
+      cwd: work,
+      encoding: "utf8",
+      env: { ...smokeEnv, HOME: home, USERPROFILE: home },
+    });
+    assert.equal(ran.stdout, `${name} ${installedManifest.version}\n`);
+    assert.equal(
+      ran.stderr,
+      `sauce ${installedManifest.version} → 999.0.0 is available: run \`sauce update\`\n`,
+      "the installed sauce notices a newer version from its cache",
+    );
+    assert.equal(readFileSync(cache, "utf8"), fresh, "a fresh cache starts no refresh");
+    rmSync(home, { recursive: true, force: true });
+  }
+  console.log("Clean package install: sauce notices a newer version from its update cache");
   // The skill's `buy.sauce.ts` names no chain, starts with a `#!` line, imports `@sauce/router`
   // and takes `main(token, budget, sqrtPriceLimitX96, minOut, recipient)` at run time.
   // `--offline`: the bin reads a chain through its built-in public endpoints otherwise, and this
@@ -822,8 +855,8 @@ try {
 
   // `sauce mcp`, from the install, the way `sauce mcp setup` launches it — `npx @eco-incorp/sauce
   // mcp`, here with `--no` so nothing is fetched — over both transports: the tools, a compile, and
-  // every shipped skill file as a resource. Nothing here reaches a chain.
-  const mcpLaunch = ["--no", "--", name, "mcp"];
+  // every shipped skill file as a resource. Nothing here reaches a chain, nor the registry.
+  const mcpLaunch = ["--no", "--", name, "mcp", "--no-update-check"];
   const mcpProgram =
     "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";
   writeFileSync(join(work, "mcp-check.sauce.ts"), mcpProgram);

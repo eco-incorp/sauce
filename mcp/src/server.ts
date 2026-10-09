@@ -17,6 +17,7 @@ import { registerSkillTools } from "./skilltools.js";
 import { COMMAND_TOOLS, flagInputLines } from "./terms.js";
 import { registerIntentTools } from "./intents.js";
 import { registerTools, type WalletContext } from "./tools.js";
+import { noteResults } from "./update-note.js";
 import { registerWalletTools } from "./wallets.js";
 
 let manifest: { readonly name: string; readonly version: string } | undefined;
@@ -141,6 +142,9 @@ export interface SauceServerOptions {
   readonly wallets?: WalletContext;
   /** The skills directory; the package's own by default. */
   readonly skillsDir?: string;
+  /** A newer version's note, asked after each tool result and added to it when it says something:
+   *  `update-note.ts#once` of the `sauce` command's note, shared by every server of the process. */
+  readonly updateNote?: () => string | undefined;
 }
 
 export function createSauceServer(options: SauceServerOptions): McpServer {
@@ -158,6 +162,7 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
       instructions: instructions(options.endpoints, options.wallets, options.local === true),
     },
   );
+  if (options.updateNote !== undefined) noteResults(server, options.updateNote);
   const tools = {
     endpoints: options.endpoints,
     ...(options.guard === undefined ? {} : { guard: options.guard }),
