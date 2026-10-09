@@ -83,6 +83,43 @@ const SAUCE_RANDOM_CHILD_GAS = 120000;
 // promise `key`, `abi.encode` of it. keccak256("RandomDelivered(bytes32,bytes)").
 const SAUCE_RANDOM_DELIVERED = 0xe500aac90a32f50f556ab717cc2f13033477bf25fe300ef4167ccaab39617fd5;
 
+// The callback's gas limit a request asks for: `gas`, else sized from what settling runs. For a
+// plain request that is its continuation, the body; for a combinator's child it is the child's
+// part, the core's own settling (a fixed allowance: most of its code is branches one settlement
+// does not take), and then the combinator's continuation (`settles`), which holds the body.
+function callbackGas(gas, continuation) {
+  if (gas !== undefined) return gas;
+  const settles = continuation.settles;
+  if (settles === undefined) {
+    return (
+      SAUCE_RANDOM_LANDING_GAS +
+      SAUCE_RANDOM_GAS_PER_BYTE * (continuation.code.length + continuation.args.length)
+    );
+  }
+  return (
+    SAUCE_RANDOM_LANDING_GAS +
+    SAUCE_RANDOM_CHILD_GAS +
+    SAUCE_RANDOM_GAS_PER_BYTE * (settles.code.length + settles.args.length)
+  );
+}
+
+// Why a request is refused when the Pot cannot pay its price now and keep the Kitchen's fee for the
+// callback's cook.
+const SAUCE_RANDOM_UNFUNDED =
+  "random: the Pot cannot pay the request and keep the Kitchen's fee for its callback";
+
+// A config's fields: each one `fields` names, or a compile error naming the one it does not take.
+function checkFields(method, config, fields, usage) {
+  if (config.length !== undefined) {
+    throw new Error("`Random." + method + "(...)` takes one object: " + usage);
+  }
+  for (const key of Object.keys(config)) {
+    if (fields[key] === undefined) {
+      throw new Error("`Random." + method + "` takes no `" + key + "`: " + usage);
+    }
+  }
+}
+
 // The requests a program makes: `Random.vrf(config)` and `Random.entropy(config)`.
 class Requests {
   // Chainlink VRF v2.5, direct funding, paid in the native coin:
@@ -92,8 +129,8 @@ class Requests {
   //                  coordinator asks for (Base's allows 0)
   //   gas            the callback's gas limit; sized from the body when left out
   //   deadline       a unix time after which anyone may expire the request
-  vrf(config) {
-    this._checkFields(
+  vrf(config = {}) {
+    checkFields(
       "vrf",
       config,
       { words: true, confirmations: true, gas: true, deadline: true },
@@ -104,18 +141,15 @@ class Requests {
         "`Random.vrf` requests through Chainlink VRF's VRFV2PlusWrapper, and the registry has none on the chain this program is compiled for",
       );
     }
-    const options = config === undefined ? {} : config;
-    const words = options.words === undefined ? 1 : options.words;
-    const confirmations = options.confirmations === undefined ? 3 : options.confirmations;
-    const gas = options.gas;
+    const { words = 1, confirmations = 3, gas, deadline } = config;
     return new Request({
-      deadline: options.deadline,
+      deadline,
       send: (continuation) => {
         require(words >= 1 && words <= 10, "random: a VRF request asks for 1 to 10 words");
-        const limit = this._callbackGas(gas, continuation);
+        const limit = callbackGas(gas, continuation);
         const wrapper = ChainlinkVrf.Wrapper;
         const price = wrapper.calculateRequestPriceNative(limit, words);
-        this._requireFunds(price);
+        require(ctx.selfBalance() >= price + kitchenFee(), SAUCE_RANDOM_UNFUNDED);
         const [id] = abi.decode(
           evm.call(
             wrapper,
@@ -141,8 +175,8 @@ class Requests {
   //             to 10,000 and raises it to the provider's default, whose fee is the least a
   //             request pays
   //   deadline  a unix time after which anyone may expire the request
-  entropy(config) {
-    this._checkFields(
+  entropy(config = {}) {
+    checkFields(
       "entropy",
       config,
       { provider: true, gas: true, deadline: true },
@@ -153,17 +187,15 @@ class Requests {
         "`Random.entropy` requests from Pyth Entropy, and the registry has no Entropy contract on the chain this program is compiled for",
       );
     }
-    const options = config === undefined ? {} : config;
-    const given = options.provider;
-    const gas = options.gas;
+    const { provider: given, gas, deadline } = config;
     return new Request({
-      deadline: options.deadline,
+      deadline,
       send: (continuation) => {
-        const limit = this._callbackGas(gas, continuation);
+        const limit = callbackGas(gas, continuation);
         const entropy = PythEntropy.Entropy;
         const provider = given === undefined ? entropy.getDefaultProvider() : given;
         const fee = entropy.getFeeV2(provider, limit);
-        this._requireFunds(fee);
+        require(ctx.selfBalance() >= fee + kitchenFee(), SAUCE_RANDOM_UNFUNDED);
         const [sequence] = abi.decode(
           evm.call(entropy, fee, hex`0e33da29`.concat(abi.encode(provider, limit))),
           ["Uint256"],
@@ -175,47 +207,6 @@ class Requests {
         body(value);
       },
     });
-  }
-
-  // The callback's gas limit a request asks for: `gas`, else sized from what settling runs. For a
-  // plain request that is its continuation, the body; for a combinator's child it is the child's
-  // part, the core's own settling (a fixed allowance: most of its code is branches one settlement
-  // does not take), and then the combinator's continuation (`settles`), which holds the body.
-  _callbackGas(gas, continuation) {
-    if (gas !== undefined) return gas;
-    const settles = continuation.settles;
-    if (settles === undefined) {
-      return (
-        SAUCE_RANDOM_LANDING_GAS +
-        SAUCE_RANDOM_GAS_PER_BYTE * (continuation.code.length + continuation.args.length)
-      );
-    }
-    return (
-      SAUCE_RANDOM_LANDING_GAS +
-      SAUCE_RANDOM_CHILD_GAS +
-      SAUCE_RANDOM_GAS_PER_BYTE * (settles.code.length + settles.args.length)
-    );
-  }
-
-  // The Pot pays `price` now and keeps the Kitchen's fee for the callback's cook.
-  _requireFunds(price) {
-    const needed = price + kitchenFee();
-    const message =
-      "random: the Pot cannot pay the request and keep the Kitchen's fee for its callback";
-    require(ctx.selfBalance() >= needed, message);
-  }
-
-  // A config's fields: each one `fields` names, or a compile error naming the one it does not take.
-  _checkFields(method, config, fields, usage) {
-    if (config === undefined) return;
-    if (config.length !== undefined) {
-      throw new Error("`Random." + method + "(...)` takes one object: " + usage);
-    }
-    for (const key of Object.keys(config)) {
-      if (fields[key] === undefined) {
-        throw new Error("`Random." + method + "` takes no `" + key + "`: " + usage);
-      }
-    }
   }
 }
 

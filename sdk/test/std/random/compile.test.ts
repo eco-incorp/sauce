@@ -208,8 +208,12 @@ function main(bump: Uint256): void {
   });
 
   it("a request checks the Pot keeps the Kitchen's fee for its callback", () => {
-    expect(SOURCE).toContain("const needed = price + kitchenFee();");
-    expect(SOURCE).toContain("require(ctx.selfBalance() >= needed, message);");
+    expect(SOURCE).toContain(
+      "require(ctx.selfBalance() >= price + kitchenFee(), SAUCE_RANDOM_UNFUNDED);",
+    );
+    expect(SOURCE).toContain(
+      "require(ctx.selfBalance() >= fee + kitchenFee(), SAUCE_RANDOM_UNFUNDED);",
+    );
     const kitchen = toFunctionSelector("kitchen()").slice(2);
     const fee = toFunctionSelector("executionFee()").slice(2);
     for (const source of [VRF, ENTROPY]) {
