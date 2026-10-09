@@ -65,5 +65,5 @@ an ABI import bound to the address), and the ABI functions are generated in
   retried. Size the callback gas limit for everything the callback runs.
 - The request id the call returns is the one the callback carries; the wrapper's `lastRequestId`
   is not set for native requests.
-- A Sauce program receives the words with `@sauce/random`'s `Random.vrf`, which pays the price,
-  keeps the continuation under the request id and authenticates the wrapper.
+- A Sauce program receives the words with `@sauce/random`'s `Random.vrf` (the `sauce-random`
+  skill), which pays the price, keys its promise by the request id and authenticates the wrapper.

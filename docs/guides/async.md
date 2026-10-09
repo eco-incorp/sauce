@@ -141,3 +141,49 @@ to three words the body captured sit beside it, and more go into code. The body'
 once per Pot, by CREATE2 at an address its bytes decide, and shared by every request that compiles
 to it. Settling clears the word. A carried `.then` stores nothing. A combinator parks a word of its
 own and one per child, and keeps each child's value until it is decided.
+
+## Randomness: `@sauce/random`
+
+`@sauce/random` asks for verifiable randomness and hands it to the body: `Random.vrf` from
+Chainlink VRF, on Ethereum and Base, and `Random.entropy` from Pyth Entropy, on Base. A coin flip
+for a prize:
+
+```js
+import { Random } from "@sauce/random";
+
+function main(heads: Address, tails: Address, prize: Uint256) {
+  Random.vrf({ words: 1 }).then((words) => {
+    USDC.transfer(words[0] % 2 == 0 ? heads : tails, prize);
+  });
+}
+```
+
+| Request                                               | The body receives                     | Defaults                                             |
+| ----------------------------------------------------- | ------------------------------------- | ---------------------------------------------------- |
+| `Random.vrf({ words, confirmations, gas, deadline })` | `words` random numbers, a `Uint256[]` | 1 word, 3 confirmations, `gas` sized, no deadline    |
+| `Random.entropy({ provider, gas, deadline })`         | one random 32-byte number             | Entropy's default provider, `gas` sized, no deadline |
+
+- **The Pot pays twice.** The request pays the provider's price in the native coin from the Pot's
+  balance when the program runs: VRF's wrapper price at the transaction's gas price, or Entropy's
+  fee. Exactly the price is paid, since both providers keep any excess. The callback's cook pays
+  the Kitchen's fee, so a request is refused unless the Pot keeps that fee after paying the price.
+- **`gas` is the callback's gas limit,** fixed and paid for with the request. Left out, the package
+  sizes it from what the callback runs as compiled: reaching the body, then an allowance for each
+  byte of the body, and of a combinator's body when the request is raced or joined. That covers
+  writes, hashing and a few token transfers; a body that loops, or calls out more than its size
+  suggests, needs `gas` given. VRF gives the callback exactly that much, and a callback that runs
+  out is spent, never retried.
+- **A callback never fails for the body.** A body that reverts is undone and its `.catch` runs, or
+  the Pot logs it unhandled; the handler first logs what arrived,
+  `RandomDelivered(bytes32 key, bytes value)`. A second delivery, or an answer after the request
+  expired, runs nothing. A call from anyone but the provider is refused.
+- **A request may never be answered.** Give it a deadline (`deadline`, or `.within(seconds)`), after
+  which anyone may call the Pot's `expire`, or race it against `Async.timeout`.
+- **Keys** are the provider's own ids: VRF's request id under its wrapper, and Entropy's sequence
+  number under its provider and the Entropy contract, since sequence numbers count per provider.
+
+Install the handlers once per Pot. On a chain with one provider, only its handler installs:
+
+```sh
+sauce run @sauce/random --chain base --wallet <name>
+```

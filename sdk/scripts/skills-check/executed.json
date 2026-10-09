@@ -36,6 +36,8 @@
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
+    "sauce-random/examples/coin-flip.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
+    "sauce-random/examples/draw.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts"
     ],

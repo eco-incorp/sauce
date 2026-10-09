@@ -49,5 +49,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 - The callback gets at most the request's gas limit. One that reverts leaves the request open:
   the reveal emits `Revealed` with `callbackFailed`, and anyone may reveal it again, then with no
   gas limit.
-- A Sauce program receives the number with `@sauce/random`'s `Random.entropy`, which pays the fee,
-  keeps the continuation under the provider and sequence number and authenticates the caller.
+- A Sauce program receives the number with `@sauce/random`'s `Random.entropy` (the `sauce-random`
+  skill), which pays the fee, keys its promise by the provider and sequence number and
+  authenticates the caller.

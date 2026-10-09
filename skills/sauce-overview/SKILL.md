@@ -375,6 +375,19 @@ writing a package of the family.
   family, which its own section here or its `sauce-protocols` document covers.
 - **Asked as:** "Draw a random winner with Chainlink VRF and pay them when the number arrives."
 
+### `sauce-random`
+
+Verifiable randomness from `@sauce/random`: `Random.vrf`, Chainlink VRF random words on Ethereum
+and Base, and `Random.entropy`, a Pyth Entropy number on Base, each a promise whose `.then` runs
+with the randomness; what the Pot pays and keeps for the callback, the callback's gas, and a
+callback that fails, comes twice or never comes.
+
+- **Holds** a VRF coin flip paying USDC, and an Entropy draw among three entrants raced against an
+  hour.
+- **Load it** when a program needs a random number, with `sauce-async` for promises beyond one
+  request.
+- **Asked as:** "Flip a coin with Chainlink VRF and pay the prize to whoever wins."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

@@ -64,8 +64,8 @@ function main(coordinatorAddress: Address): Uint256 {
   retried. Size the callback gas limit for everything the callback runs.
 - The request id the call returns is the one the callback carries; the wrapper's `lastRequestId`
   is not set for native requests.
-- A Sauce program receives the words with `@sauce/random`'s `Random.vrf`, which pays the price,
-  keeps the continuation under the request id and authenticates the wrapper.
+- A Sauce program receives the words with `@sauce/random`'s `Random.vrf` (the the `sauce-random` agent skill
+  skill), which pays the price, keys its promise by the request id and authenticates the wrapper.
 
 ## Its names in a program
 

@@ -62,6 +62,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../../../src/chains/canonical.js";
 import { contractAddressOn } from "../../../src/routes/chain-module.js";
+import { registryTokens } from "../../../src/routes/token-registry.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
@@ -102,6 +103,13 @@ const fixture = (name: string) =>
     abi: Abi;
     runtimeCode: Hex;
   };
+/** The `sauce-random` skill's example programs, run here as the skill's usage lines run them. */
+const SKILL_EXAMPLES = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../../skills/sauce-random/examples",
+);
+const skillExample = (name: string): string =>
+  readFileSync(join(SKILL_EXAMPLES, `${name}.sauce.ts`), "utf8");
 const WRAPPER_MOCK = fixture("MockVRFV2PlusWrapper");
 const ENTROPY_MOCK = fixture("MockEntropy");
 /** OpenZeppelin's ERC20Mock, as `std/token`'s suite vendors it. */
@@ -134,6 +142,8 @@ const CHAIN_ID = 8453;
 
 const WRAPPER = contractAddressOn(requireChain(CHAIN), "ChainlinkVrf", "Wrapper") as Address;
 const ENTROPY = contractAddressOn(requireChain(CHAIN), "PythEntropy", "Entropy") as Address;
+/** Base's USDC, which the coin flip pays in: OpenZeppelin's ERC20Mock installed at its address. */
+const USDC = registryTokens(requireChain(CHAIN)).USDC!.address as Address;
 /** Base's default Entropy provider, as the mock answers `getDefaultProvider()`. */
 const PROVIDER = "0x52DeaA1c84233F7bb8C8A45baeDE41091c616506" as Address;
 
@@ -236,13 +246,13 @@ function main(bump: Uint256): void {
     });
 }`;
 
-/** A VRF request raced against a one-minute timeout. A raced request's callback runs the race's
- *  body too, which the request's own sizing does not see: its gas is given. */
+/** A VRF request raced against a one-minute timeout: its callback runs the race's body too, which
+ *  its sizing counts. */
 const VRF_RACE_SOURCE = `import { Async, Promise } from "@sauce/async";
 import { Random } from "@sauce/random";
 
 function main(bump: Uint256): void {
-  Promise.race([Random.vrf({ words: 1, gas: 500000 }), Async.timeout(60)])
+  Promise.race([Random.vrf({ words: 1 }), Async.timeout(60)])
     .then((words) => {
       evm.sstore(${SLOT}, words[0] + bump);
     })
@@ -526,6 +536,21 @@ describeRandom("@sauce/random on the EVM, through the Router's handlers", () => 
       }),
     );
 
+    // Base's USDC: the token's code at its address, and a balance for the Pot.
+    await testClient.setCode({
+      address: USDC,
+      bytecode: (await publicClient.getCode({ address: token }))!,
+    });
+    await send(
+      owner,
+      USDC,
+      encodeFunctionData({
+        abi: ERC20_MOCK.abi,
+        functionName: "mint",
+        args: [stack.pot, 10n ** 12n],
+      }),
+    );
+
     // The package's handlers, installed as `sauce run @sauce/random --chain base` installs them.
     const install = await cook(
       compiled(handlersInstallSource(packageHandlers(CHAIN, "@sauce/random"), "@sauce/random")),
@@ -782,6 +807,11 @@ function main(bump: Uint256): void {
           await testClient.setStorageAt({ address: stack.pot, index: SLOT, value: word(0n) });
           await testClient.setStorageAt({ address: stack.pot, index: CAUGHT, value: word(0n) });
           const { id, timeout } = await race();
+          // Sized for the race's body as well as the request's part.
+          const asked = await callbackGasOf(id);
+          const least = await leastCallbackGas(id, [5n]);
+          expect(least).toBeLessThanOrEqual(asked);
+          expect(asked).toBeLessThan(least * 3n);
           expect((await send(stranger, WRAPPER, fulfill(id, [5n]))).status).toBe("success");
           expect(await storage(SLOT)).toBe(1_005n);
 
@@ -906,6 +936,72 @@ function main(bump: Uint256): void {
         ).toBe(true);
         expect(deliveredIn(revealed, key)).toBe(word(7n));
         expect(await parked(key)).toBe(0n);
+      },
+    );
+  });
+
+  describe("the sauce-random skill's examples", () => {
+    const HEADS = "0x00000000000000000000000000000000000000c1" as Address;
+    const TAILS = "0x00000000000000000000000000000000000000c2" as Address;
+    const usdcOf = async (holder: Address): Promise<bigint> =>
+      (await publicClient.readContract({
+        address: USDC,
+        abi: ERC20_MOCK.abi,
+        functionName: "balanceOf",
+        args: [holder],
+      })) as bigint;
+
+    it("sauce-random/examples/coin-flip pays heads on an even word and tails on an odd one", async () => {
+      for (const [drawn, winner] of [
+        [8n, HEADS],
+        [9n, TAILS],
+      ] as const) {
+        const before = await usdcOf(winner);
+        const program = compileSauceProgram(CHAIN, skillExample("coin-flip"));
+        const receipt = await cook(
+          bytesToHex(
+            concat([program.bytecode, encodeEntryArguments(program, [HEADS, TAILS, 5_000_000n])]),
+          ),
+        );
+        expect(receipt.status).toBe("success");
+        const [requested] = eventsOf(receipt, WRAPPER, WRAPPER_MOCK.abi);
+        const id = (requested!.args as { requestId: bigint }).requestId;
+        expect(await parked(vrfKey(id))).not.toBe(0n);
+        expect((await send(stranger, WRAPPER, fulfill(id, [drawn]))).status).toBe("success");
+        expect((await usdcOf(winner)) - before).toBe(5_000_000n);
+      }
+    });
+
+    itOnStackEngine(
+      "sauce-random/examples/draw pays the entrant the number picks, within the hour",
+      async () => {
+        const entrants = [
+          "0x00000000000000000000000000000000000000d1",
+          "0x00000000000000000000000000000000000000d2",
+          "0x00000000000000000000000000000000000000d3",
+        ] as const;
+        const prize = 10n ** 16n;
+        const program = compileSauceProgram(CHAIN, skillExample("draw"));
+        const receipt = await cook(
+          bytesToHex(
+            concat([program.bytecode, encodeEntryArguments(program, [...entrants, prize])]),
+          ),
+        );
+        expect(receipt.status).toBe("success");
+        const [requested] = eventsOf(receipt, ENTROPY, ENTROPY_MOCK.abi);
+        const sequence = (requested!.args as { sequenceNumber: bigint }).sequenceNumber;
+        const before = await publicClient.getBalance({ address: entrants[2] });
+        const revealed = await send(
+          stranger,
+          ENTROPY,
+          encodeFunctionData({
+            abi: ENTROPY_MOCK.abi,
+            functionName: "reveal",
+            args: [PROVIDER, sequence, word(3_002n)], // 3002 % 3 == 2: the third entrant
+          }),
+        );
+        expect(revealed.status).toBe("success");
+        expect((await publicClient.getBalance({ address: entrants[2] })) - before).toBe(prize);
       },
     );
   });
