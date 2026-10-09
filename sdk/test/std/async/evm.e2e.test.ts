@@ -43,6 +43,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
   http,
@@ -426,6 +427,16 @@ const pendingOf = async (hash: Hex): Promise<{ key: bigint; deadline: bigint }[]
         entry.address.toLowerCase() === stack.pot.toLowerCase() && entry.topics[0] === PENDING,
     )
     .map((entry) => ({ key: BigInt(entry.topics[1]!), deadline: BigInt(entry.data) }));
+
+/** The payload a cook sent the carrier, from its `Sent` event. */
+const sentPayload = async (hash: Hex): Promise<Hex> => {
+  const sent = (await publicClient.getTransactionReceipt({ hash })).logs.find(
+    (entry) => entry.address.toLowerCase() === carrier.toLowerCase(),
+  )!;
+  const [payload] = decodeAbiParameters([{ type: "bytes" }], sent.data);
+
+  return payload;
+};
 
 /** The echo protocol's next `count` ids, in the order its requests will take them. */
 async function nextIds(count: number): Promise<bigint[]> {
@@ -856,7 +867,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       encodeFunctionData({
         abi: CARRIER.abi,
         functionName: "deliver",
-        args: [before + 1n, word(5n)],
+        args: [before + 1n, await sentPayload(requested.hash), word(5n)],
       }),
     );
     expect(delivered.ok).toBe(true);
@@ -878,7 +889,7 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       const deliver = encodeFunctionData({
         abi: CARRIER.abi,
         functionName: "deliver",
-        args: [before + 1n, word(6n)],
+        args: [before + 1n, await sentPayload(requested.hash), word(6n)],
       });
       expect((await send(stranger, carrier, deliver)).ok).toBe(true);
       expect(await slot(ECHOED_SLOT)).toBe(word(206n));
