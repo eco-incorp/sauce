@@ -216,6 +216,8 @@ import * as socketAbis from "../protocols/socket/abis.js";
 import { deployments as socketDeployments } from "../protocols/socket/addresses.js";
 import * as sommelierAbis from "../protocols/sommelier/abis.js";
 import { deployments as sommelierDeployments } from "../protocols/sommelier/addresses.js";
+import * as spaceAndTimeAbis from "../protocols/space-and-time/abis.js";
+import { deployments as spaceAndTimeDeployments } from "../protocols/space-and-time/addresses.js";
 import * as sparkAbis from "../protocols/spark/abis.js";
 import { deployments as sparkDeployments } from "../protocols/spark/addresses.js";
 import * as spookyswapAbis from "../protocols/spookyswap/abis.js";
@@ -383,6 +385,7 @@ export const PROTOCOL_SOURCES = {
   "silo": { abis: siloAbis, deployments: siloDeployments },
   "socket": { abis: socketAbis, deployments: socketDeployments },
   "sommelier": { abis: sommelierAbis, deployments: sommelierDeployments },
+  "space-and-time": { abis: spaceAndTimeAbis, deployments: spaceAndTimeDeployments },
   "spark": { abis: sparkAbis, deployments: sparkDeployments },
   "spookyswap": { abis: spookyswapAbis, deployments: spookyswapDeployments },
   "squid": { abis: squidAbis, deployments: squidDeployments },
@@ -414,7 +417,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 316 contracts across 135 protocols. */
+/** One entry per contract: 318 contracts across 136 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -661,6 +664,8 @@ export const CONTRACT_LINKS = [
   { protocol: "socket", contract: "SocketGateway", kind: "singleton", roleKey: "socketGateway", abiExport: "SocketGatewayABI" },
   { protocol: "sommelier", contract: "Cellar", kind: "interface", abiExport: "CellarABI" },
   { protocol: "sommelier", contract: "CellarRouter", kind: "address-only", roleKey: "cellarRouter", caveats: ["the registry has no ABI for this contract: its address only"] },
+  { protocol: "space-and-time", contract: "QueryRouter", kind: "singleton", roleKey: "queryRouter", abiExport: "QueryRouterABI" },
+  { protocol: "space-and-time", contract: "CallbackExecutor", kind: "singleton", roleKey: "callbackExecutor", abiExport: "CallbackExecutorABI" },
   { protocol: "spark", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "SparkPoolABI" },
   { protocol: "spark", contract: "PoolAddressesProvider", kind: "address-only", roleKey: "poolAddressesProvider", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "spookyswap", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "SpookySwapRouterABI", caveats: ["swapExactTokensForTokens(uint256,uint256,address[],address,uint256) is checked against the deployed bytecode only: the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)","addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256) is checked against the deployed bytecode only: the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)","removeLiquidity(address,address,uint256,uint256,uint256,address,uint256) is checked against the deployed bytecode only: the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)"] },
@@ -1297,6 +1302,11 @@ export interface SommelierContracts {
   readonly CellarRouter: AddressOnlyContract;
 }
 
+export interface SpaceAndTimeContracts {
+  readonly QueryRouter: Contract<typeof spaceAndTimeAbis.QueryRouterABI>;
+  readonly CallbackExecutor: Contract<typeof spaceAndTimeAbis.CallbackExecutorABI>;
+}
+
 export interface SparkContracts {
   readonly Pool: Contract<typeof sparkAbis.SparkPoolABI>;
   readonly PoolAddressesProvider: AddressOnlyContract;
@@ -1677,6 +1687,7 @@ export interface ChainContracts {
   readonly Silo: SiloContracts;
   readonly Socket: SocketContracts;
   readonly Sommelier: SommelierContracts;
+  readonly SpaceAndTime: SpaceAndTimeContracts;
   readonly Spark: SparkContracts;
   readonly Spookyswap: SpookyswapContracts;
   readonly Squid: SquidContracts;

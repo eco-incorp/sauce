@@ -602,7 +602,8 @@ const CHOOSING = {
   oracle: [
     "Chainlink feeds are read on chain (`latestRoundData`): check `updatedAt` against a staleness",
     "bound and scale by the feed's decimals. Pyth is pulled: the price is updated in the same",
-    "transaction (`updatePriceFeeds`, paying its fee as value) before it is read.",
+    "transaction (`updatePriceFeeds`, paying its fee as value) before it is read. Space and Time",
+    "answers a SQL query over indexed chain data later, proven, by calling the requester back.",
   ],
   payments: [
     "Sablier locks tokens into a schedule a recipient withdraws from; Superfluid streams Super Tokens",

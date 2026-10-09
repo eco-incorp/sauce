@@ -1130,6 +1130,19 @@
         ]
       }
     },
+    "space-and-time": {
+      "QueryRouterABI": {
+        "roles": ["queryRouter"],
+        "required": {
+          "requestQuery((bytes32,bytes,bytes,bytes),(uint256,uint64,address,bytes4,bytes),(uint256,address,uint64))": "std/zk/zk.evm.js Zk.sql, the call a program's query is asked with, its callback the Pot's",
+          "PAYMENT_TOKEN()": "std/zk/zk.evm.js Zk.sql, which approves the router to pull the query's payment in this token",
+          "cancelQuery(bytes32,(uint256,address,uint64))": "std/zk/zk.evm.js Zk.cancel, which takes an unanswered query's payment back after its timeout"
+        }
+      },
+      "CallbackExecutorABI": {
+        "roles": ["callbackExecutor"]
+      }
+    },
     "spark": {
       "SparkPoolABI": {
         "roles": ["pool"]

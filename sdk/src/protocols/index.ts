@@ -126,6 +126,7 @@ import { protocolInfo as kyberswapAggregator } from "./kyberswap-aggregator/info
 // Oracles
 import { protocolInfo as chainlink } from "./chainlink/info.js";
 import { protocolInfo as pyth } from "./pyth/info.js";
+import { protocolInfo as spaceAndTime } from "./space-and-time/info.js";
 
 // CDPs & Stablecoins
 import { protocolInfo as maker } from "./maker/info.js";
@@ -286,6 +287,7 @@ export const protocols: Record<string, ProtocolInfo> = {
   // Oracles
   chainlink: chainlink,
   pyth: pyth,
+  "space-and-time": spaceAndTime,
 
   // CDPs & Stablecoins
   maker: maker,
@@ -357,6 +359,7 @@ export * as compoundV3 from "./compound-v3/index.js";
 export * as oneInch from "./oneinch/index.js";
 export * as chainlink from "./chainlink/index.js";
 export * as pyth from "./pyth/index.js";
+export * as spaceAndTime from "./space-and-time/index.js";
 export * as permit2 from "./permit2/index.js";
 export * as safe from "./safe/index.js";
 export * as lido from "./lido/index.js";

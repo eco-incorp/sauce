@@ -216,6 +216,8 @@ address.
 | [Silo](../../sauce-protocols/references/registry/silo.md) | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` | `Silo.SiloRepository` |
 | [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
 | [Sommelier](../../sauce-protocols/references/registry/sommelier.md) | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366d8f2` | `Sommelier.CellarRouter` |
+| [Space and Time](../../sauce-protocols/references/registry/space-and-time.md) | callbackExecutor | `0xaCf075862425A0c839844369ac20e334B3710e47` | `SpaceAndTime.CallbackExecutor` |
+| [Space and Time](../../sauce-protocols/references/registry/space-and-time.md) | queryRouter | `0x220a7036a815a1Bd4A7998fb2BCE608581fA2DbB` | `SpaceAndTime.QueryRouter` |
 | [Spark](../../sauce-protocols/references/registry/spark.md) | pool | `0xC13e21B648A5Ee794902342038FF3aDAB66BE987` | `Spark.Pool` |
 | [Spark](../../sauce-protocols/references/registry/spark.md) | poolAddressesProvider | `0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE` | `Spark.PoolAddressesProvider` |
 | [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |

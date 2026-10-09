@@ -1213,6 +1213,24 @@ export interface SommelierCellarMethods {
   "convertToAssets"(arg0: bigint): bigint;
 }
 
+export interface SpaceAndTimeQueryRouterMethods {
+  "requestQuery"(arg0: { "version": bigint; "innerQuery": (string | SauceBytes); "parameters": (string | SauceBytes); "metadata": (string | SauceBytes) }, arg1: { "maxGasPrice": bigint; "gasLimit": bigint; "callbackContract": bigint; "selector": bigint; "callbackData": (string | SauceBytes) }, arg2: { "paymentAmount": bigint; "refundTo": bigint; "timeout": bigint }): bigint;
+  "cancelQuery"(arg0: bigint, arg1: { "paymentAmount": bigint; "refundTo": bigint; "timeout": bigint }): void;
+  "fulfillQuery"(arg0: { "version": bigint; "innerQuery": (string | SauceBytes); "parameters": (string | SauceBytes); "metadata": (string | SauceBytes) }, arg1: { "maxGasPrice": bigint; "gasLimit": bigint; "callbackContract": bigint; "selector": bigint; "callbackData": (string | SauceBytes) }, arg2: { "paymentAmount": bigint; "refundTo": bigint; "timeout": bigint }, arg3: bigint, arg4: (string | SauceBytes)): void;
+  "verifyQuery"(arg0: { "version": bigint; "innerQuery": (string | SauceBytes); "parameters": (string | SauceBytes); "metadata": (string | SauceBytes) }, arg1: (string | SauceBytes)): SauceBytes;
+  "baseCost"(): bigint;
+  "PAYMENT_TOKEN"(): bigint;
+  "EXECUTOR"(): bigint;
+  "versions"(arg0: bigint): bigint;
+  "pendingPayments"(arg0: bigint): bigint;
+  "openFulfillment"(): boolean;
+}
+
+export interface SpaceAndTimeCallbackExecutorMethods {
+  "maxGasLimit"(): bigint;
+  "gasCostConfig"(): [bigint, bigint, bigint, bigint, bigint] & { "nativeUsdFeed": bigint; "nativeStaleThreshold": bigint; "tokenUsdFeed": bigint; "tokenStaleThreshold": bigint; "scalingFactor": bigint };
+}
+
 export interface SparkPoolMethods {
   "supply"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
   "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
@@ -2157,6 +2175,11 @@ export interface SommelierSource {
   readonly CellarRouter: bigint;
 }
 
+export interface SpaceAndTimeSource {
+  readonly QueryRouter: SauceContract<SpaceAndTimeQueryRouterMethods>;
+  readonly CallbackExecutor: SauceContract<SpaceAndTimeCallbackExecutorMethods>;
+}
+
 export interface SparkSource extends SparkPoolMethods {
   readonly Pool: SauceContract<SparkPoolMethods>;
   readonly PoolAddressesProvider: bigint;
@@ -2534,6 +2557,7 @@ declare global {
   const Silo: SiloSource;
   const Socket: SocketSource;
   const Sommelier: SommelierSource;
+  const SpaceAndTime: SpaceAndTimeSource;
   const Spark: SparkSource;
   const Spookyswap: SpookyswapSource;
   const Squid: SquidSource;

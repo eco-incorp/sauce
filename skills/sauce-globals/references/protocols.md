@@ -226,6 +226,8 @@ and in each chain's file in `sauce-chains`.
 - `Silo.SiloRepository` ([`silo`](../../sauce-protocols/references/registry/silo.md), default)
 - `Socket.SocketGateway` ([`socket`](../../sauce-protocols/references/registry/socket.md), default)
 - `Sommelier.CellarRouter` ([`sommelier`](../../sauce-protocols/references/registry/sommelier.md))
+- `SpaceAndTime.CallbackExecutor` ([`space-and-time`](../../sauce-protocols/references/registry/space-and-time.md))
+- `SpaceAndTime.QueryRouter` ([`space-and-time`](../../sauce-protocols/references/registry/space-and-time.md))
 - `Spark.Pool` ([`spark`](../../sauce-protocols/references/registry/spark.md), default)
 - `Spark.PoolAddressesProvider` ([`spark`](../../sauce-protocols/references/registry/spark.md))
 - `Spookyswap.V2Router` ([`spookyswap`](../../sauce-protocols/references/registry/spookyswap.md), default)

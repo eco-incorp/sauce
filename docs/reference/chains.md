@@ -36,7 +36,7 @@ A refusal links both, prefilled for the chain it refused.
 
 | Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [Ethereum](chains/ethereum.md) | `ethereum` | 1 | EVM | supported | yes | 0 | 1734 | 96 |
+| [Ethereum](chains/ethereum.md) | `ethereum` | 1 | EVM | supported | yes | 0 | 1734 | 97 |
 | [Optimism](chains/optimism.md) | `optimism` | 10 | EVM | preview | yes | 2 | 4 | 40 |
 | [Cronos](chains/cronos.md) | `cronos` | 25 | EVM | preview | no | — | 0 | 0 |
 | [BNB Chain](chains/bsc.md) | `bsc` | 56 | EVM | preview | no | — | 0 | 29 |
@@ -62,7 +62,7 @@ A refusal links both, prefilled for the chain it refused.
 | [Arc](chains/arc.md) | `arc` | 5042 | EVM | preview | yes | 26 | 4 | 23 |
 | [ZetaChain](chains/zetachain.md) | `zetachain` | 7000 | EVM | preview | no | — | 0 | 0 |
 | [Klaytn](chains/klaytn.md) | `klaytn` | 8217 | EVM | preview | no | — | 0 | 0 |
-| [Base](chains/base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 47 |
+| [Base](chains/base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 48 |
 | [Evmos](chains/evmos.md) | `evmos` | 9001 | EVM | preview | no | — | 0 | 0 |
 | [Plasma](chains/plasma.md) | `plasma` | 9745 | EVM | preview | yes | — | 1 | 0 |
 | [Mode](chains/mode.md) | `mode` | 34443 | EVM | preview | no | — | 0 | 2 |

@@ -301,18 +301,20 @@ buys, exercises or settles a position it holds.
 | [Premia](protocols/premia.md) | — | `Premia`: arbitrum | arbitrum |
 | [Thales](protocols/thales.md) | — | `Thales`: optimism | optimism |
 
-## Oracles (2)
+## Oracles (3)
 
 ### Choosing between them
 
 Chainlink feeds are read on chain (`latestRoundData`): check `updatedAt` against a staleness
 bound and scale by the feed's decimals. Pyth is pulled: the price is updated in the same
-transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
+transaction (`updatePriceFeeds`, paying its fee as value) before it is read. Space and Time
+answers a SQL query over indexed chain data later, proven, by calling the requester back.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
 | [Chainlink](protocols/chainlink.md) | — | `Chainlink`: ethereum, arc | ethereum, arc |
 | [Pyth Network](protocols/pyth.md) | — | `Pyth`: ethereum | ethereum |
+| [Space and Time](protocols/space-and-time.md) | — | `SpaceAndTime`: ethereum, base | ethereum, base |
 
 ## Payments and streaming (2)
 
