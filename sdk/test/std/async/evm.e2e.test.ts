@@ -410,6 +410,29 @@ function main(key: Uint256, value: Uint256): void {
   Async.resolve(key, abi.encode(value));
 }`;
 
+/** \`run\` hands a program its input: a continuation takes it as its parameters, and a program
+ *  that takes none reads it with the deprecated \`received()\`, for one release. */
+const runSource = `import { received, run } from "@sauce/async";
+
+function main(value: Uint256): void {
+  const taking = program(
+    (input: bytes, mode: Uint256) => {
+      const [got] = abi.decode(input, ["Uint256"]);
+      evm.sstore(${ECHOED_SLOT}, got * 10 + mode);
+    },
+    { continuation: chainId },
+  );
+  run(taking.code.concat(taking.args), abi.encode(value));
+  const reading = program(
+    () => {
+      const [got] = abi.decode(received(), ["Uint256"]);
+      evm.sstore(${CAUGHT_SLOT}, got);
+    },
+    { continuation: chainId },
+  );
+  run(reading.code.concat(reading.args), abi.encode(value + 1));
+}`;
+
 /** Gas each path costs, by name: printed with ASYNC_GAS=1. */
 const GAS: Record<string, bigint> = {};
 
@@ -1037,6 +1060,17 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
       expect(await slot(ECHOED_SLOT)).toBe(word(0n));
     },
   );
+
+  it("run hands its program the input as parameters, and through received() for one release", async () => {
+    await setSlot(ECHOED_SLOT, 0n);
+    await setSlot(CAUGHT_SLOT, 0n);
+    expect((await cook(compiled(runSource, [4n]))).ok).toBe(true);
+    expect(await slot(ECHOED_SLOT)).toBe(word(42n));
+    expect(await slot(CAUGHT_SLOT)).toBe(word(5n));
+    // As found, so the next case's gas is its own.
+    await setSlot(ECHOED_SLOT, 0n);
+    await setSlot(CAUGHT_SLOT, 0n);
+  });
 
   itSettling("a carried continuation: nothing parked, run as the message lands", async () => {
     const before = (await publicClient.readContract({

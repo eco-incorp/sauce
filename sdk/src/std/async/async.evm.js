@@ -73,19 +73,20 @@
 // address of the code that keeps it in bits 0..159; a word or less is in the next slot, as a
 // number, those bits zero and its length in bytes at bits 168..173.
 //
-// Every continuation is compiled with `program(closure, { continuation: chainId })`: the SDK
-// compiles it for that chain's names and reports it as a continuation (`continuations`), not as an
-// intent's body, since nothing opens an intent for it.
+// Every continuation is compiled with `program((input: bytes, mode: Uint256) => …, { continuation:
+// chainId })`: the SDK compiles it for that chain's names and reports it as a continuation
+// (`continuations`), not as an intent's body, since nothing opens an intent for it. It runs with
+// what settled it, the value or the reason, and how, 2 fulfilled or 3 rejected, appended as its
+// parameters: `code ++ captured words ++ abi.encode(input, mode)`.
 //
 // SETTLING. `fulfil(key, value)` and `reject(key, reason)` clear the promise, then run its
 // continuation inside the handler's own cook (`evm.delegate` into the in-flight engine: no second
-// cook, no second fee), handing it what arrived through transient storage, which `received()`
-// reads and the request's `deliver` decodes into the body's parameters. The body's revert is caught
-// at that call: everything it did is undone and, with a `.catch`, the continuation runs again for
-// the catch with the revert's data (its first 256 bytes). A promise rejected with no `.catch`, or
-// whose `.catch` reverts, is logged unhandled. Either way the callback RETURNS: a protocol that
-// retries a failed delivery must not retry forever, and a late or duplicate callback is no failure
-// of the protocol's.
+// cook, no second fee), handing it what arrived as its parameters, which the request's `deliver`
+// decodes into the body's. The body's revert is caught at that call: everything it did is undone
+// and, with a `.catch`, the continuation runs again for the catch with the revert's data (its first
+// 256 bytes). A promise rejected with no `.catch`, or whose `.catch` reverts, is logged unhandled.
+// Either way the callback RETURNS: a protocol that retries a failed delivery must not retry
+// forever, and a late or duplicate callback is no failure of the protocol's.
 //
 // EVENTS, from the Pot: `PromisePending(bytes32 indexed key, uint256 deadline)` when a promise is
 // parked (how a later transaction learns a deferred's key), `PromiseSettled(bytes32 indexed key,
@@ -122,8 +123,9 @@
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.Async")) - 1)) & ~bytes32(uint256(0xff)).
 const SAUCE_ASYNC_NAMESPACE = 0x4dfff1aabf079bde1221d3a9fbfbe12f9d81161876e97fa9b85215e9f7a8b300;
 
-// Transient storage (EIP-1153), the Pot's in every frame of the transaction. What a settlement
-// hands its continuation, `keccak256("sauce.async.received")`: its length, then its words.
+// Transient storage (EIP-1153), the Pot's in every frame of the transaction. What `run` hands its
+// program for `received()`, deprecated, `keccak256("sauce.async.received")`: its length, then its
+// words.
 const SAUCE_ASYNC_RECEIVED = 0xe0834bde068556530c4cc9d3e560d8055ab88b322f2d933c8fac9a037dbe690e;
 // How it settled, `keccak256("sauce.async.mode")`: 2 fulfilled, 3 rejected.
 const SAUCE_ASYNC_MODE = 0x93281666bb76cfd6e9531316fbd9a988b1822676b7d07d7f32d40d855f438c9d;
@@ -203,19 +205,36 @@ function resultSlot(key: Uint256, index: Uint256): Uint256 {
 // code is a ten-byte copier (PUSH2 <length> DUP1 PUSH1 0x0a RETURNDATASIZE CODECOPY
 // RETURNDATASIZE RETURN) and `data`, and the init code is the same copier around it: `data` may be
 // up to 24,566 bytes (EIP-170).
-function keep(data: bytes): Uint256 {
+function initOf(data: bytes): bytes {
   const length = data.length;
   require(length <= 24566, "async: more than one contract can hold");
   const code = length + 10;
-  const init = hex`61`
+  return hex`61`
     .concat(code.toBytesBe(2))
     .concat(hex`80600a3d393df361`)
     .concat(length.toBytesBe(2))
     .concat(hex`80600a3d393df3`)
     .concat(data);
+}
+
+// `data` kept as code (see `initOf`), its init code hashed here: for bytes known only as the
+// program runs, a result or captured words.
+function keep(data: bytes): Uint256 {
+  const init = initOf(data);
   const at = evm.create2Address(ctx.self(), 0, crypto.keccak256(init));
   if (ctx.codeSize(at) == 0) {
     require(evm.create2(init, 0) == at, "async: the code could not be deployed");
+  }
+  return at;
+}
+
+// `data` kept as code, its init code's hash `initHash` given: a continuation, whose code the
+// compiler knows, so `Code.initHash` works the hash out while the program compiles. The init code
+// is built only to deploy, the first time.
+function keepAt(data: bytes, initHash: Uint256): Uint256 {
+  const at = evm.create2Address(ctx.self(), 0, initHash);
+  if (ctx.codeSize(at) == 0) {
+    require(evm.create2(initOf(data), 0) == at, "async: the code could not be deployed");
   }
   return at;
 }
@@ -247,11 +266,12 @@ export function park(
   deadline: Uint256,
   catches: bool,
 ): void {
-  parkRecord(key, code, args, deadline, catches, 0, 0, false);
+  parkRecord(key, crypto.keccak256(initOf(code)), code, args, deadline, catches, 0, 0, false);
 }
 
 function parkRecord(
   key: Uint256,
+  codeHash: Uint256,
   code: bytes,
   args: bytes,
   deadline: Uint256,
@@ -269,7 +289,11 @@ function parkRecord(
   require(args.length % 32 == 0, "async: a continuation's captured values are not whole words");
   const words = args.length / 32;
   require(words < 256, "async: a continuation captures at most 255 words");
-  let word = keep(code) | (deadline << 160) | (SAUCE_ASYNC_PENDING_STATE << 200) | (words << 203);
+  let word =
+    keepAt(code, codeHash) |
+    (deadline << 160) |
+    (SAUCE_ASYNC_PENDING_STATE << 200) |
+    (words << 203);
   if (catches) {
     word = word | (1 << 202);
   }
@@ -323,7 +347,8 @@ function takeRecord(key: Uint256, state: Uint256): bytes {
 
 // ---- what arrives -------------------------------------------------------------------------------
 
-// Hold `input` and how it settled where the continuation reads them, in every frame of the cook.
+// Hold `input` and how it settled where `received()` and `fulfilled()` read them, in every frame of
+// the cook: `run`'s, for one release.
 function hand(input: bytes, mode: Uint256): void {
   const length = input.length;
   evm.tstore(SAUCE_ASYNC_RECEIVED, length);
@@ -336,7 +361,8 @@ function hand(input: bytes, mode: Uint256): void {
   }
 }
 
-// In a running continuation: what settled it, the value or the reason. Empty anywhere else.
+// DEPRECATED, removed in the next release: a continuation takes what settled it as its
+// parameters. In a program `run` runs: what it was handed. Empty anywhere else.
 export function received(): bytes {
   const length = evm.tload(SAUCE_ASYNC_RECEIVED);
   let out = hex``;
@@ -347,7 +373,7 @@ export function received(): bytes {
   return out.slice(0, length);
 }
 
-// In a running continuation: whether it runs for a fulfilment (true) or a rejection.
+// DEPRECATED, removed in the next release, as `received()`: in a program `run` runs, true.
 export function fulfilled(): bool {
   return evm.tload(SAUCE_ASYNC_MODE) == SAUCE_ASYNC_FULFILLED;
 }
@@ -358,12 +384,14 @@ export function winner(): Uint256 {
 }
 
 // Run `program` as this Pot, writable, inside the cook in flight — no second cook, no second fee —
-// handing it `input` as a fulfilment, which it reads with `received()`. Answers what it returns.
-// For a continuation a protocol carried and no table holds; a handler calls it only after it has
+// handing it `input` as a fulfilment: as its parameters, `abi.encode(input, 2)` appended, which a
+// continuation, `program((input: bytes, mode: Uint256) => …)`, takes, and a program that takes
+// none ignores. For one release `received()` reads it too. Answers what the program returns. For a
+// continuation a protocol carried and no table holds; a handler calls it only after it has
 // authenticated its caller, since the program runs with everything the Pot holds.
 export function run(program: bytes, input: bytes): bytes {
   hand(input, SAUCE_ASYNC_FULFILLED);
-  return evm.delegate(inFlightEngine(), program);
+  return evm.delegate(inFlightEngine(), program.concat(abi.encode(input, SAUCE_ASYNC_FULFILLED)));
 }
 
 // ---- settling -----------------------------------------------------------------------------------
@@ -419,11 +447,12 @@ function runSettled(
   let failed = 0;
   let reason = input;
   if (state == SAUCE_ASYNC_FULFILLED) {
-    hand(input, SAUCE_ASYNC_FULFILLED);
-    evm.delegate(inFlightEngine(), program).catch((e) => {
-      failed = 1;
-      reason = e;
-    });
+    evm
+      .delegate(inFlightEngine(), program.concat(abi.encode(input, SAUCE_ASYNC_FULFILLED)))
+      .catch((e) => {
+        failed = 1;
+        reason = e;
+      });
     if (failed == 0) {
       return;
     }
@@ -433,11 +462,12 @@ function runSettled(
     return;
   }
   failed = 0;
-  hand(reason, SAUCE_ASYNC_REJECTED);
-  evm.delegate(inFlightEngine(), program).catch((e) => {
-    failed = 1;
-    reason = e;
-  });
+  evm
+    .delegate(inFlightEngine(), program.concat(abi.encode(reason, SAUCE_ASYNC_REJECTED)))
+    .catch((e) => {
+      failed = 1;
+      reason = e;
+    });
   if (failed == 1) {
     log(abi.encode(reason), SAUCE_ASYNC_UNHANDLED, key);
   }
@@ -651,6 +681,29 @@ export function isValidSignature(hash: Uint256, signature: bytes): Uint256 {
 
 // ---- the classes the compiler runs --------------------------------------------------------------
 
+// A continuation's code, as the compiler knows it.
+class Code {
+  // keccak256 of the init code `keepAt` deploys `program`'s code with (`initOf`), worked out while
+  // the program compiles, where the compiler folds a hash over bytes it knows: a park only checks
+  // the address it gives.
+  static initHash(program) {
+    const code = program.code;
+    if (code.length > 24566) {
+      throw new Error("a continuation compiles to more bytes than one contract can hold");
+    }
+    const size = code.length + 10;
+    const length = code.length;
+    return crypto.keccak256(
+      hex`61`
+        .concat(size.toBytesBe(2))
+        .concat(hex`80600a3d393df361`)
+        .concat(length.toBytesBe(2))
+        .concat(hex`80600a3d393df3`)
+        .concat(code),
+    );
+  }
+}
+
 // An empty list that grows while compiling.
 class Lists {
   static empty(...none) {
@@ -674,8 +727,8 @@ class Lists {
 //             delivered, and calls `body` with it decoded, or `fail` with why the request failed.
 //             Left out, the body is handed `input` as it is.
 //   carries   true for a protocol that carries the continuation back (above).
-//   chain     the id of the chain the callback lands on, a number the compiler knows
-//             (`Optimism.valueOf()`): this chain's (`chainId`) when left out.
+//   chain     the chain the callback lands on, `Optimism` or its id: this chain (`chainId`)
+//             when left out.
 //   deadline  a unix time after which anyone may `expire` the promise, rejecting it with
 //             `Timeout(bytes32)`; or call `.within(seconds)`.
 //
@@ -778,13 +831,33 @@ export class Request {
           "a request's `send` answers the key of its promise (`promiseKey(TAG, id)`); a protocol that carries its continuation back says `carries: true`",
         );
       }
-      parkRecord(key, continuation.code, continuation.args, deadline, catches, 0, 0, false);
+      parkRecord(
+        key,
+        Code.initHash(continuation),
+        continuation.code,
+        continuation.args,
+        deadline,
+        catches,
+        0,
+        0,
+        false,
+      );
       return;
     }
     const key = salt();
     const stored = joined == 1 || this._deadline !== undefined;
     if (stored) {
-      parkRecord(key, continuation.code, continuation.args, deadline, catches, 0, 0, true);
+      parkRecord(
+        key,
+        Code.initHash(continuation),
+        continuation.code,
+        continuation.args,
+        deadline,
+        catches,
+        0,
+        0,
+        true,
+      );
     }
     send({
       code: continuation.code,
@@ -806,23 +879,23 @@ export class Request {
     // With no handler, a rejection reverts the run, which the settlement logs unhandled: a carried
     // continuation is run for a rejection too, whatever it handles.
     if (handler === undefined) {
-      return () => {
-        if (fulfilled()) {
-          deliver(received(), body, (reason) => {
+      return (input: bytes, mode: Uint256) => {
+        if (mode == 2) {
+          deliver(input, body, (reason) => {
             revert(reason);
           });
         } else {
-          revert(received());
+          revert(input);
         }
       };
     }
-    return () => {
-      if (fulfilled()) {
-        deliver(received(), body, (reason) => {
+    return (input: bytes, mode: Uint256) => {
+      if (mode == 2) {
+        deliver(input, body, (reason) => {
           revert(reason);
         });
       } else {
-        handler(received());
+        handler(input);
       }
     };
   }
@@ -831,8 +904,8 @@ export class Request {
   // combinator `joinKey`, and the request is made with it.
   _join(joinKey, index, settles) {
     const child = program(
-      () => {
-        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
+      (input: bytes, mode: Uint256) => {
+        childSettled(joinKey, index, mode, input);
       },
       { continuation: this._chainId() },
     );
@@ -906,10 +979,10 @@ class Deferred {
     this._deadline = deadline;
     this._timeout = timeout;
     this._stage = 1;
-    // Fields, not methods, so `const { promise, resolve, reject } = Promise.withResolvers()` takes
-    // them: fulfil it with `value`, or reject it with `reason`, at run time. Its body is parked when
-    // the block that holds it ends, so in the transaction that made it, settle it after that block;
-    // later, `Async.resolve(key, v)` or `Async.reject(key, reason)`.
+    // Fields, not methods, so `const { promise, resolve, reject } = Promise.withResolvers()`
+    // takes them: fulfil it with `value`, or reject it with `reason`, at run time. Its body is
+    // parked when the block that holds it ends, so in the transaction that made it, settle it after
+    // that block; later, `Async.resolve(key, v)` or `Async.reject(key, reason)`.
     this.resolve = (value) => fulfil(this.key, value);
     this.reject = (reason) => reject(this.key, reason);
   }
@@ -944,27 +1017,28 @@ class Deferred {
     const continuation =
       handler === undefined
         ? program(
-            () => {
-              if (fulfilled()) {
-                body(received());
+            (input: bytes, mode: Uint256) => {
+              if (mode == 2) {
+                body(input);
               } else {
-                revert(received());
+                revert(input);
               }
             },
             { continuation: chainId },
           )
         : program(
-            () => {
-              if (fulfilled()) {
-                body(received());
+            (input: bytes, mode: Uint256) => {
+              if (mode == 2) {
+                body(input);
               } else {
-                handler(received());
+                handler(input);
               }
             },
             { continuation: chainId },
           );
     parkRecord(
       this.key,
+      Code.initHash(continuation),
       continuation.code,
       continuation.args,
       this._deadline,
@@ -976,12 +1050,22 @@ class Deferred {
   }
   _join(joinKey, index, settles) {
     const child = program(
-      () => {
-        childSettled(joinKey, index, fulfilled() ? 2 : 3, received());
+      (input: bytes, mode: Uint256) => {
+        childSettled(joinKey, index, mode, input);
       },
       { continuation: chainId },
     );
-    parkRecord(this.key, child.code, child.args, this._deadline, true, 0, 0, true);
+    parkRecord(
+      this.key,
+      Code.initHash(child),
+      child.code,
+      child.args,
+      this._deadline,
+      true,
+      0,
+      0,
+      true,
+    );
   }
   _decoder() {
     // A timeout is never fulfilled: its branch of a race's continuation never runs.
@@ -1028,6 +1112,7 @@ class Join {
     const continuation = program(this._continuation(joinKey), { continuation: chainId });
     parkRecord(
       joinKey,
+      Code.initHash(continuation),
       continuation.code,
       continuation.args,
       0,
@@ -1052,30 +1137,30 @@ class Join {
     };
     const settledBody =
       kind == SAUCE_ASYNC_ALL
-        ? () => {
+        ? (input) => {
             Fold.all(children, 0, undefined, joinKey, body, fail);
           }
         : kind == SAUCE_ASYNC_ALL_SETTLED
-          ? () => {
+          ? (input) => {
               Fold.settled(children, 0, Lists.empty(), joinKey, body);
             }
-          : () => {
-              Fold.first(children, 0, winner(), received(), body, fail);
+          : (input) => {
+              Fold.first(children, 0, winner(), input, body, fail);
             };
     if (handler === undefined) {
-      return () => {
-        if (fulfilled()) {
-          settledBody();
+      return (input: bytes, mode: Uint256) => {
+        if (mode == 2) {
+          settledBody(input);
         } else {
-          revert(received());
+          revert(input);
         }
       };
     }
-    return () => {
-      if (fulfilled()) {
-        settledBody();
+    return (input: bytes, mode: Uint256) => {
+      if (mode == 2) {
+        settledBody(input);
       } else {
-        handler(received());
+        handler(input);
       }
     };
   }

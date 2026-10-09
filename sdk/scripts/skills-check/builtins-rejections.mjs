@@ -250,22 +250,27 @@ export const rejections = [
   },
   {
     quotes: [
-      "a destructuring binding needs an initializer that produces a tuple — this one does not, so bind it to one name instead",
+      "an array pattern takes an array whose length is known while compiling, and this one's is known only at run time: read its elements by index",
     ],
     targets: ["evm"],
-    src: "function main(): Uint256 { const [a, b] = [1n, 2n]; return a; }",
+    src: "function main(xs: Uint256[]): Uint256 { const [a, b] = xs; return a + b; }",
   },
   {
-    row: "object destructuring `const { a } = t`",
+    row: "destructuring at module scope, or in an assignment",
     targets: ["evm"],
-    src: "function main(): Uint256 { const t = { a: 1n }; const { a } = t; return a; }",
+    src: "const [a, b] = [1n, 2n]; function main(): Uint256 { return 0n; }",
+  },
+  {
+    row: "destructuring at module scope, or in an assignment",
+    targets: ["evm"],
+    src: "function main(): Uint256 { let a = 1n; let b = 2n; [a, b] = [b, a]; return a; }",
   },
   {
     quotes: [
       "returning a bytes value from a function other than `main` needs a return-type annotation — …",
     ],
     targets: ["evm"],
-    src: "function f() { return hex`01`; } function main(): bytes { return f(); }",
+    src: "function f(x: bytes) { return x.slice(0, 4); } function main(b: bytes): bytes { return f(b); }",
   },
   {
     quotes: ["`f` does not return on every path"],
@@ -357,14 +362,44 @@ export const rejections = [
     src: "const FEES = [100n, 500n]; function main(i: Uint256): Uint256 { return FEES[i]; }",
   },
   {
-    row: "default parameters, rest parameters, destructuring parameters",
-    targets: ["evm"],
-    src: "function f(a: Uint256 = 1n): Uint256 { return a; } function main(): Uint256 { return f(2n); }",
-  },
-  {
-    row: "default parameters, rest parameters, destructuring parameters",
+    row: "rest parameters of a function compiled for run time",
     targets: ["evm"],
     src: "function f(...a: Uint256[]): Uint256 { return 0n; } function main(): Uint256 { return f(2n); }",
+  },
+  {
+    quotes: [
+      "the default for `a` reads `b`, which has no value yet: a default reads only the parameters before its own",
+    ],
+    targets: ["evm"],
+    src: "function f(a = b, b = 1n) { return a + b; } function main(): Uint256 { return f(); }",
+  },
+  {
+    quotes: [
+      "`main`'s parameters are its program's arguments, which its caller always passes: a default for `amount` would never apply",
+    ],
+    targets: ["evm"],
+    src: "function main(amount: Uint256 = 1n): Uint256 { return amount; }",
+  },
+  {
+    quotes: [
+      "`this` is read in `B`'s constructor before `super(…)` runs: a derived class works on the instance its base's constructor makes",
+    ],
+    targets: ["evm"],
+    src: "class A { constructor() { this.a = 1n; } } class B extends A { constructor() { this.b = 2n; super(); } } function main(): Uint256 { return new B().a; }",
+  },
+  {
+    quotes: [
+      "`+` with a string needs a value known while compiling, and this one is known only when the program runs",
+    ],
+    targets: ["evm"],
+    src: 'function main(n: Uint256): bytes { return "n=" + n; }',
+  },
+  {
+    quotes: [
+      "a closure compiled as a program of its own takes plain parameters, which its program's caller passes: no default, pattern or rest parameter",
+    ],
+    targets: ["evm"],
+    src: "function main(): Uint256 { const p = program((n = 1n) => { evm.sstore(1n, n); }, 8453n); return 0n; }",
   },
   {
     row: "spread of a run-time array, `f(...xs)`",

@@ -430,37 +430,13 @@ async function breakdown(client: PublicClient, hash: Hex, labels: Map<string, st
 
 const SALT = `0x${"5a".repeat(32)}` as Hex;
 const OPTIONS = { intents: { executionFee: 777n, openedAt: 1_900_000_000n, salt: SALT } };
-const MAIN =
-  "function main(amount: Uint256, delivered: Uint256, beneficiary: Address, refundTo: Address)";
-const HOP =
-  "Base.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount: delivered }, refundee: refundTo })";
-const PROGRAMS: Record<string, string> = {
-  "one-hop": `${MAIN} {
-  ${HOP}.then(() => {
-    USDC.transfer(beneficiary, delivered);
-  });
-}`,
-  "one-hop-in-a-try": `${MAIN} {
-  try {
-    ${HOP}
-      .then(() => {
-        USDC.transfer(beneficiary, delivered);
-      })
-      .catch((e) => {
-        USDC.transfer(refundTo, delivered);
-      });
-  } catch (e) {
-    USDC.transfer(refundTo, delivered);
-  }
-}`,
-  "two-hops": `${MAIN} {
-  ${HOP}.then(() => {
-    Optimism.hop({ send: { token: USDC, amount: delivered }, receive: { token: USDC, amount: delivered - 1000 }, refundee: refundTo }).then(() => {
-      USDC.transfer(beneficiary, delivered - 1000);
-    });
-  });
-}`,
-};
+/** The programs, each written once, as `test/fixtures/intent-compiles-to/<name>.sauce.ts`. */
+const PROGRAMS = Object.fromEntries(
+  ["one-hop", "one-hop-in-a-try", "two-hops"].map((name) => [
+    name,
+    readFileSync(join(HERE, "../../test/fixtures/intent-compiles-to", `${name}.sauce.ts`), "utf8"),
+  ]),
+) as Record<string, string>;
 const ARGUMENTS = [
   1_234_567n,
   1_200_001n,

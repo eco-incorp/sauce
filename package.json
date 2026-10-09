@@ -119,7 +119,7 @@
     "acorn": "8.16.0",
     "dotenv": "^17.3.1",
     "litesvm": "^1.2.1",
-    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-ctjs-20c9",
+    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-prv-7d0f604c",
     "typescript": "^5.7.0",
     "viem": "^2.45.3",
     "zod": "4.6.5"

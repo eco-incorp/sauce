@@ -14,6 +14,7 @@ const dirs = [
   join(root, "docs/examples"),
   ...readdirSync(join(root, "skills")).map((s) => join(root, "skills", s, "examples")),
   join(root, "sdk/src/recipes"),
+  join(root, "sdk/test/fixtures/intent-compiles-to"),
 ];
 const files = dirs.filter(existsSync).flatMap((d) =>
   readdirSync(d)

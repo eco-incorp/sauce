@@ -26,6 +26,7 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbsentPath,
   AccountManifest,
+  ArgValue,
   ProgramOptions,
   ProgramScope,
   ResolveModule,
@@ -48,7 +49,7 @@ import { randomSalt, type IntentDefaults } from "./intent-defaults.js";
 import { INTENT_FUND_VIA } from "./portal.js";
 import {
   entryParamsOf,
-  entryWords,
+  entryArguments,
   type EntryParam,
   type EntrySignature,
   type EntryValue,
@@ -430,8 +431,10 @@ export interface SauceProgramOptions extends SauceCompileOptions {
    * computed from them), so it takes none at run time and the result's `entryParams` is empty; an
    * intent's body folds them in too, capturing nothing for them. On Solana an `Account` parameter
    * is no entry of `entryParams` and takes no value here: it stays a slot of the manifest. Each
-   * value is one word: an unsigned integer, an address or a `bool`; the compiler holds each to its
-   * parameter. How a wallet publishes the intents a program opens from values known before anything
+   * value is what its parameter reads: an unsigned integer, an address or a `bool`, a `bytes` (a
+   * `Uint8Array` or `0x` hex), a string, an array of values, or a record (an array of its fields
+   * in order, or an object of them by name); the compiler holds each to its parameter
+   * (`ArgShape`, `ArgOutOfRange`). How a wallet publishes the intents a program opens from values known before anything
    * runs. Leave it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
@@ -463,7 +466,7 @@ export function compileSauceProgram(
     source,
     { ...given, ambient: ambient.length > 0 ? ambient : given.ambient },
     isSauceClosure(body) ? "closure" : "module",
-    args === undefined ? undefined : entryWords(args),
+    args === undefined ? undefined : entryArguments(args),
   );
   // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
   // carries. Nothing is read from the source.
@@ -495,7 +498,7 @@ function compileForChain(
   sauce: string,
   options: SauceCompileOptions,
   entryKind: "module" | "closure" = "module",
-  args?: readonly (bigint | boolean | string)[],
+  args?: readonly ArgValue[],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
