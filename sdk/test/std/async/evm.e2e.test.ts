@@ -19,10 +19,11 @@
  * Kitchen's fee is charged once per callback; a second delivery runs nothing and returns; a forged
  * callback reverts; `.catch` runs for a body's revert and a protocol's failure, and a rejection with
  * no `.catch` is logged unhandled and returns; Promise.all/race/any/allSettled settle as
- * JavaScript's do; a race against `Async.timeout` is rejected by `expire` after the deadline
- * (refused before it, and without the fee); a deferred is resolved by its key later; a carried
- * continuation runs with nothing stored, or once from the table with a deadline; `install` is
- * refused on a Shared Pot and on a fixed-Router Pot. ASYNC_GAS=1 prints each path's gas.
+ * JavaScript's do, a child's result of a word or less kept in a slot and a longer one as code; a
+ * race against `Async.timeout` is rejected by `expire` after the deadline (refused before it, and
+ * without the fee); a deferred is resolved by its key later; a carried continuation runs with
+ * nothing stored, or once from the table with a deadline; `install` is refused on a Shared Pot and
+ * on a fixed-Router Pot. ASYNC_GAS=1 prints each path's gas.
  *
  * GATED twice. On SAUCE_V12_RUNTIME_CREATION_HEX, as every EVM execution suite is, and on
  * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code
@@ -172,7 +173,8 @@ const slotOf = (key: bigint): Hex =>
   keccak256(encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [key, NAMESPACE]));
 
 /** The handler `echo(uint256,uint256)` answers with, for the protocol at `echo`: compiled by the
- *  SDK for the chain, as a package's handler is. */
+ *  SDK for the chain, as a package's handler is. An echoed value with a count `n` above bit 128
+ *  settles with `n` words (`wideResult`): a protocol whose answer is longer than a word. */
 const handlerSource = (
   echo: Address,
 ): string => `import { fulfil, promiseKey, requireCaller } from "@sauce/async";
@@ -180,8 +182,22 @@ const handlerSource = (
 function main(caller: Address, value: Uint256, data: bytes): void {
   requireCaller(${echo}, caller);
   const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
-  fulfil(promiseKey(${ECHO_TAG}, id), abi.encode(echoed));
+  let delivered = abi.encode(echoed);
+  for (let i = 1; i < echoed >> 128; i += 1) {
+    delivered = delivered.concat(abi.encode(echoed + i));
+  }
+  fulfil(promiseKey(${ECHO_TAG}, id), delivered);
 }`;
+
+/** The value to request for a result of `words` words, distinct for each `seed`. */
+const wideValue = (words: number, seed: bigint): bigint => (BigInt(words) << 128n) | seed;
+/** What the handler settles a request for `value` with: `value`, `value + 1`, … one word each. */
+const wideResult = (value: bigint): Hex =>
+  concat(
+    Array.from({ length: Math.max(1, Number(value >> 128n)) }, (_, i) =>
+      toHex(value + BigInt(i), { size: 32 }),
+    ),
+  );
 
 /** The handler `carried(bytes,bytes)` answers with, for the protocol at `carrier`: the payload the
  *  request sent, `(key, stored, program)`, settled with what the protocol delivered. */
@@ -320,6 +336,60 @@ const Carrier = new CarrierProtocol();
 function main(bump: Uint256): void {
   Carrier.send()${within ? ".within(3600)" : ""}.then((value) => {
     evm.sstore(${ECHOED_SLOT}, value + bump);
+  });
+}`;
+
+/** The echo protocol with no `deliver`: a body takes each result as it arrived, bytes. */
+const WIDE_PROTOCOL = (
+  echo: Address,
+): string => `import { Promise, Request, promiseKey } from "@sauce/async";
+
+class WideEcho {
+  request(value: Uint256) {
+    return new Request({
+      send: (continuation) => {
+        const [id] = abi.decode(
+          evm.call(${echo}, 0, hex\`${REQUEST_SELECTOR.slice(2)}\`.concat(abi.encode(value))),
+          ["Uint256"],
+        );
+        return promiseKey(${ECHO_TAG}, id);
+      },
+    });
+  }
+}
+const Wide = new WideEcho();
+`;
+
+/** Promise.all of two echo requests, its body writing the hash of both results as they arrived:
+ *  `keccak256(abi.encode(r[0], r[1]))`. */
+const wideSource = (echo: Address): string => `${WIDE_PROTOCOL(echo)}
+function main(first: Uint256, second: Uint256): void {
+  Promise.all([Wide.request(first), Wide.request(second)]).then((r) => {
+    evm.sstore(${ECHOED_SLOT}, crypto.keccak256(abi.encode(r[0], r[1])));
+  });
+}`;
+
+/** Results kept both ways, read back by one body: a word and two words from the protocol, and
+ *  reasons of 33, 4 and 0 bytes the program rejects with itself. The body writes the hash of
+ *  every value, and each status as a digit. */
+const THIRTY_THREE: Hex = `0x${"ab".repeat(33)}`;
+const keptSource = (echo: Address): string => `${WIDE_PROTOCOL(echo)}
+function main(first: Uint256, second: Uint256): void {
+  Promise.allSettled([
+    Wide.request(first),
+    Wide.request(second),
+    Promise.reject(hex\`${THIRTY_THREE.slice(2)}\`),
+    Promise.reject(hex\`deadbeef\`),
+    Promise.reject(hex\`\`),
+  ]).then((r) => {
+    evm.sstore(
+      ${ECHOED_SLOT},
+      crypto.keccak256(abi.encode(r[0].value, r[1].value, r[2].value, r[3].value, r[4].value)),
+    );
+    evm.sstore(
+      ${CAUGHT_SLOT},
+      r[0].status * 10000 + r[1].status * 1000 + r[2].status * 100 + r[3].status * 10 + r[4].status,
+    );
   });
 }`;
 
@@ -740,6 +810,100 @@ describeAsync("@sauce/async on the EVM, through the Router's handlers", () => {
         ),
       );
       GAS["all of 2: request, continuations already deployed"] = await gasOf(again.hash);
+    },
+  );
+
+  itSettling(
+    "Promise.all hands its body each child's result as it arrived, however long",
+    async () => {
+      for (const [words, seed] of [
+        [1, 0xa1n],
+        [2, 0xa2n],
+        [4, 0xa4n],
+        [8, 0xa8n],
+        [9, 0xa9n],
+      ] as const) {
+        await setSlot(ECHOED_SLOT, 0n);
+        const [first, second] = await nextIds(2);
+        const values = [wideValue(words, seed), wideValue(words, seed << 8n)] as const;
+        expect((await cook(compiled(wideSource(echo), [...values]))).ok).toBe(true);
+        const child = await fulfill(second!);
+        expect(child.ok).toBe(true);
+        GAS[`all of 2, ${words}-word results: a child's callback`] = await gasOf(child.hash);
+        const last = await fulfill(first!);
+        expect(last.ok).toBe(true);
+        GAS[`all of 2, ${words}-word results: the last child's callback, running the body`] =
+          await gasOf(last.hash);
+        expect(await slot(ECHOED_SLOT)).toBe(
+          keccak256(
+            encodeAbiParameters(
+              [{ type: "bytes" }, { type: "bytes" }],
+              [wideResult(values[0]), wideResult(values[1])],
+            ),
+          ),
+        );
+      }
+    },
+  );
+
+  itSettling(
+    "keeps a child's result of a word or less in a slot and a longer one as code, and reads both",
+    async () => {
+      await setSlot(ECHOED_SLOT, 0n);
+      await setSlot(CAUGHT_SLOT, 0n);
+      const [first, second] = await nextIds(2);
+      const values = [wideValue(1, 0xb1n), wideValue(2, 0xb2n)] as const;
+      const requested = await cook(compiled(keptSource(echo), [...values]));
+      expect(requested.ok).toBe(true);
+      const joinKey = (await pendingOf(requested.hash))
+        .map(({ key }) => key)
+        .find((key) => key !== keyOf(first!) && key !== keyOf(second!))!;
+      expect((await fulfill(second!)).ok).toBe(true);
+      expect((await fulfill(first!)).ok).toBe(true);
+
+      const results: Hex[] = [
+        wideResult(values[0]),
+        wideResult(values[1]),
+        THIRTY_THREE,
+        "0xdeadbeef",
+        "0x",
+      ];
+      expect(await slot(ECHOED_SLOT)).toBe(
+        keccak256(
+          encodeAbiParameters(
+            results.map(() => ({ type: "bytes" })),
+            results,
+          ),
+        ),
+      );
+      expect(await slot(CAUGHT_SLOT)).toBe(word(22_333n));
+      // Each head: its state and, for a result longer than a word, the address of the code that
+      // keeps it; else a zero address, the length, and the result in the next slot, as a number.
+      for (const [index, result] of results.entries()) {
+        const at = BigInt(
+          keccak256(
+            encodeAbiParameters(
+              [{ type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
+              [joinKey, BigInt(index), NAMESPACE],
+            ),
+          ),
+        );
+        const state = index < 2 ? 2n : 3n;
+        const head = BigInt((await slot(toHex(at, { size: 32 }))) ?? "0x0");
+        const length = BigInt((result.length - 2) / 2);
+        if (length <= 32n) {
+          expect(word(head)).toBe(word((state << 160n) | (length << 168n)));
+          expect(await slot(toHex(at + 1n, { size: 32 }))).toBe(
+            word(length === 0n ? 0n : BigInt(result)),
+          );
+        } else {
+          expect(word(head >> 160n)).toBe(word(state));
+          const code = await publicClient.getCode({
+            address: toHex(head & ((1n << 160n) - 1n), { size: 20 }),
+          });
+          expect(code?.slice(22)).toBe(result.slice(2));
+        }
+      }
     },
   );
 
