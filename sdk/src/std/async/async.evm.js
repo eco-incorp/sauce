@@ -95,8 +95,9 @@
 // (`"program": "@sauce/async/erc1271.handler.js"`), registered as a view (static, no fee). It is
 // valid, with the magic value 0x1626ba7e, for
 //   (a) a hash a program running as the Pot approved, `Erc1271.approve(hash)` (and `revoke`), kept
-//       in the ERC-7201 namespace `sauce.storage.Erc1271`: a request the Pot made itself, which a
-//       market checks before it spends the Pot's deposit;
+//       in the ERC-7201 namespace `sauce.storage.Erc1271`, WHATEVER the signature bytes: the
+//       approval is the authorization, as a Safe's approved hash is, and a market that checks a
+//       request the Pot made passes whatever signature the Pot gave it;
 //   (b) the owner's signature over `hash` bound to the Pot, EIP-712's
 //         domain      { name: "Sauce Pot", version: "1", chainId, verifyingContract: the Pot }
 //         PotMessage  { hash: bytes32 }

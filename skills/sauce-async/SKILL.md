@@ -145,8 +145,8 @@ core ships, which a package that needs the Pot to sign declares as its own handl
 (`"program": "@sauce/async/erc1271.handler.js"`, a view). It is valid for:
 
 - **a hash the Pot approved**: `Erc1271.approve(hash)` in a program running as the Pot (and
-  `Erc1271.revoke(hash)`), such as a request the Pot made, which a market checks before it spends
-  the Pot's deposit. One storage read, well under the 100,000 gas such a check gives it;
+  `Erc1271.revoke(hash)`), whatever the signature bytes, since the approval is the authorization:
+  a request the Pot made, which a market checks before it spends the Pot's deposit. One storage read, well under the 100,000 gas such a check gives it;
 - **the owner's signature over the hash bound to the Pot**: EIP-712's `PotMessage { hash: bytes32 }`
   under the domain `{ name: "Sauce Pot", version: "1", chainId, verifyingContract: the Pot }`, never
   the bare hash, so a signature the owner made for anything else is none of the Pot's. A malleable

@@ -19,6 +19,7 @@ import {
 } from "viem";
 
 import { packageHandlers, packageReader } from "../../../src/routes/handlers.js";
+import { ERC1271_HANDLER, potMessageTypedData } from "../../../src/routes/erc1271.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
   SIGNED_NAMESPACE,
@@ -27,7 +28,6 @@ import {
   executeAcrossTypedData,
   executeTypedData,
   executionHash,
-  potMessageTypedData,
   signedSaltSlot,
 } from "../../../src/routes/signed.js";
 
@@ -144,7 +144,7 @@ describe("the handlers", () => {
     const declared = MANIFEST.handlers.find(
       ({ selector }) => selector === "isValidSignature(bytes32,bytes)",
     );
-    expect(declared?.program).toBe("@sauce/async/erc1271.handler.js");
+    expect(declared).toEqual(ERC1271_HANDLER);
     const ours = packageHandlers("base", "@sauce/signed").find(
       ({ signature }) => signature === "isValidSignature(bytes32,bytes)",
     );

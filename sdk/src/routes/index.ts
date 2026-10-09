@@ -118,8 +118,18 @@ export {
   packageHandlers,
   packageInstall,
   packageInterfaces,
+  packageReader,
 } from "./handlers.js";
 export type { CompiledHandler, HandlerDeclaration, PackageInstall } from "./handlers.js";
+export {
+  approvedHashSlot,
+  ERC1271_HANDLER,
+  ERC1271_NAMESPACE,
+  erc1271Abi,
+  POT_SIGNER_DOMAIN,
+  potMessageDigest,
+  potMessageTypedData,
+} from "./erc1271.js";
 export {
   SIGNED_DOMAIN,
   SIGNED_NAMESPACE,
@@ -130,7 +140,6 @@ export {
   executeAcrossTypedData,
   executeTypedData,
   executionHash,
-  potMessageTypedData,
   signedAbi,
   signedProgram,
   signedSalt,

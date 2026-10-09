@@ -141,7 +141,8 @@ core ships, `@sauce/async/erc1271.handler.js`, which a package that needs the Po
 as its own (a view). Installing two such packages installs it once. It is valid for:
 
 - a hash a program running as the Pot approved, `Erc1271.approve(hash)` (and `Erc1271.revoke`),
-  kept in the ERC-7201 namespace `sauce.storage.Erc1271`: a request the Pot made itself, which a
+  kept in the ERC-7201 namespace `sauce.storage.Erc1271`, whatever the signature bytes, since the
+  approval is the authorization: a request the Pot made itself, which a
   market checks with at most 100,000 gas before it spends the Pot's deposit. The check is one
   storage read, about 42,000 gas for the call;
 - the owner's signature over the hash bound to the Pot, EIP-712's `PotMessage { hash: bytes32 }`

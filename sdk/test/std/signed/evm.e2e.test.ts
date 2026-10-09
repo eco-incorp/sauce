@@ -51,6 +51,7 @@ import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
 import { Base } from "../../../src/index.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
+import { potMessageTypedData } from "../../../src/routes/erc1271.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
   cancelSaltsSource,
@@ -58,7 +59,6 @@ import {
   encodeExecuteAcross,
   executeAcrossTypedData,
   executeTypedData,
-  potMessageTypedData,
   signedProgram,
   signedSaltSlot,
   type SignedExecution,

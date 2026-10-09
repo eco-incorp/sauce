@@ -19,9 +19,9 @@
  * the Pot records it, and {@link cancelSaltsSource} writes the program that cancels salts.
  *
  * `executeAcross` takes one signature over an execution per chain ({@link executeAcrossTypedData},
- * {@link encodeExecuteAcross}), and the Pot answers EIP-1271's `isValidSignature(hash, signature)`
- * with its owner's signature over {@link potMessageTypedData}, bound to the Pot so that no
- * signature the owner made for another account is one of the Pot's.
+ * {@link encodeExecuteAcross}). The package also installs the core's ERC-1271 handler
+ * (`erc1271.ts`), whose `potMessageTypedData` the owner signs for the Pot to answer
+ * `isValidSignature`, under the same domain.
  *
  * Every hash here is the one `sdk/src/std/signed/signed.evm.js` computes on chain; the SDK's tests
  * hold the two together.
@@ -40,19 +40,21 @@ import {
 } from "viem";
 
 import { encodeEntryArguments, type EntryValue } from "./entry.js";
+import { POT_SIGNER_DOMAIN } from "./erc1271.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
 
 /** The package whose handlers answer the calls this module encodes. */
 export const SIGNED_PACKAGE = "@sauce/signed";
 
-/** The EIP-712 domain's `name` and `version` every Pot signs under. */
-export const SIGNED_DOMAIN = { name: "Sauce Pot", version: "1" } as const;
+/** The EIP-712 domain's `name` and `version` every Pot signs under: the core's, which its ERC-1271
+ *  handler checks too. */
+export const SIGNED_DOMAIN = POT_SIGNER_DOMAIN;
 
-/** The Pot's calls `@sauce/signed` answers, as a contract calls them. */
+/** The Pot's calls `@sauce/signed` answers, as a contract calls them; `isValidSignature` is the
+ *  core's (`erc1271Abi`). */
 export const signedAbi = parseAbi([
   "function execute(bytes program, bytes32 salt, uint256 deadline, bytes signature) returns (bytes)",
   "function executeAcross(bytes program, bytes32 salt, uint256 deadline, bytes32[] executions, uint256 index, bytes signature) returns (bytes)",
-  "function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)",
   "event SaltsCancelled(uint256 indexed word, uint256 mask)",
 ]);
 
@@ -81,8 +83,6 @@ const EXECUTIONS_TYPES = {
   Executions: [{ name: "executions", type: "Execution[]" }],
   ...EXECUTION_TYPES,
 } as const;
-
-const MESSAGE_TYPES = { PotMessage: [{ name: "hash", type: "bytes32" }] } as const;
 
 /** One program the owner signs for one Pot on one chain. */
 export interface SignedExecution {
@@ -220,21 +220,6 @@ export function encodeExecuteAcross(
       across.signature,
     ],
   });
-}
-
-/** The typed data the owner of `pot` signs for the Pot to answer EIP-1271's `isValidSignature`
- *  for `hash` (a Permit2 permit's digest, say): `PotMessage { hash }` under the Pot's domain. */
-export function potMessageTypedData(message: {
-  readonly pot: Address;
-  readonly chainId: number | bigint;
-  readonly hash: Hex;
-}) {
-  return {
-    domain: { ...SIGNED_DOMAIN, chainId: BigInt(message.chainId), verifyingContract: message.pot },
-    types: MESSAGE_TYPES,
-    primaryType: "PotMessage",
-    message: { hash: salt32(message.hash) },
-  } as const;
 }
 
 /** Where a Pot records `salt`: the storage word (`eth_getStorageAt` on the Pot) and its bit, set
