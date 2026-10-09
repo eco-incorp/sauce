@@ -8,13 +8,14 @@
 //     `number | bigint` of `c ? x : 0` (TS2365, TS2367, TS2322, TS2345). In SauceScript `1` and `1n`
 //     are the same integer, an account compares as its address (`program == 0x06dd…`), and so does
 //     a token or a contract, which is zero on a chain without it (`UniswapV3.Factory != 0`).
-//   - With `await` on, the SDK manifest's one switch (`src/plugin/manifest.json`, read below; off
-//     while the compiler has no `await`): an `await` that is a statement of `main`'s body, or of a
-//     closure's a call takes, or of a `try` block or a branch of an `if` ending the body standing in
-//     either (TS1308). SauceScript then needs no `async`: `await x; rest` is
-//     `x.then(() => { rest })`, as in JavaScript, and the compiler builds the closure. An `await`
-//     anywhere else is refused by the compile, and TypeScript's error on it stays. With it off,
-//     TypeScript's error on every `await` stays, as the compile refuses each.
+//   - With `await` on, the SDK manifest's one switch (`awaitSupported` in
+//     `src/plugin/manifest.json`, read below; off while the compiler has no `await`): an `await`
+//     that is a statement of `main`'s body, or of a closure's a call takes, or of a `try` block or
+//     a branch of an `if` ending the body standing in either (TS1308). SauceScript then needs no
+//     `async`: `await x; rest` is `x.then(() => { rest })`, as in JavaScript, and the compiler
+//     builds the closure. An `await` anywhere else is refused by the compile, and TypeScript's
+//     error on it stays. With it off, TypeScript's error on every `await` stays, as the compile
+//     refuses each.
 //
 // Everything else TypeScript reports stays: a misspelled builtin, a wrong argument count, a method a
 // contract does not have, and a name the program never declares, whatever its case: a program's
@@ -68,7 +69,7 @@ const PATTERNS = {
  */
 function isFalsePositive(diagnostic, flatten, ts) {
   if (diagnostic.code === 1308) {
-    return MANIFEST.await === true && ts !== undefined && awaitsInProgram(diagnostic, ts);
+    return MANIFEST.awaitSupported === true && ts !== undefined && awaitsInProgram(diagnostic, ts);
   }
   const pattern = PATTERNS[diagnostic.code];
 
