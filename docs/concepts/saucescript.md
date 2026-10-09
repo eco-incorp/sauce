@@ -87,8 +87,8 @@ limits. What most often surprises a TypeScript author:
   `~x + 1` reverts when `x` is zero. A route callback written in TypeScript uses `bigint` literals
   (`3000n`), which TypeScript types; the compiler reads both spellings as the same integer.
 - `bool` is kept apart from numbers, and `bytes`/`string` are byte strings: `"text"` is its UTF-8
-  bytes and `` hex`a9059cbb` `` raw bytes. Every untagged template literal is rejected, with or
-  without `${}`.
+  bytes and `` hex`a9059cbb` `` raw bytes. An untagged template literal is a string the compiler
+  builds while compiling, so every `${…}` in it must be a value it knows.
 - Annotations are checked, and an unannotated parameter is a number, so a helper that takes or
   returns an array, a record or bytes says so. `Account` roles (`Account<Writable, Signer>`) exist
   on SVM only; on EVM an `Account` is an address and a role is a compile error.
