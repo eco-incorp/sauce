@@ -56,11 +56,19 @@ describe("an ABI binding given in `contracts`", () => {
     same(given(body), imported(body));
   });
 
-  it("reaches what follows an `await`, and a body nested in a body", () => {
+  it.skip("reaches what follows an `await`, and a body nested in a body: await dropped from the compiler (v12 #554)", () => {
     same(
       given(`await ${opened};\n  Grid.at(${AT}).poke(1);`),
       given(`${opened}.then(() => { Grid.at(${AT}).poke(1); });`),
     );
+    const nested = `${opened}.then(() => {
+    Optimism.hop({ send: { token: USDC, amount: 1 }, refundee: ${AT} })
+      .then(() => { Grid.at(${AT}).poke(2); });
+  });`;
+    same(given(nested), imported(nested));
+  });
+
+  it("reaches a body nested in a body", () => {
     const nested = `${opened}.then(() => {
     Optimism.hop({ send: { token: USDC, amount: 1 }, refundee: ${AT} })
       .then(() => { Grid.at(${AT}).poke(2); });

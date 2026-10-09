@@ -184,10 +184,10 @@ a recorded address, not proof of live code on the chain.
   `routes.predictIntentVault`. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`
   and `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
 - **Nested intents** are written in the program: a body that opens the next intent with
-  `await Chain.hop({ send, receive, refundee })`, or `Chain.hop({ … }).then(() => { ... })`
-  (`sauce-intents`, Cascades). In a typed closure the chain is the imported export, whose `hop`
-  typechecks there, its fields included. `routes.compileSauceProgram`
-  lists each intent's body in `.bodies`, its destination and its program. The intents themselves
+  `Chain.hop({ send, receive, refundee }).then(() => { ... })` (`sauce-intents`, Cascades). In a
+  typed closure the chain is the imported export, whose `hop` typechecks there, its fields
+  included. `routes.compileSauceProgram` lists each intent's body in `.bodies`, its destination and
+  its program. The intents themselves
   are encoded as the program runs, so every one is published by a cook, and read back from the
   cook's logs, in its receipt or rehearsal (`routes.intentFromPublished`).
 
