@@ -3,8 +3,8 @@
 // The message-based way to run code on another chain. A Private Pot has the same address on every
 // chain its owner minted it on, so a program on one of them can send a program to itself on
 // another, over a bridge, and that Pot runs it when the bridge delivers it. Unlike a hop, nothing
-// moves with it and nothing is public: the program runs as the owner's own Pot, whose storage and
-// balances persist between messages.
+// moves with it, and the program runs as the owner's own Pot rather than one every intent shares,
+// so its storage and balances persist between messages.
 //
 //   Base.remote(() => {
 //     return USDC.balanceOf(self); // runs on Base, as this same Pot

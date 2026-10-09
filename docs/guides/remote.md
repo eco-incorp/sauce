@@ -4,8 +4,8 @@
 
 A Private Pot has the same address on every chain its owner mints it on. A program cooked on one of
 them can send a program to itself on another chain, over a bridge, and that Pot runs it when the
-bridge delivers it. Nothing moves with the message and nothing about it is public: the program
-runs as the owner's own Pot, whose storage and balances stay between messages. That is the
+bridge delivers it. Nothing moves with the message, and the program runs as the owner's own Pot,
+whose storage and balances stay between messages. That is the
 difference from an intent, whose body runs on a Pot every intent to that chain shares.
 
 `@sauce/remote` sends over the four bridges eco-routes proves intents with: Hyperlane, LayerZero
