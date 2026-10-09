@@ -371,7 +371,7 @@ const HELP: FlagSpecs = {
   help: { type: "boolean", short: "h", help: "Show this help" },
   "no-update-check": {
     type: "boolean",
-    help: "Say nothing of a newer sauce, and do not ask the registry (before the command too)",
+    help: "No notice of a newer sauce, and no registry read for one",
   },
 };
 
