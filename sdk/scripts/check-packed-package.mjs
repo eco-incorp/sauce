@@ -1184,19 +1184,21 @@ try {
     `Clean package install: the first sauce mcp installs its runtime folder ` +
       `(${installedSize(runtimeOf(mcpHome)).text}), and the second needs no npm`,
   );
-  // A project with its own MCP SDK at another version installs the package beside it (the peer is
-  // any version's), and the command passes that copy over for the pinned one.
+  // A project that already has its own zod 3 and MCP SDK 1.29.0, both outside the pins, then
+  // installs the package. That is the case where an exact optional peer made npm refuse the install
+  // (ERESOLVE); the peers are any version's, so it installs beside them, and the command passes those
+  // copies over for the pinned ones.
   const mismatch = mkdtempSync(join(tmpdir(), "sauce-mismatch-"));
   try {
     writeFileSync(join(mismatch, "package.json"), JSON.stringify({ private: true }));
-    execFileSync(
-      "npm",
-      [
-        ...["install", "--ignore-scripts", "--prefer-offline", "--no-audit", "--no-fund"],
-        ...[join(work, filename), "@modelcontextprotocol/sdk@1.29.0"],
-      ],
-      { cwd: mismatch, stdio: "inherit" },
-    );
+    const npmInstall = (...specs) =>
+      execFileSync(
+        "npm",
+        ["install", "--ignore-scripts", "--prefer-offline", "--no-audit", "--no-fund", ...specs],
+        { cwd: mismatch, stdio: "inherit" },
+      );
+    npmInstall("zod@3.25.76", "@modelcontextprotocol/sdk@1.29.0");
+    npmInstall(join(work, filename));
     const env = { ...smokeEnv, HOME: mcpHome };
     const status = JSON.parse(
       execFileSync(
@@ -1210,6 +1212,7 @@ try {
       ),
     );
     assert.equal(status.packages["@modelcontextprotocol/sdk"].own.version, "1.29.0");
+    assert.equal(status.packages.zod.own.version, "3.25.76");
     assert.equal(status.uses["sauce mcp"], "runtime", "the runtime folder's, not the user's");
     sameTools((await overStdio({ cwd: mismatch, env })).answers, "beside a mismatched MCP SDK");
   } finally {
@@ -1278,7 +1281,8 @@ try {
     rmSync(setupProject, { recursive: true, force: true });
   }
   console.log(
-    "Clean package install: a mismatched MCP SDK of the user's is passed over; --offline, no npm " +
+    "Clean package install: a project with its own zod 3 and MCP SDK 1.29.0 installs the " +
+      "package, and its copies are passed over; --offline, no npm " +
       "and no registry each refuse on one line, leaving nothing; sauce mcp setup installs the folder",
   );
   // Over Streamable HTTP, self-hosted with the same one command and a port it picks: initialize
