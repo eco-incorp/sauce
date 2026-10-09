@@ -1214,20 +1214,21 @@ one as code. The callback reaches the Router's programmable fallback (v12 #571, 
 cooks the HANDLER the owner installed for that selector, `main(caller, value, data)`:
 `requireCaller`, then `fulfil(key, value)` or `reject` (once: an unknown or settled key is logged
 ignored and returns), which runs the continuation by `evm.delegate` into the in-flight engine (one
-fee). The continuation reads what arrived from TRANSIENT storage
-(`keccak256("sauce.async.received")`, `received()`): not the program's input, because a `.catch`
-runs the body in a `try` block, a frame whose `ctx.msgData()` is the block's. A Pot's ONE ERC-1271
-handler is the core's, `std/async/erc1271.handler.js` (an approved hash, `Erc1271.approve`, or the
-owner's signature over the hash bound to the Pot, `PotMessage`), which a package needing it declares
-by that path. A package declares handlers in its `package.json` (`"handlers": [{ selector, program,
-readOnly }]`); `routes/handlers.ts` compiles them for a chain and writes the install program (one
-`install` per selector), and the `sauce` command takes a package as a program operand (`sauce run
-@sauce/<package> --chain base`, `cli/handlers.ts`). `test/std/async/evm.e2e.test.ts` runs it end to
-end with `startGatedEngine(…, { routerCreationCode })`, the explicit, test-only way to deploy a
-Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it skips without
-one, in CI too). Settling reads a continuation's revert (`catch (e)` that reads `e`, encoded `CATCH
-0x00 0xB8 <len>`), so every settling case needs an engine built from the compiler's tree; the
-released v12-evm 1.2.0 refuses it loudly, which the suite's one release case holds.
+fee). A continuation is `program((input: bytes, mode: Uint256) => …)`, run with `abi.encode(input,
+mode)` appended to its code and captured words, so what arrived and how (2 fulfilled, 3 rejected)
+are its parameters, decoded as it starts. `received()`/`fulfilled()` (TRANSIENT storage, which
+`run()` still writes) are deprecated for one release, for @sauce/remote's reply program. A Pot's ONE
+ERC-1271 handler is the core's, `std/async/erc1271.handler.js` (an approved hash, `Erc1271.approve`,
+or the owner's signature over the hash bound to the Pot, `PotMessage`), which a package needing it
+declares by that path. A package declares handlers in its `package.json` (`"handlers": [{ selector,
+program, readOnly }]`); `routes/handlers.ts` compiles them for a chain and writes the install
+program (one `install` per selector), and the `sauce` command takes a package as a program operand
+(`sauce run @sauce/<package> --chain base`, `cli/handlers.ts`). `test/std/async/evm.e2e.test.ts`
+runs it end to end with `startGatedEngine(…, { routerCreationCode })`, the explicit, test-only way
+to deploy a Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it
+skips without one, in CI too). Settling reads a continuation's revert (`catch (e)` that reads `e`,
+encoded `CATCH 0x00 0xB8 <len>`), so every settling case needs an engine built from the compiler's
+tree; the released v12-evm 1.2.0 refuses it loudly, which the suite's one release case holds.
 
 **Remote messages are `@sauce/remote`** (`src/std/remote/remote.evm.js`, EVM only, on
 `@sauce/async`): `Base.remote(body, { via, gas, replyGas })`, a method every chain's module gives
