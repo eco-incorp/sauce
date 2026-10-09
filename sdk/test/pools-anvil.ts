@@ -146,6 +146,9 @@ export interface PoolsChain {
   stop(): Promise<void>;
 }
 
+// Where suites have long imported it from.
+export { freePort } from "./anvil-process.js";
+
 /** Starts the pools' anvil, on a port the OS hands out (`anvil-process.ts`). */
 export async function startPoolsChain(): Promise<PoolsChain> {
   const port = await freePort();
