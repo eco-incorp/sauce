@@ -6,7 +6,7 @@
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { resolveSdkPackage } from "../embedded/resolve.js";
-import { handlersInstallSource, packageHandlers } from "../routes/handlers.js";
+import { handlersInstallSource, packageInstall } from "../routes/handlers.js";
 
 const PACKAGE = /^@sauce\/[\w-]+$/;
 
@@ -23,5 +23,14 @@ export function packageOperandText(specifier: string, chain: CanonicalChain): st
     );
   }
 
-  return handlersInstallSource(packageHandlers(chain, specifier), specifier);
+  const { handlers, interfaces, skipped } = packageInstall(chain, specifier);
+  if (handlers.length === 0 && interfaces.length === 0) {
+    const lacking = skipped.map(({ selector, missing }) => `${selector} needs ${missing}`);
+    throw new Error(
+      `${specifier} has no handler ${chain.slug} can run` +
+        (lacking.length === 0 ? "" : `: ${lacking.join("; ")}`),
+    );
+  }
+
+  return handlersInstallSource(handlers, specifier, interfaces);
 }

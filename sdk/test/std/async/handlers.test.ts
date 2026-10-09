@@ -10,16 +10,18 @@ import {
   compileHandlers,
   handlersInstallSource,
   packageHandlerDeclarations,
+  packageInstall,
+  packageInterfaces,
 } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 
 const PROTOCOL = "0x000000000000000000000000000000000000ec40";
-const HANDLER = `import { requireCaller, run, take } from "@sauce/async";
+const HANDLER = `import { fulfil, promiseKey, requireCaller } from "@sauce/async";
 
-function main(caller: Address, value: Uint256, data: bytes): bytes {
+function main(caller: Address, value: Uint256, data: bytes): void {
   requireCaller(${PROTOCOL}, caller);
   const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
-  return run(take(id), abi.encode(echoed));
+  fulfil(promiseKey(7, id), abi.encode(echoed));
 }`;
 const VIEW = `function main(caller: Address, value: Uint256, data: bytes): bool {
   return caller == ${PROTOCOL};
@@ -31,8 +33,15 @@ const FILES: Readonly<Record<string, string>> = {
 const read = (path: string): string | undefined => FILES[path];
 
 describe("a package's handler declarations", () => {
-  it("are none for a package that declares none", () => {
-    expect(packageHandlerDeclarations("@sauce/async")).toEqual([]);
+  it("are the public `expire(bytes32)` for @sauce/async, which every package installs too", () => {
+    expect(packageHandlerDeclarations("@sauce/async")).toEqual([
+      { selector: "expire(bytes32)", program: "expire.handler.js", readOnly: false },
+    ]);
+    expect(packageInterfaces("@sauce/async")).toEqual([]);
+    const install = packageInstall("base", "@sauce/async");
+    expect(install.handlers.map((h) => h.selector)).toEqual([
+      toFunctionSelector("expire(bytes32)"),
+    ]);
   });
 
   it("are refused for a package the SDK does not have", () => {
@@ -59,6 +68,20 @@ describe("compiling them for a chain", () => {
     expect(bytesToHex(handlers[0]!.bytecode)).toBe(
       bytesToHex(compileSauceProgram("base", HANDLER).bytecode),
     );
+  });
+
+  it("skips a handler on a chain without a contract it requires", () => {
+    const declarations = [
+      { selector: "echo(uint256,uint256)", program: "echo.handler.js" },
+      { selector: "allowed()", program: "views/allowed.js", requires: ["Aerodrome.Router"] },
+    ];
+    expect(compileHandlers("base", declarations, read)).toHaveLength(2);
+    expect(compileHandlers("ethereum", declarations, read).map((h) => h.signature)).toEqual([
+      "echo(uint256,uint256)",
+    ]);
+    expect(() =>
+      compileHandlers("base", [{ ...declarations[1]!, requires: ["Router"] }], read),
+    ).toThrow("a handler requires a contract as Namespace.Contract, not Router");
   });
 
   it("refuses two handlers for one selector, a file it cannot read and a bad selector", () => {
@@ -105,9 +128,21 @@ describe("the program installing them", () => {
       expect(bytecode).toContain(bytesToHex(handler.bytecode).slice(2));
   });
 
-  it("is refused with no handler to install", () => {
-    expect(() => handlersInstallSource([], "@sauce/async")).toThrow(
-      "@sauce/async declares no handlers",
+  it("declares each ERC-165 id after the handlers", () => {
+    const handlers = compileHandlers(
+      "base",
+      [{ selector: "echo(uint256,uint256)", program: "echo.handler.js" }],
+      read,
+    );
+    const source = handlersInstallSource(handlers, "@sauce/echo", ["0x805f2132"]);
+    expect(source).toContain('import { install, declareInterface } from "@sauce/async";');
+    expect(source).toContain("declareInterface(0x805f2132, true); // ERC-165");
+    expect(compileSauceProgram("base", source).bytecode.length).toBeGreaterThan(0);
+  });
+
+  it("is refused with nothing to install", () => {
+    expect(() => handlersInstallSource([], "@sauce/echo")).toThrow(
+      "@sauce/echo declares no handlers",
     );
   });
 });
@@ -129,8 +164,7 @@ describe("the `sauce` command, given a package", () => {
     expect(missing.code).not.toBe(0);
     expect(missing.out).toContain("@sauce/async's handlers are compiled for a chain: give --chain");
 
-    const none = await sauce("compile", "@sauce/async", "--chain", "base");
-    expect(none.code).not.toBe(0);
-    expect(none.out).toContain("@sauce/async declares no handlers: there is nothing to install");
+    const installed = await sauce("compile", "@sauce/async", "--chain", "base", "--json");
+    expect(installed.code).toBe(0);
   });
 });
