@@ -1,6 +1,6 @@
 ---
 name: sauce-script
-description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...), whose parameters are every input a program takes, intent files included, and a file of top-level statements for a program with no inputs), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, a callback's .then body, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
+description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...), whose parameters are every input a program takes, intent files included, and a file of top-level statements for a program with no inputs), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
 ---
 
 # Writing SauceScript
@@ -411,58 +411,9 @@ function main(target: Address, query: bytes): Uint256 {
 
 ## Waiting for a callback
 
-Some protocols answer later, in a transaction of their own: a random number, an oracle's
-response, a message from another chain, a proof. A program asks now, and the code that uses the
-answer is the request's `.then` body, or what follows an `await` of it. The body is compiled with
-the program and runs when the protocol calls the Pot back, as the same Pot:
-
-```sauce chain=base
-import { Request } from "@sauce/async";
-
-// What a protocol's package gives a program: a request method, on an object the program reads,
-// returning a `Request`. This one asks `protocol` to echo `value`, and parks the body under the
-// id the request answers.
-class EchoProtocol {
-  request(protocol: Address, value: Uint256) {
-    return new Request({
-      send: (continuation) => {
-        const asked = evm.call(protocol, 0, hex`d845a4b3`.concat(abi.encode(value)));
-        return abi.decode(asked, ["Uint256"])[0];
-      },
-      deliver: (input, body, fail) => {
-        body(abi.decode(input, ["Uint256"])[0]);
-      },
-    });
-  }
-}
-const Echo = new EchoProtocol();
-
-function main(protocol: Address, value: Uint256, recipient: Address) {
-  Echo.request(protocol, value)
-    .then((echoed) => {
-      USDC.transfer(recipient, echoed);
-    })
-    .catch((e) => {
-      USDC.transfer(recipient, value);
-    });
-}
-```
-
-- **The body runs on a Private Pot, in the callback's transaction.** The protocol calls the Pot
-  with a selector of its own, and the Pot's Router runs the handler the Pot's owner installed for
-  it: a program that checks the caller is the protocol, takes the parked body and runs it. Install
-  a package's handlers once per Pot, by giving the package as the program:
-  `sauce run @sauce/<package> --chain <chain> --wallet <name>`. A Shared Pot answers no callback.
-- **The body reads the program around it as it was when the request was made.** `recipient` and
-  `value` above are carried into the body then, and it cannot assign them. What the protocol
-  delivers is the body's parameter (`echoed`), decoded by the package.
-- **One callback runs it once.** The body is taken when it runs, so the same answer delivered
-  again is refused, and a call from anyone but the protocol is refused before anything runs.
-- **Each callback is a cook.** The Router pays the Kitchen's fee from the Pot's own balance, so a
-  Pot waiting for a callback holds enough of the native coin for it.
-- **`.catch` runs in the body's place** when the body reverts (everything it did undone) or when
-  the protocol reports the request failed, handed why. With no `.catch`, the callback reverts and
-  the body stays parked.
+A request whose answer arrives later, in a transaction of its own (randomness, an oracle, a message
+from another chain, a proof), is a promise: its `.then` body runs when the protocol calls the Pot
+back. `sauce-async` covers it, with `Promise.all`, `race`, timeouts and deferreds.
 
 ## What a program costs
 
