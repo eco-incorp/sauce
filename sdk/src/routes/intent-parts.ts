@@ -1,13 +1,14 @@
 /**
  * Where the parts of a program run that a hop sends to another chain: the body of each intent
- * opened with a chain's `hop` — what follows `await Arbitrum.hop({ … });` in its block, or the
- * argument of `Arbitrum.hop({ … }).then(…)` — its handler, `.catch(…)` after that `.then`, and its
- * config's `receive`, which names the destination's tokens. The handler of a `try` around awaited
- * hops runs on each of their destinations and where the `try` is written. Read from the program's
- * text, for what the compile does not report: which chain a diagnostic, or a name a program reads,
- * is on.
+ * opened with a chain's `hop` — the argument of `Arbitrum.hop({ … }).then(…)`, or, with `await` on
+ * (`plugin/await.ts`), what follows `await Arbitrum.hop({ … });` in its block — its handler,
+ * `.catch(…)` after that `.then`, and its config's `receive`, which names the destination's tokens.
+ * The handler of a `try` around awaited hops runs on each of their destinations and where the `try`
+ * is written. Read from the program's text, for what the compile does not report: which chain a
+ * diagnostic, or a name a program reads, is on.
  */
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { AWAIT_SUPPORTED } from "../plugin/await.js";
 import { chainSlugForKey, isChainKey } from "./accessor-index.js";
 import { walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
@@ -27,7 +28,7 @@ export function intentParts(program: AstNode): IntentPart[] {
   walk(program, (node) => {
     // `await X.hop({ … });` and the statements after it in its block.
     const statements =
-      node.type === "Program" || node.type === "BlockStatement"
+      AWAIT_SUPPORTED && (node.type === "Program" || node.type === "BlockStatement")
         ? (node.body as AstNode[] | undefined)
         : undefined;
     statements?.forEach((statement, i) => {
@@ -39,7 +40,7 @@ export function intentParts(program: AstNode): IntentPart[] {
     });
     // `try { …; await X.hop({ … }); … } catch { H }`: H runs on each hop's destination, in order,
     // as `.catch` of its body, and where the `try` is written.
-    if (node.type === "TryStatement") {
+    if (AWAIT_SUPPORTED && node.type === "TryStatement") {
       const handler = (node.handler as AstNode | undefined)?.body as AstNode | undefined;
       const tried = ((node.block as AstNode).body as AstNode[] | undefined) ?? [];
       for (const statement of tried) {

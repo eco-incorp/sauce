@@ -241,8 +241,7 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      documented:
-        "| The body, what follows `await` or `.then(() => { ... })` | Arbitrum, the destination | Arbitrum's |",
+      documented: "| The body, `.then(() => { ... })` | Arbitrum, the destination | Arbitrum's |",
       holds: () => {
         const [body] = lowered().bodies;
         return (
