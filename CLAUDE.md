@@ -23,11 +23,14 @@ everything from one name.
 
 **What the root manifest depends on is held to what the code imports.** Its `dependencies` are
 exactly what a library import loads. The packages only one command of the `sauce` bin loads are
-OPTIONAL PEER dependencies at exact pins: `@modelcontextprotocol/sdk` and `zod` (`sauce mcp`, i.e.
-`mcp/dist`) and `litesvm` (a Solana rehearsal, `cli/svm-fork.ts`). No install of the package brings
-them, with no flag. The command takes, in this order (`cli/optional.ts#provide`): the user's own
-copies where the package's modules resolve them, when each is exactly the pin; else
-`~/.sauce/runtime/<version>`; else it installs that folder first. The install is `npm ci
+OPTIONAL PEER dependencies: `@modelcontextprotocol/sdk` and `zod` (`sauce mcp`, i.e. `mcp/dist`) and
+`litesvm` (a Solana rehearsal, `cli/svm-fork.ts`). No install of the package brings them, with no
+flag. They are declared at any version (`*`). npm refuses (ERESOLVE) to install a package whose
+optional peer range a project's own copy misses, and zod is common, so never narrow those ranges.
+The pins are the root's devDependencies. The command takes, in this order
+(`cli/optional.ts#provide`): the user's own copies where the package's modules resolve them, when
+each is exactly the pin; else `~/.sauce/runtime/<version>`; else it installs that folder first. The
+install is `npm ci
 --ignore-scripts` on the lockfile the package ships, `sdk/runtime/package{,-lock}.json`
 (`cli/runtime.ts`), run in a 0700 mkdtemp beside the folder and renamed into place, after which
 other versions' folders are pruned, except the newest older one. The packages then load from the
@@ -40,10 +43,10 @@ the new binary run `sauce runtime install` where the replaced version had a fold
 --offline` installs nothing.
 
 `sdk/scripts/gen-runtime-lock.mjs` (`pnpm --filter './sdk' gen-runtime-lock`, which reaches the
-registry) writes `sdk/runtime/` from the root's peers. `optional-dependencies.test.ts` fails while
+registry) writes `sdk/runtime/` from those pins. `optional-dependencies.test.ts` fails while
 the lock is stale or incomplete, and also walks every export's module graph: every package it loads
 is a dependency, and none reaches the command. Every pin is three places that test holds equal: the
-root's peers, the workspace that imports the package, and `sdk/runtime/`.
+root's devDependencies, the workspace that imports the package, and `sdk/runtime/`.
 
 TypeScript is a devDependency only: the editor plugin gets the editor's TypeScript, and `sauce init`
 writes our devDependency's range into the new project's devDependencies.

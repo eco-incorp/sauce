@@ -121,9 +121,9 @@
     "viem": "^2.45.3"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "1.31.0",
-    "litesvm": "1.2.1",
-    "zod": "4.6.5"
+    "@modelcontextprotocol/sdk": "*",
+    "litesvm": "*",
+    "zod": "*"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {
@@ -138,16 +138,19 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@uniswap/v3-core": "^1.0.1",
     "@uniswap/v4-core": "^1.0.2",
     "esbuild": "0.28.0",
     "eslint": "10.10.0",
     "globals": "16.5.0",
     "hardhat": "^2.22.0",
+    "litesvm": "1.2.1",
     "playwright-core": "1.63.0",
     "prettier": "3.9.6",
     "typescript": "^5.7.0",
-    "typescript-eslint": "8.70.0"
+    "typescript-eslint": "8.70.0",
+    "zod": "4.6.5"
   },
   "packageManager": "pnpm@10.28.2",
   "engines": {

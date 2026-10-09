@@ -160,10 +160,11 @@ try {
   console.log("Clean package install: license metadata and full license text ship");
 
   // What a library import loads is a dependency; what only the `sauce` command loads, for one
-  // command each, is an optional peer at an exact pin, which no install brings.
+  // command each, is an optional peer of any version, which no install brings and no project's own
+  // version conflicts with (the mismatched MCP SDK below installs beside it).
   assert.equal(installedManifest.optionalDependencies, undefined);
-  assert.deepEqual(installedManifest.peerDependencies, RUNTIME_PINS);
   for (const each of RUNTIME) {
+    assert.equal(installedManifest.peerDependencies[each], "*");
     assert.deepEqual(installedManifest.peerDependenciesMeta[each], { optional: true });
   }
   for (const each of NEVER_IN_A_LIBRARY_INSTALL) {
@@ -1183,7 +1184,8 @@ try {
     `Clean package install: the first sauce mcp installs its runtime folder ` +
       `(${installedSize(runtimeOf(mcpHome)).text}), and the second needs no npm`,
   );
-  // A user's own copy of the MCP SDK at another version is passed over for the pinned one.
+  // A project with its own MCP SDK at another version installs the package beside it (the peer is
+  // any version's), and the command passes that copy over for the pinned one.
   const mismatch = mkdtempSync(join(tmpdir(), "sauce-mismatch-"));
   try {
     writeFileSync(join(mismatch, "package.json"), JSON.stringify({ private: true }));

@@ -3,9 +3,10 @@
  *
  *   - Its `dependencies` are what a library import loads: every package the module graph of every
  *     export reaches is one of them, and nothing else is.
- *   - Its OPTIONAL PEER dependencies are the MCP SDK and zod (`sauce mcp`) and LiteSVM (a Solana
- *     rehearsal), at exact pins, the versions the workspaces that use them pin. A library install
- *     gets none of them. No export reaches them, nor any module of the `sauce` command or the MCP
+ *   - Its OPTIONAL PEER dependencies, of any version, are the MCP SDK and zod (`sauce mcp`) and
+ *     LiteSVM (a Solana rehearsal), pinned exactly by the root's devDependencies and the workspaces
+ *     that import them. A library install gets none of them, and a project's own version of one
+ *     never conflicts. No export reaches them, nor any module of the `sauce` command or the MCP
  *     server; the command takes the user's own copies at those versions, else installs them for
  *     itself into a runtime folder from the lockfile the package ships, `sdk/runtime/`
  *     (`cli/optional.ts`, `cli/runtime.ts`), which this holds to the pins and to completeness:
@@ -204,13 +205,17 @@ function lockedAt(path: string, name: string): string | undefined {
 }
 
 describe("the package's dependencies", () => {
-  it("are what a library import loads; the runtime packages are exact optional peers", () => {
+  it("are what a library import loads; the runtime packages are optional peers of any version", () => {
     expect(ROOT.optionalDependencies).toBeUndefined();
     expect(Object.keys(ROOT.peerDependencies ?? {}).sort()).toEqual(RUNTIME);
     for (const name of RUNTIME) {
-      expect([name, ROOT.peerDependencies![name]]).toEqual([name, pinned()[name]]);
-      expect(pinned()[name]).toMatch(/^\d+\.\d+\.\d+$/);
+      // Any version: a project's own zod or MCP SDK never makes npm refuse to install the package.
+      // The command takes a user's copy only at the pin, and else its runtime folder.
+      expect([name, ROOT.peerDependencies![name]]).toEqual([name, "*"]);
       expect([name, ROOT.peerDependenciesMeta?.[name]?.optional]).toEqual([name, true]);
+      // The pin: exact, and the root's devDependency, which the repository builds and tests with.
+      expect(pinned()[name]).toMatch(/^\d+\.\d+\.\d+$/);
+      expect([name, ROOT.devDependencies?.[name]]).toEqual([name, pinned()[name]]);
     }
     // The workspaces that import them take exactly those versions.
     const mcp = manifestOf("mcp/package.json").dependencies ?? {};
@@ -230,9 +235,9 @@ describe("the package's dependencies", () => {
     const manifest = JSON.parse(read("sdk/runtime/package.json")) as {
       dependencies: Record<string, string>;
     };
-    // Written by gen-runtime-lock.mjs from the root's peers: a pin changed without it is stale.
+    // Written by gen-runtime-lock.mjs from the root's pins: a pin changed without it is stale.
     expect(manifest.dependencies).toEqual(
-      Object.fromEntries(RUNTIME.map((name) => [name, ROOT.peerDependencies![name]])),
+      Object.fromEntries(RUNTIME.map((name) => [name, ROOT.devDependencies![name]])),
     );
     expect(LOCK.lockfileVersion).toBe(3);
     expect(LOCK.packages[""]?.dependencies).toEqual(manifest.dependencies);

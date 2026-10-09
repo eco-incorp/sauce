@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // The runtime packages' manifest and lockfile, `sdk/runtime/`: what the `sauce` command installs
 // for itself, with `npm ci`, into ~/.sauce/runtime/<version> when `sauce mcp` or a Solana rehearsal
-// first needs them (`sdk/src/cli/optional.ts`, `runtime.ts`). Their one source is the root
-// manifest's optional peer dependencies: this writes them as `sdk/runtime/package.json` and has npm
-// resolve the whole tree into `sdk/runtime/package-lock.json`, every package pinned with its
-// integrity hash — LiteSVM's native binary for every platform included, which `npm ci` then picks
-// from by the platform it runs on.
+// first needs them (`sdk/src/cli/optional.ts`, `runtime.ts`). They are the root manifest's optional
+// peer dependencies, declared there at any version so that no project's own version of one of them
+// ever conflicts with the package; the versions they are pinned to are the root's devDependencies.
+// This writes those as `sdk/runtime/package.json` and has npm resolve the whole tree into
+// `sdk/runtime/package-lock.json`, every package pinned with its integrity hash — LiteSVM's native
+// binary for every platform included, which `npm ci` then picks from by the platform it runs on.
 //
 // Run it after changing a pin (`pnpm --filter './sdk' gen-runtime-lock`), and commit both files;
 // `optional-dependencies.test.ts` fails while they and the root manifest disagree. It reaches the
@@ -30,7 +31,7 @@ const runtimeManifest = {
     "What the sauce command installs for itself, with npm ci, into ~/.sauce/runtime/<version>: " +
     "the MCP server's packages and LiteSVM. Written by sdk/scripts/gen-runtime-lock.mjs.",
   dependencies: Object.fromEntries(
-    optional.sort().map((name) => [name, manifest.peerDependencies[name]]),
+    optional.sort().map((name) => [name, manifest.devDependencies[name]]),
   ),
 };
 const text = `${JSON.stringify(runtimeManifest, null, 2)}\n`;
