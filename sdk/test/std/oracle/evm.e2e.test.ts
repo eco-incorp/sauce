@@ -94,7 +94,10 @@ const RELEASED_ENGINE =
         readFileSync(join(HERE, "../../../src/artifacts/V12RuntimeBytecode.json"), "utf8"),
       ) as { runtimeCreationCode: string }
     ).runtimeCreationCode.toLowerCase();
-const itSettling = RELEASED_ENGINE ? it.skip : it;
+/** Each delivery compiles its programs and sends several transactions: a minute, so a loaded machine
+ *  does not fail it on time alone. */
+const itSettling = (name: string, test: () => Promise<void>): void =>
+  (RELEASED_ENGINE ? it.skip : it)(name, test, 60_000);
 
 const fixture = <T>(name: string): T =>
   JSON.parse(readFileSync(join(HERE, "fixtures", name), "utf8")) as T;
