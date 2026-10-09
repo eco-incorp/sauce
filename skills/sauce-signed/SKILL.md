@@ -249,7 +249,7 @@ Measured on a local chain, a program that returns a number, whole transactions:
 | the owner cooks the program itself                 | ~48,000  |
 | `execute`, the salt's word new to the Pot          | ~138,000 |
 | `execute`, the salt's word already written         | ~121,000 |
-| `isValidSignature` on the Pot                      | ~83,000  |
+| `isValidSignature` on the Pot                      | ~81,000  |
 | installing the package (three calls), once per Pot | ~780,000 |
 
 Salts that share a word (the same `salt >> 8`) are cheaper after the first: pick them in a run when

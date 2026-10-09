@@ -278,7 +278,7 @@ Whole transactions on a local chain, the program returning a number:
 | `execute`, a salt whose word is new to the Pot         | ~138,000 |
 | `execute`, a salt whose word is already written        | ~121,000 |
 | The same check written in Solidity, then the same cook | ~75,000  |
-| `isValidSignature` on the Pot                          | ~83,000  |
+| `isValidSignature` on the Pot                          | ~81,000  |
 | Installing the package, once per Pot                   | ~780,000 |
 
 The difference from Solidity has three parts:
