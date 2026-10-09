@@ -272,6 +272,19 @@ describe("the SDK's side", () => {
     expect(coreConstant("SAUCE_ERC1271_NAME")).toBe(constant("SAUCE_SIGNED_NAME"));
     expect(coreConstant("SAUCE_ERC1271_VERSION")).toBe(constant("SAUCE_SIGNED_VERSION"));
     expect(coreConstant("SAUCE_ERC1271_HALF_ORDER")).toBe(constant("SAUCE_SIGNED_HALF_ORDER"));
+    // The handler writes the same check out inline, with constants of its own.
+    const handler = readFileSync(
+      join(process.cwd(), "src", "std", "async", "erc1271.handler.js"),
+      "utf8",
+    );
+    for (const [name, ours] of [
+      ["DOMAIN", "SAUCE_SIGNED_DOMAIN"],
+      ["NAME", "SAUCE_SIGNED_NAME"],
+      ["VERSION", "SAUCE_SIGNED_VERSION"],
+      ["HALF_ORDER", "SAUCE_SIGNED_HALF_ORDER"],
+    ] as const) {
+      expect(handler).toContain(`const SAUCE_ERC1271_HANDLER_${name} = ${constant(ours)};`);
+    }
     const hash = keccak256(toHex("permit"));
     const domain = keccak256(
       encodeAbiParameters(
