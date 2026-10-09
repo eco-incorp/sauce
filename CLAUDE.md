@@ -783,7 +783,14 @@ The syntax is ONE verb with ONE config object (user, 2026-10-06): `Optimism.hop(
 refundee, deadline?, rewardDeadline?, prover?, salt?, fee? }).then(() => { … })`, the body running on
 Optimism, and `.catch((e) => …)` on what `.then` returns. SauceScript has no `await` (user,
 2026-10-08: the compiler's await work, v12 #554, was dropped), so a cascade nests each hop in the
-body above it. `send`/`receive` take one item or a list:
+body above it. What the SDK built for `await` is KEPT, dormant behind ONE switch, the plugin
+manifest's `await` (`plugin/await.ts#AWAIT_SUPPORTED`, false): the route parser's `canAwait`, the
+intent parts after an awaited hop and in a `try` around one (`intent-parts.ts`), `--fund`'s
+`thenForm` (`await x; rest` as `x.then(() => { rest })`, byte for byte), and the editor plugin's
+TS1308 rule, which reads the manifest itself. Off, the editor reports an `await` as the compiler
+refuses it, and the tests of that machinery are skipped, named "await dropped from the compiler
+(v12 #554)"; flip the switch only with a compiler that takes `await`, and they pass again. Docs,
+skills and examples write `.then`. `send`/`receive` take one item or a list:
 `send` is what leaves the source chain, escrowed there to pay the solver (the Portal's reward, so
 `rewardDeadline` and every Portal struct keep the name), and `receive` what arrives on the
 destination. `send` was `reward` until the user renamed it (2026-10-08); a hop given `reward` is
@@ -869,7 +876,8 @@ is a namespace (`chain`, `hop`, `Portal`, contracts, tokens), not a function.
 `hop` and `Portal`); the class is what compiles, so change them together;
 `routes-intent-portal.test.ts` holds the bytes each field builds, and the TypeScript intent's cook
 to what the same statement in a file publishes. `intent-parts.ts` reads from a program's text which
-chain each part runs on (`.then`'s and `.catch`'s arguments, `receive`), for
+chain each part runs on (`.then`'s and `.catch`'s arguments, `receive`, and with `await` on what
+follows an awaited hop), for
 diagnostics and the defines report.
 
 **`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
