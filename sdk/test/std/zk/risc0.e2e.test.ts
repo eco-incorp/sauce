@@ -609,6 +609,60 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
     expect(await chain.slot(SLOT)).toBe(3n);
   });
 
+  it("runs the body once for a re-proof of the same input: the promise settled already", async () => {
+    // The Pot's request is fulfilled. A stranger then pays for a proof of the same guest over the
+    // very same stdin, with the Pot as its callback: the same journal, so the same promise, which
+    // settled; the callback returns and the body does not run again.
+    const ours = await ask(11n);
+    expect((await lock(ours)).ok).toBe(true);
+    expect((await fulfil(ours, journalOf(ours, 30n))).ok).toBe(true);
+    expect(await chain.slot(SLOT)).toBe(41n);
+
+    const id = (BigInt(STRANGER.address) << 32n) | 2n;
+    const again: Request = { ...ours, id };
+    expect(
+      (
+        await chain.send(
+          chain.stranger,
+          MARKET,
+          encodeFunctionData({
+            abi: BoundlessMarketABI,
+            functionName: "submitRequest",
+            args: [again, "0x"],
+          }),
+          MAX_PRICE,
+        )
+      ).ok,
+    ).toBe(true);
+    const signature = await STRANGER.signTypedData(typedRequest(again));
+    expect(
+      (
+        await chain.send(
+          prover,
+          MARKET,
+          encodeFunctionData({
+            abi: BoundlessMarketABI,
+            functionName: "lockRequest",
+            args: [again, signature],
+          }),
+        )
+      ).ok,
+    ).toBe(true);
+    await chain.cook(chain.compiled(`function main(): void { evm.sstore(${SLOT}, 0); }`));
+    const replay = await fulfil(again, journalOf(ours, 30n));
+    expect(replay.ok).toBe(true);
+    expect(eventsOf(replay).some((e) => e.eventName === "CallbackFailed")).toBe(false);
+    expect(
+      replay.logs.some(
+        (log) =>
+          log.address.toLowerCase() === chain.stack.pot.toLowerCase() &&
+          log.topics[0] === PROMISE_IGNORED &&
+          log.topics[1] === promiseKeyOf(ours),
+      ),
+    ).toBe(true);
+    expect(await chain.slot(SLOT)).toBe(0n);
+  });
+
   it("hashes its request as the market's EIP-712 does: the Pot approves exactly that hash", async () => {
     const request = await ask(0n);
     expect(
