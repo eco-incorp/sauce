@@ -71,7 +71,7 @@ const SAUCE_RANDOM_VRF_NATIVE = hex`92fd1338000000000000000000000000000000000000
 // What a callback costs before the body runs: the Router's fallback dispatching to the handler,
 // the handler's cook (the engine gate, the Kitchen's fee), the handler, and settling the promise and
 // starting its continuation. Measured on the engine, with a margin.
-const SAUCE_RANDOM_LANDING_GAS = 150000;
+const SAUCE_RANDOM_LANDING_GAS = 130000;
 // The allowance per byte of the continuation as compiled, its captured values included.
 const SAUCE_RANDOM_GAS_PER_BYTE = 600;
 // What a combinator's child adds to its callback before the combinator's continuation runs:
