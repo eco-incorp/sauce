@@ -675,10 +675,11 @@ export function isValidSignature(hash: Uint256, signature: bytes): Uint256 {
 
 // A continuation's code, as the compiler knows it.
 class Code {
-  // keccak256 of the init code `keep` deploys `code` with (`initOf`), worked out while the program
-  // compiles where the compiler can fold a hash over bytes it knows, so a park only checks the
-  // address it gives.
-  static initHash(code) {
+  // keccak256 of the init code `keepAt` deploys `program`'s code with (`initOf`), worked out while
+  // the program compiles, where the compiler folds a hash over bytes it knows: a park only checks
+  // the address it gives.
+  static initHash(program) {
+    const code = program.code;
     if (code.length > 24566) {
       throw new Error("a continuation compiles to more bytes than one contract can hold");
     }
@@ -824,7 +825,7 @@ export class Request {
       }
       parkRecord(
         key,
-        Code.initHash(continuation.code),
+        Code.initHash(continuation),
         continuation.code,
         continuation.args,
         deadline,
@@ -840,7 +841,7 @@ export class Request {
     if (stored) {
       parkRecord(
         key,
-        Code.initHash(continuation.code),
+        Code.initHash(continuation),
         continuation.code,
         continuation.args,
         deadline,
@@ -1029,7 +1030,7 @@ class Deferred {
           );
     parkRecord(
       this.key,
-      Code.initHash(continuation.code),
+      Code.initHash(continuation),
       continuation.code,
       continuation.args,
       this._deadline,
@@ -1048,7 +1049,7 @@ class Deferred {
     );
     parkRecord(
       this.key,
-      Code.initHash(child.code),
+      Code.initHash(child),
       child.code,
       child.args,
       this._deadline,
@@ -1103,7 +1104,7 @@ class Join {
     const continuation = program(this._continuation(joinKey), { continuation: chainId });
     parkRecord(
       joinKey,
-      Code.initHash(continuation.code),
+      Code.initHash(continuation),
       continuation.code,
       continuation.args,
       0,
