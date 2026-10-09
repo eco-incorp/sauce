@@ -1385,7 +1385,8 @@ try {
     execFileSync(
       process.execPath,
       [join(root, "sdk/scripts", script), "--package-root", installedRoot, "--consumer", work],
-      { cwd: work, stdio: "inherit", env: smokeEnv },
+      // The real home: no `sauce` runs here, and Playwright keeps its browser under it.
+      { cwd: work, stdio: "inherit", env: { ...smokeEnv, HOME: process.env.HOME } },
     );
   }
 } finally {
