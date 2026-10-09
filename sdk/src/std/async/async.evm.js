@@ -68,8 +68,10 @@
 //   bits 224..231  a combinator's children
 //
 // The captured words follow in the next slots, or, more than three, as code whose address the next
-// slot holds. A combinator's child results are each kept as code, the address and the child's state
-// at `keccak256(abi.encode(key, index, namespace))`.
+// slot holds. A combinator's child result is a word at `keccak256(abi.encode(key, index,
+// namespace))`: the child's state at bits 160..161 and, for a result longer than a word, the
+// address of the code that keeps it in bits 0..159; a word or less is in the next slot, as a
+// number, those bits zero and its length in bytes at bits 168..173.
 //
 // Every continuation is compiled with `program(closure, { continuation: chainId })`: the SDK
 // compiles it for that chain's names and reports it as a continuation (`continuations`), not as an
@@ -490,8 +492,16 @@ export function childSettled(joinKey: Uint256, index: Uint256, state: Uint256, i
     settle(joinKey, state, input);
     return;
   }
-  // Kept for later: an all's value, an any's reason, an allSettled's either.
-  evm.sstore(resultSlot(joinKey, index), keep(input) | (state << 160));
+  // Kept for later: an all's value, an any's reason, an allSettled's either. A word or less in the
+  // next slot, which costs less than the CREATE2 of code; longer, as code.
+  const at = resultSlot(joinKey, index);
+  let head = input.length << 168;
+  if (input.length > 32) {
+    head = keep(input);
+  } else {
+    evm.sstore(at + 1, input.toBe());
+  }
+  evm.sstore(at, head | (state << 160));
   const remaining = ((word >> 216) & 255) - 1;
   evm.sstore(slot, (word & ~(255 << 216)) | (remaining << 216));
   if (remaining > 0) {
@@ -507,7 +517,13 @@ export function childSettled(joinKey: Uint256, index: Uint256, state: Uint256, i
 
 // A combinator's child `index`, kept by `childSettled`: what it settled with.
 export function result(joinKey: Uint256, index: Uint256): bytes {
-  return kept(evm.sload(resultSlot(joinKey, index)) & ((1 << 160) - 1));
+  const at = resultSlot(joinKey, index);
+  const head = evm.sload(at);
+  const code = head & ((1 << 160) - 1);
+  if (code == 0) {
+    return evm.sload(at + 1).toBytesBe(head >> 168);
+  }
+  return kept(code);
 }
 
 // A combinator's child `index`: 2 fulfilled, 3 rejected (or 0 not kept).

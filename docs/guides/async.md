@@ -158,7 +158,8 @@ A pending promise is one word in the Pot's storage, in the ERC-7201 namespace
 to three words the body captured sit beside it, and more go into code. The body's code is deployed
 once per Pot, by CREATE2 at an address its bytes decide, and shared by every request that compiles
 to it. Settling clears the word. A carried `.then` stores nothing. A combinator parks a word of its
-own and one per child, and keeps each child's value until it is decided.
+own and one per child, and keeps each child's value until it is decided: a value of a word or less
+in a storage slot, a longer one as code, which costs a CREATE2 but less for each further word.
 
 ## Randomness: `@sauce/random`
 
