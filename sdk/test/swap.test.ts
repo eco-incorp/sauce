@@ -241,14 +241,15 @@ describe("kyberSwap and ecoSwap compile through the host", () => {
 
   it("an intent body's swap is built for the destination's shared Pot", () => {
     const source = `function main(owner: Address) {
-  await Base.hop({
+  Base.hop({
     send: { token: USDC, amount: 1010000 },
     receive: { token: USDC, amount: 1000000 },
     refundee: owner,
     fee: 0,
+  }).then(() => {
+    const out = kyberSwap(USDC, WETH, 1000000, 1);
+    WETH.transfer(owner, out);
   });
-  const out = kyberSwap(USDC, WETH, 1000000, 1);
-  WETH.transfer(owner, out);
 }`;
     const program = compileSauceProgram("ethereum", source, {
       swap: { placeholders: true },

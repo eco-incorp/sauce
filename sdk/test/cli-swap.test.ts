@@ -294,14 +294,15 @@ describe("sauce tx builds the route for the cook's Pot", () => {
 describe("a file whose intent bodies swap is not rebuilt from the file", () => {
   // The body swaps on Base, in the destination's shared Pot; the program runs on Ethereum.
   const BODY = `function main(owner: Address) {
-  await Base.hop({
+  Base.hop({
     send: { token: USDC, amount: 1010000 },
     receive: { token: USDC, amount: 1000000 },
     refundee: owner,
     fee: 0,
+  }).then(() => {
+    const out = kyberSwap(USDC, WETH, 1000000, 1);
+    WETH.transfer(owner, out);
   });
-  const out = kyberSwap(USDC, WETH, 1000000, 1);
-  WETH.transfer(owner, out);
 }`;
 
   // `intent fill` reads the file's intents from a rehearsal on each chain's endpoint: the refusal
@@ -341,12 +342,13 @@ describe("a file whose intent bodies swap is not rebuilt from the file", () => {
         "top.sauce.ts",
         `function main(owner: Address) {
   const out = ecoSwap(USDC, WETH, 1000000, 0);
-  await Base.hop({
+  Base.hop({
     send: { token: WETH, amount: out },
     receive: { token: USDC, amount: 1 },
     refundee: owner,
+  }).then(() => {
+    USDC.transfer(owner, 1);
   });
-  USDC.transfer(owner, 1);
 }`,
       ),
       "--chain",
