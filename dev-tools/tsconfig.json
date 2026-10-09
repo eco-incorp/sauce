@@ -5,10 +5,11 @@
     "moduleResolution": "bundler",
     "esModuleInterop": true,
     "strict": false,
+    "strictNullChecks": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true
   },
   "include": ["scripts/**/*", "src/**/*", "test/**/*"],
-  "exclude": ["node_modules", "**/node_modules"]
+  "exclude": ["node_modules", "**/node_modules", "**/*.sauce.ts"]
 }

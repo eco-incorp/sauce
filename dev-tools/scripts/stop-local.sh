@@ -10,22 +10,22 @@ DEPLOYMENT_FILE="$REPO_ROOT/.deployment.json"
 
 # Try to get PID from deployment file
 if [ -f "$DEPLOYMENT_FILE" ]; then
-    HARDHAT_PID=$(grep -o '"hardhatPid":[0-9]*' "$DEPLOYMENT_FILE" | grep -o '[0-9]*')
+    NODE_PID=$(grep -o '"nodePid": *[0-9]*' "$DEPLOYMENT_FILE" | grep -o '[0-9]*$')
 fi
 
 # Also check if anything is running on port 8545
 PORT_PID=$(lsof -ti :8545 2>/dev/null)
 
-if [ -n "$HARDHAT_PID" ] && kill -0 "$HARDHAT_PID" 2>/dev/null; then
-    echo -e "${YELLOW}Stopping Hardhat (PID: $HARDHAT_PID)...${NC}"
-    kill "$HARDHAT_PID"
-    echo -e "${GREEN}Hardhat stopped.${NC}"
+if [ -n "$NODE_PID" ] && kill -0 "$NODE_PID" 2>/dev/null; then
+    echo -e "${YELLOW}Stopping anvil (PID: $NODE_PID)...${NC}"
+    kill "$NODE_PID"
+    echo -e "${GREEN}anvil stopped.${NC}"
 elif [ -n "$PORT_PID" ]; then
     echo -e "${YELLOW}Stopping process on port 8545 (PID: $PORT_PID)...${NC}"
     kill "$PORT_PID"
     echo -e "${GREEN}Process stopped.${NC}"
 else
-    echo -e "${YELLOW}No Hardhat process found running.${NC}"
+    echo -e "${YELLOW}No anvil process found running.${NC}"
 fi
 
 # Clean up files
@@ -34,7 +34,7 @@ if [ -f "$DEPLOYMENT_FILE" ]; then
     echo "Removed .deployment.json"
 fi
 
-if [ -f "$REPO_ROOT/.hardhat.log" ]; then
-    rm "$REPO_ROOT/.hardhat.log"
-    echo "Removed .hardhat.log"
+if [ -f "$REPO_ROOT/.anvil.log" ]; then
+    rm "$REPO_ROOT/.anvil.log"
+    echo "Removed .anvil.log"
 fi

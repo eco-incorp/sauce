@@ -255,6 +255,27 @@ try {
       assert.notEqual(typeof actions[export_], 'undefined', export_ + ' does not resolve from ${name}/actions');
     }
     console.log('Clean package install: ./actions resolves every runtime export its pages name: ' + documentedValues.join(', '));
+    // The testing kit reaches sdk/dist by a RELATIVE path and spawns its recorder from beside
+    // itself: an import proves the first, and a cook on an anvil the stack it reads from the
+    // packaged artifacts.
+    const testing = await import('${name}/testing');
+    assert.equal(typeof testing.fork, 'function', 'fork resolves from ${name}/testing');
+    assert.ok(existsSync(fileURLToPath(new URL('./recorder.mjs', import.meta.resolve('${name}/testing')))), 'the recorder ships beside the testing kit');
+    const { execFileSync } = await import('node:child_process');
+    let anvil = true;
+    try { execFileSync('anvil', ['--version'], { stdio: 'ignore' }); } catch { anvil = false; }
+    if (anvil && ${shipsAddresses}) {
+      const chain = await testing.local();
+      try {
+        const result = await chain.run({ source: 'function main(a: Uint256): Uint256 {\\n  return a * 2;\\n}\\n' }, { args: [21n] });
+        assert.equal(result.returned, 42n, 'a program cooks on the testing kit from a clean install');
+      } finally {
+        await chain.stop();
+      }
+      console.log('Clean package install: ./testing runs a program on a local chain with the packaged stack');
+    } else {
+      console.log('Clean package install: ./testing resolves (no anvil, or no engine artifacts, to run it here)');
+    }
   `,
   );
   // Force the packaged path: the resolvers read no environment, and scrubbing CI's SAUCE_* paths

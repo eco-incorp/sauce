@@ -1,7 +1,7 @@
 /**
  * Sync a Uniswap V3 pool's price and token balances on a fork to match mainnet.
  *
- * Uses hardhat_setStorageAt to copy:
+ * Uses anvil_setStorageAt to copy:
  * - slot0 (sqrtPriceX96, tick, etc.)
  * - Token balances held by the pool
  */
@@ -94,7 +94,7 @@ export async function setBalance(
   forkRpc: string,
 ) {
   const key = balanceKey(holder, balanceSlot);
-  await rpc(forkRpc, "hardhat_setStorageAt", [token, key, pad(numberToHex(amount), { size: 32 })]);
+  await rpc(forkRpc, "anvil_setStorageAt", [token, key, pad(numberToHex(amount), { size: 32 })]);
 }
 
 export interface SyncPriceOptions {
@@ -172,7 +172,7 @@ export async function syncPrice(options: SyncPriceOptions): Promise<SyncPriceRes
     SLOT0_POSITION,
     "latest",
   ])) as Hex;
-  await rpc(forkRpc, "hardhat_setStorageAt", [poolAddress, SLOT0_POSITION, mainnetRawSlot0]);
+  await rpc(forkRpc, "anvil_setStorageAt", [poolAddress, SLOT0_POSITION, mainnetRawSlot0]);
 
   // Sync token balances
   for (const [token, target] of [

@@ -15,8 +15,6 @@
     "scripts",
     "src",
     "sauce",
-    "artifacts",
-    "hardhat.config.cjs",
     "tsconfig.json",
     "README.md"
   ],
@@ -24,21 +22,18 @@
     "access": "public"
   },
   "scripts": {
-    "sauce": "npx tsx scripts/run.ts",
     "start:local": "./scripts/start-local.sh",
     "start:fork": "./scripts/start-fork.sh",
     "stop": "./scripts/stop-local.sh",
     "sync-price": "npx tsx scripts/sync-price.ts",
-    "sync-artifacts": "node scripts/sync-artifacts.js",
-    "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts && npx tsx test/svm-local.test.ts",
-    "test:e2e": "npx tsx test/e2e.test.ts",
-    "typecheck": "tsc --noEmit"
+    "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts && npx tsx test/svm-local.test.ts && tsx --test --test-concurrency=1 test/testing/local.test.ts test/testing/base.test.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.build.json --noEmit",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').copyFileSync('src/testing/recorder.mjs', 'dist/testing/recorder.mjs')\""
   },
   "devDependencies": {
     "@eco-incorp/sauce-source": "workspace:*",
     "@solana/kit": "^6.10.0",
     "@types/node": "^22.0.0",
-    "hardhat": "^2.22.0",
     "litesvm": "^1.2.1",
     "tsx": "^4.7.0",
     "typescript": "^5.7.0"
