@@ -362,6 +362,19 @@ name resolves, and rehearsing both sides.
 - **Load it** whenever the work crosses chains; `sauce-chains` says which chains take intents.
 - **Asked as:** "Move my USDC from Base to Ethereum and supply it to Aave there."
 
+### `sauce-remote`
+
+Code run on your own Pot on another chain: `Base.remote(() => { … })` sends a program to the same
+Pot there over a bridge (Hyperlane, LayerZero, Metalayer or Polymer), `.then` brings its answer
+back, `await` and `.catch` work as with any request; which bridge, what each leg costs and which Pot
+pays, the handlers both Pots install, and pairing a message with an intent that brings the money.
+
+- **Holds** compiled programs: a body sent one way, a round trip with its answer, a bridge named,
+  and a message that waits for an intent's money.
+- **Load it** when a program should read or change its own Pot's state on another chain, or get an
+  answer back from one. Moving money to another chain for a solver to deliver is `sauce-intents`.
+- **Asked as:** "From Ethereum, supply my Pot's USDC on Base to Aave, and tell me what is left."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

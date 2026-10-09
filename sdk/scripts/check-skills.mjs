@@ -450,6 +450,12 @@ const UNDECLARED_NAMES = {
     CallToEOA:
       "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
   },
+  "sauce-remote": {
+    allowInitializePath:
+      "LayerZero's question to a message's receiver before a path's first message, which the Pot answers; no registry ABI declares a receiver's callbacks",
+    nextNonce:
+      "LayerZero's question to a message's receiver about ordering, which the Pot answers; no registry ABI declares a receiver's callbacks",
+  },
   "sauce-solana-distributed-swap": {
     SqrtPriceLimitOverflow:
       "Raydium CLMM's error for a price limit on the wrong side of the price, a venue program's, which the package does not decode",

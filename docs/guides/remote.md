@@ -55,8 +55,8 @@ call it was not written for with the program its owner registered for that selec
 Router runs. Install `@sauce/remote`'s once on each chain the Pot sends to or hears from:
 
 ```sh
-sauce run @sauce/remote --chain ethereum
-sauce run @sauce/remote --chain base
+sauce run @sauce/remote --chain ethereum --wallet <name>
+sauce run @sauce/remote --chain base --wallet <name>
 ```
 
 | Bridge    | The Pot answers                                                                                      |

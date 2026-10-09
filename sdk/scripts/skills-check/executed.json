@@ -46,6 +46,7 @@
     "sauce-globals/examples/globals.sauce.ts": "compiled, and its token-write lowering pinned, by globals.mts; no suite executes it",
     "sauce-intents/examples/cross-chain.sauce.ts": "compiled by intents.mts, which pins on which chain each name resolves; no suite fulfils the intent it opens",
     "sauce-protocols/examples/protocols.sauce.ts": "compiled by protocols.mts for chains with and without PancakeSwap V3; no suite executes it",
+    "sauce-remote/examples/pay-on-base.sauce.ts": "executed by sdk/test/std/remote/evm.e2e.test.ts over each bridge's own contracts, which needs a Router no release publishes yet, so CI skips it",
     "sauce-script/examples/twap.sauce.ts": "compiled by skills:check and by the MCP sauce_compile test; no suite executes it",
     "sauce-solana/examples/solana.sauce.ts": "compiled by solana.mts, which checks its account manifest; no suite runs it in LiteSVM",
     "sauce-solana/examples/token-2022.sauce.ts": "compiled by solana.mts, which checks its accounts; no suite runs it in LiteSVM",

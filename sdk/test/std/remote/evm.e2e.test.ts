@@ -353,6 +353,32 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     expect(await read(ethereum, "round")).toBe(8_453_000n + 7n + 1n);
   }, 120_000);
 
+  it("runs the skill's example: pays on Base, and records back on Ethereum what is left there", async () => {
+    const example = readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../../../skills/sauce-remote/examples/pay-on-base.sauce.ts",
+      ),
+      "utf8",
+    );
+    const recipient = "0x000000000000000000000000000000000000beef" as Address;
+    const amount = parseEther("0.001");
+    const out = await cook(ethereum, example, [recipient, amount]);
+    const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+    expect(await base.publicClient.getBalance({ address: recipient })).toBe(amount);
+    const left = await base.publicClient.getBalance({ address: pot });
+    const back = await base.publicClient.getTransactionReceipt({ hash: there! });
+    await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
+    // What the Pot held on Base once it paid, before the way back's fee was paid from it.
+    const recorded = BigInt(
+      (await ethereum.publicClient.getStorageAt({
+        address: pot,
+        slot: keccak256(toHex("base.balance")),
+      })) ?? "0x0",
+    );
+    expect(recorded).toBe(left + HYPERLANE_FEE);
+  }, 120_000);
+
   it("runs what follows an await back on Ethereum, once the body ran on Base", async () => {
     const out = await cook(
       ethereum,
