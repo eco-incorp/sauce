@@ -9,6 +9,10 @@
  * LOADED HERE ONLY WHEN THIS COMMAND RUNS, by a dynamic import of that build, so no other command
  * pays for the MCP SDK; and it is reached through the interface below, which the workspace's own
  * entry module is checked against when it compiles (`mcp/src/entry.ts`), so neither side can drift.
+ * The MCP SDK and zod are optional peer dependencies of the package: the user's own copies at the
+ * versions pinned, else this version's runtime folder, which this command installs on first use
+ * (`optional.ts`) — `sauce mcp setup` up front, so an agent's first start of the server does not
+ * wait for it.
  *
  * It reads a chain through a caller's `rpcUrl`, else `--config`'s entry for the chain, else the
  * built-in public endpoints the command hands it. Over stdio, `--wallets [dir]` with a password
@@ -16,6 +20,11 @@
  * the wallets of that directory alone: the password is read here, once, before the server starts,
  * and never reaches a tool's input or result. Without `--wallets`, and always over HTTP, it holds
  * no key and every transaction it builds comes back unsigned.
+ *
+ * It prints no update notice — over stdio its stdout is the protocol — but notes a newer version in
+ * the first tool result of its life instead, and `sauce_skills` returns it as `latest`, from the
+ * same cache the command's notice reads (`update-check.ts`), refreshed the same way;
+ * `--no-update-check` or the config's `"updateCheck": false` turns both off.
  */
 import {
   CliError,
@@ -26,9 +35,11 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { parseSwapApi, type CommandOutput, type SwapApiUrls } from "./commands.js";
+import { MCP_EXTRA, provide, useRuntime } from "./optional.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { secret } from "./signer.js";
+import { updateCheckOff, updateNote, type UpdateCheck } from "./update-check.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
 import { defaultWalletsDir } from "./wallets.js";
 
@@ -55,6 +66,15 @@ export interface McpServeOptions {
   readonly log: (text: string) => void;
   /** `--wallets`, over stdio only: the wallets its tools create, list and send from. */
   readonly wallets?: McpWallets;
+  /**
+   * The update check's note on a newer version, or `undefined`, from its cache as it is when asked
+   * (`update-check.ts`). The server asks once, for the first tool result of its life. Absent with
+   * `--no-update-check`, the config's `"updateCheck": false`, or in a test.
+   */
+  readonly updateNote?: () => string | undefined;
+  /** The newer version the update check's cache names, or `undefined`, as it is when asked:
+   *  `sauce_skills` returns it as `latest`. Absent when `updateNote` is. */
+  readonly newerVersion?: () => string | undefined;
 }
 
 /** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
@@ -87,6 +107,10 @@ export const MCP_FLAGS: FlagSpecs = {
     type: "string",
     value: "<file>",
     help: 'Your own RPC endpoints: { "rpcUrls": { "<chain id>": "<url>" } } (default: public ones)',
+  },
+  offline: {
+    type: "boolean",
+    help: "Reach no network of its own: no built-in endpoint, and nothing installed",
   },
   http: {
     type: "string",
@@ -134,8 +158,9 @@ export const MCP_FLAGS: FlagSpecs = {
   force: { type: "boolean", help: 'setup: replace a "sauce" entry that differs' },
 };
 
-/** The server, from the package's build of `mcp/`. */
-async function loadMcp(): Promise<McpEntry> {
+/** The server, from the package's build of `mcp/`, its packages provided first. */
+async function loadMcp(offline: boolean, log: (text: string) => void): Promise<McpEntry> {
+  await provide(MCP_EXTRA, { offline, log });
   // A specifier TypeScript does not follow, so the SDK builds without the workspace built after it.
   const entry = new URL("../../../mcp/dist/entry.js", import.meta.url).href;
   let module: { mcpEntry?: McpEntry };
@@ -177,6 +202,7 @@ export async function mcpCommand(
     readonly stderr: (text: string) => void;
     readonly publicRpcs?: PublicEndpoints | undefined;
     readonly swapApis?: SwapApiUrls | undefined;
+    readonly updateCheck?: UpdateCheck | undefined;
   } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
@@ -185,11 +211,15 @@ export async function mcpCommand(
   }
   const given = (flags: readonly string[]) => flags.find((flag) => args.values[flag] !== undefined);
   const config = stringFlag(args, "config");
+  const offline = args.values.offline === true;
+  // The whole process installs nothing: a tool's Solana rehearsal later refuses as the start does.
+  if (offline) useRuntime({ offline: true });
   if (sub === "setup") {
     const serving = given(SERVE_ONLY);
     if (serving !== undefined) throw new UsageError(`--${serving} is for serving, not setup`);
     const dir = stringFlag(args, "dir");
-    const lines = (await loadMcp()).setup({
+    // Setup installs the server's packages now, so an agent's first start of it does not wait.
+    const lines = (await loadMcp(offline, io.stderr)).setup({
       agents: repeatedFlag(args, "agent"),
       ...(dir === undefined ? {} : { dir }),
       ...(config === undefined ? {} : { config }),
@@ -211,15 +241,21 @@ export async function mcpCommand(
     secret(url);
     swapApisGiven[provider] = url;
   }
+  const check = updateCheckOff(args.values, io.readText) ? undefined : io.updateCheck;
+  // Asked now as well, so a cache a day old is refreshed before the first tool call reads it.
+  check?.latest();
   await (
-    await loadMcp()
+    await loadMcp(offline, io.stderr)
   ).serve({
     ...(config === undefined ? {} : { config }),
-    ...(io.publicRpcs === undefined ? {} : { publicRpcs: io.publicRpcs }),
-    swapApis: {
-      ...(io.swapApis?.kyber === undefined ? {} : { kyber: io.swapApis.kyber }),
-      ...(io.swapApis?.jupiter === undefined ? {} : { jupiter: io.swapApis.jupiter }),
-    },
+    ...(io.publicRpcs === undefined || offline ? {} : { publicRpcs: io.publicRpcs }),
+    // The built-in swap APIs are network of its own too: none with --offline.
+    swapApis: offline
+      ? {}
+      : {
+          ...(io.swapApis?.kyber === undefined ? {} : { kyber: io.swapApis.kyber }),
+          ...(io.swapApis?.jupiter === undefined ? {} : { jupiter: io.swapApis.jupiter }),
+        },
     swapApisGiven,
     ...(http === undefined ? {} : { http }),
     ...(host === undefined ? {} : { host }),
@@ -228,6 +264,16 @@ export async function mcpCommand(
     allowPrivateRpc: args.values["allow-private-rpc"] === true,
     log: io.stderr,
     ...(wallets === undefined ? {} : { wallets }),
+    ...(check === undefined
+      ? {}
+      : {
+          updateNote: () => {
+            const latest = check.latest();
+
+            return latest === undefined ? undefined : updateNote(check.version, latest);
+          },
+          newerVersion: () => check.latest(),
+        }),
   });
 
   return undefined;
