@@ -155,6 +155,21 @@ command pays for it.
 Over stdio the server writes nothing but the protocol to stdout. A message larger than `--max-body`
 (2 MiB by default) closes the connection.
 
+### A newer version
+
+The server prints no update notice. Instead, the first tool result of its life carries one note, in
+`notes` and in the result's text, when the `sauce` command's update cache names a newer release
+([The update notice](cli.md#the-update-notice)): which version is out, which one the server runs,
+and how to move to it. `sauce update` updates the command, or says how for the way it was
+installed. A project's MCP entry pins its version, so
+`npx -y @eco-incorp/sauce@latest mcp setup --force` rewrites it. The new version serves once the
+agent restarts the server.
+
+The server reads that cache when it starts, and refreshes a cache a day old the way the command
+does, in a process of its own, so neither starting nor answering waits for the registry. Over HTTP
+the note is said once for the process, in whichever request is first. `--no-update-check`, or
+`"updateCheck": false` in the `--config` file, turns it off.
+
 ## Endpoints
 
 A tool that reads a chain needs no endpoint from you or the server's operator: it reads the chain

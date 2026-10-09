@@ -914,9 +914,9 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
 names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
-else the built-in public endpoints (none with `--offline`) — and `sauce update`, its one other
-network access, the npm registry, read only when that command runs (no background or automatic
-update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`) — and signs only with
+else the built-in public endpoints (none with `--offline`) — and the npm registry, its one other
+network access, named and read in `npm-registry.ts` alone, by `sauce update` when it runs and by
+the update check — and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
 from everything it prints. **The public endpoints are the one exception to "the package ships no
 RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
@@ -929,7 +929,24 @@ guard's forwarder) that falls back through the list on a network error, a timeou
 5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
 executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
 it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
-`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI. `run --fund` (`funding.ts`)
+`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI.
+**The update check** (`update-check.ts`, the user's call, replacing "no automatic update check")
+prints one line on stderr after a command when its cache, `~/.sauce/update-check.json` (the last
+check's time, the latest version seen, the version that checked), names a newer release (a
+prerelease only to a prerelease). The command reads the cache synchronously and never waits on the
+registry: a cache a day old is refreshed by `update-refresh.ts`, a script `startDetached` runs in a
+detached, unref'd Node process with stdio ignored. It records the attempt first, so a failing
+registry is asked again a day later, and writes the cache 0600 in a 0700 `~/.sauce`, renamed into
+place. An in-process request could not do this: it either holds a short command open (the DNS
+lookup included) or dies with it unanswered. It is off with `--offline`, `--no-update-check` (on
+every command's `HELP` flags, and accepted before the command name for an alias) or the `--config`
+file's `"updateCheck": false`, and is silent on any failure. `sauce mcp` prints nothing; it adds one
+note to the first tool result of the process (`mcp/src/update-note.ts`, wrapping `registerTool`,
+shared by HTTP's per-request servers). Only `main.ts` creates the check, so an in-process `runCli`
+(every test, the skills checker) reads no registry, and the bin-spawning checks
+(`transports.test.ts`, the packed check) pass `--no-update-check`. `no-embedded-rpc.test.ts` holds
+the registry's name to `npm-registry.ts`, and its importers and the check's to the command's own
+modules. `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
