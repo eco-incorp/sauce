@@ -120,6 +120,23 @@ export {
   packageInterfaces,
 } from "./handlers.js";
 export type { CompiledHandler, HandlerDeclaration, PackageInstall } from "./handlers.js";
+export {
+  SIGNED_DOMAIN,
+  SIGNED_NAMESPACE,
+  SIGNED_PACKAGE,
+  cancelSaltsSource,
+  encodeExecute,
+  encodeExecuteAcross,
+  executeAcrossTypedData,
+  executeTypedData,
+  executionHash,
+  potMessageTypedData,
+  signedAbi,
+  signedProgram,
+  signedSalt,
+  signedSaltSlot,
+} from "./signed.js";
+export type { SignedAcross, SignedCall, SignedExecution } from "./signed.js";
 
 export {
   ECO_ROUTES_VAULT_PROXY_CREATION_CODE,
