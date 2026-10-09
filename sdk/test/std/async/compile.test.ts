@@ -208,6 +208,46 @@ function main(value: Uint256, to: Address) {
     expect(program.bodies).toEqual([]);
   });
 
+  it("a request as a method, a plain function or a class extending Request: one program", () => {
+    const options = `{
+      send: (continuation) => {
+        const [id] = abi.decode(
+          evm.call(0x000000000000000000000000000000000000ec40, 0, abi.encode(value)),
+          ["Uint256"],
+        );
+        return promiseKey(7, id);
+      },
+      deliver: (input, body, fail) => {
+        const [echoed] = abi.decode(input, ["Uint256"]);
+        body(echoed);
+      },
+    }`;
+    const requested = (request: string) => `
+function main(value: Uint256, to: Address) {
+  ${request}.then((echoed) => {
+    evm.sstore(1, echoed + to);
+  });
+}`;
+    const method = compile(`${ECHO}${requested("Echo.request(value)")}`);
+    const plain = compile(`import { Request, promiseKey } from "@sauce/async";
+
+function echo(value: Uint256) {
+  return new Request(${options});
+}
+${requested("echo(value)")}`);
+    const extended = compile(`import { Request, promiseKey } from "@sauce/async";
+
+class Echo extends Request {
+  constructor(value: Uint256) {
+    super(${options});
+  }
+}
+${requested("new Echo(value)")}`);
+    expect(hex(plain.bytecode)).toBe(hex(method.bytecode));
+    expect(hex(extended.bytecode)).toBe(hex(method.bytecode));
+    expect(extended.continuations).toHaveLength(1);
+  });
+
   it.skip("`await` folds onto the same `then` (await dropped from the compiler (v12 #554))", () => {
     const awaited = compile(`${ECHO}
 function main(value: Uint256, to: Address) {

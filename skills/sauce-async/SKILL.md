@@ -106,8 +106,10 @@ the owner's later cook that resolves it by its key.
 
 ## Writing a package
 
-A package's request is a method on an object the program reads (the echo protocol's `request`
-above), never a plain function, returning `new Request({ send, deliver, carries, chain, deadline })`:
+A package's request returns `new Request({ send, deliver, carries, chain, deadline })`, from a
+method on an object the program reads (the echo protocol's `request` above) or a plain function; or
+it is a class that extends `Request` and hands `super` the same options. The three compile to the
+same program:
 
 - `send(continuation)` makes the request when the statement ends and answers the promise's key,
   `promiseKey(tag, id)`: the protocol's id under a word naming the protocol.
@@ -119,6 +121,30 @@ above), never a plain function, returning `new Request({ send, deliver, carries,
   `stored` is true and the message carries only `key`.
 - `chain` is the chain id the callback lands on, which the body is compiled for: this chain by
   default.
+
+```sauce chain=base
+import { Request, promiseKey } from "@sauce/async";
+
+class Echo extends Request {
+  constructor(protocol: Address, value: Uint256) {
+    super({
+      send: (continuation) => {
+        const asked = evm.call(protocol, 0, hex`d845a4b3`.concat(abi.encode(value)));
+        return promiseKey(7, abi.decode(asked, ["Uint256"])[0]);
+      },
+      deliver: (input, body, fail) => {
+        body(abi.decode(input, ["Uint256"])[0]);
+      },
+    });
+  }
+}
+
+function main(protocol: Address, value: Uint256, recipient: Address) {
+  new Echo(protocol, value).then((echoed) => {
+    USDC.transfer(recipient, echoed);
+  });
+}
+```
 
 Its handlers are programs `main(caller: Address, value: Uint256, data: bytes)`, listed in its
 `package.json`:

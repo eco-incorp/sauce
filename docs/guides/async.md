@@ -73,7 +73,9 @@ Promise.race([Oracle.price(feed), Async.timeout(3600)])
 
 ## Writing a package
 
-A package's request is a method on an object the program reads, returning a `Request`:
+A package's request is a method on an object the program reads, or a plain function, returning a
+`Request`; or a class that extends `Request` and hands `super` the same options. The three compile
+to the same program:
 
 ```js
 import { Request, promiseKey } from "@sauce/async";

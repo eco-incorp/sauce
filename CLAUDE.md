@@ -1200,31 +1200,34 @@ test that builds or sends a transaction through the CLI or MCP uses a supported 
 
 **Callbacks are `@sauce/async`** (`src/std/async/async.evm.js`, EVM only): `.then` is Sauce's one
 async primitive (user, 2026-10-08). A program requests now; the protocol calls the Pot back later;
-the `.then` body, compiled by `program(body, chainId)` with the program, runs then, as the same
-Private Pot. SauceScript has no `extends` and runs no plain function at compile time, so a
-protocol package COMPOSES `new Request({ send, deliver, chain })` from a method of an object the
-program reads (`Random.vrf(…)`): `send(continuation)` makes the request at run time and answers
-the key, which `[Symbol.dispose]` `park`s `code ++ args` under (deployed as a contract's code by
-`evm.create`, its address at `keccak256(abi.encode(key, ns))`, ERC-7201 `sauce.storage.Async`), or
-`undefined` when the protocol carries the body itself; `deliver(input, body, fail)` runs in the
-body's program and decodes. The callback reaches the Router's programmable fallback (v12 #571,
-unreleased), which cooks the HANDLER the owner installed for that selector,
-`main(caller, value, data)`: `requireCaller`, `take(id)` (one-shot), `run(program, input)`
-(`evm.delegate` into the in-flight engine, one fee). `run` holds `input` in TRANSIENT storage
-(`keccak256("sauce.async.received")`), which `received()` reads: not the program's input, because
-a `.catch` runs the body in a `try` block, a frame whose `ctx.msgData()` is the block's. A Pot's ONE ERC-1271 handler is the core's, `std/async/erc1271.handler.js` (an approved hash,
-`Erc1271.approve`, or the owner's signature over the hash bound to the Pot, `PotMessage`), which a
-package needing it declares by that path. A package
-declares handlers in its `package.json` (`"handlers": [{ selector, program, readOnly }]`);
-`routes/handlers.ts` compiles them for a chain and writes the install program (one `install` per
-selector), and the `sauce` command takes a package as a program operand
-(`sauce run @sauce/<package> --chain base`, `cli/handlers.ts`). `test/std/async/evm.e2e.test.ts`
-runs it end to end with `startGatedEngine(…, { routerCreationCode })`, the explicit, test-only way
-to deploy a Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it
-skips without one, in CI too). Settling reads a continuation's revert (`catch (e)` that reads
-`e`, encoded `CATCH 0x00 0xB8 <len>`), so every settling case needs an engine built from the
-compiler's tree; the released v12-evm 1.2.0 refuses it loudly, which the suite's one release case
-holds.
+the `.then` body, compiled by `program(body, { continuation: chainId })` with the program, runs
+then, as the same Private Pot. A protocol package's request returns `new Request({ send, deliver,
+carries, chain, deadline })` from a method of an object the program reads (`Random.vrf(…)`) or a
+plain function, or is a class that extends `Request`: the three compile to one program
+(`compile.test.ts`). `send(continuation)` makes the request at run time and answers the key, under
+which `[Symbol.dispose]` parks one packed word (`keccak256(abi.encode(key, ns))`, ERC-7201
+`sauce.storage.Async`) pointing at the continuation's code, deployed once by CREATE2 from the Pot
+with salt zero, its init code's hash folded while the program compiles (`Code.initHash`); a protocol
+that carries its bytes back says `carries: true`. `deliver(input, body, fail)` runs in the body's
+program and decodes. A combinator keeps a child's result of a word or less in a slot and a longer
+one as code. The callback reaches the Router's programmable fallback (v12 #571, unreleased), which
+cooks the HANDLER the owner installed for that selector, `main(caller, value, data)`:
+`requireCaller`, then `fulfil(key, value)` or `reject` (once: an unknown or settled key is logged
+ignored and returns), which runs the continuation by `evm.delegate` into the in-flight engine (one
+fee). The continuation reads what arrived from TRANSIENT storage
+(`keccak256("sauce.async.received")`, `received()`): not the program's input, because a `.catch`
+runs the body in a `try` block, a frame whose `ctx.msgData()` is the block's. A Pot's ONE ERC-1271
+handler is the core's, `std/async/erc1271.handler.js` (an approved hash, `Erc1271.approve`, or the
+owner's signature over the hash bound to the Pot, `PotMessage`), which a package needing it declares
+by that path. A package declares handlers in its `package.json` (`"handlers": [{ selector, program,
+readOnly }]`); `routes/handlers.ts` compiles them for a chain and writes the install program (one
+`install` per selector), and the `sauce` command takes a package as a program operand (`sauce run
+@sauce/<package> --chain base`, `cli/handlers.ts`). `test/std/async/evm.e2e.test.ts` runs it end to
+end with `startGatedEngine(…, { routerCreationCode })`, the explicit, test-only way to deploy a
+Router not yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it skips without
+one, in CI too). Settling reads a continuation's revert (`catch (e)` that reads `e`, encoded `CATCH
+0x00 0xB8 <len>`), so every settling case needs an engine built from the compiler's tree; the
+released v12-evm 1.2.0 refuses it loudly, which the suite's one release case holds.
 
 ## Agent skills
 
