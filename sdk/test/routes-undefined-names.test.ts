@@ -274,18 +274,7 @@ const ON_MAIN: readonly { source: string; chain: string; bytecode: string }[] = 
 ];
 
 describe("a test of the name compiles to the bytes available(X) did on main", () => {
-  // An early return ends its block only on a compiler built from #550.
-  const now = ON_MAIN.filter((entry) => !entry.source.includes("if (!"));
-  const later = ON_MAIN.filter((entry) => entry.source.includes("if (!"));
-  it.each(later.map((entry) => [`${entry.chain}: ${entry.source}`, entry] as const))(
-    "%s",
-    (_name, { source, chain, bytecode }) => {
-      expect(Buffer.from(compileSauceProgram(chain, source).bytecode).toString("hex")).toBe(
-        bytecode,
-      );
-    },
-  );
-  it.each(now.map((entry) => [`${entry.chain}: ${entry.source}`, entry] as const))(
+  it.each(ON_MAIN.map((entry) => [`${entry.chain}: ${entry.source}`, entry] as const))(
     "%s",
     (_name, { source, chain, bytecode }) => {
       expect(Buffer.from(compileSauceProgram(chain, source).bytecode).toString("hex")).toBe(
