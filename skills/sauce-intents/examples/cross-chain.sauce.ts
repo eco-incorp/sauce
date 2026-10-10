@@ -30,6 +30,7 @@ function main(beneficiary: Address, refundTo: Address) {
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   }).then(() => {
+    require(AaveV3.Pool);
     // On Ethereum.
     USDC.approve(AaveV3.Pool, delivered);
     AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);

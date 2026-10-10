@@ -98,22 +98,22 @@ alias resolves to where, and `contracts.listContracts(slug)` a protocol's contra
 
 ## Use a venue only where the chain has it
 
-A contract the chain a program is compiled for does not have is zero there, and comparing it with
-zero is decided when the program is compiled. A branch that comparison rules out is never compiled,
-so nothing in it is resolved, and one program can name a venue some of its chains lack:
+A contract the chain a program is compiled for does not have is `undefined` there, and testing it
+is decided when the program is compiled. A branch that test rules out is never compiled, so nothing
+in it is resolved, and one program can name a venue some of its chains lack:
 
 ```js
 // One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has
 // it, from Uniswap V3 where it does not, and nothing where it has neither venue.
 //
-// A contract the chain lacks is zero there, and comparing it with zero is decided when the program
-// is compiled, for the chain it is compiled for: a branch it rules out is never compiled. A token is
-// a bare name: a chain with a venue but without USDC or WETH refuses the program, naming the token.
+// A contract the chain lacks is `undefined` there, so testing it is decided when the program is
+// compiled, for the chain it is compiled for: a branch it rules out is never compiled. A token the
+// chain lacks is `undefined` too: used without a test, the program does not compile there.
 function main() {
   let pool = 0;
-  if (PancakeswapV3.Factory != 0) {
+  if (PancakeswapV3.Factory) {
     pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);
-  } else if (UniswapV3.Factory != 0) {
+  } else if (UniswapV3.Factory) {
     pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   }
   return pool;
@@ -124,28 +124,27 @@ Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, wh
 PancakeSwap V3, it compiles to the Uniswap V3 lookup alone. [registry-names.ts](../examples/registry-names.ts)
 compiles it for both.
 
-- Any registry contract compares this way: `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one
-  on a named chain, `Arbitrum.UniswapV3.Factory`. A token symbol does not: it is a bare name, and
-  one the chain's token map lacks (the registry's, plus the `tokens` you pass) is refused wherever
-  it appears, guarded or not. Write a token some of your chains lack as `Token(<address>)`.
-- `==` and `!=` (and `===` and `!==` against a number) are the only uses of an absent contract; any
-  other use is a compile error saying the chain does not have it. The comparison folds `if`/`else`, `?:`, `&&`, `||` and `!`, and
-  a guard that returns, `if (UniswapV3.Factory == 0) return 0;`, drops the rest of its block where
-  the contract is absent.
-- A branch that depends on it only through a runtime value
-  (`const has = UniswapV3.Factory != 0; if (has) ...`) is live code, and every name in it must
-  still resolve.
-- A name the registry does not know on any chain is the compiler's unknown name, not zero, so a typo
-  cannot quietly drop a branch. A program that declares the name owns it.
+- Every name is declared for every chain: every registry contract (`UniswapV3.Factory`,
+  `Uniswap.UniversalRouter`, one on a named chain, `Arbitrum.UniswapV3.Factory`) and every token
+  symbol. Where the chain has none, its value is `undefined`, so `if (UniswapV3.Factory)` or
+  `if (USDT)` is decided while compiling. A token's chain map is the registry's, plus the `tokens`
+  you pass.
+- Testing it is the one use of a name the chain lacks: any other use is a compile error naming it.
+  The test folds `if`/`else`, `?:`, `&&`, `||` and `!`, and a guard that returns,
+  `if (!UniswapV3.Factory) return 0;`, drops the rest of its block where the contract is absent.
+  `require(UniswapV3.Factory, "…")` makes the program compile only for chains that have it.
+- `undefined` is not `0`: `UniswapV3.Factory != 0` is true on a chain without it, so test the name
+  itself.
+- A name no chain has, `Uniswapp` or `UniswapV3.Factroy`, is a compile error on every chain, so a
+  typo cannot quietly drop a branch. A program that declares the name owns it.
 - Inside an intent to another chain, in `Arbitrum.hop({ … }).then(() => { … })`'s body, it is
   decided for that chain.
 
 In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
 token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is a type error.
 
-A name used as a token or a protocol that the chain does not have at all fails when the program
-compiles, naming it and the chain's closest names: `USDCC.balanceOf(...)` on Base reports
-"`USDCC` is not a token or protocol on base. Did you mean `USDC`?".
+A name no chain has fails when the program compiles, on every chain, with the closest declared
+name: `USDCC.balanceOf(...)` reports "`USDCC` is not a declared variable; did you mean `USDC`?".
 
 ## Token methods and balances
 

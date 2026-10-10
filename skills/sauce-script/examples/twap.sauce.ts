@@ -20,6 +20,7 @@
 import IOracle from "./IOracle.json";
 
 function main(tokenA: Address, tokenB: Address, fee: Uint256, window: Uint256): bytes {
+  require(UniswapV3.Factory);
   const pool = UniswapV3.Factory.getPool(tokenA, tokenB, fee);
   require(pool != 0, "no pool for that pair and fee");
   require(UniswapV3.Pool(pool).liquidity() > 0, "the pool has no liquidity");

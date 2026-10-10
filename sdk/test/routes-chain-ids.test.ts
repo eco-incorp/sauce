@@ -59,7 +59,7 @@ describe("a chain's name is its chain id", () => {
     expect(opened.map((body) => body.destination.slug)).toEqual(["ethereum"]);
   });
 
-  it("refuses the old intent form, a chain's name called, naming the hop", () => {
+  it("refuses the old intent form, a chain's name called", () => {
     expect(() =>
       compileSauceProgram(
         "base",
@@ -68,9 +68,6 @@ describe("a chain's name is its chain id", () => {
         ),
         {},
       ),
-    ).toThrow(
-      "`Arbitrum` is a chain id, not a function: an intent opens with " +
-        "`Arbitrum.hop({ send, receive, refundee }).then(() => { … })`",
-    );
+    ).toThrow("an instance of `OnChain` is not a function, so it cannot be called");
   });
 });
