@@ -24,7 +24,6 @@
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type {
-  AbsentPath,
   AccountManifest,
   ArgValue,
   ProgramOptions,
@@ -38,8 +37,15 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { chainById, requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs, toRsDefines, type RsCompileResult } from "./rs-compile.js";
-import { chainModuleSource, isChainScalar, type ChainModuleOptions } from "./chain-module.js";
-import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
+import {
+  CHAIN_DEFINE,
+  chainModuleSource,
+  isChainScalar,
+  isPlainModule,
+  levelModuleSource,
+  type ChainModuleOptions,
+} from "./chain-module.js";
+import { registryTokenSymbols } from "./token-registry.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
 import { pascalOfSlug } from "./pascal.js";
 import { chainAmbient } from "./ambient.js";
@@ -54,7 +60,6 @@ import {
   type EntrySignature,
   type EntryValue,
 } from "./entry.js";
-import { absentPathError, chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
@@ -205,13 +210,18 @@ function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
 
+/** The bare specifier a compile's module of names is named by: `@sauce/chain-evm`, the one module of
+ *  the target, or `@sauce/chain-evm-own` for a compile that chose values of its own. */
+const moduleSpecifier = (chain: CanonicalChain, options: ChainModuleOptions): string =>
+  `@sauce/chain-${chain.kind === "evm" ? "evm" : "svm"}${isPlainModule(options) ? "" : "-own"}`;
+
 /**
- * The bare specifier a chain's generated module is named by in one compile: `@sauce/chain-base`
- * for the program's own chain, `@sauce/chain-base-body` for the module every body on Base compiles
- * with, whose intents open when that body runs and are published by no wallet.
+ * The bare specifier one program's level module is named by in a compile: `@sauce/chain-level-base`
+ * for the program's own, `@sauce/chain-level-base-body` for every body on Base, whose intents open
+ * when that body runs and are published by no wallet.
  */
-const moduleSpecifier = (chain: CanonicalChain, body: boolean): string =>
-  `@sauce/chain-${chain.slug}${body ? "-body" : ""}`;
+const levelSpecifier = (chain: CanonicalChain, body: boolean): string =>
+  `@sauce/chain-level-${chain.slug}${body ? "-body" : ""}`;
 
 /**
  * What a compile for `chain` hands the compiler beyond the program: the chain's module of names, the
@@ -236,16 +246,22 @@ function chainModules(
   readonly bodies: Map<number, CanonicalChain>;
 } {
   const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
+  if (defines !== undefined && CHAIN_DEFINE in defines) {
+    throw new Error(
+      `compileSauceRoute: \`${CHAIN_DEFINE}\` is the SDK's own define, set to the chain's id`,
+    );
+  }
   requireFundVia(options.intents ?? {});
   const salt = options.intents?.salt ?? randomSalt();
-  const moduleOptions: ChainModuleOptions = {
-    tokens,
-    values,
-    accessors: options.accessors,
-    intents: options.intents ?? {},
-  };
-  const own = moduleSpecifier(chain, false);
-  const modules = new Map([[own, chainModuleSource(chain, moduleOptions, salt)]]);
+  const moduleOptions: ChainModuleOptions = { tokens, values, accessors: options.accessors };
+  // Every program of the compile reads the same names: a value the caller chose is its chain's, so
+  // a body on another chain reads that chain's registry values.
+  const own = moduleSpecifier(chain, moduleOptions);
+  const level = levelSpecifier(chain, false);
+  const modules = new Map([
+    [own, chainModuleSource(chain, moduleOptions)],
+    [level, levelModuleSource(chain, { intents: options.intents ?? {} }, salt)],
+  ]);
   // A level below opens its intents when its parent runs, and funds them whatever the root does: a
   // rehearsal that leaves the root's rewards unpaid must not change the bodies it publishes.
   const { openedAt: _openedAt, fund: _fund, ...inherited } = options.intents ?? {};
@@ -262,34 +278,24 @@ function chainModules(
       );
     }
     bodies.set(id, destination);
-    const specifier = moduleSpecifier(destination, true);
+    const specifier = levelSpecifier(destination, true);
     if (!modules.has(specifier)) {
-      modules.set(
-        specifier,
-        chainModuleSource(
-          destination,
-          {
-            accessors: options.accessors,
-            intents: inherited,
-            // A body on this same chain keeps the caller's names for it.
-            ...(destination.id === chain.id ? { tokens, values } : {}),
-          },
-          salt,
-        ),
-      );
+      modules.set(specifier, levelModuleSource(destination, { intents: inherited }, salt));
     }
 
     return {
       target: destination.kind === "svm" ? "svm" : "evm",
-      ambient: [...new Set([...chainAmbient(destination), ...(options.ambient ?? []), specifier])],
-      defines: toRsDefines(defines) ?? [],
+      ambient: [
+        ...new Set([...chainAmbient(destination), ...(options.ambient ?? []), own, specifier]),
+      ],
+      defines: [...(toRsDefines(defines) ?? []), [CHAIN_DEFINE, String(destination.id)]],
     };
   };
 
   return {
     modules,
-    ambient: [...new Set([...(options.ambient ?? []), own])],
-    defines,
+    ambient: [...new Set([...(options.ambient ?? []), own, level])],
+    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
     programOptions,
     bodies,
   };
@@ -527,65 +533,22 @@ function compileForChain(
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. Nothing here reads or rewrites it.
   const source = sauce;
-  const tokens = resolveTokenMap(chain, options.tokens);
   const names = chainModules(chain, options);
-  let rs: RsCompileResult;
-  try {
-    rs = compileWithRs({
-      source,
-      target,
-      entryKind,
-      resolve: options.resolve,
-      resolvePackage: options.resolvePackage,
-      defines: names.defines,
-      contracts: options.contracts,
-      ambient: names.ambient,
-      compactArgs: options.compactArgs,
-      modules: names.modules,
-      programOptions: names.programOptions,
-      ...(args === undefined ? {} : { args }),
-    });
-  } catch (error) {
-    // A token or protocol name the chain does not have, reported as one rather than as the call
-    // the compiler could not lower — from the compiler's own located diagnostics.
-    throw (
-      unknownGlobalError(source, "main.js", chain, tokens.keys(), error, {
-        allowWidenedSelectors:
-          typeof options.accessors === "object" && options.accessors.allowWidenedSelectors === true,
-      }) ??
-      chainCalledError(error) ??
-      error
-    );
-  }
-  const {
-    manifest,
-    entryEncoding,
-    entryParams,
-    entrySignature,
-    programs,
-    absentPaths,
-    ...compiled
-  } = rs;
-  // Every name a comparison read as 0, held to the registry: a name some chain has and this one
-  // lacks is decided; anything else — a typo — is refused, on the chain the part naming it runs on.
-  const reports: { readonly chain: CanonicalChain; readonly paths: readonly AbsentPath[] }[] = [
-    { chain, paths: absentPaths },
-    ...programs.flatMap((report) => {
-      const id = scopeChainId(report.scope);
-      const on = id === undefined ? undefined : chainById(id);
-      return on === undefined ? [] : [{ chain: on, paths: report.absentPaths }];
-    }),
-  ];
-  for (const { chain: on, paths } of reports) {
-    for (const path of paths) {
-      const refusal = absentPathError(path.name, on);
-      if (refusal !== undefined) {
-        throw new Error(
-          `compileSauceRoute: ${refusal} (${path.path}:${path.start.line}:${path.start.column + 1})`,
-        );
-      }
-    }
-  }
+  const rs = compileWithRs({
+    source,
+    target,
+    entryKind,
+    resolve: options.resolve,
+    resolvePackage: options.resolvePackage,
+    defines: names.defines,
+    contracts: options.contracts,
+    ambient: names.ambient,
+    compactArgs: options.compactArgs,
+    modules: names.modules,
+    programOptions: names.programOptions,
+    ...(args === undefined ? {} : { args }),
+  });
+  const { manifest, entryEncoding, entryParams, entrySignature, programs, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");

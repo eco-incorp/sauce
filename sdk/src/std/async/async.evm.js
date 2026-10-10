@@ -739,8 +739,21 @@ class Lists {
 // The compiler runs all of this while it compiles: a package's request method must be a method of
 // an object the program reads (`Random.vrf(…)`), which the compiler can run, and not a plain
 // function.
+// What `new Request(...)` takes: `send` always (refused, with how to write it, when absent), the
+// rest when the protocol needs them.
+interface RequestOptions {
+  send?: (continuation: any) => any;
+  deliver?: (input: bytes, body: any, fail: any) => void;
+  carries?: bool;
+  chain?: any;
+  deadline?: Uint256;
+}
+
 export class Request {
-  constructor(spec) {
+  // Set by `.then` and `.catch`, and read as `undefined` when neither ran.
+  _body;
+  _handler;
+  constructor(spec: RequestOptions) {
     if (spec === undefined || spec.send === undefined) {
       throw new Error(
         "`new Request({ send, deliver, carries, chain, deadline })` needs `send`: the request, made at run time",
@@ -922,6 +935,8 @@ export class Request {
 // `Promise.reject(reason)` rejected with bytes. Composes with the combinators; on its own, its
 // body runs where it is written.
 class Settled {
+  _body;
+  _handler;
   constructor(state, value) {
     this._state = state;
     this._value = value;
@@ -974,6 +989,8 @@ class Settled {
 // reason)`, from the owner's cook or from a handler the owner installed. It is its own resolvers:
 // `const d = Promise.withResolvers(); d.promise.then((value) => { … });`, the value as bytes.
 class Deferred {
+  _body;
+  _handler;
   constructor(deadline, timeout) {
     this.key = salt();
     this._deadline = deadline;
@@ -1075,6 +1092,8 @@ class Deferred {
 
 // A combinator over `children`, settled by `childSettled` as they settle.
 class Join {
+  _body;
+  _handler;
   constructor(kind, children) {
     if (children === undefined || children.length == 0) {
       throw new Error("a combinator takes a list of promises: `Promise.all([a, b])`");

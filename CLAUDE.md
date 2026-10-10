@@ -501,14 +501,21 @@ binds when called with an address (`UniswapV3.Pool(pool)`, exactly `.at(pool)`);
 evaluates a module constant only when a program reads it, so Ethereum's two thousand names cost a
 program its parsing and nothing else.
 
-**A module exports only what its chain has.** A dotted path the chain lacks
-(`PancakeswapV3.Factory`) is the compiler's to fold: it reads as 0 only as an operand of `==`/`!=`
-(and `===`/`!==` against a number), so `if (X != 0)` leaves the branch it rules out uncompiled,
-names and all, and the compile reports each folded path (`absentPaths`), which `unknown-global.ts`
-holds to the registry — a path no chain has is a typo and refused, and any other use of an absent
-one is worded for the chain. A BARE name the chain lacks, a token symbol, stays the compiler's
-unknown name, guarded or not (user, 2026-10-06), worded "`USDT` is not a token or protocol on
-base"; a token some chains lack is `Token(<address>)`. `sauce-route.ts#splitChainDefines` moves a
+**Every name is declared on every chain, valued per chain (user, 2026-10-09).** The names module is
+ONE text per target (`@sauce/chain-evm`, `@sauce/chain-svm`), declaring every token symbol of every
+chain, every namespace with every contract it has anywhere, and every chain's name; each value is the
+chain's whose id the define `__sauce_chain` is (`CHAIN_DEFINE`, set for the entry and, through
+`programOptions`, for each body), and `undefined` where that chain has none. So `if (X.Y)`,
+`if (USDT)` and `require(X.Y, "…")` are decided while compiling, a use of an `undefined` name is the
+compiler's located error, and a name no chain has (`UniswapV3.Factroy`) is an error on every chain:
+there is no SDK typo layer (`unknown-global.ts` and `absentPaths` are gone). `undefined` is not 0:
+`X.Y != 0` keeps its branch. The TypeScript declarations make a deployed contract member optional
+(`Factory?:`) so strict TS asks for the test; tokens stay non-optional. A compile that chose values
+of its own (a `tokens` override, a chain value, an accessor policy) gets `@sauce/chain-evm-own`,
+whose chosen values are its chain's alone, so a body on another chain reads that chain's. The
+per-compile part, where intents open (`HERE`, each destination's facts, the salt), is each
+program's level module (`@sauce/chain-level-<slug>[-body]`, `levelModuleSource`), which the names
+module's `Base.hop(…)` calls. `sauce-route.ts#splitChainDefines` moves a
 caller's define named like a chain-scoped name (a token symbol, `chainId`, an address key) into the
 chain's module (`tokens`, `values`) for that chain alone: a define replaces a module `const` of its
 name in EVERY module, so a `USDC` define would put a number where the module has the `Token`, and
