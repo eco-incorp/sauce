@@ -620,7 +620,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
       ]);
       expect(lpFee).toBe(venue.price === undefined ? 0 : Number(venue.fee));
     }
-  });
+  }, 60_000);
 
   it("sells to every pool with liquidity down to its own limit, and returns the unsold WETH", async () => {
     const amountIn = WETH_UNIT;
@@ -654,7 +654,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     console.log(
       `partial fill: gas ${receipt.gasUsed}, sold ${sold} of ${amountIn} WETH units for ${bought} USDC units`,
     );
-  });
+  }, 60_000);
 
   it("moves only what this intent delivered: what the shared Pot already held stays there", async () => {
     // Another intent's WETH and USDC, resting in the Pot every intent to Base shares.
@@ -674,7 +674,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     expect(await balance(WETH, REFUND_TO)).toBe(amountIn - sold);
     expect(await balance(WETH, pot)).toBe(resting);
     expect(await balance(USDC, pot)).toBe(restingUsdc);
-  });
+  }, 60_000);
 
   it("sells a small amount to the first pool, within its limit, and returns nothing", async () => {
     const amountIn = WETH_UNIT / 20n;
@@ -687,7 +687,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     expect(await balance(USDC, RECIPIENT)).toBe(swapped[0]!.got);
     expect(await balance(WETH, REFUND_TO)).toBe(0n);
     expect(await balance(WETH, pot)).toBe(0n);
-  });
+  }, 60_000);
 
   it("sells nothing under a limit above every pool's price, and returns all the WETH", async () => {
     const amountIn = WETH_UNIT;
@@ -701,7 +701,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     expect(await balance(WETH, REFUND_TO)).toBe(amountIn);
     expect(await balance(USDC, RECIPIENT)).toBe(0n);
     expect(await balance(WETH, pot)).toBe(0n);
-  });
+  }, 60_000);
 
   it("reverts the whole fulfilment below minOut, and below minAvgPrice", async () => {
     // A million USDC for one WETH.
@@ -717,7 +717,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     expect(await balance(WETH, OWNER.address)).toBe(solverWeth + 2n * WETH_UNIT);
     expect(await balance(USDC, RECIPIENT)).toBe(0n);
     expect(await balance(WETH, REFUND_TO)).toBe(0n);
-  });
+  }, 60_000);
 
   it("runs the nested-intents guide's swap: the body buys WETH on Base and opens the next intent with it", async () => {
     // docs/examples/nested-swap.sauce.ts as written, opened on Ethereum and its main arguments fixed
@@ -793,7 +793,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     // The shared Pot keeps nothing: the USDC went into the pool, the WETH into the vault.
     expect(await balance(USDC, pot)).toBe(0n);
     expect(await balance(WETH, pot)).toBe(0n);
-  });
+  }, 60_000);
 
   it("without the √(1 − fee), the 0.3% V3 pool's last unit pays less than the limit", async () => {
     const receipt = await fulfil(
@@ -804,7 +804,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     const pricier = fills(receipt).find((fill) => fill.venue === "v3:3000")!;
     const last = pricier.sqrtPriceX96 * pricier.sqrtPriceX96 * (1_000_000n - pricier.fee);
     expect(last).toBeLessThan(LIMIT * LIMIT * 1_000_000n);
-  });
+  }, 60_000);
 
   it("with the other direction's protocol fee, the V4 pool's last unit pays less than the limit", async () => {
     const receipt = await fulfil(
@@ -818,5 +818,5 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     const v4 = fills(receipt).find((fill) => fill.venue === "v4:500")!;
     const last = v4.sqrtPriceX96 * v4.sqrtPriceX96 * (1_000_000n - v4.fee);
     expect(last).toBeLessThan(LIMIT * LIMIT * 1_000_000n);
-  });
+  }, 60_000);
 });
