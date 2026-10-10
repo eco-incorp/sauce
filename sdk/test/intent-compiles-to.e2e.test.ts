@@ -39,7 +39,6 @@ import {
   startChain,
   type LocalChain,
 } from "./cli-anvil.js";
-import { freePort } from "./pools-anvil.js";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures/intent-compiles-to");
 const SALT = `0x${"5a".repeat(32)}` as Hex;
@@ -99,7 +98,7 @@ describeEvm("what a hop compiles to", () => {
   let pot: Address;
 
   beforeAll(async () => {
-    local = await startChain("ethereum", await freePort());
+    local = await startChain("ethereum");
     ({ portal } = await placePortal(local));
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
     pot = await deployPot(local);
