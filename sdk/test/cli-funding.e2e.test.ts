@@ -53,7 +53,6 @@ import {
   sauce,
   sauceWith,
   startChain,
-  WORKER,
   type LocalChain,
   type Run,
 } from "./cli-anvil.js";
@@ -157,7 +156,7 @@ describeEvm(
       work = mkdtempSync(join(tmpdir(), "sauce-cli-funding-"));
       program = join(work, "pays.sauce.ts");
       writeFileSync(program, PAYS);
-      local = await startChain("ethereum", 9100 + WORKER);
+      local = await startChain("ethereum");
       // Canonical Permit2, where the registry says Permit2 is.
       permit2 = getAddress(addressOn(getDescriptor("permit2", "Permit2")!, local.chain)!);
       expect(permit2).toBe(getAddress(PERMIT2_FIXTURE.address));

@@ -12,7 +12,6 @@
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -56,15 +55,6 @@ const PAY = [
 ].join("\n");
 const ZERO_SALT = `0x${"00".repeat(32)}` as Hex;
 
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-
-  return port;
-}
-
 /** A throwaway password, as the client config would pass one from an agent's .env. */
 const PASSWORD = `throwaway-${process.pid}-${Date.now()}`;
 
@@ -77,7 +67,7 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
   let pot: Address;
 
   before(async () => {
-    base = await startChain("base", await freePort());
+    base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-e2e-"));
     mcp = await connect(endpointsFor({ [String(base.chain.id)]: base.rpcUrl }), undefined, {

@@ -38,7 +38,6 @@ import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
 import { describeEvm } from "./cli-anvil.js";
 import { startIntentChain, type IntentChain } from "./intent-anvil.js";
-import { freePort } from "./pools-anvil.js";
 
 const CREATOR = "0x4444444444444444444444444444444444444444";
 const SPENDER = "0x5555555555555555555555555555555555555555";
@@ -209,7 +208,7 @@ describe("`await` of a hop with hooks", () => {
 describeEvm("the hooks a program publishes", () => {
   let base: IntentChain;
   beforeAll(async () => {
-    base = await startIntentChain("base", await freePort(), ["USDC"]);
+    base = await startIntentChain("base", ["USDC"]);
   }, 120_000);
   afterAll(async () => {
     await base?.stop();

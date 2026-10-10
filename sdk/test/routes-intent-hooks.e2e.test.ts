@@ -52,7 +52,6 @@ import type { Intent } from "../src/routes/types.js";
 import { DEPLOYER, FEE, describeEvm, erc20, fixture } from "./cli-anvil.js";
 import { gateAnchors } from "./evm/gated-engine.js";
 import { startIntentChain, type IntentChain } from "./intent-anvil.js";
-import { freePort } from "./pools-anvil.js";
 
 const GAS_LIMIT = 30_000_000n;
 const AMOUNT = 1_000_000n;
@@ -81,7 +80,7 @@ describeEvm("hooks, made by the Portal's Executor", () => {
   let saltByte = 0x10;
 
   beforeAll(async () => {
-    base = await startIntentChain("base", await freePort(), ["USDC"]);
+    base = await startIntentChain("base", ["USDC"]);
     executor = getAddress(ecoRoutesExecutorOf(base.portal));
     // The Executor's shared Pot, which the solver deploys once per Portal: a body cooks on it.
     const deploy = sauceEvmDeployPotCall({
