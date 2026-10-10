@@ -21,6 +21,9 @@ import { balanceOf } from "@sauce/token";
 //   minOut: Uint256   the least USDT to keep, in its smallest units (6 decimals): below it the
 //                     whole transaction reverts
 function main(minOut: Uint256) {
+  // Both venues are Ethereum's: on a chain without one the program does not compile.
+  require(UniswapV2.Factory, "no Uniswap V2 here");
+  require(Curve.ThreePool, "no 3pool here");
   const pair = UniswapV2.Factory.getPair(WETH, USDC);
   const sold = balanceOf(WETH, ctx.self());
   const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self());

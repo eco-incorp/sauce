@@ -152,7 +152,12 @@ const block = (where) => (members.get(where) ?? []).join("\n");
 const functions = (members.get("function") ?? []).map(({ builtin, name, params, returns }) => {
   const signature = `(${params.join(", ")}): ${tsType(returns, "return")}`;
   if (name === "require") {
-    return `${doc(builtin, "    ")}    ${signature};`;
+    // An assertion: a name a chain may lack (`UniswapV3.Factory`, `undefined` there) is present after
+    // `require(UniswapV3.Factory)`, which compiles only where the chain has it. A scalar or
+    // `undefined`, so a host's own `require(id: string)` keeps its overload.
+    const [first, ...rest] = params;
+    const condition = first.replace(/: (.+)$/, ": $1 | undefined");
+    return `${doc(builtin, "    ")}    (${[condition, ...rest].join(", ")}): asserts condition;`;
   }
   return `${doc(builtin, "  ")}  function ${name}${signature};`;
 });

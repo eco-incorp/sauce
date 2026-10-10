@@ -30,6 +30,8 @@ function main(
   maxSlippageBps: Uint256,
   maxAge: Uint256,
 ): { price: Uint256; triggered: bool; sold: Uint256; received: Uint256 } {
+  require(Chainlink.EthUsdFeed);
+  require(UniswapV3.Factory);
   require(maxSlippageBps < 10000, "maxSlippageBps is 100% or more");
   const round = Chainlink.EthUsdFeed.latestRoundData();
   const price = round.answer; // USD per ETH, 8 decimals

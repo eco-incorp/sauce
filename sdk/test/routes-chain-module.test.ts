@@ -1,71 +1,92 @@
 /**
- * A chain's module (`src/routes/chain-module.ts`) is written for every compile, so what does not
- * change between compiles is kept, and nothing is written that no program can reach. Kept or written
- * again, the text is the same; only the salt, in `HERE`, is the compile's.
+ * A compile's modules (`src/routes/chain-module.ts`): the names module, one text for every chain of a
+ * target, written once and kept; and a level module per program, where its intents open, which is
+ * the compile's own and differs between compiles only in its salt.
  */
 import { requireChain } from "../src/chains/canonical.js";
-import { chainModuleSource, forgetChainModules } from "../src/routes/chain-module.js";
+import {
+  chainModuleSource,
+  forgetChainModules,
+  levelModuleSource,
+} from "../src/routes/chain-module.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 const SALT_A = `0x${"5a".repeat(32)}`;
 const SALT_B = `0x${"a5".repeat(32)}`;
 
-/** The hop line of `destination`'s class in a module: the facts a hop there is built with. */
-const hopTo = (module: string, destination: string): string =>
-  new RegExp(`class On${destination} \\{[\\s\\S]*?\\n  hop\\(config\\) \\{([^\\n]*)`).exec(
-    module,
-  )![1]!;
+/** The branch of a level module that opens a hop to the chain whose id is `id`. */
+const hopTo = (module: string, id: number): string =>
+  new RegExp(`if \\(id == ${id}\\) \\{ ([^}]*(?:\\{[^}]*\\}[^}]*)*) \\}`).exec(module)![1]!;
 
-describe("a chain's module", () => {
+describe("the names module", () => {
+  it("is one text for every chain of a target, written afresh or kept", () => {
+    forgetChainModules();
+    const base = chainModuleSource(requireChain("base"), {});
+    expect(chainModuleSource(requireChain("ethereum"), {})).toBe(base);
+    expect(chainModuleSource(requireChain("arbitrum"), {})).toBe(base);
+    forgetChainModules();
+    expect(chainModuleSource(requireChain("base"), {})).toBe(base);
+    const solana = chainModuleSource(requireChain("solana"), {});
+    expect(solana).not.toBe(base);
+  });
+
+  it("declares the same names on both targets", () => {
+    const exported = (text: string) =>
+      [...text.matchAll(/^export const (\w+) =/gm)].map(([, name]) => name).sort();
+    const evm = exported(chainModuleSource(requireChain("base"), {}));
+    const svm = exported(chainModuleSource(requireChain("solana"), {}));
+    // `Token(address)` is the EVM's alone.
+    expect(evm.filter((name) => name !== "Token")).toEqual(svm);
+  });
+
+  it("chooses a compile's own values for its chain alone", () => {
+    const tokens = { USDT: "0x2222222222222222222222222222222222222222" } as const;
+    const own = chainModuleSource(requireChain("base"), { tokens });
+    expect(own).not.toBe(chainModuleSource(requireChain("base"), {}));
+    expect(own).toMatch(/== 8453 \? new TokenOf\("USDT", 0x2222/);
+  });
+
+  it("says what a namespace is once, in its class", () => {
+    const module = chainModuleSource(requireChain("base"), {});
+    expect(module.split("'UniswapV3' has Factory,").length - 1).toBe(1);
+    expect(() =>
+      compileSauceProgram("base", "function main(): Uint256 { return Optimism.Abracadabra + 1; }"),
+    ).toThrow("'Abracadabra' is abracadabra.DegenBox, which this chain has no deployment of");
+  });
+});
+
+describe("a level module", () => {
   it.each(["base", "ethereum", "solana"])(
-    "on %s is the same text written afresh or kept, and between compiles differs only in its salt",
+    "on %s differs between compiles only in its salt",
     (slug) => {
       const chain = requireChain(slug);
-      forgetChainModules();
-      const fresh = chainModuleSource(chain, {}, SALT_A);
-      const kept = chainModuleSource(chain, {}, SALT_A);
-      expect(kept).toBe(fresh);
-      expect(chainModuleSource(chain, {}, SALT_B).replaceAll(SALT_B, SALT_A)).toBe(fresh);
+      const a = levelModuleSource(chain, {}, SALT_A);
+      expect(levelModuleSource(chain, {}, SALT_A)).toBe(a);
+      expect(levelModuleSource(chain, {}, SALT_B).replaceAll(SALT_B, SALT_A)).toBe(a);
     },
   );
 
-  it("keeps a destination's facts per intent defaults, and reads a fee given as a function each time", () => {
+  it("takes a destination's facts from the intent defaults, and reads a fee given as a function each time", () => {
     const base = requireChain("base");
     const fee = (amount: bigint) => ({ intents: { executionFee: amount } });
-    expect(hopTo(chainModuleSource(base, fee(7n), SALT_A), "Ethereum")).toContain("fee: 7,");
-    expect(hopTo(chainModuleSource(base, fee(9n), SALT_A), "Ethereum")).toContain("fee: 9,");
+    expect(hopTo(levelModuleSource(base, fee(7n), SALT_A), 1)).toContain("fee: 7,");
+    expect(hopTo(levelModuleSource(base, fee(9n), SALT_A), 1)).toContain("fee: 9,");
     let read = 11n;
     const asked = { intents: { executionFee: () => read } };
-    expect(hopTo(chainModuleSource(base, asked, SALT_A), "Ethereum")).toContain("fee: 11,");
+    expect(hopTo(levelModuleSource(base, asked, SALT_A), 1)).toContain("fee: 11,");
     read = 12n;
-    expect(hopTo(chainModuleSource(base, asked, SALT_A), "Ethereum")).toContain("fee: 12,");
+    expect(hopTo(levelModuleSource(base, asked, SALT_A), 1)).toContain("fee: 12,");
   });
 
-  it("gives a destination's tokens for the symbols the source chain has, which a `receive` names", () => {
-    // SPCXc is Base's (Coinbase's tokenized SpaceX); TSLAx is a Backed xStock on Ethereum.
-    const fromBase = hopTo(chainModuleSource(requireChain("base"), {}, SALT_A), "Ethereum");
-    expect(fromBase).toMatch(/\bUSDC: 0x/);
-    expect(fromBase).not.toMatch(/\bTSLAx: /);
-    const fromEthereum = hopTo(chainModuleSource(requireChain("ethereum"), {}, SALT_A), "Base");
-    expect(fromEthereum).toMatch(/\bUSDC: 0x/);
-    expect(fromEthereum).not.toMatch(/\bSPCXc: /);
+  it("holds no token table: a hop reads the destination's token by its name there", () => {
+    const fromBase = hopTo(levelModuleSource(requireChain("base"), {}, SALT_A), 1);
+    expect(fromBase).not.toMatch(/\btokens: /);
+    expect(fromBase).not.toMatch(/\bUSDC: 0x/);
   });
 
-  it("says what a namespace is once, in its class, and an instance only the chain it is missing on", () => {
-    const module = chainModuleSource(requireChain("base"), {}, SALT_A);
-    expect(module.split("'UniswapV3' names no single contract").length - 1).toBe(1);
-    // The class composes why its contract is missing from the slug an instance gives.
-    expect(
-      module.split("Contract 'DegenBox' (abracadabra) is not deployed on '\" + missingOn + \"'")
-        .length - 1,
-    ).toBe(1);
-    expect(module).toMatch(
-      /new NsAbracadabra\(\{ Cauldron: \(address\) => ABI_\d+\.at\(address\) \}, undefined, "optimism"\)/,
-    );
-    expect(() =>
-      compileSauceProgram("base", "function main(): Uint256 { return Optimism.Abracadabra + 1; }"),
-    ).toThrow(
-      "Contract 'DegenBox' (abracadabra) is not deployed on 'optimism' (available: ethereum, arbitrum)",
+  it("on Solana opens no intent, and says why", () => {
+    expect(levelModuleSource(requireChain("solana"), {}, SALT_A)).toContain(
+      "a program on solana opens no intent",
     );
   });
 });

@@ -15,7 +15,7 @@ program and in TypeScript. This page lists both surfaces; the
 | An interface               | `Erc4626.Vault(vault).deposit(...)`             | `Base.Erc4626.Vault.at(vault).deposit(...)`          |
 | A family alias             | `Uniswap.UniversalRouter`                       | `Base.Uniswap.UniversalRouter`                       |
 | Another chain's address    | `Arbitrum.UniswapV3.Factory`                    | `Arbitrum.UniswapV3.Factory`                         |
-| Whether the chain has it   | `UniswapV3.Factory != 0n`                       | `Base.UniswapV3.Factory.available`                   |
+| Whether the chain has it   | `if (UniswapV3.Factory)`                        | `Base.UniswapV3.Factory.available`                   |
 
 ## Names
 
@@ -89,8 +89,8 @@ contract's name is never called with an address. `<Chain>.<Namespace>.<Contract>
 another chain's address, without moving execution there. A protocol with a single deployed
 contract also takes its methods directly (`Cctp.depositForBurn(...)`).
 
-A contract or token symbol the chain the program is compiled for does not have is zero there, and
-`Name != 0n` is decided at compile time: a branch it rules out is never compiled; see
+A contract or token symbol the chain the program is compiled for does not have is `undefined`
+there, and `if (Name)` is decided at compile time: a branch it rules out is never compiled; see
 [use a venue only where the chain has it](../guides/protocols-and-tokens.md#use-a-venue-only-where-the-chain-has-it).
 
 The declarations a typed closure checks against, for every namespace and token, ship

@@ -90,21 +90,24 @@ for (const chain of CHAINS) {
   console.log(`holdings.sauce.ts on ${chain}: ${rows.map((row) => row.on[chain]).join(", ")}`);
 }
 
-// A name the chain lacks is refused when the file is compiled, in the words the skill quotes.
+// A name the chain lacks is `undefined` there: a use of it is refused when the file is compiled, in
+// the words the skill quotes, and a test of it compiles, leaving its branch out.
 const quoted = (message: string, words: string) => {
   check(message.includes(words), `the refusal says "${words}": ${message}`);
   check(skill.includes(words), `the skill quotes "${words}"`);
 };
-quoted(
-  refusal("base", "function main(to: Address, amount: Uint256) { USDT.transfer(to, amount); }"),
-  "`USDT` is not a token or protocol on base. Did you mean `USDC`?",
+refusal("base", "function main(to: Address, amount: Uint256) { USDT.transfer(to, amount); }");
+compile(
+  "base",
+  "function main(to: Address, amount: Uint256) { if (USDT) { USDT.transfer(to, amount); } }",
 );
 quoted(
-  refusal(
-    "ethereum",
-    "function main(fee: Uint256): Address { return AerodromeSlipstream.CLFactory.getPool(USDC, WETH, fee); }",
-  ),
-  "Contract 'CLFactory' (aerodrome-slipstream) is not deployed on 'ethereum'",
+  refusal("ethereum", "function main(): Address { return AerodromeSlipstream.CLFactory; }"),
+  "`AerodromeSlipstream.CLFactory` is `undefined`, so it has no run-time value here",
+);
+quoted(
+  refusal("base", "function main(): Address { return USDCC; }"),
+  "not a declared variable; did you mean `USDC`?",
 );
 // Tesla is a different symbol per issuer and chain: TSLAx on Ethereum and Solana, TSLAc or bTSLA
 // on Base, which refuses TSLAx.
@@ -118,7 +121,7 @@ check(tesla("base").join() === "TSLAc,bTSLA", `Tesla on Base is TSLAc or bTSLA: 
 compile("ethereum", "function main(): Address { return TSLAx; }");
 quoted(
   refusal("base", "function main(): Address { return TSLAx; }"),
-  "`TSLAx` is not a token or protocol on base",
+  "so it has no run-time value here",
 );
 
 // Another chain's contract, by its name: its address there, as a value in a program for this one.
