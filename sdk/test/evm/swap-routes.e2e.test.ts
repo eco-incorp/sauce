@@ -14,7 +14,6 @@
  * GATED on `SAUCE_V12_RUNTIME_CREATION_HEX` like every EVM execution suite, and a hard failure
  * without it in CI.
  */
-import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -44,6 +43,7 @@ import {
   compileSauceProgramAsync,
   type CompiledSauceProgram,
 } from "../../src/routes/sauce-route.js";
+import { freePortSync, spawnAnvil } from "../anvil-process.js";
 import { answerSwapApi } from "../swap-stub.js";
 import { startGatedEngine } from "./gated-engine.js";
 import type { GatedEngine } from "./gated-engine.js";
@@ -75,7 +75,7 @@ const RECIPIENT = getAddress("0x70997970c51812dc3a010c7d01b50e0d17dc79c8");
 /** The registry's KyberSwap router on Base, where the mock is installed. */
 const ROUTER = getAddress("0x6131B5fae19EA4f9D964eAc0408E4408b66337b5");
 
-const PORT = 9750 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const GAS_LIMIT = 10_000_000n;
 
@@ -120,18 +120,6 @@ let pair: Address;
 let ecoProgram: Hex;
 /** What the stub was asked, by path. */
 const asked: string[] = [];
-
-const waitForRpc = async (deadline: number): Promise<void> => {
-  for (;;) {
-    try {
-      await publicClient.getChainId();
-      return;
-    } catch {
-      if (Date.now() >= deadline) throw new Error(`anvil did not come up on ${RPC_URL}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-};
 
 const send = async (to: Address | null, data: Hex): Promise<{ status: string; at?: Address }> => {
   const hash = await walletClient.sendTransaction({
@@ -263,8 +251,7 @@ describeEvm("kyberSwap and ecoSwap, executed on the released gated stack", () =>
   let snapshot: Hex;
 
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
-    await waitForRpc(Date.now() + 20_000);
+    anvil = await spawnAnvil(PORT);
     sauce = await startGatedEngine(
       { publicClient, testClient, walletClient },
       OWNER.address,
