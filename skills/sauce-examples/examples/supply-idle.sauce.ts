@@ -25,6 +25,7 @@ function main(
   reserve: Uint256,
   minMove: Uint256,
 ): { supplied: Uint256; withdrawn: Uint256; liquid: Uint256; deposited: Uint256 } {
+  require(AaveV3.Pool);
   const self = ctx.self();
   const aToken = AaveV3Reads.at(AaveV3.Pool).getReserveAToken(USDC);
   require(aToken != 0, "USDC is not listed on this Aave V3 pool");

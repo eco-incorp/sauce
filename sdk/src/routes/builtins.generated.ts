@@ -203,7 +203,7 @@ declare global {
     /** `require(condition, message?)`, merged into the host's `require`. */
     interface Require {
       /** `require(condition: scalar, message?: bytes): void` — EVM and SVM. */
-      (condition: SauceScalar, message?: SauceBytesLike): void;
+      (condition: SauceScalar | undefined, message?: SauceBytesLike): asserts condition;
     }
   }
   var require: NodeJS.Require;

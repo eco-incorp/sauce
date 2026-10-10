@@ -61,6 +61,9 @@ function main(
     receive: { token: WETH, amount: amountIn },
     refundee: refundTo,
   }).then(() => {
+    require(UniswapV3.Factory);
+    require(UniswapV4.PoolManager);
+    require(UniswapV4.StateView);
     // On Base, in the fill.
     require(sqrtPriceLimitX96 != 0 &&
       recipient != 0 &&

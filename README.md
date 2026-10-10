@@ -176,7 +176,8 @@ const built = Base.hop({
   refundee: owner,
   fee: kitchenFee,
 }).then(() => {
-  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  // Base has the router: a test of a contract a chain may lack is decided while compiling.
+  if (Uniswap.UniversalRouter) USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
 });
 
 // The cook that publishes it from your Pot on Ethereum: { to, data, value }.

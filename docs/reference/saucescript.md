@@ -217,15 +217,18 @@ program rarely needs to.
   `main` cannot take one. A `for (const x of items)` over such a list unrolls while compiling.
 - A field nothing has set, and an argument left out, is `undefined`, and `x === undefined` is decided
   while compiling, as is `x instanceof C` (false for any run-time value). Where a run-time value is
-  needed `undefined` is an error: "`undefined` exists only while the program compiles, so it has no
-  run-time value here". `this.b || this.a` is `this.a` while `this.b` is unset.
+  needed `undefined` is an error: "undefined has no run-time form, so it cannot be used here as a
+  run-time value", or, read from a name, the error names it. `this.b || this.a` is `this.a` while
+  `this.b` is unset.
 - An instance has a run-time value only through its class: its `valueOf()`, or its
   `[Symbol.toPrimitive]` method, run while compiling with the hint `"default"` under `==`/`!=` and
   `"number"` elsewhere. A class's `[Symbol.dispose]()` runs when the statement that made the
   instance ends (a `const` holding one, at the end of its block).
-- A dotted path to nothing, `Monkey.Jump` with `Monkey` undeclared or a member a static object lacks,
-  reads as `0` under `==` and `!=`, so `if (Monkey.Jump != 0) { … }` is decided while compiling and
-  its other arm is never compiled; any other use is an error. A bare unknown name is always one.
+- A value has the members it declares: a module's value the ones its module gives it, an object the
+  program builds the ones it sets, its class declares or its type names. Reading any other is an
+  error, in a test too. A declared member that is `undefined` (a field nothing set, a name a chain
+  lacks) is falsy, so `if (X.Y) { … }` is decided while compiling and its other arm is never
+  compiled; any other use of it is an error naming it. A bare unknown name is always one.
 - `typeof x`, `Array.isArray(x)` and a function's `length` are constants: a number or an address is
   `"bigint"`, a `bool` `"boolean"`, bytes and a string `"string"`, an array or an object
   `"object"`, a function, a class or a contract import `"function"`. A run-time value answers from
@@ -347,8 +350,8 @@ a module-level constant with functions, or to return a value.
 
 - A top-level `const` must be a literal or a constant expression over other `const`s.
 - A top-level `const` array, `const FEES = [100, 500];`, is a lookup table: it is read only at a literal index,
-  `FEES[0]`. A loop over it, `.length` or a write gives "a module-scope lookup table `<name>` can only be read
-  by a literal index or a field name …", and a computed index "a module-scope lookup table can only be indexed by
+  `FEES[0]`. A loop over it, `.length` or a write gives "a module-scope lookup table `<name>` has no run-time
+  form: read it by a literal index or a field name …", and a computed index "a module-scope lookup table can only be indexed by
   a non-negative integer literal or a `const` bound to one …". Declare an array you loop over or index at run
   time inside a function.
 - A top-level `let` is scratch space, reset on every run. It is not persistent storage.
@@ -793,9 +796,10 @@ Rules and errors:
 - `try { <statements> } catch { … }` runs the statements in a frame of their own: what they do
   stands when they finish, and is undone together, every write, when anything in them reverts — a
   `require`, a `throw`, a call nothing catches. The `catch` block then runs in the function's own
-  frame, where it may read and assign its variables. The `try` block reads the code around it but
-  cannot assign it ("a `try` block runs in a frame of its own, so it cannot assign `…`"), and
-  neither block may `return`, nor `break` or `continue` a loop outside it.
+  frame, where it may read and assign its variables. The `try` block reads the code around it, and
+  what it assigns of it (a number, an address or a bool in a parameter or a `let`) is handed back
+  when it completes: when it reverts, they keep the values they had, and the `catch` block runs with
+  those. Either block may `return`, and `break` or `continue` the loop around the `try`.
 - `catch (e) { … }` names what the `try` reverted with: `bytes`, at most its first 256 bytes, as
   for `.catch((e) => { … })`. There is no `finally`.
 
