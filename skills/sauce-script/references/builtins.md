@@ -154,9 +154,14 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
   (`t[0]`). A computed position is rejected: "a tuple index must be a number literal or a `const` bound to one — …".
 - Write with `a[i] = v` or `t.amount = v`. An out-of-range constant index is a compile error ("array index 5 is
   out of range — this array has 2 element(s). …"), and a computed out-of-range index reverts.
-- **Destructuring:** `const [a, b] = …` works on anything that produces a record: a multi-output contract call,
-  `abi.decode`, a record, or `crypto.findPDA`. It does not work on an array: "a destructuring binding needs an
-  initializer that produces a tuple — this one does not, so bind it to one name instead".
+- **Destructuring:** `const [a, b] = …` takes a record by position (a multi-output contract call,
+  `abi.decode`, a record, `crypto.findPDA`), and an array or a string the compiler knows by element;
+  `const { qty, price: each, fee = 30 } = …` takes fields by name, a default applying where the
+  value read is `undefined`; `...rest` collects the rest. A parameter can be a pattern too, `main`'s
+  included (`function main({ qty, price }: Order)`). An array known only at run time has no
+  pattern: "an array pattern takes an array whose length is known while compiling, and this one's
+  is known only at run time: read its elements by index". A pattern at module scope or in an
+  assignment (`[a, b] = [b, a]`) is not supported.
 - `new Array(n)` makes an array of `n` zeros to fill by index.
 
 **Control flow:** `if`/`else`, `while`, `for (init; test; update)`, `for (const x of array)`, unlabeled
@@ -165,8 +170,14 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 **Functions**
 
 - Declare functions at the top level. They may call each other and recurse.
-- A function other than `main` that returns bytes, an array or a record needs a return type: "returning a bytes
-  value from a function other than `main` needs a return-type annotation — …".
+- A function other than `main` that returns bytes, an array or a record at run time needs a return type:
+  "returning a bytes value from a function other than `main` needs a return-type annotation — …". One with
+  no return type that returns a value the compiler holds (below) runs while compiling.
+- A parameter may have a default, `function fee(amount: Uint256, bps: Uint256 = 30)`, evaluated at the call
+  where the argument is left out or `undefined`. It reads only the parameters before its own: "the default
+  for `a` reads `b`, which has no value yet: a default reads only the parameters before its own". `main`'s
+  parameters take none: "`main`'s parameters are its program's arguments, which its caller always passes: a
+  default for `amount` would never apply".
 - Every path must return ("`f` does not return on every path"). A bare `return;` is allowed only in a `: void`
   function.
 - A `: void` function's result is not a value: "a call to a `: void` function produces no value, so its result
@@ -192,8 +203,12 @@ program rarely needs to.
 
 - A class is declared at the top level, `export`ed or not, with fields (an initializer each, or
   none), a `constructor`, methods and `static` methods; `this` is the instance in a method and the
-  class in a `static` one, and a method that returns `this` chains. It cannot extend another class,
-  and getters, setters, private members and `static` fields are not supported.
+  class in a `static` one, and a method that returns `this` chains. A getter (`get total()`) runs at
+  each read. A class may extend another the program declares or imports: its constructor calls
+  `super(…)` before it reads `this` ("`this` is read in `B`'s constructor before `super(…)` runs: a
+  derived class works on the instance its base's constructor makes"), it inherits the base's methods,
+  getters and `static` methods, `super.m()` calls the base's, and `instanceof` holds through the chain.
+  Setters, private members and `static` fields are not supported.
 - An arrow function is called in place (`const twice = (x) => x * 2; twice(a)`), in the function it
   was written in. A nested `function` declaration is not supported.
 - A method may take a rest parameter (`add(...items)`), filled only by a call the compiler runs:
@@ -226,9 +241,61 @@ program rarely needs to.
   `includes` and `join` while compiling, and a string it knows `startsWith`, `endsWith`, `includes`,
   `toUpperCase`, `toLowerCase` and `length`. An array known only at run time has none of them:
   "`.map` needs a value known while compiling, and this one is known only when the program runs".
+- A `const` holding a string the compiler knows compares as that string, so an `if` that compares
+  it is decided while compiling (the example below), and `+` joins a known string with the
+  text of what the compiler knows. With a value known only at run time it is an error: "`+` with a
+  string needs a value known while compiling, and this one is known only when the program runs".
+- A function with no return type that returns an object, an array, an instance, an arrow or a string runs
+  while compiling, at every call, as does a call that passes an unannotated parameter a string, an object, a
+  record or `undefined`.
 - `const xs = []` is an empty array of this kind; an empty array in a `let` needs a declared type (§2).
 - A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown
   message.
+
+A class extending another, a pattern parameter with a default, an array pattern and a known string,
+all answered while compiling: only the arithmetic on `order` is left for the program to run.
+
+```sauce chain=base
+interface Order {
+  qty: Uint256;
+  price: Uint256;
+}
+
+class Fee {
+  constructor(bps) {
+    this.bps = bps;
+  }
+  of(amount) {
+    return (amount * this.bps) / 10000;
+  }
+}
+
+// A fee that never passes its cap: `super(bps)` makes the instance, `super.of` is the base's.
+class Capped extends Fee {
+  constructor(bps, cap) {
+    super(bps);
+    this.cap = cap;
+  }
+  of(amount) {
+    const fee = super.of(amount);
+    return fee > this.cap ? this.cap : fee;
+  }
+}
+
+function charge({ qty, price }: Order, bps: Uint256 = 30): Uint256 {
+  const cost = qty * price;
+  return cost + new Capped(bps, 1000000).of(cost);
+}
+
+function main(order: Order): Uint256 {
+  const [base, extra] = [1, 2];
+  const via = "post";
+  if (via == "post") {
+    return charge(order) + base + extra;
+  }
+  return charge(order, 50);
+}
+```
 
 **`main`'s arguments**
 
@@ -717,33 +784,33 @@ function main(x: Uint256): Uint256 {
 
 ## 14. Not supported, and what to write instead
 
-| Not supported                                                 | Write instead                                                                                                     |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `switch`                                                      | `if` / `else if` chains                                                                                           |
-| `do { } while (…)`                                            | `while (true) { …; if (!cond) { break; } }`                                                                       |
-| `for (k in obj)`, `for await`                                 | an index loop or `for (const x of array)`                                                                         |
-| `finally`                                                     | `try`/`catch` (§13) for what fails on EVM, and the code after it                                                  |
-| function expressions, nested `function` declarations          | top-level `function` declarations, or an arrow function (§4)                                                      |
-| `enum`, `type` aliases, generics, `namespace`                 | records, `interface`, constants                                                                                   |
-| `async function`, `await`                                     | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
-| default parameters, rest parameters, destructuring parameters | plain parameters                                                                                                  |
-| object destructuring `const { a } = t`                        | `const a = t.a;`                                                                                                  |
-| spread of a run-time array, `f(...xs)`                        | explicit elements, or a loop                                                                                      |
-| `?.`, `??`, `x!`, `as`, `satisfies`                           | explicit checks; annotations                                                                                      |
-| `>>>`, `in`, `delete`, `void`, unary `+`                      | `Math.sShr`, or plain values                                                                                      |
-| `>>>=`, `\|\|=`, `&&=`, `??=`                                 | `x = …`                                                                                                           |
-| `a[i] += v`, `t.f += v`, `a[i]++`                             | `a[i] = a[i] + v`                                                                                                 |
-| `i++` used as a value                                         | `i += 1` on its own line                                                                                          |
-| `t[0] = v` on a record                                        | `t.field = v`                                                                                                     |
-| a template string with a run-time `${…}`                      | `"text"`, or bytes built with `.concat`                                                                           |
-| `1e18`, `1.5`, `null`                                         | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
-| `xs.push(v)`, `console.log`, any JavaScript library           | `new Array(n)` with an index; `log(…)`                                                                            |
-| `Math.min`, `max`, `abs`, `pow`                               | `if` or a ternary; `**`                                                                                           |
-| comparing bytes with `==`                                     | compare `crypto.keccak256` of each                                                                                |
-| `export default`, `export { … }`, `import * as X`             | `export function` / `export const`; named imports                                                                 |
-| sending value through a bound call                            | `evm.call(address, value, data)`                                                                                  |
-| labeled statements, labeled `break`/`continue`                | a flag variable                                                                                                   |
-| computed object keys, object methods                          | plain named fields                                                                                                |
+| Not supported                                        | Write instead                                                                                                     |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `switch`                                             | `if` / `else if` chains                                                                                           |
+| `do { } while (…)`                                   | `while (true) { …; if (!cond) { break; } }`                                                                       |
+| `for (k in obj)`, `for await`                        | an index loop or `for (const x of array)`                                                                         |
+| `finally`                                            | `try`/`catch` (§13) for what fails on EVM, and the code after it                                                  |
+| function expressions, nested `function` declarations | top-level `function` declarations, or an arrow function (§4)                                                      |
+| `enum`, `type` aliases, generics, `namespace`        | records, `interface`, constants                                                                                   |
+| `async function`, `await`                            | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
+| rest parameters of a function compiled for run time  | an array parameter                                                                                                |
+| destructuring at module scope, or in an assignment   | a pattern in a declaration inside a function; one assignment per name                                             |
+| spread of a run-time array, `f(...xs)`               | explicit elements, or a loop                                                                                      |
+| `?.`, `??`, `x!`, `as`, `satisfies`                  | explicit checks; annotations                                                                                      |
+| `>>>`, `in`, `delete`, `void`, unary `+`             | `Math.sShr`, or plain values                                                                                      |
+| `>>>=`, `\|\|=`, `&&=`, `??=`                        | `x = …`                                                                                                           |
+| `a[i] += v`, `t.f += v`, `a[i]++`                    | `a[i] = a[i] + v`                                                                                                 |
+| `i++` used as a value                                | `i += 1` on its own line                                                                                          |
+| `t[0] = v` on a record                               | `t.field = v`                                                                                                     |
+| a template string with a run-time `${…}`             | `"text"`, or bytes built with `.concat`                                                                           |
+| `1e18`, `1.5`, `null`                                | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
+| `xs.push(v)`, `console.log`, any JavaScript library  | `new Array(n)` with an index; `log(…)`                                                                            |
+| `Math.min`, `max`, `abs`, `pow`                      | `if` or a ternary; `**`                                                                                           |
+| comparing bytes with `==`                            | compare `crypto.keccak256` of each                                                                                |
+| `export default`, `export { … }`, `import * as X`    | `export function` / `export const`; named imports                                                                 |
+| sending value through a bound call                   | `evm.call(address, value, data)`                                                                                  |
+| labeled statements, labeled `break`/`continue`       | a flag variable                                                                                                   |
+| computed object keys, object methods                 | plain named fields                                                                                                |
 
 The compiler rejects each of these. Most messages read "… is not supported", naming the construct.
 
