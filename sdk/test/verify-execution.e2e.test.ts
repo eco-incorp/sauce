@@ -16,7 +16,6 @@
  * see that suite's header for the engine-lineage finding in full, and for the two commands that
  * produce the file. CI supplies it, so an absent one is a failure there, never a skip.
  */
-import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -45,6 +44,7 @@ import {
   SETTLE_VECTORS,
   SETTLE_WIRE,
 } from "../src/verify/index";
+import { freePortSync, spawnAnvil } from "./anvil-process.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -105,7 +105,8 @@ const DEPLOYER = privateKeyToAccount(
  * mint below funds it rather than the engine.
  */
 let sauce: GatedEngine;
-const PORT = 8700 + (Number(process.env.JEST_WORKER_ID ?? "1") % 100);
+/** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const STARTUP_TIMEOUT_MS = 20_000;
 const GAS_LIMIT = 10_000_000n;
@@ -119,16 +120,6 @@ const transport = http(RPC_URL, { fetchOptions: { headers: { connection: "close"
 const publicClient = createPublicClient({ transport });
 const testClient = createTestClient({ mode: "anvil", transport });
 const walletClient = createWalletClient({ account: DEPLOYER, transport });
-
-const waitForRpc = (deadline: number): Promise<void> =>
-  Date.now() >= deadline
-    ? Promise.reject(new Error(`anvil did not come up on ${RPC_URL}`))
-    : publicClient
-        .getChainId()
-        .then(() => undefined)
-        .catch(() =>
-          new Promise((resolve) => setTimeout(resolve, 100)).then(() => waitForRpc(deadline)),
-        );
 
 const sendTo = (to: Address, data: Hex): Promise<"success" | "reverted"> =>
   walletClient
@@ -184,21 +175,12 @@ const addressesInPlay = (): Address[] => {
  * is minted afterwards.
  */
 const startEvm = async (): Promise<ChildProcess> => {
-  const anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
+  // `spawnAnvil` names a failed spawn (no `anvil` on PATH) and a port it could not bind, at once.
+  const anvil = await spawnAnvil(PORT, [], STARTUP_TIMEOUT_MS);
 
-  // A failed spawn — no `anvil` on PATH — reports asynchronously as an 'error' event, not a throw
-  // from `spawn`. With no listener that event kills the jest worker with a raw ENOENT before the
-  // startup timeout below can say what is wrong. Race it so the failure arrives named, and at once.
-  const spawnFailed = new Promise<never>((_, reject) => {
-    anvil.once("error", (err: Error) =>
-      reject(new Error(`could not start anvil (is it on PATH?): ${err.message}`)),
-    );
-  });
-
-  // Everything after the spawn is guarded: a waitForRpc timeout, a setCode failure or a deploy
-  // revert would otherwise leave the child holding this port for the rest of the job.
+  // Everything after the start is guarded: a setCode failure or a deploy revert would otherwise
+  // leave the child running for the rest of the job.
   try {
-    await Promise.race([waitForRpc(Date.now() + STARTUP_TIMEOUT_MS), spawnFailed]);
     sauce = await startGatedEngine(
       { publicClient, testClient, walletClient },
       DEPLOYER.address,
@@ -247,8 +229,7 @@ const startEvm = async (): Promise<ChildProcess> => {
     return anvil;
   } catch (err) {
     // Through `stopEvm`, awaited: a bare kill() here is the exact leak that helper documents. This is
-    // the path a waitForRpc timeout or a reverting deploy takes, and jest then moves to the next
-    // suite -- which binds this same PORT and would fail with EADDRINUSE, masking the real error.
+    // the path a reverting deploy takes, and jest then moves to the next suite.
     await stopEvm(anvil);
     throw err;
   }
