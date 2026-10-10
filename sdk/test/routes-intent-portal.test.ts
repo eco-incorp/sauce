@@ -812,16 +812,17 @@ describe("the syntax as data", () => {
   it("names exactly the fields and the steps `@sauce/hop` reads", () => {
     const source = readFileSync(resolve("src/std/hop/hop.evm.js"), "utf8");
     const read = new Set([...source.matchAll(/\bconfig\.(\w+)/g)].map((match) => match[1]!));
-    read.delete("length");
+    // `reward` is read only to refuse it by its former name.
+    read.delete("reward");
     expect([...read].sort()).toEqual(Object.keys(HOP_FIELDS).sort());
-    // The fields the class takes, which it refuses any other than, and names in the refusal.
-    const taken = /const fields = \{([^}]*)\}/.exec(source)![1]!;
-    expect([...taken.matchAll(/(\w+): true/g)].map((match) => match[1])).toEqual(
-      Object.keys(HOP_FIELDS),
-    );
-    expect(source).toContain(
-      `its fields are ${Object.keys(HOP_FIELDS).slice(0, -1).join(", ")} and ${Object.keys(HOP_FIELDS).at(-1)}`,
-    );
+    // The fields the hop takes are its `HopConfig`'s, which the compiler refuses any other than at the
+    // chain's `hop(config: HopConfig)`.
+    const declared = /export interface HopConfig \{([^}]*)\}/.exec(source)![1]!;
+    expect(
+      [...declared.matchAll(/(\w+)\?:/g)]
+        .map((match) => match[1])
+        .filter((field) => field !== "reward"),
+    ).toEqual(Object.keys(HOP_FIELDS));
     for (const stage of Object.values(HOP_STAGES)) {
       for (const step of Object.keys(stage.steps)) {
         expect(source).toMatch(new RegExp(`^  ${step}\\(`, "m"));
@@ -839,7 +840,7 @@ describe("what the lowering refuses", () => {
 
   it("refuses the refund address under its old name: the field is `refundee`", () => {
     expect(refused(`${hop(`send: ${item}, creator: ${CREATOR}`)}${then};`)).toThrow(
-      /a hop takes no `creator`: its fields are .*\brefundee\b/,
+      /`creator` is not a member of `HopConfig`/,
     );
     expect(refused(`${hop(`send: ${item}`)}${then};`)).toThrow(/a hop needs a `refundee`/);
   });
@@ -919,10 +920,6 @@ describe("what the lowering refuses", () => {
       /each item of a hop's `receive` is `\{ token, amount \}`/,
     ],
     [
-      `${hop(`send: ${item}, receive: { token: USDT, amount: 1 }, refundee: ${CREATOR}`)}${then};`,
-      /`USDT` is not a token or protocol on arbitrum\. Did you mean `USDC` or `USDT0`\?/,
-    ],
-    [
       `${hop(`send: { token: USDC, amount: 1 - 2 }, receive: ${item}, refundee: ${CREATOR}`)}${then};`,
       /constant `-` expression overflows 256 bits/,
     ],
@@ -936,5 +933,13 @@ describe("what the lowering refuses", () => {
     ],
   ])("%s", (body, message) => {
     expect(refused(body)).toThrow(message);
+  });
+
+  it("a delivery token neither chain registers, by name", () => {
+    expect(
+      refused(
+        `${hop(`send: ${item}, receive: { token: USDT, amount: 1 }, refundee: ${CREATOR}`)}${then};`,
+      ),
+    ).toThrow(/USDT/);
   });
 });

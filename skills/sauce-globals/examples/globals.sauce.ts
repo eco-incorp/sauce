@@ -30,6 +30,7 @@ function main(
   otherAmount: Uint256,
   usdcAmount: Uint256,
 ) {
+  require(AaveV3.Pool);
   const me = ctx.self();
 
   // Registered symbols, and the Pot's own balance.

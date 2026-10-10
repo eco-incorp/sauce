@@ -28,6 +28,7 @@ function main(
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
   }).then(() => {
+    require(UniswapV3.Factory);
     // On Base: buy WETH with what was delivered, and hop on with it.
     const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
     const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());

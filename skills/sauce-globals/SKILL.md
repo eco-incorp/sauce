@@ -166,20 +166,20 @@ function main(
   its factory returned (`.at(pool)` is the same).
   [references/protocols.md](references/protocols.md) lists every interface.
 
-**A venue a chain may not have** is zero on that chain, and a program compares it with zero: the
-comparison is decided when the program is compiled for a chain, so
-`if (UniswapV3.Factory != 0) { ... }` keeps its branch where the chain has the contract, and leaves
-it out, names and all, where it does not. The comparison folds `if`/`else`, `?:`, `&&`, `||` and
-`!`, and a guard `if (UniswapV3.Factory == 0) { return 0; }` drops the rest of its function. Any
-other use of an absent contract is a compile error saying the chain does not have it, and a name no
-chain has is an unknown name rather than zero, so a typo cannot quietly drop a branch. A token
-symbol does not compare this way: it is a bare name, and one the chain lacks is refused wherever it
-appears, guarded or not. Write a token some of your chains lack as `Token(<address>)`, or take its
-address as a `main` parameter.
+**A venue a chain may not have** is `undefined` on that chain, and a program tests it: the test is
+decided when the program is compiled for a chain, so `if (UniswapV3.Factory) { ... }` keeps its
+branch where the chain has the contract, and leaves it out, names and all, where it does not. The
+test folds `if`/`else`, `?:`, `&&`, `||` and `!`, and a guard `if (!UniswapV3.Factory) { return 0; }`
+drops the rest of its function. `require(UniswapV3.Factory, "…")` makes the program compile only for
+chains that have it. Any other use of an absent contract is a compile error naming it. `undefined`
+is not `0`: `UniswapV3.Factory != 0` is true where the contract is absent, so test the name itself.
+A token symbol is the same: one the chain lacks is `undefined`, so `if (USDT) { ... }` is decided
+while compiling. Every name is declared on every chain, so a name no chain has, a misspelled one, is a compile error
+everywhere, and a typo cannot quietly drop a branch.
 
 ```sauce chain=base,linea
 function main(tokenA: Address, tokenB: Address) {
-  if (UniswapV3.Factory != 0) {
+  if (UniswapV3.Factory) {
     const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500);
     require(pool != 0, "no 0.05% pool");
   }

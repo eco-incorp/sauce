@@ -48,6 +48,7 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
     receive: { token: USDC, amount: delivered }, // Base's USDC, which the solver delivers
     refundee: refundTo,
   }).then(() => {
+    require(AaveV3.Pool);
     // On Base, in the fill.
     // The Pot is shared by every intent to Base: this body moves only `delivered`.
     const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
