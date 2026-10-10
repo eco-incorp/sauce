@@ -13,7 +13,7 @@
  * `.catch` that reads its reason needs an engine built from the compiler's tree until the release
  * carries the fix (`@sauce/async`'s suite says which).
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 
@@ -40,6 +40,7 @@ import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageInstall } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import { freePort, spawnAnvil } from "../../anvil-process.js";
 import { routerUnderTest, startGatedEngine, type GatedEngine } from "../../evm/gated-engine.js";
 
 const RUNTIME_HEX_PATH =
@@ -104,26 +105,15 @@ export interface ZkChain {
 /** A program's `require(cond, message)` reverts with the message's bytes as they are. */
 export const text = (data: Hex): string => Buffer.from(data.slice(2), "hex").toString("utf8");
 
-/** An anvil for `slug` at `chainId` on `port`, with the gated stack on #571's Router. */
-export async function startZkChain(slug: string, chainId: number, port: number): Promise<ZkChain> {
+/** An anvil for `slug` at `chainId`, on a port the OS gives it, with the gated stack on #571's
+ *  Router. */
+export async function startZkChain(slug: string, chainId: number): Promise<ZkChain> {
+  const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
-  const anvil: ChildProcess = spawn(
-    "anvil",
-    ["--port", String(port), "--chain-id", String(chainId), "--silent"],
-    { stdio: "ignore" },
-  );
+  const anvil: ChildProcess = await spawnAnvil(port, ["--chain-id", String(chainId)]);
   const transport = http(rpcUrl);
   const publicClient = createPublicClient({ transport });
   const testClient = createTestClient({ mode: "anvil", transport });
-  for (const deadline = Date.now() + 20_000; ;) {
-    try {
-      await publicClient.getChainId();
-      break;
-    } catch {
-      if (Date.now() > deadline) throw new Error(`anvil did not come up on ${rpcUrl}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
   const owner = createWalletClient({ account: OWNER, transport });
   const stranger = createWalletClient({ account: STRANGER, transport });
   const stack = await startGatedEngine(

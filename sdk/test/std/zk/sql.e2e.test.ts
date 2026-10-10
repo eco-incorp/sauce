@@ -234,12 +234,7 @@ describeOnRouter.each([
     );
 
   beforeAll(async () => {
-    // 9550-9599, which no other suite takes: 25 ports a chain, one per worker.
-    chain = await startZkChain(
-      slug,
-      chainId,
-      9550 + (chainId === 1 ? 0 : 25) + (Number(process.env.JEST_WORKER_ID ?? "1") % 25),
-    );
+    chain = await startZkChain(slug, chainId);
     const { testClient, publicClient } = chain;
 
     // Space and Time's deployer replays its two creation transactions at their nonces.

@@ -370,12 +370,7 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
     });
 
   beforeAll(async () => {
-    // 9575-9599, which no other suite takes, one per worker.
-    chain = await startZkChain(
-      "base",
-      8453,
-      9575 + (Number(process.env.JEST_WORKER_ID ?? "1") % 25),
-    );
+    chain = await startZkChain("base", 8453);
     const { testClient, publicClient } = chain;
     for (const contract of [
       BOUNDLESS.proxy,
