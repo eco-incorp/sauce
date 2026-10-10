@@ -29,7 +29,7 @@
  * reads its reason needs an engine built from the compiler's tree, not the released one: those cases
  * skip on the released engine.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -66,6 +66,7 @@ import { registryTokens } from "../../../src/routes/token-registry.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import { freePortSync, spawnAnvil } from "../../anvil-process.js";
 import {
   gateAnchors,
   routerUnderTest,
@@ -140,8 +141,8 @@ const STRANGER = privateKeyToAccount(
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
 );
 
-/** A range no other suite takes (cli-wallet's base chain starts at 9700, the next suite's at 9800). */
-const PORT = 9750 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
+/** A port the OS hands out, so no other suite's anvil is ever this one. */
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 /** Non-zero, so a cook provably pays it, and a callback's single fee can be counted. */
 const FEE = 1_234n;
@@ -504,21 +505,10 @@ async function leastCallbackGas(id: bigint, words: readonly bigint[]): Promise<b
 
 describeRandom("@sauce/random on the EVM, through the Router's handlers", () => {
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--chain-id", String(CHAIN_ID), "--silent"], {
-      stdio: "ignore",
-    });
+    anvil = await spawnAnvil(PORT, ["--chain-id", String(CHAIN_ID)]);
     const transport = http(RPC_URL);
     publicClient = createPublicClient({ transport });
     testClient = createTestClient({ mode: "anvil", transport });
-    for (const deadline = Date.now() + 20_000; ;) {
-      try {
-        await publicClient.getChainId();
-        break;
-      } catch {
-        if (Date.now() > deadline) throw new Error(`anvil did not come up on ${RPC_URL}`);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
     stack = await startGatedEngine(
       { publicClient, walletClient: owner, testClient },
       OWNER.address,
