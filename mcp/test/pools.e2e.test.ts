@@ -13,14 +13,7 @@ import { after, before, describe, it } from "node:test";
 import { connectAt } from "../../sdk/dist/cli/chain.js";
 import { poolsCommand } from "../../sdk/dist/cli/pools.js";
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
-import {
-  ACME,
-  freePort,
-  SPCX,
-  startPoolsChain,
-  USDC,
-  type PoolsChain,
-} from "../../sdk/test/pools-anvil.js";
+import { ACME, SPCX, startPoolsChain, USDC, type PoolsChain } from "../../sdk/test/pools-anvil.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const ANVIL = spawnSync("anvil", ["--version"]).status === 0;
@@ -31,7 +24,7 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
   let mcp: Connected;
 
   before(async () => {
-    chain = await startPoolsChain(await freePort());
+    chain = await startPoolsChain();
     mcp = await connect();
   });
 
