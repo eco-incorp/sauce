@@ -38,9 +38,9 @@ naming rules, and the [contracts reference](contracts.md) both surfaces.
 | Address only      | An address per chain with no verified ABI: usable as an address, no methods   |
 | Interface         | An ABI with no fixed address: called with one, `Erc4626.Vault(vault)`         |
 
-A name existing does not mean the contract is deployed on your chain: comparing it with zero in a
-program (`Name != 0n`) and `.available` in TypeScript answer that, and naming an absent contract
-fails at compile or call construction, listing the chains that have it.
+A name existing does not mean the contract is deployed on your chain: testing it in a program
+(`if (Name)`) and `.available` in TypeScript answer that, and using an absent contract fails at
+compile or call construction.
 
 Every registry ABI declares its contract's deployed types, so its selectors are the deployed ones,
 and is a subset of the contract's complete API. A `coverage.caveats` entry records a deployment the

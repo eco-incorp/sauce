@@ -30,6 +30,7 @@ function main(
   minOut: Uint256,
   recipient: Address,
 ): { pool: Address; spent: Uint256; bought: Uint256 } {
+  require(UniswapV3.Factory);
   const self = ctx.self();
   // Paying USDC lowers a pool's price where USDC is its token0 (the lower address) and raises it
   // where USDC is its token1, so a pool can still trade while its price is on the far side.
