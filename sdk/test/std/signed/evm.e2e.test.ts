@@ -21,7 +21,7 @@
  * SAUCE_V12_ROUTER_CREATION_HEX, a file of #571's Router creation code, which no release publishes
  * yet, so the suite skips in CI until a kitchen-evm release carries the handlers.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -63,6 +63,7 @@ import {
   signedSaltSlot,
   type SignedExecution,
 } from "../../../src/routes/signed.js";
+import { freePortSync, spawnAnvil } from "../../anvil-process.js";
 import { routerUnderTest, startGatedEngine, type GatedEngine } from "../../evm/gated-engine.js";
 
 const RUNTIME_HEX_PATH =
@@ -101,7 +102,7 @@ const WALLET_SECOND = privateKeyToAccount(
   "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
 );
 
-const PORT = 8800 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 /** Non-zero, so a cook provably pays it, and a submission's single fee can be counted. */
 const FEE = 1_234n;
@@ -286,21 +287,10 @@ async function mintPot(who: Address, salt: Hex, routerFixed = false): Promise<Ad
 
 describeSigned("@sauce/signed on the EVM, through the Router's handlers", () => {
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--chain-id", String(CHAIN_ID), "--silent"], {
-      stdio: "ignore",
-    });
+    anvil = await spawnAnvil(PORT, ["--chain-id", String(CHAIN_ID)]);
     const transport = http(RPC_URL);
     publicClient = createPublicClient({ transport });
     const testClient = createTestClient({ mode: "anvil", transport });
-    for (const deadline = Date.now() + 20_000; ;) {
-      try {
-        await publicClient.getChainId();
-        break;
-      } catch {
-        if (Date.now() > deadline) throw new Error(`anvil did not come up on ${RPC_URL}`);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
     stack = await startGatedEngine(
       { publicClient, walletClient: owner, testClient },
       OWNER.address,
