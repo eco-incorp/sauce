@@ -31,6 +31,7 @@ function main(
   recipient: Address,
   refundTo: Address,
 ): { fee: Uint256; spent: Uint256; shares: Uint256 } {
+  require(UniswapV3.Factory);
   const self = ctx.self();
   require(maxPrice > 0, "maxPrice is 0");
   const before = USDC.balanceOf(self);

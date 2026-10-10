@@ -102,6 +102,28 @@ export class Level {
   }
 }
 
+// What a hop's `send` and `receive` list: `{ token, amount }`, or in a `send` `{ native: amount }`.
+export interface HopItem {
+  token?: any;
+  amount?: Uint256;
+  native?: Uint256;
+}
+
+// What `hop(…)` takes; `reward` is the former name of `send`, refused by name.
+export interface HopConfig {
+  send?: HopItem | HopItem[];
+  receive?: HopItem | HopItem[];
+  refundee?: any;
+  deadline?: Uint256;
+  rewardDeadline?: Uint256;
+  prover?: any;
+  salt?: Uint256;
+  fee?: Uint256;
+  before?: (() => any) | (() => any)[];
+  after?: (() => any) | (() => any)[];
+  reward?: any;
+}
+
 // One hop: an Eco intent a program opens, whose body runs on `destination`, as the chain the program
 // runs on (`level`) sees it — that chain's Portal, the prover, its shared Pot and engine, its Kitchen
 // fee, its tokens by symbol — with what `config` gives:
@@ -121,39 +143,15 @@ export class Level {
 //
 // The SDK's module for the chain makes one from each chain's `hop(config)`.
 export class Intent {
-  constructor(destination, level, config) {
-    if (config === undefined || config.length !== undefined) {
+  constructor(destination, level, config: HopConfig) {
+    if (config === undefined || Array.isArray(config)) {
       throw new Error(
         "`hop(...)` takes one object: `hop({ send: { token, amount }, receive: { token, amount }, refundee })`",
       );
     }
-    // A field the hop does not take is a mistake, said by its name, as the editor's declarations say
-    // it (`routes/intent-syntax.ts#HOP_FIELDS`, which the SDK's tests hold to this list).
-    const fields = {
-      send: true,
-      receive: true,
-      refundee: true,
-      deadline: true,
-      rewardDeadline: true,
-      prover: true,
-      salt: true,
-      fee: true,
-      before: true,
-      after: true,
-    };
     // A field under its former name says what it is called now.
-    const renamed = { reward: "what the source sends is `send`" };
-    for (const key of Object.keys(config)) {
-      if (renamed[key] !== undefined) {
-        throw new Error("a hop takes no `" + key + "`: " + renamed[key]);
-      }
-      if (fields[key] === undefined) {
-        throw new Error(
-          "a hop takes no `" +
-            key +
-            "`: its fields are send, receive, refundee, deadline, rewardDeadline, prover, salt, fee, before and after",
-        );
-      }
+    if (config.reward !== undefined) {
+      throw new Error("a hop takes no `reward`: what the source sends is `send`");
     }
     this._destination = destination;
     this._here = level.fields;
@@ -212,7 +210,7 @@ export class Intent {
         "`<Chain>.hop({ … })` has no body. Finish it with `.then(() => { … })`: the code that runs on its destination with what was received",
       );
     }
-    const config = this._config;
+    const config: HopConfig = this._config;
     const creator = config.refundee;
     if (creator === undefined) {
       throw new Error(
@@ -229,7 +227,7 @@ export class Intent {
     const rewardTokens = new Items();
     const funds = new Funds();
     const native = new Native();
-    if (config.send.length !== undefined) {
+    if (Array.isArray(config.send)) {
       for (const item of config.send) this._rewardItem(item, rewardTokens, funds, native);
     } else {
       this._rewardItem(config.send, rewardTokens, funds, native);
@@ -249,7 +247,7 @@ export class Intent {
     // The delivery, on the destination: the destination's token of each symbol.
     const deliveryTokens = new Items();
     if (config.receive !== undefined) {
-      if (config.receive.length !== undefined) {
+      if (Array.isArray(config.receive)) {
         for (const item of config.receive) this._deliveryToken(item, deliveryTokens);
       } else {
         this._deliveryToken(config.receive, deliveryTokens);
@@ -403,7 +401,7 @@ export class Intent {
     return crypto.keccak256(abi.encode(this._here.salt, opened));
   }
 
-  _rewardItem(item, tokens, funds, native) {
+  _rewardItem(item: HopItem, tokens, funds, native) {
     if (item.native !== undefined) {
       if (native.amount !== undefined) {
         throw new Error("a hop's `send` names its native amount once");
@@ -418,29 +416,36 @@ export class Intent {
     funds.add(item.token, item.amount);
   }
 
-  _deliveryToken(item, tokens) {
+  _deliveryToken(item: HopItem, tokens) {
     if (item.native !== undefined) {
       throw new Error("a hop's `receive` names tokens: the native coin is paid in its `send`");
     }
-    if (item.token === undefined || item.amount === undefined) {
+    if (item.amount === undefined) {
       throw new Error("each item of a hop's `receive` is `{ token, amount }`");
     }
-    // A name this chain does not declare (`USDT0`, where only the destination has it) is the
-    // destination's token of that name.
-    if (nameOf(item.token) !== undefined) {
-      tokens.add({ token: globalIn(this._destination.chainId, item.token), amount: item.amount });
+    // A name this chain has no value for (`USDT0`, `undefined` where only the destination has it) is
+    // the destination's token of that name.
+    if (item.token === undefined && nameOf(item.token) !== undefined) {
+      const token = globalIn(this._destination.chainId, item.token);
+      if (token === undefined) throw new Error(this._destination.missing);
+      tokens.add({ token, amount: item.amount });
       return;
     }
+    if (item.token === undefined) {
+      throw new Error("each item of a hop's `receive` is `{ token, amount }`");
+    }
     // An address, or a `Token(address)`, is used as written; a token the registry names is the
-    // destination's token of its symbol.
+    // destination's global of its symbol.
     if (!(item.token instanceof Token) || item.token.symbol === undefined) {
       tokens.add({ token: item.token, amount: item.amount });
       return;
     }
-    const token = this._destination.tokens[item.token.symbol];
+    const token = globalIn(this._destination.chainId, item.token.symbol);
     if (token === undefined) throw new Error(this._destination.missing);
     tokens.add({ token, amount: item.amount });
   }
 }
 
-class Native {}
+class Native {
+  amount;
+}

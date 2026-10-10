@@ -137,11 +137,8 @@ describe("what a hook refuses, where it is written", () => {
     );
   });
 
-  it("names the hooks among the fields a hop takes", () => {
-    expect(refusal("\n    hooks: [],").message).toMatch(
-      "its fields are send, receive, refundee, deadline, rewardDeadline, prover, salt, fee, " +
-        "before and after",
-    );
+  it("a field the hop does not take: not a member of `HopConfig`", () => {
+    expect(refusal("\n    hooks: [],").message).toMatch("`hooks` is not a member of `HopConfig`");
   });
 });
 

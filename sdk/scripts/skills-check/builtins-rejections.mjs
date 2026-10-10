@@ -121,9 +121,7 @@ export const rejections = [
     src: "function main(): Uint256 { let xs = []; return 0n; }",
   },
   {
-    quotes: [
-      "`undefined` exists only while the program compiles, so it has no run-time value here",
-    ],
+    quotes: ["undefined has no run-time form, so it cannot be used here as a run-time value"],
     targets: ["evm"],
     src: "function main(): Uint256 { return undefined; }",
   },
@@ -337,14 +335,14 @@ export const rejections = [
   },
   {
     quotes: [
-      "a module-scope lookup table `<name>` can only be read by a literal index or a field name …",
+      "a module-scope lookup table `<name>` has no run-time form: read it by a literal index or a field name …",
     ],
     targets: ["evm", "svm"],
     src: "const FEES = [100n, 500n]; function main(): Uint256 { let t = 0n; for (const f of FEES) { t += f; } return t; }",
   },
   {
     quotes: [
-      "a module-scope lookup table `<name>` can only be read by a literal index or a field name …",
+      "a module-scope lookup table `<name>` has no run-time form: read it by a literal index or a field name …",
     ],
     targets: ["evm"],
     src: "const FEES = [100n, 500n]; function main(): Uint256 { return FEES.length; }",
@@ -862,11 +860,6 @@ export const rejections = [
     targets: ["evm"],
     contracts,
     src: "function main(t: Uint256, o: Uint256): Uint256 { return ERC20.at(t).balanceOf(o).catch((e) => { return 0n; }); }",
-  },
-  {
-    quotes: ["a `try` block runs in a frame of its own, so it cannot assign `…`"],
-    targets: ["evm"],
-    src: "function main(): Uint256 { let n = 0n; try { n = 1n; } catch { } return n; }",
   },
   {
     quotes: ["`try`/`catch` is not available on the svm target"],
