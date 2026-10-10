@@ -209,10 +209,11 @@ program rarely needs to.
   `[Symbol.toPrimitive]` method, run while compiling with the hint `"default"` under `==`/`!=` and
   `"number"` elsewhere. A class's `[Symbol.dispose]()` runs when the statement that made the
   instance ends (a `const` holding one, at the end of its block).
-<<<<<<< HEAD
-- A dotted path to nothing, `Monkey.Jump` with `Monkey` undeclared or a member a static object lacks,
-  reads as `0` under `==` and `!=`, so `if (Monkey.Jump != 0) { … }` is decided while compiling and
-  its other arm is never compiled; any other use is an error. A bare unknown name is always one.
+- A value has the members it declares: a module's value the ones its module gives it, an object the
+  program builds the ones it sets, its class declares or its type names. Reading any other is an
+  error, in a test too. A declared member that is `undefined` (a field nothing set, a name a chain
+  lacks) is falsy, so `if (X.Y) { … }` is decided while compiling and its other arm is never
+  compiled; any other use of it is an error naming it. A bare unknown name is always one.
 - `typeof x`, `Array.isArray(x)` and a function's `length` are constants: a number or an address is
   `"bigint"`, a `bool` `"boolean"`, bytes and a string `"string"`, an array or an object
   `"object"`, a function, a class or a contract import `"function"`. A run-time value answers from
@@ -227,13 +228,6 @@ program rarely needs to.
   `includes` and `join` while compiling, and a string it knows `startsWith`, `endsWith`, `includes`,
   `toUpperCase`, `toLowerCase` and `length`. An array known only at run time has none of them:
   "`.map` needs a value known while compiling, and this one is known only when the program runs".
-=======
-- A value has the members it declares: a module's value the ones its module gives it, an object the
-  program builds the ones it sets, its class declares or its type names. Reading any other is an
-  error, in a test too. A declared member that is `undefined` (a field nothing set, a name a chain
-  lacks) is falsy, so `if (X.Y) { … }` is decided while compiling and its other arm is never
-  compiled; any other use of it is an error naming it. A bare unknown name is always one.
->>>>>>> feat/intents-docs-skills
 - `const xs = []` is an empty array of this kind; an empty array in a `let` needs a declared type (§2).
 - A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown
   message.
