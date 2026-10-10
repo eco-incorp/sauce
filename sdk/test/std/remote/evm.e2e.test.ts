@@ -48,13 +48,7 @@ import { v12EngineAddress } from "../../../src/deployments/v12-addresses.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
-import {
-  DEPLOYER,
-  FEE,
-  RUNTIME_HEX_PATH,
-  startChain,
-  type LocalChain,
-} from "../../cli-anvil.js";
+import { DEPLOYER, FEE, RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../cli-anvil.js";
 import { gateAnchors, POT_SALT, routerUnderTest } from "../../evm/gated-engine.js";
 import {
   HYPERLANE_FEE,
