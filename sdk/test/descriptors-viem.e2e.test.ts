@@ -7,7 +7,7 @@
  *
  * Needs `anvil` on PATH: skipped without it locally, and a failure in CI, where Foundry is set up.
  */
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -25,6 +25,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { base, mainnet } from "viem/chains";
 
 import { Base } from "../src/index.js";
+import { freePortSync, spawnAnvil } from "./anvil-process.js";
 
 const ANVIL = spawnSync("anvil", ["--version"]).status === 0;
 const describeAnvil = ANVIL ? describe : describe.skip;
@@ -36,7 +37,8 @@ if (!ANVIL && process.env.CI) throw new Error("anvil is not on PATH in CI — th
 const DEPLOYER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 );
-const PORT = 8600 + (process.pid % 300);
+/** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
+const PORT = freePortSync();
 const transport = http(`http://127.0.0.1:${PORT}`);
 const publicClient = createPublicClient({ chain: base, transport });
 const walletClient = createWalletClient({ account: DEPLOYER, chain: base, transport });
@@ -60,19 +62,7 @@ let deployed: Address;
 
 describeAnvil("ContractCall viem helpers, against a local Base", () => {
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--chain-id", "8453", "--silent"], {
-      stdio: "ignore",
-    });
-    const deadline = Date.now() + 20_000;
-    for (;;) {
-      try {
-        await publicClient.getChainId();
-        break;
-      } catch {
-        if (Date.now() > deadline) throw new Error("anvil did not come up");
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
+    anvil = await spawnAnvil(PORT, ["--chain-id", "8453"]);
     const hash = await walletClient.sendTransaction({ data: FACTORY_CREATION, to: null });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     deployed = receipt.contractAddress!;

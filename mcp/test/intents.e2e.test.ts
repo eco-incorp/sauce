@@ -16,7 +16,6 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite.
  */
 import assert from "node:assert/strict";
-import { createServer } from "node:net";
 import { after, before, describe, it } from "node:test";
 
 import { createWalletClient, getAddress, http, type Address, type Hex } from "viem";
@@ -73,15 +72,6 @@ interface Plan {
   readonly notes?: readonly string[];
 }
 type IntentRecord = Record<string, unknown> & { readonly intentHash: Hex };
-
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-
-  return port;
-}
 
 describe(
   "the intent tools: publish, fill and prove, claim; refund; cancel",
@@ -155,10 +145,7 @@ describe(
       ok(await mcp.call(tool, { ...args, rpcUrls }));
 
     before(async () => {
-      [ethereum, base] = await Promise.all([
-        startChain("ethereum", await freePort()),
-        startChain("base", await freePort()),
-      ]);
+      [ethereum, base] = await Promise.all([startChain("ethereum"), startChain("base")]);
       ethereumUsdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
       baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
       for (const local of [ethereum, base]) await plantPortal(local, PORTAL_FIXTURES.v2_12);

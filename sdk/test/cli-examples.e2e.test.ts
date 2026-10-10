@@ -61,7 +61,7 @@ import {
   type LocalChain,
   type Run,
 } from "./cli-anvil.js";
-import { FACTORY, freePort, LIQUIDITY, POOL } from "./pools-anvil.js";
+import { FACTORY, LIQUIDITY, POOL } from "./pools-anvil.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXAMPLES = join(HERE, "../../skills/sauce-cli/examples");
@@ -201,7 +201,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-examples-"));
-    base = await startChain("base", await freePort());
+    base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     weth = await base.plant(fixture("MockERC20"), registered(base.chain, "WETH"));
     for (const token of [usdc, weth]) await base.mint(token, DEPLOYER.address, 10n ** 30n);
