@@ -15,7 +15,6 @@ import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { describeEvm } from "./cli-anvil.js";
 import { startIntentChain, type IntentChain } from "./intent-anvil.js";
-import { freePort } from "./pools-anvil.js";
 
 const INTENTS = {
   deadline: 4_000_000_000n,
@@ -25,7 +24,7 @@ const INTENTS = {
 describeEvm("a caller's chain-scoped defines are its chain's, and nowhere else's", () => {
   let base: IntentChain;
   beforeAll(async () => {
-    base = await startIntentChain("base", await freePort(), ["USDC"]);
+    base = await startIntentChain("base", ["USDC"]);
   }, 120_000);
   afterAll(async () => {
     await base?.stop();
