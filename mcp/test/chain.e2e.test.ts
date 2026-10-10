@@ -11,7 +11,6 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { createServer } from "node:net";
 import { after, before, describe, it } from "node:test";
 
 import { formatUnits, getAddress, toFunctionSelector, type Address, type Hex } from "viem";
@@ -94,16 +93,6 @@ const COOKED = [
   "",
 ].join("\n");
 
-/** A port nothing is listening on, so this suite never collides with another's anvil. */
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-
-  return port;
-}
-
 describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, () => {
   let local: LocalChain;
   /** The intent's destination, which only a call's own rpcUrl reaches. */
@@ -114,12 +103,12 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   let usdc: Address;
 
   before(async () => {
-    local = await startChain("ethereum", await freePort());
+    local = await startChain("ethereum");
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
     // The real eco-routes Portal, where the SDK records it and deployed there in effect (so its
     // vaults are the ones the SDK derives), for the publish rehearsal.
     await placePortal(local);
-    base = await startChain("base", await freePort());
+    base = await startChain("base");
     baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     basePortal = (await placePortal(base)).portal;
     mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
