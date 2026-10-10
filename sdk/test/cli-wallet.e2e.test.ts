@@ -23,7 +23,6 @@ import {
   registered,
   sauceWith,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
 
@@ -60,7 +59,7 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     wallets = join(work, "wallets");
     program = join(work, "pay.sauce.ts");
     writeFileSync(program, PAY);
-    base = await startChain("base", 9700 + WORKER);
+    base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
   }, 120_000);
   afterAll(async () => {
