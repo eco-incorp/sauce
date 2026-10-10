@@ -130,6 +130,7 @@ function trade(
   } else {
     // A missing V4 pool reads as empty. Its fee: this direction's protocol fee (paying token0's in
     // the low 12 bits, token1's in the next 12), then the LP fee on the rest.
+    require(UniswapV4.StateView);
     liquidity = UniswapV4.StateView.getLiquidity(pool);
     const [sqrtPriceX96, , protocolFees, poolFee] = UniswapV4.StateView.getSlot0(pool);
     const protocolFee = (paysToken0 ? protocolFees : protocolFees >> 12) & 0xfff;
@@ -147,6 +148,7 @@ function trade(
   }
   if (venue == 2) {
     // A hookless pool's LP fee is its key's fee.
+    require(UniswapV4.PoolManager);
     const manager = UniswapV4.PoolManager;
     return uniswapV4(manager, payToken, buyToken, unspent, lpFee, spacing, 0, own, 0, recipient);
   }
@@ -177,12 +179,15 @@ function main(
     limit = Math.sqrt(Math.mulDiv(1 << 192, 10 ** 18, maxPrice));
   }
 
-  // The loops only find pools; trade() decides and swaps. Slipstream, keyed by tick spacing.
+  // The loops only find pools; trade() decides and swaps. Slipstream, keyed by tick spacing: on a
+  // chain without its factory, the program does not compile.
+  require(AerodromeSlipstream.CLFactoryGaugesV3);
   for (const spacing of [1, 10, 50, 80, 100, 150, 200, 500, 2000]) {
     const pool = AerodromeSlipstream.CLFactoryGaugesV3.getPool(payToken, buyToken, spacing);
     bought += trade(1, pool, 0, payToken, buyToken, kept, limit, recipient);
   }
   // Uniswap V3, keyed by fee tier: the seven Base's factory enables.
+  require(UniswapV3.Factory);
   for (const fee of [100, 200, 300, 400, 500, 3000, 10000]) {
     const pool = UniswapV3.Factory.getPool(payToken, buyToken, fee);
     bought += trade(0, pool, 0, payToken, buyToken, kept, limit, recipient);
@@ -259,12 +264,13 @@ id short there; it is still declared `Uint256`, because it is not an address, an
 the program's edge an `Address` is 20 bytes: `--args` refuses a 32-byte value for an `Address`
 parameter. A V4 pool id taken as an input or returned is a `Uint256`.
 
-**The chains it compiles on.** Each venue is a namespace contract, and naming one a chain lacks is a
-compile error (`Contract 'CLFactoryGaugesV3' (aerodrome-slipstream) is not deployed on
-'ethereum'`). `AerodromeSlipstream.CLFactoryGaugesV3` is on Base alone, so this program compiles for
-Base. For another chain, write the loops for the venues that chain has: Ethereum has
-`UniswapV3.Factory` and `UniswapV4.StateView` and no Slipstream, so the program less its Slipstream
-loop.
+**The chains it compiles on.** Each venue is a namespace contract, `undefined` on a chain that lacks
+it, and each loop first requires its venue, so the program compiles only where every venue is:
+compiled for Ethereum it fails with
+"`AerodromeSlipstream.CLFactoryGaugesV3` is `undefined`, so it has no run-time value here".
+`AerodromeSlipstream.CLFactoryGaugesV3` is on Base alone, so this program compiles for Base. For
+another chain, write the loops for the venues that chain has: Ethereum has `UniswapV3.Factory` and
+`UniswapV4.StateView` and no Slipstream, so the program less its Slipstream loop.
 
 ## The token and its pools
 

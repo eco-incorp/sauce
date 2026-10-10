@@ -269,7 +269,7 @@ file.
 
 Every protocol the registry knows: how to choose between protocols that do the same job, and how a
 program reaches each (a namespace contract, an address only, an interface called with an address,
-or an imported ABI), compared with zero on a chain that may lack it.
+or an imported ABI), tested on a chain that may lack it.
 
 - **Holds** [references/index.md](../sauce-protocols/references/index.md), every protocol by
   category with "Choosing between them"; per protocol, a generated registry file

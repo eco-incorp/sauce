@@ -25,8 +25,14 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
-import { chainModuleSource, isChainScalar, type ChainModuleOptions } from "./chain-module.js";
-import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
+import {
+  CHAIN_DEFINE,
+  chainModuleSource,
+  isChainScalar,
+  isPlainModule,
+  type ChainModuleOptions,
+} from "./chain-module.js";
+import { registryTokenSymbols } from "./token-registry.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
 import { pascalOfSlug } from "./pascal.js";
 import { chainAmbient } from "./ambient.js";
@@ -38,7 +44,6 @@ import {
   type EntrySignature,
   type EntryValue,
 } from "./entry.js";
-import { absentPathError, chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -160,16 +165,19 @@ function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
 
-/** The bare specifier a chain's generated module is named by: `@sauce/chain-base`. */
-const moduleSpecifier = (chain: CanonicalChain): string => `@sauce/chain-${chain.slug}`;
+/** The bare specifier a compile's module of names is named by: `@sauce/chain-evm`, the one module of
+ *  the target, or `@sauce/chain-evm-own` for a compile that chose values of its own. */
+const moduleSpecifier = (chain: CanonicalChain, options: ChainModuleOptions): string =>
+  `@sauce/chain-${chain.kind === "evm" ? "evm" : "svm"}${isPlainModule(options) ? "" : "-own"}`;
 
 /**
  * What a compile for `chain` hands the compiler beyond the program: the chain's module of names,
  * and the caller's own defines.
  *
- * NAMES ARE SCOPED PER CHAIN. A token symbol, `chainId` or a protocol name means the chain the
- * program is compiled for, from that chain's module. So every `tokens` override and every chain
- * value the caller chose goes into it; the caller's other defines (`RECIPIENT`) stay defines.
+ * NAMES ARE VALUED PER CHAIN. A token symbol, `chainId` or a protocol name is declared for every
+ * chain in one module, and its value is the one of the chain the program is compiled for, whose id
+ * the define `__sauce_chain` is. A `tokens` override and a chain value the caller chose are that
+ * chain's, in a module of the compile's own; the caller's other defines (`RECIPIENT`) stay defines.
  */
 function chainModules(
   chain: CanonicalChain,
@@ -180,13 +188,18 @@ function chainModules(
   readonly defines: SauceCompileOptions["defines"];
 } {
   const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
+  if (defines !== undefined && CHAIN_DEFINE in defines) {
+    throw new Error(
+      `compileSauceRoute: \`${CHAIN_DEFINE}\` is the SDK's own define, set to the chain's id`,
+    );
+  }
   const moduleOptions: ChainModuleOptions = { tokens, values, accessors: options.accessors };
-  const own = moduleSpecifier(chain);
+  const own = moduleSpecifier(chain, moduleOptions);
 
   return {
     modules: new Map([[own, chainModuleSource(chain, moduleOptions)]]),
     ambient: [...new Set([...(options.ambient ?? []), own])],
-    defines,
+    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
   };
 }
 
@@ -346,45 +359,20 @@ function compileForChain(
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. Nothing here reads or rewrites it.
   const source = sauce;
-  const tokens = resolveTokenMap(chain, options.tokens);
   const names = chainModules(chain, options);
-  let rs: RsCompileResult;
-  try {
-    rs = compileWithRs({
-      source,
-      target,
-      resolve: options.resolve,
-      resolvePackage: options.resolvePackage,
-      defines: names.defines,
-      contracts: options.contracts,
-      ambient: names.ambient,
-      compactArgs: options.compactArgs,
-      modules: names.modules,
-      ...(args === undefined ? {} : { args }),
-    });
-  } catch (error) {
-    // A token or protocol name the chain does not have, reported as one rather than as the call
-    // the compiler could not lower — from the compiler's own located diagnostics.
-    throw (
-      unknownGlobalError(source, "main.js", chain, tokens.keys(), error, {
-        allowWidenedSelectors:
-          typeof options.accessors === "object" && options.accessors.allowWidenedSelectors === true,
-      }) ??
-      chainCalledError(error) ??
-      error
-    );
-  }
-  const { manifest, entryEncoding, entryParams, entrySignature, absentPaths, ...compiled } = rs;
-  // Every name a comparison read as 0, held to the registry: a name some chain has and this one
-  // lacks is decided; anything else — a typo — is refused.
-  for (const path of absentPaths) {
-    const refusal = absentPathError(path.name, chain);
-    if (refusal !== undefined) {
-      throw new Error(
-        `compileSauceRoute: ${refusal} (${path.path}:${path.start.line}:${path.start.column + 1})`,
-      );
-    }
-  }
+  const rs = compileWithRs({
+    source,
+    target,
+    resolve: options.resolve,
+    resolvePackage: options.resolvePackage,
+    defines: names.defines,
+    contracts: options.contracts,
+    ambient: names.ambient,
+    compactArgs: options.compactArgs,
+    modules: names.modules,
+    ...(args === undefined ? {} : { args }),
+  });
+  const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");

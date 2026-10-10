@@ -58,8 +58,6 @@ describe("a chain's name is its chain id", () => {
         ),
         {},
       ),
-    ).toThrow(
-      "`Arbitrum` is a chain id, not a function: `Arbitrum(() => { … })` no longer opens an intent",
-    );
+    ).toThrow("an instance of `OnChain` is not a function, so it cannot be called");
   });
 });

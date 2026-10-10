@@ -71,6 +71,7 @@ describe("chain accessors: the names resolve through an import, and only through
   it("the SOURCE-only route-body names are still ambient in the same program (the two mechanisms are separate)", () => {
     const diagnostics = typecheckProbe(`
       const routeBody = () => {
+        require(Uniswap.UniversalRouter);
         USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
         return chainId;
       };

@@ -199,7 +199,7 @@ describe("SauceScript in an editor", () => {
   it("takes a local that starts at 0 and is later given a contract's result", () => {
     const { bare, shown } = plain(
       "zeroed",
-      "function main(): Uint256 {\n  let pool = 0;\n" +
+      "function main(): Uint256 {\n  require(UniswapV3.Factory);\n  let pool = 0;\n" +
         "  pool = UniswapV3.Factory.getPool(USDC, WETH, 500);\n  return pool;\n}\n",
     );
     expect(bare).toEqual([2322, 2345, 2322]);

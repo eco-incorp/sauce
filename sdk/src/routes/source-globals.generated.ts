@@ -1499,220 +1499,220 @@ export interface ZksyncBridgeZkSyncDiamondProxyMethods {
 }
 
 export interface AaveV2Source extends AaveV2LendingPoolMethods {
-  readonly LendingPool: SauceContract<AaveV2LendingPoolMethods>;
+  readonly LendingPool?: SauceContract<AaveV2LendingPoolMethods>;
 }
 
 export interface AaveV3Source extends AaveV3PoolMethods {
-  readonly Pool: SauceContract<AaveV3PoolMethods>;
-  readonly PoolAddressesProvider: bigint;
+  readonly Pool?: SauceContract<AaveV3PoolMethods>;
+  readonly PoolAddressesProvider?: bigint;
 }
 
 export interface AaveV4Source {
-  readonly MainSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly ForexSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly BluechipSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly EthenaCorrelatedSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly EthenaEcosystemSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly GoldSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly PaxgGoldSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly LombardBtcSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly UsdgPendleSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly EtherfiESpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly KelpESpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly LidoESpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly UsdgMapleESpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly Mag7Spoke: SauceContract<AaveV4SpokeMethods>;
-  readonly AvaxCorrelatedSpoke: SauceContract<AaveV4SpokeMethods>;
-  readonly CoreHub: SauceContract<AaveV4HubMethods>;
-  readonly PlusHub: SauceContract<AaveV4HubMethods>;
-  readonly PrimeHub: SauceContract<AaveV4HubMethods>;
-  readonly GlobalDollarHub: SauceContract<AaveV4HubMethods>;
-  readonly EquitiesHub: SauceContract<AaveV4HubMethods>;
+  readonly MainSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly ForexSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly BluechipSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly EthenaCorrelatedSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly EthenaEcosystemSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly GoldSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly PaxgGoldSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly LombardBtcSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly UsdgPendleSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly EtherfiESpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly KelpESpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly LidoESpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly UsdgMapleESpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly Mag7Spoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly AvaxCorrelatedSpoke?: SauceContract<AaveV4SpokeMethods>;
+  readonly CoreHub?: SauceContract<AaveV4HubMethods>;
+  readonly PlusHub?: SauceContract<AaveV4HubMethods>;
+  readonly PrimeHub?: SauceContract<AaveV4HubMethods>;
+  readonly GlobalDollarHub?: SauceContract<AaveV4HubMethods>;
+  readonly EquitiesHub?: SauceContract<AaveV4HubMethods>;
 }
 
 export interface AbracadabraSource extends AbracadabraDegenBoxMethods {
   readonly Cauldron: SauceInterface<AbracadabraCauldronMethods>;
-  readonly DegenBox: SauceContract<AbracadabraDegenBoxMethods>;
-  readonly Mim: bigint;
+  readonly DegenBox?: SauceContract<AbracadabraDegenBoxMethods>;
+  readonly Mim?: bigint;
 }
 
 export interface AcrossSource {
-  readonly HubPool: SauceContract<AcrossHubPoolMethods>;
-  readonly SpokePool: SauceContract<AcrossSpokePoolMethods>;
+  readonly HubPool?: SauceContract<AcrossHubPoolMethods>;
+  readonly SpokePool?: SauceContract<AcrossSpokePoolMethods>;
 }
 
 export interface AerodromeSource {
-  readonly PoolFactory: SauceContract<AerodromePoolFactoryMethods>;
-  readonly Router: SauceContract<AerodromeRouterMethods>;
+  readonly PoolFactory?: SauceContract<AerodromePoolFactoryMethods>;
+  readonly Router?: SauceContract<AerodromeRouterMethods>;
   readonly Pool: SauceInterface<AerodromePoolMethods>;
 }
 
 export interface AerodromeSlipstreamSource {
-  readonly CLFactory: SauceContract<AerodromeSlipstreamSlipstreamCLFactoryMethods>;
-  readonly CLFactoryGaugeCaps: SauceContract<AerodromeSlipstreamSlipstreamCLFactoryMethods>;
-  readonly CLFactoryGaugesV3: SauceContract<AerodromeSlipstreamSlipstreamCLFactoryMethods>;
-  readonly NonfungiblePositionManager: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
-  readonly NonfungiblePositionManagerGaugeCaps: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
-  readonly NonfungiblePositionManagerGaugesV3: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
-  readonly Metarouter: SauceContract<AerodromeSlipstreamAeroMetarouterMethods>;
+  readonly CLFactory?: SauceContract<AerodromeSlipstreamSlipstreamCLFactoryMethods>;
+  readonly CLFactoryGaugeCaps?: SauceContract<AerodromeSlipstreamSlipstreamCLFactoryMethods>;
+  readonly CLFactoryGaugesV3?: SauceContract<AerodromeSlipstreamSlipstreamCLFactoryMethods>;
+  readonly NonfungiblePositionManager?: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
+  readonly NonfungiblePositionManagerGaugeCaps?: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
+  readonly NonfungiblePositionManagerGaugesV3?: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
+  readonly Metarouter?: SauceContract<AerodromeSlipstreamAeroMetarouterMethods>;
   readonly Pool: SauceInterface<AerodromeSlipstreamPoolMethods>;
 }
 
 export interface AevoSource extends AevoDepositContractMethods {
-  readonly DepositContract: SauceContract<AevoDepositContractMethods>;
+  readonly DepositContract?: SauceContract<AevoDepositContractMethods>;
 }
 
 export interface AlchemixSource {
-  readonly AlchemistAlUSD: SauceContract<AlchemixAlchemistMethods>;
-  readonly AlchemistAlETH: SauceContract<AlchemixAlchemistMethods>;
-  readonly AlUSD: bigint;
-  readonly AlETH: bigint;
+  readonly AlchemistAlUSD?: SauceContract<AlchemixAlchemistMethods>;
+  readonly AlchemistAlETH?: SauceContract<AlchemixAlchemistMethods>;
+  readonly AlUSD?: bigint;
+  readonly AlETH?: bigint;
 }
 
 export interface AmbientSource extends AmbientCrocSwapDexMethods {
-  readonly CrocSwapDex: SauceContract<AmbientCrocSwapDexMethods>;
+  readonly CrocSwapDex?: SauceContract<AmbientCrocSwapDexMethods>;
 }
 
 export interface ArbitrumBridgeSource extends ArbitrumBridgeArbitrumL1GatewayRouterMethods {
-  readonly L1GatewayRouter: SauceContract<ArbitrumBridgeArbitrumL1GatewayRouterMethods>;
-  readonly L2GatewayRouter: bigint;
+  readonly L1GatewayRouter?: SauceContract<ArbitrumBridgeArbitrumL1GatewayRouterMethods>;
+  readonly L2GatewayRouter?: bigint;
 }
 
 export interface ArrakisSource extends ArrakisRouterMethods {
-  readonly Router: SauceContract<ArrakisRouterMethods>;
+  readonly Router?: SauceContract<ArrakisRouterMethods>;
   readonly Vault: SauceInterface<ArrakisVaultMethods>;
-  readonly Factory: bigint;
+  readonly Factory?: bigint;
 }
 
 export interface AxelarSource {
-  readonly GasService: SauceContract<AxelarGasServiceMethods>;
-  readonly Gateway: SauceContract<AxelarGatewayMethods>;
-  readonly ITS: SauceContract<AxelarITSMethods>;
+  readonly GasService?: SauceContract<AxelarGasServiceMethods>;
+  readonly Gateway?: SauceContract<AxelarGatewayMethods>;
+  readonly ITS?: SauceContract<AxelarITSMethods>;
 }
 
 export interface BalancerV2Source extends BalancerV2VaultMethods {
-  readonly Vault: SauceContract<BalancerV2VaultMethods>;
+  readonly Vault?: SauceContract<BalancerV2VaultMethods>;
 }
 
 export interface BaseBridgeSource extends BaseBridgeBaseL1StandardBridgeMethods {
-  readonly L1StandardBridge: SauceContract<BaseBridgeBaseL1StandardBridgeMethods>;
-  readonly L2StandardBridge: bigint;
+  readonly L1StandardBridge?: SauceContract<BaseBridgeBaseL1StandardBridgeMethods>;
+  readonly L2StandardBridge?: bigint;
 }
 
 export interface BaseswapSource extends BaseswapRouterMethods {
-  readonly V2Router: SauceContract<BaseswapRouterMethods>;
+  readonly V2Router?: SauceContract<BaseswapRouterMethods>;
 }
 
 export interface BeefySource {
   readonly Vault: SauceInterface<BeefyVaultMethods>;
-  readonly BIFI: bigint;
+  readonly BIFI?: bigint;
 }
 
 export interface BenqiSource extends BenqiComptrollerMethods {
-  readonly Comptroller: SauceContract<BenqiComptrollerMethods>;
+  readonly Comptroller?: SauceContract<BenqiComptrollerMethods>;
   readonly QiToken: SauceInterface<BenqiQiTokenMethods>;
 }
 
 export interface CamelotSource {
-  readonly V2Router: SauceContract<CamelotV2RouterMethods>;
-  readonly V3SwapRouter: SauceContract<CamelotV3SwapRouterMethods>;
-  readonly V2Factory: SauceContract<CamelotV2FactoryMethods>;
+  readonly V2Router?: SauceContract<CamelotV2RouterMethods>;
+  readonly V3SwapRouter?: SauceContract<CamelotV3SwapRouterMethods>;
+  readonly V2Factory?: SauceContract<CamelotV2FactoryMethods>;
   readonly V2Pair: SauceInterface<CamelotV2PairMethods>;
-  readonly V3Factory: SauceContract<CamelotV3FactoryMethods>;
+  readonly V3Factory?: SauceContract<CamelotV3FactoryMethods>;
   readonly V3Pool: SauceInterface<CamelotV3PoolMethods>;
 }
 
 export interface CbethSource extends CbethCbETHMethods {
-  readonly CbETH: SauceContract<CbethCbETHMethods>;
+  readonly CbETH?: SauceContract<CbethCbETHMethods>;
 }
 
 export interface CctpSource extends CctpTokenMessengerMethods {
-  readonly TokenMessenger: SauceContract<CctpTokenMessengerMethods>;
+  readonly TokenMessenger?: SauceContract<CctpTokenMessengerMethods>;
 }
 
 export interface CelerSource extends CelerBridgeMethods {
-  readonly Bridge: SauceContract<CelerBridgeMethods>;
+  readonly Bridge?: SauceContract<CelerBridgeMethods>;
 }
 
 export interface ChainlinkSource {
-  readonly EthUsdFeed: SauceContract<ChainlinkAggregatorV3Methods>;
-  readonly FeedRegistry: SauceContract<ChainlinkFeedRegistryMethods>;
-  readonly VrfV2Coordinator: bigint;
+  readonly EthUsdFeed?: SauceContract<ChainlinkAggregatorV3Methods>;
+  readonly FeedRegistry?: SauceContract<ChainlinkFeedRegistryMethods>;
+  readonly VrfV2Coordinator?: bigint;
 }
 
 export interface ChainlinkCcipSource extends ChainlinkCcipCCIPRouterMethods {
-  readonly Router: SauceContract<ChainlinkCcipCCIPRouterMethods>;
+  readonly Router?: SauceContract<ChainlinkCcipCCIPRouterMethods>;
 }
 
 export interface CircleGatewaySource {
-  readonly GatewayWallet: SauceContract<CircleGatewayGatewayWalletMethods>;
-  readonly GatewayMinter: SauceContract<CircleGatewayGatewayMinterMethods>;
+  readonly GatewayWallet?: SauceContract<CircleGatewayGatewayWalletMethods>;
+  readonly GatewayMinter?: SauceContract<CircleGatewayGatewayMinterMethods>;
 }
 
 export interface CompoundV2Source {
-  readonly CUSDC: SauceContract<CompoundV2CErc20Methods>;
-  readonly Comptroller: SauceContract<CompoundV2ComptrollerMethods>;
-  readonly CETH: bigint;
+  readonly CUSDC?: SauceContract<CompoundV2CErc20Methods>;
+  readonly Comptroller?: SauceContract<CompoundV2ComptrollerMethods>;
+  readonly CETH?: bigint;
 }
 
 export interface CompoundV3Source {
-  readonly CUSDCv3: SauceContract<CompoundV3CometMethods>;
-  readonly CWETHv3: SauceContract<CompoundV3CometMethods>;
-  readonly CUSDTv3: SauceContract<CompoundV3CometMethods>;
+  readonly CUSDCv3?: SauceContract<CompoundV3CometMethods>;
+  readonly CWETHv3?: SauceContract<CompoundV3CometMethods>;
+  readonly CUSDTv3?: SauceContract<CompoundV3CometMethods>;
 }
 
 export interface ConnextSource extends ConnextEverclearSpokeMethods {
-  readonly EverclearSpoke: SauceContract<ConnextEverclearSpokeMethods>;
+  readonly EverclearSpoke?: SauceContract<ConnextEverclearSpokeMethods>;
 }
 
 export interface ConvexSource extends ConvexBoosterMethods {
   readonly BaseRewardPool: SauceInterface<ConvexBaseRewardPoolMethods>;
-  readonly Booster: SauceContract<ConvexBoosterMethods>;
-  readonly CvxRewardPool: bigint;
+  readonly Booster?: SauceContract<ConvexBoosterMethods>;
+  readonly CvxRewardPool?: bigint;
 }
 
 export interface CowswapSource extends CowswapGPv2SettlementMethods {
-  readonly GPv2Settlement: SauceContract<CowswapGPv2SettlementMethods>;
+  readonly GPv2Settlement?: SauceContract<CowswapGPv2SettlementMethods>;
 }
 
 export interface CrvusdSource extends CrvusdERC20Methods {
-  readonly CrvUSD: SauceContract<CrvusdERC20Methods>;
+  readonly CrvUSD?: SauceContract<CrvusdERC20Methods>;
 }
 
 export interface CurveSource {
-  readonly AddressProvider: SauceContract<CurveAddressProviderMethods>;
-  readonly RouterNG: SauceContract<CurveRouterNGMethods>;
+  readonly AddressProvider?: SauceContract<CurveAddressProviderMethods>;
+  readonly RouterNG?: SauceContract<CurveRouterNGMethods>;
   readonly StableSwap: SauceInterface<CurveStableSwapMethods>;
-  readonly ThreePool: SauceContract<CurveThreePoolMethods>;
-  readonly CrvToken: bigint;
+  readonly ThreePool?: SauceContract<CurveThreePoolMethods>;
+  readonly CrvToken?: bigint;
 }
 
 export interface DebridgeSource {
-  readonly DlnDestination: SauceContract<DebridgeDlnDestinationMethods>;
-  readonly DlnSource: SauceContract<DebridgeDlnSourceMethods>;
+  readonly DlnDestination?: SauceContract<DebridgeDlnDestinationMethods>;
+  readonly DlnSource?: SauceContract<DebridgeDlnSourceMethods>;
 }
 
 export interface DodoSource extends DodoV2ProxyMethods {
-  readonly DODOV2Proxy: SauceContract<DodoV2ProxyMethods>;
+  readonly DODOV2Proxy?: SauceContract<DodoV2ProxyMethods>;
 }
 
 export interface EcoRoutesSource {
-  readonly Portal: SauceContract<EcoRoutesPortalMethods>;
-  readonly HyperProver: SauceContract<EcoRoutesProverMethods>;
-  readonly PolymerProver: SauceContract<EcoRoutesProverMethods>;
+  readonly Portal?: SauceContract<EcoRoutesPortalMethods>;
+  readonly HyperProver?: SauceContract<EcoRoutesProverMethods>;
+  readonly PolymerProver?: SauceContract<EcoRoutesProverMethods>;
 }
 
 export interface EigenlayerSource {
-  readonly DelegationManager: SauceContract<EigenlayerDelegationManagerMethods>;
-  readonly StETHStrategy: SauceContract<EigenlayerStrategyMethods>;
-  readonly RETHStrategy: SauceContract<EigenlayerStrategyMethods>;
-  readonly CbETHStrategy: SauceContract<EigenlayerStrategyMethods>;
-  readonly StrategyManager: SauceContract<EigenlayerStrategyManagerMethods>;
+  readonly DelegationManager?: SauceContract<EigenlayerDelegationManagerMethods>;
+  readonly StETHStrategy?: SauceContract<EigenlayerStrategyMethods>;
+  readonly RETHStrategy?: SauceContract<EigenlayerStrategyMethods>;
+  readonly CbETHStrategy?: SauceContract<EigenlayerStrategyMethods>;
+  readonly StrategyManager?: SauceContract<EigenlayerStrategyManagerMethods>;
 }
 
 export interface EnsSource {
-  readonly BaseRegistrar: SauceContract<EnsBaseRegistrarMethods>;
-  readonly Registry: SauceContract<EnsRegistryMethods>;
+  readonly BaseRegistrar?: SauceContract<EnsBaseRegistrarMethods>;
+  readonly Registry?: SauceContract<EnsRegistryMethods>;
 }
 
 export interface Erc20Source {
@@ -1728,607 +1728,607 @@ export interface Erc4626Source {
 }
 
 export interface EthenaSource {
-  readonly Susde: SauceContract<EthenaStakedUSDeMethods>;
-  readonly USDe: SauceContract<EthenaUSDeMethods>;
+  readonly Susde?: SauceContract<EthenaStakedUSDeMethods>;
+  readonly USDe?: SauceContract<EthenaUSDeMethods>;
 }
 
 export interface EtherfiSource {
-  readonly EETH: SauceContract<EtherfiEETHMethods>;
-  readonly LiquidityPool: SauceContract<EtherfiLiquidityPoolMethods>;
-  readonly WeETH: SauceContract<EtherfiWeETHMethods>;
+  readonly EETH?: SauceContract<EtherfiEETHMethods>;
+  readonly LiquidityPool?: SauceContract<EtherfiLiquidityPoolMethods>;
+  readonly WeETH?: SauceContract<EtherfiWeETHMethods>;
 }
 
 export interface EulerV2Source extends EulerV2EVCMethods {
-  readonly EthereumVaultConnector: SauceContract<EulerV2EVCMethods>;
+  readonly EthereumVaultConnector?: SauceContract<EulerV2EVCMethods>;
   readonly EVault: SauceInterface<EulerV2EVaultMethods>;
 }
 
 export interface FenixSource extends FenixRouterMethods {
-  readonly Router: SauceContract<FenixRouterMethods>;
+  readonly Router?: SauceContract<FenixRouterMethods>;
 }
 
 export interface FluidSource {
   readonly Lending: SauceInterface<FluidLendingMethods>;
   readonly Vault: SauceInterface<FluidVaultMethods>;
-  readonly Liquidity: bigint;
+  readonly Liquidity?: bigint;
 }
 
 export interface FraxSource extends FraxERC20Methods {
-  readonly Frax: SauceContract<FraxERC20Methods>;
+  readonly Frax?: SauceContract<FraxERC20Methods>;
 }
 
 export interface FraxEtherSource {
-  readonly FrxETHMinter: SauceContract<FraxEtherFrxETHMinterMethods>;
-  readonly SfrxETH: SauceContract<FraxEtherSfrxETHMethods>;
+  readonly FrxETHMinter?: SauceContract<FraxEtherFrxETHMinterMethods>;
+  readonly SfrxETH?: SauceContract<FraxEtherSfrxETHMethods>;
 }
 
 export interface GainsNetworkSource extends GainsNetworkDiamondMethods {
-  readonly Diamond: SauceContract<GainsNetworkDiamondMethods>;
-  readonly Gns: bigint;
+  readonly Diamond?: SauceContract<GainsNetworkDiamondMethods>;
+  readonly Gns?: bigint;
 }
 
 export interface GammaSource {
   readonly Hypervisor: SauceInterface<GammaHypervisorMethods>;
-  readonly UniProxy: SauceContract<GammaUniProxyMethods>;
-  readonly UniProxyLegacy: SauceContract<GammaUniProxyLegacyMethods>;
+  readonly UniProxy?: SauceContract<GammaUniProxyMethods>;
+  readonly UniProxyLegacy?: SauceContract<GammaUniProxyLegacyMethods>;
 }
 
 export interface GelatoSource extends GelatoAutomateMethods {
-  readonly Automate: SauceContract<GelatoAutomateMethods>;
+  readonly Automate?: SauceContract<GelatoAutomateMethods>;
 }
 
 export interface GhoSource extends GhoTokenMethods {
-  readonly Gho: SauceContract<GhoTokenMethods>;
+  readonly Gho?: SauceContract<GhoTokenMethods>;
 }
 
 export interface GmxV1Source {
-  readonly PositionRouter: SauceContract<GmxV1PositionRouterMethods>;
-  readonly Router: SauceContract<GmxV1RouterMethods>;
-  readonly Vault: SauceContract<GmxV1VaultMethods>;
-  readonly Glp: bigint;
+  readonly PositionRouter?: SauceContract<GmxV1PositionRouterMethods>;
+  readonly Router?: SauceContract<GmxV1RouterMethods>;
+  readonly Vault?: SauceContract<GmxV1VaultMethods>;
+  readonly Glp?: bigint;
 }
 
 export interface GmxV2Source extends GmxV2ExchangeRouterMethods {
-  readonly ExchangeRouter: SauceContract<GmxV2ExchangeRouterMethods>;
-  readonly DataStore: bigint;
+  readonly ExchangeRouter?: SauceContract<GmxV2ExchangeRouterMethods>;
+  readonly DataStore?: bigint;
 }
 
 export interface HarvestSource {
   readonly Vault: SauceInterface<HarvestVaultMethods>;
-  readonly Controller: bigint;
-  readonly Farm: bigint;
-  readonly DepositHelper: bigint;
+  readonly Controller?: bigint;
+  readonly Farm?: bigint;
+  readonly DepositHelper?: bigint;
 }
 
 export interface HegicSource extends HegicHegicMethods {
-  readonly OperationalTreasury: SauceContract<HegicHegicMethods>;
-  readonly Hegic: bigint;
+  readonly OperationalTreasury?: SauceContract<HegicHegicMethods>;
+  readonly Hegic?: bigint;
 }
 
 export interface HopSource {
-  readonly L1EthBridge: SauceContract<HopL1BridgeMethods>;
-  readonly L1UsdcBridge: SauceContract<HopL1BridgeMethods>;
-  readonly L2AmmWrapper: SauceContract<HopL2AmmWrapperMethods>;
+  readonly L1EthBridge?: SauceContract<HopL1BridgeMethods>;
+  readonly L1UsdcBridge?: SauceContract<HopL1BridgeMethods>;
+  readonly L2AmmWrapper?: SauceContract<HopL2AmmWrapperMethods>;
 }
 
 export interface HyperlaneSource extends HyperlaneMailboxMethods {
-  readonly Mailbox: SauceContract<HyperlaneMailboxMethods>;
+  readonly Mailbox?: SauceContract<HyperlaneMailboxMethods>;
 }
 
 export interface InstadappSource extends InstadappFlashAggregatorMethods {
-  readonly FlashloanAggregator: SauceContract<InstadappFlashAggregatorMethods>;
+  readonly FlashloanAggregator?: SauceContract<InstadappFlashAggregatorMethods>;
 }
 
 export interface KelpSource {
-  readonly LRTDepositPool: SauceContract<KelpLRTDepositPoolMethods>;
-  readonly RsETH: SauceContract<KelpRsETHMethods>;
+  readonly LRTDepositPool?: SauceContract<KelpLRTDepositPoolMethods>;
+  readonly RsETH?: SauceContract<KelpRsETHMethods>;
 }
 
 export interface KimSource extends KimRouterMethods {
-  readonly V2Router: SauceContract<KimRouterMethods>;
+  readonly V2Router?: SauceContract<KimRouterMethods>;
 }
 
 export interface KyberswapSource {
-  readonly ElasticRouter: SauceContract<KyberswapElasticRouterMethods>;
-  readonly MetaAggregationRouterV2: SauceContract<KyberswapMetaAggregationRouterMethods>;
-  readonly ElasticFactory: bigint;
+  readonly ElasticRouter?: SauceContract<KyberswapElasticRouterMethods>;
+  readonly MetaAggregationRouterV2?: SauceContract<KyberswapMetaAggregationRouterMethods>;
+  readonly ElasticFactory?: bigint;
 }
 
 export interface KyberswapAggregatorSource extends KyberswapAggregatorKyberSwapMetaAggregationRouterMethods {
-  readonly MetaAggregationRouter: SauceContract<KyberswapAggregatorKyberSwapMetaAggregationRouterMethods>;
+  readonly MetaAggregationRouter?: SauceContract<KyberswapAggregatorKyberSwapMetaAggregationRouterMethods>;
 }
 
 export interface LayerbankSource extends LayerbankCoreMethods {
   readonly LToken: SauceInterface<LayerbankLTokenMethods>;
-  readonly Core: SauceContract<LayerbankCoreMethods>;
+  readonly Core?: SauceContract<LayerbankCoreMethods>;
 }
 
 export interface LayerzeroSource extends LayerzeroEndpointV2Methods {
-  readonly EndpointV2: SauceContract<LayerzeroEndpointV2Methods>;
+  readonly EndpointV2?: SauceContract<LayerzeroEndpointV2Methods>;
 }
 
 export interface LevelFinanceSource extends LevelFinanceLiquidityPoolMethods {
-  readonly LiquidityPool: SauceContract<LevelFinanceLiquidityPoolMethods>;
+  readonly LiquidityPool?: SauceContract<LevelFinanceLiquidityPoolMethods>;
 }
 
 export interface LidoSource {
-  readonly StETH: SauceContract<LidoLidoMethods>;
-  readonly WstETH: SauceContract<LidoWstETHMethods>;
+  readonly StETH?: SauceContract<LidoLidoMethods>;
+  readonly WstETH?: SauceContract<LidoWstETHMethods>;
 }
 
 export interface LifiSource extends LifiDiamondMethods {
-  readonly LiFiDiamond: SauceContract<LifiDiamondMethods>;
+  readonly LiFiDiamond?: SauceContract<LifiDiamondMethods>;
 }
 
 export interface LineaBridgeSource extends LineaBridgeLineaL1MessageServiceMethods {
-  readonly L1MessageService: SauceContract<LineaBridgeLineaL1MessageServiceMethods>;
-  readonly L2MessageService: bigint;
+  readonly L1MessageService?: SauceContract<LineaBridgeLineaL1MessageServiceMethods>;
+  readonly L2MessageService?: bigint;
 }
 
 export interface LiquityV1Source extends LiquityV1BorrowerOperationsMethods {
-  readonly BorrowerOperations: SauceContract<LiquityV1BorrowerOperationsMethods>;
-  readonly Lusd: bigint;
+  readonly BorrowerOperations?: SauceContract<LiquityV1BorrowerOperationsMethods>;
+  readonly Lusd?: bigint;
 }
 
 export interface LiquityV2Source extends LiquityV2BoldTokenMethods {
-  readonly Bold: SauceContract<LiquityV2BoldTokenMethods>;
+  readonly Bold?: SauceContract<LiquityV2BoldTokenMethods>;
 }
 
 export interface LynexSource extends LynexRouterMethods {
-  readonly Router: SauceContract<LynexRouterMethods>;
+  readonly Router?: SauceContract<LynexRouterMethods>;
 }
 
 export interface MakerSource {
-  readonly Pot: SauceContract<MakerPotMethods>;
-  readonly SDAI: SauceContract<MakerSavingsDaiMethods>;
-  readonly Dai: bigint;
-  readonly Usds: bigint;
-  readonly Vat: bigint;
+  readonly Pot?: SauceContract<MakerPotMethods>;
+  readonly SDAI?: SauceContract<MakerSavingsDaiMethods>;
+  readonly Dai?: bigint;
+  readonly Usds?: bigint;
+  readonly Vat?: bigint;
 }
 
 export interface MantleMethSource {
-  readonly METH: SauceContract<MantleMethMETHMethods>;
-  readonly Staking: SauceContract<MantleMethMETHStakingMethods>;
+  readonly METH?: SauceContract<MantleMethMETHMethods>;
+  readonly Staking?: SauceContract<MantleMethMETHStakingMethods>;
 }
 
 export interface MaverickSource {
-  readonly V2Factory: SauceContract<MaverickV2FactoryMethods>;
-  readonly V2Router: SauceContract<MaverickV2RouterMethods>;
+  readonly V2Factory?: SauceContract<MaverickV2FactoryMethods>;
+  readonly V2Router?: SauceContract<MaverickV2RouterMethods>;
   readonly V2Pool: SauceInterface<MaverickV2PoolMethods>;
 }
 
 export interface MoonwellSource extends MoonwellComptrollerMethods {
   readonly MToken: SauceInterface<MoonwellMTokenMethods>;
-  readonly Comptroller: SauceContract<MoonwellComptrollerMethods>;
+  readonly Comptroller?: SauceContract<MoonwellComptrollerMethods>;
 }
 
 export interface MorphoBlueSource extends MorphoBlueMorphoMethods {
-  readonly Morpho: SauceContract<MorphoBlueMorphoMethods>;
-  readonly Bundler3: bigint;
+  readonly Morpho?: SauceContract<MorphoBlueMorphoMethods>;
+  readonly Bundler3?: bigint;
 }
 
 export interface MuxProtocolSource {
-  readonly LiquidityPool: SauceContract<MuxProtocolLiquidityPoolMethods>;
-  readonly OrderBook: SauceContract<MuxProtocolOrderBookMethods>;
+  readonly LiquidityPool?: SauceContract<MuxProtocolLiquidityPoolMethods>;
+  readonly OrderBook?: SauceContract<MuxProtocolOrderBookMethods>;
 }
 
 export interface OlympusSource extends OlympusStakingMethods {
-  readonly Staking: SauceContract<OlympusStakingMethods>;
-  readonly Ohm: bigint;
-  readonly StakingHelper: bigint;
+  readonly Staking?: SauceContract<OlympusStakingMethods>;
+  readonly Ohm?: bigint;
+  readonly StakingHelper?: bigint;
 }
 
 export interface OneinchSource extends OneinchAggregationRouterV6Methods {
-  readonly AggregationRouterV6: SauceContract<OneinchAggregationRouterV6Methods>;
+  readonly AggregationRouterV6?: SauceContract<OneinchAggregationRouterV6Methods>;
 }
 
 export interface OpenoceanSource extends OpenoceanExchangeV2Methods {
-  readonly ExchangeV2: SauceContract<OpenoceanExchangeV2Methods>;
+  readonly ExchangeV2?: SauceContract<OpenoceanExchangeV2Methods>;
 }
 
 export interface OptimismBridgeSource extends OptimismBridgeOptimismL1StandardBridgeMethods {
-  readonly L1StandardBridge: SauceContract<OptimismBridgeOptimismL1StandardBridgeMethods>;
-  readonly L2StandardBridge: bigint;
+  readonly L1StandardBridge?: SauceContract<OptimismBridgeOptimismL1StandardBridgeMethods>;
+  readonly L2StandardBridge?: bigint;
 }
 
 export interface OpynSource extends OpynControllerMethods {
-  readonly Controller: SauceContract<OpynControllerMethods>;
-  readonly OSQTH: bigint;
+  readonly Controller?: SauceContract<OpynControllerMethods>;
+  readonly OSQTH?: bigint;
 }
 
 export interface PancakeswapV2Source {
-  readonly Factory: SauceContract<PancakeswapV2FactoryMethods>;
-  readonly Router: SauceContract<PancakeswapV2RouterMethods>;
+  readonly Factory?: SauceContract<PancakeswapV2FactoryMethods>;
+  readonly Router?: SauceContract<PancakeswapV2RouterMethods>;
   readonly Pair: SauceInterface<PancakeswapV2PairMethods>;
 }
 
 export interface PancakeswapV3Source {
-  readonly Factory: SauceContract<PancakeswapV3FactoryMethods>;
-  readonly NonfungiblePositionManager: SauceContract<PancakeswapV3NFPMMethods>;
-  readonly SmartRouter: SauceContract<PancakeswapV3SmartRouterMethods>;
+  readonly Factory?: SauceContract<PancakeswapV3FactoryMethods>;
+  readonly NonfungiblePositionManager?: SauceContract<PancakeswapV3NFPMMethods>;
+  readonly SmartRouter?: SauceContract<PancakeswapV3SmartRouterMethods>;
   readonly Pool: SauceInterface<PancakeswapV3PoolMethods>;
 }
 
 export interface ParaswapSource extends ParaswapAugustusV5Methods {
-  readonly AugustusV5: SauceContract<ParaswapAugustusV5Methods>;
-  readonly AugustusV6: bigint;
+  readonly AugustusV5?: SauceContract<ParaswapAugustusV5Methods>;
+  readonly AugustusV6?: bigint;
 }
 
 export interface PendleSource extends PendleRouterMethods {
-  readonly Router: SauceContract<PendleRouterMethods>;
+  readonly Router?: SauceContract<PendleRouterMethods>;
 }
 
 export interface Permit2Source extends Permit2Permit2Methods {
-  readonly Permit2: SauceContract<Permit2Permit2Methods>;
+  readonly Permit2?: SauceContract<Permit2Permit2Methods>;
 }
 
 export interface PerpetualProtocolSource {
-  readonly ClearingHouse: SauceContract<PerpetualProtocolClearingHouseMethods>;
-  readonly Vault: SauceContract<PerpetualProtocolVaultMethods>;
+  readonly ClearingHouse?: SauceContract<PerpetualProtocolClearingHouseMethods>;
+  readonly Vault?: SauceContract<PerpetualProtocolVaultMethods>;
 }
 
 export interface PolygonBridgeSource extends PolygonBridgePolygonRootChainManagerMethods {
-  readonly RootChainManager: SauceContract<PolygonBridgePolygonRootChainManagerMethods>;
-  readonly Erc20Predicate: bigint;
-  readonly EtherPredicate: bigint;
-  readonly ChildChainManager: bigint;
+  readonly RootChainManager?: SauceContract<PolygonBridgePolygonRootChainManagerMethods>;
+  readonly Erc20Predicate?: bigint;
+  readonly EtherPredicate?: bigint;
+  readonly ChildChainManager?: bigint;
 }
 
 export interface PremiaSource {
   readonly Diamond: SauceInterface<PremiaDiamondMethods>;
-  readonly PoolFactory: bigint;
+  readonly PoolFactory?: bigint;
 }
 
 export interface PufferSource extends PufferVaultMethods {
-  readonly PufferVault: SauceContract<PufferVaultMethods>;
-  readonly PufETH: bigint;
+  readonly PufferVault?: SauceContract<PufferVaultMethods>;
+  readonly PufETH?: bigint;
 }
 
 export interface PythSource extends PythOracleMethods {
-  readonly Oracle: SauceContract<PythOracleMethods>;
+  readonly Oracle?: SauceContract<PythOracleMethods>;
 }
 
 export interface QuickswapSource {
-  readonly V2Router: SauceContract<QuickswapV2RouterMethods>;
-  readonly V3SwapRouter: SauceContract<QuickswapV3SwapRouterMethods>;
-  readonly V2Factory: SauceContract<QuickswapV2FactoryMethods>;
+  readonly V2Router?: SauceContract<QuickswapV2RouterMethods>;
+  readonly V3SwapRouter?: SauceContract<QuickswapV3SwapRouterMethods>;
+  readonly V2Factory?: SauceContract<QuickswapV2FactoryMethods>;
   readonly V2Pair: SauceInterface<QuickswapV2PairMethods>;
-  readonly V3Factory: SauceContract<QuickswapV3FactoryMethods>;
+  readonly V3Factory?: SauceContract<QuickswapV3FactoryMethods>;
   readonly V3Pool: SauceInterface<QuickswapV3PoolMethods>;
 }
 
 export interface RadiantSource {
-  readonly LendingPool: bigint;
+  readonly LendingPool?: bigint;
 }
 
 export interface RamsesSource extends RamsesRouterMethods {
-  readonly Router: SauceContract<RamsesRouterMethods>;
+  readonly Router?: SauceContract<RamsesRouterMethods>;
 }
 
 export interface ReflexerSource {
-  readonly CoinJoin: SauceContract<ReflexerCoinJoinMethods>;
-  readonly ETHJoin: SauceContract<ReflexerETHJoinMethods>;
-  readonly SAFEEngine: SauceContract<ReflexerSAFEEngineMethods>;
-  readonly Rai: bigint;
+  readonly CoinJoin?: SauceContract<ReflexerCoinJoinMethods>;
+  readonly ETHJoin?: SauceContract<ReflexerETHJoinMethods>;
+  readonly SAFEEngine?: SauceContract<ReflexerSAFEEngineMethods>;
+  readonly Rai?: bigint;
 }
 
 export interface RenzoSource {
-  readonly EzETH: SauceContract<RenzoEzETHMethods>;
-  readonly RestakeManager: SauceContract<RenzoRestakeManagerMethods>;
+  readonly EzETH?: SauceContract<RenzoEzETHMethods>;
+  readonly RestakeManager?: SauceContract<RenzoRestakeManagerMethods>;
 }
 
 export interface RocketPoolSource {
-  readonly RETH: SauceContract<RocketPoolRETHMethods>;
-  readonly RocketDepositPool: SauceContract<RocketPoolRocketDepositPoolMethods>;
+  readonly RETH?: SauceContract<RocketPoolRETHMethods>;
+  readonly RocketDepositPool?: SauceContract<RocketPoolRocketDepositPoolMethods>;
 }
 
 export interface SablierSource extends SablierLockupLinearMethods {
-  readonly LockupLinear: SauceContract<SablierLockupLinearMethods>;
+  readonly LockupLinear?: SauceContract<SablierLockupLinearMethods>;
 }
 
 export interface SafeSource {
-  readonly SafeV141: SauceContract<SafeSafeMethods>;
-  readonly SafeL2V130: SauceContract<SafeSafeMethods>;
+  readonly SafeV141?: SauceContract<SafeSafeMethods>;
+  readonly SafeL2V130?: SauceContract<SafeSafeMethods>;
 }
 
 export interface ScrollBridgeSource {
-  readonly L1GatewayRouter: SauceContract<ScrollBridgeScrollL1GatewayRouterMethods>;
-  readonly L1ScrollMessenger: SauceContract<ScrollBridgeScrollL1MessengerMethods>;
-  readonly L2ScrollMessenger: bigint;
-  readonly L2GatewayRouter: bigint;
+  readonly L1GatewayRouter?: SauceContract<ScrollBridgeScrollL1GatewayRouterMethods>;
+  readonly L1ScrollMessenger?: SauceContract<ScrollBridgeScrollL1MessengerMethods>;
+  readonly L2ScrollMessenger?: bigint;
+  readonly L2GatewayRouter?: bigint;
 }
 
 export interface SeamlessSource extends SeamlessPoolMethods {
-  readonly Pool: SauceContract<SeamlessPoolMethods>;
-  readonly PoolAddressesProvider: bigint;
+  readonly Pool?: SauceContract<SeamlessPoolMethods>;
+  readonly PoolAddressesProvider?: bigint;
 }
 
 export interface SeaportSource extends SeaportSeaportMethods {
-  readonly SeaportV16: SauceContract<SeaportSeaportMethods>;
+  readonly SeaportV16?: SauceContract<SeaportSeaportMethods>;
 }
 
 export interface SiloSource extends SiloRepositoryMethods {
   readonly Silo: SauceInterface<SiloSiloMethods>;
-  readonly SiloRepository: SauceContract<SiloRepositoryMethods>;
+  readonly SiloRepository?: SauceContract<SiloRepositoryMethods>;
 }
 
 export interface SocketSource extends SocketGatewayMethods {
-  readonly SocketGateway: SauceContract<SocketGatewayMethods>;
+  readonly SocketGateway?: SauceContract<SocketGatewayMethods>;
 }
 
 export interface SommelierSource {
   readonly Cellar: SauceInterface<SommelierCellarMethods>;
-  readonly CellarRouter: bigint;
+  readonly CellarRouter?: bigint;
 }
 
 export interface SparkSource extends SparkPoolMethods {
-  readonly Pool: SauceContract<SparkPoolMethods>;
-  readonly PoolAddressesProvider: bigint;
+  readonly Pool?: SauceContract<SparkPoolMethods>;
+  readonly PoolAddressesProvider?: bigint;
 }
 
 export interface SpookyswapSource extends SpookyswapRouterMethods {
-  readonly V2Router: SauceContract<SpookyswapRouterMethods>;
+  readonly V2Router?: SauceContract<SpookyswapRouterMethods>;
 }
 
 export interface SquidSource extends SquidRouterMethods {
-  readonly SquidRouter: SauceContract<SquidRouterMethods>;
+  readonly SquidRouter?: SauceContract<SquidRouterMethods>;
 }
 
 export interface StaderSource {
-  readonly ETHx: SauceContract<StaderETHxMethods>;
-  readonly StakePoolManager: SauceContract<StaderStakePoolManagerMethods>;
+  readonly ETHx?: SauceContract<StaderETHxMethods>;
+  readonly StakePoolManager?: SauceContract<StaderStakePoolManagerMethods>;
 }
 
 export interface StargateSource {
-  readonly PoolNative: SauceContract<StargatePoolMethods>;
-  readonly PoolUSDC: SauceContract<StargatePoolMethods>;
-  readonly PoolUSDT: SauceContract<StargatePoolMethods>;
+  readonly PoolNative?: SauceContract<StargatePoolMethods>;
+  readonly PoolUSDC?: SauceContract<StargatePoolMethods>;
+  readonly PoolUSDT?: SauceContract<StargatePoolMethods>;
 }
 
 export interface SuperfluidSource extends SuperfluidCFAForwarderMethods {
-  readonly CFAForwarder: SauceContract<SuperfluidCFAForwarderMethods>;
-  readonly Host: bigint;
+  readonly CFAForwarder?: SauceContract<SuperfluidCFAForwarderMethods>;
+  readonly Host?: bigint;
 }
 
 export interface SushiswapV2Source {
-  readonly Factory: SauceContract<SushiswapV2FactoryMethods>;
-  readonly Router: SauceContract<SushiswapV2RouterMethods>;
+  readonly Factory?: SauceContract<SushiswapV2FactoryMethods>;
+  readonly Router?: SauceContract<SushiswapV2RouterMethods>;
   readonly Pair: SauceInterface<SushiswapV2PairMethods>;
 }
 
 export interface SwellSource {
-  readonly RswETH: SauceContract<SwellRswETHMethods>;
-  readonly SwETH: SauceContract<SwellSwETHMethods>;
+  readonly RswETH?: SauceContract<SwellRswETHMethods>;
+  readonly SwETH?: SauceContract<SwellSwETHMethods>;
 }
 
 export interface SynapseSource extends SynapseBridgeMethods {
-  readonly SynapseBridge: SauceContract<SynapseBridgeMethods>;
-  readonly CctpRouter: bigint;
+  readonly SynapseBridge?: SauceContract<SynapseBridgeMethods>;
+  readonly CctpRouter?: bigint;
 }
 
 export interface SyncswapSource extends SyncswapRouterMethods {
-  readonly Router: SauceContract<SyncswapRouterMethods>;
+  readonly Router?: SauceContract<SyncswapRouterMethods>;
 }
 
 export interface SynthetixV3Source {
-  readonly CoreProxy: SauceContract<SynthetixV3CoreProxyMethods>;
-  readonly PerpsMarketProxy: SauceContract<SynthetixV3PerpsMarketProxyMethods>;
+  readonly CoreProxy?: SauceContract<SynthetixV3CoreProxyMethods>;
+  readonly PerpsMarketProxy?: SauceContract<SynthetixV3PerpsMarketProxyMethods>;
 }
 
 export interface SynthraV3Source {
-  readonly Factory: SauceContract<SynthraV3FactoryMethods>;
-  readonly SwapRouter02: SauceContract<SynthraV3SwapRouter02Methods>;
-  readonly QuoterV2: SauceContract<SynthraV3QuoterV2Methods>;
-  readonly NonfungiblePositionManager: SauceContract<SynthraV3NonfungiblePositionManagerMethods>;
+  readonly Factory?: SauceContract<SynthraV3FactoryMethods>;
+  readonly SwapRouter02?: SauceContract<SynthraV3SwapRouter02Methods>;
+  readonly QuoterV2?: SauceContract<SynthraV3QuoterV2Methods>;
+  readonly NonfungiblePositionManager?: SauceContract<SynthraV3NonfungiblePositionManagerMethods>;
   readonly Pool: SauceInterface<SynthraV3PoolMethods>;
 }
 
 export interface ThalesSource {
-  readonly SpeedMarketsAMM: SauceContract<ThalesSpeedMarketsAMMMethods>;
-  readonly ThalesAMM: SauceContract<ThalesAMMMethods>;
+  readonly SpeedMarketsAMM?: SauceContract<ThalesSpeedMarketsAMMMethods>;
+  readonly ThalesAMM?: SauceContract<ThalesAMMMethods>;
   readonly PositionalMarket: SauceInterface<ThalesPositionalMarketMethods>;
 }
 
 export interface ThenaSource extends ThenaRouterMethods {
-  readonly RouterV2: SauceContract<ThenaRouterMethods>;
+  readonly RouterV2?: SauceContract<ThenaRouterMethods>;
 }
 
 export interface ThrusterSource extends ThrusterV3SwapRouterMethods {
-  readonly V3SwapRouter: SauceContract<ThrusterV3SwapRouterMethods>;
+  readonly V3SwapRouter?: SauceContract<ThrusterV3SwapRouterMethods>;
 }
 
 export interface TokemakSource {
   readonly Autopool: SauceInterface<TokemakAutopoolMethods>;
-  readonly Toke: bigint;
-  readonly SystemRegistry: bigint;
-  readonly AutopoolRegistry: bigint;
+  readonly Toke?: bigint;
+  readonly SystemRegistry?: bigint;
+  readonly AutopoolRegistry?: bigint;
 }
 
 export interface TraderJoeSource {
-  readonly LBFactory: SauceContract<TraderJoeLBFactoryMethods>;
-  readonly LBRouter: SauceContract<TraderJoeLBRouterMethods>;
+  readonly LBFactory?: SauceContract<TraderJoeLBFactoryMethods>;
+  readonly LBRouter?: SauceContract<TraderJoeLBRouterMethods>;
   readonly LBPair: SauceInterface<TraderJoeLBPairMethods>;
 }
 
 export interface UniswapV2Source {
-  readonly Factory: SauceContract<UniswapV2FactoryMethods>;
-  readonly Router: SauceContract<UniswapV2RouterMethods>;
+  readonly Factory?: SauceContract<UniswapV2FactoryMethods>;
+  readonly Router?: SauceContract<UniswapV2RouterMethods>;
   readonly Pair: SauceInterface<UniswapV2PairMethods>;
 }
 
 export interface UniswapV3Source {
-  readonly Factory: SauceContract<UniswapV3FactoryMethods>;
-  readonly NonfungiblePositionManager: SauceContract<UniswapV3NonfungiblePositionManagerMethods>;
-  readonly QuoterV2: SauceContract<UniswapV3QuoterV2Methods>;
-  readonly SwapRouter: SauceContract<UniswapV3SwapRouterMethods>;
-  readonly SwapRouter02: SauceContract<UniswapV3SwapRouter02Methods>;
+  readonly Factory?: SauceContract<UniswapV3FactoryMethods>;
+  readonly NonfungiblePositionManager?: SauceContract<UniswapV3NonfungiblePositionManagerMethods>;
+  readonly QuoterV2?: SauceContract<UniswapV3QuoterV2Methods>;
+  readonly SwapRouter?: SauceContract<UniswapV3SwapRouterMethods>;
+  readonly SwapRouter02?: SauceContract<UniswapV3SwapRouter02Methods>;
   readonly Pool: SauceInterface<UniswapV3PoolMethods>;
 }
 
 export interface UniswapV4Source {
-  readonly PoolManager: SauceContract<UniswapV4PoolManagerMethods>;
-  readonly PositionManager: SauceContract<UniswapV4PositionManagerMethods>;
-  readonly UniversalRouter: SauceContract<UniswapV4UniversalRouterMethods>;
-  readonly StateView: SauceContract<UniswapV4StateViewMethods>;
+  readonly PoolManager?: SauceContract<UniswapV4PoolManagerMethods>;
+  readonly PositionManager?: SauceContract<UniswapV4PositionManagerMethods>;
+  readonly UniversalRouter?: SauceContract<UniswapV4UniversalRouterMethods>;
+  readonly StateView?: SauceContract<UniswapV4StateViewMethods>;
 }
 
 export interface UnitflowV3Source {
-  readonly Factory: SauceContract<UnitflowV3FactoryMethods>;
-  readonly Router: SauceContract<UnitflowV3RouterMethods>;
-  readonly Quoter: SauceContract<UnitflowV3QuoterMethods>;
+  readonly Factory?: SauceContract<UnitflowV3FactoryMethods>;
+  readonly Router?: SauceContract<UnitflowV3RouterMethods>;
+  readonly Quoter?: SauceContract<UnitflowV3QuoterMethods>;
   readonly Pool: SauceInterface<UnitflowV3PoolMethods>;
 }
 
 export interface VelodromeSource {
-  readonly PoolFactory: SauceContract<VelodromePoolFactoryMethods>;
-  readonly RouterV2: SauceContract<VelodromeRouterMethods>;
+  readonly PoolFactory?: SauceContract<VelodromePoolFactoryMethods>;
+  readonly RouterV2?: SauceContract<VelodromeRouterMethods>;
   readonly Pool: SauceInterface<VelodromePoolMethods>;
 }
 
 export interface VenusSource {
-  readonly VBNB: SauceContract<VenusVBNBMethods>;
+  readonly VBNB?: SauceContract<VenusVBNBMethods>;
   readonly VToken: SauceInterface<VenusVTokenMethods>;
-  readonly Comptroller: SauceContract<VenusComptrollerMethods>;
+  readonly Comptroller?: SauceContract<VenusComptrollerMethods>;
 }
 
 export interface VertexSource {
-  readonly Clearinghouse: SauceContract<VertexClearinghouseMethods>;
-  readonly Endpoint: SauceContract<VertexEndpointMethods>;
+  readonly Clearinghouse?: SauceContract<VertexClearinghouseMethods>;
+  readonly Endpoint?: SauceContract<VertexEndpointMethods>;
 }
 
 export interface WormholeSource {
-  readonly CoreBridge: SauceContract<WormholeCoreBridgeMethods>;
-  readonly TokenBridge: SauceContract<WormholeTokenBridgeMethods>;
+  readonly CoreBridge?: SauceContract<WormholeCoreBridgeMethods>;
+  readonly TokenBridge?: SauceContract<WormholeTokenBridgeMethods>;
 }
 
 export interface YearnV3Source {
   readonly Vault: SauceInterface<YearnV3VaultMethods>;
-  readonly VaultFactory: bigint;
+  readonly VaultFactory?: bigint;
 }
 
 export interface ZerolendSource extends ZerolendPoolMethods {
-  readonly Pool: SauceContract<ZerolendPoolMethods>;
+  readonly Pool?: SauceContract<ZerolendPoolMethods>;
 }
 
 export interface ZeroxSource extends ZeroxExchangeProxyMethods {
-  readonly ExchangeProxy: SauceContract<ZeroxExchangeProxyMethods>;
+  readonly ExchangeProxy?: SauceContract<ZeroxExchangeProxyMethods>;
 }
 
 export interface ZksyncBridgeSource extends ZksyncBridgeZkSyncDiamondProxyMethods {
-  readonly DiamondProxy: SauceContract<ZksyncBridgeZkSyncDiamondProxyMethods>;
-  readonly L2Bridge: bigint;
+  readonly DiamondProxy?: SauceContract<ZksyncBridgeZkSyncDiamondProxyMethods>;
+  readonly L2Bridge?: bigint;
 }
 
 export interface AaveFamilySource {
-  readonly LendingPool: AaveV2Source["LendingPool"];
-  readonly Pool: AaveV3Source["Pool"];
-  readonly PoolAddressesProvider: AaveV3Source["PoolAddressesProvider"];
-  readonly MainSpoke: AaveV4Source["MainSpoke"];
-  readonly ForexSpoke: AaveV4Source["ForexSpoke"];
-  readonly BluechipSpoke: AaveV4Source["BluechipSpoke"];
-  readonly EthenaCorrelatedSpoke: AaveV4Source["EthenaCorrelatedSpoke"];
-  readonly EthenaEcosystemSpoke: AaveV4Source["EthenaEcosystemSpoke"];
-  readonly GoldSpoke: AaveV4Source["GoldSpoke"];
-  readonly PaxgGoldSpoke: AaveV4Source["PaxgGoldSpoke"];
-  readonly LombardBtcSpoke: AaveV4Source["LombardBtcSpoke"];
-  readonly UsdgPendleSpoke: AaveV4Source["UsdgPendleSpoke"];
-  readonly EtherfiESpoke: AaveV4Source["EtherfiESpoke"];
-  readonly KelpESpoke: AaveV4Source["KelpESpoke"];
-  readonly LidoESpoke: AaveV4Source["LidoESpoke"];
-  readonly UsdgMapleESpoke: AaveV4Source["UsdgMapleESpoke"];
-  readonly Mag7Spoke: AaveV4Source["Mag7Spoke"];
-  readonly AvaxCorrelatedSpoke: AaveV4Source["AvaxCorrelatedSpoke"];
-  readonly CoreHub: AaveV4Source["CoreHub"];
-  readonly PlusHub: AaveV4Source["PlusHub"];
-  readonly PrimeHub: AaveV4Source["PrimeHub"];
-  readonly GlobalDollarHub: AaveV4Source["GlobalDollarHub"];
-  readonly EquitiesHub: AaveV4Source["EquitiesHub"];
+  readonly LendingPool?: AaveV2Source["LendingPool"];
+  readonly Pool?: AaveV3Source["Pool"];
+  readonly PoolAddressesProvider?: AaveV3Source["PoolAddressesProvider"];
+  readonly MainSpoke?: AaveV4Source["MainSpoke"];
+  readonly ForexSpoke?: AaveV4Source["ForexSpoke"];
+  readonly BluechipSpoke?: AaveV4Source["BluechipSpoke"];
+  readonly EthenaCorrelatedSpoke?: AaveV4Source["EthenaCorrelatedSpoke"];
+  readonly EthenaEcosystemSpoke?: AaveV4Source["EthenaEcosystemSpoke"];
+  readonly GoldSpoke?: AaveV4Source["GoldSpoke"];
+  readonly PaxgGoldSpoke?: AaveV4Source["PaxgGoldSpoke"];
+  readonly LombardBtcSpoke?: AaveV4Source["LombardBtcSpoke"];
+  readonly UsdgPendleSpoke?: AaveV4Source["UsdgPendleSpoke"];
+  readonly EtherfiESpoke?: AaveV4Source["EtherfiESpoke"];
+  readonly KelpESpoke?: AaveV4Source["KelpESpoke"];
+  readonly LidoESpoke?: AaveV4Source["LidoESpoke"];
+  readonly UsdgMapleESpoke?: AaveV4Source["UsdgMapleESpoke"];
+  readonly Mag7Spoke?: AaveV4Source["Mag7Spoke"];
+  readonly AvaxCorrelatedSpoke?: AaveV4Source["AvaxCorrelatedSpoke"];
+  readonly CoreHub?: AaveV4Source["CoreHub"];
+  readonly PlusHub?: AaveV4Source["PlusHub"];
+  readonly PrimeHub?: AaveV4Source["PrimeHub"];
+  readonly GlobalDollarHub?: AaveV4Source["GlobalDollarHub"];
+  readonly EquitiesHub?: AaveV4Source["EquitiesHub"];
 }
 
 export interface BalancerFamilySource {
-  readonly Vault: BalancerV2Source["Vault"];
+  readonly Vault?: BalancerV2Source["Vault"];
 }
 
 export interface CompoundFamilySource {
-  readonly CUSDC: CompoundV2Source["CUSDC"];
-  readonly Comptroller: CompoundV2Source["Comptroller"];
-  readonly CETH: CompoundV2Source["CETH"];
-  readonly CUSDCv3: CompoundV3Source["CUSDCv3"];
-  readonly CWETHv3: CompoundV3Source["CWETHv3"];
-  readonly CUSDTv3: CompoundV3Source["CUSDTv3"];
+  readonly CUSDC?: CompoundV2Source["CUSDC"];
+  readonly Comptroller?: CompoundV2Source["Comptroller"];
+  readonly CETH?: CompoundV2Source["CETH"];
+  readonly CUSDCv3?: CompoundV3Source["CUSDCv3"];
+  readonly CWETHv3?: CompoundV3Source["CWETHv3"];
+  readonly CUSDTv3?: CompoundV3Source["CUSDTv3"];
 }
 
 export interface EulerFamilySource {
-  readonly EthereumVaultConnector: EulerV2Source["EthereumVaultConnector"];
+  readonly EthereumVaultConnector?: EulerV2Source["EthereumVaultConnector"];
   readonly EVault: EulerV2Source["EVault"];
 }
 
 export interface GmxFamilySource {
-  readonly PositionRouter: GmxV1Source["PositionRouter"];
-  readonly Router: GmxV1Source["Router"];
-  readonly Vault: GmxV1Source["Vault"];
-  readonly Glp: GmxV1Source["Glp"];
-  readonly ExchangeRouter: GmxV2Source["ExchangeRouter"];
-  readonly DataStore: GmxV2Source["DataStore"];
+  readonly PositionRouter?: GmxV1Source["PositionRouter"];
+  readonly Router?: GmxV1Source["Router"];
+  readonly Vault?: GmxV1Source["Vault"];
+  readonly Glp?: GmxV1Source["Glp"];
+  readonly ExchangeRouter?: GmxV2Source["ExchangeRouter"];
+  readonly DataStore?: GmxV2Source["DataStore"];
 }
 
 export interface LiquityFamilySource {
-  readonly BorrowerOperations: LiquityV1Source["BorrowerOperations"];
-  readonly Lusd: LiquityV1Source["Lusd"];
-  readonly Bold: LiquityV2Source["Bold"];
+  readonly BorrowerOperations?: LiquityV1Source["BorrowerOperations"];
+  readonly Lusd?: LiquityV1Source["Lusd"];
+  readonly Bold?: LiquityV2Source["Bold"];
 }
 
 export interface PancakeswapFamilySource {
-  readonly Router: PancakeswapV2Source["Router"];
+  readonly Router?: PancakeswapV2Source["Router"];
   readonly Pair: PancakeswapV2Source["Pair"];
-  readonly NonfungiblePositionManager: PancakeswapV3Source["NonfungiblePositionManager"];
-  readonly SmartRouter: PancakeswapV3Source["SmartRouter"];
+  readonly NonfungiblePositionManager?: PancakeswapV3Source["NonfungiblePositionManager"];
+  readonly SmartRouter?: PancakeswapV3Source["SmartRouter"];
   readonly Pool: PancakeswapV3Source["Pool"];
 }
 
 export interface SushiswapFamilySource {
-  readonly Factory: SushiswapV2Source["Factory"];
-  readonly Router: SushiswapV2Source["Router"];
+  readonly Factory?: SushiswapV2Source["Factory"];
+  readonly Router?: SushiswapV2Source["Router"];
   readonly Pair: SushiswapV2Source["Pair"];
 }
 
 export interface SynthetixFamilySource {
-  readonly CoreProxy: SynthetixV3Source["CoreProxy"];
-  readonly PerpsMarketProxy: SynthetixV3Source["PerpsMarketProxy"];
+  readonly CoreProxy?: SynthetixV3Source["CoreProxy"];
+  readonly PerpsMarketProxy?: SynthetixV3Source["PerpsMarketProxy"];
 }
 
 export interface SynthraFamilySource {
-  readonly Factory: SynthraV3Source["Factory"];
-  readonly SwapRouter02: SynthraV3Source["SwapRouter02"];
-  readonly QuoterV2: SynthraV3Source["QuoterV2"];
-  readonly NonfungiblePositionManager: SynthraV3Source["NonfungiblePositionManager"];
+  readonly Factory?: SynthraV3Source["Factory"];
+  readonly SwapRouter02?: SynthraV3Source["SwapRouter02"];
+  readonly QuoterV2?: SynthraV3Source["QuoterV2"];
+  readonly NonfungiblePositionManager?: SynthraV3Source["NonfungiblePositionManager"];
   readonly Pool: SynthraV3Source["Pool"];
 }
 
 export interface UniswapFamilySource {
-  readonly Router: UniswapV2Source["Router"];
+  readonly Router?: UniswapV2Source["Router"];
   readonly Pair: UniswapV2Source["Pair"];
-  readonly NonfungiblePositionManager: UniswapV3Source["NonfungiblePositionManager"];
-  readonly QuoterV2: UniswapV3Source["QuoterV2"];
-  readonly SwapRouter: UniswapV3Source["SwapRouter"];
-  readonly SwapRouter02: UniswapV3Source["SwapRouter02"];
+  readonly NonfungiblePositionManager?: UniswapV3Source["NonfungiblePositionManager"];
+  readonly QuoterV2?: UniswapV3Source["QuoterV2"];
+  readonly SwapRouter?: UniswapV3Source["SwapRouter"];
+  readonly SwapRouter02?: UniswapV3Source["SwapRouter02"];
   readonly Pool: UniswapV3Source["Pool"];
-  readonly PoolManager: UniswapV4Source["PoolManager"];
-  readonly PositionManager: UniswapV4Source["PositionManager"];
-  readonly UniversalRouter: UniswapV4Source["UniversalRouter"];
-  readonly StateView: UniswapV4Source["StateView"];
+  readonly PoolManager?: UniswapV4Source["PoolManager"];
+  readonly PositionManager?: UniswapV4Source["PositionManager"];
+  readonly UniversalRouter?: UniswapV4Source["UniversalRouter"];
+  readonly StateView?: UniswapV4Source["StateView"];
 }
 
 export interface UnitflowFamilySource {
-  readonly Factory: UnitflowV3Source["Factory"];
-  readonly Router: UnitflowV3Source["Router"];
-  readonly Quoter: UnitflowV3Source["Quoter"];
+  readonly Factory?: UnitflowV3Source["Factory"];
+  readonly Router?: UnitflowV3Source["Router"];
+  readonly Quoter?: UnitflowV3Source["Quoter"];
   readonly Pool: UnitflowV3Source["Pool"];
 }
 
 export interface YearnFamilySource {
   readonly Vault: YearnV3Source["Vault"];
-  readonly VaultFactory: YearnV3Source["VaultFactory"];
+  readonly VaultFactory?: YearnV3Source["VaultFactory"];
 }
 
 declare global {

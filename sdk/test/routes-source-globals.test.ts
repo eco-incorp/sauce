@@ -47,7 +47,7 @@ function diagnostics(source: string): string[] {
 
 test("token/protocol closures compile identically to the same source text", () => {
   const closure = onBase(() => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+    if (Uniswap.UniversalRouter) USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
   });
   const text = onBase("USDC.approve(Uniswap.UniversalRouter, 1_000_000n);");
   expect(closure).toEqual(text);
@@ -64,6 +64,9 @@ test("ABI-derived protocol methods, address values, and ambient chain identity t
   expect(
     diagnostics(`
     const routeBody = () => {
+      require(Uniswap.UniversalRouter);
+      require(UniswapV4.UniversalRouter);
+      require(Cctp.TokenMessenger);
       USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
       Token(USDC).transfer(0x1234n, 1n);
       UniswapV4.UniversalRouter.execute("0x0a", ["0x00"], 2_000_000_000n);
@@ -82,6 +85,11 @@ test("ABI-derived protocol methods, address values, and ambient chain identity t
 
 test("unsupported names and ABI argument shapes remain TypeScript errors", () => {
   const errors = diagnostics(`
+    require(Uniswap.UniversalRouter);
+    require(AaveV3.Pool);
+    require(AaveV3.PoolAddressesProvider);
+    require(MorphoBlue.Bundler3);
+    require(PancakeswapV3.Factory);
     USDC.aproove(0x1234n, 1n);
     USDC.approve(0x1234n);
     UniswapV3.UniversalRouter.execute("0x", [], 1n);
@@ -97,8 +105,8 @@ test("unsupported names and ABI argument shapes remain TypeScript errors", () =>
     available(USDC);
     export {};
   `);
-  // `available` is no name of the language: a name a chain lacks is zero there, and a program
-  // compares it with zero.
+  // `available` is no name of the language: a name a chain lacks is `undefined` there, and a
+  // program tests it.
   expect(errors).toHaveLength(13);
 });
 
@@ -132,8 +140,10 @@ test("declarations cover every registry token and every protocol namespace, in b
 
 test("a typed closure over a formerly unlinked namespace typechecks and compiles", () => {
   const body = `
+      require(UniswapV4.StateView);
+      require(AerodromeSlipstream.CLFactory);
       let pool = 0n;
-      if (PancakeswapV3.Factory != 0n) {
+      if (PancakeswapV3.Factory) {
         pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
       }
       const [sqrtPriceX96, tick] = UniswapV4.StateView.getSlot0(0x1234n);
@@ -143,9 +153,10 @@ test("a typed closure over a formerly unlinked namespace typechecks and compiles
   // The same body as a closure, compiled for a chain with every name in it.
   const closure = onBase(() => {
     let pool = 0n;
-    if (PancakeswapV3.Factory != 0n) {
+    if (PancakeswapV3.Factory) {
       pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
     }
+    if (!UniswapV4.StateView || !AerodromeSlipstream.CLFactory) return pool;
     const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(0x1234n);
     return pool + sqrtPriceX96 + AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
   });
