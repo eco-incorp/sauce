@@ -630,7 +630,9 @@ function remoteBranches(chain: CanonicalChain): string {
       destination.kind !== "evm"
         ? why(unreachable(destination))
         : destination.id === chain.id
-          ? why(`a remote message runs on another chain: this program already runs on ${chain.slug}`)
+          ? why(
+              `a remote message runs on another chain: this program already runs on ${chain.slug}`,
+            )
           : `return new Remote(${remoteLinkSource(remoteLink(destination))}, HERE_LINK, body, options);`;
     return `if (id == ${destination.id}) { ${sent} }`;
   });

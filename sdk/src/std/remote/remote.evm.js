@@ -12,9 +12,9 @@
 //     const [balance] = abi.decode(result, ["Uint256"]); // back here, with what the body returned
 //   });
 //
-// `Base.remote` is a method of the chain's name in the SDK's module for the chain the program is
-// compiled for, which knows both chains' bridges: each one's contract on each side and the id it
-// names each chain by. It returns a `Remote`, whose steps only record what they are given; the
+// `Base.remote` is a method of the chain's name, which the SDK writes for each program from the
+// chain it is compiled for, knowing both chains' bridges: each one's contract on each side and the
+// id it names each chain by. It returns a `Remote`, whose steps only record what they are given; the
 // compiler runs all of it while it compiles, and when the statement ends it runs
 // `[Symbol.dispose]()`, which compiles what runs there as a program for the destination and leaves
 // the program the run-time work: pricing the message with the bridge and sending it.
@@ -92,7 +92,7 @@ export class Link {
 //             it; whoever submits a Polymer proof gives it their own)
 //   replyGas  the same for the way back, after a `.then` or a `.catch`
 //
-// The SDK's module for the chain makes one from each chain's `remote(body, options)`.
+// The SDK makes one from each chain's `remote(body, options)`.
 interface RemoteOptions {
   via?: string;
   gas?: Uint256;
