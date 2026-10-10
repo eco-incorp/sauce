@@ -93,24 +93,32 @@ export class Link {
 //   replyGas  the same for the way back, after a `.then` or a `.catch`
 //
 // The SDK's module for the chain makes one from each chain's `remote(body, options)`.
+interface RemoteOptions {
+  via?: string;
+  gas?: Uint256;
+  replyGas?: Uint256;
+}
+
 export class Remote {
-  constructor(there, here, body, options) {
+  constructor(there, here, body, options?: RemoteOptions) {
     if (body === undefined) {
       throw new Error(
         "`remote(...)` takes the body, the code that runs there: `remote(() => { … })`",
       );
     }
-    const config = options === undefined ? {} : options;
-    const fields = { via: true, gas: true, replyGas: true };
-    for (const key of Object.keys(config)) {
-      if (fields[key] === undefined) {
-        throw new Error("`remote` takes no `" + key + "`: its options are via, gas and replyGas");
+    if (options !== undefined) {
+      for (const key of Object.keys(options)) {
+        if (key != "via" && key != "gas" && key != "replyGas") {
+          throw new Error("`remote` takes no `" + key + "`: its options are via, gas and replyGas");
+        }
       }
     }
     this._there = there.fields;
     this._here = here.fields;
     this._body = body;
-    this._config = config;
+    this._bridge = options === undefined ? undefined : options.via;
+    this._gas = options === undefined ? undefined : options.gas;
+    this._replyGas = options === undefined ? undefined : options.replyGas;
     // 1 after `remote`, 2 after `then`, 3 after `catch`.
     this._stage = 1;
   }
@@ -195,17 +203,17 @@ export class Remote {
   _via() {
     const here = this._here;
     const there = this._there;
-    if (this._config.via !== undefined) {
-      if (Bridge.has(here, this._config.via) && Bridge.has(there, this._config.via)) {
-        return this._config.via;
+    if (this._bridge !== undefined) {
+      if (Bridge.has(here, this._bridge) && Bridge.has(there, this._bridge)) {
+        return this._bridge;
       }
       throw new Error(
         "`via: " +
-          this._config.via +
+          this._bridge +
           "` needs " +
-          this._config.via +
+          this._bridge +
           " on both chains, and " +
-          (Bridge.has(here, this._config.via) ? there.name : here.name) +
+          (Bridge.has(here, this._bridge) ? there.name : here.name) +
           " has none: name a bridge both have (hyperlane, layerzero, metalayer, polymer)",
       );
     }
@@ -223,11 +231,11 @@ export class Remote {
   }
 
   _gas() {
-    return this._config.gas === undefined ? SAUCE_REMOTE_GAS : this._config.gas;
+    return this._gas === undefined ? SAUCE_REMOTE_GAS : this._gas;
   }
 
   _replyGas() {
-    return this._config.replyGas === undefined ? SAUCE_REMOTE_GAS : this._config.replyGas;
+    return this._replyGas === undefined ? SAUCE_REMOTE_GAS : this._replyGas;
   }
 
   // The body alone, handed nothing. A body that reverts reverts the delivery, which the bridge can

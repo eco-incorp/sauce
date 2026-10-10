@@ -66,28 +66,31 @@ export function remoteLink(chain: CanonicalChain): RemoteLink {
   };
 }
 
-/** `link` as the SauceScript `new Link({ … })` a chain's module writes. */
+/** `link` as the SauceScript `new Link({ … })` a chain's module writes: every bridge's key, unset
+ *  (`undefined`) where the chain lacks it, since a program reads only the members a value sets. */
 export function remoteLinkSource(link: RemoteLink): string {
   const word = (address: string): string => address.toLowerCase();
-  const fields = [`chainId: ${link.chainId}`, `name: ${JSON.stringify(link.name)}`];
-  if (link.hyperlane !== undefined) {
-    fields.push(
-      `hyperlane: { mailbox: ${word(link.hyperlane.mailbox)}, domain: ${link.hyperlane.domain} }`,
-    );
-  }
-  if (link.layerzero !== undefined) {
-    fields.push(
-      `layerzero: { endpoint: ${word(link.layerzero.endpoint)}, eid: ${link.layerzero.eid} }`,
-    );
-  }
-  if (link.metalayer !== undefined) {
-    fields.push(
-      `metalayer: { router: ${word(link.metalayer.router)}, domain: ${link.metalayer.domain} }`,
-    );
-  }
-  if (link.polymer !== undefined) {
-    fields.push(`polymer: { prover: ${word(link.polymer.prover)} }`);
-  }
+  const field = (name: string, value: string | undefined): string =>
+    `${name}: ${value ?? "undefined"}`;
 
-  return `new Link({ ${fields.join(", ")} })`;
+  return `new Link({ ${[
+    `chainId: ${link.chainId}`,
+    `name: ${JSON.stringify(link.name)}`,
+    field(
+      "hyperlane",
+      link.hyperlane &&
+        `{ mailbox: ${word(link.hyperlane.mailbox)}, domain: ${link.hyperlane.domain} }`,
+    ),
+    field(
+      "layerzero",
+      link.layerzero &&
+        `{ endpoint: ${word(link.layerzero.endpoint)}, eid: ${link.layerzero.eid} }`,
+    ),
+    field(
+      "metalayer",
+      link.metalayer &&
+        `{ router: ${word(link.metalayer.router)}, domain: ${link.metalayer.domain} }`,
+    ),
+    field("polymer", link.polymer && `{ prover: ${word(link.polymer.prover)} }`),
+  ].join(", ")} })`;
 }
