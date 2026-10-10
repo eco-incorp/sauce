@@ -57,10 +57,9 @@ const HELD = 10n ** 30n;
 
 export async function startIntentChain(
   slug: string,
-  port: number,
   symbols: readonly string[],
 ): Promise<IntentChain> {
-  const local = await startChain(slug, port);
+  const local = await startChain(slug);
   const { portal } = await placePortal(local);
   const pot = getAddress(v12PredictPot(DEPLOYER.address, POT_SALT));
   const token = (symbol: string): Address => {

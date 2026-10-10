@@ -19,7 +19,6 @@ import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { priceFromSqrtPriceX96 } from "../src/price.js";
 import {
   ACME,
-  freePort,
   IMPOSTOR,
   LIQUIDITY,
   SPCX,
@@ -91,7 +90,7 @@ describeAnvil("sauce pools, against a local Base", () => {
   let report: Report;
 
   beforeAll(async () => {
-    chain = await startPoolsChain(await freePort());
+    chain = await startPoolsChain();
     const run = await sauce(
       ...["pools", "--chain", "base", "USDC", "SPCXc", "--v4-key", "50:1"],
       ...["--rpc-url", chain.rpcUrl, "--json"],
