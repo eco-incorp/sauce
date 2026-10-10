@@ -48,6 +48,8 @@ function main(
     refundee: refundTo,
   })
     .then(() => {
+      require(UniswapV3.Factory);
+      require(UniswapV4.PoolManager);
       require(sqrtPriceLimitX96 != 0n &&
         minOut != 0n &&
         recipient != 0n &&

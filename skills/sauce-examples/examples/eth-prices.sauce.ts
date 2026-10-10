@@ -39,6 +39,9 @@ function main(amount: Uint256): {
   spreadBps: Uint256;
   oracleGapBps: Uint256;
 } {
+  require(Chainlink.EthUsdFeed);
+  require(UniswapV2.Factory);
+  require(UniswapV3.Factory);
   require(amount > 0, "amount is 0");
   const round = Chainlink.EthUsdFeed.latestRoundData();
   require(round.answer > 0, "no oracle price");

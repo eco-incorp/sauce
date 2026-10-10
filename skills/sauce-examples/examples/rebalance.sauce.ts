@@ -48,6 +48,7 @@ function main(
   bandBps: Uint256,
   maxSlippageBps: Uint256,
 ): { before: Uint256; after: Uint256; soldWeth: bool; amountIn: Uint256; amountOut: Uint256 } {
+  require(UniswapV3.Factory);
   require(targetBps <= 10000 && maxSlippageBps < 10000, "a share above 100%");
   const self = ctx.self();
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);

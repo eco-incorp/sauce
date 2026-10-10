@@ -23,6 +23,7 @@ function main(
   tranche: Uint256,
   maxPrice: Uint256,
 ): { price: Uint256; spent: Uint256; bought: Uint256 } {
+  require(UniswapV3.Factory);
   require(tranche > 0 && maxPrice > 0, "set tranche and maxPrice");
   const self = ctx.self();
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);

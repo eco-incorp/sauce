@@ -44,7 +44,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-ctjs-20c9",
+    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-ctjs-m570-03cdb463",
     "@uniswap/v3-core": "^1.0.1",
     "dotenv": "^17.3.1",
     "viem": "^2.45.1"
