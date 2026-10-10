@@ -211,10 +211,14 @@ try {
 } catch (error) {
   refused = String(error);
 }
-const quoted = "Contract 'CLFactoryGaugesV3' (aerodrome-slipstream) is not deployed on 'ethereum'";
+const quoted =
+  "`AerodromeSlipstream.CLFactoryGaugesV3` is `undefined`, so it has no run-time value here";
 check(refused.includes(quoted), `Ethereum refuses the Slipstream venue: ${refused}`);
 check(prose.includes(quoted), "the skill quotes that error");
-const loop = /\n {2}for \(const spacing of [^\n]*\n[^\n]*\n[^\n]*\n {2}\}/.exec(source);
+const loop =
+  /\n {2}require\(AerodromeSlipstream\.CLFactoryGaugesV3\);\n {2}for \(const spacing of [^\n]*\n[^\n]*\n[^\n]*\n {2}\}/.exec(
+    source,
+  );
 check(loop !== null, "the program has a Slipstream loop");
 routes.compileSauceProgram("ethereum", source.replace(loop[0], ""));
 check(

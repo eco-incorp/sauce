@@ -12,7 +12,6 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 // hand-written mirror of them would drift with nothing to catch it.
 import type {
   AbiParameter,
-  AbsentPath,
   AccountManifest,
   ProgramOptions,
   ProgramReport,
@@ -260,8 +259,6 @@ export interface RsCompileResult extends CompileResult {
   entrySignature: EntrySignature;
   /** Every closure the compile compiled as a program of its own (`program(closure, scope)`). */
   programs: readonly ProgramReport[];
-  /** Every dotted path a comparison read as 0 because it names nothing in the entry program. */
-  absentPaths: readonly AbsentPath[];
 }
 
 /**
@@ -296,7 +293,6 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     entryParams: result.entryParams,
     entrySignature: entrySignatureOf(result.entrySignature),
     programs: result.programs,
-    absentPaths: result.absentPaths,
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 

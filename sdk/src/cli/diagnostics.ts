@@ -255,7 +255,9 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
  * or a token only an EVM chain registers.
  */
 function unregisteredMints(message: string, chain: CanonicalChain): string[] {
-  const name = /`([A-Za-z_$][\w$]*)` is not a declared variable/.exec(message)?.[1];
+  const name = /`([A-Za-z_$][\w$]*)` (?:is not a declared variable|is `undefined`)/.exec(
+    message,
+  )?.[1];
   if (chain.kind !== "svm" || name === undefined) return [];
   const cased = svmTokenRows(chain).find((row) => row.symbol.toUpperCase() === name.toUpperCase());
   if (cased !== undefined) {

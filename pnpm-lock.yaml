@@ -36,8 +36,8 @@ importers:
         specifier: 8.16.0
         version: 8.16.0
       sauce-compiler:
-        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-local
-        version: link:../sauce-compiler-local
+        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-ctjs-m569-e618
+        version: link:../sauce-compiler-ctjs-m569-e618
       viem:
         specifier: ^2.45.3
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.5)
@@ -88,8 +88,8 @@ importers:
   actions:
     dependencies:
       sauce-compiler:
-        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-local
-        version: link:../../sauce-compiler-local
+        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-ctjs-m569-e618
+        version: link:../../sauce-compiler-ctjs-m569-e618
       viem:
         specifier: ^2.0.0
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.5)
@@ -119,8 +119,8 @@ importers:
         specifier: ^17.3.1
         version: 17.4.2
       sauce-compiler:
-        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-local
-        version: link:../../sauce-compiler-local
+        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-ctjs-m569-e618
+        version: link:../../sauce-compiler-ctjs-m569-e618
       viem:
         specifier: ^2.45.1
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.5)
@@ -202,8 +202,8 @@ importers:
         specifier: 1.2.1
         version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       sauce-compiler:
-        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-local
-        version: link:../../sauce-compiler-local
+        specifier: link:/Users/er/Documents/Projects/v12-class/sauce-compiler-ctjs-m569-e618
+        version: link:../../sauce-compiler-ctjs-m569-e618
       viem:
         specifier: ^2.45.1
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.5)
