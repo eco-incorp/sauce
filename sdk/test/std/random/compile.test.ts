@@ -249,14 +249,8 @@ function main(): void {
   });
 
   it("a field it does not take, by its name", () => {
-    refuses(
-      program("Random.vrf({ word: 2 })"),
-      "`Random.vrf` takes no `word`: `Random.vrf({ words, confirmations, gas, deadline })`",
-    );
-    refuses(
-      program("Random.entropy({ words: 2 })"),
-      "`Random.entropy` takes no `words`: `Random.entropy({ provider, gas, deadline })`",
-    );
+    refuses(program("Random.vrf({ word: 2 })"), "`word` is not a member of `VrfConfig`");
+    refuses(program("Random.entropy({ words: 2 })"), "`words` is not a member of `EntropyConfig`");
   });
 
   it("a request with no body", () => {

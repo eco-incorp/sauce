@@ -108,16 +108,20 @@ function callbackGas(gas, continuation) {
 const SAUCE_RANDOM_UNFUNDED =
   "random: the Pot cannot pay the request and keep the Kitchen's fee for its callback";
 
-// A config's fields: each one `fields` names, or a compile error naming the one it does not take.
-function checkFields(method, config, fields, usage) {
-  if (config.length !== undefined) {
-    throw new Error("`Random." + method + "(...)` takes one object: " + usage);
-  }
-  for (const key of Object.keys(config)) {
-    if (fields[key] === undefined) {
-      throw new Error("`Random." + method + "` takes no `" + key + "`: " + usage);
-    }
-  }
+// What `Random.vrf` takes, every field optional: a field it does not declare is a compile error
+// naming it.
+interface VrfConfig {
+  words?: Uint256;
+  confirmations?: Uint256;
+  gas?: Uint256;
+  deadline?: Uint256;
+}
+
+// What `Random.entropy` takes, every field optional, as `VrfConfig`.
+interface EntropyConfig {
+  provider?: Address;
+  gas?: Uint256;
+  deadline?: Uint256;
 }
 
 // The requests a program makes: `Random.vrf(config)` and `Random.entropy(config)`.
@@ -129,14 +133,8 @@ class Requests {
   //                  coordinator asks for (Base's allows 0)
   //   gas            the callback's gas limit; sized from the body when left out
   //   deadline       a unix time after which anyone may expire the request
-  vrf(config = {}) {
-    checkFields(
-      "vrf",
-      config,
-      { words: true, confirmations: true, gas: true, deadline: true },
-      "`Random.vrf({ words, confirmations, gas, deadline })`",
-    );
-    if (ChainlinkVrf.Wrapper == 0) {
+  vrf(config: VrfConfig = {}) {
+    if (!ChainlinkVrf.Wrapper) {
       throw new Error(
         "`Random.vrf` requests through Chainlink VRF's VRFV2PlusWrapper, and the registry has none on the chain this program is compiled for",
       );
@@ -175,14 +173,8 @@ class Requests {
   //             to 10,000 and raises it to the provider's default, whose fee is the least a
   //             request pays
   //   deadline  a unix time after which anyone may expire the request
-  entropy(config = {}) {
-    checkFields(
-      "entropy",
-      config,
-      { provider: true, gas: true, deadline: true },
-      "`Random.entropy({ provider, gas, deadline })`",
-    );
-    if (PythEntropy.Entropy == 0) {
+  entropy(config: EntropyConfig = {}) {
+    if (!PythEntropy.Entropy) {
       throw new Error(
         "`Random.entropy` requests from Pyth Entropy, and the registry has no Entropy contract on the chain this program is compiled for",
       );
