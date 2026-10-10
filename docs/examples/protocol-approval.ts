@@ -12,7 +12,8 @@ const built = Base.hop({
   refundee: "0x4444444444444444444444444444444444444444",
   fee: executionFee,
 }).then(() => {
-  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  // Base has the router: a test of a contract a chain may lack is decided while compiling.
+  if (Uniswap.UniversalRouter) USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
 });
 
 if (built.program.bodies.length !== 1 || !built.source.includes("fee: 1000,")) {

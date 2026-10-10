@@ -1,6 +1,6 @@
 ---
 name: sauce-protocols
-description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with an address), `!= 0n` for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
+description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with an address), a test for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
 ---
 
 # Protocols
@@ -39,15 +39,15 @@ registry does not record at all is called through its ABI, imported from
 `./protocols/<slug>/<Export>.json` and bound with `.at(address)` to an address passed in as a
 `main` input.
 
-A program that should also compile for a chain without the protocol compares the contract with
-zero: a contract the chain lacks is zero there, and the comparison is decided when the program is
-compiled, so the branch it rules out is left out, names and all:
+A program that should also compile for a chain without the protocol tests the contract: a contract
+the chain lacks is `undefined` there, and the test is decided when the program is compiled, so the
+branch it rules out is left out, names and all:
 
 ```sauce chain=base,arbitrum,optimism
 function main(fee: Uint256) {
   const uni = UniswapV3.Factory.getPool(WETH, USDC, fee);
   let pancake = 0;
-  if (PancakeswapV3.Factory != 0) {
+  if (PancakeswapV3.Factory) {
     pancake = PancakeswapV3.Factory.getPool(WETH, USDC, fee);
   }
   require(uni != 0 || pancake != 0, "no WETH/USDC pool at that fee");
@@ -62,7 +62,7 @@ sauce run pools.sauce.ts --chain base --keystore <keystore> \
   --args 500
 ```
 
-Used without that comparison, a member is required: the program does not compile for a chain that
+Used without that test, a member is required: the program does not compile for a chain that
 lacks it.
 
 ## Decision guidance
@@ -71,7 +71,7 @@ lacks it.
 | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Which protocol for a job     | the category's "Choosing between them" in [references/index.md](references/index.md)                     |
 | How to name a contract       | the registry file's "In a program" column for your chain                                                 |
-| A chain may lack it          | `if (Namespace.Contract != 0n) { … }`                                                                    |
+| A chain may lack it          | `if (Namespace.Contract) { … }`                                                                          |
 | A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
 | A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`), not the protocol's own router                  |
 | Code on another chain        | a Sauce intent (`sauce-intents`), not a bridge call alone                                                |
@@ -110,7 +110,7 @@ lacks it.
 ## Verification checklist
 
 - [ ] The protocol is deployed on the program's chain, and the address has code.
-- [ ] Each contract is named as its registry file says for that chain, or behind `!= 0n`.
+- [ ] Each contract is named as its registry file says for that chain, or behind a test, `if (Namespace.Contract)`.
 - [ ] The document's pitfalls are handled: approvals, balance deltas, minimums.
 - [ ] Every output ends where the user asked: their wallet, or the Pot when they chose it.
 - [ ] The program compiles with `--chain`.
