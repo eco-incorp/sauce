@@ -58,7 +58,6 @@ import {
   registered,
   sauce,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
 import {
@@ -171,7 +170,7 @@ describeEvm("sauce intent: Base to Solana, filled and proven on Solana, claimed;
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-intent-solana-e2e-"));
-    base = await startChain("base", 9500 + WORKER);
+    base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     await plantPortal(base, PORTAL_FIXTURES.v2_12);
     mailbox = await deployMailbox(base, HYPERLANE_FEE);

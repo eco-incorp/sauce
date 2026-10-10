@@ -78,7 +78,6 @@ import {
   sauce,
   sauceWith,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
 import {
@@ -177,10 +176,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-lifecycle-e2e-"));
-    [ethereum, base] = await Promise.all([
-      startChain("ethereum", 9400 + WORKER),
-      startChain("base", 9450 + WORKER),
-    ]);
+    [ethereum, base] = await Promise.all([startChain("ethereum"), startChain("base")]);
     ethereumUsdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
     baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     for (const local of [ethereum, base]) await plantPortal(local, PORTAL_FIXTURES.v2_12);

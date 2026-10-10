@@ -7,7 +7,7 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md), and a hard
  * failure without it in CI.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -43,6 +43,7 @@ import {
   ecoRoutesVaultImplementationOf,
 } from "../src/protocols/eco-routes/lookup.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
 
 export const RUNTIME_HEX_PATH =
@@ -91,8 +92,6 @@ export const OTHER_KEY = "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f
 
 /** Non-zero, so the fee `--rpc-url` reads is one a cook provably pays. */
 export const FEE = 1_234n;
-
-export const WORKER = Number(process.env.JEST_WORKER_ID ?? "1") % 50;
 
 export const erc20 = parseAbi([
   "function mint(address to, uint256 amount)",
@@ -150,29 +149,19 @@ export interface LocalChain {
   stop(): Promise<void>;
 }
 
-export async function startChain(slug: string, port: number): Promise<LocalChain> {
+/** Starts an anvil standing in for `slug`, on a port the OS hands out (`anvil-process.ts`): a
+ *  suite never names one, so no two suites can share one. */
+export async function startChain(slug: string): Promise<LocalChain> {
   const chain = requireChain(slug);
+  const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
-  const anvil: ChildProcess = spawn(
-    "anvil",
-    ["--port", String(port), "--chain-id", String(chain.id), "--silent"],
-    { stdio: "ignore" },
-  );
+  const anvil: ChildProcess = await spawnAnvil(port, ["--chain-id", String(chain.id)]);
   // `connection: close`: pooled keep-alive sockets would outlive the suite.
   const transport = http(rpcUrl, { fetchOptions: { headers: { connection: "close" } } });
   const publicClient = createPublicClient({ transport });
   const testClient = createTestClient({ mode: "anvil", transport });
   const deployer = createWalletClient({ account: DEPLOYER, transport });
   const owner = createWalletClient({ account: OWNER, transport });
-  for (const deadline = Date.now() + 20_000; ;) {
-    try {
-      await publicClient.getChainId();
-      break;
-    } catch {
-      if (Date.now() > deadline) throw new Error(`anvil did not come up on ${rpcUrl}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
 
   const send = async (from: WalletClient, to: Address, data: Hex, value = 0n): Promise<Hex> => {
     const hash = await from.sendTransaction({
@@ -201,30 +190,42 @@ export async function startChain(slug: string, port: number): Promise<LocalChain
     return at;
   };
 
-  const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
-  const stack = await gated.startGatedEngine(
-    { publicClient, walletClient: deployer, testClient },
-    DEPLOYER.address,
-    creationCode,
-  );
-  // The CLI names the engine the SDK records. A harness that deploys it at that release address
-  // needs nothing more; one that deploys it elsewhere moves it there.
-  const released = getAddress(v12EngineAddress());
-  if (getAddress(stack.engine) !== released) {
-    const install = (gated as Record<string, unknown>).installEngineAt as
-      ((clients: object, from: Address, to: Address) => Promise<void>) | undefined;
-    if (install === undefined) throw new Error(`the harness put the engine at ${stack.engine}`);
-    await install({ publicClient, testClient }, stack.engine, released);
+  const stop = async (): Promise<void> => {
+    if (anvil.exitCode !== null) return;
+    const exited = once(anvil, "exit");
+    anvil.kill();
+    await exited;
+  };
+  // A chain that cannot be set up is stopped, not left running for the rest of the worker's life.
+  try {
+    const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
+    const stack = await gated.startGatedEngine(
+      { publicClient, walletClient: deployer, testClient },
+      DEPLOYER.address,
+      creationCode,
+    );
+    // The CLI names the engine the SDK records. A harness that deploys it at that release address
+    // needs nothing more; one that deploys it elsewhere moves it there.
+    const released = getAddress(v12EngineAddress());
+    if (getAddress(stack.engine) !== released) {
+      const install = (gated as Record<string, unknown>).installEngineAt as
+        ((clients: object, from: Address, to: Address) => Promise<void>) | undefined;
+      if (install === undefined) throw new Error(`the harness put the engine at ${stack.engine}`);
+      await install({ publicClient, testClient }, stack.engine, released);
+    }
+    await send(
+      deployer,
+      gated.gateAnchors().kitchen,
+      encodeFunctionData({
+        abi: parseAbi(["function setExecutionFee(uint256)"]),
+        functionName: "setExecutionFee",
+        args: [FEE],
+      }),
+    );
+  } catch (error) {
+    await stop();
+    throw error;
   }
-  await send(
-    deployer,
-    gated.gateAnchors().kitchen,
-    encodeFunctionData({
-      abi: parseAbi(["function setExecutionFee(uint256)"]),
-      functionName: "setExecutionFee",
-      args: [FEE],
-    }),
-  );
 
   return {
     chain,
@@ -249,12 +250,7 @@ export async function startChain(slug: string, port: number): Promise<LocalChain
         functionName: "balanceOf",
         args: [holder],
       }),
-    stop: async () => {
-      if (anvil.exitCode !== null) return;
-      const exited = once(anvil, "exit");
-      anvil.kill();
-      await exited;
-    },
+    stop,
   };
 }
 
