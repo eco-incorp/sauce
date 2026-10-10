@@ -140,6 +140,36 @@ const SAUCE_ZK_TIMEOUT_SECONDS = 3600;
 // The requests a program makes: `Zk.sql(query)`, `Zk.risc0(request)`, and what their `.catch` and
 // `.then` call. Each coprocessor's takes its own calls, so a program names only the contracts of the
 // coprocessors it asks: one for Ethereum, which has no Boundless market, names none of its.
+// What `Zk.sql` and `Zk.risc0` take. The compiler refuses a field these do not declare, naming it, and
+// a read of a member an object never set unless its type declares it optional, so each is optional
+// here and each method says which it requires.
+interface SqlQuery {
+  query?: bytes;
+  payment?: Uint256;
+  parameters?: bytes;
+  metadata?: bytes;
+  timeout?: Uint256;
+  gasLimit?: Uint256;
+  maxGasPrice?: Uint256;
+}
+
+interface ProofOffer {
+  maxPrice?: Uint256;
+  minPrice?: Uint256;
+  rampUpPeriod?: Uint256;
+  lockTimeout?: Uint256;
+  timeout?: Uint256;
+  lockCollateral?: Uint256;
+}
+
+interface ProofRequest {
+  imageId?: Uint256;
+  imageUrl?: bytes;
+  input?: bytes;
+  offer?: ProofOffer;
+  gasLimit?: Uint256;
+}
+
 class Requests {
   // A SQL query to Space and Time:
   //
@@ -153,27 +183,9 @@ class Requests {
   //   gasLimit     the callback's gas: 1,000,000
   //   maxGasPrice  the most per gas the callback is charged at, on Ethereum; the payment caps the
   //                whole charge, so no limit when left out
-  sql(config) {
-    if (config === undefined || config.length !== undefined) {
+  sql(config: SqlQuery) {
+    if (config === undefined) {
       throw new Error("`Zk.sql(...)` takes one object: `Zk.sql({ query, payment })`");
-    }
-    const fields = {
-      query: true,
-      payment: true,
-      parameters: true,
-      metadata: true,
-      timeout: true,
-      gasLimit: true,
-      maxGasPrice: true,
-    };
-    for (const key of Object.keys(config)) {
-      if (fields[key] === undefined) {
-        throw new Error(
-          "`Zk.sql` takes no `" +
-            key +
-            "`: its fields are query, payment, parameters, metadata, timeout, gasLimit and maxGasPrice",
-        );
-      }
     }
     if (config.query === undefined || config.payment === undefined) {
       throw new Error(
@@ -235,21 +247,11 @@ class Requests {
   //             `rampUpPeriod`, `lockTimeout`, `timeout` (seconds from now) and `lockCollateral`
   //             (ZKC's base units) required, `minPrice` 0 when left out
   //   gasLimit  the callback's gas: 1,000,000
-  risc0(config) {
-    if (config === undefined || config.length !== undefined) {
+  risc0(config: ProofRequest) {
+    if (config === undefined) {
       throw new Error(
         "`Zk.risc0(...)` takes one object: `Zk.risc0({ imageId, imageUrl, input, offer })`",
       );
-    }
-    const fields = { imageId: true, imageUrl: true, input: true, offer: true, gasLimit: true };
-    for (const key of Object.keys(config)) {
-      if (fields[key] === undefined) {
-        throw new Error(
-          "`Zk.risc0` takes no `" +
-            key +
-            "`: its fields are imageId, imageUrl, input, offer and gasLimit",
-        );
-      }
     }
     if (
       config.imageId === undefined ||

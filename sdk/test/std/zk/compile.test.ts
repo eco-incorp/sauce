@@ -251,7 +251,11 @@ describe("what compiles where", () => {
 
 describe("what it refuses", () => {
   it.each([
-    ["an unknown field", "query: plan, payment, version: 1", "`Zk.sql` takes no `version`"],
+    [
+      "an unknown field",
+      "query: plan, payment, version: 1",
+      "`version` is not a member of `SqlQuery`",
+    ],
     ["a query without its payment", "query: plan", "`Zk.sql` needs `query`"],
     ["a payment without its query", "payment", "`Zk.sql` needs `query`"],
   ])("%s", (_, fields, message) => {
@@ -272,7 +276,7 @@ describe("what it refuses", () => {
     [
       "an unknown field",
       "imageId, imageUrl, offer: {}, journal: 1",
-      "`Zk.risc0` takes no `journal`",
+      "`journal` is not a member of `ProofRequest`",
     ],
   ])("%s", (_, fields, message) => {
     expect(() =>
