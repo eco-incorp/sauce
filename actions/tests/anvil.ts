@@ -9,9 +9,8 @@
  * `sdk/{dist,src}/artifacts/V12RuntimeBytecode.json`. With neither, `engineCreationCode()` returns
  * undefined and a suite skips — except under CI, where it throws, so an unrun suite cannot pass.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -29,6 +28,7 @@ import { privateKeyToAccount } from "viem/accounts";
 
 // The SDK's own harness, so every suite in the repository stands the stack up one way: from
 // creation code, at the release addresses.
+import { freePort, spawnAnvil } from "../../sdk/test/anvil-process.js";
 import { startGatedEngine } from "../../sdk/test/evm/gated-engine.js";
 import { startMainnet, type ChainName } from "./mainnet.js";
 
@@ -66,17 +66,6 @@ export function skipReason(): string | false {
     : false;
 }
 
-async function freePort(): Promise<number> {
-  return new Promise((ok, fail) => {
-    const server = createServer();
-    server.listen(0, () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => ok(port));
-    });
-    server.on("error", fail);
-  });
-}
-
 export type Anvil = Awaited<ReturnType<typeof startAnvil>>;
 
 /**
@@ -96,12 +85,10 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
     rpc = node.rpc;
     stopNode = () => node.stop();
   } else {
+    // Refused on a port something holds, and killed by a watchdog if this process dies first
+    // (`sdk/test/anvil-process.ts`).
     const port = await freePort();
-    const proc: ChildProcess = spawn(
-      "anvil",
-      ["--port", String(port), "--silent", "--gas-limit", "100000000"],
-      { stdio: "ignore" },
-    );
+    const proc: ChildProcess = await spawnAnvil(port, ["--gas-limit", "100000000"]);
     rpc = `http://127.0.0.1:${port}`;
     stopNode = async () => {
       proc.kill("SIGKILL");

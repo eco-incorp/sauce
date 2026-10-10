@@ -26,13 +26,14 @@
  *
  * The procedure, for maintainers, is in CLAUDE.md.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
+
+import { freePort, spawnAnvil } from "../../sdk/test/anvil-process.js";
 
 /** A chain a suite can be frozen on: the block, and what replay's genesis block carries from it. */
 export interface CapturedChain {
@@ -107,17 +108,6 @@ export interface Mainnet {
   stop(): Promise<void>;
 }
 
-async function freePort(): Promise<number> {
-  return new Promise((ok, fail) => {
-    const server = createServer();
-    server.listen(0, () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => ok(port));
-    });
-    server.on("error", fail);
-  });
-}
-
 const nativeFetch = globalThis.fetch;
 
 /** Every `fetch` to anything but this machine throws, for the rest of the process. */
@@ -154,19 +144,6 @@ async function rpcCall(rpc: string, method: string, params: unknown[] = []): Pro
   return body.result;
 }
 
-async function waitFor(rpc: string, proc: ChildProcess): Promise<void> {
-  for (let i = 0; i < 600; i++) {
-    if (proc.exitCode !== null) throw new Error(`anvil exited with code ${proc.exitCode}`);
-    try {
-      await rpcCall(rpc, "eth_chainId");
-      return;
-    } catch {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-  throw new Error("anvil did not start within 60s");
-}
-
 /** The captured state for `suite`, or a named error. */
 function statePath(suite: string): string {
   return join(STATE_DIR, `${suite}.genesis.json.gz`);
@@ -200,7 +177,10 @@ export async function startMainnet(
   const chain: CapturedChain = CHAINS[chainName];
   const port = await freePort();
   const rpc = `http://127.0.0.1:${port}`;
-  const common = ["--port", String(port), "--silent", "--chain-id", String(chain.chainId)];
+  // `spawnAnvil` adds the port and --silent, refuses a port something holds, waits for this anvil
+  // (60 s: a large genesis takes a while to load), and starts the watchdog that kills it if this
+  // process dies first (`sdk/test/anvil-process.ts`).
+  const common = ["--chain-id", String(chain.chainId)];
 
   if (!capturing) {
     forbidNetwork();
@@ -215,9 +195,8 @@ export async function startMainnet(
     const work = mkdtempSync(join(tmpdir(), `sauce-mainnet-${suite}-`));
     const genesis = join(work, "genesis.json");
     writeFileSync(genesis, gunzipSync(readFileSync(blob)));
-    const proc = spawn("anvil", ["--init", genesis, ...common], { stdio: "ignore" });
+    const proc = await spawnAnvil(port, ["--init", genesis, ...common], 60_000);
     try {
-      await waitFor(rpc, proc);
       await pin(rpc, chain);
       const info = (await rpcCall(rpc, "anvil_nodeInfo")) as {
         forkConfig?: { forkUrl?: string | null };
@@ -240,13 +219,13 @@ export async function startMainnet(
   const forkUrl = captureRpc(chain);
   const home = mkdtempSync(join(tmpdir(), `sauce-capture-${suite}-`));
   const recorder = await startRecorder(forkUrl, home, chain);
-  const proc = spawn(
-    "anvil",
+  const proc = await spawnAnvil(
+    port,
     ["--fork-url", recorder.url, "--fork-block-number", String(chain.block), ...common],
+    60_000,
     // A private HOME, so the fork writes no RPC cache into the maintainer's own.
-    { stdio: "ignore", env: { ...process.env, HOME: home } },
+    { ...process.env, HOME: home },
   );
-  await waitFor(rpc, proc);
   const devAccounts = (await rpcCall(rpc, "eth_accounts")) as string[];
   for (const account of devAccounts) await rpcCall(rpc, "anvil_setCode", [account, "0x"]);
   await pin(rpc, chain);
