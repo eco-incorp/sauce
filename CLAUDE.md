@@ -255,6 +255,18 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   tests to etch at another address. **A tree where the
   sync has not run is not green**: with no `sdk/{src,dist}/artifacts/`, the tests that import
   `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
+  **Every anvil in `sdk/test`, `mcp/test` and `actions/tests` starts through
+  `sdk/test/anvil-process.ts#spawnAnvil`** (the actions harness and its mainnet replay included)
+  on a port the OS hands out: `startChain(slug)` and `startPoolsChain()` take no port, and a suite
+  that builds its clients at module load takes `freePortSync()`. `anvil-process.test.ts` fails a
+  direct `spawn("anvil", …)` in any of the three, and any fixed port in `sdk/test`, `mcp/test` or `actions/tests` (a
+  number, a `--port` literal, a range by `JEST_WORKER_ID`). Two suites once took overlapping
+  `N + JEST_WORKER_ID` ranges and met on 9701: one attached to the other's orphaned anvil and
+  asserted against its stale chain. `spawnAnvil` also REFUSES a port that already answers, naming
+  its holder (netstat, ss, else lsof), answers only once its own anvil does, and starts a detached
+  watchdog that SIGKILLs the anvil once the jest worker is gone. A suite's own exit or signal
+  handler cannot: jest hands a suite a copy of `process` whose listeners the real process never
+  calls.
 - **Mainnet state (`actions/tests/state/*.genesis.json.gz`)** — no test forks a live chain. The
   actions mainnet suites replay a chain at its pinned block (`CHAINS` in `actions/tests/mainnet.ts`:
   Ethereum at `PINNED_BLOCK` 26,070,000, Base at 51,966,000, Avalanche C-Chain at 96,424,000, OP

@@ -11,7 +11,6 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { createServer } from "node:net";
 import { after, before, describe, it } from "node:test";
 
 import { formatUnits, getAddress, toFunctionSelector, type Address, type Hex } from "viem";
@@ -75,23 +74,13 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
   return `0x60003560e01c${dispatch}600080fd${bodies.map((each) => each.body).join("")}`;
 }
 
-/** A port nothing is listening on, so this suite never collides with another's anvil. */
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-
-  return port;
-}
-
 describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, () => {
   let local: LocalChain;
   let mcp: Connected;
   let usdc: Address;
 
   before(async () => {
-    local = await startChain("ethereum", await freePort());
+    local = await startChain("ethereum");
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
     mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
   });
