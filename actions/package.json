@@ -35,7 +35,7 @@
     "capture-mainnet": "RECAPTURE_ANVIL_STATE=1 tsx --test --test-concurrency=1 tests/actions.mainnet.test.ts tests/quote.mainnet.test.ts tests/split-swap.mainnet.test.ts tests/swap.mainnet.test.ts tests/swap-base.mainnet.test.ts tests/swap-avalanche.mainnet.test.ts tests/names.mainnet.test.ts tests/holdings.mainnet.test.ts tests/docs-examples.mainnet.test.ts tests/examples-cookbook.mainnet.test.ts"
   },
   "dependencies": {
-    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-names-f33c0939",
+    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-names-cb04e059",
     "viem": "^2.0.0"
   },
   "devDependencies": {
