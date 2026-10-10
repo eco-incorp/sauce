@@ -68,7 +68,7 @@ describe("stock tokens in a program", () => {
   });
 
   it("are refused, by name, on a chain without them", () => {
-    // Used there, a stock token is the chain's refusal; compared with zero, it is zero there.
+    // A stock token a chain lacks is `undefined` there: a use of it is refused, naming it.
     expect(() =>
       compileSauceProgram("ethereum", "function main() {\n  SPCXc.transfer(ctx.self(), 1n);\n}"),
     ).toThrow(/SPCXc/);
@@ -113,7 +113,7 @@ describe("Solana's stock mints in a program", () => {
   });
 
   it("are refused, by name, on a chain without them, and an EVM chain's on Solana", () => {
-    // Compared with zero, an absent name is zero there; any other use is refused, naming it.
+    // An absent name is `undefined` there: a use of it is refused, naming it.
     expect(() =>
       compileSauceProgram("base", "function main(): Uint256 {\n  return NVDA_US;\n}"),
     ).toThrow(/NVDA_US/);

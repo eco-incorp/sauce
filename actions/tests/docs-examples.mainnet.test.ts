@@ -605,8 +605,8 @@ describe("venue-where-deployed on OP Mainnet state", SUITE, () => {
 
 describe("venue-where-deployed on every EVM chain", SUITE, () => {
   // A chain with neither venue gets a program that reads nothing, so an empty anvil runs it as well
-  // as that chain would; a chain with a venue but without USDC or WETH refuses the program, naming
-  // the token, which only a compiled branch resolves.
+  // as that chain would; a chain with a venue but without USDC or WETH refuses the program: the token
+  // is `undefined` there, and only a compiled branch uses it.
   let env: Anvil;
 
   before(async () => {
@@ -630,7 +630,7 @@ describe("venue-where-deployed on every EVM chain", SUITE, () => {
       const factory = names.pancake ?? names.uniswap;
       if (factory !== undefined && (names.usdc === undefined || names.weth === undefined)) {
         const missing = names.usdc === undefined ? "USDC" : "WETH";
-        assert.throws(compile, new RegExp(`\`${missing}\` is not a token or protocol on ${slug}`));
+        assert.throws(compile, new RegExp(`\`${missing}\` is \`undefined\``));
         refused++;
         continue;
       }

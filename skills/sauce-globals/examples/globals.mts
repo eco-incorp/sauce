@@ -69,11 +69,11 @@ check(
 );
 // A family alias resolves only where one member owns the name.
 check(
-  !rejects("base", "function main() { require(Uniswap.UniversalRouter != 0); }"),
+  !rejects("base", "function main() { require(Uniswap.UniversalRouter); }"),
   "Uniswap.UniversalRouter",
 );
 check(
-  rejects("base", "function main() { require(Uniswap.Factory != 0); }"),
+  rejects("base", "function main() { require(Uniswap.Factory); }"),
   "Uniswap.Factory is ambiguous",
 );
 // A namespace's default contract is called by the namespace alone.
@@ -84,8 +84,8 @@ check(
   ),
   "Cctp.depositForBurn calls Cctp.TokenMessenger",
 );
-// A namespace absent on the chain is zero there: using it is a compile error, and comparing it with
-// zero rules its branch out. A name no chain has is an error either way.
+// A contract absent on the chain is `undefined` there: using it is a compile error, and testing it
+// rules its branch out. A name no chain has is an error either way.
 check(
   rejects("linea", "function main() { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500); }"),
   "absent namespace",
@@ -93,18 +93,19 @@ check(
 check(
   !rejects(
     "linea",
-    "function main() { if (UniswapV3.Factory != 0) { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500); } }",
+    "function main() { if (UniswapV3.Factory) { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500); } }",
   ),
-  "comparing with zero removes the branch where the chain lacks the contract",
+  "testing it removes the branch where the chain lacks the contract",
 );
-// A token symbol is a bare name: Base registers no USDT, so it is refused there, guarded or not.
+// A token symbol is the same: Base registers no USDT, so it is `undefined` there, and a use of it
+// compiles only behind a test.
 check(rejects("base", "function main() { USDT.transfer(ctx.self(), 1); }"), "no USDT on Base");
 check(
-  rejects("base", "function main() { if (USDT != 0) { USDT.transfer(ctx.self(), 1); } }"),
-  "a guard does not make USDT a name on Base",
+  !rejects("base", "function main() { if (USDT) { USDT.transfer(ctx.self(), 1); } }"),
+  "a test leaves USDT out on Base",
 );
 check(
-  rejects("base", "function main() { if (UniswapV9.Factory != 0) { require(false); } }"),
+  rejects("base", "function main() { if (UniswapV9.Factory) { require(false); } }"),
   "a name no chain has is an error",
 );
 // The Pot's own balance of a symbol, and the chain's id.

@@ -161,8 +161,10 @@ declare const svm: {
   remainingAccounts(): Account[];
 };
 
-/** Fails the whole program, and the transaction with it, unless `condition` holds. */
-declare function require(condition: unknown, message?: SauceData): void;
+/** Fails the whole program, and the transaction with it, unless `condition` holds. On a name a
+ *  chain may lack, `require(UniswapV3.Factory, "…")`, it is the compile that fails where the name is
+ *  `undefined`, and the name is present after it. */
+declare function require(condition: unknown, message?: SauceData): asserts condition;
 /** Fails the program with `data` as its revert data. */
 declare function revert(data?: SauceData): never;
 /** Emits a log; topics are EVM only. */
