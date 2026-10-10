@@ -108,7 +108,16 @@ function blocks(md) {
     }
     entry = null;
   };
+  let fenced = false;
   for (const line of md.split("\n")) {
+    // A fenced program is code, compiled as a ```sauce block, not prose: nothing in it is quoted.
+    if (/^\s*```/.test(line)) {
+      close();
+      flush();
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
     const detail = /^ {2}- (.*)$/.exec(line);
     if (entry !== null && detail !== null) {
       const labelled = /^([A-Z][A-Za-z ]*?): (.*)$/.exec(detail[1]);
