@@ -35,7 +35,7 @@
  * whose handler reads the error, and the released engine refuses that encoding of a `catch`. The
  * deliveries skip on the released engine.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -72,6 +72,7 @@ import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageInstall } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../../../src/routes/token-registry.js";
+import { freePortSync, spawnAnvil } from "../../anvil-process.js";
 import {
   gateAnchors,
   routerUnderTest,
@@ -130,7 +131,7 @@ const CONFIG_VERSION = 1;
 const WORKFLOW_OWNER = getAddress("0x00000000000000000000000000000000000f10e5");
 const OTHER_OWNER = getAddress("0x0000000000000000000000000000000000ba5e00");
 
-const PORT = 8800 + (Number(process.env.JEST_WORKER_ID ?? "1") % 50);
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const FEE = 1_234n;
 const CHAIN = "base";
@@ -366,21 +367,10 @@ const query = async (interfaceId: Hex) =>
 
 describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--chain-id", String(CHAIN_ID), "--silent"], {
-      stdio: "ignore",
-    });
+    anvil = await spawnAnvil(PORT, ["--chain-id", String(CHAIN_ID)]);
     const transport = http(RPC_URL);
     publicClient = createPublicClient({ transport });
     testClient = createTestClient({ mode: "anvil", transport });
-    for (const deadline = Date.now() + 20_000; ;) {
-      try {
-        await publicClient.getChainId();
-        break;
-      } catch {
-        if (Date.now() > deadline) throw new Error(`anvil did not come up on ${RPC_URL}`);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
     stack = await startGatedEngine(
       { publicClient, walletClient: owner, testClient },
       OWNER.address,
