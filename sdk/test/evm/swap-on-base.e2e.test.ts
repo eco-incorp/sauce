@@ -570,7 +570,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     // The V3 factory's code and state onto Base's factory address, where the body looks.
     await replay(factory, getAddress(Base.UniswapV3.Factory.address!));
 
-    ethereum = await startIntentChain("ethereum", PORT + 50, ["WETH"]);
+    ethereum = await startIntentChain("ethereum", ["WETH"]);
 
     snapshot = await testClient.snapshot();
   }, 180_000);
