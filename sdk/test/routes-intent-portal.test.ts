@@ -55,7 +55,6 @@ import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
 import { describeEvm, FEE as KITCHEN_FEE } from "./cli-anvil.js";
 import { startIntentChain, type IntentChain } from "./intent-anvil.js";
-import { freePort } from "./pools-anvil.js";
 
 const CREATOR = "0x4444444444444444444444444444444444444444" as const;
 const RECIPIENT = 0x6666666666666666666666666666666666666666n;
@@ -289,7 +288,7 @@ describe("the intents a program opens, as compiled", () => {
 describeEvm("the intents a program publishes", () => {
   let base: IntentChain;
   beforeAll(async () => {
-    base = await startIntentChain("base", await freePort(), ["USDC", "WETH"]);
+    base = await startIntentChain("base", ["USDC", "WETH"]);
   }, 120_000);
   afterAll(async () => {
     await base?.stop();
