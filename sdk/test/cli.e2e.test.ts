@@ -23,7 +23,7 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md), and a hard
  * failure without it — or without `cast` — in CI.
  */
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -59,9 +59,9 @@ import {
   sauce,
   sauceWith,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
+import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
 
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
@@ -95,7 +95,7 @@ describeEvm("sauce, sent to a chain", () => {
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-e2e-"));
-    ethereum = await startChain("ethereum", 8700 + WORKER);
+    ethereum = await startChain("ethereum");
     // The registry's tokens, as code at their registered addresses: a standard OpenZeppelin ERC-20
     // as USDC, and a USDT-shaped one whose writes return nothing as USDT.
     usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
@@ -661,8 +661,8 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
   const RECIPIENTS: Address[] = [RECIPIENT, SECOND_RECIPIENT];
 
   beforeAll(async () => {
-    chains.base = await startChain("base", 8800 + WORKER);
-    chains.ethereum = await startChain("ethereum", 8900 + WORKER);
+    chains.base = await startChain("base");
+    chains.ethereum = await startChain("ethereum");
   }, 120_000);
 
   afterAll(async () => {
@@ -883,7 +883,7 @@ describeEvm("an intent file: published by a cook on the signer's Pot", () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-publish-"));
     intentFile = join(work, "bridge.sauce.ts");
     writeFileSync(intentFile, INTENT);
-    ethereum = await startChain("ethereum", 8600 + WORKER);
+    ethereum = await startChain("ethereum");
     // The real eco-routes Portal, at the address the SDK records for Ethereum.
     ({ portal } = await placePortal(ethereum));
     usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
@@ -1104,7 +1104,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   let bare: ChildProcess;
   let work: string;
   let config: string;
-  const BARE = `http://127.0.0.1:${9400 + WORKER}`;
+  let BARE: string;
   const REWARD = 2_000_000n;
   // An intent from Ethereum whose body is a program on Base: its cook pays Base's Kitchen fee, on
   // the Pot every intent through Base's Portal shares.
@@ -1129,24 +1129,11 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-deployed-"));
-    base = await startChain("base", 9300 + WORKER);
+    base = await startChain("base");
     // A chain with nothing of Sauce's on it.
-    bare = spawn("anvil", ["--port", String(9400 + WORKER), "--chain-id", "1", "--silent"], {
-      stdio: "ignore",
-    });
-    for (const deadline = Date.now() + 20_000; ;) {
-      const up = await fetch(BARE, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
-      }).then(
-        () => true,
-        () => false,
-      );
-      if (up) break;
-      if (Date.now() > deadline) throw new Error("the bare anvil did not come up");
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    const port = await freePort();
+    bare = await spawnAnvil(port, ["--chain-id", "1"]);
+    BARE = `http://127.0.0.1:${port}`;
     config = join(work, "sauce.config.json");
     writeFileSync(config, JSON.stringify({ rpcUrls: { "8453": base.rpcUrl } }));
   }, 120_000);

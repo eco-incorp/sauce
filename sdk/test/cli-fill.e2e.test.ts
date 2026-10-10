@@ -41,7 +41,6 @@ import {
   registered,
   sauce,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
 
@@ -131,8 +130,8 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-fill-e2e-"));
-    base = await startChain("base", 9300 + WORKER);
-    arbitrum = await startChain("arbitrum", 9360 + WORKER);
+    base = await startChain("base");
+    arbitrum = await startChain("arbitrum");
     await placePortal(arbitrum);
     config = join(work, "sauce.config.json");
     writeFileSync(
@@ -421,7 +420,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   }, 60_000);
 
   it("names the destination when --rpc-url serves another chain", async () => {
-    const other = await startChain("arbitrum", 9350 + WORKER);
+    const other = await startChain("arbitrum");
     try {
       // --rpc-url is the destination's, beside --config, which names the source's.
       const run = await sauce(
