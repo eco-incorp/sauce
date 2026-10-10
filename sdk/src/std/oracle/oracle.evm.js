@@ -64,6 +64,14 @@ const ORACLE_CRE = 0xe0c066f41c1dc7e55f8fdb9c65959880975a5253ce7ee0f0fe9c8196947
 // Its first slot counts the requests the Pot has made.
 const SAUCE_ORACLE_NAMESPACE = 0xfb914c48cb718df1ddac58f9ecf041e1351f5cba973af6506236543b47c9ff00;
 
+// What `Oracle.cre(…)` takes, each field described on `cre` below. `owner` is optional here only so
+// that leaving it out is refused with why, rather than as a missing member.
+export interface CreOptions {
+  owner?: Address;
+  args?: bytes;
+  deadline?: Uint256;
+}
+
 // The requests a program makes: `Oracle.cre(config)`, one per oracle network this package speaks.
 export class Oracle {
   // A request to a Chainlink CRE workflow, which `config` names:
@@ -71,17 +79,9 @@ export class Oracle {
   //   owner     the workflow owner whose report alone settles it; required
   //   args      what the workflow reads, as bytes (`abi.encode(…)` of it); none when left out
   //   deadline  a unix time after which anyone may expire the request; or `.within(seconds)`
-  static cre(config) {
+  static cre(config: CreOptions) {
     if (config === undefined) {
       throw new Error("`Oracle.cre(...)` takes one object: `Oracle.cre({ owner, args })`");
-    }
-    const fields = { owner: true, args: true, deadline: true };
-    for (const key of Object.keys(config)) {
-      if (fields[key] === undefined) {
-        throw new Error(
-          "`Oracle.cre` takes no `" + key + "`: its fields are owner, args and deadline",
-        );
-      }
     }
     const owner = config.owner;
     if (owner === undefined) {

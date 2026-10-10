@@ -158,7 +158,7 @@ function main(owner: Address): void {
   it("a field it does not take, by its name", () => {
     refuses(
       program("Oracle.cre({ owner, source: hex`01` })"),
-      "`Oracle.cre` takes no `source`: its fields are owner, args and deadline",
+      "`source` is not a member of `CreOptions`",
     );
   });
 
