@@ -50,8 +50,8 @@
  *   SAUCE_RUST_V12_RUNTIME=/tmp/v12-runtime.hex pnpm --filter './sdk' test
  * Also needs `anvil` on PATH (Foundry, which CI already installs).
  */
-import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import { freePortSync, spawnAnvil } from "../../anvil-process.js";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -129,8 +129,8 @@ const DEPLOYER = privateKeyToAccount(
  */
 let sauce: GatedEngine;
 
-/** Per-worker port so concurrent jest workers never share a node. */
-const PORT = 8600 + (Number(process.env.JEST_WORKER_ID ?? "1") % 100);
+/** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 
 const STARTUP_TIMEOUT_MS = 20_000;
@@ -168,16 +168,6 @@ const walletClient = createWalletClient({ account: DEPLOYER, transport });
 const literal = (value: Address): string => `${value}n`;
 
 const toHex = (bytes: Uint8Array): Hex => `0x${Buffer.from(bytes).toString("hex")}`;
-
-const waitForRpc = (deadline: number): Promise<void> =>
-  Date.now() >= deadline
-    ? Promise.reject(new Error(`anvil did not come up on ${RPC_URL}`))
-    : publicClient
-        .getChainId()
-        .then(() => undefined)
-        .catch(() =>
-          new Promise((resolve) => setTimeout(resolve, 100)).then(() => waitForRpc(deadline)),
-        );
 
 /** Wait for `hash` to land, rejecting with `what` when it reverted. */
 const confirm = (hash: Hex, what: string): Promise<void> =>
@@ -268,10 +258,9 @@ const deployToken = (): Promise<Address> => deploy(MOCK_ERC20.creationCode);
  * fails silently rather than loudly.
  */
 const startEvm = async (): Promise<{ anvil: ChildProcess; token: Address }> => {
-  const anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
+  const anvil = await spawnAnvil(PORT, [], STARTUP_TIMEOUT_MS);
   const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
 
-  await waitForRpc(Date.now() + STARTUP_TIMEOUT_MS);
   sauce = await startGatedEngine(
     { publicClient, testClient, walletClient },
     DEPLOYER.address,
