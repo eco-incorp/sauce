@@ -33,6 +33,7 @@ function main(
   minOut: Uint256,
   recipient: Address,
 ) {
+  require(UniswapV3.Factory);
   const self = ctx.self();
   const pool = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);
   require(pool != 0, "no pool at that fee tier");
