@@ -52,7 +52,6 @@ import {
   DEPLOYER,
   FEE,
   RUNTIME_HEX_PATH,
-  WORKER,
   startChain,
   type LocalChain,
 } from "../../cli-anvil.js";
@@ -184,9 +183,9 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
   beforeAll(async () => {
     const options = { routerCreationCode: ROUTER };
     [ethereum, base, optimism] = await Promise.all([
-      startChain("ethereum", 8850 + WORKER * 3, options),
-      startChain("base", 8851 + WORKER * 3, options),
-      startChain("optimism", 8852 + WORKER * 3, options),
+      startChain("ethereum", options),
+      startChain("base", options),
+      startChain("optimism", options),
     ]);
     pot = getCreate2Address({
       bytecodeHash: gateAnchors().potInitCodeHash,
