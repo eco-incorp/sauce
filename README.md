@@ -60,7 +60,8 @@ Three words name where a program runs, and every guide uses them:
 - **Kitchen**: the contract that creates Pots and sets the flat fee every cook pays, in the chain's
   native coin.
 
-`sauce pot --deploy` creates your Pot, you fund it like any address, and `sauce run` sends a cook.
+You fund your Pot like any address, and `sauce run` sends a cook, deploying the Pot first when it
+first needs it (it asks, or `--yes`).
 [Kitchen, Pot and cook](docs/concepts/kitchen-pot-cook.md) explains each, who may do what with a
 Pot, and the shared Pot an intent's body runs on.
 

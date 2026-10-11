@@ -25,8 +25,9 @@ developer who meets them for the first time.
 - **Pot**: an owner's account on chain, a small contract the Kitchen creates. It holds the tokens
   a program spends, and every call a program makes comes from it. Only its owner can run programs
   on it. Its address follows from the owner and a salt (zero unless `--salt` names another), so it
-  is known before it exists: `sauce pot --chain <chain> --owner <address>` prints it. Anyone may
-  deploy an owner's Pot (`sauce pot --deploy`), and it is the owner's whoever sends that. It is
+  is known before it exists: `sauce pot --chain <chain> --owner <address>` prints it. A command
+  deploys your Pot when it first needs it (asks, or `--yes`); anyone may deploy an owner's Pot
+  (`sauce pot --deploy` does it by hand), and it is the owner's whoever sends that. It is
   funded by sending tokens to its address, and what it holds leaves only through a program its
   owner runs on it: a Pot has no withdraw function. So what a cook leaves in the Pot is the
   owner's, but it is not in the owner's wallet, and a wallet does not show it.
@@ -178,8 +179,9 @@ sauce run payout.sauce.ts --chain base --keystore <keystore> \
 Compiling for a chain produces the program's bytecode; running it is one transaction to the
 owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the program, paying the
 Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for
-any wallet or signer to send; `sauce run` signs and sends it itself, deploying the Pot first if it
-is not there. Both work on a supported chain only; on a preview chain, compile and simulate.
+any wallet or signer to send, with the Pot's deployment first (`transactions`) while it has no
+code; `sauce run` signs and sends it itself, deploying the Pot first if it is not there (asks, or
+`--yes`). Both work on a supported chain only; on a preview chain, compile and simulate.
 `sauce-cli` covers each command. A chain is read through a built-in public endpoint, or one the
 developer passes, never one from the program or the environment. Without the CLI, the same steps
 are tools of the Sauce MCP server (`sauce mcp`); `sauce-cli` maps each command
