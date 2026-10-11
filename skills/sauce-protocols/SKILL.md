@@ -128,7 +128,10 @@ the protocol mints it, a Uniswap V3 position's NFT included. A Pot is cooked by 
 the records and checks a contract keeps of who may call it fall away. Each Solidity function becomes
 a function of the program and `main` picks one; `msg.sender`'s tokens are already in the Pot, and
 an address the example hardcodes is the registry's name for it. Each ported example's header names
-the file it ports, pinned to a commit, and says what changed and why.
+the file it ports, pinned to a commit, and says what changed and why. One encoding differs:
+Solidity's `abi.encode(s)` of a struct that holds a dynamic field (`bytes`, an array) is that struct
+as one value, behind an offset, while `abi.encode` encodes a record as its fields; write
+`abi.encode({ s: record })` for the Solidity bytes.
 
 [examples/uniswap-v3-liquidity-examples.sauce.ts](examples/uniswap-v3-liquidity-examples.sauce.ts)
 ports Uniswap's `LiquidityExamples`: a full-range DAI/USDC position minted to the Pot, its fees

@@ -64,6 +64,9 @@
     ],
     "sauce-swaps/examples/uniswap-v3-swap-examples.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
+    ],
+    "sauce-swaps/examples/uniswap-v4-swap.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
     ]
   },
   "compileOnly": {

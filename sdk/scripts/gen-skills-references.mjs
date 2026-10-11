@@ -106,6 +106,7 @@ export const PORTED_EXAMPLES = [
   ["Aave V3: credit delegation", "sauce-protocols/examples/aave-v3-credit-delegation.sauce.ts"],
   ["Compound III: MyContract", "sauce-protocols/examples/compound-v3-my-contract.sauce.ts"],
   ["Morpho Blue: the snippets", "sauce-protocols/examples/morpho-blue-snippets.sauce.ts"],
+  ["Uniswap V4: the swap guide", "sauce-swaps/examples/uniswap-v4-swap.sauce.ts"],
 ];
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
