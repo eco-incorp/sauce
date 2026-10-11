@@ -96,13 +96,16 @@ to reveal again.
 A request's key is the provider's own id: VRF's request id under its wrapper, Entropy's sequence
 number under its provider and the Entropy contract (a sequence number counts per provider).
 
-## Installing the handlers
+## The handlers
 
-The Pot must be a Private Pot with `@sauce/random`'s handlers installed, once:
-`sauce run @sauce/random --chain base --wallet <name>`. They answer `rawFulfillRandomWords` from
-VRF's wrapper and `_entropyCallback` from Entropy; a chain with one provider installs only its
-handler, and every install adds the Pot's public `expire`. `sauce-async` covers the handlers, the
-promise table and its combinators.
+Nothing is installed first. A request installs the handler its callback reaches, in its own
+transaction, unless the Pot already answers with it: `Random.vrf` the one for VRF's
+`rawFulfillRandomWords`, `Random.entropy` the one for Entropy's `_entropyCallback`, each checking
+its caller is that chain's contract; a request with a deadline also installs the Pot's public
+`expire`. The Pot must be a Private Pot. `sauce run @sauce/random --chain base --wallet <name>`
+installs them ahead of time, which only makes the first request cheaper; a chain with one provider
+installs only its handler. `sauce-async` covers the handlers, the promise table and its
+combinators.
 
 ## The body
 

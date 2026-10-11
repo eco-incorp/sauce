@@ -2,8 +2,8 @@
 // prize in USDC to `heads` on an even word and to `tails` on an odd one. The request is paid from
 // the Pot's balance as this program runs, in the native coin; the Pot keeps the Kitchen's fee for
 // the callback. A day without an answer lets anyone expire the request, and the prize stays put.
-// The Pot must be a Private Pot with @sauce/random's handlers installed
-// (`sauce run @sauce/random --chain <chain>`).
+// The Pot must be a Private Pot; the request installs the handler its callback reaches, in the
+// same transaction, the first time.
 //
 //   sauce run coin-flip.sauce.ts --chain <chain> --wallet <name> --password-env <NAME> \
 //     --args <heads> <tails> <prize>

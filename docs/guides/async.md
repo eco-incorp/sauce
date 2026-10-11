@@ -247,7 +247,9 @@ function main(): Uint256 {
 }
 ```
 
-Install the handlers once per Pot. On a chain with one provider, only its handler installs:
+A request installs the handler its callback reaches in its own transaction, unless the Pot already
+answers with it, so there is nothing to install first. Installing them ahead of time only makes the
+first request cheaper; on a chain with one provider only its handler installs:
 
 ```sh
 sauce run @sauce/random --chain base --wallet <name>

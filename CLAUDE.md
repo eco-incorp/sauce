@@ -1343,7 +1343,11 @@ gas, and a callback that runs out is spent); `Random.entropy` pays `getFeeV2` (t
 MOST its gas, and a failed one stays open). A request is refused unless the Pot keeps the Kitchen's
 fee after paying, since the callback is a cook. Promise keys: `promiseKey(wrapper, requestId)` and
 `promiseKey(entropy, keccak256(abi.encode(provider, sequence)))`, since Entropy's sequence numbers
-count per provider. The handlers log `RandomDelivered(bytes32 key, bytes value)` and `fulfil`, so
+count per provider. Each request lists its protocol's `Handler`, which the core installs in the
+request's own transaction when the Pot lacks it: the program its handler file (`vrf.handler.js`,
+`entropy.handler.js`) compiles to, byte for byte, which `compile.test.ts` holds, so a Pot
+pre-warmed with `sauce run @sauce/random` is not installed again. The handlers log
+`RandomDelivered(bytes32 key, bytes value)` and `fulfil`, so
 a duplicate or late delivery is the core's no-op and a reverting body never fails the provider's
 call. The callback gas defaults to `SAUCE_RANDOM_LANDING_GAS` plus `SAUCE_RANDOM_GAS_PER_BYTE` per
 byte of what settling runs (the continuation, and a combinator's `settles`), held within 3x of the

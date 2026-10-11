@@ -2,8 +2,8 @@
 // arrives within the hour, the Pot pays `prize` of the chain's native coin to the entrant it picks;
 // after the hour, anyone may expire the timeout, and the draw is called off. The request is paid
 // from the Pot's balance as this program runs; the Pot keeps the Kitchen's fee for the callback.
-// The Pot must be a Private Pot with @sauce/random's handlers installed
-// (`sauce run @sauce/random --chain <chain>`).
+// The Pot must be a Private Pot; the request installs the handler its callback reaches, in the
+// same transaction, the first time.
 //
 //   sauce run draw.sauce.ts --chain <chain> --wallet <name> --password-env <NAME> \
 //     --args <first> <second> <third> <prize>
