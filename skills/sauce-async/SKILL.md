@@ -1,6 +1,6 @@
 ---
 name: sauce-async
-description: Promises in a Sauce program with @sauce/async — a request whose answer arrives later, in a transaction of its own, its .then body compiled with the program and run when the protocol calls the Pot back, as the same Private Pot. Covers .then and .catch on a request; Promise.all, race, any, allSettled, resolve, reject and withResolvers with JavaScript's semantics; deadlines, Async.timeout and the public expire(key) anyone may call after one; settling a promise by its key in a later transaction (Async.resolve, Async.reject); installing a package's handlers on a Pot (sauce run @sauce/<package>); and writing a package of the family (Request, a handler that settles by key, the handlers manifest). Use when a program must wait for randomness, an oracle, a cross-chain message or a proof, when the user mentions a callback, a promise, then, a timeout or a deadline, or when writing a protocol package with a callback.
+description: Promises in a Sauce program with @sauce/async — a request whose answer arrives later, in a transaction of its own, its .then body compiled with the program and run when the protocol calls the Pot back, as the same Private Pot. Covers .then and .catch on a request; Promise.all, race, any, allSettled, resolve, reject and withResolvers with JavaScript's semantics; deadlines, Async.timeout and the public expire(key) anyone may call after one; settling a promise by its key in a later transaction (Async.resolve, Async.reject); the handlers a request installs on the Pot as it runs, with nothing to install first; and writing a package of the family (Request, its handlers, a handler that settles by key, the optional pre-install with sauce run @sauce/<package>). Use when a program must wait for randomness, an oracle, a cross-chain message or a proof, when the user mentions a callback, a promise, then, a timeout or a deadline, or when writing a protocol package with a callback.
 ---
 
 # Promises with `@sauce/async`
@@ -47,13 +47,12 @@ function main(protocol: Address, value: Uint256, recipient: Address) {
 
 ## Where a callback lands
 
-- **A Private Pot, with the package's handlers installed.** The protocol calls the Pot with a
-  selector of its own. The Pot's Router runs the program its owner installed for that selector,
-  the handler, which checks the call came from the protocol and settles the promise the callback
-  names. Install a package's handlers once per Pot, by giving the package where a program file
-  goes: `sauce run @sauce/<package> --chain base --wallet <name>`. The same command installs the
-  Pot's public `expire(bytes32)`. A Shared Pot, and a Private Pot whose Router is fixed, answer no
-  callback.
+- **A Private Pot.** The protocol calls the Pot with a selector of its own. The Pot's Router runs
+  the program registered for that selector, the handler, which checks the call came from the
+  protocol and settles the promise the callback names. The request installs the handlers its
+  callback needs as it runs, in the same transaction, and with a deadline the Pot's public
+  `expire(bytes32)` too; a later request finds them in place and only checks them. There is nothing
+  to install first. A Shared Pot, and a Private Pot whose Router is fixed, answer no callback.
 - **The native coin for the fee.** Each callback is a cook of the Pot, and the Router pays the
   Kitchen's fee from the Pot's own balance.
 
@@ -107,7 +106,7 @@ the owner's later cook that resolves it by its key.
 
 ## Writing a package
 
-A package's request returns `new Request({ send, deliver, carries, chain, deadline })`, from a
+A package's request returns `new Request({ send, deliver, handlers, carries, chain, deadline })`, from a
 method on an object the program reads (the echo protocol's `request` above) or a plain function; or
 it is a class that extends `Request` and hands `super` the same options. The three compile to the
 same program:
@@ -116,6 +115,8 @@ same program:
   `promiseKey(tag, id)`: the protocol's id under a word naming the protocol.
 - `deliver(input, body, fail)` runs when the promise is fulfilled: it decodes what arrived and calls
   `body(value)`, or `fail(reason)` when the protocol reports a failure.
+- `handlers` are the handlers the protocol's callback reaches (below), installed on the Pot as the
+  request runs, unless they already are.
 - `carries: true` is for a protocol that carries the requester's bytes back (a bridge's message, a
   proof's extra data): the key is picked first, and `send` is handed `{ key, stored, program }`. A
   plain `.then` stores nothing: the message carries `program`. With a deadline or a combinator,
@@ -147,23 +148,36 @@ function main(protocol: Address, value: Uint256, recipient: Address) {
 }
 ```
 
-Its handlers are programs `main(caller: Address, value: Uint256, data: bytes)`, listed in its
-`package.json`:
+Its handlers go in the request's `handlers`: each a `Handler`, the program the Router runs when the
+protocol calls the Pot with that selector, handed the caller, the value it sent and the whole
+calldata. The request installs each on the Pot as it runs, unless the Pot already answers the
+selector with it:
 
-```json
-{
-  "handlers": [
-    { "selector": "echo(uint256,uint256)", "program": "echo.handler.js", "requires": [] }
+```js
+new Request({
+  handlers: [
+    new Handler(ECHO_SELECTOR, (caller: Address, value: Uint256, data: bytes) => {
+      requireCaller(Protocol, caller);
+      const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
+      fulfil(promiseKey(7, id), abi.encode(echoed));
+    }),
   ],
-  "interfaces": []
-}
+  send: (continuation) => { … },
+});
 ```
 
-A handler checks its caller with `requireCaller(protocol, caller)`, then settles:
+A handler captures nothing of the program around it, since it runs on its own whenever the selector
+reaches the Pot: the protocol it checks is a name the chain declares, never a value of the request.
+It checks its caller with `requireCaller(protocol, caller)`, then settles:
 `fulfil(promiseKey(tag, id), abi.encode(value))` or `reject(key, reason)`, and for a protocol that
-carries its bytes, `requireSelf(sender)` then `settleCarried(key, stored, program, value, ok)`.
-`requires` names the contracts a handler needs (`Namespace.Contract`), so a chain without one skips
-it; `interfaces` are ERC-165 ids the Pot declares for a protocol that checks its receiver.
+carries its bytes, `requireSelf(sender)` then `settleCarried(key, stored, program, value, ok)`. A
+third argument `true` makes it a view (static, no fee), as a signature check must be;
+`Erc1271.handler()` is the Pot's ERC-1271 handler, for a package whose protocol asks the Pot to
+sign.
+
+The package also lists its handlers in its `package.json` (`"handlers"`: selector, program file,
+`requires`; `"interfaces"`: ERC-165 ids), for `sauce run @sauce/<package>`, which installs them on a
+Pot ahead of its first request so that request does not pay for them. That is optional.
 
 ## The Pot as a signer
 

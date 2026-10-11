@@ -78,11 +78,20 @@ A package's request is a method on an object the program reads, or a plain funct
 to the same program:
 
 ```js
-import { Request, promiseKey } from "@sauce/async";
+import { Handler, Request, fulfil, promiseKey, requireCaller } from "@sauce/async";
 
 class EchoProtocol {
   request(protocol, value) {
     return new Request({
+      // The program the Pot answers the protocol's callback with, installed as the request runs
+      // unless it is already: it checks the caller, then settles the promise the callback names.
+      handlers: [
+        new Handler(ECHO_SELECTOR, (caller: Address, value: Uint256, data: bytes) => {
+          requireCaller(Echo, caller); // the protocol's contract, as the chain names it
+          const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
+          fulfil(promiseKey(7, id), abi.encode(echoed));
+        }),
+      ],
       // At run time, when the statement ends: make the request, and answer the promise's key, the
       // protocol's id under a tag naming the protocol.
       send: (continuation) => {
@@ -100,23 +109,19 @@ A protocol that carries the requester's bytes back, such as a bridge's message, 
 true`. Its `send` is then handed the promise's key and the body's program to carry, and a plain
 `.then` stores nothing on the Pot.
 
-The package lists its handlers in its `package.json`. Each is a program
-`main(caller: Address, value: Uint256, data: bytes)`, compiled for the Pot's chain:
+A handler is handed who called the Pot, the value it sent and the whole calldata. It captures nothing
+of the program around it, since it runs on its own whenever the selector reaches the Pot: the
+protocol it checks is a name the chain declares. A third argument `true` makes it a view (static, no
+fee), as a signature check must be. `Erc1271.handler()` is the Pot's ERC-1271 handler, for a package
+whose protocol asks the Pot to sign.
+
+For the optional pre-install, the package lists the same handlers in its `package.json`, each a file
+with `main(caller: Address, value: Uint256, data: bytes)` compiled for the Pot's chain:
 
 ```json
 {
   "handlers": [{ "selector": "echo(uint256,uint256)", "program": "echo.handler.js" }],
   "interfaces": []
-}
-```
-
-```js
-import { fulfil, promiseKey, requireCaller } from "@sauce/async";
-
-function main(caller: Address, value: Uint256, data: bytes): void {
-  requireCaller(Echo, caller); // the protocol's contract, as the chain names it
-  const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
-  fulfil(promiseKey(7, id), abi.encode(echoed));
 }
 ```
 
@@ -131,7 +136,9 @@ checks its receiver before it calls back.
 | `promiseKey(tag, id)`                                                                | A protocol's id as a promise's key.                                                   |
 | `requireCaller(expected, actual)`, `requireSelf(sender)`                             | A handler's checks: the protocol called; this Pot sent the message.                   |
 | `expire(key)`                                                                        | Reject a promise past its deadline with `Timeout(bytes32)`.                           |
-| `install(selector, program, readOnly)`, `declareInterface(id, supported)`            | What installing a package's handlers calls.                                           |
+| `new Handler(selector, (caller, value, data) => { … }, readOnly?)`                   | A handler a request installs (`handlers`); `.ensure()` installs it unless in place.   |
+| `ensureInstalled(selector, program, readOnly)`                                       | The same for a program known only as the request runs.                                |
+| `install(selector, program, readOnly)`, `declareInterface(id, supported)`            | What installing a handler calls.                                                      |
 | `winner()`                                                                           | In a race's or an any's continuation: the child that settled it.                      |
 | `received()`, `fulfilled()`                                                          | Deprecated: what `run` handed its program. A continuation takes it as its parameters. |
 | `park`, `run`, `salt`, `isPending`                                                   | The settlement table's parts, for a package that needs them directly.                 |
