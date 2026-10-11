@@ -1289,8 +1289,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         "[deploy/cancel] ",
     );
     expect(declined.stderr).toContain(
-      `Your Pot ${pot} on solana isn't deployed yet, so nothing was sent: run again and answer ` +
-        "deploy, or pass --yes (-y), or create it yourself with sauce pot --deploy",
+      `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the ` +
+        "cook's transaction, so nothing was sent: run again and answer deploy, or pass --yes " +
+        "(-y), or create it yourself with sauce pot --deploy",
     );
     expect(harness.svm.getAccount(pot).exists).toBe(false);
     const yes = await sauce(...argv, "-y");

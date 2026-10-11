@@ -12,7 +12,6 @@ import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
 import {
   bytesToHex,
-  formatEther,
   getAddress,
   hexToBytes,
   type Address,
@@ -55,7 +54,7 @@ import {
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
-import { nativeSymbol } from "./effects.js";
+import { approveAll, gasEstimate, unapproved, type Approver, type SetupStep } from "./approvals.js";
 import { linkLines, txLinks } from "./links.js";
 import {
   checkIntentPots,
@@ -601,30 +600,62 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
 export const potMissing = (pot: string, chain: CanonicalChain): string =>
   `Your Pot ${pot} on ${chain.slug} isn't deployed yet`;
 
-/** The question a run asks before deploying the Pot it needs: `missing`, and what it costs. */
-export const potQuestion = (missing: string, cost: string): string =>
-  `${missing}. Deploy it now (one transaction, ${cost}), then run? [deploy/cancel] `;
-
 /**
- * What sending `tx` from `from` costs, as a question says it: its gas and, at the current gas price,
- * the native coin; `its gas` where the endpoint cannot estimate it.
+ * The Pot's deployment as a step a command sends first (`approvals.ts`): `Kitchen.deployPot(owner,
+ * salt)` from the signer, asked about with its gas, listed first in a plan, and sent through
+ * `sendAndWait` (the wallet guard, the policy, the release gate) — done once the endpoint shows the
+ * Pot's code, since a cook rehearsed on an endpoint behind the deployment would "succeed" on an
+ * address with no code. With no account (`sauce tx`), it is planned and never sent.
  */
-async function deployCost(
-  client: PublicClient,
-  from: Address,
-  tx: TxRequest,
-  chain: CanonicalChain,
-): Promise<string> {
-  try {
-    const [gas, price] = await Promise.all([
-      client.estimateGas({ account: from, to: tx.to, data: tx.data, value: tx.value }),
-      client.getGasPrice(),
-    ]);
+export async function potDeployStep(input: {
+  readonly chain: CanonicalChain;
+  readonly target: Extract<PotInput, { readonly owner: Address }>;
+  readonly pot: Address;
+  readonly client?: PublicClient;
+  readonly rpcUrl?: string;
+  readonly account?: PrivateKeyAccount;
+}): Promise<SetupStep> {
+  const { chain, target, pot } = input;
+  const tx: TxRequest = {
+    to: kitchenAddress(),
+    data: sauceEvmDeployPotCall({
+      kitchen: kitchenAddress(),
+      owner: target.owner,
+      salt: target.salt,
+    }).data,
+    value: 0n,
+  };
+  const estimate =
+    input.client === undefined || input.account === undefined
+      ? "its gas"
+      : await gasEstimate(input.client, input.account.address, tx, chain);
 
-    return `about ${gas.toLocaleString("en-US")} gas, ~${formatEther(gas * price)} ${nativeSymbol(chain)}`;
-  } catch {
-    return "its gas";
-  }
+  return {
+    action: `deploy Pot ${pot}`,
+    reason: potMissing(pot, chain),
+    offer: "Deploy it now",
+    estimate,
+    byHand: `deploy it yourself with ${deployHint(chain, target)}`,
+    planned: {
+      what: `Kitchen.deployPot(${target.owner}, ${target.salt}): deploys the Pot, which has no code yet`,
+      deploysPot: pot,
+      to: tx.to,
+      data: tx.data,
+      value: "0",
+    },
+    send: async () => {
+      if (input.client === undefined || input.rpcUrl === undefined || input.account === undefined) {
+        throw new Error("internal: a planned Pot deployment has no signer to send it");
+      }
+      const sent = await sendAndWait(input.client, input.rpcUrl, input.account, tx);
+      if (sent.status !== "success") {
+        throw new CliError(`${sentText("deploying the Pot", sent)}; the Pot is not there`);
+      }
+      await awaitPot(input.client, pot, sent.blockNumber);
+
+      return sent;
+    },
+  };
 }
 
 /** The `sauce pot` that deploys `target`'s Pot. */
@@ -661,6 +692,9 @@ export function valueOf(
 export interface TxInput extends CookInput {
   /** An endpoint, when given: it reads the fee and checks the Pot. */
   readonly rpcUrl?: string;
+  /** More transactions the cook needs sent first, listed after the Pot's deployment (when it has
+   *  no code) and before the cook: another chain's setup, say (`approvals.ts`). */
+  readonly setup?: (client: PublicClient | undefined) => Promise<readonly SetupStep[]>;
 }
 
 /** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
@@ -683,24 +717,29 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
       ? `Pot ${cook.pot} belongs to ${target.owner} (salt ${target.salt}).`
       : `Pot ${cook.pot}.`;
   const from = `Send from ${owner ?? "the Pot's owner"}: cook() is onlyOwner.`;
-  // A Pot with no code yet, whose owner and salt are known: the plan deploys it first, then cooks.
-  if (state !== undefined && !state.deployed && "owner" in target) {
-    const deploy = sauceEvmDeployPotCall({
-      kitchen: kitchenAddress(),
-      owner: target.owner,
-      salt: target.salt,
-    });
+  // What the cook needs first: its Pot, when it has no code and its owner and salt are known, and
+  // whatever else the caller sets up. A plan then lists them, and the cook last.
+  const deployFirst = state !== undefined && !state.deployed && "owner" in target;
+  const setup = [
+    ...(deployFirst
+      ? [
+          await potDeployStep({
+            chain: input.chain,
+            target,
+            pot: cook.pot,
+            ...(client === undefined ? {} : { client }),
+          }),
+        ]
+      : []),
+    ...((await input.setup?.(client)) ?? []),
+  ];
+  if (setup.length > 0) {
+    const steps = setup.map((step) => step.planned);
     const json = {
       chainId: input.chain.id,
       pot: cook.pot,
       transactions: [
-        {
-          what: `Kitchen.deployPot(${target.owner}, ${target.salt}): deploys the Pot, which has no code yet`,
-          deploysPot: cook.pot,
-          to: kitchenAddress(),
-          data: deploy.data,
-          value: "0",
-        },
+        ...steps,
         { what: `cook on Pot ${cook.pot}`, to: cook.pot, data: cook.data, value: value.toString() },
       ],
     };
@@ -708,14 +747,24 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
     return {
       text: JSON.stringify(json, null, 2),
       json,
-      cast: [castSend(kitchenAddress(), deploy.data), castSend(cook.pot, cook.data, value)].join(
-        "\n",
-      ),
+      cast: [
+        ...steps.map((step) =>
+          castSend(step.to, step.data, step.value === "0" ? undefined : BigInt(step.value)),
+        ),
+        castSend(cook.pot, cook.data, value),
+      ].join("\n"),
       notes: [
         head,
-        `${potMissing(cook.pot, input.chain)}: the first transaction deploys it (any account may ` +
-          "send it; the Pot is the owner's either way), the second is the cook. Send them in order, " +
-          "then fund the Pot with what the program spends.",
+        ...(deployFirst
+          ? [
+              `${potMissing(cook.pot, input.chain)}: the first transaction deploys it (any account ` +
+                "may send it; the Pot is the owner's either way), and the cook comes last. Send " +
+                "them in order, then fund the Pot with what the program spends.",
+            ]
+          : []),
+        ...setup
+          .slice(deployFirst ? 1 : 0)
+          .map((step) => `${step.reason}: ${step.planned.what} comes first.`),
         from,
       ],
     };
@@ -765,48 +814,14 @@ const sentJson = (sent: Sent, chain: CanonicalChain): Record<string, unknown> =>
   ...(sent.reason === undefined ? {} : { reason: sent.reason }),
 });
 
-/** Asks a yes/no question at the terminal; `undefined` when there is no terminal to ask on. */
-export type Confirm = (question: string) => Promise<boolean | undefined>;
-
-/**
- * Who approves what a run does before its cook, each a transaction of its own: deploying a missing
- * Pot, approving Permit2 for a token, approving the Pot for an amount. The person at the terminal,
- * asked each in turn — or `--yes`, which approves them all and says so for each.
- */
-export interface Approver {
-  /** `--yes` (or `--auto-approve`). */
-  readonly auto: boolean;
-  /** Whether a question can reach anyone: false with no terminal to ask on, or with `--json`. */
-  readonly canAsk: boolean;
-  /** Why no question can, when it is not the missing terminal: `--json asks nothing`. */
-  readonly why?: string;
-  /**
-   * Approves `action` (`deploy Pot 0x…`): with `--yes`, says `auto-approved: <action>` and goes
-   * ahead; else asks `question`. `undefined` when there is no one to ask.
-   */
-  readonly approve: (action: string, question: string) => Promise<boolean | undefined>;
-}
-
-/**
- * Refuses a run that needs approvals no one can give, before anything is sent: naming every action
- * it would need approved, why it cannot ask (`why`: no terminal by default, or `--json`), and how to
- * approve them.
- */
-export function unapproved(
-  actions: readonly string[],
-  why = "there is no terminal to ask on",
-): CliError {
-  return new CliError(
-    `nothing was sent: this run needs ${actions.length === 1 ? "an approval" : "approvals"}, and ` +
-      `${why}:\n` +
-      actions.map((action) => `  ${action}\n`).join("") +
-      "Pass --yes (-y) to approve them (and --password-file with a keystore).",
-  );
-}
+export { unapproved, type Approver, type Confirm } from "./approvals.js";
 
 export interface RunInput extends CookInput, ChainAccess {
   readonly account: PrivateKeyAccount;
   readonly approver: Approver;
+  /** More transactions the cook needs sent first: asked about with the Pot's deployment, in one
+   *  question, and sent after it (another chain's setup, say; `approvals.ts`). */
+  readonly setup?: (client: PublicClient) => Promise<readonly SetupStep[]>;
   /** Called with the cook once it is sent, for what it published (the store); returns notes. */
   readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
@@ -825,61 +840,48 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   requireSupported("sending the cook", [input.chain, ...intentDestinations(cook.program.intents)]);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
-  const deployAction = `deploy Pot ${cook.pot}`;
+  // What the cook needs sent first, approved together in one question: the Pot, when it has no
+  // code, then whatever else the caller sets up.
+  if (!state.deployed && !("owner" in target)) {
+    throw new CliError(
+      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it ` +
+        `is. Deploy it first: ${deployHint(input.chain, target)}`,
+    );
+  }
+  if (state.deployed && state.owner !== signer) {
+    throw new CliError(
+      `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
+    );
+  }
+  const setup = [
+    ...(!state.deployed && "owner" in target
+      ? [
+          await potDeployStep({
+            chain: input.chain,
+            target,
+            pot: cook.pot,
+            client,
+            rpcUrl: input.rpcUrl,
+            account: input.account,
+          }),
+        ]
+      : []),
+    ...((await input.setup?.(client)) ?? []),
+  ];
   // With no one to ask, every approval the run would need is named before anything is sent.
   if (!input.approver.auto && !input.approver.canAsk) {
     const needs = [
-      ...(!state.deployed && "owner" in target ? [deployAction] : []),
+      ...setup.map((step) => step.action),
       ...(input.fund === undefined
         ? []
         : ((await input.fund(client, cook.pot, signer, true)).needs ?? [])),
     ];
     if (needs.length > 0) throw unapproved(needs, input.approver.why);
   }
-  let deployed: Sent | undefined;
-  if (!state.deployed) {
-    if (!("owner" in target)) {
-      throw new CliError(
-        `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it ` +
-          `is. Deploy it first: ${deployHint(input.chain, target)}`,
-      );
-    }
-    // The run deploys the Pot it needs, once agreed: a transaction of its own, then the cook.
-    const deploy: TxRequest = {
-      to: kitchenAddress(),
-      data: sauceEvmDeployPotCall({
-        kitchen: kitchenAddress(),
-        owner: target.owner,
-        salt: target.salt,
-      }).data,
-      value: 0n,
-    };
-    const missing = potMissing(cook.pot, input.chain);
-    const agreed = await input.approver.approve(
-      deployAction,
-      potQuestion(missing, await deployCost(client, signer, deploy, input.chain)),
-    );
-    if (agreed !== true) {
-      throw new CliError(
-        `${missing}, so nothing was sent: ` +
-          (agreed === undefined
-            ? "pass --yes (-y) to deploy it before the cook"
-            : "run again and answer deploy, or pass --yes (-y)") +
-          `, or deploy it yourself with ${deployHint(input.chain, target)}`,
-      );
-    }
-    deployed = await sendAndWait(client, input.rpcUrl, input.account, deploy);
-    if (deployed.status !== "success") {
-      throw new CliError(`${sentText("deploying the Pot", deployed)}; the Pot is not there`);
-    }
-    // The cook is rehearsed next: on an endpoint behind the deployment it would "succeed" on an
-    // address with no code, so wait until the endpoint shows the Pot.
-    await awaitPot(client, cook.pot, deployed.blockNumber);
-  } else if (state.owner !== signer) {
-    throw new CliError(
-      `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
-    );
-  }
+  await approveAll(input.approver, setup);
+  const sentFirst: Array<readonly [SetupStep, Sent]> = [];
+  for (const step of setup) sentFirst.push([step, await step.send()]);
+  const deployed = sentFirst.find(([step]) => step.planned.deploysPot === cook.pot)?.[1];
   // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
   // carry, and the program wrapped to pull, run and sweep.
   const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, signer);
@@ -913,9 +915,13 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
 
   return {
     text: [
-      ...(deployed === undefined
-        ? []
-        : sentLines(`deployed Pot ${cook.pot} in`, deployed, input.chain)),
+      ...sentFirst.flatMap(([step, first]) =>
+        sentLines(
+          first === deployed ? `deployed Pot ${cook.pot} in` : `${step.action} in`,
+          first,
+          input.chain,
+        ),
+      ),
       ...(funding?.sent ?? []).flatMap((step) => sentLines(step.what, step.sent, input.chain)),
       ...sentLines("cook", sent, input.chain),
       ...(cost === undefined
@@ -931,6 +937,14 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       value: value.toString(),
       ...(report === undefined ? {} : { leftInPot: report.leftInPot }),
       ...(deployed === undefined ? {} : { deployPot: sentJson(deployed, input.chain) }),
+      // What else was sent first, beside the Pot's deployment.
+      ...(sentFirst.some(([, first]) => first !== deployed)
+        ? {
+            setup: sentFirst
+              .filter(([, first]) => first !== deployed)
+              .map(([step, first]) => ({ what: step.action, ...sentJson(first, input.chain) })),
+          }
+        : {}),
       ...(funding === undefined
         ? {}
         : {

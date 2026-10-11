@@ -109,6 +109,7 @@ import {
   revertedFirst,
   unapproved,
 } from "./commands.js";
+import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "./returned.js";
 import { guardOf } from "./policy.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
@@ -2099,26 +2100,17 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
  * does not fit in the cook's own transaction (`svmRunCommand`); what was sent.
  */
 async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<SvmSent> {
-  const missing = `Your Pot ${pot} on solana isn't deployed yet`;
-  const action = `create Pot ${pot}`;
-  // With no one to ask, creating it is the one approval a Solana run needs: named before it sends.
-  if (!input.approver.auto && !input.approver.canAsk) {
-    throw unapproved([action], input.approver.why);
-  }
-  const agreed = await input.approver.approve(
-    action,
-    `${missing}, and its creation does not fit in the cook's transaction. Deploy it now (one ` +
-      "transaction, its rent paid by you), then run? [deploy/cancel] ",
-  );
-  if (agreed !== true) {
-    throw new CliError(
-      `${missing}, so nothing was sent: ` +
-        (agreed === undefined
-          ? "pass --yes (-y) to create it before the cook"
-          : "run again and answer deploy, or pass --yes (-y)") +
-        `, or create it yourself with ${createHint(input)}`,
-    );
-  }
+  // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
+  // before anything is sent.
+  await approveAll(input.approver, [
+    {
+      action: `create Pot ${pot}`,
+      reason: `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the cook's transaction`,
+      offer: "Deploy it now",
+      estimate: "its rent paid by you",
+      byHand: `create it yourself with ${createHint(input)}`,
+    },
+  ]);
   const created = await sendInstructions(
     rpc,
     input.rpcUrl,
