@@ -219,8 +219,11 @@ function main(publicValues: bytes, proof: bytes): Uint256 {
 - **The version must be live.** A proof's first four bytes name the SP1 version that made it, and
   the gateway routes it to that version's verifier. Succinct freezes a version it retires, and a
   frozen route refuses every proof (`RouteIsFrozen`), as a missing one does (`RouteNotFound`).
-  Succinct's own template still ships a proof of a version whose route it has frozen.
-- **Gas**: a Groth16 verification costs about 225,000 inside the gateway.
+  Succinct's template's current fixture targets a frozen verifier route: the gateway refuses it
+  until the template moves to a live version. A proof a live SP1 app posts on Ethereum (Cosmos
+  IBC's SP1 light client) verifies inside a program of this shape through the live route, and on
+  Base's gateway too: a proof is not bound to a chain.
+- **Gas**: a Groth16 verification costs about 226,000 inside the gateway.
 
 ## The protocols' own examples
 

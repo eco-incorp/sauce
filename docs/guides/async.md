@@ -362,8 +362,11 @@ function main(publicValues: bytes, proof: bytes): { n: Uint256; a: Uint256; b: U
 ```
 
 A proof's first four bytes name the SP1 version that made it, and the gateway refuses a version
-Succinct has frozen (`RouteIsFrozen`). The template still ships a proof of SP1 v6.0.0, whose routes
-Succinct has frozen on both chains: through the gateway as the chain holds it, the template's own
+Succinct has frozen (`RouteIsFrozen`). The template as published produces proofs the live gateway
+refuses until it moves to a live version: its fixture is a proof of SP1 v6.0.0, whose routes
+Succinct has frozen on both chains, so through the gateway as the chain holds it the template's own
 proof is refused. With that one route as it stood before the freeze, the version's verifier checks
-the proof and the program returns 20, 6765 and 10946. A Groth16 verification costs about 225,000
-gas.
+the proof and the program returns 20, 6765 and 10946. The path that works today is a live version's
+proof: one that Cosmos IBC's SP1 light client had the gateway verify on Ethereum verifies inside a
+program of the same shape, trusting that app's key, through the live route as the chain holds it,
+and on Base's gateway too. A Groth16 verification costs about 226,000 gas.

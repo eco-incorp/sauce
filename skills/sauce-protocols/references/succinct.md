@@ -50,7 +50,7 @@ function main(publicValues: bytes, proof: bytes): Uint256 {
 - **The verification key is the program.** A proof of any other program verifies too, for its own
   key: a program that accepts a key as an argument accepts every SP1 program's proofs. Fix the key
   the program trusts.
-- **Gas.** A Groth16 verification costs about 225,000 gas inside the gateway.
+- **Gas.** A Groth16 verification costs about 226,000 gas inside the gateway.
 
 ## Typed templates for the raw compiler (not for `sauce compile`)
 

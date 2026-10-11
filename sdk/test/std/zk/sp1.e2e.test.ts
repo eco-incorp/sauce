@@ -1,20 +1,25 @@
 /**
- * Succinct's SP1 template ported (`skills/sauce-zk/examples/fibonacci.sauce.ts`) EXECUTED: a program
- * checks a real SP1 proof through Succinct's verifier gateway, in the same transaction, and returns
- * the public values the proof shows its program committed — on an anvil at each chain's id running
- * the gated engine and Kitchen. A proof that arrives with the call needs no handler and no promise,
- * so the Pot is cooked as any program is, on the released Router.
+ * A program checking a real SP1 proof through Succinct's verifier gateway, in the same transaction,
+ * and acting on the public values the proof shows its program committed, EXECUTED — on an anvil at
+ * each chain's id running the gated engine and Kitchen. A proof that arrives with the call needs no
+ * handler and no promise, so the Pot is cooked as any program is, on the released Router.
  *
  * Nothing is mocked. The Groth16 gateway and two of its verifiers are their chains' runtimes at
  * their addresses, the gateway's owner and its route words as the chain holds them
- * (`fixtures/Succinct.json`, each runtime held to the chain's keccak256), and the proof is the
- * template's own fixture: a real Groth16 proof that its Fibonacci program computed fib(20).
+ * (`fixtures/Succinct.json`, each runtime held to the chain's keccak256).
  *
- * That proof is for SP1 v6.0.0, whose route Succinct has frozen on both chains (on Base at block
- * 52,444,424), so through the gateway as the chain holds it the proof is refused, as it is live.
- * With that one route as it stood before the freeze, its frozen flag cleared and nothing else
- * changed, v6.0.0's verifier checks the proof and the program returns (20, 6765, 10946). The same
- * proof labelled for the live v6.1.0 route reaches v6.1.0's verifier, which refuses it.
+ * THE PATH THAT WORKS TODAY: a proof a live SP1 app had the gateway verify on Ethereum (Cosmos IBC's
+ * SP1ICS07Tendermint, `live`), checked inside a program that trusts that app's program key, through
+ * the live v6.1.0 route, with no state changed. A proof is not bound to a chain: Base's gateway
+ * takes it too.
+ *
+ * THE TEMPLATE PORTED (`skills/sauce-zk/examples/fibonacci.sauce.ts`), with the template's own
+ * fixture: a real Groth16 proof that its Fibonacci program computed fib(20). That proof is for SP1
+ * v6.0.0, whose route Succinct has frozen on both chains (on Base at block 52,444,424), so through
+ * the gateway as the chain holds it the proof is refused, as it is live. With that one route as it
+ * stood before the freeze — its frozen flag cleared, the one local change — v6.0.0's verifier checks
+ * the proof and the port returns (20, 6765, 10946). The same proof labelled for the live v6.1.0
+ * route reaches v6.1.0's verifier, which refuses it.
  */
 import {
   concat,
@@ -52,8 +57,20 @@ const SUCCINCT = JSON.parse(readFileSync(join(FIXTURES, "Succinct.json"), "utf8"
     }
   >;
   template: { vkey: Hex; publicValues: Hex; proof: Hex; n: number; a: number; b: number };
+  live: { vkey: Hex; publicValues: Hex; proof: Hex };
 };
 const TEMPLATE = SUCCINCT.template;
+const LIVE = SUCCINCT.live;
+
+/** A program shaped as the port, trusting the live app's program instead: it answers the hash of
+ *  the public values the proof shows. */
+const LIVE_PROGRAM = `const PROGRAM_VKEY = ${LIVE.vkey};
+
+function main(publicValues: bytes, proof: bytes): Uint256 {
+  require(Succinct.VerifierGatewayGroth16);
+  Succinct.VerifierGatewayGroth16.verifyProof(PROGRAM_VKEY, publicValues, proof);
+  return crypto.keccak256(publicValues);
+}`;
 
 /** The skill's port of the template's Fibonacci contract. */
 const FIBONACCI = readFileSync(
@@ -82,28 +99,30 @@ describeOnEngine.each([
 
   let chain: ZkChain;
 
-  const cookData = (publicValues: Hex, proof: Hex): Hex =>
+  const cookData = (publicValues: Hex, proof: Hex, source = FIBONACCI): Hex =>
     encodeFunctionData({
       abi: potAbi,
       functionName: "cook",
-      args: [chain.stack.engine, chain.compiled(FIBONACCI, [publicValues, proof])],
+      args: [chain.stack.engine, chain.compiled(source, [publicValues, proof])],
     });
 
-  /** What the cook returns, as `main` returns it, unframed: its record's three words. */
-  const returned = async (publicValues: Hex, proof: Hex): Promise<bigint[]> => {
+  /** What the cook returns, as `main` returns it, unframed: one word each. */
+  const returned = async (publicValues: Hex, proof: Hex, source = FIBONACCI): Promise<bigint[]> => {
     const { data } = await chain.publicClient.call({
       account: OWNER.address,
       to: chain.stack.pot,
-      data: cookData(publicValues, proof),
+      data: cookData(publicValues, proof, source),
       value: FEE,
     });
-    expect((data!.length - 2) / 2).toBe(96);
+    expect((data!.length - 2) % 64).toBe(0);
 
-    return [0, 1, 2].map((i) => BigInt(`0x${data!.slice(2 + 64 * i, 2 + 64 * (i + 1))}`));
+    return Array.from({ length: (data!.length - 2) / 64 }, (_, i) =>
+      BigInt(`0x${data!.slice(2 + 64 * i, 2 + 64 * (i + 1))}`),
+    );
   };
 
-  const refusal = (publicValues: Hex, proof: Hex) =>
-    chain.revertOf(OWNER.address, chain.stack.pot, cookData(publicValues, proof), FEE);
+  const refusal = (publicValues: Hex, proof: Hex, source = FIBONACCI) =>
+    chain.revertOf(OWNER.address, chain.stack.pot, cookData(publicValues, proof, source), FEE);
 
   /** The v6.0.0 route with its frozen flag cleared, or as the chain holds it. */
   const thawed = (): Hex => `0x${"00".repeat(12)}${frozenRoute.value.slice(26)}`;
@@ -146,6 +165,35 @@ describeOnEngine.each([
   afterAll(async () => {
     await chain?.stop();
   });
+
+  it(
+    "verifies a live SP1 app's proof through the live route, as the chain holds the gateway, and acts on its public values",
+    async () => {
+      expect(LIVE.proof.slice(0, 10)).toBe(V6_1_0);
+      expect(await returned(LIVE.publicValues, LIVE.proof, LIVE_PROGRAM)).toEqual([
+        BigInt(keccak256(LIVE.publicValues)),
+      ]);
+      const sent = await chain.cook(chain.compiled(LIVE_PROGRAM, [LIVE.publicValues, LIVE.proof]));
+      expect(sent.ok).toBe(true);
+      const gas = await chain.callGas(
+        sent.hash,
+        gateway,
+        toFunctionSelector("verifyProof(bytes32,bytes,bytes)"),
+      );
+      console.log(`${slug}: the gateway verified the live proof with ${gas} gas`);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "refuses that proof to a program trusting another key: the key is the program",
+    async () => {
+      expect(await refusal(LIVE.publicValues, LIVE.proof)).toBe(
+        encodeErrorResult({ abi: verifierAbi, errorName: "ProofInvalid" }),
+      );
+    },
+    TEST_TIMEOUT,
+  );
 
   it(
     "refuses the template's proof through the gateway as the chain holds it: its version's route is frozen",

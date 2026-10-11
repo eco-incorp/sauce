@@ -1369,12 +1369,15 @@ the ports and counts their lines; `compile.test.ts` holds both to the files.
 **A proof that comes with the call is the registry's `succinct`**, not `@sauce/zk`: Succinct's SP1
 verifier gateways (`Succinct.VerifierGatewayGroth16`/`VerifierGatewayPlonk`, Ethereum and Base)
 check it synchronously, and the program acts on the public values in the same cook — the
-`fibonacci` port of `succinctlabs/sp1-project-template`. `sp1.e2e.test.ts` runs it with nothing
+`fibonacci` port of `succinctlabs/sp1-project-template`. `sp1.e2e.test.ts` runs with nothing
 mocked, on the released Router (it installs no handler: `describeOnEngine`), against the gateway's
 and two verifiers' runtimes and the gateway's route words captured from both chains
-(`fixtures/Succinct.json`) and the template's own Groth16 fixture proof. That proof is SP1 v6.0.0,
-whose route Succinct froze on both chains (Base block 52,444,424), so the suite holds both: refused
-`RouteIsFrozen` as the chain holds the route, verified (fib(20)) with only the frozen flag cleared.
+(`fixtures/Succinct.json`). Its main case is a live proof (`live`: one SP1ICS07Tendermint had the
+gateway verify on Ethereum, read from the transaction's trace) verified through the live route
+with no state changed. The template's own Groth16 fixture is SP1 v6.0.0, whose route Succinct froze
+on both chains (Base block 52,444,424), so the suite holds both: refused `RouteIsFrozen` as the
+chain holds the route, verified (fib(20)) with only the frozen flag cleared. Skills say "the
+template's current fixture targets a frozen verifier route", naming no version.
 The ABI leaves out `RouteNotFound(bytes4)`: the code pushes its selector shifted right one bit
 (`PUSH4 0x79043bbf`, `SHL 225`), which the evidence capture does not read.
 

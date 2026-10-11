@@ -8,7 +8,10 @@
 //
 // The proof is a Groth16 one, as `cargo run --bin evm -- --system groth16` makes it; its first four
 // bytes name the SP1 version whose verifier the gateway routes it to. A version Succinct has frozen
-// is refused (`RouteIsFrozen`), as is one the gateway lacks (`RouteNotFound`). What the Pot does
+// is refused (`RouteIsFrozen`), as is one the gateway lacks (`RouteNotFound`). The template's
+// current fixture targets a frozen verifier route: the gateway refuses it, and the template's
+// proofs, until the template moves to a live version; a proof from a live version, as live SP1
+// apps post, verifies. What the Pot does
 // differently: nothing to deploy, so the verification key is a constant here, where the template's
 // contract takes it in its constructor; and the gateway is the registry's, where the template's
 // takes an address.
