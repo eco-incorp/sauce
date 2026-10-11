@@ -1024,7 +1024,10 @@ run` puts the Pot's deployment (`commands.ts#potDeployStep`) first, sent through
 `sauce tx` and `sauce_tx` list the same steps unsigned as `{ chainId, pot, transactions }` ahead
 of the cook, with no top-level `to`/`data` so a wallet sends the whole plan; `RunInput.setup` and
 `TxInput.setup` take a command's further steps (another chain's setup) into the same question and
-plan rather than a second prompt. On Solana `create_pot` rides in the cook's own transaction when
+plan rather than a second prompt; each gets a `SetupReach` — the cook's chain, and `on(chain)` for
+any other through the command's own endpoint finder (`endpointOf`: `--config`, the public ones;
+MCP's reach) and signer, its `send` going through `sendAndWait` — so a step opens no transport
+and touches no key of its own. On Solana `create_pot` rides in the cook's own transaction when
 the two fit in one, and falls back to a step otherwise. A wallet policy's `to` counts the
 released Kitchen's `deployPot` of the wallet's own Pot, with no value, as a transaction to that
 Pot (`policy.ts#ownPotDeployed`). `run --fund` (`funding.ts`)

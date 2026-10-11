@@ -84,6 +84,35 @@ export interface SetupStep extends PendingApproval {
   readonly send: () => Promise<Sent>;
 }
 
+/** A chain as a setup step reaches it: a client, and where the command signs, its signer's send. */
+export interface ChainReach {
+  readonly chain: CanonicalChain;
+  readonly client: PublicClient;
+  /** Who sends: the signer, or for an unsigned plan the Pot's owner where it is known. */
+  readonly from?: Address;
+  /** Sends `tx` from the command's signer through `chain.ts#sendAndWait` — the wallet guard and its
+   *  policy, a rehearsal first — and waits; only where the command signs (`sauce run`). */
+  readonly send?: (tx: TxRequest) => Promise<Sent>;
+}
+
+/**
+ * What a command's setup steps reach (`RunInput.setup`, `TxInput.setup`): the cook's chain, and any
+ * other through the command's own endpoint for it (`--config`, the built-in public ones) and its
+ * own signer, so a step opens no transport and touches no key of its own.
+ */
+export interface SetupReach {
+  /** The cook's chain; `undefined` for an unsigned plan built with no endpoint. */
+  readonly cook: ChainReach | undefined;
+  /** `chain`, the cook's or another. Refuses a chain the command has no endpoint for, and — where
+   *  the command signs — a chain the release does not send on. */
+  readonly on: (chain: CanonicalChain) => Promise<ChainReach>;
+}
+
+/** Finds a chain's endpoint as the command does: `--config`, else a built-in public one. */
+export type EndpointOf = (
+  chain: CanonicalChain,
+) => string | undefined | Promise<string | undefined>;
+
 /** The one question for every step of `pending`, before the command goes on to `then` (`run`). */
 export function approvalQuestion(pending: readonly PendingApproval[], then: string): string {
   if (pending.length === 1) {

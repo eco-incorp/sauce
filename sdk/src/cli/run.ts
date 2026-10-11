@@ -2876,6 +2876,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...input,
           ...(fund === undefined ? {} : { fund }),
           rpcUrl,
+          endpointOf: (chain) => sharedEndpoint(args, io, chain),
           account,
           approver: approverOf(args, io),
           onSent: storing(args, io, input.chain, rpcUrl),
@@ -3014,7 +3015,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const input = cookInput(args, io, trailing, undefined, program);
       const rpcUrl = endpoint(args, io, input.chain);
 
-      return txCommand({ ...input, ...(rpcUrl === undefined ? {} : { rpcUrl }) }, io);
+      return txCommand(
+        {
+          ...input,
+          ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          endpointOf: (chain) => sharedEndpoint(args, io, chain),
+        },
+        io,
+      );
     },
   },
   pot: {

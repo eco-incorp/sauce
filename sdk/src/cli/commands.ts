@@ -54,7 +54,16 @@ import {
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
-import { approveAll, gasEstimate, unapproved, type Approver, type SetupStep } from "./approvals.js";
+import {
+  approveAll,
+  gasEstimate,
+  unapproved,
+  type Approver,
+  type ChainReach,
+  type EndpointOf,
+  type SetupReach,
+  type SetupStep,
+} from "./approvals.js";
 import { linkLines, txLinks } from "./links.js";
 import {
   checkIntentPots,
@@ -658,6 +667,54 @@ export async function potDeployStep(input: {
   };
 }
 
+/**
+ * What setup steps reach (`approvals.ts#SetupReach`): the cook's `chain` through the client the
+ * command connected, and any other through `endpointOf`, each with the command's signer where it
+ * signs — so every send goes through `sendAndWait` — and then the release's gate first.
+ */
+function setupReach(
+  chain: CanonicalChain,
+  endpointOf: EndpointOf | undefined,
+  own:
+    | {
+        readonly client: PublicClient;
+        readonly from?: Address;
+        readonly signed?: { readonly rpcUrl: string; readonly account: PrivateKeyAccount };
+      }
+    | undefined,
+): SetupReach {
+  const reachOf = (on: CanonicalChain, client: PublicClient, rpcUrl: string): ChainReach => {
+    const signed = own?.signed;
+
+    return {
+      chain: on,
+      client,
+      ...(own?.from === undefined ? {} : { from: own.from }),
+      ...(signed === undefined
+        ? {}
+        : { send: (tx: TxRequest) => sendAndWait(client, rpcUrl, signed.account, tx) }),
+    };
+  };
+  const cook = own === undefined ? undefined : reachOf(chain, own.client, own.signed?.rpcUrl ?? "");
+
+  return {
+    cook,
+    on: async (on) => {
+      if (on.id === chain.id && cook !== undefined) return cook;
+      if (own?.signed !== undefined) requireSupported("sending a setup step", [on]);
+      const url = await endpointOf?.(on);
+      if (url === undefined) {
+        throw new CliError(
+          `setting up ${on.slug} needs its endpoint, and the command has none: give --config with ` +
+            `an rpcUrls entry for chain ${on.id}`,
+        );
+      }
+
+      return reachOf(on, await connect(url, on), url);
+    },
+  };
+}
+
 /** The `sauce pot` that deploys `target`'s Pot. */
 function deployHint(chain: CanonicalChain, target: PotInput): string {
   // Any account may send the deployment; the hint names the owner, whose Pot it is.
@@ -694,7 +751,9 @@ export interface TxInput extends CookInput {
   readonly rpcUrl?: string;
   /** More transactions the cook needs sent first, listed after the Pot's deployment (when it has
    *  no code) and before the cook: another chain's setup, say (`approvals.ts`). */
-  readonly setup?: (client: PublicClient | undefined) => Promise<readonly SetupStep[]>;
+  readonly setup?: (reach: SetupReach) => Promise<readonly SetupStep[]>;
+  /** Another chain's endpoint, as the command finds it, for what `setup` reads there. */
+  readonly endpointOf?: EndpointOf;
 }
 
 /** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
@@ -731,7 +790,15 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           }),
         ]
       : []),
-    ...((await input.setup?.(client)) ?? []),
+    ...((await input.setup?.(
+      setupReach(
+        input.chain,
+        input.endpointOf,
+        client === undefined
+          ? undefined
+          : { client, ...(owner === undefined ? {} : { from: owner }) },
+      ),
+    )) ?? []),
   ];
   if (setup.length > 0) {
     const steps = setup.map((step) => step.planned);
@@ -821,7 +888,9 @@ export interface RunInput extends CookInput, ChainAccess {
   readonly approver: Approver;
   /** More transactions the cook needs sent first: asked about with the Pot's deployment, in one
    *  question, and sent after it (another chain's setup, say; `approvals.ts`). */
-  readonly setup?: (client: PublicClient) => Promise<readonly SetupStep[]>;
+  readonly setup?: (reach: SetupReach) => Promise<readonly SetupStep[]>;
+  /** Another chain's endpoint, as the command finds it, for what `setup` reads and sends there. */
+  readonly endpointOf?: EndpointOf;
   /** Called with the cook once it is sent, for what it published (the store); returns notes. */
   readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
@@ -866,7 +935,13 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
           }),
         ]
       : []),
-    ...((await input.setup?.(client)) ?? []),
+    ...((await input.setup?.(
+      setupReach(input.chain, input.endpointOf, {
+        client,
+        from: signer,
+        signed: { rpcUrl: input.rpcUrl, account: input.account },
+      }),
+    )) ?? []),
   ];
   // With no one to ask, every approval the run would need is named before anything is sent.
   if (!input.approver.auto && !input.approver.canAsk) {

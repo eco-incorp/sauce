@@ -809,7 +809,14 @@ async function cookTransaction(
     );
   }
 
-  return txCommand({ ...cook, ...(rpcUrl === undefined ? {} : { rpcUrl }) }, program.files);
+  return txCommand(
+    {
+      ...cook,
+      ...(rpcUrl === undefined ? {} : { rpcUrl }),
+      endpointOf: (other) => reach.endpoint(other, undefined),
+    },
+    program.files,
+  );
 }
 
 /** `sauce compile --json`: the command's own report, its defines among it. */

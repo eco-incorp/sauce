@@ -23,7 +23,11 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
+import { gasEstimate, type Approver, type SetupStep } from "../src/cli/approvals.js";
+import { runCommand, txCommand, type RunInput } from "../src/cli/commands.js";
 import type { CliIo } from "../src/cli/run.js";
+import { nodeIo } from "../src/cli/run.js";
+import { requireChain } from "../src/chains/canonical.js";
 import { v12KitchenAddress } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12KitchenAbi } from "../src/evm/engine.js";
@@ -212,6 +216,116 @@ describeEvm("a command deploys the Pot it needs", () => {
     const again = await run(answering(true), fresh.key, "asked");
     expect(again.code).toBe(0);
     expect(asked).toHaveLength(2);
+  }, 120_000);
+
+  it("asks once for the Pot and a command's own setup on another chain, and sends both before the cook", async () => {
+    // A second chain, where a command's setup step (here, one wei to a recipient) is sent: what a
+    // remote message's destination setup is, with the Pot's deployment in the same question.
+    const other = await startChain("base");
+    try {
+      const fresh = await owner("set-up");
+      await other.testClient.setBalance({ address: fresh.address, value: parseEther("1") });
+      const recipient = privateKeyToAccount(generatePrivateKey()).address;
+      const setup: RunInput["setup"] = async (reach) => {
+        const there = await reach.on(other.chain);
+        const tx = { to: recipient, data: "0x" as Hex, value: 1n };
+
+        return [
+          {
+            action: `pay ${recipient} on base`,
+            reason: `The setup on base is not done yet`,
+            offer: "Do it now",
+            estimate: await gasEstimate(there.client, there.from!, tx, other.chain),
+            planned: {
+              what: "the setup on base",
+              chainId: other.chain.id,
+              to: tx.to,
+              data: tx.data,
+              value: "1",
+            },
+            send: () => there.send!(tx),
+          } satisfies SetupStep,
+        ];
+      };
+      const input = (approver: Approver): RunInput => ({
+        file: program,
+        text: PROGRAM,
+        chain: requireChain("ethereum"),
+        defines: {},
+        compactArgs: false,
+        intents: {},
+        target: { owner: fresh.address, salt: fresh.salt },
+        args: { from: "--args", values: ["41"] },
+        rpcUrl: local.rpcUrl,
+        endpointOf: (chain) => (chain.id === other.chain.id ? other.rpcUrl : undefined),
+        account: privateKeyToAccount(fresh.key),
+        approver,
+        setup,
+      });
+      // One question for both, listing them; cancelled, nothing is sent on either chain.
+      const asked: string[] = [];
+      await expect(
+        runCommand(
+          input({
+            auto: false,
+            canAsk: true,
+            approve: async (_action, question) => (asked.push(question), false),
+          }),
+          nodeIo(),
+        ),
+      ).rejects.toThrow(
+        `${`Your Pot ${fresh.pot} on ethereum isn't deployed yet`}; The setup on base is not done yet, ` +
+          "so nothing was sent",
+      );
+      expect(asked).toHaveLength(1);
+      expect(asked[0]!.split("\n").slice(0, 3)).toEqual([
+        "Before it can run, it sends 2 transactions:",
+        expect.stringMatching(
+          new RegExp(`^  1\\. Your Pot ${fresh.pot} on ethereum isn't deployed yet: deploy Pot`),
+        ),
+        expect.stringMatching(
+          /^ {2}2\. The setup on base is not done yet: pay 0x[0-9a-fA-F]{40} on base \(about [\d,]+ gas/,
+        ),
+      ]);
+      await nothingSent(fresh.address, fresh.pot);
+      // Approved, both go first, in order, then the cook.
+      const approved: string[] = [];
+      const done = await runCommand(
+        input({
+          auto: true,
+          canAsk: true,
+          approve: async (action) => (approved.push(action), true),
+        }),
+        nodeIo(),
+      );
+      expect(approved).toEqual([`deploy Pot ${fresh.pot}`, `pay ${recipient} on base`]);
+      expect(done.json).toMatchObject({
+        deployPot: { status: "success" },
+        setup: [{ what: `pay ${recipient} on base`, status: "success" }],
+        cook: { status: "success" },
+      });
+      expect(await other.publicClient.getBalance({ address: recipient })).toBe(1n);
+      // Unsigned, the same setup leads the plan, after the Pot's deployment.
+      const plan = await txCommand(
+        {
+          ...input({ auto: false, canAsk: false, approve: async () => undefined }),
+          target: { owner: fresh.address, salt: potSalt("set-up-plan") },
+        },
+        nodeIo(),
+      );
+      expect(
+        (plan.json.transactions as Array<{ what: string; chainId?: number }>).map((tx) => [
+          tx.what.split(":")[0],
+          tx.chainId ?? null,
+        ]),
+      ).toEqual([
+        [expect.stringMatching(/^Kitchen\.deployPot\(/), null],
+        ["the setup on base", other.chain.id],
+        [expect.stringMatching(/^cook on Pot /), null],
+      ]);
+    } finally {
+      await other.stop();
+    }
   }, 120_000);
 
   it("-y deploys the Pot without asking, then cooks", async () => {
