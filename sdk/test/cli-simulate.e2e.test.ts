@@ -290,7 +290,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     expect(run.stdout).toMatch(
       new RegExp(
         `^ {2}1\\. Kitchen\\.deployPot\\(${OWNER}, 0x${"00".repeat(32)}\\), gas used \\d+: ` +
-          `Pot ${pot} is not deployed on ethereum yet\\.`,
+          `Pot ${pot} is not deployed on ethereum yet, so the rehearsal deploys it first`,
         "m",
       ),
     );

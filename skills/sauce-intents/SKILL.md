@@ -186,7 +186,7 @@ sauce intent import <tx-hash> --chain <source>
   though the Portal's status for it stays Initial.
 - `fill --send` fills it as a solver, from the signer: rehearsed first on the signer's real
   balances and not sent if it reverts, and what it spends (each delivered token, and the value)
-  shown for approval (`--auto-approve` approves). It sends the approvals (zero first where a smaller one
+  shown for approval (`--yes` approves). It sends the approvals (zero first where a smaller one
   stands), then `fulfillAndProve` with the prover's fee, or `fulfill` with `--no-prove`. It prints
   the Hyperlane message the proof travels as.
 - `prove` sends the proof of a filled or cancelled intent, paying the prover's fee; `claim` pays the
@@ -540,11 +540,12 @@ no eco-routes deployment, a pair with no prover deployed on both sides.
 - **The shared Pot.** A program body cooks on the destination Portal Executor's **shared Pot** (its
   owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the
   Executor, and the deployments file above the Pot. **The Pot must exist before any fill**: until it
-  does, every fulfilment of a program body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
-  address and deploy transaction; with `--deploy --keystore <keystore>`
-  any signer deploys it (the Pot is the Executor's either way), and an existing one is reported, not
-  redeployed; `sauce intent fill` says whether it is deployed on the destination, and deploys it in its
-  rehearsal when it is not. Anything left in the Pot after the program, token or allowance, belongs
+  does, every fulfilment of a program body reverts (`CallToEOA`). No one has to deploy it as a step
+  of their own: `sauce intent fill` says whether it is deployed on the destination, and puts its
+  deployment first, in the rehearsal and in what `--send` sends, when it is not (any signer may
+  send it; the Pot is the Executor's either way). By hand, `sauce pot --chain <destination> --owner <Executor>`
+  prints its address and deploy transaction, and with `--deploy --keystore <keystore>` sends it;
+  an existing one is reported, not redeployed. Anything left in the Pot after the program, token or allowance, belongs
   to the next intent through that Portal: approve exactly what is spent and move every remainder
   out.
 - **What the solver pays.** The Kitchen fee becomes the route's `nativeAmount`: the solver sends it,
