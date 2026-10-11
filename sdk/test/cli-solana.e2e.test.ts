@@ -1232,31 +1232,54 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(run.stdout + run.stderr).not.toContain(secret);
   }, 60_000);
 
-  it("asks before creating a missing Pot; --auto-approve creates it, then cooks", async () => {
+  it("creates a missing Pot in the cook's own transaction, asking nothing", async () => {
     const salt = hexToBytes(potSalt("fresh"));
     const pot = await potOf(salt);
     const { dest, flags } = accountsFor(pot, 50n);
-    const argv = [
-      "run",
-      sweep,
-      "--define",
-      mintDefine,
-      "--salt",
-      "fresh",
-      "--rpc-url",
-      RPC_URL,
-      "--keypair",
-      owner.path,
-      ...flags,
-      "--args",
-      "50",
-    ];
+    expect(harness.svm.getAccount(pot).exists).toBe(false);
+    // The unsigned cook carries the Pot's creation ahead of it.
+    const unsigned = await sauce(
+      ...["tx", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ...["--salt", "fresh", "--rpc-url", RPC_URL, ...flags, "--args", "50"],
+    );
+    expect(json(unsigned)).toMatchObject({ pot, createsPot: true });
+    expect(unsigned.stderr).toContain("this transaction creates it");
+    // No terminal and no --yes: nothing to approve, since the Pot is made by the cook's transaction.
+    const ran = await sauce(
+      ...["run", sweep, "--define", mintDefine, "--salt", "fresh", "--rpc-url", RPC_URL],
+      ...["--keypair", owner.path, ...flags, "--args", "50"],
+    );
+    expect(ran.code).toBe(0);
+    expect(ran.stderr).not.toContain("auto-approved");
+    expect(ran.stdout).toContain(
+      `created Pot ${pot} in the cook's own transaction, ahead of the cook`,
+    );
+    expect(ran.stdout).toMatch(/^cook \w+: success/m);
+    expect(harness.svm.getAccount(pot).exists).toBe(true);
+    expect(tokenAmount(harness, dest)).toBe(50n);
+  }, 60_000);
+
+  it("asks before creating a Pot whose creation does not fit in the cook's transaction; -y creates it", async () => {
+    // A program staged in a buffer: its cook carries no program, but not the Pot's creation either.
+    const big = join(work, "big-fresh.sauce.ts");
+    writeFileSync(
+      big,
+      [
+        "// @chain solana",
+        "function main() {",
+        `  const blob = hex\`${"cd".repeat(1500)}\`;`,
+        "  require(blob.length == 1500);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const pot = await potOf(hexToBytes(potSalt("fresh-big")));
+    const argv = ["run", big, "--salt", "fresh-big", "--rpc-url", RPC_URL, "--keypair", owner.path];
     const noTerminal = await sauce(...argv);
-    // No terminal: the approval it needs is named before anything is sent.
     expect(noTerminal.code).toBe(1);
     expect(noTerminal.stderr).toContain(
       "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
-        `  create Pot ${pot}\nPass --auto-approve`,
+        `  create Pot ${pot}\nPass --yes (-y)`,
     );
     let asked = "";
     const declined = await sauceWith(
@@ -1264,18 +1287,22 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       ...argv,
     );
     expect(asked).toBe(
-      `Pot ${pot} (owner ${owner.signer.address}, salt ${potSalt("fresh")}) is not deployed on ` +
-        "solana. Deploy it now? [y/N] ",
+      `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the ` +
+        "cook's transaction. Deploy it now (one transaction, its rent paid by you), then run? " +
+        "[deploy/cancel] ",
     );
-    expect(declined.stderr).toMatch(/so nothing was sent/);
+    expect(declined.stderr).toContain(
+      `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the ` +
+        "cook's transaction, so nothing was sent: run again and answer deploy, or pass --yes " +
+        "(-y), or create it yourself with sauce pot --deploy",
+    );
     expect(harness.svm.getAccount(pot).exists).toBe(false);
-    const yes = await sauce(...argv.slice(0, -2), "--auto-approve", "--args", "50");
+    const yes = await sauce(...argv, "-y");
     expect(yes.code).toBe(0);
     expect(yes.stderr).toContain(`auto-approved: create Pot ${pot}`);
     expect(yes.stdout).toMatch(new RegExp(`^created Pot ${pot} in \\w+: success`, "m"));
     expect(yes.stdout).toMatch(/^cook \w+: success/m);
-    expect(tokenAmount(harness, dest)).toBe(50n);
-  }, 60_000);
+  }, 120_000);
 
   it("stages a program too large for one transaction, cooks it, and closes the buffer", async () => {
     const big = join(work, "big.sauce.ts");
