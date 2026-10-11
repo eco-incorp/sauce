@@ -7,12 +7,12 @@
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
- * - every `@sauce/` library the SDK serves but `@sauce/token` (`@sauce/router`), as a module of
- *   its exported functions, typed from their own SauceScript annotations;
+ * - every `@sauce/` library the SDK serves but `@sauce/token` and `@sauce/swap` (`@sauce/router`),
+ *   as a module of its exported functions, typed from their own SauceScript annotations;
  * - then the catch-alls: another JSON ABI, another `@sauce/` library.
  *
- * The language itself — types, builtins, value methods, `@sauce/token` — is the hand-written
- * `sdk/sauce-script/builtins.d.ts`; the token symbols and the namespaces' contracts are
+ * The language itself — types, builtins, value methods, `@sauce/token`, `@sauce/swap` — is the
+ * hand-written `sdk/sauce-script/builtins.d.ts`; the token symbols and the namespaces' contracts are
  * `routes/source-globals.generated.ts`'s own declarations, referenced rather than copied.
  *
  * ONE SOURCE for the names: `routes.sourceGlobals`, what `sauce globals` prints, over every
@@ -134,14 +134,15 @@ function annotatedType(annotation: string | undefined, input: boolean): string {
 
 /**
  * The `@sauce/<name>` libraries the SDK serves, each as a module of its exported functions, every
- * target's arm merged (a function whose arms differ is overloaded). `@sauce/token` is left to
- * builtins.d.ts, which declares its functions as the globals a program calls with no import.
+ * target's arm merged (a function whose arms differ is overloaded). `@sauce/token` and `@sauce/swap`
+ * are left to builtins.d.ts, which declares their functions as the globals a program calls with no
+ * import.
  */
 function libraryModules(): string[] {
   const libraries = new Map<string, Set<string>>();
   for (const [path, source] of Object.entries(STD_SOURCES)) {
     const arm = /^([\w-]+)\/\1\.(evm|svm)\.js$/.exec(path);
-    if (arm === null || arm[1] === "token") continue;
+    if (arm === null || arm[1] === "token" || arm[1] === "swap") continue;
     const functions = libraries.get(arm[1]!) ?? new Set<string>();
     libraries.set(arm[1]!, functions);
     const annotation = (node: unknown): string | undefined => {
