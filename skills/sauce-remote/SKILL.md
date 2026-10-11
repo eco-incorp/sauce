@@ -217,7 +217,33 @@ A rehearsal shows the cook on the sending chain: the message priced and handed t
 the body does there runs when the bridge delivers it, in a transaction of its own; rehearse the
 body as a program for that chain to see it.
 
-## Example
+## The bridges' own examples, in Sauce
+
+Each bridge's official example app, ported. The original is a contract deployed on both chains,
+each set up to trust the other; the Sauce program deploys none: it runs on the owner's Pot on the
+chain it is cooked on, and its body on the same Pot on the other.
+
+| Bridge    | Official example                                    | Solidity | Sauce | Program                                                          |
+| --------- | --------------------------------------------------- | -------- | ----- | ---------------------------------------------------------------- |
+| Hyperlane | HelloWorld, Hyperlane's Hello World app             | 62       | 25    | [examples/hello-world.sauce.ts](examples/hello-world.sauce.ts)   |
+| LayerZero | MyOApp, LayerZero's OApp example                    | 38       | 15    | [examples/my-oapp.sauce.ts](examples/my-oapp.sauce.ts)           |
+| Metalayer | BlockHeightReader and BlockHeightProvider           | 67       | 9     | [examples/block-height.sauce.ts](examples/block-height.sauce.ts) |
+| Polymer   | State Sync (StateSyncV2), from Polymer's quickstart | 145      | 45    | [examples/state-sync.sauce.ts](examples/state-sync.sauce.ts)     |
+
+Lines are code lines, comments and blank lines left out, and the Solidity is the example's own file
+only, not the bridge's base contract it inherits (Hyperlane's Router, LayerZero's OApp). Each
+program's header cites its source and says what changed:
+
+- **What the original keeps in variables**, the program keeps in the Pot's storage, each at a slot
+  named for the variable (`keccak256("helloworld.sent")`), and its events are logged with the same
+  signatures and topics.
+- **The fee** the original takes with the call, the Pot pays from what it holds.
+- **Metalayer's read operations** are performed by its relayer, and a remote message sends none: the
+  body reads Base's block number itself, and the answer comes back as a second message.
+- **State Sync's per-key owners and replay check** fall away: only the owner's programs write to
+  the Pot, and a Polymer proof delivers once.
+
+## More examples
 
 - [examples/pay-on-base.sauce.ts](examples/pay-on-base.sauce.ts) pays someone on Base from this Pot
   there, from a program cooked on Ethereum, and records back on Ethereum what the Pot holds on Base

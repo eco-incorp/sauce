@@ -277,3 +277,50 @@ function remoteBodyToken(chain: string, symbol: string): string {
 
   return address.toString(16).padStart(40, "0");
 }
+
+describe("the bridges' own examples, ported", () => {
+  const REPOSITORY = join(process.cwd(), "..");
+  const PORTS = ["hello-world", "my-oapp", "block-height", "state-sync"];
+  const file = (name: string): string =>
+    readFileSync(
+      join(REPOSITORY, "skills", "sauce-remote", "examples", `${name}.sauce.ts`),
+      "utf8",
+    );
+  /** The program a file holds, its header comment left out. */
+  const program = (text: string): string => text.replace(/^(\/\/.*\n)+/, "").trimEnd();
+  /** Its code lines: neither blank nor only a comment. */
+  const codeLines = (text: string): number =>
+    text.split("\n").filter((line) => line.replace(/\/\/.*/, "").trim() !== "").length;
+  /** The Sauce column of each row of the ports' table under `heading` in `page`, in order. */
+  const sauceColumn = (page: string, heading: string): number[] => {
+    const lines = page.slice(page.indexOf(heading)).split("\n");
+    const cells = (line: string): string[] => line.split("|").map((cell) => cell.trim());
+    const column = cells(lines.find((line) => line.startsWith("| Bridge"))!).indexOf("Sauce");
+
+    return lines
+      .filter((line) => /^\| (Hyperlane|LayerZero|Metalayer|Polymer) /.test(line))
+      .slice(0, PORTS.length)
+      .map((line) => Number(cells(line)[column]));
+  };
+
+  it("each states its own size, which the skill's table and the manual's give", () => {
+    const sizes = PORTS.map((name) => codeLines(file(name)));
+    for (const [i, name] of PORTS.entries()) {
+      // The header, its lines joined as it reads.
+      expect(file(name).replace(/\n\/\/ /g, " ")).toContain(
+        `This program is ${sizes[i]} and deploys nothing`,
+      );
+    }
+    const skill = readFileSync(join(REPOSITORY, "skills", "sauce-remote", "SKILL.md"), "utf8");
+    expect(sauceColumn(skill, "## The bridges' own examples, in Sauce")).toEqual(sizes);
+    const guide = readFileSync(join(REPOSITORY, "docs", "guides", "async.md"), "utf8");
+    expect(sauceColumn(guide, "### The bridges' own examples, in Sauce")).toEqual(sizes);
+  });
+
+  it("the manual carries each program as the skill's file has it", () => {
+    const guide = readFileSync(join(REPOSITORY, "docs", "guides", "async.md"), "utf8");
+    const section = guide.slice(guide.indexOf("### The bridges' own examples, in Sauce"));
+    const blocks = [...section.matchAll(/```js\n([\s\S]*?)\n```/g)].map((match) => match[1]);
+    expect(blocks).toEqual(PORTS.map((name) => program(file(name))));
+  });
+});

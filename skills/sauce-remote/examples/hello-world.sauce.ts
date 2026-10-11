@@ -6,7 +6,7 @@
 // Ported from: hyperlane-xyz/hyperlane-monorepo/typescript/helloworld/contracts/HelloWorld.sol
 //   https://github.com/hyperlane-xyz/hyperlane-monorepo/blob/18c32ed2b608bfb02183b5028e2406c5153a3754/typescript/helloworld/contracts/HelloWorld.sol
 // The original is a contract deployed on both chains, each enrolled as the other's router: 62
-// lines of Solidity (comments left out) over Hyperlane's Router. This program is 26 and deploys
+// lines of Solidity (comments left out) over Hyperlane's Router. This program is 25 and deploys
 // nothing. The Pot pays Hyperlane's fee from what it holds, and a chain's id stands for its
 // Hyperlane domain, which is the same number.
 //

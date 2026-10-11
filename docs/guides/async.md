@@ -251,3 +251,150 @@ function main(amount: Uint256, owner: Address) {
   });
 }
 ```
+
+### The bridges' own examples, in Sauce
+
+Each bridge publishes an example app: a contract deployed on two chains, each set up to trust the
+other. Each is ported here to one Sauce program, which deploys nothing: it runs on the owner's Pot
+on the chain it is cooked on, Ethereum below, and its body on the same Pot on Base.
+
+| Bridge    | Official example                                                                                                                                                                                                                                                                                                                               | Solidity | Sauce |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----- |
+| Hyperlane | [HelloWorld.sol](https://github.com/hyperlane-xyz/hyperlane-monorepo/blob/18c32ed2b608bfb02183b5028e2406c5153a3754/typescript/helloworld/contracts/HelloWorld.sol)                                                                                                                                                                             | 62       | 25    |
+| LayerZero | [MyOApp.sol](https://github.com/LayerZero-Labs/devtools/blob/508363b50abf8215363a9d3aaddaf2ca5021c9ec/examples/oapp/contracts/MyOApp.sol)                                                                                                                                                                                                      | 38       | 15    |
+| Metalayer | BlockHeightReader.sol and BlockHeightProvider.sol, in the `@metalayer/contracts` npm package                                                                                                                                                                                                                                                   | 67       | 9     |
+| Polymer   | [StateSyncV2.sol](https://github.com/dpbmaverick98/polymer-state-sync/blob/e277c1ec466acfc028d2e99f1adf028a44f4a06c/contracts/StateSyncV2.sol), the State Sync example [Polymer's quickstart](https://github.com/polymerdao/developer-hub/blob/dc3ca3aec2a93b4a0cc933acaad07cd3a8105078/docs/build/get%20started/quickstart.mdx) walks through | 145      | 45    |
+
+The counts are code lines, comments and blank lines left out, and the Solidity is the example's file
+alone, not the base contract it inherits (Hyperlane's Router, LayerZero's OApp). The originals'
+variables become slots of the Pot's storage, each named for its variable; their events are logged
+with the same signatures and topics; and the Pot pays each bridge's fee from what it holds, where
+the originals take it with the call.
+
+**Hyperlane's Hello World** counts each message sent and received, per chain, and logs both ends.
+Run it with `sauce run hello-world.sauce.ts --chain ethereum --wallet <name> --args 'Hello, Base'`:
+
+```js
+function main(message: string) {
+  const origin = chainId;
+  const sent = crypto.keccak256("helloworld.sent");
+  const sentTo = crypto.keccak256(abi.encode(Base, crypto.keccak256("helloworld.sentTo")));
+  evm.sstore(sent, evm.sload(sent) + 1);
+  evm.sstore(sentTo, evm.sload(sentTo) + 1);
+  Base.remote(
+    () => {
+      const received = crypto.keccak256("helloworld.received");
+      const receivedFrom = crypto.keccak256(
+        abi.encode(origin, crypto.keccak256("helloworld.receivedFrom")),
+      );
+      evm.sstore(received, evm.sload(received) + 1);
+      evm.sstore(receivedFrom, evm.sload(receivedFrom) + 1);
+      log(
+        abi.encode(ctx.self(), message),
+        crypto.keccak256("ReceivedHelloWorld(uint32,uint32,bytes32,string)"),
+        origin,
+        chainId,
+      );
+    },
+    { via: "hyperlane" },
+  );
+  log(abi.encode(message), crypto.keccak256("SentHelloWorld(uint32,uint32,string)"), origin, Base);
+}
+```
+
+**LayerZero's OApp example** sends a string, and the chain it reaches keeps the last one it
+received: here its length at `keccak256("myoapp.lastMessage")` and its bytes a word to a slot from
+that slot's hash on. Run it with
+`sauce run my-oapp.sauce.ts --chain ethereum --wallet <name> --args 'Hello from Ethereum'`:
+
+```js
+function main(text: string) {
+  Base.remote(
+    () => {
+      const lastMessage = crypto.keccak256("myoapp.lastMessage");
+      const words = crypto.keccak256(lastMessage.toBytesBe(32));
+      const zero = 0;
+      const padded = text.concat(zero.toBytesBe(32));
+      evm.sstore(lastMessage, text.length);
+      for (let i = 0; i < text.length; i += 32) {
+        evm.sstore(words + i / 32, padded.slice(i, i + 32).toBe());
+      }
+    },
+    { via: "layerzero" },
+  );
+}
+```
+
+**Metalayer's block-height reader** learns another chain's block height and logs it. The original
+reads through Metalayer's read operations, which Metalayer's relayer performs; a remote message
+sends none, so the body reads Base's block number itself, and the answer comes back as a second
+message. Run it with `sauce run block-height.sauce.ts --chain ethereum --wallet <name>`:
+
+```js
+function main() {
+  Base.remote(() => ctx.blockNumber(), { via: "metalayer" }).then((result) => {
+    const [blockHeight] = abi.decode(result, ["Uint256"]);
+    log(
+      abi.encode(Base, ctx.self(), blockHeight),
+      crypto.keccak256("BlockHeightReceived(uint32,address,uint256)"),
+    );
+  });
+}
+```
+
+**Polymer's State Sync** keeps a key-value store the same on several chains: each write takes a
+version one past the key's last, and a chain takes a value only when its version is newer than the
+one it holds. The body runs on Base once anyone submits Polymer's proof of the message, and each
+further chain is one more `remote`. The original's per-key owners and its replay check fall away:
+only the owner's programs write to the Pot, and a proof delivers once. Run it with
+`sauce run state-sync.sauce.ts --chain ethereum --wallet <name> --args greeting 0x68656c6c6f`:
+
+```js
+function keep(slot: Uint256, data: bytes): void {
+  const words = crypto.keccak256(slot.toBytesBe(32));
+  const zero = 0;
+  const padded = data.concat(zero.toBytesBe(32));
+  evm.sstore(slot, data.length);
+  for (let i = 0; i < data.length; i += 32) {
+    evm.sstore(words + i / 32, padded.slice(i, i + 32).toBe());
+  }
+}
+
+function update(hashedKey: Uint256, value: bytes, version: Uint256): void {
+  const versionOf = crypto.keccak256(
+    abi.encode(hashedKey, crypto.keccak256("statesync.keyVersions")),
+  );
+  require(version > evm.sload(versionOf), "Version must be newer than current version");
+  evm.sstore(versionOf, version);
+  keep(crypto.keccak256(abi.encode(hashedKey, crypto.keccak256("statesync.store"))), value);
+}
+
+function main(key: string, value: bytes) {
+  const hashedKey = crypto.keccak256(ctx.self().toBytesBe(20).concat(key));
+  const versionOf = crypto.keccak256(
+    abi.encode(hashedKey, crypto.keccak256("statesync.keyVersions")),
+  );
+  const nonces = crypto.keccak256("statesync.nonces");
+  const nonce = evm.sload(nonces);
+  const version = evm.sload(versionOf) + 1;
+  evm.sstore(nonces, nonce + 1);
+  update(hashedKey, value, version);
+  log(
+    abi.encode(key, value, nonce, version),
+    crypto.keccak256("ValueSet(address,string,bytes,uint256,bytes32,uint256)"),
+    ctx.self(),
+    hashedKey,
+  );
+  Base.remote(
+    () => {
+      update(hashedKey, value, version);
+      log(
+        abi.encode(value, version),
+        crypto.keccak256("ValueUpdated(bytes32,bytes,uint256)"),
+        hashedKey,
+      );
+    },
+    { via: "polymer" },
+  );
+}
+```
