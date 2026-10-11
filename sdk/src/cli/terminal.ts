@@ -8,7 +8,7 @@
  * terminal instead, `/dev/tty`, where there is one: a program piped in from a terminal session is
  * still answered at that terminal. With neither there is no one to ask, and the command says so
  * before it sends anything (`commands.ts#unapproved`); it never waits on a stdin that is spent.
- * Windows has no `/dev/tty`, so a program piped in there runs with `--auto-approve` and a password
+ * Windows has no `/dev/tty`, so a program piped in there runs with `--yes` and a password
  * source (`--password-env`, `--password-file`, `--password-command`).
  */
 import { closeSync, openSync, writeSync } from "node:fs";
@@ -103,14 +103,15 @@ export function writeToTerminal(text: string): boolean {
   return true;
 }
 
-/** A yes/no answer typed at `terminal`: yes only for `y` or `yes`. */
+/** A yes/no answer typed at `terminal`: yes only for `y`, `yes`, or `deploy`, the word the Pot's
+ *  question (`[deploy/cancel]`) offers. */
 export function confirmOn(terminal: Terminal, question: string): Promise<boolean> {
   const prompt = createInterface({ input: terminal.input, output: terminal.output });
 
   return new Promise((resolve) => {
     prompt.question(question, (answer) => {
       prompt.close();
-      resolve(/^\s*y(?:es)?\s*$/i.test(answer));
+      resolve(/^\s*(?:y|yes|deploy)\s*$/i.test(answer));
     });
   });
 }

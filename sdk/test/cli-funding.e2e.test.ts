@@ -200,7 +200,7 @@ describeEvm(
           expect(refused.code).toBe(1);
           expect(refused.stderr).toContain(
             answer === undefined
-              ? "USDC is not approved to Permit2: approve it, or pass --auto-approve to let the run do it"
+              ? "USDC is not approved to Permit2: approve it, or pass --yes (-y) to let the run do it"
               : "USDC is not approved to Permit2: approve it; nothing was sent",
           );
         }
@@ -212,13 +212,15 @@ describeEvm(
         expect(await balance(usdc, OWNER.address)).toBe(MINTED);
       }, 60_000);
 
-      it("on yes approves Permit2, then pulls 1.5 USDC into the Pot and runs the program in one cook", async () => {
+      it("with --yes approves Permit2, then pulls 1.5 USDC into the Pot and runs the program in one cook", async () => {
+        // --json asks nothing, even at a terminal: --yes is what approves.
         const done = await run(
-          ["--fund", "USDC:1.5", "--json"],
+          ["--fund", "USDC:1.5", "--json", "--yes"],
           [usdc, RECIPIENT, "1000000"],
-          async () => true,
+          unasked,
         );
         expect(done.code).toBe(0);
+        expect(done.stderr).toContain("auto-approved: approve Permit2 for USDC");
         const out = JSON.parse(done.stdout) as {
           funding: Array<{ what: string; status: string }>;
           cook: { status: string };
@@ -744,7 +746,7 @@ describeEvm(
           { from: OWNER.address, to: usdc, data: approve(pot, 1_000_000n) },
         );
         expect(notes(done)).toBe(
-          "USDC: the Pot may not pull it yet: sauce run asks to approve it first (--auto-approve " +
+          "USDC: the Pot may not pull it yet: sauce run asks to approve it first (--yes " +
             "approves it), and the rehearsal runs that approval before the cook\n",
         );
         expect(await allowance(usdc, pot)).toBe(0n);
@@ -824,7 +826,7 @@ describeEvm(
         );
         expect(notes(done)).toContain(
           `USDC: Permit2 (${permit2}) may not move your tokens yet: sauce run asks to approve it ` +
-            "first (--auto-approve approves it), and the rehearsal runs that approval before the cook",
+            "first (--yes approves it), and the rehearsal runs that approval before the cook",
         );
         // A rehearsal: nothing landed.
         expect(await allowanceOf(usdc, account.address, permit2)).toBe(0n);
@@ -924,7 +926,7 @@ describeEvm(
       expect(stopped.code).toBe(1);
       expect(stopped.stderr).toContain(
         "nothing was sent: this run needs approvals, and there is no terminal to ask on:\n" +
-          `  deploy Pot ${pot}\n  approve Permit2 for USDC\nPass --auto-approve to approve them`,
+          `  deploy Pot ${pot}\n  approve Permit2 for USDC\nPass --yes (-y) to approve them`,
       );
       expect(await local.publicClient.getCode({ address: pot })).toBeUndefined();
       expect(await allowance(usdc, permit2)).toBe(0n);
@@ -952,7 +954,7 @@ describeEvm(
       expect(asked.code).toBe(0);
       expect(questions).toEqual([
         expect.stringMatching(
-          /^Pot 0x[0-9a-fA-F]{40} \(owner .*\) is not deployed on ethereum\. Deploy it now\? \[y\/N\] $/,
+          /^Your Pot 0x[0-9a-fA-F]{40} on ethereum isn't deployed yet\. Deploy it now \(one transaction, about [\d,]+ gas, ~[\d.]+ ETH\), then run\? \[deploy\/cancel\] $/,
         ),
       ]);
 
