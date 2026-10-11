@@ -14,7 +14,7 @@
 // request pays at most `maxPrice` wei, which the Pot deposits, and asks the prover that takes it to
 // lock 15 ZKC as collateral. Base only.
 //
-//   sauce run even-number.sauce.ts --chain base --wallet <name> --password-env <NAME> \
+//   sauce run even-number.sauce.ts --chain <chain> --wallet <name> --password-env <NAME> \
 //     --args <number> <imageId> <imageUrl> <maxPrice>
 //
 //   number: Uint256  the number to prove even and keep
@@ -22,7 +22,7 @@
 //   imageUrl: bytes  where provers download the guest, its UTF-8 bytes
 //   maxPrice: Uint256  the most the proof is paid, in wei
 //
-// Keeping 42, paying at most 0.001 ETH:
+// On Base, keeping 42, paying at most 0.001 ETH:
 //
 //   sauce run even-number.sauce.ts --chain base --wallet <name> --password-env <NAME> \
 //     --args 42 <imageId> <imageUrl> 1000000000000000

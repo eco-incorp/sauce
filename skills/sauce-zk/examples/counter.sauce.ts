@@ -15,14 +15,14 @@
 // price back in `.catch`. The request pays at most `maxPrice` wei, which the Pot deposits, and asks
 // the prover that takes it to lock 15 ZKC as collateral. Base only.
 //
-//   sauce run counter.sauce.ts --chain base --wallet <name> --password-env <NAME> \
+//   sauce run counter.sauce.ts --chain <chain> --wallet <name> --password-env <NAME> \
 //     --args <imageId> <imageUrl> <maxPrice>
 //
 //   imageId: Uint256  the echo guest's image id
 //   imageUrl: bytes  where provers download the guest, its UTF-8 bytes
 //   maxPrice: Uint256  the most the proof is paid, in wei
 //
-// Paying at most 0.001 ETH:
+// On Base, paying at most 0.001 ETH:
 //
 //   sauce run counter.sauce.ts --chain base --wallet <name> --password-env <NAME> \
 //     --args <imageId> <imageUrl> 1000000000000000
