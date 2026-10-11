@@ -91,34 +91,6 @@ sauce run pools.sauce.ts --chain base --keystore <keystore> \
 - **"The caller" or "self" is the Pot** in a Sauce program: what lands there stays in the Pot, not
   in the user's wallet, until another cook moves it.
 
-## Pitfalls
-
-- **Recorded is not live.** A registry address is not proof of code: confirm `eth_getCode` returns
-  code before relying on it.
-- **Swapping through a protocol's own router.** Use `@sauce/router` (`sauce-swaps`).
-- **An address-only factory called for a pool** (`Kyberswap.ElasticFactory`): the registry has no
-  ABI for it, only its address; pass the pool as a `main` input. An Algebra factory (Camelot V3,
-  QuickSwap V3) is a deployed contract: `Camelot.V3Factory.poolByPair(a, b)` returns the pool, with
-  no fee argument (Algebra fees are dynamic).
-- **A standing allowance.** Approve exactly what the call spends: the Pot keeps any allowance it
-  grants.
-- **An output left in the Pot by default.** A call naming no beneficiary credits its caller, the
-  Pot; pass the user's wallet where they chose it.
-- **A receipt measured by the amount supplied.** Rebasing receipts (aTokens) grow: measure deltas.
-
-## Files
-
-- [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has
-  it, PancakeSwap V3 through their namespaces.
-- [examples/protocols.mts](examples/protocols.mts) compiles it for Base, Arbitrum and Optimism (the
-  last two preview chains, compiled only), loads a protocol document, and compiles a protocol
-  template.
-- [examples/uniswap-v3-liquidity-examples.sauce.ts](examples/uniswap-v3-liquidity-examples.sauce.ts)
-  ports Uniswap's `LiquidityExamples` (below), with the position reads the registry's ABI leaves
-  out in [examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
-- [references/index.md](references/index.md), `references/registry/<slug>.md` (generated) and
-  `references/<slug>.md` (one document per protocol).
-
 ## Porting a protocol's own example
 
 A protocol's Solidity example is a contract its user deploys, funds and calls; a Sauce program is
@@ -162,3 +134,38 @@ the IRM's rate and the oracle's price in
 [examples/MorphoBlueReads.json](examples/MorphoBlueReads.json). A Solidity view that computes
 interest accrued since the market was last touched becomes `accrueInterest` and a read: a program
 runs as a transaction, even under `sauce simulate`.
+
+[examples/pendle-router-sample.sauce.ts](examples/pendle-router-sample.sauce.ts) ports Pendle's own
+router samples: PT and YT bought and sold back, a zap into a market's liquidity and out, SY and PT
+with YT minted and redeemed, and a zap that keeps its YT, each a `step` on one market, with the
+router's approximation, token and limit-order arguments built as Pendle's StructGen builds them
+and the functions the registry's ABI leaves out in
+[examples/PendleRouterSample.json](examples/PendleRouterSample.json).
+
+## Pitfalls
+
+- **Recorded is not live.** A registry address is not proof of code: confirm `eth_getCode` returns
+  code before relying on it.
+- **Swapping through a protocol's own router.** Use `@sauce/router` (`sauce-swaps`).
+- **An address-only factory called for a pool** (`Kyberswap.ElasticFactory`): the registry has no
+  ABI for it, only its address; pass the pool as a `main` input. An Algebra factory (Camelot V3,
+  QuickSwap V3) is a deployed contract: `Camelot.V3Factory.poolByPair(a, b)` returns the pool, with
+  no fee argument (Algebra fees are dynamic).
+- **A standing allowance.** Approve exactly what the call spends: the Pot keeps any allowance it
+  grants.
+- **An output left in the Pot by default.** A call naming no beneficiary credits its caller, the
+  Pot; pass the user's wallet where they chose it.
+- **A receipt measured by the amount supplied.** Rebasing receipts (aTokens) grow: measure deltas.
+
+## Files
+
+- [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has
+  it, PancakeSwap V3 through their namespaces.
+- [examples/protocols.mts](examples/protocols.mts) compiles it for Base, Arbitrum and Optimism (the
+  last two preview chains, compiled only), loads a protocol document, and compiles a protocol
+  template.
+- [examples/uniswap-v3-liquidity-examples.sauce.ts](examples/uniswap-v3-liquidity-examples.sauce.ts)
+  ports Uniswap's `LiquidityExamples` (above), with the position reads the registry's ABI leaves
+  out in [examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
+- [references/index.md](references/index.md), `references/registry/<slug>.md` (generated) and
+  `references/<slug>.md` (one document per protocol).
