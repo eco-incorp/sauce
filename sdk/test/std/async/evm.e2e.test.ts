@@ -10,10 +10,12 @@
  *   - `CarrierProtocol`, echoing: the request sends its own bytes, and later `deliver(id, value)`
  *     calls the Pot back with `carried(bytes payload, bytes value)`, the payload as it was sent. A
  *     plain `.then` carries its continuation and stores nothing.
- * Each step runs as a user would run it: the owner cooks the install program the SDK writes
- * (`routes/handlers.ts`, the two handlers and @sauce/async's public `expire(bytes32)`), then
- * programs that request; anyone calls the protocols back, and the Router's fallback cooks the
- * handler, which checks its caller and settles the promise, running its body in the same cook.
+ * Each step runs as a user would run it. On the harness Pot the owner first cooks the optional
+ * pre-install the SDK writes (`routes/handlers.ts`, the two handlers and @sauce/async's public
+ * `expire(bytes32)`); on fresh Pots a request installs the handler it lists, and the public `expire`
+ * for a deadline, as it runs, a later one only checking them. Then anyone calls the protocols back,
+ * and the Router's fallback cooks the handler, which checks its caller and settles the promise,
+ * running its body in the same cook.
  *
  * What is held: the body writes the Pot's storage with what arrived and what it captured; the
  * Kitchen's fee is charged once per callback; a second delivery runs nothing and returns; a forged
@@ -61,6 +63,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
+import { handlerRecord, handlersInPlace } from "../../../src/cli/handlers.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
 import {
   approvedHashSlot,
@@ -73,7 +76,11 @@ import {
   packageHandlers,
   packageReader,
 } from "../../../src/routes/handlers.js";
-import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import {
+  ASYNC_ENGINE_DEFINE,
+  ASYNC_INSTALLED_DEFINE,
+  compileSauceProgram,
+} from "../../../src/routes/sauce-route.js";
 import { freePortSync, spawnAnvil } from "../../anvil-process.js";
 import {
   gateAnchors,
@@ -158,6 +165,11 @@ const REQUEST_SELECTOR = toFunctionSelector("request(uint256)");
 /** keccak256(abi.encode(uint256(keccak256("sauce.storage.Async")) - 1)) & ~0xff. */
 const NAMESPACE = (() => {
   const inner = BigInt(keccak256(toHex("sauce.storage.Async"))) - 1n;
+  return BigInt(keccak256(encodeAbiParameters([{ type: "uint256" }], [inner]))) & ~0xffn;
+})();
+/** The Router's handler records, in the Pot's storage: ERC-7201 `sauce.storage.Handlers`. */
+const HANDLERS = (() => {
+  const inner = BigInt(keccak256(toHex("sauce.storage.Handlers"))) - 1n;
   return BigInt(keccak256(encodeAbiParameters([{ type: "uint256" }], [inner]))) & ~0xffn;
 })();
 /** The Pot storage slot the body writes. */
@@ -403,6 +415,46 @@ function main(first: Uint256, second: Uint256): void {
   });
 }`;
 
+/** The echo protocol as a package of the family writes one now: its request installs the handler its
+ *  callback reaches (`handlers`), on a Pot that installed nothing beforehand. `within` follows the
+ *  request (`.within(60)`). */
+const lazyEchoSource = (
+  echo: Address,
+  within: string,
+): string => `import { Handler, Request, fulfil, promiseKey, requireCaller } from "@sauce/async";
+
+class LazyEcho {
+  request(value: Uint256) {
+    return new Request({
+      handlers: [
+        new Handler(${ECHO_SELECTOR}, (caller: Address, paid: Uint256, data: bytes) => {
+          requireCaller(${echo}, caller);
+          const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
+          fulfil(promiseKey(${ECHO_TAG}, id), abi.encode(echoed));
+        }),
+      ],
+      send: (continuation) => {
+        const [id] = abi.decode(
+          evm.call(${echo}, 0, hex\`${REQUEST_SELECTOR.slice(2)}\`.concat(abi.encode(value))),
+          ["Uint256"],
+        );
+        return promiseKey(${ECHO_TAG}, id);
+      },
+      deliver: (input, body, fail) => {
+        const [echoed] = abi.decode(input, ["Uint256"]);
+        body(echoed);
+      },
+    });
+  }
+}
+const Echo = new LazyEcho();
+
+function main(value: Uint256, bump: Uint256): void {
+  Echo.request(value)${within}.then((echoed) => {
+    evm.sstore(${ECHOED_SLOT}, echoed + bump);
+  });
+}`;
+
 /** A deferred: its body parked, its key the program's answer and logged; settled later by key. */
 const deferredSource = `import { Promise } from "@sauce/async";
 
@@ -477,7 +529,16 @@ async function send(
 
 /** `program` with `args` for its `main`, compiled by the SDK for the chain. */
 function compiled(source: string, args: readonly (bigint | Hex)[] = []): Hex {
-  const program = compileSauceProgram(CHAIN, source);
+  return compiledWith(source, args, {});
+}
+
+/** The same, with `defines`: what a sender that read the chain first compiles. */
+function compiledWith(
+  source: string,
+  args: readonly (bigint | Hex)[],
+  defines: Readonly<Record<string, bigint>>,
+): Hex {
+  const program = compileSauceProgram(CHAIN, source, { defines });
 
   return bytesToHex(concat([program.bytecode, encodeEntryArguments(program, args)]));
 }
@@ -1306,6 +1367,147 @@ function main(hash: Uint256, signature: bytes): Uint256 {
       ).toBe(INVALID);
     },
   );
+
+  /** A Private Pot the owner just made: nothing installed on it, a balance for its callbacks' fee. */
+  const freshPot = async (salt: bigint): Promise<Address> => {
+    expect(
+      (
+        await send(
+          owner,
+          stack.kitchen,
+          encodeFunctionData({
+            abi: kitchenAbi,
+            functionName: "deployPot",
+            args: [OWNER.address, word(salt), false],
+          }),
+        )
+      ).ok,
+    ).toBe(true);
+    const pot = (await publicClient.readContract({
+      address: stack.kitchen,
+      abi: kitchenAbi,
+      functionName: "predictPot",
+      args: [OWNER.address, word(salt), false],
+    })) as Address;
+    await createTestClient({ mode: "anvil", transport: http(RPC_URL) }).setBalance({
+      address: pot,
+      value: parseEther("1"),
+    });
+    return pot;
+  };
+  /** The Router's record for `selector` on `pot`: zero when nothing answers it. */
+  const record = async (pot: Address, selector: Hex): Promise<bigint> =>
+    BigInt(
+      (await publicClient.getStorageAt({
+        address: pot,
+        slot: keccak256(
+          encodeAbiParameters(
+            [{ type: "bytes32" }, { type: "uint256" }],
+            [
+              concat([selector, "0x00000000000000000000000000000000000000000000000000000000"]),
+              HANDLERS,
+            ],
+          ),
+        ),
+      })) ?? "0x0",
+    );
+
+  itSettling(
+    "a first request installs the handler its callback reaches, in the same transaction",
+    async () => {
+      const pot = await freshPot(0x1a2en);
+      expect(await record(pot, ECHO_SELECTOR)).toBe(0n);
+      // What the CLI reads before it sends: not in place yet.
+      const handlers = compileSauceProgram(CHAIN, lazyEchoSource(echo, "")).handlers;
+      expect(await handlersInPlace(publicClient, pot, handlers)).toBe(false);
+      const [id] = await nextIds(1);
+      const first = await cook(compiled(lazyEchoSource(echo, ""), [41n, 1_000n]), pot);
+      expect(first.ok).toBe(true);
+      GAS["lazy: first request, installing its handler"] = await gasOf(first.hash);
+      const installed = await record(pot, ECHO_SELECTOR);
+      expect(installed).not.toBe(0n);
+      // The record the CLI works out is the one the Router wrote.
+      expect(word(installed)).toBe(word(handlerRecord(pot, handlers[0]!)));
+      expect(await handlersInPlace(publicClient, pot, handlers)).toBe(true);
+      expect((await fulfill(id!)).ok).toBe(true);
+      expect(await publicClient.getStorageAt({ address: pot, slot: ECHOED_SLOT })).toBe(
+        word(1_041n),
+      );
+      // Again: the handler is in place, so the request only checks it.
+      const again = await cook(compiled(lazyEchoSource(echo, ""), [42n, 1_000n]), pot);
+      expect(again.ok).toBe(true);
+      GAS["lazy: a later request, checking its handler"] = await gasOf(again.hash);
+      expect(await record(pot, ECHO_SELECTOR)).toBe(installed);
+      // Compiled by a sender that read it installed: no handler carried, only checked.
+      const sent = compiledWith(lazyEchoSource(echo, ""), [43n, 1_000n], {
+        [ASYNC_INSTALLED_DEFINE]: 1n,
+      });
+      const carried = compiled(lazyEchoSource(echo, ""), [43n, 1_000n]);
+      expect(sent.length).toBeLessThan(carried.length);
+      const checked = await cook(sent, pot);
+      expect(checked.ok).toBe(true);
+      GAS["lazy: a later request, compiled knowing it installed"] = await gasOf(checked.hash);
+      // With no engine to work the address out from while compiling, the check hashes the handler.
+      const hashed = await cook(
+        compiledWith(lazyEchoSource(echo, ""), [44n, 1_000n], { [ASYNC_ENGINE_DEFINE]: 0n }),
+        pot,
+      );
+      expect(hashed.ok).toBe(true);
+      GAS["lazy: a later request, its check hashing the handler"] = await gasOf(hashed.hash);
+      // Against the same request with no handler at all, its continuation deployed on this Pot.
+      await cook(compiled(requestSource(echo), [45n, 1_000n]), pot);
+      const plain = await cook(compiled(requestSource(echo), [46n, 1_000n]), pot);
+      GAS["lazy: the same request with no handler"] = await gasOf(plain.hash);
+    },
+  );
+
+  itAlways(
+    "compiled knowing its handlers installed, a program refuses a Pot that lacks one",
+    async () => {
+      const pot = await freshPot(0x1a2fn);
+      const program = compiledWith(lazyEchoSource(echo, ""), [1n, 0n], {
+        [ASYNC_INSTALLED_DEFINE]: 1n,
+      });
+      const refused = await revertOf(
+        OWNER.address,
+        pot,
+        encodeFunctionData({ abi: potAbi, functionName: "cook", args: [stack.engine, program] }),
+        FEE,
+      );
+      expect(refused.reason).toContain("async: a handler this program needs is not installed");
+      expect(await record(pot, ECHO_SELECTOR)).toBe(0n);
+    },
+  );
+
+  itSettling("a request with a deadline installs the public expire too", async () => {
+    const pot = await freshPot(0x1a30n);
+    const [id] = await nextIds(1);
+    const first = await cook(compiled(lazyEchoSource(echo, ".within(60)"), [7n, 0n]), pot);
+    expect(first.ok).toBe(true);
+    GAS["lazy: first request with a deadline, installing echo and expire"] = await gasOf(
+      first.hash,
+    );
+    expect(await record(pot, ECHO_SELECTOR)).not.toBe(0n);
+    expect(await record(pot, toFunctionSelector("expire(bytes32)"))).not.toBe(0n);
+    // Past the deadline anyone may expire it, through the handler the request installed.
+    await later(61);
+    const key = keyOf(id!);
+    const expired = await send(
+      stranger,
+      pot,
+      concat([toFunctionSelector("expire(bytes32)"), word(key)]),
+      FEE,
+    );
+    expect(expired.ok).toBe(true);
+    expect(
+      BigInt(
+        (await publicClient.getStorageAt({
+          address: pot,
+          slot: slotOf(key),
+        })) ?? "0x0",
+      ),
+    ).toBe(0n);
+  });
 
   itAlways("refuses `install` on a Shared Pot, which answers no selector", async () => {
     const salt = word(0x5a5an);

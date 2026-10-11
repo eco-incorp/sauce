@@ -61,6 +61,7 @@ import {
   type EntryValue,
 } from "./entry.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
+import { v12EngineAddress } from "../deployments/v12-addresses.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -273,8 +274,8 @@ function chainModules(
     if (destination === undefined) {
       throw new Error(
         `program(closure, scope): the SDK compiles a closure for the chain whose id \`scope\` is ` +
-          `(an intent's body), or \`scope.continuation\` is (a promise's continuation); ` +
-          `${scopeText(scope)} is no chain it knows`,
+          `(an intent's body), or \`scope.continuation\` is (a promise's continuation), or ` +
+          `\`scope.handler\` is (a Pot's handler); ${scopeText(scope)} is no chain it knows`,
       );
     }
     bodies.set(id, destination);
@@ -288,37 +289,73 @@ function chainModules(
       ambient: [
         ...new Set([...chainAmbient(destination), ...(options.ambient ?? []), own, specifier]),
       ],
-      defines: [...(toRsDefines(defines) ?? []), [CHAIN_DEFINE, String(destination.id)]],
+      defines: [
+        ...(toRsDefines({ ...engineDefine(destination, defines), ...defines }) ?? []),
+        [CHAIN_DEFINE, String(destination.id)],
+      ],
     };
   };
 
   return {
     modules,
     ambient: [...new Set([...(options.ambient ?? []), own, level])],
-    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
+    defines: { ...engineDefine(chain, defines), ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
     programOptions,
     bodies,
   };
 }
 
 /**
- * The chain id a `program(closure, scope)` call compiles for: `scope` itself for an intent's body
- * (`@sauce/hop`), `scope.continuation` for a promise's continuation (`@sauce/async`), which runs on
- * the program's own Pot when a callback settles it and opens no intent.
+ * `@sauce/async`'s constant for the engine its Pot's cooks run on, which the SDK sets to the
+ * release's on an EVM chain: a request then checks the handlers it installs against an address
+ * worked out while it compiles. A caller's define of the same name is kept.
  */
+export const ASYNC_ENGINE_DEFINE = "SAUCE_ASYNC_ENGINE";
+/** `@sauce/async`'s constant that the program's sender set, to 1, once it read every handler the
+ *  program installs in place on the Pot: the program then carries none of them. */
+export const ASYNC_INSTALLED_DEFINE = "SAUCE_ASYNC_INSTALLED";
+
+function engineDefine(
+  chain: CanonicalChain,
+  defines: SauceCompileOptions["defines"],
+): Readonly<Record<string, bigint>> {
+  return chain.kind === "svm" || (defines !== undefined && ASYNC_ENGINE_DEFINE in defines)
+    ? {}
+    : { [ASYNC_ENGINE_DEFINE]: BigInt(v12EngineAddress()) };
+}
+
+/**
+ * What a `program(closure, scope)` call compiled, by its scope: an intent's body (`scope` a chain
+ * id, `@sauce/hop`), a promise's continuation (`{ continuation: chainId }`, `@sauce/async`), which
+ * runs on the program's own Pot when a callback settles it, or a Pot's handler (`{ handler:
+ * chainId, selector, readOnly }`, `@sauce/async`'s `Handler`), which a request installs for the
+ * callback to reach. Neither of the last two opens an intent.
+ */
+type ScopeKind = "body" | "continuation" | "handler";
+
+function scopeKind(scope: ProgramScope): ScopeKind | undefined {
+  if (typeof scope === "bigint") return "body";
+  if (typeof scope !== "object" || Array.isArray(scope)) return undefined;
+  if (scope.continuation !== undefined) return "continuation";
+  if (scope.handler !== undefined) return "handler";
+
+  return undefined;
+}
+
+/** The chain id a `program(closure, scope)` call compiles for (see {@link scopeKind}). */
 function scopeChainId(scope: ProgramScope): number | undefined {
   if (typeof scope === "bigint") return Number(scope);
   if (typeof scope === "object" && !Array.isArray(scope)) {
-    const continuation = scope.continuation;
-    if (typeof continuation === "bigint") return Number(continuation);
+    const id = scope.continuation ?? scope.handler;
+    if (typeof id === "bigint") return Number(id);
   }
 
   return undefined;
 }
 
-/** Whether a `program(closure, scope)` call compiled a promise's continuation, not an intent's body. */
-function isContinuation(scope: ProgramScope): boolean {
-  return typeof scope === "object" && !Array.isArray(scope) && scope.continuation !== undefined;
+/** A word of a scope read as a flag: a `bool` arrives as a word. */
+function scopeFlag(value: ProgramScope | undefined): boolean {
+  return typeof value === "bigint" && value !== 0n;
 }
 
 function scopeText(scope: ProgramScope): string {
@@ -403,6 +440,15 @@ export interface CompiledBody {
   readonly captures: readonly string[];
 }
 
+/** A Pot's handler the program installs (`@sauce/async`'s `Handler`), as compiled for its chain:
+ *  the Router runs it for `selector`, with `(caller, value, data)` appended. */
+export interface InstalledHandler extends CompiledBody {
+  /** The selector it answers, its four bytes as a word. */
+  readonly selector: bigint;
+  /** Whether it runs as a view (static, no fee) rather than as a cook. */
+  readonly readOnly: boolean;
+}
+
 /** A standalone program, compiled for one chain: {@link compileSauceProgram}'s result. */
 export interface CompiledSauceProgram {
   readonly chain: CanonicalChain;
@@ -423,6 +469,9 @@ export interface CompiledSauceProgram {
   /** Every promise continuation the program parks (`@sauce/async`: a request's `.then`, a
    *  combinator's), as compiled for the chain its callback lands on. No intent opens for one. */
   readonly continuations: readonly CompiledBody[];
+  /** Every handler the program installs on its Pot when it runs (`@sauce/async`: a request's
+   *  `handlers`, the core's `expire`), as compiled for the Pot's chain. */
+  readonly handlers: readonly InstalledHandler[];
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
   /** The source the compiler was given: the program as written. */
@@ -489,6 +538,7 @@ export function compileSauceProgram(
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     bodies: program.bodies,
     continuations: program.continuations,
+    handlers: program.handlers,
     entrySignature: program.entrySignature,
     source: program.source,
   };
@@ -514,6 +564,7 @@ function compileForChain(
   readonly manifest?: AccountManifest;
   readonly bodies: readonly CompiledBody[];
   readonly continuations: readonly CompiledBody[];
+  readonly handlers: readonly InstalledHandler[];
   readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
@@ -553,9 +604,9 @@ function compileForChain(
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
-  const reported = (continuations: boolean): CompiledBody[] =>
+  const reported = (kind: ScopeKind): CompiledBody[] =>
     programs.flatMap((report): CompiledBody[] => {
-      if (isContinuation(report.scope) !== continuations) return [];
+      if (scopeKind(report.scope) !== kind) return [];
       const id = scopeChainId(report.scope);
       const on = id === undefined ? undefined : chainById(id);
       return on === undefined
@@ -570,11 +621,42 @@ function compileForChain(
             },
           ];
     });
-  const bodies = reported(false);
-  const continuations = reported(true);
+  const bodies = reported("body");
+  const continuations = reported("continuation");
+  const handlers = programs.flatMap((report): InstalledHandler[] => {
+    const scope = report.scope;
+    if (scopeKind(scope) !== "handler" || typeof scope !== "object" || Array.isArray(scope)) {
+      return [];
+    }
+    const on = chainById(scopeChainId(scope) ?? NaN);
+    const selector = scope.selector;
+    if (on === undefined || typeof selector !== "bigint") return [];
+
+    return [
+      {
+        id: report.id,
+        path: report.path,
+        destination: on,
+        bytecode: report.bytecode,
+        captures: report.captures,
+        selector,
+        readOnly: scopeFlag(scope.readOnly),
+      },
+    ];
+  });
 
   return manifest === undefined
-    ? { chain, compiled, entryParams, source, entryEncoding, bodies, continuations, entrySignature }
+    ? {
+        chain,
+        compiled,
+        entryParams,
+        source,
+        entryEncoding,
+        bodies,
+        continuations,
+        handlers,
+        entrySignature,
+      }
     : {
         chain,
         compiled,
@@ -584,6 +666,7 @@ function compileForChain(
         manifest,
         bodies,
         continuations,
+        handlers,
         entrySignature,
       };
 }

@@ -29,23 +29,35 @@
 //   promiseKey, salt    a promise's key: a protocol's id under its tag, or one the Pot picks
 //   park, run, received the settlement table's parts, for a package that needs them directly
 //   requireCaller, requireSelf  a handler's checks
-//   install, declareInterface   what installing a package's handlers on the Pot calls
+//   Handler             a program the Pot answers a selector with, which a request installs as it
+//                       runs (`handlers`) unless the Pot already answers with it
+//   ensureInstalled, install, declareInterface  installing a handler, and an ERC-165 id
 //   isValidSignature, Erc1271   the Pot as an ERC-1271 signer: a hash a program approved, or its
 //                               owner's signature over the hash bound to the Pot
 //
 // WHERE A CALLBACK LANDS. A Private Pot answers a selector neither it nor its Router declares with
-// the program its owner registered for it (the Router's `setHandler`, which `install` calls): the
-// Router runs that handler as a cook of the Pot, paying the Kitchen's fee from the Pot's balance,
-// as `main(caller: Address, value: Uint256, data: bytes)`. A handler authenticates its caller and
-// settles the promise the callback names:
+// the program registered for it (the Router's `setHandler`, which `install` calls, from the owner
+// or from a cook of the Pot): the Router runs that handler as a cook of the Pot, paying the
+// Kitchen's fee from the Pot's balance, handed `(caller: Address, value: Uint256, data: bytes)`. A
+// handler authenticates its caller and settles the promise the callback names. A package's request
+// lists its handlers, and installs them as it runs, in the same transaction, unless the Pot already
+// answers with them; nothing is installed beforehand:
 //
-//   import { fulfil, promiseKey, requireCaller } from "@sauce/async";
+//   new Request({
+//     handlers: [
+//       new Handler(VRF_FULFIL, (caller: Address, value: Uint256, data: bytes) => {
+//         requireCaller(Coordinator, caller);
+//         const [id, words] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256[]"]);
+//         fulfil(promiseKey(VRF_TAG, id), abi.encode(words));
+//       }),
+//     ],
+//     send: (continuation) => { … },
+//   });
 //
-//   function main(caller: Address, value: Uint256, data: bytes): void {
-//     requireCaller(Coordinator, caller);
-//     const [id, words] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256[]"]);
-//     fulfil(promiseKey(VRF_TAG, id), abi.encode(words));
-//   }
+// A request checks a handler in place by the Router's record of it, against the CREATE2 address of
+// `0x00 ++ engine ++ program` from the Pot (salt zero), worked out while compiling when the SDK
+// sets `SAUCE_ASYNC_ENGINE`; and with a deadline it installs the Pot's public `expire(bytes32)`
+// too.
 //
 // A Shared Pot, and a Private Pot whose Router is fixed, answer no selector: their Router refuses
 // `install`.
@@ -166,6 +178,17 @@ const SAUCE_ASYNC_ALL = 1;
 const SAUCE_ASYNC_RACE = 2;
 const SAUCE_ASYNC_ANY = 3;
 const SAUCE_ASYNC_ALL_SETTLED = 4;
+
+// What the SDK may set while compiling (a define replaces a module constant). The engine the Pot's
+// cooks run on, the release's: with it a request checks its handlers against an address worked out
+// while it compiles, and carries none of their code to check them. And 1 when the program's sender
+// read every handler the program installs already in place on the Pot: then the program carries
+// no handler at all, and refuses to run if one is gone rather than park a promise its callback
+// could not reach.
+const SAUCE_ASYNC_ENGINE = 0;
+const SAUCE_ASYNC_INSTALLED = 0;
+// `expire(bytes32)`, the selector of the Pot's public `expire` handler.
+const SAUCE_ASYNC_EXPIRE = 0xc6441798;
 
 // ---- keys ---------------------------------------------------------------------------------------
 
@@ -588,6 +611,33 @@ export function install(selector: Uint256, program: bytes, readOnly: bool): void
   );
 }
 
+// The ERC-7201 namespace of the Pot's handler records, the Router's: selector to
+// `{ address bytecode; bool isView; }` in one word, the flag in the byte above the address.
+const SAUCE_HANDLERS_LOCATION = 0x3ede71929532386d53b5e25665f65f4ad4a552935973d8ba46f290dd0524c500;
+
+// Answer `selector` with `program` on this Pot, unless it already does: the record the Router keeps
+// names the code contract `0x00 ++ engine ++ program` that `install` deploys by CREATE2 from the
+// Pot (salt zero), with this mode. Answers whether it installed.
+export function ensureInstalled(selector: Uint256, program: bytes, readOnly: bool): bool {
+  const word = evm.sload(crypto.keccak256(abi.encode(selector << 224, SAUCE_HANDLERS_LOCATION)));
+  const engine = inFlightEngine();
+  const init = hex`61`
+    .concat((program.length + 21).toBytesBe(2))
+    .concat(hex`80600a3d393df300`)
+    .concat(engine.toBytesBe(20))
+    .concat(program);
+  const code = evm.create2Address(ctx.self(), 0, crypto.keccak256(init));
+  if (word == (code | ((readOnly ? 1 : 0) << 160))) {
+    return false;
+  }
+  evm.call(
+    ctx.self(),
+    0,
+    hex`eb45e5d0`.concat(abi.encode(selector << 224, engine, program, readOnly)),
+  );
+  return true;
+}
+
 // Declare (or stop declaring) the ERC-165 interface `id` (its four bytes) on the Pot this program
 // runs on, which its Router then answers natively to `supportsInterface`: what a protocol that
 // checks its receiver before it calls back asks.
@@ -704,6 +754,84 @@ class Code {
   }
 }
 
+// A handler's record and code, as the compiler knows them.
+class HandlerCode {
+  // The slot of the Router's record for `selector`, in the Pot's storage.
+  static slot(selector) {
+    return crypto.keccak256(abi.encode(selector << 224, SAUCE_HANDLERS_LOCATION));
+  }
+  // keccak256 of the init code the Router deploys `program`'s code with, for `engine`: its code
+  // contract is `0x00 ++ engine ++ program`, by CREATE2 from the Pot with salt zero.
+  static initHash(program, engine) {
+    const code = program.code;
+    if (code.length > 24555) {
+      throw new Error(
+        "a handler compiles to more bytes than one contract can hold beside its engine",
+      );
+    }
+    const size = code.length + 21;
+    return crypto.keccak256(
+      hex`61`
+        .concat(size.toBytesBe(2))
+        .concat(hex`80600a3d393df300`)
+        .concat(engine.toBytesBe(20))
+        .concat(code),
+    );
+  }
+}
+
+// A program the Pot answers a selector with, which a request installs for its callback to reach:
+// `new Handler(selector, (caller: Address, value: Uint256, data: bytes) => { … }, readOnly)`. The
+// Router runs it for `selector` as a cook (a view with `readOnly`), handed who called the Pot, the
+// value sent and the whole calldata. It captures nothing of the program around it: it runs on its
+// own, whenever the selector reaches the Pot.
+export class Handler {
+  constructor(selector, run, readOnly) {
+    this.selector = selector;
+    this.readOnly = readOnly === true;
+    this.program = program(run, {
+      handler: chainId,
+      selector,
+      readOnly: this.readOnly ? 1 : 0,
+    });
+  }
+  // Install it on the Pot unless the Pot already answers `selector` with it, as it runs. With
+  // `SAUCE_ASYNC_INSTALLED`, only check, and refuse to run without it.
+  ensure() {
+    const p = this.program;
+    if (SAUCE_ASYNC_ENGINE != 0) {
+      const expected =
+        evm.create2Address(ctx.self(), 0, HandlerCode.initHash(p, SAUCE_ASYNC_ENGINE)) |
+        ((this.readOnly ? 1 : 0) << 160);
+      const word = evm.sload(HandlerCode.slot(this.selector));
+      if (SAUCE_ASYNC_INSTALLED == 1) {
+        require(word ==
+          expected, "async: a handler this program needs is not installed on the Pot");
+        return;
+      }
+      if (word != expected) {
+        install(this.selector, p.code.concat(p.args), this.readOnly);
+      }
+      return;
+    }
+    ensureInstalled(this.selector, p.code.concat(p.args), this.readOnly);
+  }
+}
+
+// The handlers the core installs itself.
+class CoreHandlers {
+  // The Pot's public `expire(bytes32 key)`: anyone may reject a promise whose deadline has passed,
+  // with `Timeout(bytes32 key)`, paying the Kitchen's fee for the cook (`expire.handler.js`, the
+  // same program).
+  static expire() {
+    return new Handler(SAUCE_ASYNC_EXPIRE, (caller: Address, value: Uint256, data: bytes) => {
+      require(value >= kitchenFee(), "async: expire pays the Kitchen's fee");
+      const [key] = abi.decode(data.slice(4, data.length), ["Uint256"]);
+      expire(key);
+    });
+  }
+}
+
 // An empty list that grows while compiling.
 class Lists {
   static empty(...none) {
@@ -742,6 +870,7 @@ class Lists {
 // What `new Request(...)` takes: `send` always (refused, with how to write it, when absent), the
 // rest when the protocol needs them.
 interface RequestOptions {
+  handlers?: any;
   send?: (continuation: any) => any;
   deliver?: (input: bytes, body: any, fail: any) => void;
   carries?: bool;
@@ -760,6 +889,7 @@ export class Request {
       );
     }
     this._send = spec.send;
+    this._handlers = spec.handlers;
     this._deliver = spec.deliver;
     this._carries = spec.carries === true;
     this._chain = spec.chain;
@@ -827,6 +957,19 @@ export class Request {
     return this._chain === undefined ? chainId : this._chain;
   }
 
+  // Before the request: the handlers its callback reaches, and with a deadline the public
+  // `expire`, installed on the Pot unless they are already.
+  _install() {
+    if (this._handlers !== undefined) {
+      for (const handler of this._handlers) {
+        handler.ensure();
+      }
+    }
+    if (this._deadline !== undefined) {
+      CoreHandlers.expire().ensure();
+    }
+  }
+
   _deadlineOr0() {
     return this._deadline === undefined ? 0 : this._deadline;
   }
@@ -835,6 +978,7 @@ export class Request {
   // child, so the table always holds it, and `settles` the combinator's continuation, which
   // settling it may run too.
   _make(continuation, catches, joinKey, joined, settles) {
+    this._install();
     const deadline = this._deadlineOr0();
     const send = this._send;
     if (!this._carries) {
@@ -991,10 +1135,12 @@ class Settled {
 class Deferred {
   _body;
   _handler;
-  constructor(deadline, timeout) {
+  constructor(deadline, timeout, expires) {
     this.key = salt();
     this._deadline = deadline;
     this._timeout = timeout;
+    // A deadline given: `expire` must be installed for anyone to reach it.
+    this._expires = expires;
     this._stage = 1;
     // Fields, not methods, so `const { promise, resolve, reject } = Promise.withResolvers()`
     // takes them: fulfil it with `value`, or reject it with `reason`, at run time. Its body is
@@ -1053,6 +1199,9 @@ class Deferred {
             },
             { continuation: chainId },
           );
+    if (this._expires) {
+      CoreHandlers.expire().ensure();
+    }
     parkRecord(
       this.key,
       Code.initHash(continuation),
@@ -1072,6 +1221,9 @@ class Deferred {
       },
       { continuation: chainId },
     );
+    if (this._expires) {
+      CoreHandlers.expire().ensure();
+    }
     parkRecord(
       this.key,
       Code.initHash(child),
@@ -1281,7 +1433,7 @@ export class Promise {
   // A promise the program settles itself: `d.promise`, `d.resolve(value)`, `d.reject(reason)` and
   // `d.key` (no destructuring in SauceScript). `deadline`, a unix time, lets anyone `expire` it.
   static withResolvers(deadline) {
-    return new Deferred(deadline === undefined ? 0 : deadline, false);
+    return new Deferred(deadline === undefined ? 0 : deadline, false, deadline !== undefined);
   }
 }
 
@@ -1302,7 +1454,7 @@ export class Async {
   // A promise that only times out: rejected with `Timeout(bytes32)` once `seconds` have passed and
   // anyone calls `expire`. For `Promise.race([request, Async.timeout(3600)])`.
   static timeout(seconds) {
-    return new Deferred(ctx.timestamp() + seconds, true);
+    return new Deferred(ctx.timestamp() + seconds, true, true);
   }
 }
 
@@ -1319,5 +1471,52 @@ export class Erc1271 {
   // Whether the Pot approved `hash`.
   static approved(hash) {
     return isApprovedHash(hash);
+  }
+  // The Pot's ERC-1271 handler, a view, for a package's request to install: `handlers:
+  // [Erc1271.handler()]`. The same program as `erc1271.handler.js`, written out with no call.
+  static handler() {
+    return new Handler(
+      0x1626ba7e,
+      (caller: Address, value: Uint256, data: bytes): Uint256 => {
+        const [hash, signature] = abi.decode(data.slice(4, data.length), ["Uint256", "bytes"]);
+        if (evm.sload(crypto.keccak256(abi.encode(hash, SAUCE_ERC1271_NAMESPACE))) == 1) {
+          return 0x1626ba7e00000000000000000000000000000000000000000000000000000000;
+        }
+        const digest = crypto.keccak256(
+          hex`1901`.concat(
+            abi.encode(
+              crypto.keccak256(
+                abi.encode(
+                  SAUCE_ERC1271_DOMAIN,
+                  SAUCE_ERC1271_NAME,
+                  SAUCE_ERC1271_VERSION,
+                  ctx.chainId(),
+                  ctx.self(),
+                ),
+              ),
+              crypto.keccak256(abi.encode(SAUCE_ERC1271_MESSAGE, hash)),
+            ),
+          ),
+        );
+        const [signer] = abi.decode(evm.static(ctx.self(), hex`8da5cb5b`), ["Address"]);
+        let valid = false;
+        if (signature.length == 65) {
+          const s = signature.slice(32, 64).toBe();
+          const v = signature.slice(64, 65).toBe();
+          if (s <= SAUCE_ERC1271_HALF_ORDER && (v == 27 || v == 28)) {
+            valid = crypto.ecdsaVerify(digest, signature, signer);
+          }
+        }
+        if (!valid && ctx.codeSize(signer) > 0) {
+          const answer = evm.static(signer, hex`1626ba7e`.concat(abi.encode(digest, signature)));
+          valid = answer.length >= 32 && answer.slice(0, 4).toBe() == 0x1626ba7e;
+        }
+        if (valid) {
+          return 0x1626ba7e00000000000000000000000000000000000000000000000000000000;
+        }
+        return 0xffffffff00000000000000000000000000000000000000000000000000000000;
+      },
+      true,
+    );
   }
 }
