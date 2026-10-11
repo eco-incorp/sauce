@@ -117,7 +117,7 @@
     "@solana/kit": "^6.10.0",
     "@sveltejs/acorn-typescript": "1.0.13",
     "acorn": "8.16.0",
-    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-names-cb04e059",
+    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-names-e394938c",
     "viem": "^2.45.3"
   },
   "peerDependencies": {
