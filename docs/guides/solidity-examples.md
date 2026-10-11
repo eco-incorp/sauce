@@ -18,7 +18,8 @@ Uniswap's pool through `uniswapV3FlashCallback` and Aave's Pool through `execute
 a Pot cannot be called back by a program. The flash a program has is its Router's: a swap whose
 output arrives first, with a program run inside the swap's callback, before the pool is paid.
 Uniswap's `PairFlash` is ported that way below; Aave's flash-loan receiver has no port, since
-the same trade is that flash swap.
+the same trade is that flash swap. Balancer's flash swap needs no callback at all: the Vault
+settles a batch of swaps as a whole, so it ports as it is.
 
 Lines are counted whole, and as code: neither blank nor only a comment. A Solidity count leaves
 out the libraries and interfaces the example imports; a Sauce program imports nothing it does
@@ -33,6 +34,8 @@ not ship with.
 | [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 197 (140) |
 | [Morpho Blue: the snippets](#morpho-blue-the-snippets) | [morpho-org/morpho-blue-snippets, `MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol) | 380 (219) | 256 (197) |
 | [Uniswap V4: the swap guide](#uniswap-v4-the-swap-guide) | [Uniswap/docs, `swapping.mdx`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/protocols/v4/guides/swapping/swapping.mdx) | 79 (61) | 80 (42) |
+| [Balancer V2: batch swaps](#balancer-v2-batch-swaps) | [balancer/docs, `batch-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md) | 30 (30) | 101 (56) |
+| [Balancer V2: a flash swap](#balancer-v2-a-flash-swap) | [balancer/docs, `flash-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/flash-swaps.md) | 30 (30) | 65 (30) |
 
 ## Uniswap V3: the swap examples
 
@@ -1059,5 +1062,185 @@ function swapExactInputSingle(key: PoolKey, amountIn: Uint256, minAmountOut: Uin
 function main(key: PoolKey, amountIn: Uint256, minAmountOut: Uint256): Uint256 {
   approveTokenWithPermit2(key.currency0, amountIn, ctx.timestamp());
   return swapExactInputSingle(key, amountIn, minAmountOut);
+}
+```
+
+## Balancer V2: batch swaps
+
+Ported from balancer/docs, [`docs/reference/swaps/batch-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md): 30 lines of Solidity, 30 of them code. In Sauce, `balancer-v2-batch-swap.sauce.ts`: 101 lines, 56 of them code.
+
+```ts
+// Balancer's batch swap examples, ported: Balancer's batch swap guide routes token A to token C
+// through B, across two pools, in one call to the Vault's `batchSwap`: "given in" sells exactly
+// `amount` of A, its first step taking `amount` and its second the first's whole output (an amount
+// of 0); "given out" buys exactly `amount` of C, its steps running backwards from C. `limit` bounds
+// the other side, as the guide's limits do: the least C, or the most A. It returns what the Pot
+// paid in A and what `recipient` received in C.
+//
+// Ported from balancer/docs, docs/reference/swaps/batch-swaps.md (30 lines, 30 of code):
+// https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md
+//
+// What changes in Sauce: the guide gives `batchSwap`'s interface and its two multi-hop examples as
+// tables, not a contract; the program is those examples, through `BalancerV2.Vault`. The Pot is
+// the sender and pays from its own balance; `recipient` receives. The guide's warning holds: limits
+// computed on chain by `queryBatchSwap` in the same transaction can be sandwiched, so `limit` is a
+// `main` input, worked out before the transaction. Its count is the guide's code: the interface
+// and its structs.
+//
+//   sauce run balancer-v2-batch-swap.sauce.ts --chain <chain> --keystore <keystore> \
+//     --args <givenOut> <poolAB> <poolBC> <a> <b> <c> <amount> <limit> <recipient>
+//
+//   givenOut: bool       false: sell exactly `amount` of A; true: buy exactly `amount` of C
+//   poolAB: Uint256      the id of the pool that trades A and B, as the Vault names it
+//   poolBC: Uint256      the id of the pool that trades B and C
+//   a: Address           the token paid
+//   b: Address           the token between
+//   c: Address           the token received
+//   amount: Uint256      the A to sell, or the C to buy, in its smallest units:
+//                        1000000000 is 1,000 USDC (6 decimals)
+//   limit: Uint256       the least C to accept, or with `givenOut` the most A to pay
+//   recipient: Address   who receives the C
+//
+// On Ethereum, 1,000 USDC sold for WBTC through WETH, in the 50/50 USDC/WETH and WBTC/WETH pools:
+//
+//   sauce run balancer-v2-batch-swap.sauce.ts --chain ethereum --keystore <keystore> \
+//     --args false 0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019 \
+//     0xa6f548df93de924d73be7d25dc02554c6bd66db500020000000000000000000e \
+//     0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 \
+//     <wbtc> 1000000000 <limit> <recipient>
+
+const GIVEN_IN = 0;
+const GIVEN_OUT = 1;
+
+interface Swapped {
+  paid: Uint256;
+  received: Uint256;
+}
+
+function main(
+  givenOut: bool,
+  poolAB: Uint256,
+  poolBC: Uint256,
+  a: Address,
+  b: Address,
+  c: Address,
+  amount: Uint256,
+  limit: Uint256,
+  recipient: Address,
+): Swapped {
+  require(BalancerV2.Vault);
+  const maxIn = givenOut ? limit : amount;
+  approve(a, BalancerV2.Vault, maxIn);
+  // Example 1, given in: A → B, then all of that B → C. Example 2, given out: C ← B first, then
+  // the B that costs ← A. The second step's amount is 0: the first step's result.
+  const swaps = [
+    {
+      poolId: givenOut ? poolBC : poolAB,
+      assetInIndex: givenOut ? 1 : 0,
+      assetOutIndex: givenOut ? 2 : 1,
+      amount,
+      userData: hex``,
+    },
+    {
+      poolId: givenOut ? poolAB : poolBC,
+      assetInIndex: givenOut ? 0 : 1,
+      assetOutIndex: givenOut ? 1 : 2,
+      amount: 0,
+      userData: hex``,
+    },
+  ];
+  const funds = {
+    sender: ctx.self(),
+    fromInternalBalance: false,
+    recipient,
+    toInternalBalance: false,
+  };
+  // A limit is what the Vault may take of each asset: positive in, negative out.
+  const limits = [maxIn, 0, givenOut ? -amount : -limit];
+  const deltas = BalancerV2.Vault.batchSwap(
+    givenOut ? GIVEN_OUT : GIVEN_IN,
+    swaps,
+    [a, b, c],
+    funds,
+    limits,
+    ctx.timestamp(),
+  );
+  // What the Vault did not take of the allowance does not stand.
+  if (deltas[0] < maxIn) {
+    approve(a, BalancerV2.Vault, 0);
+  }
+  return { paid: deltas[0], received: -deltas[2] };
+}
+```
+
+## Balancer V2: a flash swap
+
+Ported from balancer/docs, [`docs/reference/swaps/flash-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/flash-swaps.md): 30 lines of Solidity, 30 of them code. In Sauce, `balancer-v2-flash-swap.sauce.ts`: 65 lines, 30 of them code.
+
+```ts
+// Balancer's flash swap, ported: when two Balancer pools price the same two tokens apart, one
+// `batchSwap` sells `amount` of A to the first pool for B and sells all that B back to the second
+// for A. The Vault settles the batch as a whole, so the Pot sends nothing: its limits are zero, and
+// the A the second pool pays beyond `amount` goes to `recipient`. A cycle that would cost anything
+// fails on those limits and reverts. It returns the profit.
+//
+// Ported from balancer/docs, docs/reference/swaps/flash-swaps.md (30 lines, 30 of code):
+// https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/flash-swaps.md
+//
+// What changes in Sauce: nothing in how it works. A Balancer flash swap is the one flash loan with
+// no callback: the Vault nets the steps before anyone pays, so the Pot needs no tokens and no
+// Router. The guide shows the transaction's arguments, which the program builds; its count is that
+// transaction's code.
+//
+//   sauce run balancer-v2-flash-swap.sauce.ts --chain <chain> --keystore <keystore> \
+//     --args <sellPool> <buyPool> <a> <b> <amount> <recipient>
+//
+//   sellPool: Uint256    the id of the pool A is sold to, where A is dear
+//   buyPool: Uint256     the id of the pool A is bought back from, where A is cheap
+//   a: Address           the token the cycle starts and ends with
+//   b: Address           the token between
+//   amount: Uint256      the A sold to the first pool, in its smallest units:
+//                        1000000000000000000 is 1 WETH (18 decimals)
+//   recipient: Address   who receives the profit, in A
+//
+// On Ethereum, 1 WETH around two pools of WETH and USDC, one of them Balancer's 50/50 pool:
+//
+//   sauce run balancer-v2-flash-swap.sauce.ts --chain ethereum --keystore <keystore> \
+//     --args <sellPool> 0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019 \
+//     0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \
+//     1000000000000000000 <recipient>
+
+const GIVEN_IN = 0;
+
+function main(
+  sellPool: Uint256,
+  buyPool: Uint256,
+  a: Address,
+  b: Address,
+  amount: Uint256,
+  recipient: Address,
+): Uint256 {
+  require(BalancerV2.Vault);
+  const swaps = [
+    { poolId: sellPool, assetInIndex: 0, assetOutIndex: 1, amount, userData: hex`` },
+    // An amount of 0 is the step before's whole output.
+    { poolId: buyPool, assetInIndex: 1, assetOutIndex: 0, amount: 0, userData: hex`` },
+  ];
+  const funds = {
+    sender: ctx.self(),
+    fromInternalBalance: false,
+    recipient,
+    toInternalBalance: false,
+  };
+  // Zero limits: the Vault may take nothing of either token from the Pot.
+  const deltas = BalancerV2.Vault.batchSwap(
+    GIVEN_IN,
+    swaps,
+    [a, b],
+    funds,
+    [0, 0],
+    ctx.timestamp(),
+  );
+  return -deltas[0];
 }
 ```

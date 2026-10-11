@@ -110,6 +110,8 @@ export const PORTED_EXAMPLES = [
   ["Compound III: MyContract", "sauce-protocols/examples/compound-v3-my-contract.sauce.ts"],
   ["Morpho Blue: the snippets", "sauce-protocols/examples/morpho-blue-snippets.sauce.ts"],
   ["Uniswap V4: the swap guide", "sauce-swaps/examples/uniswap-v4-swap.sauce.ts"],
+  ["Balancer V2: batch swaps", "sauce-swaps/examples/balancer-v2-batch-swap.sauce.ts"],
+  ["Balancer V2: a flash swap", "sauce-swaps/examples/balancer-v2-flash-swap.sauce.ts"],
 ];
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
@@ -2061,7 +2063,8 @@ function renderPortedGuide(examples) {
     "a Pot cannot be called back by a program. The flash a program has is its Router's: a swap whose",
     "output arrives first, with a program run inside the swap's callback, before the pool is paid.",
     "Uniswap's `PairFlash` is ported that way below; Aave's flash-loan receiver has no port, since",
-    "the same trade is that flash swap.",
+    "the same trade is that flash swap. Balancer's flash swap needs no callback at all: the Vault",
+    "settles a batch of swaps as a whole, so it ports as it is.",
     "",
     "Lines are counted whole, and as code: neither blank nor only a comment. A Solidity count leaves",
     "out the libraries and interfaces the example imports; a Sauce program imports nothing it does",

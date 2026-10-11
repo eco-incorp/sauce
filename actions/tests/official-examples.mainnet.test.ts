@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import {
   createWalletClient,
+  encodeAbiParameters,
   getAddress,
   http,
   parseAbi,
@@ -26,7 +27,7 @@ import { requireChain, routes } from "../../sdk/dist/index.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
-import { allowance, balanceOf, setBalance } from "./swap-venues.js";
+import { allowance, balanceOf, NATIVE, setBalance } from "./swap-venues.js";
 
 const example = (skill: string, name: string): string =>
   join(REPO_ROOT, "skills", skill, "examples", `${name}.sauce.ts`);
@@ -95,6 +96,15 @@ const abi = {
   ]),
   permit2: parseAbi([
     "function allowance(address user, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)",
+  ]),
+  balancer: parseAbi([
+    "struct BatchSwapStep { bytes32 poolId; uint256 assetInIndex; uint256 assetOutIndex; uint256 amount; bytes userData; }",
+    "struct FundManagement { address sender; bool fromInternalBalance; address recipient; bool toInternalBalance; }",
+    "function queryBatchSwap(uint8 kind, BatchSwapStep[] swaps, address[] assets, FundManagement funds) returns (int256[])",
+    "struct JoinPoolRequest { address[] assets; uint256[] maxAmountsIn; bytes userData; bool fromInternalBalance; }",
+    "function joinPool(bytes32 poolId, address sender, address recipient, JoinPoolRequest request) payable",
+    "function create(string name, string symbol, address[] tokens, uint256[] normalizedWeights, address[] rateProviders, uint256 swapFeePercentage, address owner, bytes32 salt) returns (address)",
+    "function getPoolId() view returns (bytes32)",
   ]),
   quoter: parseAbi([
     "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
@@ -989,6 +999,257 @@ describe(
           String(result[0] + 1n),
         ]);
         assert.equal(rehearsal.ok, false);
+      });
+    });
+    describe("Balancer's batch swap examples, through the V2 Vault", () => {
+      const FILE = example("sauce-swaps", "balancer-v2-batch-swap");
+      const VAULT = named("BalancerV2_Vault");
+      const USDC = named("USDC");
+      const WETH = named("WETH");
+      const WBTC: Address = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
+      const USDC_BALANCE = { slot: 9n };
+      /** Balancer's 50/50 USDC/WETH and WBTC/WETH pools on Ethereum. */
+      const USDC_WETH = "0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019" as Hex;
+      const WBTC_WETH = "0xa6f548df93de924d73be7d25dc02554c6bd66db500020000000000000000000e" as Hex;
+      const HELD = 5000n * 10n ** 6n;
+
+      /** What the Vault's own `queryBatchSwap` says the same steps move, by asset: + in, - out. */
+      async function query(givenOut: boolean, amount: bigint): Promise<readonly bigint[]> {
+        const step = (poolId: Hex, assetInIndex: bigint, assetOutIndex: bigint, value: bigint) => ({
+          poolId,
+          assetInIndex,
+          assetOutIndex,
+          amount: value,
+          userData: "0x" as Hex,
+        });
+        const swaps = givenOut
+          ? [step(WBTC_WETH, 1n, 2n, amount), step(USDC_WETH, 0n, 1n, 0n)]
+          : [step(USDC_WETH, 0n, 1n, amount), step(WBTC_WETH, 1n, 2n, 0n)];
+        const { result } = await env.publicClient.simulateContract({
+          address: VAULT,
+          abi: abi.balancer,
+          functionName: "queryBatchSwap",
+          args: [
+            givenOut ? 1 : 0,
+            swaps,
+            [USDC, WETH, WBTC],
+            {
+              sender: env.pot,
+              fromInternalBalance: false,
+              recipient: env.pot,
+              toInternalBalance: false,
+            },
+          ],
+        });
+
+        return result;
+      }
+      const args = (givenOut: boolean, amount: bigint, limit: bigint, recipient: Address) => [
+        String(givenOut),
+        USDC_WETH,
+        WBTC_WETH,
+        USDC,
+        WETH,
+        WBTC,
+        String(amount),
+        String(limit),
+        recipient,
+      ];
+      interface Swapped {
+        paid: string;
+        received: string;
+      }
+
+      it("given in (Example 1): sells 1,000 USDC for WBTC through WETH, as the Vault quotes", async () => {
+        const [recipient] = PEOPLE;
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, HELD);
+        const amount = 1000n * 10n ** 6n;
+        const deltas = await query(false, amount);
+        const out = -deltas[2];
+        const returned = (await cook(FILE, args(false, amount, out, recipient))) as Swapped;
+        assert.deepEqual([BigInt(returned.paid), BigInt(returned.received)], [amount, out]);
+        assert.equal(await balanceOf(env, WBTC, recipient), out);
+        assert.equal(await balanceOf(env, USDC, env.pot), HELD - amount);
+      });
+
+      it("given out (Example 2): buys 0.001 WBTC with at most 1% over the quote, the rest kept", async () => {
+        const [recipient] = PEOPLE;
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, HELD);
+        const amount = 100_000n; // 0.001 WBTC, 8 decimals
+        const deltas = await query(true, amount);
+        const maxIn = (deltas[0] * 101n) / 100n;
+        const returned = (await cook(FILE, args(true, amount, maxIn, recipient))) as Swapped;
+        assert.deepEqual([BigInt(returned.paid), BigInt(returned.received)], [deltas[0], amount]);
+        assert.equal(await balanceOf(env, WBTC, recipient), amount);
+        assert.equal(await balanceOf(env, USDC, env.pot), HELD - deltas[0]);
+        assert.equal(await allowance(env, USDC, env.pot, VAULT), 0n);
+      });
+
+      it("refuses a limit the pools cannot meet", async () => {
+        const [recipient] = PEOPLE;
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, HELD);
+        const amount = 1000n * 10n ** 6n;
+        const out = -(await query(false, amount))[2];
+        const rehearsal = await simulate(FILE, args(false, amount, out + 1n, recipient));
+        assert.equal(rehearsal.ok, false);
+        assert.match(String(rehearsal.reason), /BAL#507/);
+      });
+    });
+    describe("Balancer's flash swap, through the V2 Vault", () => {
+      const FILE = example("sauce-swaps", "balancer-v2-flash-swap");
+      const VAULT = named("BalancerV2_Vault");
+      const USDC = named("USDC");
+      const WETH = named("WETH");
+      const USDC_BALANCE = { slot: 9n };
+      const WETH_BALANCE = { slot: 3n };
+      /** Balancer's 50/50 USDC/WETH pool on Ethereum, and its weighted pool factory. */
+      const USDC_WETH = "0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019" as Hex;
+      const FACTORY: Address = "0x897888115Ada5773E02aA29F775430BFB5F34c51";
+      const ONE_WETH = 10n ** 18n;
+
+      async function send(request: unknown): Promise<void> {
+        const hash = await env.walletClient.writeContract(request as never);
+        assert.equal(
+          (await env.publicClient.waitForTransactionReceipt({ hash })).status,
+          "success",
+        );
+      }
+
+      /**
+       * The guide's second pool, planted: a 50/50 USDC/WETH pool where WETH costs 2,900 USDC. The
+       * factory is disabled at the pinned block (`_disabled`, its slot 1), so it is enabled first.
+       */
+      async function plantDearPool(): Promise<Hex> {
+        const owner = env.account.address;
+        await env.testClient.setStorageAt({
+          address: FACTORY,
+          index: toHex(1n, { size: 32 }),
+          value: toHex(0n, { size: 32 }),
+        });
+        const created = [
+          "Dear WETH",
+          "DEAR",
+          [USDC, WETH],
+          [5n * 10n ** 17n, 5n * 10n ** 17n],
+          [NATIVE, NATIVE],
+          3n * 10n ** 15n,
+          owner,
+          toHex(1n, { size: 32 }),
+        ] as const;
+        const { result: pool } = await env.publicClient.simulateContract({
+          account: env.account,
+          address: FACTORY,
+          abi: abi.balancer,
+          functionName: "create",
+          args: created,
+        });
+        await send({ address: FACTORY, abi: abi.balancer, functionName: "create", args: created });
+        const poolId = await env.publicClient.readContract({
+          address: pool,
+          abi: abi.balancer,
+          functionName: "getPoolId",
+        });
+        const amounts = [290_000n * 10n ** 6n, 100n * ONE_WETH] as const;
+        await setBalance(env, USDC, USDC_BALANCE, owner, amounts[0]);
+        await setBalance(env, WETH, WETH_BALANCE, owner, amounts[1]);
+        await send({
+          address: USDC,
+          abi: abi.erc20,
+          functionName: "approve",
+          args: [VAULT, amounts[0]],
+        });
+        await send({
+          address: WETH,
+          abi: abi.erc20,
+          functionName: "approve",
+          args: [VAULT, amounts[1]],
+        });
+        await send({
+          address: VAULT,
+          abi: abi.balancer,
+          functionName: "joinPool",
+          args: [
+            poolId,
+            owner,
+            owner,
+            {
+              assets: [USDC, WETH],
+              maxAmountsIn: [...amounts],
+              // A weighted pool's first join: INIT (0) with each token's amount.
+              userData: encodeAbiParameters(
+                [{ type: "uint256" }, { type: "uint256[]" }],
+                [0n, [...amounts]],
+              ),
+              fromInternalBalance: false,
+            },
+          ],
+        });
+
+        return poolId;
+      }
+
+      const profitOf = async (sellPool: Hex, buyPool: Hex): Promise<bigint> => {
+        const { result } = await env.publicClient.simulateContract({
+          address: VAULT,
+          abi: abi.balancer,
+          functionName: "queryBatchSwap",
+          args: [
+            0,
+            [
+              {
+                poolId: sellPool,
+                assetInIndex: 0n,
+                assetOutIndex: 1n,
+                amount: ONE_WETH,
+                userData: "0x",
+              },
+              { poolId: buyPool, assetInIndex: 1n, assetOutIndex: 0n, amount: 0n, userData: "0x" },
+            ],
+            [WETH, USDC],
+            {
+              sender: env.pot,
+              fromInternalBalance: false,
+              recipient: env.pot,
+              toInternalBalance: false,
+            },
+          ],
+        });
+
+        return -result[0];
+      };
+
+      it("sells 1 WETH where it is dear and buys it back where it is cheap, holding nothing", async () => {
+        const [recipient] = PEOPLE;
+        const dear = await plantDearPool();
+        const profit = await profitOf(dear, USDC_WETH);
+        assert.ok(profit > 0n, "the planted pool prices WETH above Balancer's own");
+        const returned = await cook(FILE, [
+          dear,
+          USDC_WETH,
+          WETH,
+          USDC,
+          String(ONE_WETH),
+          recipient,
+        ]);
+        assert.equal(BigInt(returned as string), profit);
+        assert.equal(await balanceOf(env, WETH, recipient), profit);
+        assert.equal(await balanceOf(env, WETH, env.pot), 0n);
+        assert.equal(await balanceOf(env, USDC, env.pot), 0n);
+      });
+
+      it("reverts the other way round, which would cost the Pot WETH it has not offered", async () => {
+        const [recipient] = PEOPLE;
+        const dear = await plantDearPool();
+        const rehearsal = await simulate(FILE, [
+          USDC_WETH,
+          dear,
+          WETH,
+          USDC,
+          String(ONE_WETH),
+          recipient,
+        ]);
+        assert.equal(rehearsal.ok, false);
+        assert.match(String(rehearsal.reason), /BAL#507/);
       });
     });
   },
