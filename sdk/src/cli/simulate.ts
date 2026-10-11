@@ -31,6 +31,7 @@ import {
   kitchenAddress,
   priceLimitNotes,
   revertedFirst,
+  sentCook,
   valueOf,
 } from "./commands.js";
 import {
@@ -237,8 +238,15 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   const kitchen = kitchenAddress();
 
   const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, owner);
+  // Rehearsed as `run` sends it: a program whose handlers are all in place on the Pot, compiled to
+  // carry none of them.
+  const lean = state.deployed
+    ? await sentCook(client, cook, input, files)
+    : { cook, input, notes: [] as string[] };
   const funded =
-    funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
+    funding === undefined
+      ? lean.cook
+      : cookOf({ ...lean.input, text: funding.wrap(input.text) }, files);
   const value =
     valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
     (funding?.value ?? 0n);
@@ -416,6 +424,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
     ...amountNotes,
     ...priceLimitNotes(input, cook.program.entryParams, input.args),
     ...(funding?.notes ?? []),
+    ...lean.notes,
     ...rehearsal.notes,
     ...unread.map(
       (token) =>

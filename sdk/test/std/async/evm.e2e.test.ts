@@ -37,7 +37,8 @@
  */
 import { type ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -82,6 +83,7 @@ import {
   compileSauceProgram,
 } from "../../../src/routes/sauce-route.js";
 import { freePortSync, spawnAnvil } from "../../anvil-process.js";
+import { jsonOf, sauce } from "../../cli-anvil.js";
 import {
   gateAnchors,
   routerUnderTest,
@@ -1476,6 +1478,36 @@ function main(hash: Uint256, signature: bytes): Uint256 {
       );
       expect(refused.reason).toContain("async: a handler this program needs is not installed");
       expect(await record(pot, ECHO_SELECTOR)).toBe(0n);
+    },
+  );
+
+  itAlways(
+    "sauce tx and sauce simulate send a program whose handlers are in place compiled to carry none",
+    async () => {
+      const pot = await freshPot(0x1a32n);
+      const file = join(mkdtempSync(join(tmpdir(), "sauce-lazy-")), "echo.sauce.ts");
+      writeFileSync(file, lazyEchoSource(echo, ""));
+      const on = ["--chain", CHAIN, "--pot", pot, "--rpc-url", RPC_URL, "--args", "5", "0"];
+      const carried = compiled(lazyEchoSource(echo, ""), [5n, 0n]);
+      const lean = compiledWith(lazyEchoSource(echo, ""), [5n, 0n], {
+        [ASYNC_INSTALLED_DEFINE]: 1n,
+      });
+      const cookData = (program: Hex) =>
+        encodeFunctionData({ abi: potAbi, functionName: "cook", args: [stack.engine, program] });
+
+      // Not installed yet: the cook carries the handler, and says it installs it.
+      const before = await sauce("tx", file, ...on);
+      expect(jsonOf(before).data).toBe(cookData(carried));
+      expect(before.stderr).toContain("installs its handlers");
+      expect((await cook(carried, pot)).ok).toBe(true);
+
+      // In place: both commands compile it again to carry none, and say so.
+      const after = await sauce("tx", file, ...on);
+      expect(jsonOf(after).data).toBe(cookData(lean));
+      expect(after.stderr).toContain("compiled to carry none of them");
+      const rehearsed = await sauce("simulate", file, ...on);
+      expect(rehearsed.code).toBe(0);
+      expect(rehearsed.stderr + rehearsed.stdout).toContain("compiled to carry none of them");
     },
   );
 

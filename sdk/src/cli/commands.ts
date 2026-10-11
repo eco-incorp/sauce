@@ -625,7 +625,7 @@ export function cookOf(input: CookInput, files: CliFiles, rehearsal = false): Co
  * `Handler`s) whose handlers are all in place on the Pot is compiled again to carry none of them,
  * and says so; otherwise the cook as it is, with a note of what it installs as it runs.
  */
-async function sentCook(
+export async function sentCook(
   client: Pick<PublicClient, "getStorageAt">,
   cook: Cook,
   input: CookInput,
