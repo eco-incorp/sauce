@@ -175,6 +175,8 @@ const SETTLED = keccak256(toHex("PromiseSettled(bytes32,uint256)"));
 const IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
 const UNHANDLED = keccak256(toHex("PromiseUnhandled(bytes32,bytes)"));
 const DELIVERED = keccak256(toHex("RandomDelivered(bytes32,bytes)"));
+/** The Pot's `HandlerSet(bytes4 indexed selector, address code, bool readOnly)`: a handler installed. */
+const HANDLER_SET = keccak256(toHex("HandlerSet(bytes4,address,bool)"));
 
 const potAbi = parseAbi([
   "function cook(address engine, bytes program) payable returns (bytes)",
@@ -672,6 +674,30 @@ function main(bump: Uint256): void {
         if (body.includes("transfer(")) expect(await paid()).toBeGreaterThan(before);
       },
       TIMEOUT,
+    );
+
+    itAlways(
+      "installs nothing on a Pot whose handlers are in place: the pre-warmed program is the request's",
+      async () => {
+        const { receipt } = await requestVrf(VRF_SOURCE, [0n]);
+        expect(potLogs(receipt).some(([topic]) => topic === HANDLER_SET)).toBe(false);
+      },
+    );
+
+    itSettling(
+      "installs its handler in the request's own transaction on a Pot without it, and the callback lands",
+      async () => {
+        const clear = await cook(
+          compiled(`import { install } from "@sauce/async";
+install(0x1fe543e3, hex\`\`, false);`),
+        );
+        expect(clear.status).toBe("success");
+        const { id, receipt } = await requestVrf(VRF_SOURCE, [100n]);
+        const set = potLogs(receipt).find(([topic]) => topic === HANDLER_SET);
+        expect(set?.[1]).toBe(`${VRF_CALLBACK}${"0".repeat(56)}`);
+        expect((await send(stranger, WRAPPER, fulfill(id, [1n, 2n]))).status).toBe("success");
+        expect(await storage(SLOT)).toBe(103n);
+      },
     );
 
     itSettling(

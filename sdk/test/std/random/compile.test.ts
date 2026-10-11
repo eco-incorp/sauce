@@ -123,6 +123,43 @@ describe("what the library writes out by hand", () => {
   });
 });
 
+describe("the handlers a request installs as it runs", () => {
+  const VRF_REQUEST = `import { Random } from "@sauce/random";
+function main(): void {
+  Random.vrf().then((words) => {
+    evm.sstore(1, words[0]);
+  });
+}`;
+  const ENTROPY_REQUEST = `import { Random } from "@sauce/random";
+function main(): void {
+  Random.entropy().then((value) => {
+    evm.sstore(1, value);
+  });
+}`;
+
+  it("each request lists its own protocol's handler, and only that one", () => {
+    expect(compile(VRF_REQUEST).handlers.map((h) => h.selector)).toEqual([0x1fe543e3n]);
+    expect(compile(ENTROPY_REQUEST).handlers.map((h) => h.selector)).toEqual([0x52a5f1f8n]);
+    expect(compile(VRF_REQUEST, "ethereum").handlers.map((h) => h.selector)).toEqual([0x1fe543e3n]);
+  });
+
+  it("each is its handler file's program, byte for byte, so a pre-warmed Pot is not reinstalled", () => {
+    for (const [chain, source] of [
+      ["base", VRF_REQUEST],
+      ["base", ENTROPY_REQUEST],
+      ["ethereum", VRF_REQUEST],
+    ] as const) {
+      const files = new Map(
+        packageHandlers(chain, "@sauce/random").map((h) => [BigInt(h.selector), h]),
+      );
+      for (const handler of compile(source, chain).handlers) {
+        expect(hex(handler.bytecode)).toBe(hex(files.get(handler.selector)!.bytecode));
+        expect(handler.readOnly).toBe(false);
+      }
+    }
+  });
+});
+
 describe("which handlers a chain installs", () => {
   const signatures = (chain: string) =>
     packageHandlers(chain, "@sauce/random").map((h) => h.signature);

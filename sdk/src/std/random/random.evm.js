@@ -62,7 +62,12 @@
 // `requestRandomWordsInNative(uint32,uint16,uint32,bytes)` (0x9cfc058e) and
 // `requestV2(address,uint32)` (0x0e33da29), which a bound call cannot send value with. The SDK's
 // tests derive each from its signature.
-import { Request, fulfil, kitchenFee, promiseKey, requireCaller } from "@sauce/async";
+import { Handler, Request, fulfil, kitchenFee, promiseKey, requireCaller } from "@sauce/async";
+
+// The callbacks the handlers answer: `rawFulfillRandomWords(uint256,uint256[])`, VRF's wrapper's,
+// and `_entropyCallback(uint64,address,bytes32)`, Entropy's.
+const SAUCE_RANDOM_VRF_CALLBACK = 0x1fe543e3;
+const SAUCE_RANDOM_ENTROPY_CALLBACK = 0x52a5f1f8;
 
 // VRFV2PlusClient's ExtraArgsV1 asking for native payment: the tag
 // bytes4(keccak256("VRF ExtraArgsV1")), then the struct's one field, `nativePayment`, true.
@@ -141,6 +146,13 @@ class Requests {
     }
     const { words = 1, confirmations = 3, gas, deadline } = config;
     return new Request({
+      // The handler its callback reaches, installed by the request unless the Pot has it:
+      // `vrf.handler.js`'s program, byte for byte.
+      handlers: [
+        new Handler(SAUCE_RANDOM_VRF_CALLBACK, (caller: Address, value: Uint256, data: bytes) => {
+          rawFulfillRandomWords(ChainlinkVrf.Wrapper, caller, data);
+        }),
+      ],
       deadline,
       send: (continuation) => {
         require(words >= 1 && words <= 10, "random: a VRF request asks for 1 to 10 words");
@@ -181,6 +193,15 @@ class Requests {
     }
     const { provider: given, gas, deadline } = config;
     return new Request({
+      // `entropy.handler.js`'s program, byte for byte.
+      handlers: [
+        new Handler(
+          SAUCE_RANDOM_ENTROPY_CALLBACK,
+          (caller: Address, value: Uint256, data: bytes) => {
+            entropyCallback(PythEntropy.Entropy, caller, data);
+          },
+        ),
+      ],
       deadline,
       send: (continuation) => {
         const limit = callbackGas(gas, continuation);
