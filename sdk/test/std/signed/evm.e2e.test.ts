@@ -943,6 +943,32 @@ function main(hash: Uint256): void {
   });
 
   describe("installing", () => {
+    it("is lazy: the owner's first cook with Signed (cancel-salt) sets a bare Pot up, once", async () => {
+      const bare = await mintPot(OWNER.address, word(0x1a27n));
+      const execution = { ...(await executionOf(compiled(WRITER, [61n]))), pot: bare };
+      const data = encodeExecute({ ...execution, signature: await signExecute(execution) });
+      // Nothing answers `execute` on a Pot with no handler.
+      const before = await callOf(STRANGER.address, bare, data);
+      expect(before.ok).toBe(false);
+      expect(before.ok === false && before.data.slice(0, 10)).toBe(
+        toFunctionSelector("UnknownSelector(bytes4)"),
+      );
+
+      const first = await cook(compiled(skillExample("cancel-salt"), [BigInt(freshSalt())]), bare);
+      expect(first.ok).toBe(true);
+      costs.set(
+        "cancel-salt on a bare Pot: the cancel, and the three handlers installed",
+        first.gas,
+      );
+      expect((await send(stranger, bare, data)).ok).toBe(true);
+      expect(await slot(WRITTEN_SLOT, bare)).toBe(61n);
+
+      const again = await cook(compiled(skillExample("cancel-salt"), [BigInt(freshSalt())]), bare);
+      expect(again.ok).toBe(true);
+      costs.set("cancel-salt again: the handlers found in place, nothing installed", again.gas);
+      expect(again.gas).toBeLessThan(first.gas / 2n);
+    });
+
     it("is refused on a Shared Pot", async () => {
       const salt = word(0x5a5a02n);
       expect(

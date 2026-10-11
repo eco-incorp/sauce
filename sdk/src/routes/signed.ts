@@ -239,7 +239,8 @@ export function signedSaltSlot(salt: Hex): { readonly slot: Hex; readonly bit: b
 }
 
 /** The program the owner cooks to cancel `salts` it signed and no longer wants run: one
- *  `invalidate` per storage word they share. */
+ *  `invalidate` per storage word they share, after `Signed.setup()`, which sets the Pot up to run
+ *  signed programs if it is not yet, as every owner cook with the package does. */
 export function cancelSaltsSource(salts: readonly Hex[]): string {
   if (salts.length === 0) throw new Error("there is no salt to cancel");
   const words = new Map<bigint, bigint>();
@@ -250,8 +251,9 @@ export function cancelSaltsSource(salts: readonly Hex[]): string {
 
   return [
     "// Cancels salts this Pot's owner signed: a signed program under any of them never runs.",
-    `import { invalidate } from "${SIGNED_PACKAGE}";`,
+    `import { Signed, invalidate } from "${SIGNED_PACKAGE}";`,
     "",
+    "Signed.setup();",
     ...[...words].map(
       ([word, mask]) => `invalidate(0x${word.toString(16)}, 0x${mask.toString(16)});`,
     ),

@@ -20,7 +20,7 @@ import {
 
 import { packageHandlers, packageReader } from "../../../src/routes/handlers.js";
 import { ERC1271_HANDLER, potMessageTypedData } from "../../../src/routes/erc1271.js";
-import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import { ASYNC_INSTALLED_DEFINE, compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import {
   SIGNED_NAMESPACE,
   cancelSaltsSource,
@@ -150,6 +150,36 @@ describe("the handlers", () => {
     );
     const core = compile(packageReader("@sauce/signed")(declared!.program)!);
     expect(hex(ours!.bytecode)).toBe(hex(core.bytecode));
+  });
+
+  it("Signed's Handlers are the programs the handler files compile to, byte for byte", () => {
+    const program = compile(`import { Signed } from "@sauce/signed";
+function main(salt: Uint256): void {
+  Signed.cancel(salt);
+}`);
+    const files = packageHandlers("base", "@sauce/signed");
+    expect(program.handlers.map((h) => [h.selector, h.readOnly])).toEqual(
+      files.map((file) => [BigInt(file.selector), file.readOnly]),
+    );
+    for (const handler of program.handlers) {
+      const file = files.find((f) => BigInt(f.selector) === handler.selector)!;
+      expect(hex(handler.bytecode)).toBe(hex(file.bytecode));
+    }
+  });
+
+  it("an owner cook with Signed carries the handlers to install, and none once they are in place", () => {
+    const source = `import { Signed } from "@sauce/signed";
+function main(salt: Uint256): void {
+  Signed.cancel(salt);
+}`;
+    const carried = compile(source);
+    for (const handler of carried.handlers) {
+      expect(hex(carried.bytecode)).toContain(hex(handler.bytecode));
+    }
+    const lean = compileSauceProgram("base", source, { defines: { [ASYNC_INSTALLED_DEFINE]: 1n } });
+    for (const handler of carried.handlers) {
+      expect(hex(lean.bytecode)).not.toContain(hex(handler.bytecode));
+    }
   });
 
   it("each handler reads `main(caller, value, data)`", () => {

@@ -61,6 +61,8 @@
 // `execute(bytes,bytes32,uint256,bytes)` (0x82bf0988), which `submit` calls. The SDK's tests derive
 // each from its signature, and each EIP-712 hash from its type.
 
+import { Erc1271, Handler } from "@sauce/async";
+
 // The ERC-7201 namespace of the salt bitmap, in the Pot's storage:
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.Signed")) - 1)) & ~bytes32(uint256(0xff)).
 const SAUCE_SIGNED_NAMESPACE = 0x445da62d53bdea9331f042175775dc985d50361ac56f5f57e8a11871d9d99500;
@@ -84,6 +86,11 @@ const SAUCE_SIGNED_EXECUTIONS = 0xba0c072019a30ebf425f382274e4c73194ddb72abaadf0
 // The event `cancel` and `invalidate` log, from the Pot: SaltsCancelled(uint256 indexed word,
 // uint256 mask).
 const SAUCE_SIGNED_CANCELLED = 0xe05728d1293b5fedd7a46b6b6f775619d38197b8d6f15a4eeb539230f9067adb;
+
+// The selectors the package answers: execute(bytes,bytes32,uint256,bytes) and
+// executeAcross(bytes,bytes32,uint256,bytes32[],uint256,bytes).
+const SAUCE_SIGNED_EXECUTE_SELECTOR = 0x82bf0988;
+const SAUCE_SIGNED_EXECUTE_ACROSS_SELECTOR = 0xdf288b73;
 
 // Half the order of secp256k1: a signature's `s` above it is the malleable twin of one below.
 const SAUCE_SIGNED_HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
@@ -330,4 +337,61 @@ export function submit(
   signature: bytes,
 ): bytes {
   return evm.call(pot, 0, hex`82bf0988`.concat(abi.encode(program, salt, deadline, signature)));
+}
+
+// ---- installing -----------------------------------------------------------------------------------
+
+// What a Pot answers signed programs with, and the owner cooks that install it as they run. No
+// request of the owner's precedes a stranger's `execute`, so a Pot is set up by a cook of its
+// owner's: any that calls `Signed.setup()`, or `Signed.cancel` and `Signed.invalidate`, which call
+// it. Each handler is installed unless the Pot already answers its selector with it.
+export class Signed {
+  // `execute`, `executeAcross`, and the core's ERC-1271 view: the same programs as
+  // `execute.handler.js`, `execute-across.handler.js` and `@sauce/async/erc1271.handler.js`.
+  static handlers() {
+    return [
+      new Handler(
+        SAUCE_SIGNED_EXECUTE_SELECTOR,
+        (caller: Address, value: Uint256, data: bytes): bytes => {
+          const [program, salt, deadline, signature] = abi.decode(data.slice(4, data.length), [
+            "bytes",
+            "Uint256",
+            "Uint256",
+            "bytes",
+          ]);
+          return execute(program, salt, deadline, signature);
+        },
+      ),
+      new Handler(
+        SAUCE_SIGNED_EXECUTE_ACROSS_SELECTOR,
+        (caller: Address, value: Uint256, data: bytes): bytes => {
+          const [program, salt, deadline, executions, index, signature] = abi.decode(
+            data.slice(4, data.length),
+            ["bytes", "Uint256", "Uint256", "Uint256[]", "Uint256", "bytes"],
+          );
+          return executeAcross(program, salt, deadline, executions, index, signature);
+        },
+      ),
+      Erc1271.handler(),
+    ];
+  }
+
+  // Install the handlers on the Pot this program runs on, those it does not answer already.
+  static setup() {
+    for (const handler of Signed.handlers()) {
+      handler.ensure();
+    }
+  }
+
+  // `cancel(salt)` in a cook that also sets the Pot up.
+  static cancel(salt) {
+    Signed.setup();
+    cancel(salt);
+  }
+
+  // `invalidate(word, mask)` in a cook that also sets the Pot up.
+  static invalidate(word, mask) {
+    Signed.setup();
+    invalidate(word, mask);
+  }
 }
