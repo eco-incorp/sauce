@@ -182,7 +182,9 @@ export function registerWalletTools(
         "EVM chain all together in one eth_simulateV1 block from the wallet, on Solana each as " +
         "signed; it refuses, sending nothing, if any would revert, and refuses what the wallet's " +
         "policy does not allow, naming the limit. Then it sends each in order, rehearsing it " +
-        "again, and stops at the first that does not succeed. Returns each one's hash (a Solana " +
+        "again, and stops at the first that does not succeed. A plan on several chains (a " +
+        "cook that readies another chain's Pot first) is sent chain by chain, in its order, " +
+        "each entry naming its chain. Returns each one's hash (a Solana " +
         "signature) and status, with `explorer` and `trace` (Phalcon: calls and balance changes) " +
         "beside it, links to give the user to open in a browser, never to fetch; and for an EVM " +
         "cook, from its receipt, `moves` (what moved, in order, by role), `leftInPot` (what the " +

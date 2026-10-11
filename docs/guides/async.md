@@ -228,8 +228,14 @@ the bridge's receiver: a handler. The Pot a round trip is cooked on installs the
 reaches as the program runs, unless it is there already. The Pot on the other chain must already
 answer when the message lands: deployed there, its receiver installed by its owner (only the owner
 can), and holding the Kitchen's fee for the message and, for a round trip, the bridge's fee for the
-answer. `sauce run @sauce/remote --chain base --wallet <name>` installs every receiver a chain has
-ahead of time:
+answer. `sauce run` and `sauce tx` read that Pot before the cook and offer what is missing as part
+of the cook's setup, in the same single question as deploying the Pot the cook runs on: deploy the
+Pot there, install the message's bridge's receiver, and fund it with exactly the Kitchen's fee for
+each message plus each answer's fee, quoted from the bridge ("fund your Pot on Base with … ETH (1
+delivery × the Kitchen fee + the answer's Hyperlane fee, quoted for up to … bytes)"); `--yes`
+approves them, and what is left over stays in the Pot. `sauce tx` and `sauce_tx` list them ahead of
+the cook, each with its `chainId`. `sauce run @sauce/remote --chain base --wallet <name>` installs
+every receiver a chain has ahead of time:
 
 | Bridge    | The Pot answers                                                                                      |
 | --------- | ---------------------------------------------------------------------------------------------------- |

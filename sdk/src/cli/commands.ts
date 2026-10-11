@@ -789,12 +789,14 @@ function setupReach(
  */
 async function remoteSetup(
   cook: Cook,
-  owner: Address | undefined,
-  salt: Hex | undefined,
+  target: PotInput,
+  client: PublicClient | undefined,
+  potOwner: Address | undefined,
   reach: SetupReach,
 ): Promise<{ readonly steps: readonly SetupStep[]; readonly notes: readonly string[] }> {
   const needs = remoteNeeds(cook.program.continuations);
   if (needs.length === 0) return { steps: [], notes: [] };
+  const { owner, salt } = await ownerAndSalt(target, client, cook.pot, potOwner);
   const where = [...new Set(needs.map((need) => need.chain.name))].join(" and ");
   if (
     owner === undefined ||
@@ -930,8 +932,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
     input.endpointOf,
     client === undefined ? undefined : { client, ...(owner === undefined ? {} : { from: owner }) },
   );
-  const pot = await ownerAndSalt(target, client, cook.pot, state?.owner);
-  const remote = await remoteSetup(cook, pot.owner, pot.salt, reach);
+  const remote = await remoteSetup(cook, target, client, state?.owner, reach);
   const setup = [
     ...(deployFirst
       ? [
@@ -1097,8 +1098,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     from: signer,
     signed: { rpcUrl: input.rpcUrl, account: input.account },
   });
-  const pot = await ownerAndSalt(target, client, cook.pot, state.owner);
-  const remote = await remoteSetup(cook, pot.owner, pot.salt, reach);
+  const remote = await remoteSetup(cook, target, client, state.owner, reach);
   const setup = [
     ...(!state.deployed && "owner" in target
       ? [

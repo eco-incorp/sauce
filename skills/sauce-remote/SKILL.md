@@ -161,8 +161,12 @@ it was not written for with the program installed for that selector: the bridge'
 - **The Pot on the other chain** must already answer the bridge when the message lands: deployed
   there, its receiver installed, and holding the Kitchen's fee for the message (and, for a round
   trip, the bridge's fee for the answer it sends back). Only its owner can install a receiver, so
-  this is a transaction of the owner's on that chain. Any program the owner runs there that takes
-  the same bridge back installs it; so does installing `@sauce/remote`'s receivers ahead, every
+  these are transactions of the owner's on that chain. `sauce run` and `sauce tx` read that Pot
+  before the cook, and offer what is missing as steps of the cook's setup, asked about once with
+  the rest, sent first (`--yes` approves them), each one on that chain: "Your Pot on Base can't
+  receive this message yet". The funding is exact, the Kitchen's fee for each message plus each
+  answer's fee quoted from the bridge, and what is left over stays in the Pot. A rehearsal reads
+  nothing there. Installing `@sauce/remote`'s receivers ahead does the install by hand, every
   bridge the chain has at once:
 
 ```sh

@@ -346,7 +346,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
 isn't deployed yet. Deploy it now (one transaction, about <gas>), then run? [deploy/cancel]`,
    then sends the deployment and the cook. `--yes` (`-y`; `--auto-approve` is its older name)
    approves, in advance, everything a run sends before its cook (deploying the Pot, approving
-   Permit2 or the Pot for `--fund`) and names each; with no terminal, or with `--json`, the run
+   Permit2 or the Pot for `--fund`, readying the Pot a remote message reaches on another chain,
+   `sauce-remote`) and names each; with no terminal, or with `--json`, the run
    lists what it needs approved and sends nothing until it is given. On Solana a missing Pot is
    created in the cook's own transaction, with nothing asked, when the two fit in one. Ask the
    user before passing `--yes`.
