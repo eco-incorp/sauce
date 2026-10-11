@@ -3,7 +3,7 @@
 // method `commitments_v1_evmProofPlan` gives for the SQL, and it pays `payment` of SXT (at least the
 // QueryRouter's `baseCost()`), which the Pot holds. If the query is not answered within the hour,
 // anyone may expire it, and its payment comes back to the Pot. The Pot must be a Private Pot with
-// @sauce/zk's handlers installed (`sauce run @sauce/zk --chain <chain>`).
+// handlers it needs, which the first request installs.
 //
 //   sauce run proven-payout.sauce.ts --chain <chain> --wallet <name> --password-env <NAME> \
 //     --args <plan> <payment> <minimum> <recipient> <amount>

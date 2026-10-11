@@ -42,15 +42,15 @@ ported, are under [The protocols' own examples](#the-protocols-own-examples).
 
 ## Before the first request
 
-- **A Private Pot with the package's handlers installed.** The coprocessor calls the Pot back with
-  a selector of its own, which the Pot answers with `@sauce/zk`'s handler for it: Space and Time's
-  `queryCallback(bytes32 queryId, bytes result, bytes callbackData)`, and on Base Boundless's
-  `handleProof(bytes32 imageId, bytes journal, bytes seal)`, and `@sauce/async`'s read-only
-  `isValidSignature(bytes32 hash, bytes signature)`, the Pot's one ERC-1271 answer, which approves
-  the Pot's own requests. Install
-  them once per Pot, with `@sauce/async`'s public `expire(bytes32)`:
-  `sauce run @sauce/zk --chain base --wallet <name> --password-env <NAME>`; a chain without one of
-  the coprocessors gets the others'. A Shared Pot answers no callback.
+- **A Private Pot.** The coprocessor calls the Pot back with a selector of its own, which the Pot
+  answers with `@sauce/zk`'s handler for it: Space and Time's `queryCallback(bytes32 queryId, bytes
+result, bytes callbackData)`, and on Base Boundless's `handleProof(bytes32 imageId, bytes journal,
+bytes seal)` and `@sauce/async`'s read-only `isValidSignature(bytes32 hash, bytes signature)`, the
+  Pot's one ERC-1271 answer, which approves the Pot's own requests. The first request installs what
+  is missing, in its own transaction, with `@sauce/async`'s public `expire(bytes32)`; a later one
+  only checks they are there. `sauce run @sauce/zk --chain <chain> --wallet <name> --password-env
+<NAME>` installs them beforehand, an optional pre-warm that spares the first request the cost. A
+  Shared Pot answers no callback.
 - **The payment on the Pot**: SXT for a query, which the Pot approves the QueryRouter for (the token
   `SpaceAndTime.QueryRouter.PAYMENT_TOKEN()` names, 18 decimals); the native coin for a proof
   request, which the Pot deposits at the market.

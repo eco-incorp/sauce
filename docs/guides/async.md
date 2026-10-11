@@ -211,7 +211,8 @@ function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Addres
   `.catch` runs, and `Zk.cancel(e)` there cancels the query and takes its payment back.
 - **The checks.** The handler takes calls only from the chain's CallbackExecutor, and settles only
   the promise under a query id the Pot asked: a query someone else asked naming the Pot settles
-  nothing. Install it with `sauce run @sauce/zk --chain base --wallet <name>`.
+  nothing. The first query installs the handler on the Pot, and with it the public `expire`;
+  `sauce run @sauce/zk --chain base --wallet <name>` installs them beforehand, an optional pre-warm.
 
 Reading a result costs gas (a four-column result read once took about 250,000 of the callback's
 gas), and the Pot keeps a query's id and payment in two words until its promise settles.

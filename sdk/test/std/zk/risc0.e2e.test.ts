@@ -48,7 +48,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { handlersInPlace } from "../../../src/cli/handlers.js";
 import { BoundlessMarketABI } from "../../../src/protocols/boundless/abis.js";
+import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import { approvedHashSlot } from "../../../src/routes/erc1271.js";
 import { gateAnchors } from "../../evm/gated-engine.js";
 import {
@@ -97,7 +99,6 @@ const COLLATERAL = 15n * 10n ** 18n;
 
 const CALLBACK = toFunctionSelector("handleProof(bytes32,bytes,bytes)");
 const SIGNATURE = toFunctionSelector("isValidSignature(bytes32,bytes)");
-const QUERY_CALLBACK = toFunctionSelector("queryCallback(bytes32,bytes,bytes)");
 const EXPIRE = toFunctionSelector("expire(bytes32)");
 const RISC0_TAG = keccak256(toHex("sauce.zk.risc0"));
 const PROMISE_IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
@@ -492,12 +493,14 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
       ).toBe(true);
     }
 
-    expect(await chain.installPackage("@sauce/zk")).toEqual([
-      QUERY_CALLBACK,
-      CALLBACK,
-      SIGNATURE,
-      EXPIRE,
-    ]);
+    // Nothing installed on the Pot: the first request installs what it needs.
+    expect(
+      await handlersInPlace(
+        chain.publicClient,
+        chain.stack.pot,
+        compileSauceProgram("base", REQUEST).handlers,
+      ),
+    ).toBe(false);
   }, 180_000);
 
   afterAll(async () => {
@@ -505,10 +508,17 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
   });
 
   it(
-    "submits the market's own request, the Pot its client and its callback, its price deposited",
+    "submits the market's own request, the Pot its client and its callback, its price deposited, installing its handlers first",
     async () => {
       const before = await marketBalance(chain.stack.pot);
       const request = await ask(0n);
+      // The market's callback, the Pot's ERC-1271 answer and the public expire, installed in the
+      // same transaction.
+      const handlers = compileSauceProgram("base", REQUEST).handlers;
+      expect(handlers.map((h) => toHex(h.selector, { size: 4 })).sort()).toEqual(
+        [CALLBACK, SIGNATURE, EXPIRE].sort(),
+      );
+      expect(await handlersInPlace(chain.publicClient, chain.stack.pot, handlers)).toBe(true);
       const index = request.id & 0xffff_ffffn;
 
       expect(request.id).toBe((1n << 192n) | (BigInt(chain.stack.pot) << 32n) | index);

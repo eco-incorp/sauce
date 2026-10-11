@@ -1369,6 +1369,12 @@ keccak256(abi.encode(imageId, digest)))`, which `handleProof` recomputes from th
   namespace the chain lacks (it is "not a declared variable" there, where a program folds it to
   zero), and a module-constant instance cannot record what a program asked.
 
+Each request lists the handlers its callback reaches, installed lazily (`@sauce/async`'s
+`Handler`): `Zk.sql` the executor's `queryCallback`, `Zk.risc0` the market's `handleProof` and
+`Erc1271.handler()`, with the core's `expire` for their deadlines. `compile.test.ts` holds each
+Handler's program to the package's handler file byte for byte, so a Pot pre-warmed with `sauce run
+@sauce/zk` holds the very code a request checks for; the suites start from a bare Pot.
+
 The suites (`test/std/zk/sql.e2e.test.ts`, `risc0.e2e.test.ts`) run each protocol's own contracts:
 Space and Time's deployed by replaying their creation transactions at the deployer's nonces
 (`fixtures/SpaceAndTime.json`), Boundless's market as its captured proxy, implementation, legacy

@@ -15,7 +15,7 @@ import { encodeAbiParameters, keccak256, toFunctionSelector, toHex } from "viem"
 
 import { deployments } from "../../../src/protocols/space-and-time/addresses.js";
 import { ERC1271_HANDLER } from "../../../src/routes/erc1271.js";
-import { packageInstall } from "../../../src/routes/handlers.js";
+import { compileHandlers, packageInstall, packageReader } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 
 /** jest's cwd is `sdk/`. */
@@ -211,6 +211,29 @@ describe("what compiles where", () => {
     const callback = compile(readFileSync(join(DIR, "risc0.handler.js"), "utf8"), "base");
     expect(hex(callback.bytecode)).toContain("fd152dadc5183870710fe54f939eae3ab9f0fe82");
   });
+
+  it.each(["base", "ethereum"])(
+    "on %s, each request installs the programs the package's handler files compile to",
+    (chain) => {
+      // So a Pot pre-warmed with `sauce run @sauce/zk` holds the very code a request checks for.
+      const files = compileHandlers(chain, MANIFEST.handlers, packageReader("@sauce/zk"));
+      const requested = [
+        ...compile(QUERY, chain).handlers,
+        ...(chain === "base" ? compile(RISC0, chain).handlers : []),
+      ];
+      for (const file of files) {
+        const handler = requested.find((h) => h.selector === BigInt(file.selector))!;
+        expect(handler).toBeDefined();
+        expect(handler.readOnly).toBe(file.readOnly);
+        expect(hex(handler.bytecode)).toBe(hex(file.bytecode));
+      }
+      // The files' handlers and the core's `expire`, for each request's deadline: nothing else.
+      const selectors = new Set(requested.map((h) => h.selector));
+      expect(selectors).toEqual(
+        new Set([...files.map((file) => BigInt(file.selector)), 0xc6441798n]),
+      );
+    },
+  );
 
   it("approves a request's hash with @sauce/async's ERC-1271, whose one handler answers for it", () => {
     expect(SOURCE).toContain("approveHash(");

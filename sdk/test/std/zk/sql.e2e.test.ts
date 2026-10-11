@@ -43,7 +43,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { handlersInPlace } from "../../../src/cli/handlers.js";
 import { QueryRouterABI } from "../../../src/protocols/space-and-time/abis.js";
+import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import { gateAnchors } from "../../evm/gated-engine.js";
 import {
   describeOnRouter,
@@ -311,9 +313,14 @@ describeOnRouter.each([
     await grant(router, "FULFILLER_ROLE", FULFILLER.address);
     await grant(executor, "EXECUTOR_ROLE", router);
 
-    const installed = await chain.installPackage("@sauce/zk");
-    expect(installed).toContain(QUERY_CALLBACK);
-    expect(installed).toContain(EXPIRE);
+    // Nothing installed on the Pot: the first query installs what it needs.
+    expect(
+      await handlersInPlace(
+        chain.publicClient,
+        chain.stack.pot,
+        compileSauceProgram(slug, QUERY).handlers,
+      ),
+    ).toBe(false);
   }, 180_000);
 
   afterAll(async () => {
@@ -321,11 +328,17 @@ describeOnRouter.each([
   });
 
   it(
-    "asks the query with the Pot as its callback, under the latest version, paying SXT",
+    "asks the query with the Pot as its callback, under the latest version, paying SXT, installing its handlers first",
     async () => {
       const potBefore = await sxt(chain.stack.pot);
       const sent = await chain.cook(chain.compiled(QUERY, [PLAN, PAYMENT, 0n, 0n]));
       expect(sent.ok).toBe(true);
+      // The executor's callback and the public expire, installed in the same transaction.
+      const handlers = compileSauceProgram(slug, QUERY).handlers;
+      expect(handlers.map((h) => toHex(h.selector, { size: 4 })).sort()).toEqual(
+        [QUERY_CALLBACK, EXPIRE].sort(),
+      );
+      expect(await handlersInPlace(chain.publicClient, chain.stack.pot, handlers)).toBe(true);
       const asked = requested(sent);
       const block = await chain.publicClient.getBlock({ blockNumber: undefined });
 

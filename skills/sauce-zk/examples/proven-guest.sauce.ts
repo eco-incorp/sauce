@@ -4,7 +4,7 @@
 // stdin and then its output, one 32-byte word. The request pays at most `maxPrice` wei, which the
 // Pot deposits, and asks the prover that takes it to lock 15 ZKC as collateral. If no prover fulfils it within half
 // an hour, anyone may expire it, and its price comes back to the Pot. Base only; the Pot must be a
-// Private Pot with @sauce/zk's handlers installed (`sauce run @sauce/zk --chain base`).
+// Private Pot; the first request installs @sauce/zk's handlers on it.
 //
 //   sauce run proven-guest.sauce.ts --chain <chain> --wallet <name> --password-env <NAME> \
 //     --args <imageId> <imageUrl> <input> <maxPrice> <minimum> <recipient> <amount>

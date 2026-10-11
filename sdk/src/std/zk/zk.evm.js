@@ -37,8 +37,8 @@
 //
 //   queryCallback(bytes32 queryId, bytes result, bytes callbackData)
 //
-// which the Pot answers with the handler whose body is `queryCallback` below: from the executor
-// alone, it fulfils the promise parked under the query's id with the result. Anyone may ask a query
+// which the Pot answers with the handler whose body is `queryCallback` below, installed by the query
+// itself unless the Pot already has it (the request's `handlers`): from the executor alone, it fulfils the promise parked under the query's id with the result. Anyone may ask a query
 // naming the Pot as its callback, but only a query this Pot asked has its id in the table: any other
 // finds nothing pending, and the callback returns. The router answers a query once.
 //
@@ -65,7 +65,9 @@
 // `isValidSignature(requestHash, signature)` (ERC-1271), static, with 100,000 gas, and the lock spends
 // the client's balance at the market. When it submits a request the Pot hashes it as the market does
 // (EIP-712, under the market's own domain) and approves the hash (`@sauce/async`'s `Erc1271`), and
-// the Pot's one ERC-1271 handler, `@sauce/async`'s, says yes for it, in about 38,000 of the 100,000.
+// the Pot's one ERC-1271 handler, `@sauce/async`'s (`Erc1271.handler()`, which the request installs
+// with the market's callback unless the Pot has them), says yes for it, in about 38,000 of the
+// 100,000.
 // An approval is left in place once the request settles: it names one request of one market, which
 // is locked once.
 //
@@ -91,7 +93,15 @@
 // (0x5b07fdd8), `requestIsLocked(uint256)` (0xcb74db11), `requestIsFulfilled(uint256)` (0x81bf6c24),
 // `slash(uint256)` (0x45bc4d10) and `withdraw(uint256)` (0x2e1a7d4d). The SDK's tests derive each
 // from its signature and run them against the contracts as deployed.
-import { Request, approveHash, fulfil, promiseKey, requireCaller } from "@sauce/async";
+import {
+  Erc1271,
+  Handler,
+  Request,
+  approveHash,
+  fulfil,
+  promiseKey,
+  requireCaller,
+} from "@sauce/async";
 import { approve } from "@sauce/token";
 
 // The tag a query's promise key is made under: keccak256("sauce.zk.sql").
@@ -110,6 +120,10 @@ const SAUCE_ZK_NAMESPACE = 0xb17760d84f08c2c9fa647a884d9c84e17f084859463e6c6008d
 // The callback's selector, `queryCallback(bytes32,bytes,bytes)`: the name Space and Time's own
 // examples give it, and the one the package's handler answers.
 const SAUCE_ZK_QUERY_CALLBACK = 0xd1eefc40;
+
+// Boundless's callback's selector, `handleProof(bytes32,bytes,bytes)`, which the package's other
+// handler answers.
+const SAUCE_ZK_HANDLE_PROOF = 0xa12da43f;
 
 // `Timeout(bytes32)`, what `expire` rejects a promise with.
 const SAUCE_ZK_TIMEOUT = 0xe6cc9dd0;
@@ -210,6 +224,13 @@ class Requests {
     const deadline = ctx.timestamp() + timeout;
     return new Request({
       deadline,
+      // The executor's callback, installed on the Pot as the query is asked unless it already is:
+      // the same program as `sql.handler.js`.
+      handlers: [
+        new Handler(SAUCE_ZK_QUERY_CALLBACK, (caller: Address, value: Uint256, data: bytes) => {
+          queryCallback(SpaceAndTime.CallbackExecutor, caller, data);
+        }),
+      ],
       send: (continuation) => {
         const router = SpaceAndTime.QueryRouter;
         const [token] = abi.decode(evm.static(router, hex`877c86fb`), ["Address"]);
@@ -295,6 +316,14 @@ class Requests {
     const deadline = ctx.timestamp() + offer.timeout;
     return new Request({
       deadline,
+      // The market's callback (`risc0.handler.js`'s program), and the Pot's ERC-1271 answer, which a
+      // prover's lock asks: installed as the request is made unless they already are.
+      handlers: [
+        new Handler(SAUCE_ZK_HANDLE_PROOF, (caller: Address, value: Uint256, data: bytes) => {
+          handleProof(Boundless.Market, caller, data);
+        }),
+        Erc1271.handler(),
+      ],
       send: (continuation) => {
         return requestProof(
           Boundless.Market,
