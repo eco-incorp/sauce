@@ -230,6 +230,11 @@ Each handler checks that its caller is the bridge's contract on that chain and t
 sender on its origin chain is this same Pot before it runs anything. A Polymer proof is checked by
 Polymer's prover on that chain, must be of a log this Pot emitted for this chain, and runs once.
 
+A message sent to a Pot that is not ready, with no Pot on that chain yet or no handler for its
+bridge, waits: its delivery fails and nothing runs. Hyperlane, LayerZero and Metalayer deliver it
+again once the Pot answers, and a Polymer proof can be submitted any time later. It is not lost,
+and it runs once.
+
 An intent moves money to another chain; a remote message does the stateful part on the Pot that
 owns it. They arrive in no set order, so a one-way message's body checks what it needs and reverts
 until it is there:

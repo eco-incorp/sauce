@@ -177,6 +177,11 @@ emitted for this chain, and runs once. LayerZero's two read-only answers run wit
 Pot itself, and messages arrive in any order. A shared Pot answers no message, so a remote message
 runs between Private Pots only.
 
+A message sent to a Pot that is not ready, with no Pot on that chain yet or no handler for its
+bridge, waits: its delivery fails and nothing runs. Hyperlane, LayerZero and Metalayer deliver it
+again once the Pot answers, and a Polymer proof can be submitted any time later. It is not lost,
+and it runs once.
+
 ## With an intent
 
 An intent brings the money; a remote message does the stateful part on your Pot. They arrive in no
