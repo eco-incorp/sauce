@@ -81,6 +81,15 @@ const abi = {
     "function borrowBalanceOf(address) view returns (uint256)",
     "function decimals() view returns (uint8)",
   ]),
+  morpho: parseAbi([
+    "struct MarketParams { address loanToken; address collateralToken; address oracle; address irm; uint256 lltv; }",
+    "struct Market { uint128 totalSupplyAssets; uint128 totalSupplyShares; uint128 totalBorrowAssets; uint128 totalBorrowShares; uint128 lastUpdate; uint128 fee; }",
+    "function idToMarketParams(bytes32 id) view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)",
+    "function market(bytes32 id) view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee)",
+    "function position(bytes32 id, address user) view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral)",
+    "function borrowRateView(MarketParams marketParams, Market market) view returns (uint256)",
+    "function price() view returns (uint256)",
+  ]),
   quoter: parseAbi([
     "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
     "function quoteExactOutputSingle((address tokenIn, address tokenOut, uint256 amount, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
@@ -757,6 +766,161 @@ describe(
         // claimCometRewards: whatever the Pot is owed arrives in COMP.
         const claimed = asNumbers((await cook(FILE, args(4, USDC, 0n))) as Market);
         assert.equal(await balanceOf(env, COMP, env.pot), claimed.moved);
+      });
+    });
+    describe("Morpho's snippets, on Morpho Blue's USDC market with WETH collateral", () => {
+      const FILE = example("sauce-protocols", "morpho-blue-snippets");
+      const MORPHO = named("MorphoBlue_Morpho");
+      const USDC = named("USDC");
+      const WETH = named("WETH");
+      const WETH_BALANCE = { slot: 3n };
+      const USDC_BALANCE = { slot: 9n };
+      /** The USDC market with WETH collateral at an 86% LLTV, by Morpho's id. */
+      const ID = "0x94b823e6bd8ea533b4e33fbc307faea0b307301bc48763acc4d4aa4def7636cd" as Hex;
+      const USDC_UNIT = 10n ** 6n;
+      const WAD = 10n ** 18n;
+
+      interface Snippet {
+        assets: string;
+        shares: string;
+        supplyApy: string;
+        borrowApy: string;
+        supplied: string;
+        borrowed: string;
+        collateral: string;
+        totalSupply: string;
+        totalBorrow: string;
+        healthFactor: string;
+      }
+      const position = async () => {
+        const [supplyShares, borrowShares, collateral] = await env.publicClient.readContract({
+          address: MORPHO,
+          abi: abi.morpho,
+          functionName: "position",
+          args: [ID, env.pot],
+        });
+
+        return { supplyShares, borrowShares, collateral };
+      };
+      const step = async (n: number, amount: bigint, receiver: Address) =>
+        (await cook(FILE, [String(n), ID, String(amount), receiver])) as Snippet;
+
+      it("supplies, takes collateral, borrows, repays and withdraws each way, and reads the position", async () => {
+        const [receiver] = PEOPLE;
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, 5000n * USDC_UNIT);
+        await setBalance(env, WETH, WETH_BALANCE, env.pot, WAD);
+        const usdc = () => balanceOf(env, USDC, env.pot);
+
+        // supply, then supplyCollateral: Morpho records both for the Pot.
+        await step(1, 1000n * USDC_UNIT, receiver);
+        assert.equal(await usdc(), 4000n * USDC_UNIT);
+        assert.ok((await position()).supplyShares > 0n);
+        await step(2, WAD, receiver);
+        assert.equal((await position()).collateral, WAD);
+        assert.equal(await allowance(env, USDC, env.pot, MORPHO), 0n);
+        assert.equal(await allowance(env, WETH, env.pot, MORPHO), 0n);
+
+        // borrow: 500 USDC to the receiver, a debt on the Pot.
+        await step(8, 500n * USDC_UNIT, receiver);
+        assert.equal(await balanceOf(env, USDC, receiver), 500n * USDC_UNIT);
+
+        // The views, read with nothing changed: Morpho's own position, the oracle and the IRM.
+        const viewed = await simulate(FILE, ["0", ID, "0", receiver]);
+        assert.equal(viewed.ok, true, viewed.reason);
+        const views = Object.fromEntries(
+          Object.entries(viewed.returned as Snippet).map(([k, v]) => [k, BigInt(v)]),
+        );
+        assert.equal(views.collateral, WAD);
+        assert.ok(views.borrowed >= 500n * USDC_UNIT && views.borrowed < 501n * USDC_UNIT);
+        const [loanToken, collateralToken, oracle, irm, lltv] = await env.publicClient.readContract(
+          {
+            address: MORPHO,
+            abi: abi.morpho,
+            functionName: "idToMarketParams",
+            args: [ID],
+          },
+        );
+        const price = await env.publicClient.readContract({
+          address: oracle,
+          abi: abi.morpho,
+          functionName: "price",
+        });
+        const maxBorrow = (((WAD * price) / 10n ** 36n) * lltv) / WAD;
+        assert.equal(views.healthFactor, (maxBorrow * WAD) / views.borrowed);
+        const [
+          totalSupplyAssets,
+          totalSupplyShares,
+          totalBorrowAssets,
+          totalBorrowShares,
+          lastUpdate,
+          fee,
+        ] = await env.publicClient.readContract({
+          address: MORPHO,
+          abi: abi.morpho,
+          functionName: "market",
+          args: [ID],
+        });
+        const rate = await env.publicClient.readContract({
+          address: irm,
+          abi: abi.morpho,
+          functionName: "borrowRateView",
+          args: [
+            { loanToken, collateralToken, oracle, irm, lltv },
+            {
+              totalSupplyAssets,
+              totalSupplyShares,
+              totalBorrowAssets,
+              totalBorrowShares,
+              lastUpdate,
+              fee,
+            },
+          ],
+        });
+        const first = rate * 365n * 86400n;
+        const apy =
+          first +
+          (first * first) / (2n * WAD) +
+          (((first * first) / (2n * WAD)) * first) / (3n * WAD);
+        // The program accrued the interest since the market's last update first, which moves the
+        // rate a little: within 1%.
+        assert.ok(
+          views.borrowApy * 100n >= apy * 99n && views.borrowApy * 100n <= apy * 101n,
+          `${views.borrowApy} vs ${apy}`,
+        );
+        assert.ok(views.supplyApy > 0n && views.supplyApy < views.borrowApy);
+        assert.ok(views.totalSupply >= totalSupplyAssets && views.totalBorrow >= totalBorrowAssets);
+
+        // repayAmount, repay50Percent, repayAmountOrAll (more than owed: all of it).
+        await step(9, 100n * USDC_UNIT, receiver);
+        const owedShares = (await position()).borrowShares;
+        await step(10, 0n, receiver);
+        assert.equal((await position()).borrowShares, owedShares - owedShares / 2n);
+        await step(12, 10_000n * USDC_UNIT, receiver);
+        assert.equal((await position()).borrowShares, 0n);
+        assert.equal(await allowance(env, USDC, env.pot, MORPHO), 0n);
+
+        // repayAll, on a second borrow.
+        await step(8, 200n * USDC_UNIT, receiver);
+        await step(11, 0n, receiver);
+        assert.equal((await position()).borrowShares, 0n);
+
+        // withdrawAmount, withdraw50Percent, withdrawAmountOrAll (more than supplied: all of it).
+        const paidOut = await balanceOf(env, USDC, receiver);
+        await step(4, 100n * USDC_UNIT, receiver);
+        assert.equal(await balanceOf(env, USDC, receiver), paidOut + 100n * USDC_UNIT);
+        const suppliedShares = (await position()).supplyShares;
+        await step(5, 0n, receiver);
+        assert.equal((await position()).supplyShares, suppliedShares - suppliedShares / 2n);
+        await step(7, 10_000n * USDC_UNIT, receiver);
+        assert.equal((await position()).supplyShares, 0n);
+
+        // withdrawAll, on a second supply; then withdrawCollateral.
+        await step(1, 100n * USDC_UNIT, receiver);
+        await step(6, 0n, receiver);
+        assert.equal((await position()).supplyShares, 0n);
+        await step(3, WAD, receiver);
+        assert.equal((await position()).collateral, 0n);
+        assert.equal(await balanceOf(env, WETH, receiver), WAD);
       });
     });
   },
