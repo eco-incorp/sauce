@@ -369,6 +369,14 @@ const skillsSource = (): SkillsSource => {
 // ---------------------------------------------------------------------------------------------
 
 /** Every command's: its help, and the update check's opt-out (`update-check.ts`). */
+/** `-y`: what a command would ask before it sends — deploying the Pot it cooks on first, an approval
+ *  a run's funding needs — approved without asking. `--auto-approve` is its older name. */
+const YES: FlagSpec = {
+  type: "boolean",
+  short: "y",
+  help: "Approve, without asking, what it sends first (deploying your Pot, an approval)",
+};
+
 const HELP: FlagSpecs = {
   help: { type: "boolean", short: "h", help: "Show this help" },
   "no-update-check": {
@@ -1102,20 +1110,26 @@ async function signerAddress(args: ParsedArgs, io: CliIo): Promise<`0x${string}`
 }
 
 /**
- * Who approves what a run sends before its cook: `--auto-approve`, which says so for each action it
- * approves, or the person at the terminal (`io.confirm`).
+ * Who approves what a run sends before its cook: `--yes` (or its older name, `--auto-approve`),
+ * which says so for each action it approves, or the person at the terminal (`io.confirm`). With
+ * `--json` nothing is asked: its output is for a program, which no question reaches.
  */
 function approverOf(args: ParsedArgs, io: CliIo): Approver {
-  const auto = args.values["auto-approve"] === true;
+  const auto = args.values.yes === true || args.values["auto-approve"] === true;
+  const json = args.values.json === true;
 
   return {
     auto,
-    canAsk: auto || io.canAsk(),
+    canAsk: auto || (!json && io.canAsk()),
+    ...(json ? { why: "--json asks nothing" } : {}),
     approve: async (action, question) => {
-      if (!auto) return io.confirm(question);
-      io.stderr(`auto-approved: ${action}\n`);
+      if (auto) {
+        io.stderr(`auto-approved: ${action}\n`);
 
-      return true;
+        return true;
+      }
+
+      return json ? undefined : io.confirm(question);
     },
   };
 }
@@ -1374,13 +1388,14 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     return publishCommand({ ...program, dryRun: false, format: "json", rpcUrl, from: creator }, io);
   }
   const action = `publish ${created.file} from ${account.address}`;
-  const answer = await approverOf(args, io).approve(
+  const approver = approverOf(args, io);
+  const answer = await approver.approve(
     action,
     `Publish ${created.file} from ${account.address}? [y/N] `,
   );
   if (answer === undefined) {
     throw new CliError(
-      `${created.file} is written, and not published: ${unapproved([action]).message}`,
+      `${created.file} is written, and not published: ${unapproved([action], approver.why).message}`,
     );
   }
   if (!answer) throw new CliError(`${created.file} is written, and not published: you declined`);
@@ -1423,9 +1438,10 @@ const LIFECYCLE: FlagSpecs = {
     help: "Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file",
     only: "svm",
   },
+  yes: YES,
   "auto-approve": {
     type: "boolean",
-    help: "Approve what it spends beyond gas (a fee, tokens) without asking",
+    help: "The same as --yes, its older name",
   },
   store: {
     type: "string",
@@ -1659,6 +1675,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...SIGNER,
       ...CREATE,
+      yes: LIFECYCLE.yes!,
       "auto-approve": LIFECYCLE["auto-approve"]!,
       from: {
         type: "string",
@@ -1721,7 +1738,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "named). It writes the intent as a .sauce.ts file (--out, default",
       "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, rehearses",
       "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
-      "with a signer publishes it once you approve (or with --auto-approve), storing it. It reads",
+      "with a signer publishes it once you approve (or with --yes), storing it. It reads",
       "both chains.",
       ...SUPPORTED_ONLY("Publishes (or prints the transactions)"),
       "",
@@ -1816,7 +1833,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     usage: [
       "sauce intent fill <file | -> --chain <source> [options] [--args <value>…]",
       "sauce intent fill <intent-hash> [options]",
-      "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
+      "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--yes]",
       "sauce intent fill <intent-hash> --claimant <address> --send --keypair <path>   (to Solana)",
     ],
     summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
@@ -1855,6 +1872,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       },
       ...EVM_SIGNER,
       keypair: LIFECYCLE.keypair!,
+      yes: LIFECYCLE.yes!,
       "auto-approve": LIFECYCLE["auto-approve"]!,
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
@@ -1880,7 +1898,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "--assume-balance finds it. With --send the signer is the solver and nothing is assumed: the",
       "rehearsal runs on its real balances, a fill that would revert is not sent, and what it",
       "spends (each token, the value and what it is for) is shown for you to approve at the",
-      "terminal, or with --auto-approve. Then the transactions are sent in order, and the intent and its",
+      "terminal, or with --yes. Then the transactions are sent in order, and the intent and its",
       "fill go into the store (--store, default ~/.sauce/intents).",
       "",
       "Prints the gas and what the fill moved — the transfers, each address's net change, labelled",
@@ -1931,8 +1949,14 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       if (sending && solver !== undefined) {
         throw new UsageError("--solver is for a rehearsal: with --send, the signer is the solver");
       }
-      if (args.values["auto-approve"] === true && !sending) {
-        throw new UsageError("--auto-approve approves what --send spends: give --send");
+      const yes =
+        args.values.yes === true
+          ? "yes"
+          : args.values["auto-approve"] === true
+            ? "auto-approve"
+            : undefined;
+      if (yes !== undefined && !sending) {
+        throw new UsageError(`--${yes} approves what --send spends: give --send`);
       }
       const operands = args.positionals;
       let targets: readonly FillTarget[];
@@ -2037,7 +2061,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "For intents fulfilled (or cancelled) on their destination whose proof has not reached the",
       "source: Portal.prove(prover, sourceDomain, intentHashes, data) on the destination, from",
       "the signer, with the prover's fee — quoted from its fetchFee — as the value, which you",
-      "approve at the terminal or with --auto-approve. Several hashes share one proof when they have one",
+      "approve at the terminal or with --yes. Several hashes share one proof when they have one",
       "destination, source and prover. An intent the source has proven already is left out.",
       "Prints the transaction and the Hyperlane message the proof travels as. With no signer,",
       "prints the unsigned transaction instead.",
@@ -2756,9 +2780,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...SIGNER,
       ...FUND,
+      yes: YES,
       "auto-approve": {
         type: "boolean",
-        help: "Approve, without asking, what the run sends first: see below",
+        help: "The same as --yes, its older name",
       },
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
@@ -2771,14 +2796,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "reason when it reverts (exit 1). The signer is the owner. The value defaults to the",
       "Kitchen's execution fee, read from the chain.",
       "",
+      "You never deploy the Pot as a step of your own: a run deploys it when it first needs it.",
       "What the run sends before its cook, each in a transaction of its own, it asks you to",
-      "approve at the terminal first; --auto-approve approves every one without asking, and says",
-      "`auto-approved: <action>` for each. They are:",
-      "  deploying the Pot, when it is not deployed yet (on Solana, creating it)",
+      "approve at the terminal first; -y (--yes, or --auto-approve) approves every one without",
+      "asking, and says `auto-approved: <action>` for each. They are:",
+      "  deploying your Pot, when it has no code yet (asked as `[deploy/cancel]`, with its gas)",
       "  approving Permit2 for a token --fund pulls, the first time (--fund-mode permit2)",
       "  approving the Pot for the amount --fund pulls (--fund-mode allowance)",
-      "With no terminal to ask on (CI, a pipe, a program read from stdin with no terminal),",
-      "nothing is sent until they are approved: the run names every one it needs and stops.",
+      "On Solana a missing Pot is created in the cook's own transaction, with nothing asked, when",
+      "the two fit in one; else it is asked for like the rest. With no terminal to ask on (CI, a",
+      "pipe, a program read from stdin with no terminal), or with --json, nothing is sent until",
+      "they are approved: the run names every one it needs, and --yes, and stops.",
       "",
       "--fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so",
       "it first pulls each amount from you, then runs, then (--sweep) returns what is left. The",
@@ -2865,6 +2893,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     flags: {
       ...ENDPOINT,
       ...EVM_SIGNER,
+      yes: LIFECYCLE.yes!,
       "auto-approve": LIFECYCLE["auto-approve"]!,
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
@@ -2956,13 +2985,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Compiles the file and prints the transaction that runs it, unsigned, as JSON:",
       "{ chainId, to: the Pot, data: Pot.cook(engine, program ++ arguments), value }. The value",
       "is --value, or else the Kitchen's fee, read from the chain, which also checks the Pot.",
-      "`--format cast` prints the same transaction as a `cast send` line instead. What must be",
-      "true for it to land goes to stderr: the Pot deployed and funded, and sent from its owner.",
+      "When the chain shows the Pot has no code yet, it prints the plan instead: { chainId, pot,",
+      "transactions }, Kitchen.deployPot first (marked deploysPot; any account may send it), then",
+      "the cook, to send in that order. `--format cast` prints each as a `cast send` line. What",
+      "must be true for it to land goes to stderr: the Pot funded, and sent from its owner.",
       "",
-      "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, transaction }, the Kitchen",
-      "cook as a base64 transaction signed by no one, for --owner to sign — or, --via engine, the",
-      "engine's own paid cook, with no Pot. It reads the cluster (for the blockhash and the fee),",
-      "and the --account flags simulate takes; --max-execution-fee refuses a fee above it.",
+      "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },",
+      "the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via",
+      "engine, the engine's own paid cook, with no Pot. A Pot not created yet is created by the",
+      "same transaction, ahead of the cook (createsPot). It reads the cluster (for the blockhash",
+      "and the fee), and the --account flags simulate takes; --max-execution-fee refuses a fee",
+      "above it.",
       ...SUPPORTED_ONLY("Prints the transaction"),
       "",
       "Example:",
@@ -2995,6 +3028,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       deploy: { type: "boolean", help: "Send the deployment (needs an endpoint and a signer)" },
       ...ENDPOINT,
       ...SIGNER,
+      yes: { ...YES, help: "Accepted, approving nothing: --deploy itself is the approval" },
       "auto-approve": {
         type: "boolean",
         help: "Accepted, approving nothing: --deploy itself is the approval",
@@ -3004,7 +3038,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
     details: [
       "A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known",
-      "before it exists. Prints it and the unsigned Kitchen.deployPot transaction as JSON; with",
+      "before it exists. You need not deploy it yourself: sauce run deploys it when it first",
+      "needs it (asking, or with -y), and sauce tx plans its deployment first. This does it by",
+      "hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with",
       "--deploy, sends it unless the Pot is already there, and waits until the endpoint shows its",
       "code. The owner defaults to the signer. Deploying is permissionless: with --owner, the",
       "signer sends and pays for another owner's Pot, which is that owner's alone — how the Pot",
@@ -4001,8 +4037,9 @@ function mainHelp(): string {
     "A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain",
     "base`); it is never read without one. Its relative imports then resolve against the",
     "current directory, or --source-dir. Questions go to the terminal (/dev/tty) instead of",
-    "stdin; with no terminal, a run names what it needs approved and sends nothing until",
-    "--auto-approve (and a password source for a wallet or keystore) is given.",
+    "stdin; with no terminal, or with --json, a run names what it needs approved (deploying your",
+    "Pot first, say) and sends nothing until -y (--yes) and a password source for a wallet or",
+    "keystore are given.",
     "",
   ].join("\n");
 }
@@ -4109,7 +4146,7 @@ function notTaken(name: string, flag: string): string {
         ? `${name} signs nothing`
         : REACHING.has(flag) && !("config" in own)
           ? `${name} reads nothing from a chain`
-          : flag === "auto-approve"
+          : flag === "auto-approve" || flag === "yes"
             ? `${name} has nothing to ask`
             : undefined;
 
