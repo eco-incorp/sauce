@@ -35,9 +35,10 @@
 //
 // `ok` true fulfils the request, and the body is handed `data`; false rejects it, and `.catch` is
 // handed `data`, the workflow's error. Chainlink's KeystoneForwarder checks the DON's signatures,
-// asks the Pot over ERC-165 whether it is an `IReceiver` (0x805f2132, which installing this package
-// declares), and calls its `onReport(bytes metadata, bytes report)`, which the Pot answers with the
-// handler this package's `onReport` is the body of. A report for a request already settled, or for
+// asks the Pot over ERC-165 whether it is an `IReceiver` (0x805f2132), and calls its
+// `onReport(bytes metadata, bytes report)`, which the Pot answers with the handler this package's
+// `onReport` is the body of. The first request on a Pot installs both, the handler and the
+// interface, unless the Pot already has them. A report for a request already settled, or for
 // none, changes nothing and returns.
 //
 // WHO MAY ANSWER. Any workflow's DON can reach the forwarder, so the forwarder as the caller proves
@@ -50,7 +51,12 @@
 // it: `onReport(bytes,bytes)` (0x805f2132), whose `metadata` is the 64 bytes `workflowId` (32),
 // `workflowName` (10), `workflowOwner` (20), `reportId` (2). The SDK's tests run it through the
 // forwarder deployed on Ethereum and Base, its runtime as captured.
-import { Request, fulfil, promiseKey, reject, requireCaller } from "@sauce/async";
+import { Handler, Request, fulfil, promiseKey, reject, requireCaller } from "@sauce/async";
+
+// `onReport(bytes,bytes)`, the call the forwarder makes, and `IReceiver`'s ERC-165 id, the same four
+// bytes: the interface declares that one function.
+const ON_REPORT = 0x805f2132;
+const IRECEIVER = 0x805f2132;
 
 // The event a request logs: keccak256("OracleRequest(bytes32,address,bytes)").
 const ORACLE_REQUEST = 0xc110c892d7bf322caf684db2c33c898be8770bb1a502d0845097c8672c9874ed;
@@ -89,8 +95,22 @@ export class Oracle {
         "`Oracle.cre` needs an `owner`: the workflow owner whose report settles the request. Any workflow can reach Chainlink's forwarder, so the owner is what proves the answer is the one asked for.",
       );
     }
+    if (!Chainlink.KeystoneForwarder) {
+      throw new Error(
+        "`Oracle.cre` needs Chainlink's KeystoneForwarder, which delivers a CRE workflow's report, and this chain has none",
+      );
+    }
     const args = config.args === undefined ? hex`` : config.args;
     return new Request({
+      // What the Pot needs to take the report, installed with the first request: the program it
+      // runs for `onReport`, the same as `report.handler.js`, and `IReceiver` declared for the
+      // forwarder's ERC-165 check.
+      handlers: [
+        new Handler(ON_REPORT, (caller: Address, value: Uint256, data: bytes) => {
+          onReport(Chainlink.KeystoneForwarder, caller, data);
+        }),
+      ],
+      interfaces: [IRECEIVER],
       deadline: config.deadline,
       send: (continuation) => {
         const count = evm.sload(SAUCE_ORACLE_NAMESPACE) + 1;

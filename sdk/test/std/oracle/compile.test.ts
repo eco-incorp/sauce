@@ -12,7 +12,8 @@ import { join } from "node:path";
 
 import { encodeAbiParameters, keccak256, toFunctionSelector, toHex } from "viem";
 
-import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import { compileHandlers, packageReader } from "../../../src/routes/handlers.js";
+import { ASYNC_INSTALLED_DEFINE, compileSauceProgram } from "../../../src/routes/sauce-route.js";
 
 /** jest's cwd is `sdk/`. */
 const SOURCE = readFileSync(join(process.cwd(), "src", "std", "oracle", "oracle.evm.js"), "utf8");
@@ -141,6 +142,45 @@ function main(owner: Address): void {
   });
 });
 
+describe("what a request installs", () => {
+  const ON_REPORT = BigInt(toFunctionSelector("onReport(bytes,bytes)"));
+
+  it("onReport, the very program report.handler.js compiles to, so a pre-warmed Pot keeps it", () => {
+    for (const chain of ["ethereum", "base"]) {
+      const program = compile(REQUEST, chain);
+      const [file] = compileHandlers(
+        chain,
+        [{ selector: "onReport(bytes,bytes)", program: "report.handler.js" }],
+        packageReader("@sauce/oracle"),
+      );
+      const reported = program.handlers.find((h) => h.selector === ON_REPORT)!;
+      expect(reported.readOnly).toBe(false);
+      expect(hex(reported.bytecode)).toBe(hex(file!.bytecode));
+      // Carried while the Pot may lack it, and not once the sender read it installed.
+      expect(hex(program.bytecode)).toContain(hex(reported.bytecode));
+      const lean = compileSauceProgram(chain, REQUEST, {
+        defines: { [ASYNC_INSTALLED_DEFINE]: 1n },
+      });
+      expect(hex(lean.bytecode)).not.toContain(hex(reported.bytecode));
+    }
+  });
+
+  it("with a deadline, the core's expire too", () => {
+    const program = compile(`import { Oracle } from "@sauce/oracle";
+
+function main(owner: Address): void {
+  Oracle.cre({ owner })
+    .within(600)
+    .then((report) => {
+      evm.sstore(1, report.length);
+    });
+}`);
+    expect(program.handlers.map((h) => h.selector).sort()).toEqual(
+      [ON_REPORT, BigInt(toFunctionSelector("expire(bytes32)"))].sort(),
+    );
+  });
+});
+
 describe("what it refuses", () => {
   const refuses = (source: string, message: string): void => {
     expect(() => compile(source)).toThrow(message);
@@ -175,6 +215,18 @@ function main(owner: Address): void {
 }`,
       "a request has no body",
     );
+  });
+
+  it("a request on a chain with no forwarder", () => {
+    expect(() =>
+      compile(
+        `import { Oracle } from "@sauce/oracle";
+function main(owner: Address): void {
+  Oracle.cre({ owner }).then(() => {});
+}`,
+        "optimism",
+      ),
+    ).toThrow("needs Chainlink's KeystoneForwarder");
   });
 
   it("an import on Solana, where no arm exists", () => {

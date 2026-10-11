@@ -14,12 +14,11 @@
  * `IReceiver` (OpenZeppelin's checker: three static calls of 30,000 gas), and calls its
  * `onReport(metadata, report)`. Each step runs as a user would run it:
  *
- *   1. the owner cooks the program the SDK writes to install `@sauce/oracle`: the `onReport`
- *      handler, `@sauce/async`'s public `expire`, and the `IReceiver` interface the Router answers
- *      ERC-165 for;
- *   2. the owner cooks a program that requests: `Oracle.cre({ owner, args }).then(…).catch(…)`,
- *      which logs `OracleRequest(id, owner, args)` and parks the body as a promise;
- *   3. the DON's report reaches the Pot through the forwarder: the handler checks its caller,
+ *   1. the owner cooks a program that requests: `Oracle.cre({ owner, args }).then(…).catch(…)`,
+ *      which, the first time, installs the `onReport` handler and declares the `IReceiver`
+ *      interface the Router answers ERC-165 for, then logs `OracleRequest(id, owner, args)` and
+ *      parks the body as a promise;
+ *   2. the DON's report reaches the Pot through the forwarder: the handler checks its caller,
  *      derives the promise's key from the report's id and the metadata's workflow owner, and
  *      fulfils it (the body runs) or rejects it (`.catch` runs, as it does for a body that reverted).
  *
@@ -69,7 +68,7 @@ import { privateKeyToAccount, sign } from "viem/accounts";
 import { requireChain } from "../../../src/chains/canonical.js";
 import { chainlink } from "../../../src/protocols/index.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
-import { handlersInstallSource, packageInstall } from "../../../src/routes/handlers.js";
+import { packageInstall } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../../../src/routes/token-registry.js";
 import { freePortSync, spawnAnvil } from "../../anvil-process.js";
@@ -167,7 +166,13 @@ const IERC165 = toFunctionSelector("supportsInterface(bytes4)");
 const PRICE_SLOT = keccak256(toHex("oracle.price"));
 const ERROR_SLOT = keccak256(toHex("oracle.error"));
 
-const potAbi = parseAbi(["function cook(address engine, bytes program) payable returns (bytes)"]);
+const potAbi = parseAbi([
+  "function cook(address engine, bytes program) payable returns (bytes)",
+  "function handler(bytes4 selector) view returns (address engine, bytes program, bool readOnly)",
+]);
+/** What the Pot logs when its Router records a handler or an interface. */
+const HANDLER_SET = keccak256(toHex("HandlerSet(bytes4,address,bool)"));
+const INTERFACE_SET = keccak256(toHex("InterfaceSet(bytes4,bool)"));
 const kitchenAbi = parseAbi(["function setExecutionFee(uint256 fee)"]);
 const forwarderAbi = parseAbi([
   "function setConfig(uint32 donId, uint32 configVersion, uint8 f, address[] signers)",
@@ -461,10 +466,6 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
       data: PROBE.creationCode,
     });
     probe = (await publicClient.waitForTransactionReceipt({ hash: deployed })).contractAddress!;
-
-    const { handlers, interfaces } = packageInstall(CHAIN, "@sauce/oracle");
-    const install = handlersInstallSource(handlers, "@sauce/oracle", interfaces);
-    expect((await cook(compiled(install))).ok).toBe(true);
   }, 120_000);
 
   afterAll(async () => {
@@ -475,7 +476,37 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
     }
   });
 
-  it("installs `onReport` and the public `expire`, run as cooks, and declares `IReceiver`", () => {
+  it("the first request installs `onReport` and declares `IReceiver`; a later one installs nothing", async () => {
+    const recorded = async () =>
+      (
+        await publicClient.readContract({
+          address: stack.pot,
+          abi: potAbi,
+          functionName: "handler",
+          args: [ON_REPORT],
+        })
+      )[1];
+    expect(await recorded()).toBe("0x");
+    expect((await query(ON_REPORT))[0]).toBe(false);
+
+    const pair = encodeAbiParameters([{ type: "string" }], ["ETH/USD"]);
+    const first = await cook(compiled(REQUEST, [WORKFLOW_OWNER, pair, 10n ** 30n]));
+    expect(first.ok).toBe(true);
+    const [installed] = packageInstall(CHAIN, "@sauce/oracle").handlers;
+    expect(await recorded()).toBe(bytesToHex(installed!.bytecode));
+    const firstLogs = (await potLogs(first.hash)).map(([topic]) => topic);
+    expect(firstLogs).toContain(HANDLER_SET);
+    expect(firstLogs).toContain(INTERFACE_SET);
+    expect((await query(ON_REPORT))[0]).toBe(true);
+
+    const later = await cook(compiled(REQUEST, [WORKFLOW_OWNER, pair, 10n ** 30n]));
+    expect(later.ok).toBe(true);
+    const laterLogs = (await potLogs(later.hash)).map(([topic]) => topic);
+    expect(laterLogs).not.toContain(HANDLER_SET);
+    expect(laterLogs).not.toContain(INTERFACE_SET);
+  });
+
+  it("pre-warms the same: the package's declarations are `onReport`, the public `expire` and `IReceiver`", () => {
     const { handlers, interfaces, skipped } = packageInstall(CHAIN, "@sauce/oracle");
     expect(handlers.map((h) => [h.selector, h.readOnly])).toEqual([
       [ON_REPORT, false],
