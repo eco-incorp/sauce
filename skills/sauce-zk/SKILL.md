@@ -1,6 +1,6 @@
 ---
 name: sauce-zk
-description: Proven answers in a Sauce program with @sauce/zk — asked now, answered later by a callback that runs the request's .then body on the same Private Pot — a SQL query over indexed chain data proven with Space and Time's Proof of SQL (Zk.sql, Ethereum and Base), or a RISC Zero guest program proven run on an input by Boundless's market (Zk.risc0, Base). Covers each request's fields and payment (SXT, or ETH and a prover's ZKC collateral), reading a proven SQL table (Zk.cell, Zk.rows), the journal a guest must commit, how the Pot signs its own Boundless requests, timeouts and taking an unanswered request's payment back (Zk.cancel, Zk.reclaim), installing the handlers (sauce run @sauce/zk), what each handler checks and why only the Pot's own requests settle, and what each costs. Use when a program must act on chain history or a computation it cannot run itself, proven rather than reported, or when the user mentions ZK, a coprocessor, Proof of SQL, Space and Time, SXT, RISC Zero, Boundless or a zkVM.
+description: Proven answers in a Sauce program with @sauce/zk — asked now, answered later by a callback that runs the request's .then body on the same Private Pot — a SQL query over indexed chain data proven with Space and Time's Proof of SQL (Zk.sql, Ethereum and Base), or a RISC Zero guest program proven run on an input by Boundless's market (Zk.risc0, Base). Covers each request's fields and payment (SXT, or ETH and a prover's ZKC collateral), reading a proven SQL table (Zk.cell, Zk.text, Zk.rows), the journal a guest must commit or the one a request names in advance, how the Pot signs its own Boundless requests, timeouts and taking an unanswered request's payment back (Zk.cancel, Zk.reclaim), installing the handlers (sauce run @sauce/zk), what each handler checks and why only the Pot's own requests settle, what each costs, and the protocols' own examples ported (Space and Time's HelloWorld, Boundless's EvenNumber and Counter). Use when a program must act on chain history or a computation it cannot run itself, proven rather than reported, or when the user mentions ZK, a coprocessor, Proof of SQL, Space and Time, SXT, RISC Zero, Boundless or a zkVM.
 ---
 
 # Proven answers with `@sauce/zk`
@@ -37,7 +37,8 @@ function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Addres
 
 [`examples/proven-payout.sauce.ts`](examples/proven-payout.sauce.ts) is this program, and
 [`examples/proven-guest.sauce.ts`](examples/proven-guest.sauce.ts) pays once a Boundless guest's
-proven output reaches a minimum; each has the command that runs it.
+proven output reaches a minimum; each has the command that runs it. The protocols' own examples,
+ported, are under [The protocols' own examples](#the-protocols-own-examples).
 
 ## Before the first request
 
@@ -82,8 +83,9 @@ The body is handed the proven table, as bytes. Read it with:
 - `Zk.cell(result, column, row)`: one value of a fixed-width column (BOOLEAN, TINYINT, SMALLINT,
   INT, BIGINT, DECIMAL75, TIMESTAMP, SCALAR), as the unsigned number its big-endian bytes are: a
   negative BIGINT comes as its two's complement in 8 bytes, a DECIMAL75 as its unscaled integer, a
-  TIMESTAMP in milliseconds. A VARCHAR or VARBINARY column is skipped over to reach the columns
-  after it, but not read: `Zk.cell` reverts on one.
+  TIMESTAMP in milliseconds. It reverts on a VARCHAR or VARBINARY column.
+- `Zk.text(result, column, row)`: one value of a VARCHAR or VARBINARY column, its bytes (UTF-8 for
+  a VARCHAR). `abi.encode` of it is a `string`'s encoding, for a log or a call.
 - `Zk.rows(result)`: how many rows it has.
 
 Reading costs gas: a callback whose body read one value of a four-column result used about 250,000
@@ -137,7 +139,8 @@ function main(imageId: Uint256, imageUrl: bytes, input: bytes, maxPrice: Uint256
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `imageId`  | The guest program's image id                                                                                                                                                                       | required  |
 | `imageUrl` | Where provers download the guest, its UTF-8 bytes                                                                                                                                                  | required  |
-| `input`    | What the guest reads from stdin after the request's id                                                                                                                                             | none      |
+| `input`    | What the guest reads from stdin: after the request's id, unless `journal` is given                                                                                                                 | none      |
+| `journal`  | What the guest must commit, when the program knows it in advance: the request asks for exactly it, and the body is handed it                                                                       | none      |
 | `offer`    | The price and its timing: `maxPrice` (wei, deposited), `rampUpPeriod`, `lockTimeout` and `timeout` (seconds from now), `lockCollateral` (ZKC's base units, which the prover locks), `minPrice` (0) | required  |
 | `gasLimit` | The callback's gas                                                                                                                                                                                 | `1000000` |
 
@@ -153,6 +156,14 @@ The guest must commit, as the first 32 bytes of its journal, the sha256 of its w
 request's predicate requires it (a prefix match on the journal), and it is how the Pot knows which
 request a proof answers. The body is handed the rest of the journal.
 
+A guest that proves a claim about its input commits an output the program can state in advance:
+Boundless's template's `is-even` commits the number it was given, its `echo` its stdin. Give that
+output as `journal`, and such a guest runs as published: its stdin is `input` alone, the request
+asks for exactly that journal (a digest match on its sha256, as Boundless's own tooling asks), and
+the body is handed the whole journal. The Pot keeps one such request pending per guest and
+journal: a second while the first waits is refused (`zk: the Pot has a request pending for that
+guest and journal`).
+
 ### The Pot signs its own requests
 
 A prover locks a request by asking its client, the Pot, `isValidSignature(hash, signature)`
@@ -166,9 +177,12 @@ the Pot as its client was never approved, and cannot be locked.
 
 The callback carries no request id, and anyone may fund a request naming the Pot as its callback.
 The handler checks the call came from the chain's market, and settles the promise the proof's image
-id and its journal's first word name: a proof of the same guest over another stdin names another
-promise, which is not there, and the callback returns. A proof delivered again finds its promise
-settled. The market verifies the proof before it calls back.
+id and its journal name: for a request that named its journal, the image id and the journal's
+sha256; for any other, the image id and the journal's first word. A proof of the same guest over
+another stdin, or of another journal, names another promise, which is not there, and the callback
+returns. A proof of a named journal settles its promise whichever request it answers: it proves
+the very output the program asked for. A proof delivered again finds its promise settled. The
+market verifies the proof before it calls back.
 
 ### Unanswered: the deadline and `Zk.reclaim`
 
@@ -178,6 +192,62 @@ slashes the request if a prover locked it and failed (the market refunds the pri
 the prover's collateral), then withdraws the price from the Pot's balance at the market. A request no
 prover locked cost nothing; its deposit is withdrawn the same way. It answers whether it took the
 price back, and does nothing for any other rejection.
+
+## The protocols' own examples
+
+Each coprocessor publishes an example consumer: a contract that asks, or an app that asks for it,
+and a callback or a call that uses the proven answer. Ported, each is one program that asks and
+acts on the answer in its `.then`, with no contract to deploy; each one's header names its source
+and what the Pot does differently.
+
+| Example                                                                                      | Ported from                                                                                                                            | Chains             |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| [`examples/hello-world.sauce.ts`](examples/hello-world.sauce.ts): logs each proven name      | Space and Time's tutorial, `spaceandtimefdn/sxt-chain-examples/contracts/src/HelloWorld/HelloWorld.sol`                                | `base`, `ethereum` |
+| [`examples/even-number.sauce.ts`](examples/even-number.sauce.ts): keeps a number proven even | Boundless's template, `boundless-xyz/boundless-foundry-template/contracts/src/EvenNumber.sol` and its app's request                    | `base`             |
+| [`examples/counter.sauce.ts`](examples/counter.sauce.ts): counts each proof called back      | Boundless's callback example, `boundless-xyz/boundless/examples/counter-with-callback/contracts/src/Counter.sol` and its app's request | `base`             |
+
+The tutorial's query, as its port asks it:
+
+```sauce chain=base,ethereum
+import { Zk } from "@sauce/zk";
+
+const QUERY_PLAN = hex`0000000000000001000000000000003d5455544f5249414c5f414243384437303943383032363239363533343446353234304144313233463543424535313132332e48454c4c4f5f574f524c440000000000000002000000000000000000000000000000044e414d4500000007000000000000000000000000000000094c4f4e47495455444500000005000000000000000100000000000000044e414d45000000000000000000000000000000020000000000000000000000010000000100000005000000000000003c0000000000000001000000000000000000000000`;
+
+function main(payment: Uint256): void {
+  Zk.sql({ query: QUERY_PLAN, payment, gasLimit: 300000, maxGasPrice: 10 * 10 ** 9 })
+    .then((result) => {
+      const names = Zk.rows(result);
+      for (let i = 0; i < names; i += 1) {
+        log(abi.encode(Zk.text(result, 0, i)), crypto.keccak256("QueryFulfilled(string)"));
+      }
+    });
+}
+```
+
+The answer the tutorial's own query got on Ethereum, one name, proven again for the Pot, makes it
+log the same `QueryFulfilled` event, byte for byte, as the tutorial's contract logged. The template's
+guest, asked for exactly the journal it commits:
+
+```sauce chain=base
+import { Zk } from "@sauce/zk";
+
+function main(number: Uint256, imageId: Uint256, imageUrl: bytes, maxPrice: Uint256): void {
+  Zk.risc0({
+    imageId,
+    imageUrl,
+    input: abi.encode(number),
+    journal: abi.encode(number),
+    offer: { maxPrice, rampUpPeriod: 60, lockTimeout: 900, timeout: 1800, lockCollateral: 15000000000000000000 },
+  }).then((journal) => {
+    const [even] = abi.decode(journal, ["Uint256"]);
+    evm.sstore(crypto.keccak256("EvenNumber.number"), even);
+  });
+}
+```
+
+A Pot's callback takes more gas than the originals give theirs (Space and Time's tutorial and
+Boundless's callback example give 100,000): a port's callback used about 145,000 to 155,000, so
+each gives its callback 300,000, or keeps the default.
 
 ## What it costs
 

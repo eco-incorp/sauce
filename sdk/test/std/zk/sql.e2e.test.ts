@@ -77,6 +77,7 @@ const SXT = JSON.parse(readFileSync(join(FIXTURES, "SpaceAndTime.json"), "utf8")
     }
   >;
   results: { chain: number; block: number; transaction: Hex; result: Hex }[];
+  helloWorld: { contract: Address; transaction: Hex; log: { topics: Hex[]; data: Hex } };
 };
 const MOCKS = JSON.parse(readFileSync(join(FIXTURES, "SpaceAndTimeMocks.json"), "utf8")) as Record<
   "PoSQLVerifierMock" | "AggregatorMock",
@@ -96,6 +97,8 @@ const PLAN =
 const STAKE = SXT.results.find((r) => r.block === 25272381)!.result;
 const LONGITUDE = SXT.results.find((r) => r.chain === 8453)!.result;
 const VARCHARS = SXT.results.find((r) => r.block === 25199551)!.result;
+/** The answer Space and Time's tutorial's own query got on Ethereum: one VARCHAR, a name. */
+const HELLO = SXT.results.find((r) => r.transaction === SXT.helloWorld.transaction)!.result;
 
 const QUERY_CALLBACK = toFunctionSelector("queryCallback(bytes32,bytes,bytes)");
 const EXPIRE = toFunctionSelector("expire(bytes32)");
@@ -136,6 +139,12 @@ function main(plan: bytes, payment: Uint256, column: Uint256, bump: Uint256): vo
 /** The skill's example: a payment made once the proven value reaches a minimum. */
 const PROVEN_PAYOUT = readFileSync(
   join(FIXTURES, "../../../../../skills/sauce-zk/examples/proven-payout.sauce.ts"),
+  "utf8",
+);
+
+/** The skill's port of Space and Time's tutorial contract. */
+const HELLO_WORLD = readFileSync(
+  join(FIXTURES, "../../../../../skills/sauce-zk/examples/hello-world.sauce.ts"),
   "utf8",
 );
 
@@ -517,6 +526,49 @@ describeOnRouter.each([
       // Base's longitude, 51, proven.
       expect((await fulfil(requested(sent), LONGITUDE)).ok).toBe(true);
       expect(await chain.publicClient.getBalance({ address: recipient })).toBe(paid);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "the skill's sauce-zk/examples/hello-world, Space and Time's tutorial ported: its query, and its answer logged as the tutorial's contract logged it",
+    async () => {
+      const sent = await chain.cook(chain.compiled(HELLO_WORLD, [PAYMENT]));
+      expect(sent.ok).toBe(true);
+      const asked = requested(sent);
+      // The tutorial's query, its proof plan and no parameters, and its callback, but for what the
+      // port says differs: the latest verifier and the callback's gas.
+      expect(asked.query).toEqual({
+        version: LATEST,
+        innerQuery: PLAN,
+        parameters: "0x0000000000000000",
+        metadata: "0x",
+      });
+      expect(asked.callback).toEqual({
+        maxGasPrice: 10_000_000_000n,
+        gasLimit: 300_000n,
+        callbackContract: chain.stack.pot,
+        selector: QUERY_CALLBACK,
+        callbackData: "0x",
+      });
+
+      // The answer the tutorial's query got, proven again: the Pot logs what the tutorial's contract
+      // logged on Ethereum, byte for byte.
+      const fulfilment = await fulfil(asked, HELLO);
+      expect(fulfilment.ok).toBe(true);
+      const logged = fulfilment.logs
+        .filter(
+          (log) =>
+            log.address.toLowerCase() === chain.stack.pot.toLowerCase() &&
+            log.topics[0] === SXT.helloWorld.log.topics[0],
+        )
+        .map((log) => ({ topics: log.topics, data: log.data }));
+      expect(logged).toEqual([SXT.helloWorld.log]);
+      expect(text(`0x${SXT.helloWorld.log.data.slice(130, 164)}`)).toBe("Amazon rainforest");
+
+      const gas = await chain.callGas(fulfilment.hash, chain.stack.pot, QUERY_CALLBACK);
+      console.log(`${slug}: hello-world's callback used ${gas} gas`);
+      expect(gas).toBeLessThan(300_000n);
     },
     TEST_TIMEOUT,
   );

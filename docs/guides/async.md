@@ -196,7 +196,8 @@ function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Addres
   paid the base cost and, on Ethereum, the callback's gas; the rest comes back to the Pot.
 - **The result** is Proof of SQL's table. `Zk.cell(result, column, row)` reads a value of a
   fixed-width column as an unsigned number (a negative BIGINT as its two's complement in 8 bytes),
-  and `Zk.rows(result)` counts the rows.
+  `Zk.text(result, column, row)` the bytes of a VARCHAR or VARBINARY value, and `Zk.rows(result)`
+  counts the rows.
 - **The timeout.** Only Space and Time's fulfiller answers queries, and it may not answer one. A
   query's promise expires at its timeout: anyone may then call the Pot's `expire(key)`, its
   `.catch` runs, and `Zk.cancel(e)` there cancels the query and takes its payment back.
@@ -214,12 +215,129 @@ gas), and the Pot keeps a query's id and payment in two words until its promise 
   `timeout` and `lockCollateral` (the ZKC a prover locks), and `minPrice`. Any prover may lock it.
 - **The guest** reads the request's id, 32 bytes, then `input`, from stdin, and must commit the
   sha256 of its whole stdin as the first 32 bytes of its journal. The body is handed the rest.
+- **A journal known in advance.** A guest that proves a claim about its input, as Boundless's own
+  examples do, commits an output the program can state: given as `journal`, the guest runs as
+  published, reading `input` alone, and the request asks for exactly that journal (a digest match,
+  as Boundless's own tooling asks). The body is handed the whole journal. The Pot keeps one such
+  request pending per guest and journal.
 - **The Pot signs its own requests.** A prover's lock asks the client `isValidSignature` (ERC-1271)
   with 100,000 gas. The program hashes each request as the market does and approves the hash
   (`Erc1271.approve`, above), and the Pot's one ERC-1271 handler answers yes for it, in about 38,000
   gas, so nobody else's request can spend the Pot's balance at the market.
 - **The checks.** The callback carries no request id: the handler takes calls only from the market,
-  and settles the promise the proof's image id and its journal's first word name, so a proof of
-  the same guest over another input settles nothing.
+  and settles the promise the proof's image id and its journal name (the journal's sha256 for a
+  request that named it, its first word for any other), so a proof of the same guest over another
+  input, or of another journal, settles nothing.
 - **The deadline.** At `timeout` the promise expires; `Zk.reclaim(e)` in its `.catch` slashes the
   request if a prover locked it and failed, and withdraws its price.
+
+### The protocols' own examples, ported
+
+Each coprocessor publishes an example consumer: a contract that asks, or an app that asks for it,
+and a callback or a call that uses the proven answer. Ported, each is one program that asks and
+acts on the answer in its `.then`, with no contract to deploy. The SDK's suites run each against
+the protocol's own contracts.
+
+| Example                                                                                                                                                                | The original, in lines of code                                     | Sauce |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----- |
+| Space and Time's tutorial: `spaceandtimefdn/sxt-chain-examples`, `contracts/src/HelloWorld/HelloWorld.sol` and its constants, `contracts/src/libraries/ProofOfSQL.sol` | 52 of Solidity                                                     | 14    |
+| Boundless's template: `boundless-xyz/boundless-foundry-template`, `contracts/src/EvenNumber.sol`, `IEvenNumber.sol` and the app, `apps/src/main.rs`                    | 25 of Solidity, and the app that asks and calls `set`, 106 of Rust | 23    |
+| Boundless's callback example: `boundless-xyz/boundless`, `examples/counter-with-callback`: `Counter.sol`, `ICounter.sol` and the app                                   | 30 of Solidity, and the app that asks, 89 of Rust                  | 25    |
+
+Lines of code leave out blank lines, comments and the apps' tests. Each original's own contracts
+are counted; the protocols' interfaces and libraries they import (`IQueryRouter`, Proof of SQL's
+table decoder, `BoundlessMarketCallback`) are the protocols', as `@sauce/zk` is the SDK's, and are
+counted on neither side.
+
+Space and Time's tutorial asks a query of a table its users created and logs each name in the
+answer. The Pot pays the SXT from its balance and takes back what the fulfiller is not paid;
+`payment` is an argument because the routers' base costs differ (100 SXT on Base, what the tutorial
+pays, and 1,000 on Ethereum); the query names the router's latest verifier, where the tutorial pins
+an earlier one's address; and the callback may use 300,000 gas, where the tutorial gives 100,000.
+Given the answer the tutorial's own query got on Ethereum, the Pot logs the event the tutorial's
+contract logged, byte for byte:
+
+```js
+import { Zk } from "@sauce/zk";
+
+// The query's proof plan, as Space and Time's RPC method `commitments_v1_evmProofPlan` gives it.
+const QUERY_PLAN = hex`0000000000000001000000000000003d5455544f5249414c5f414243384437303943383032363239363533343446353234304144313233463543424535313132332e48454c4c4f5f574f524c440000000000000002000000000000000000000000000000044e414d4500000007000000000000000000000000000000094c4f4e47495455444500000005000000000000000100000000000000044e414d45000000000000000000000000000000020000000000000000000000010000000100000005000000000000003c0000000000000001000000000000000000000000`;
+
+function main(payment: Uint256): void {
+  Zk.sql({ query: QUERY_PLAN, payment, gasLimit: 300000, maxGasPrice: 10 * 10 ** 9 })
+    .then((result) => {
+      const names = Zk.rows(result);
+      for (let i = 0; i < names; i += 1) {
+        log(abi.encode(Zk.text(result, 0, i)), crypto.keccak256("QueryFulfilled(string)"));
+      }
+    })
+    .catch((e) => {
+      Zk.cancel(e);
+    });
+}
+```
+
+Boundless's template proves a number even with its guest, `is-even`, which reads the number and
+commits it, and its contract keeps the number once its app calls `set` with the proof. The Pot asks
+for exactly that journal and keeps the number when the market calls back, so there is no `set` to
+send and no seal to verify again; the number is kept in the Pot's storage:
+
+```js
+import { Zk } from "@sauce/zk";
+
+function main(number: Uint256, imageId: Uint256, imageUrl: bytes, maxPrice: Uint256): void {
+  Zk.risc0({
+    imageId,
+    imageUrl,
+    input: abi.encode(number),
+    journal: abi.encode(number),
+    offer: {
+      maxPrice,
+      rampUpPeriod: 60,
+      lockTimeout: 900,
+      timeout: 1800,
+      lockCollateral: 15000000000000000000,
+    },
+  })
+    .then((journal) => {
+      const [even] = abi.decode(journal, ["Uint256"]);
+      evm.sstore(crypto.keccak256("EvenNumber.number"), even);
+    })
+    .catch((e) => {
+      Zk.reclaim(e);
+    });
+}
+```
+
+Boundless's callback example asks its `echo` guest to echo the time, with the counter as the
+request's callback, and counts each proof the market calls back with, keeping a table of proofs seen
+so none counts twice. The Pot counts each once because its promise settles once:
+
+```js
+import { Zk } from "@sauce/zk";
+
+function main(imageId: Uint256, imageUrl: bytes, maxPrice: Uint256): void {
+  const message = abi.encode(ctx.timestamp());
+  Zk.risc0({
+    imageId,
+    imageUrl,
+    input: message,
+    journal: message,
+    offer: {
+      maxPrice,
+      rampUpPeriod: 60,
+      lockTimeout: 900,
+      timeout: 1800,
+      lockCollateral: 15000000000000000000,
+    },
+    gasLimit: 300000,
+  })
+    .then((journal) => {
+      const count = crypto.keccak256("Counter.count");
+      evm.sstore(count, evm.sload(count) + 1);
+    })
+    .catch((e) => {
+      Zk.reclaim(e);
+    });
+}
+```

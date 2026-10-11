@@ -1,5 +1,5 @@
 {
-  "$comment": "Space and Time's QueryRouter and CallbackExecutor as deployed on Ethereum and Base, and the SXT token each names, read on 2026-10-09: per chain, the deployer and the creation transaction of each contract (replayed by the suite from the deployer at the same nonce, so each lands at its address with its constructor's arguments), the runtime's keccak256 at the block given (which the suite holds the replayed contract to), and the token's runtime (its balances at slot 0). `results` are real query results the QueryRouter verified, from its QueryFulfilled events, which the suite has its fulfiller prove again.",
+  "$comment": "Space and Time's QueryRouter and CallbackExecutor as deployed on Ethereum and Base, and the SXT token each names, read on 2026-10-09: per chain, the deployer and the creation transaction of each contract (replayed by the suite from the deployer at the same nonce, so each lands at its address with its constructor's arguments), the runtime's keccak256 at the block given (which the suite holds the replayed contract to), and the token's runtime (its balances at slot 0). `results` are real query results the QueryRouter verified, from its QueryFulfilled events, which the suite has its fulfiller prove again. `helloWorld` is the tutorial contract's own event from one of them.",
   "chains": {
     "1": {
       "block": 26151716,
@@ -98,6 +98,21 @@
       "transaction": "0x9d182adf9efc4dac120d7ececcd3884b5dac3d8862dc1bd643ff7e62d320ea82",
       "queryId": "0x728c6ea8d6df52614254e3ab679f87c6ee1b50d3df7d7036d5fd6fec70adbfbb",
       "result": "0x000000000000000100000000000000094c4f4e474954554445000000000500000000000000010000000000000033"
+    },
+    {
+      "chain": 1,
+      "block": 23786465,
+      "transaction": "0xcfd153a80a239a739c2cec3d8d5a0118e9051c8b3eb4655435b7cda997e3d196",
+      "result": "0x000000000000000100000000000000044e414d45000000000700000000000000010000000000000011416d617a6f6e207261696e666f72657374"
     }
-  ]
+  ],
+  "helloWorld": {
+    "$comment": "Space and Time's tutorial contract, spaceandtimefdn/sxt-chain-examples contracts/src/HelloWorld/HelloWorld.sol, as deployed on Ethereum, and the event it logged from the callback of the query it asked (the result above at the same transaction): what the port in skills/sauce-zk/examples/hello-world.sauce.ts must log from the Pot.",
+    "contract": "0x051d9FDA993323c1e74f8Ff9Bd22b911774e1D93",
+    "transaction": "0xcfd153a80a239a739c2cec3d8d5a0118e9051c8b3eb4655435b7cda997e3d196",
+    "log": {
+      "topics": ["0xaca149ac6a073279749bad33cf8aadc31e4395b0039787a02b69612bdc7a9f7d"],
+      "data": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000011416d617a6f6e207261696e666f72657374000000000000000000000000000000"
+    }
+  }
 }

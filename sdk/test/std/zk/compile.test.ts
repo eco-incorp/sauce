@@ -155,6 +155,9 @@ describe("what the library writes out by hand", () => {
       expect(SOURCE).toContain(`const SAUCE_ZK_${name}_TYPEHASH = ${keccak256(toHex(type!))};`);
     }
     expect(SOURCE).toContain(`const SAUCE_ZK_RISC0 = ${keccak256(toHex("sauce.zk.risc0"))};`);
+    expect(SOURCE).toContain(
+      `const SAUCE_ZK_RISC0_JOURNAL = ${keccak256(toHex("sauce.zk.risc0.journal"))};`,
+    );
     const inner = BigInt(keccak256(toHex("sauce.storage.ZkRisc0"))) - 1n;
     const location =
       BigInt(keccak256(encodeAbiParameters([{ type: "uint256" }], [inner]))) & ~0xffn;
@@ -227,6 +230,23 @@ describe("what compiles where", () => {
     expect(() => compile(RISC0, "ethereum")).toThrow(/Boundless/);
   });
 
+  it("a proof request naming the journal its guest must commit", () => {
+    const named = RISC0.replace("    input,\n", "    input,\n    journal: input,\n");
+    expect(named).not.toBe(RISC0);
+    expect(compile(named, "base").bytecode.length).toBeGreaterThan(0);
+  });
+
+  it("a query reading a VARCHAR value", () => {
+    expect(
+      compile(
+        query("query: plan, payment").replace(
+          "Zk.cell(result, 0, 0) + Zk.rows(result)",
+          "Zk.text(result, 0, 0).length",
+        ),
+      ).bytecode.length,
+    ).toBeGreaterThan(0);
+  });
+
   it.each(["ethereum", "base"])("a query, on %s, naming the chain's QueryRouter", (chain) => {
     const router = deployments.find((d) => d.chainName.toLowerCase() === chain)!.addresses
       .queryRouter!;
@@ -275,8 +295,8 @@ describe("what it refuses", () => {
     ],
     [
       "an unknown field",
-      "imageId, imageUrl, offer: {}, journal: 1",
-      "`journal` is not a member of `ProofRequest`",
+      "imageId, imageUrl, offer: {}, seal: 1",
+      "`seal` is not a member of `ProofRequest`",
     ],
   ])("%s", (_, fields, message) => {
     expect(() =>
@@ -301,5 +321,35 @@ function main(plan: bytes, payment: Uint256): void {
   Zk.sql({ query: plan, payment });
 }`),
     ).toThrow("a request has no body");
+  });
+});
+
+describe("the protocols' own examples, ported", () => {
+  const GUIDE = readFileSync(join(process.cwd(), "..", "docs", "guides", "async.md"), "utf8");
+  const port = (name: string): string =>
+    readFileSync(
+      join(process.cwd(), "..", "skills", "sauce-zk", "examples", `${name}.sauce.ts`),
+      "utf8",
+    );
+  /** A program's code: from its import on, as the manual quotes it. */
+  const codeOf = (source: string): string => source.slice(source.indexOf("import {")).trimEnd();
+  /** Lines of code, as the manual counts them: no blank line, no comment. */
+  const linesOf = (source: string): number =>
+    source.split("\n").filter((line) => line.trim() !== "" && !line.trim().startsWith("//")).length;
+
+  it.each([
+    ["hello-world", "Space and Time's tutorial"],
+    ["even-number", "Boundless's template"],
+    ["counter", "Boundless's callback example"],
+  ])("the manual quotes %s as the skill has it, and counts its lines", (name, row) => {
+    const source = port(name);
+    expect(source.startsWith("// Ported from: ")).toBe(true);
+    expect(GUIDE).toContain("```js\n" + codeOf(source) + "\n```");
+    // The table's row for it: its last cell is the port's lines of code.
+    const cells = GUIDE.split("\n")
+      .find((line) => line.startsWith(`| ${row}:`))!
+      .split("|")
+      .map((cell) => cell.trim());
+    expect(cells.at(-2)).toBe(String(linesOf(source)));
   });
 });

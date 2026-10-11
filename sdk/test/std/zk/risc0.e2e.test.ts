@@ -101,6 +101,7 @@ const QUERY_CALLBACK = toFunctionSelector("queryCallback(bytes32,bytes,bytes)");
 const EXPIRE = toFunctionSelector("expire(bytes32)");
 const RISC0_TAG = keccak256(toHex("sauce.zk.risc0"));
 const PROMISE_IGNORED = keccak256(toHex("PromiseIgnored(bytes32,uint256)"));
+const PROMISE_SETTLED = keccak256(toHex("PromiseSettled(bytes32,uint256)"));
 const INPUT_TYPEHASH = keccak256(toHex("Input(uint8 inputType,bytes data)"));
 const OFFER_TYPEHASH = keccak256(
   toHex(
@@ -108,12 +109,25 @@ const OFFER_TYPEHASH = keccak256(
   ),
 );
 
+/** Boundless's own guests, which the ports ask for as published: the template's `is-even` and the
+ *  examples' `echo`. Their image ids stand in for the ones a build derives; the proof is a mock. */
+const IS_EVEN_ID = keccak256(toHex("sauce.zk.test.is-even"));
+const IS_EVEN_URL = toHex("ipfs://boundless-foundry-template-is-even");
+const ECHO_ID = keccak256(toHex("sauce.zk.test.echo"));
+const ECHO_URL = toHex("ipfs://boundless-echo");
+const RISC0_JOURNAL_TAG = keccak256(toHex("sauce.zk.risc0.journal"));
+
+/** Where the ports keep what their contracts keep: EvenNumber's `number` and Counter's `count`. */
+const NUMBER = keccak256(toHex("EvenNumber.number"));
+const COUNT = keccak256(toHex("Counter.count"));
+
 /** The Pot storage slots the bodies write. */
 const SLOT = keccak256(toHex("zk.risc0.value"));
 const CAUGHT = keccak256(toHex("zk.risc0.caught"));
 
 const adminAbi = parseAbi(["function initialize(address initialOwner)"]);
 const erc20Abi = parseAbi(["function approve(address, uint256) returns (bool)"]);
+const potAbi = parseAbi(["function cook(address engine, bytes program) payable returns (bytes)"]);
 const collateralAbi = parseAbi(["function depositCollateral(uint256 value)"]);
 const signatureAbi = parseAbi([
   "function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)",
@@ -138,13 +152,59 @@ function main(imageId: Uint256, imageUrl: bytes, input: bytes, maxPrice: Uint256
     });
 }`;
 
+/** A request that names its journal, here what the guest reads, and a body that writes its length. */
+const NAMED = `import { Zk } from "@sauce/zk";
+
+function main(imageId: Uint256, imageUrl: bytes, message: bytes, maxPrice: Uint256, timeout: Uint256): void {
+  Zk.risc0({
+    imageId,
+    imageUrl,
+    input: message,
+    journal: message,
+    offer: { maxPrice, rampUpPeriod: 10, lockTimeout: timeout, timeout, lockCollateral: 0 },
+  })
+    .then((journal) => {
+      evm.sstore(${SLOT}, journal.length);
+    })
+    .catch((e) => {
+      evm.sstore(${CAUGHT}, Zk.reclaim(e) ? 2 : 1);
+    });
+}`;
+
 /** The skill's example: a payment made once the guest's proven output reaches a minimum. */
 const PROVEN_GUEST = readFileSync(
   join(FIXTURES, "../../../../../skills/sauce-zk/examples/proven-guest.sauce.ts"),
   "utf8",
 );
 
+/** The skill's ports of Boundless's template and of its callback example. */
+const EVEN_NUMBER = readFileSync(
+  join(FIXTURES, "../../../../../skills/sauce-zk/examples/even-number.sauce.ts"),
+  "utf8",
+);
+const COUNTER = readFileSync(
+  join(FIXTURES, "../../../../../skills/sauce-zk/examples/counter.sauce.ts"),
+  "utf8",
+);
+
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
+
+/** The promise of a request that named its journal: the image and the journal's sha256. */
+const namedKeyOf = (imageId: Hex, journal: Hex): Hex =>
+  keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "bytes32" }],
+      [
+        RISC0_JOURNAL_TAG,
+        keccak256(
+          encodeAbiParameters(
+            [{ type: "bytes32" }, { type: "bytes32" }],
+            [imageId, sha256(journal)],
+          ),
+        ),
+      ],
+    ),
+  );
 
 /** A request as EIP-712 typed data under the market's domain, as viem hashes and signs it. */
 const typedRequest = (request: Request) =>
@@ -284,7 +344,7 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
     );
 
   /** `fulfill` as the prover sends it: the request in its slim form, and the journal. */
-  const fulfil = (request: Request, journal: Hex) =>
+  const fulfil = (request: Request, journal: Hex, imageId: Hex = IMAGE_ID) =>
     chain.send(
       prover,
       MARKET,
@@ -344,7 +404,7 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
                         components: [{ type: "bytes32" }, { type: "bytes" }],
                       },
                     ],
-                    [[IMAGE_ID, journal]],
+                    [[imageId, journal]],
                   ),
                   seal: "0x",
                 },
@@ -735,6 +795,212 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
       expect((await lock(request)).ok).toBe(true);
       expect((await fulfil(request, journalOf(request, output))).ok).toBe(true);
       expect(await chain.publicClient.getBalance({ address: recipient })).toBe(paid);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "the skill's sauce-zk/examples/even-number, Boundless's template ported: its guest asked for exactly its journal, and the number kept",
+    async () => {
+      const sent = await chain.cook(
+        chain.compiled(EVEN_NUMBER, [42n, BigInt(IS_EVEN_ID), IS_EVEN_URL, MAX_PRICE]),
+      );
+      expect(sent.ok).toBe(true);
+      const request = submitted(sent);
+      // The guest reads the number ABI-encoded, nothing before it, and must commit it so: the
+      // request asks for exactly that journal (a DigestMatch, 0).
+      expect(request.input).toEqual({ inputType: 0, data: concat(["0x00", word(42n)]) });
+      expect(request.requirements.predicate).toEqual({
+        predicateType: 0,
+        data: concat([IS_EVEN_ID, sha256(word(42n))]),
+      });
+      expect(request.requirements.callback).toEqual({
+        addr: chain.stack.pot,
+        gasLimit: 1_000_000n,
+      });
+      expect(await chain.slot(approvedHashSlot(hashTypedData(typedRequest(request))))).toBe(1n);
+
+      expect((await lock(request)).ok).toBe(true);
+      const fulfilment = await fulfil(request, word(42n), IS_EVEN_ID);
+      expect(fulfilment.ok).toBe(true);
+      expect(eventsOf(fulfilment).some((e) => e.eventName === "CallbackFailed")).toBe(false);
+      expect(await chain.slot(NUMBER)).toBe(42n);
+      const gas = await chain.callGas(fulfilment.hash, chain.stack.pot, CALLBACK);
+      console.log(`base: even-number's callback used ${gas} gas`);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "settles nothing for a proof of another journal: the number is kept only as proven",
+    async () => {
+      // The market's assessor refuses a fill whose journal the predicate does not match; the mock
+      // passes every batch, and the Pot still finds no promise under that journal.
+      const sent = await chain.cook(
+        chain.compiled(EVEN_NUMBER, [44n, BigInt(IS_EVEN_ID), IS_EVEN_URL, MAX_PRICE]),
+      );
+      const request = submitted(sent);
+      expect((await lock(request)).ok).toBe(true);
+      const before = await chain.slot(NUMBER);
+      const fulfilment = await fulfil(request, word(46n), IS_EVEN_ID);
+      expect(fulfilment.ok).toBe(true);
+      expect(
+        fulfilment.logs.some(
+          (log) =>
+            log.address.toLowerCase() === chain.stack.pot.toLowerCase() &&
+            log.topics[0] === PROMISE_IGNORED,
+        ),
+      ).toBe(true);
+      expect(await chain.slot(NUMBER)).toBe(before);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "refuses a second request for the same guest and journal while the first is pending",
+    async () => {
+      const program = chain.compiled(EVEN_NUMBER, [
+        48n,
+        BigInt(IS_EVEN_ID),
+        IS_EVEN_URL,
+        MAX_PRICE,
+      ]);
+      expect((await chain.cook(program)).ok).toBe(true);
+      const cook = encodeFunctionData({
+        abi: potAbi,
+        functionName: "cook",
+        args: [chain.stack.engine, program],
+      });
+      expect(text(await chain.revertOf(OWNER.address, chain.stack.pot, cook, FEE))).toContain(
+        "zk: the Pot has a request pending for that guest and journal",
+      );
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "the skill's sauce-zk/examples/counter, Boundless's callback example ported: each proof counted once",
+    async () => {
+      const count = async () => {
+        const sent = await chain.cook(
+          chain.compiled(COUNTER, [BigInt(ECHO_ID), ECHO_URL, MAX_PRICE]),
+        );
+        expect(sent.ok).toBe(true);
+        await chain.testClient.increaseTime({ seconds: 1 });
+        await chain.testClient.mine({ blocks: 1 });
+
+        return submitted(sent);
+      };
+      const first = await count();
+      const second = await count();
+      // The echo guest commits its stdin, the time the request was made: asked for exactly that.
+      const stdin: Hex = `0x${first.input.data.slice(4)}`;
+      expect(stdin).toBe(word(first.offer.rampUpStart));
+      expect(first.requirements).toEqual({
+        callback: { addr: chain.stack.pot, gasLimit: 300_000n },
+        predicate: { predicateType: 0, data: concat([ECHO_ID, sha256(stdin)]) },
+        selector: "0x00000000",
+      });
+
+      const before = await chain.slot(COUNT);
+      expect((await lock(first)).ok).toBe(true);
+      const fulfilment = await fulfil(first, stdin, ECHO_ID);
+      expect(fulfilment.ok).toBe(true);
+      // Settled under the image and the journal's sha256.
+      expect(
+        fulfilment.logs.some(
+          (log) =>
+            log.address.toLowerCase() === chain.stack.pot.toLowerCase() &&
+            log.topics[0] === PROMISE_SETTLED &&
+            log.topics[1] === namedKeyOf(ECHO_ID, stdin),
+        ),
+      ).toBe(true);
+      expect(await chain.slot(COUNT)).toBe(before + 1n);
+      const gas = await chain.callGas(fulfilment.hash, chain.stack.pot, CALLBACK);
+      console.log(`base: counter's callback used ${gas} gas`);
+      expect(gas).toBeLessThan(300_000n);
+      expect((await lock(second)).ok).toBe(true);
+      expect((await fulfil(second, `0x${second.input.data.slice(4)}`, ECHO_ID)).ok).toBe(true);
+      expect(await chain.slot(COUNT)).toBe(before + 2n);
+
+      // A stranger pays for the same proof again, with the Pot as its callback: the example's
+      // AlreadyVerified. The promise settled, so the Pot finds nothing pending under the journal,
+      // settles nothing, and the count does not move.
+      const id = (BigInt(STRANGER.address) << 32n) | 3n;
+      const again: Request = { ...first, id };
+      expect(
+        (
+          await chain.send(
+            chain.stranger,
+            MARKET,
+            encodeFunctionData({
+              abi: BoundlessMarketABI,
+              functionName: "submitRequest",
+              args: [again, "0x"],
+            }),
+            MAX_PRICE,
+          )
+        ).ok,
+      ).toBe(true);
+      const signature = await STRANGER.signTypedData(typedRequest(again));
+      expect(
+        (
+          await chain.send(
+            prover,
+            MARKET,
+            encodeFunctionData({
+              abi: BoundlessMarketABI,
+              functionName: "lockRequest",
+              args: [again, signature],
+            }),
+          )
+        ).ok,
+      ).toBe(true);
+      const replay = await fulfil(again, stdin, ECHO_ID);
+      expect(replay.ok).toBe(true);
+      const fromPot = replay.logs.filter(
+        (log) => log.address.toLowerCase() === chain.stack.pot.toLowerCase(),
+      );
+      expect(fromPot.some((log) => log.topics[0] === PROMISE_IGNORED)).toBe(true);
+      expect(fromPot.some((log) => log.topics[0] === PROMISE_SETTLED)).toBe(false);
+      expect(await chain.slot(COUNT)).toBe(before + 2n);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "settles a named journal shorter than a word, and reclaims one nobody answers",
+    async () => {
+      const short = toHex("hi");
+      const sent = await chain.cook(
+        chain.compiled(NAMED, [BigInt(ECHO_ID), ECHO_URL, short, MAX_PRICE, 1_200n]),
+      );
+      const request = submitted(sent);
+      expect(request.input.data).toBe(concat(["0x00", short]));
+      expect((await lock(request)).ok).toBe(true);
+      expect((await fulfil(request, short, ECHO_ID)).ok).toBe(true);
+      expect(await chain.slot(SLOT)).toBe(2n);
+
+      const unanswered = submitted(
+        await chain.cook(
+          chain.compiled(NAMED, [BigInt(ECHO_ID), ECHO_URL, toHex("unanswered"), MAX_PRICE, 60n]),
+        ),
+      );
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      const potBefore = await chain.publicClient.getBalance({ address: chain.stack.pot });
+      const expired = await chain.send(
+        chain.stranger,
+        chain.stack.pot,
+        concat([EXPIRE, namedKeyOf(ECHO_ID, toHex("unanswered"))]),
+        FEE,
+      );
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(2n);
+      expect((await chain.publicClient.getBalance({ address: chain.stack.pot })) - potBefore).toBe(
+        MAX_PRICE,
+      );
+      expect(unanswered.requirements.predicate.predicateType).toBe(0);
     },
     TEST_TIMEOUT,
   );

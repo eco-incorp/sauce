@@ -1344,6 +1344,13 @@ and Succinct have no callback.
   stdin is the request id then the input, its journal must begin with `sha256(stdin)` (a
   `PrefixMatch` predicate), and the promise key is `promiseKey(keccak256("sauce.zk.risc0"),
 keccak256(abi.encode(imageId, digest)))`, which `handleProof` recomputes from the callback alone.
+  A request may instead name its `journal` (what Boundless's own guests commit, stated in advance):
+  then the stdin is the input alone, the predicate a `DigestMatch` on `sha256(journal)`, the key
+  `promiseKey(keccak256("sauce.zk.risc0.journal"), keccak256(abi.encode(imageId, sha256(journal))))`
+  — a tag of its own, so the two kinds of key never meet — and one such request per guest and
+  journal may be pending. `handleProof` looks for the named key first (Boundless's default, and the
+  cheaper callback: about 146k against the prefix kind's 165k), then the prefix one; a promise
+  found under neither is logged ignored under the prefix key when the journal has a word.
   `Zk.reclaim(e)` slashes and withdraws after the deadline. The two have separate cancel methods so
   a program names only the contracts of the coprocessor it asks: a library module cannot name a
   namespace the chain lacks (it is "not a declared variable" there, where a program folds it to
@@ -1353,7 +1360,11 @@ The suites (`test/std/zk/sql.e2e.test.ts`, `risc0.e2e.test.ts`) run each protoco
 Space and Time's deployed by replaying their creation transactions at the deployer's nonces
 (`fixtures/SpaceAndTime.json`), Boundless's market as its captured proxy, implementation, legacy
 implementation and ZKC (`fixtures/Boundless.json`); only the proof is mocked (Space and Time's
-verifier, Boundless's router) and Ethereum's two Chainlink feeds.
+verifier, Boundless's router) and Ethereum's two Chainlink feeds. They also run the skill's ports of
+the protocols' own examples (`hello-world`, `even-number`, `counter`, each headed `// Ported from:`):
+`hello-world` is given the answer Space and Time's tutorial query got on Ethereum and must log the
+tutorial contract's own event byte for byte (`helloWorld` in `SpaceAndTime.json`). The manual quotes
+the three ports and counts their lines; `compile.test.ts` holds both to the files.
 
 ## Agent skills
 
