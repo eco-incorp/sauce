@@ -1,6 +1,6 @@
 ---
 name: sauce-zk
-description: Proven answers in a Sauce program with @sauce/zk — asked now, its .then run on the same Private Pot when the proof's callback arrives — a SQL query over indexed chain data proven with Space and Time's Proof of SQL (Zk.sql, Ethereum and Base), or a RISC Zero guest program proven by Boundless's market (Zk.risc0, Base). Covers each request's fields and payment (SXT, or ETH and a prover's ZKC collateral), reading a proven table (Zk.cell, Zk.text, Zk.rows), the journal a guest commits or one named in advance, how the Pot signs its own Boundless requests, timeouts and taking an unanswered request's payment back (Zk.cancel, Zk.reclaim), the handlers and their checks, the costs, and the protocols' own examples ported (Space and Time's HelloWorld, Boundless's EvenNumber and Counter). Use when a program must act on chain history or a computation it cannot run itself, proven rather than reported, or when the user mentions ZK, a coprocessor, Proof of SQL, Space and Time, SXT, RISC Zero, Boundless or a zkVM.
+description: Proven answers in a Sauce program. With @sauce/zk a request is asked now and its .then runs on the same Private Pot when the proof's callback arrives — a SQL query over chain data proven by Space and Time (Zk.sql, Ethereum and Base) or a RISC Zero guest proven by Boundless's market (Zk.risc0, Base); a proof that comes with the call is checked in it by Succinct's SP1 verifier gateway (Ethereum and Base). Covers each request's fields and payment, reading a proven table (Zk.cell, Zk.text, Zk.rows), the journal a guest commits or one named in advance, how the Pot signs its Boundless requests, timeouts and getting an unanswered request's payment back (Zk.cancel, Zk.reclaim), the handlers, the costs, and the protocols' own examples ported (HelloWorld, EvenNumber, Counter, Fibonacci). Use when a program must act on chain history or a computation it cannot run itself, proven rather than reported, or when the user mentions ZK, a coprocessor, Proof of SQL, Space and Time, RISC Zero, Boundless, SP1, Succinct or a zkVM.
 ---
 
 # Proven answers with `@sauce/zk`
@@ -193,6 +193,35 @@ the prover's collateral), then withdraws the price from the Pot's balance at the
 prover locked cost nothing; its deposit is withdrawn the same way. It answers whether it took the
 price back, and does nothing for any other rejection.
 
+## A proof that comes with the call: Succinct SP1
+
+Not every proof is asked for. A proof made off chain beforehand (by Succinct's SP1 prover, locally
+or on its network) arrives with the transaction, and the program checks it there: Succinct's SP1
+verifier gateway, `Succinct.VerifierGatewayGroth16` (and `Succinct.VerifierGatewayPlonk` for PLONK
+proofs), on Ethereum and Base, reverts unless the proof shows the SP1 program its verification key
+names committed exactly the public values given. No request, no callback, no promise, and no
+`@sauce/zk`: the program calls the gateway and acts on the public values in the same cook.
+
+```sauce chain=base,ethereum
+// The SP1 program this one trusts: its verification key (here, Succinct's template's).
+const PROGRAM_VKEY = 0x004a55ed3c7a07d0233a027278a8b7ff8681ffbd5d1ec4795c18966f6e693090;
+
+function main(publicValues: bytes, proof: bytes): Uint256 {
+  require(Succinct.VerifierGatewayGroth16);
+  Succinct.VerifierGatewayGroth16.verifyProof(PROGRAM_VKEY, publicValues, proof);
+  const [n] = abi.decode(publicValues, ["Uint256"]);
+  return n;
+}
+```
+
+- **The key is the program.** A proof of any SP1 program verifies for its own key, so the program
+  fixes the key it trusts rather than taking one as an argument.
+- **The version must be live.** A proof's first four bytes name the SP1 version that made it, and
+  the gateway routes it to that version's verifier. Succinct freezes a version it retires, and a
+  frozen route refuses every proof (`RouteIsFrozen`), as a missing one does (`RouteNotFound`).
+  Succinct's own template still ships a proof of a version whose route it has frozen.
+- **Gas**: a Groth16 verification costs about 225,000 inside the gateway.
+
 ## The protocols' own examples
 
 Each coprocessor publishes an example consumer: a contract that asks, or an app that asks for it,
@@ -200,11 +229,12 @@ and a callback or a call that uses the proven answer. Ported, each is one progra
 acts on the answer in its `.then`, with no contract to deploy; each one's header names its source
 and what the Pot does differently.
 
-| Example                                                                                      | Ported from                                                                                                                            | Chains             |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| [`examples/hello-world.sauce.ts`](examples/hello-world.sauce.ts): logs each proven name      | Space and Time's tutorial, `spaceandtimefdn/sxt-chain-examples/contracts/src/HelloWorld/HelloWorld.sol`                                | `base`, `ethereum` |
-| [`examples/even-number.sauce.ts`](examples/even-number.sauce.ts): keeps a number proven even | Boundless's template, `boundless-xyz/boundless-foundry-template/contracts/src/EvenNumber.sol` and its app's request                    | `base`             |
-| [`examples/counter.sauce.ts`](examples/counter.sauce.ts): counts each proof called back      | Boundless's callback example, `boundless-xyz/boundless/examples/counter-with-callback/contracts/src/Counter.sol` and its app's request | `base`             |
+| Example                                                                                       | Ported from                                                                                                                            | Chains             |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| [`examples/hello-world.sauce.ts`](examples/hello-world.sauce.ts): logs each proven name       | Space and Time's tutorial, `spaceandtimefdn/sxt-chain-examples/contracts/src/HelloWorld/HelloWorld.sol`                                | `base`, `ethereum` |
+| [`examples/even-number.sauce.ts`](examples/even-number.sauce.ts): keeps a number proven even  | Boundless's template, `boundless-xyz/boundless-foundry-template/contracts/src/EvenNumber.sol` and its app's request                    | `base`             |
+| [`examples/counter.sauce.ts`](examples/counter.sauce.ts): counts each proof called back       | Boundless's callback example, `boundless-xyz/boundless/examples/counter-with-callback/contracts/src/Counter.sol` and its app's request | `base`             |
+| [`examples/fibonacci.sauce.ts`](examples/fibonacci.sauce.ts): checks an SP1 proof in the call | Succinct's SP1 template, `succinctlabs/sp1-project-template/contracts/src/Fibonacci.sol`                                               | `base`, `ethereum` |
 
 The tutorial's query, as its port asks it:
 

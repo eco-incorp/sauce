@@ -1364,7 +1364,19 @@ verifier, Boundless's router) and Ethereum's two Chainlink feeds. They also run 
 the protocols' own examples (`hello-world`, `even-number`, `counter`, each headed `// Ported from:`):
 `hello-world` is given the answer Space and Time's tutorial query got on Ethereum and must log the
 tutorial contract's own event byte for byte (`helloWorld` in `SpaceAndTime.json`). The manual quotes
-the three ports and counts their lines; `compile.test.ts` holds both to the files.
+the ports and counts their lines; `compile.test.ts` holds both to the files.
+
+**A proof that comes with the call is the registry's `succinct`**, not `@sauce/zk`: Succinct's SP1
+verifier gateways (`Succinct.VerifierGatewayGroth16`/`VerifierGatewayPlonk`, Ethereum and Base)
+check it synchronously, and the program acts on the public values in the same cook — the
+`fibonacci` port of `succinctlabs/sp1-project-template`. `sp1.e2e.test.ts` runs it with nothing
+mocked, on the released Router (it installs no handler: `describeOnEngine`), against the gateway's
+and two verifiers' runtimes and the gateway's route words captured from both chains
+(`fixtures/Succinct.json`) and the template's own Groth16 fixture proof. That proof is SP1 v6.0.0,
+whose route Succinct froze on both chains (Base block 52,444,424), so the suite holds both: refused
+`RouteIsFrozen` as the chain holds the route, verified (fib(20)) with only the frozen flag cleared.
+The ABI leaves out `RouteNotFound(bytes4)`: the code pushes its selector shifted right one bit
+(`PUSH4 0x79043bbf`, `SHL 225`), which the evidence capture does not read.
 
 ## Agent skills
 

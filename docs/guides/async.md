@@ -243,10 +243,11 @@ the protocol's own contracts.
 | Space and Time's tutorial: `spaceandtimefdn/sxt-chain-examples`, `contracts/src/HelloWorld/HelloWorld.sol` and its constants, `contracts/src/libraries/ProofOfSQL.sol` | 52 of Solidity                                                     | 14    |
 | Boundless's template: `boundless-xyz/boundless-foundry-template`, `contracts/src/EvenNumber.sol`, `IEvenNumber.sol` and the app, `apps/src/main.rs`                    | 25 of Solidity, and the app that asks and calls `set`, 106 of Rust | 23    |
 | Boundless's callback example: `boundless-xyz/boundless`, `examples/counter-with-callback`: `Counter.sol`, `ICounter.sol` and the app                                   | 30 of Solidity, and the app that asks, 89 of Rust                  | 25    |
+| Succinct's SP1 template: `succinctlabs/sp1-project-template`, `contracts/src/Fibonacci.sol`                                                                            | 24 of Solidity                                                     | 7     |
 
 Lines of code leave out blank lines, comments and the apps' tests. Each original's own contracts
 are counted; the protocols' interfaces and libraries they import (`IQueryRouter`, Proof of SQL's
-table decoder, `BoundlessMarketCallback`) are the protocols', as `@sauce/zk` is the SDK's, and are
+table decoder, `BoundlessMarketCallback`, `ISP1Verifier`) are the protocols', as `@sauce/zk` is the SDK's, and are
 counted on neither side.
 
 Space and Time's tutorial asks a query of a table its users created and logs each name in the
@@ -341,3 +342,28 @@ function main(imageId: Uint256, imageUrl: bytes, maxPrice: Uint256): void {
     });
 }
 ```
+
+Succinct's SP1 template is the other kind: its proof is made off chain beforehand and arrives with
+the call, and its contract checks it there through Succinct's SP1 verifier gateway, then returns the
+proven Fibonacci numbers. No request, callback or promise, and no `@sauce/zk`: the program calls the
+gateway, `Succinct.VerifierGatewayGroth16` on Ethereum and Base, which reverts unless the proof
+verifies, and returns what the proof shows. The verification key is a constant, where the template's
+contract takes it in its constructor:
+
+```js
+const FIBONACCI_PROGRAM_VKEY = 0x004a55ed3c7a07d0233a027278a8b7ff8681ffbd5d1ec4795c18966f6e693090;
+
+function main(publicValues: bytes, proof: bytes): { n: Uint256; a: Uint256; b: Uint256 } {
+  require(Succinct.VerifierGatewayGroth16);
+  Succinct.VerifierGatewayGroth16.verifyProof(FIBONACCI_PROGRAM_VKEY, publicValues, proof);
+  const [n, a, b] = abi.decode(publicValues, ["Uint256", "Uint256", "Uint256"]);
+  return { n, a, b };
+}
+```
+
+A proof's first four bytes name the SP1 version that made it, and the gateway refuses a version
+Succinct has frozen (`RouteIsFrozen`). The template still ships a proof of SP1 v6.0.0, whose routes
+Succinct has frozen on both chains: through the gateway as the chain holds it, the template's own
+proof is refused. With that one route as it stood before the freeze, the version's verifier checks
+the proof and the program returns 20, 6765 and 10946. A Groth16 verification costs about 225,000
+gas.

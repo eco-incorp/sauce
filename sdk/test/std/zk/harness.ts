@@ -50,6 +50,10 @@ const ROUTER = routerUnderTest();
 /** `describe` where the engine and #571's Router are given, `describe.skip` elsewhere (CI). */
 export const describeOnRouter = RUNTIME_HEX_PATH && ROUTER !== undefined ? describe : describe.skip;
 
+/** `describe` where the engine is given: for a suite that installs no handler, on the released
+ *  Router. */
+export const describeOnEngine = RUNTIME_HEX_PATH ? describe : describe.skip;
+
 /** Anvil's first two dev accounts: the Kitchen's owner and the Pot's, and a stranger. */
 export const OWNER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -106,8 +110,12 @@ export interface ZkChain {
 export const text = (data: Hex): string => Buffer.from(data.slice(2), "hex").toString("utf8");
 
 /** An anvil for `slug` at `chainId`, on a port the OS gives it, with the gated stack on #571's
- *  Router. */
-export async function startZkChain(slug: string, chainId: number): Promise<ZkChain> {
+ *  Router, or on the released one for a suite that installs no handler. */
+export async function startZkChain(
+  slug: string,
+  chainId: number,
+  { releasedRouter = false }: { releasedRouter?: boolean } = {},
+): Promise<ZkChain> {
   const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
   const anvil: ChildProcess = await spawnAnvil(port, ["--chain-id", String(chainId)]);
@@ -120,7 +128,7 @@ export async function startZkChain(slug: string, chainId: number): Promise<ZkCha
     { publicClient, walletClient: owner, testClient },
     OWNER.address,
     readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex,
-    { routerCreationCode: ROUTER },
+    releasedRouter ? {} : { routerCreationCode: ROUTER },
   );
 
   const send = async (

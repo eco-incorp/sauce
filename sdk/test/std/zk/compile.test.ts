@@ -331,8 +331,13 @@ describe("the protocols' own examples, ported", () => {
       join(process.cwd(), "..", "skills", "sauce-zk", "examples", `${name}.sauce.ts`),
       "utf8",
     );
-  /** A program's code: from its import on, as the manual quotes it. */
-  const codeOf = (source: string): string => source.slice(source.indexOf("import {")).trimEnd();
+  /** A program's code, as the manual quotes it: from its first line that is not its header. */
+  const codeOf = (source: string): string => {
+    const lines = source.split("\n");
+    const start = lines.findIndex((line) => line.trim() !== "" && !line.startsWith("//"));
+
+    return lines.slice(start).join("\n").trimEnd();
+  };
   /** Lines of code, as the manual counts them: no blank line, no comment. */
   const linesOf = (source: string): number =>
     source.split("\n").filter((line) => line.trim() !== "" && !line.trim().startsWith("//")).length;
@@ -341,6 +346,7 @@ describe("the protocols' own examples, ported", () => {
     ["hello-world", "Space and Time's tutorial"],
     ["even-number", "Boundless's template"],
     ["counter", "Boundless's callback example"],
+    ["fibonacci", "Succinct's SP1 template"],
   ])("the manual quotes %s as the skill has it, and counts its lines", (name, row) => {
     const source = port(name);
     expect(source.startsWith("// Ported from: ")).toBe(true);
