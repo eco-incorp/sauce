@@ -387,7 +387,10 @@ function valueType(parameter, input) {
     const element = valueType({ ...parameter, type: array[1] }, input);
     return input ? `(readonly (${element})[] | SauceArray<${element}>)` : `SauceArray<${element}>`;
   }
-  if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type)) return "bigint";
+  // An argument takes any SauceScript number, a plain `500` included, a field deep or more as
+  // much as at the top; what comes back is a bigint.
+  if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type))
+    return input ? "(bigint | number)" : "bigint";
   if (parameter.type === "bool") return "boolean";
   if (/^(bytes|string)$/.test(parameter.type))
     return input ? "(string | SauceBytes)" : "SauceBytes";

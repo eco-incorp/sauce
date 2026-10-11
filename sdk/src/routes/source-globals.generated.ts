@@ -136,98 +136,98 @@ export interface SauceIntentChain {
 }
 
 export interface AaveV2LendingPoolMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "borrow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
-  "repay"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
+  "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
 }
 
 export interface AaveV3PoolMethods {
-  "supply"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "borrow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
-  "repay"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
-  "flashLoanSimple"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes), arg4: bigint): void;
-  "liquidationCall"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: boolean): void;
-  "getUserAccountData"(arg0: bigint): [bigint, bigint, bigint, bigint, bigint, bigint] & { "totalCollateralBase": bigint; "totalDebtBase": bigint; "availableBorrowsBase": bigint; "currentLiquidationThreshold": bigint; "ltv": bigint; "healthFactor": bigint };
+  "supply"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
+  "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
+  "flashLoanSimple"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes), arg4: (bigint | number)): void;
+  "liquidationCall"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: boolean): void;
+  "getUserAccountData"(arg0: (bigint | number)): [bigint, bigint, bigint, bigint, bigint, bigint] & { "totalCollateralBase": bigint; "totalDebtBase": bigint; "availableBorrowsBase": bigint; "currentLiquidationThreshold": bigint; "ltv": bigint; "healthFactor": bigint };
 }
 
 export interface AaveV4SpokeMethods {
-  "supply"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint];
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint];
-  "borrow"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint];
-  "repay"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint];
-  "setUsingAsCollateral"(arg0: bigint, arg1: boolean, arg2: bigint): void;
-  "getReserveId"(arg0: bigint, arg1: bigint): bigint;
+  "supply"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint];
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint];
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint];
+  "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint];
+  "setUsingAsCollateral"(arg0: (bigint | number), arg1: boolean, arg2: (bigint | number)): void;
+  "getReserveId"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
   "getReserveCount"(): bigint;
-  "getUserSuppliedAssets"(arg0: bigint, arg1: bigint): bigint;
-  "getUserTotalDebt"(arg0: bigint, arg1: bigint): bigint;
+  "getUserSuppliedAssets"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "getUserTotalDebt"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface AaveV4HubMethods {
-  "getAssetId"(arg0: bigint): bigint;
+  "getAssetId"(arg0: (bigint | number)): bigint;
   "getAssetCount"(): bigint;
-  "getAssetLiquidity"(arg0: bigint): bigint;
-  "isUnderlyingListed"(arg0: bigint): boolean;
+  "getAssetLiquidity"(arg0: (bigint | number)): bigint;
+  "isUnderlyingListed"(arg0: (bigint | number)): boolean;
 }
 
 export interface AbracadabraCauldronMethods {
-  "addCollateral"(arg0: bigint, arg1: boolean, arg2: bigint): void;
-  "removeCollateral"(arg0: bigint, arg1: bigint): void;
-  "borrow"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "part": bigint; "share": bigint };
-  "repay"(arg0: bigint, arg1: boolean, arg2: bigint): bigint;
-  "userCollateralShare"(arg0: bigint): bigint;
-  "userBorrowPart"(arg0: bigint): bigint;
+  "addCollateral"(arg0: (bigint | number), arg1: boolean, arg2: (bigint | number)): void;
+  "removeCollateral"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint] & { "part": bigint; "share": bigint };
+  "repay"(arg0: (bigint | number), arg1: boolean, arg2: (bigint | number)): bigint;
+  "userCollateralShare"(arg0: (bigint | number)): bigint;
+  "userBorrowPart"(arg0: (bigint | number)): bigint;
 }
 
 export interface AbracadabraDegenBoxMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): [bigint, bigint] & { "amountOut": bigint; "shareOut": bigint };
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): [bigint, bigint] & { "amountOut": bigint; "shareOut": bigint };
-  "balanceOf"(arg0: bigint, arg1: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): [bigint, bigint] & { "amountOut": bigint; "shareOut": bigint };
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): [bigint, bigint] & { "amountOut": bigint; "shareOut": bigint };
+  "balanceOf"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface AcrossHubPoolMethods {
-  "liquidityUtilizationCurrent"(arg0: bigint): bigint;
-  "pooledTokens"(arg0: bigint): [bigint, boolean, bigint, bigint, bigint, bigint] & { "lpToken": bigint; "isEnabled": boolean; "lastLpFeeUpdate": bigint; "utilizedReserves": bigint; "liquidReserves": bigint; "undistributedLpFees": bigint };
+  "liquidityUtilizationCurrent"(arg0: (bigint | number)): bigint;
+  "pooledTokens"(arg0: (bigint | number)): [bigint, boolean, bigint, bigint, bigint, bigint] & { "lpToken": bigint; "isEnabled": boolean; "lastLpFeeUpdate": bigint; "utilizedReserves": bigint; "liquidReserves": bigint; "undistributedLpFees": bigint };
 }
 
 export interface AcrossSpokePoolMethods {
-  "depositV3"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint, arg9: bigint, arg10: bigint, arg11: (string | SauceBytes)): void;
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint, arg9: bigint, arg10: bigint, arg11: (string | SauceBytes)): void;
+  "depositV3"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number), arg9: (bigint | number), arg10: (bigint | number), arg11: (string | SauceBytes)): void;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number), arg9: (bigint | number), arg10: (bigint | number), arg11: (string | SauceBytes)): void;
 }
 
 export interface AerodromePoolFactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: boolean): bigint;
+  "getPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean): bigint;
 }
 
 export interface AerodromeRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ({ "from": (bigint | number); "to": (bigint | number); "stable": boolean; "factory": (bigint | number) })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "stable": boolean; "factory": (bigint | number) }>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
 }
 
 export interface AerodromePoolMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
-  "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
+  "getAmountOut"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
   "stable"(): boolean;
   "token0"(): bigint;
   "token1"(): bigint;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
 }
 
 export interface AerodromeSlipstreamSlipstreamCLFactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
   "allPoolsLength"(): bigint;
-  "tickSpacingToFee"(arg0: bigint): bigint;
+  "tickSpacingToFee"(arg0: (bigint | number)): bigint;
 }
 
 export interface AerodromeSlipstreamSlipstreamPositionManagerMethods {
   "factory"(): bigint;
-  "positions"(arg0: bigint): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] & { "nonce": bigint; "operator": bigint; "token0": bigint; "token1": bigint; "tickSpacing": bigint; "tickLower": bigint; "tickUpper": bigint; "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint; "tokensOwed0": bigint; "tokensOwed1": bigint };
+  "positions"(arg0: (bigint | number)): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] & { "nonce": bigint; "operator": bigint; "token0": bigint; "token1": bigint; "tickSpacing": bigint; "tickLower": bigint; "tickUpper": bigint; "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint; "tokensOwed0": bigint; "tokensOwed1": bigint };
 }
 
 export interface AerodromeSlipstreamAeroMetarouterMethods {
-  "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: bigint): void;
+  "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: (bigint | number)): void;
 }
 
 export interface AerodromeSlipstreamPoolMethods {
@@ -240,127 +240,127 @@ export interface AerodromeSlipstreamPoolMethods {
 }
 
 export interface AevoDepositContractMethods {
-  "depositERC20"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): void;
-  "depositETH"(arg0: bigint, arg1: (string | SauceBytes)): void;
+  "depositERC20"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): void;
+  "depositETH"(arg0: (bigint | number), arg1: (string | SauceBytes)): void;
 }
 
 export interface AlchemixAlchemistMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "mint"(arg0: bigint, arg1: bigint): void;
-  "burn"(arg0: bigint, arg1: bigint): bigint;
-  "liquidate"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "accounts"(arg0: bigint): [bigint, SauceArray<bigint>] & { "debt": bigint; "depositedTokens": SauceArray<bigint> };
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "mint"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "burn"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "liquidate"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "accounts"(arg0: (bigint | number)): [bigint, SauceArray<bigint>] & { "debt": bigint; "depositedTokens": SauceArray<bigint> };
 }
 
 export interface AmbientCrocSwapDexMethods {
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: boolean, arg4: boolean, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint, arg9: bigint): [bigint, bigint] & { "baseFlow": bigint; "quoteFlow": bigint };
-  "userCmd"(arg0: bigint, arg1: (string | SauceBytes)): SauceBytes;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: boolean, arg4: boolean, arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number), arg9: (bigint | number)): [bigint, bigint] & { "baseFlow": bigint; "quoteFlow": bigint };
+  "userCmd"(arg0: (bigint | number), arg1: (string | SauceBytes)): SauceBytes;
 }
 
 export interface ArbitrumBridgeArbitrumL1GatewayRouterMethods {
-  "outboundTransfer"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: (string | SauceBytes)): SauceBytes;
-  "getGateway"(arg0: bigint): bigint;
+  "outboundTransfer"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (string | SauceBytes)): SauceBytes;
+  "getGateway"(arg0: (bigint | number)): bigint;
 }
 
 export interface ArrakisRouterMethods {
-  "addLiquidity"(arg0: { "amount0Max": bigint; "amount1Max": bigint; "amount0Min": bigint; "amount1Min": bigint; "amountSharesMin": bigint; "vault": bigint; "receiver": bigint; "gauge": bigint }): [bigint, bigint, bigint] & { "amount0": bigint; "amount1": bigint; "sharesReceived": bigint };
-  "removeLiquidity"(arg0: { "burnAmount": bigint; "amount0Min": bigint; "amount1Min": bigint; "vault": bigint; "receiver": bigint; "gauge": bigint; "receiveETH": boolean }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
+  "addLiquidity"(arg0: { "amount0Max": (bigint | number); "amount1Max": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "amountSharesMin": (bigint | number); "vault": (bigint | number); "receiver": (bigint | number); "gauge": (bigint | number) }): [bigint, bigint, bigint] & { "amount0": bigint; "amount1": bigint; "sharesReceived": bigint };
+  "removeLiquidity"(arg0: { "burnAmount": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "vault": (bigint | number); "receiver": (bigint | number); "gauge": (bigint | number); "receiveETH": boolean }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
 }
 
 export interface ArrakisVaultMethods {
   "totalSupply"(): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
   "token0"(): bigint;
   "token1"(): bigint;
 }
 
 export interface AxelarGasServiceMethods {
-  "payNativeGasForContractCall"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: (string | SauceBytes), arg4: bigint): void;
+  "payNativeGasForContractCall"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: (string | SauceBytes), arg4: (bigint | number)): void;
 }
 
 export interface AxelarGatewayMethods {
   "callContract"(arg0: (string | SauceBytes), arg1: (string | SauceBytes), arg2: (string | SauceBytes)): void;
-  "callContractWithToken"(arg0: (string | SauceBytes), arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: (string | SauceBytes), arg4: bigint): void;
-  "sendToken"(arg0: (string | SauceBytes), arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: bigint): void;
+  "callContractWithToken"(arg0: (string | SauceBytes), arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: (string | SauceBytes), arg4: (bigint | number)): void;
+  "sendToken"(arg0: (string | SauceBytes), arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: (bigint | number)): void;
   "tokenAddresses"(arg0: (string | SauceBytes)): bigint;
 }
 
 export interface AxelarITSMethods {
-  "interchainTransfer"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: bigint, arg4: (string | SauceBytes), arg5: bigint): void;
+  "interchainTransfer"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: (bigint | number), arg4: (string | SauceBytes), arg5: (bigint | number)): void;
 }
 
 export interface BalancerV2VaultMethods {
-  "swap"(arg0: { "poolId": bigint; "kind": bigint; "assetIn": bigint; "assetOut": bigint; "amount": bigint; "userData": (string | SauceBytes) }, arg1: { "sender": bigint; "fromInternalBalance": boolean; "recipient": bigint; "toInternalBalance": boolean }, arg2: bigint, arg3: bigint): bigint;
-  "batchSwap"(arg0: bigint, arg1: (readonly ({ "poolId": bigint; "assetInIndex": bigint; "assetOutIndex": bigint; "amount": bigint; "userData": (string | SauceBytes) })[] | SauceArray<{ "poolId": bigint; "assetInIndex": bigint; "assetOutIndex": bigint; "amount": bigint; "userData": (string | SauceBytes) }>), arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: { "sender": bigint; "fromInternalBalance": boolean; "recipient": bigint; "toInternalBalance": boolean }, arg4: (readonly (bigint)[] | SauceArray<bigint>), arg5: bigint): SauceArray<bigint>;
-  "joinPool"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: { "assets": (readonly (bigint)[] | SauceArray<bigint>); "maxAmountsIn": (readonly (bigint)[] | SauceArray<bigint>); "userData": (string | SauceBytes); "fromInternalBalance": boolean }): void;
-  "exitPool"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: { "assets": (readonly (bigint)[] | SauceArray<bigint>); "minAmountsOut": (readonly (bigint)[] | SauceArray<bigint>); "userData": (string | SauceBytes); "toInternalBalance": boolean }): void;
-  "flashLoan"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>), arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: (string | SauceBytes)): void;
-  "getPoolTokens"(arg0: bigint): [SauceArray<bigint>, SauceArray<bigint>, bigint] & { "tokens": SauceArray<bigint>; "balances": SauceArray<bigint>; "lastChangeBlock": bigint };
+  "swap"(arg0: { "poolId": (bigint | number); "kind": (bigint | number); "assetIn": (bigint | number); "assetOut": (bigint | number); "amount": (bigint | number); "userData": (string | SauceBytes) }, arg1: { "sender": (bigint | number); "fromInternalBalance": boolean; "recipient": (bigint | number); "toInternalBalance": boolean }, arg2: (bigint | number), arg3: (bigint | number)): bigint;
+  "batchSwap"(arg0: (bigint | number), arg1: (readonly ({ "poolId": (bigint | number); "assetInIndex": (bigint | number); "assetOutIndex": (bigint | number); "amount": (bigint | number); "userData": (string | SauceBytes) })[] | SauceArray<{ "poolId": (bigint | number); "assetInIndex": (bigint | number); "assetOutIndex": (bigint | number); "amount": (bigint | number); "userData": (string | SauceBytes) }>), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: { "sender": (bigint | number); "fromInternalBalance": boolean; "recipient": (bigint | number); "toInternalBalance": boolean }, arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg5: (bigint | number)): SauceArray<bigint>;
+  "joinPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: { "assets": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "maxAmountsIn": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "userData": (string | SauceBytes); "fromInternalBalance": boolean }): void;
+  "exitPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: { "assets": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "minAmountsOut": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "userData": (string | SauceBytes); "toInternalBalance": boolean }): void;
+  "flashLoan"(arg0: (bigint | number), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (string | SauceBytes)): void;
+  "getPoolTokens"(arg0: (bigint | number)): [SauceArray<bigint>, SauceArray<bigint>, bigint] & { "tokens": SauceArray<bigint>; "balances": SauceArray<bigint>; "lastChangeBlock": bigint };
 }
 
 export interface BaseBridgeBaseL1StandardBridgeMethods {
-  "depositETH"(arg0: bigint, arg1: (string | SauceBytes)): void;
-  "depositERC20"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): void;
-  "depositETHTo"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): void;
-  "depositERC20To"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: (string | SauceBytes)): void;
+  "depositETH"(arg0: (bigint | number), arg1: (string | SauceBytes)): void;
+  "depositERC20"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): void;
+  "depositETHTo"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes)): void;
+  "depositERC20To"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (string | SauceBytes)): void;
 }
 
 export interface BaseswapRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
 }
 
 export interface BeefyVaultMethods {
-  "deposit"(arg0: bigint): void;
+  "deposit"(arg0: (bigint | number)): void;
   "depositAll"(): void;
-  "withdraw"(arg0: bigint): void;
+  "withdraw"(arg0: (bigint | number)): void;
   "withdrawAll"(): void;
   "getPricePerFullShare"(): bigint;
   "balance"(): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
   "want"(): bigint;
 }
 
 export interface BenqiComptrollerMethods {
-  "enterMarkets"(arg0: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
-  "exitMarket"(arg0: bigint): bigint;
+  "enterMarkets"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
+  "exitMarket"(arg0: (bigint | number)): bigint;
 }
 
 export interface BenqiQiTokenMethods {
-  "mint"(arg0: bigint): bigint;
-  "redeem"(arg0: bigint): bigint;
-  "redeemUnderlying"(arg0: bigint): bigint;
-  "borrow"(arg0: bigint): bigint;
-  "repayBorrow"(arg0: bigint): bigint;
+  "mint"(arg0: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number)): bigint;
+  "redeemUnderlying"(arg0: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number)): bigint;
+  "repayBorrow"(arg0: (bigint | number)): bigint;
 }
 
 export interface CamelotV2RouterMethods {
-  "swapExactTokensForTokensSupportingFeeOnTransferTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint, arg5: bigint): void;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "swapExactTokensForTokensSupportingFeeOnTransferTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number)): void;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
 }
 
 export interface CamelotV3SwapRouterMethods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "limitSqrtPrice": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "limitSqrtPrice": (bigint | number) }): bigint;
 }
 
 export interface CamelotV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface CamelotV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_token0FeePercent": bigint; "_token1FeePercent": bigint };
-  "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
+  "getAmountOut"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
   "stableSwap"(): boolean;
   "token0"(): bigint;
   "token1"(): bigint;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
 }
 
 export interface CamelotV3FactoryMethods {
-  "poolByPair"(arg0: bigint, arg1: bigint): bigint;
+  "poolByPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface CamelotV3PoolMethods {
@@ -372,20 +372,20 @@ export interface CamelotV3PoolMethods {
 }
 
 export interface CbethCbETHMethods {
-  "mint"(arg0: bigint, arg1: bigint): boolean;
+  "mint"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
   "exchangeRate"(): bigint;
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
-  "transfer"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "transfer"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface CctpTokenMessengerMethods {
-  "depositForBurn"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): void;
+  "depositForBurn"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): void;
 }
 
 export interface CelerBridgeMethods {
-  "send"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint): void;
-  "sendNative"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
+  "send"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number)): void;
+  "sendNative"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
 }
 
 export interface ChainlinkAggregatorV3Methods {
@@ -394,71 +394,71 @@ export interface ChainlinkAggregatorV3Methods {
 }
 
 export interface ChainlinkFeedRegistryMethods {
-  "latestRoundData"(arg0: bigint, arg1: bigint): [bigint, bigint, bigint, bigint, bigint] & { "roundId": bigint; "answer": bigint; "startedAt": bigint; "updatedAt": bigint; "answeredInRound": bigint };
-  "getFeed"(arg0: bigint, arg1: bigint): bigint;
+  "latestRoundData"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint, bigint, bigint, bigint] & { "roundId": bigint; "answer": bigint; "startedAt": bigint; "updatedAt": bigint; "answeredInRound": bigint };
+  "getFeed"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface ChainlinkCcipCCIPRouterMethods {
-  "ccipSend"(arg0: bigint, arg1: { "receiver": (string | SauceBytes); "data": (string | SauceBytes); "tokenAmounts": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "feeToken": bigint; "extraArgs": (string | SauceBytes) }): bigint;
-  "getFee"(arg0: bigint, arg1: { "receiver": (string | SauceBytes); "data": (string | SauceBytes); "tokenAmounts": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "feeToken": bigint; "extraArgs": (string | SauceBytes) }): bigint;
-  "isChainSupported"(arg0: bigint): boolean;
+  "ccipSend"(arg0: (bigint | number), arg1: { "receiver": (string | SauceBytes); "data": (string | SauceBytes); "tokenAmounts": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "feeToken": (bigint | number); "extraArgs": (string | SauceBytes) }): bigint;
+  "getFee"(arg0: (bigint | number), arg1: { "receiver": (string | SauceBytes); "data": (string | SauceBytes); "tokenAmounts": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "feeToken": (bigint | number); "extraArgs": (string | SauceBytes) }): bigint;
+  "isChainSupported"(arg0: (bigint | number)): boolean;
 }
 
 export interface CircleGatewayGatewayWalletMethods {
-  "deposit"(arg0: bigint, arg1: bigint): void;
-  "depositFor"(arg0: bigint, arg1: bigint, arg2: bigint): void;
-  "totalBalance"(arg0: bigint, arg1: bigint): bigint;
-  "availableBalance"(arg0: bigint, arg1: bigint): bigint;
-  "isTokenSupported"(arg0: bigint): boolean;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "depositFor"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
+  "totalBalance"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "availableBalance"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "isTokenSupported"(arg0: (bigint | number)): boolean;
   "domain"(): bigint;
 }
 
 export interface CircleGatewayGatewayMinterMethods {
   "gatewayMint"(arg0: (string | SauceBytes), arg1: (string | SauceBytes)): void;
-  "isTokenSupported"(arg0: bigint): boolean;
+  "isTokenSupported"(arg0: (bigint | number)): boolean;
   "domain"(): bigint;
 }
 
 export interface CompoundV2CErc20Methods {
-  "mint"(arg0: bigint): bigint;
-  "redeem"(arg0: bigint): bigint;
-  "redeemUnderlying"(arg0: bigint): bigint;
-  "borrow"(arg0: bigint): bigint;
-  "repayBorrow"(arg0: bigint): bigint;
-  "balanceOfUnderlying"(arg0: bigint): bigint;
-  "borrowBalanceCurrent"(arg0: bigint): bigint;
+  "mint"(arg0: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number)): bigint;
+  "redeemUnderlying"(arg0: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number)): bigint;
+  "repayBorrow"(arg0: (bigint | number)): bigint;
+  "balanceOfUnderlying"(arg0: (bigint | number)): bigint;
+  "borrowBalanceCurrent"(arg0: (bigint | number)): bigint;
 }
 
 export interface CompoundV2ComptrollerMethods {
-  "enterMarkets"(arg0: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
-  "exitMarket"(arg0: bigint): bigint;
+  "enterMarkets"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
+  "exitMarket"(arg0: (bigint | number)): bigint;
 }
 
 export interface CompoundV3CometMethods {
-  "supply"(arg0: bigint, arg1: bigint): void;
-  "supplyTo"(arg0: bigint, arg1: bigint, arg2: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint): void;
-  "withdrawTo"(arg0: bigint, arg1: bigint, arg2: bigint): void;
-  "balanceOf"(arg0: bigint): bigint;
-  "borrowBalanceOf"(arg0: bigint): bigint;
+  "supply"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "supplyTo"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "withdrawTo"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "borrowBalanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface ConnextEverclearSpokeMethods {
-  "newIntent"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: (string | SauceBytes)): [bigint, { "initiator": bigint; "receiver": bigint; "inputAsset": bigint; "outputAsset": bigint; "origin": bigint; "nonce": bigint; "timestamp": bigint; "ttl": bigint; "amount": bigint; "amountOutMin": bigint; "destinations": SauceArray<bigint>; "data": SauceBytes }] & { "intentId": bigint; "intent": { "initiator": bigint; "receiver": bigint; "inputAsset": bigint; "outputAsset": bigint; "origin": bigint; "nonce": bigint; "timestamp": bigint; "ttl": bigint; "amount": bigint; "amountOutMin": bigint; "destinations": SauceArray<bigint>; "data": SauceBytes } };
+  "newIntent"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (string | SauceBytes)): [bigint, { "initiator": bigint; "receiver": bigint; "inputAsset": bigint; "outputAsset": bigint; "origin": bigint; "nonce": bigint; "timestamp": bigint; "ttl": bigint; "amount": bigint; "amountOutMin": bigint; "destinations": SauceArray<bigint>; "data": SauceBytes }] & { "intentId": bigint; "intent": { "initiator": bigint; "receiver": bigint; "inputAsset": bigint; "outputAsset": bigint; "origin": bigint; "nonce": bigint; "timestamp": bigint; "ttl": bigint; "amount": bigint; "amountOutMin": bigint; "destinations": SauceArray<bigint>; "data": SauceBytes } };
 }
 
 export interface ConvexBaseRewardPoolMethods {
-  "getReward"(arg0: bigint, arg1: boolean): boolean;
-  "earned"(arg0: bigint): bigint;
-  "balanceOf"(arg0: bigint): bigint;
-  "withdrawAndUnwrap"(arg0: bigint, arg1: boolean): boolean;
+  "getReward"(arg0: (bigint | number), arg1: boolean): boolean;
+  "earned"(arg0: (bigint | number)): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "withdrawAndUnwrap"(arg0: (bigint | number), arg1: boolean): boolean;
 }
 
 export interface ConvexBoosterMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: boolean): boolean;
-  "withdraw"(arg0: bigint, arg1: bigint): boolean;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean): boolean;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
   "poolLength"(): bigint;
-  "poolInfo"(arg0: bigint): [bigint, bigint, bigint, bigint, bigint, boolean] & { "lptoken": bigint; "token": bigint; "gauge": bigint; "crvRewards": bigint; "stash": bigint; "shutdown": boolean };
+  "poolInfo"(arg0: (bigint | number)): [bigint, bigint, bigint, bigint, bigint, boolean] & { "lptoken": bigint; "token": bigint; "gauge": bigint; "crvRewards": bigint; "stash": bigint; "shutdown": boolean };
 }
 
 export interface CowswapGPv2SettlementMethods {
@@ -467,118 +467,118 @@ export interface CowswapGPv2SettlementMethods {
 }
 
 export interface CrvusdERC20Methods {
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
-  "transfer"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "transfer"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface CurveAddressProviderMethods {
   "get_registry"(): bigint;
-  "get_address"(arg0: bigint): bigint;
+  "get_address"(arg0: (bigint | number)): bigint;
 }
 
 export interface CurveRouterNGMethods {
-  "exchange"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: (readonly ((readonly (bigint)[] | SauceArray<bigint>))[] | SauceArray<(readonly (bigint)[] | SauceArray<bigint>)>), arg2: bigint, arg3: bigint, arg4: (readonly (bigint)[] | SauceArray<bigint>)): bigint;
-  "exchange"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: (readonly ((readonly (bigint)[] | SauceArray<bigint>))[] | SauceArray<(readonly (bigint)[] | SauceArray<bigint>)>), arg2: bigint, arg3: bigint, arg4: (readonly (bigint)[] | SauceArray<bigint>), arg5: bigint): bigint;
-  "get_dy"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: (readonly ((readonly (bigint)[] | SauceArray<bigint>))[] | SauceArray<(readonly (bigint)[] | SauceArray<bigint>)>), arg2: bigint, arg3: (readonly (bigint)[] | SauceArray<bigint>)): bigint;
+  "exchange"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (bigint | number), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): bigint;
+  "exchange"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (bigint | number), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg5: (bigint | number)): bigint;
+  "get_dy"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): bigint;
 }
 
 export interface CurveStableSwapMethods {
-  "exchange"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
-  "exchange_underlying"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
-  "add_liquidity"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: bigint): bigint;
-  "remove_liquidity"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
-  "remove_liquidity_one_coin"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "get_dy"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "exchange"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
+  "exchange_underlying"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
+  "add_liquidity"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number)): bigint;
+  "remove_liquidity"(arg0: (bigint | number), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
+  "remove_liquidity_one_coin"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "get_dy"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
   "get_virtual_price"(): bigint;
 }
 
 export interface CurveThreePoolMethods {
-  "exchange"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "add_liquidity"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: bigint): void;
-  "remove_liquidity"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): void;
-  "remove_liquidity_one_coin"(arg0: bigint, arg1: bigint, arg2: bigint): void;
-  "get_dy"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "exchange"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "add_liquidity"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number)): void;
+  "remove_liquidity"(arg0: (bigint | number), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): void;
+  "remove_liquidity_one_coin"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
+  "get_dy"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
   "get_virtual_price"(): bigint;
 }
 
 export interface DebridgeDlnDestinationMethods {
-  "fulfillOrder"(arg0: { "makerOrderNonce": bigint; "makerSrc": (string | SauceBytes); "giveChainId": bigint; "giveTokenAddress": (string | SauceBytes); "giveAmount": bigint; "takeChainId": bigint; "takeTokenAddress": (string | SauceBytes); "takeAmount": bigint; "receiverDst": (string | SauceBytes); "givePatchAuthoritySrc": (string | SauceBytes); "orderAuthorityAddressDst": (string | SauceBytes); "allowedTakerDst": (string | SauceBytes); "allowedCancelBeneficiarySrc": (string | SauceBytes); "externalCall": (string | SauceBytes) }, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes), arg4: bigint): void;
+  "fulfillOrder"(arg0: { "makerOrderNonce": (bigint | number); "makerSrc": (string | SauceBytes); "giveChainId": (bigint | number); "giveTokenAddress": (string | SauceBytes); "giveAmount": (bigint | number); "takeChainId": (bigint | number); "takeTokenAddress": (string | SauceBytes); "takeAmount": (bigint | number); "receiverDst": (string | SauceBytes); "givePatchAuthoritySrc": (string | SauceBytes); "orderAuthorityAddressDst": (string | SauceBytes); "allowedTakerDst": (string | SauceBytes); "allowedCancelBeneficiarySrc": (string | SauceBytes); "externalCall": (string | SauceBytes) }, arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes), arg4: (bigint | number)): void;
 }
 
 export interface DebridgeDlnSourceMethods {
-  "createOrder"(arg0: { "giveTokenAddress": bigint; "giveAmount": bigint; "takeTokenAddress": (string | SauceBytes); "takeAmount": bigint; "takeChainId": bigint; "receiverDst": (string | SauceBytes); "givePatchAuthoritySrc": bigint; "orderAuthorityAddressDst": (string | SauceBytes); "allowedTakerDst": (string | SauceBytes); "externalCall": (string | SauceBytes); "allowedCancelBeneficiarySrc": (string | SauceBytes) }, arg1: (string | SauceBytes), arg2: bigint, arg3: (string | SauceBytes)): bigint;
+  "createOrder"(arg0: { "giveTokenAddress": (bigint | number); "giveAmount": (bigint | number); "takeTokenAddress": (string | SauceBytes); "takeAmount": (bigint | number); "takeChainId": (bigint | number); "receiverDst": (string | SauceBytes); "givePatchAuthoritySrc": (bigint | number); "orderAuthorityAddressDst": (string | SauceBytes); "allowedTakerDst": (string | SauceBytes); "externalCall": (string | SauceBytes); "allowedCancelBeneficiarySrc": (string | SauceBytes) }, arg1: (string | SauceBytes), arg2: (bigint | number), arg3: (string | SauceBytes)): bigint;
 }
 
 export interface DodoV2ProxyMethods {
-  "dodoSwapV2TokenToToken"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (readonly (bigint)[] | SauceArray<bigint>), arg5: bigint, arg6: boolean, arg7: bigint): bigint;
+  "dodoSwapV2TokenToToken"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg5: (bigint | number), arg6: boolean, arg7: (bigint | number)): bigint;
 }
 
 export interface EcoRoutesPortalMethods {
-  "publish"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): [bigint, bigint] & { "intentHash": bigint; "vault": bigint };
-  "publishAndFund"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }, arg3: boolean): [bigint, bigint] & { "intentHash": bigint; "vault": bigint };
-  "fund"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }, arg3: boolean): bigint;
-  "fulfill"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint): SauceArray<SauceBytes>;
-  "getIntentHash"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): [bigint, bigint, bigint] & { "intentHash": bigint; "routeHash": bigint; "rewardHash": bigint };
-  "intentVaultAddress"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): bigint;
-  "isIntentFunded"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): boolean;
-  "getRewardStatus"(arg0: bigint): bigint;
+  "publish"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }): [bigint, bigint] & { "intentHash": bigint; "vault": bigint };
+  "publishAndFund"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }, arg3: boolean): [bigint, bigint] & { "intentHash": bigint; "vault": bigint };
+  "fund"(arg0: (bigint | number), arg1: (bigint | number), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }, arg3: boolean): bigint;
+  "fulfill"(arg0: (bigint | number), arg1: { "salt": (bigint | number); "deadline": (bigint | number); "portal": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "calls": (readonly ({ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) })[] | SauceArray<{ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) }>) }, arg2: (bigint | number), arg3: (bigint | number)): SauceArray<SauceBytes>;
+  "getIntentHash"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }): [bigint, bigint, bigint] & { "intentHash": bigint; "routeHash": bigint; "rewardHash": bigint };
+  "intentVaultAddress"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }): bigint;
+  "isIntentFunded"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }): boolean;
+  "getRewardStatus"(arg0: (bigint | number)): bigint;
   "executor"(): bigint;
-  "claimants"(arg0: bigint): bigint;
-  "fulfillAndProve"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: (string | SauceBytes)): SauceArray<SauceBytes>;
-  "prove"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: (string | SauceBytes)): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): void;
-  "batchWithdraw"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: (readonly (bigint)[] | SauceArray<bigint>), arg2: (readonly ({ "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) })[] | SauceArray<{ "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }>)): void;
-  "refund"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): void;
-  "refundTo"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }, arg3: bigint): void;
-  "cancel"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint): void;
-  "cancelAndProve"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint, arg4: bigint, arg5: (string | SauceBytes)): void;
+  "claimants"(arg0: (bigint | number)): bigint;
+  "fulfillAndProve"(arg0: (bigint | number), arg1: { "salt": (bigint | number); "deadline": (bigint | number); "portal": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "calls": (readonly ({ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) })[] | SauceArray<{ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) }>) }, arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (string | SauceBytes)): SauceArray<SauceBytes>;
+  "prove"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (string | SauceBytes)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }): void;
+  "batchWithdraw"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg2: (readonly ({ "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) })[] | SauceArray<{ "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }>)): void;
+  "refund"(arg0: (bigint | number), arg1: (bigint | number), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }): void;
+  "refundTo"(arg0: (bigint | number), arg1: (bigint | number), arg2: { "deadline": (bigint | number); "creator": (bigint | number); "prover": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>) }, arg3: (bigint | number)): void;
+  "cancel"(arg0: (bigint | number), arg1: { "salt": (bigint | number); "deadline": (bigint | number); "portal": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "calls": (readonly ({ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) })[] | SauceArray<{ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) }>) }, arg2: (bigint | number)): void;
+  "cancelAndProve"(arg0: (bigint | number), arg1: { "salt": (bigint | number); "deadline": (bigint | number); "portal": (bigint | number); "nativeAmount": (bigint | number); "tokens": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "calls": (readonly ({ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) })[] | SauceArray<{ "target": (bigint | number); "data": (string | SauceBytes); "value": (bigint | number) }>) }, arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (string | SauceBytes)): void;
   "version"(): SauceBytes;
 }
 
 export interface EcoRoutesProverMethods {
-  "provenIntents"(arg0: bigint): { "claimant": bigint; "destination": bigint };
+  "provenIntents"(arg0: (bigint | number)): { "claimant": bigint; "destination": bigint };
   "getProofType"(): SauceBytes;
   "version"(): SauceBytes;
   "PORTAL"(): bigint;
-  "isWhitelisted"(arg0: bigint): boolean;
-  "fetchFee"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes)): bigint;
+  "isWhitelisted"(arg0: (bigint | number)): boolean;
+  "fetchFee"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: (string | SauceBytes)): bigint;
 }
 
 export interface EigenlayerDelegationManagerMethods {
-  "delegateTo"(arg0: bigint, arg1: { "signature": (string | SauceBytes); "expiry": bigint }, arg2: bigint): void;
-  "undelegate"(arg0: bigint): SauceArray<bigint>;
-  "isDelegated"(arg0: bigint): boolean;
+  "delegateTo"(arg0: (bigint | number), arg1: { "signature": (string | SauceBytes); "expiry": (bigint | number) }, arg2: (bigint | number)): void;
+  "undelegate"(arg0: (bigint | number)): SauceArray<bigint>;
+  "isDelegated"(arg0: (bigint | number)): boolean;
 }
 
 export interface EigenlayerStrategyMethods {
-  "sharesToUnderlyingView"(arg0: bigint): bigint;
-  "underlyingToSharesView"(arg0: bigint): bigint;
+  "sharesToUnderlyingView"(arg0: (bigint | number)): bigint;
+  "underlyingToSharesView"(arg0: (bigint | number)): bigint;
 }
 
 export interface EigenlayerStrategyManagerMethods {
-  "depositIntoStrategy"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "stakerDepositShares"(arg0: bigint, arg1: bigint): bigint;
+  "depositIntoStrategy"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "stakerDepositShares"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface EnsBaseRegistrarMethods {
-  "nameExpires"(arg0: bigint): bigint;
-  "reclaim"(arg0: bigint, arg1: bigint): void;
+  "nameExpires"(arg0: (bigint | number)): bigint;
+  "reclaim"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface EnsRegistryMethods {
-  "owner"(arg0: bigint): bigint;
-  "resolver"(arg0: bigint): bigint;
-  "setOwner"(arg0: bigint, arg1: bigint): void;
-  "setResolver"(arg0: bigint, arg1: bigint): void;
+  "owner"(arg0: (bigint | number)): bigint;
+  "resolver"(arg0: (bigint | number)): bigint;
+  "setOwner"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "setResolver"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface Erc20ERC20Methods {
-  "transfer"(arg0: bigint, arg1: bigint): boolean;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
-  "transferFrom"(arg0: bigint, arg1: bigint, arg2: bigint): boolean;
-  "balanceOf"(arg0: bigint): bigint;
-  "allowance"(arg0: bigint, arg1: bigint): bigint;
+  "transfer"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "transferFrom"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "allowance"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
   "totalSupply"(): bigint;
   "name"(): SauceBytes;
   "symbol"(): SauceBytes;
@@ -586,46 +586,46 @@ export interface Erc20ERC20Methods {
 }
 
 export interface Erc3156FlashLenderMethods {
-  "flashLoan"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): boolean;
-  "flashFee"(arg0: bigint, arg1: bigint): bigint;
-  "maxFlashLoan"(arg0: bigint): bigint;
+  "flashLoan"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): boolean;
+  "flashFee"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "maxFlashLoan"(arg0: (bigint | number)): bigint;
 }
 
 export interface Erc4626VaultMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "mint"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "mint"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
   "totalAssets"(): bigint;
-  "convertToShares"(arg0: bigint): bigint;
-  "convertToAssets"(arg0: bigint): bigint;
-  "previewDeposit"(arg0: bigint): bigint;
-  "previewMint"(arg0: bigint): bigint;
-  "previewWithdraw"(arg0: bigint): bigint;
-  "previewRedeem"(arg0: bigint): bigint;
-  "maxDeposit"(arg0: bigint): bigint;
-  "maxMint"(arg0: bigint): bigint;
-  "maxWithdraw"(arg0: bigint): bigint;
-  "maxRedeem"(arg0: bigint): bigint;
+  "convertToShares"(arg0: (bigint | number)): bigint;
+  "convertToAssets"(arg0: (bigint | number)): bigint;
+  "previewDeposit"(arg0: (bigint | number)): bigint;
+  "previewMint"(arg0: (bigint | number)): bigint;
+  "previewWithdraw"(arg0: (bigint | number)): bigint;
+  "previewRedeem"(arg0: (bigint | number)): bigint;
+  "maxDeposit"(arg0: (bigint | number)): bigint;
+  "maxMint"(arg0: (bigint | number)): bigint;
+  "maxWithdraw"(arg0: (bigint | number)): bigint;
+  "maxRedeem"(arg0: (bigint | number)): bigint;
   "asset"(): bigint;
 }
 
 export interface EthenaStakedUSDeMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "cooldownAssets"(arg0: bigint): bigint;
-  "cooldownShares"(arg0: bigint): bigint;
-  "unstake"(arg0: bigint): void;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "cooldownAssets"(arg0: (bigint | number)): bigint;
+  "cooldownShares"(arg0: (bigint | number)): bigint;
+  "unstake"(arg0: (bigint | number)): void;
 }
 
 export interface EthenaUSDeMethods {
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface EtherfiEETHMethods {
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface EtherfiLiquidityPoolMethods {
@@ -633,279 +633,279 @@ export interface EtherfiLiquidityPoolMethods {
 }
 
 export interface EtherfiWeETHMethods {
-  "wrap"(arg0: bigint): bigint;
-  "unwrap"(arg0: bigint): bigint;
-  "getEETHByWeETH"(arg0: bigint): bigint;
-  "getWeETHByeETH"(arg0: bigint): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "wrap"(arg0: (bigint | number)): bigint;
+  "unwrap"(arg0: (bigint | number)): bigint;
+  "getEETHByWeETH"(arg0: (bigint | number)): bigint;
+  "getWeETHByeETH"(arg0: (bigint | number)): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface EulerV2EVCMethods {
-  "enableCollateral"(arg0: bigint, arg1: bigint): void;
-  "enableController"(arg0: bigint, arg1: bigint): void;
+  "enableCollateral"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "enableController"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface EulerV2EVaultMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "borrow"(arg0: bigint, arg1: bigint): bigint;
-  "repay"(arg0: bigint, arg1: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "repay"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
 }
 
 export interface FenixRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ({ "from": (bigint | number); "to": (bigint | number); "stable": boolean })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "stable": boolean }>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
 }
 
 export interface FluidLendingMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
   "asset"(): bigint;
 }
 
 export interface FluidVaultMethods {
-  "operate"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): [bigint, bigint, bigint];
+  "operate"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): [bigint, bigint, bigint];
 }
 
 export interface FraxERC20Methods {
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
-  "transfer"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "transfer"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface FraxEtherFrxETHMinterMethods {
-  "submitAndDeposit"(arg0: bigint): bigint;
+  "submitAndDeposit"(arg0: (bigint | number)): bigint;
 }
 
 export interface FraxEtherSfrxETHMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "convertToShares"(arg0: bigint): bigint;
-  "convertToAssets"(arg0: bigint): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "convertToShares"(arg0: (bigint | number)): bigint;
+  "convertToAssets"(arg0: (bigint | number)): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface GainsNetworkDiamondMethods {
-  "openTrade"(arg0: { "user": bigint; "index": bigint; "pairIndex": bigint; "leverage": bigint; "long": boolean; "isOpen": boolean; "collateralIndex": bigint; "tradeType": bigint; "collateralAmount": bigint; "openPrice": bigint; "tp": bigint; "sl": bigint; "isCounterTrade": boolean; "positionSizeToken": bigint; "__placeholder": bigint }, arg1: bigint, arg2: bigint): void;
-  "closeTradeMarket"(arg0: bigint, arg1: bigint): void;
-  "updateSl"(arg0: bigint, arg1: bigint): void;
-  "updateTp"(arg0: bigint, arg1: bigint): void;
+  "openTrade"(arg0: { "user": (bigint | number); "index": (bigint | number); "pairIndex": (bigint | number); "leverage": (bigint | number); "long": boolean; "isOpen": boolean; "collateralIndex": (bigint | number); "tradeType": (bigint | number); "collateralAmount": (bigint | number); "openPrice": (bigint | number); "tp": (bigint | number); "sl": (bigint | number); "isCounterTrade": boolean; "positionSizeToken": (bigint | number); "__placeholder": (bigint | number) }, arg1: (bigint | number), arg2: (bigint | number)): void;
+  "closeTradeMarket"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "updateSl"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "updateTp"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface GammaHypervisorMethods {
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (readonly (bigint)[] | SauceArray<bigint>)): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
-  "balanceOf"(arg0: bigint): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
+  "balanceOf"(arg0: (bigint | number)): bigint;
   "totalSupply"(): bigint;
   "getTotalAmounts"(): [bigint, bigint] & { "total0": bigint; "total1": bigint };
 }
 
 export interface GammaUniProxyMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (readonly (bigint)[] | SauceArray<bigint>)): bigint;
-  "getDepositAmount"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint] & { "amountStart": bigint; "amountEnd": bigint };
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): bigint;
+  "getDepositAmount"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint] & { "amountStart": bigint; "amountEnd": bigint };
 }
 
 export interface GammaUniProxyLegacyMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
-  "getDepositAmount"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint] & { "amountStart": bigint; "amountEnd": bigint };
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
+  "getDepositAmount"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint] & { "amountStart": bigint; "amountEnd": bigint };
 }
 
 export interface GelatoAutomateMethods {
-  "createTask"(arg0: bigint, arg1: (string | SauceBytes), arg2: { "modules": (readonly (bigint)[] | SauceArray<bigint>); "args": (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>) }, arg3: bigint): bigint;
-  "cancelTask"(arg0: bigint): void;
+  "createTask"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: { "modules": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "args": (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>) }, arg3: (bigint | number)): bigint;
+  "cancelTask"(arg0: (bigint | number)): void;
 }
 
 export interface GhoTokenMethods {
-  "transfer"(arg0: bigint, arg1: bigint): boolean;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
-  "balanceOf"(arg0: bigint): bigint;
+  "transfer"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface GmxV1PositionRouterMethods {
-  "createIncreasePosition"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: boolean, arg6: bigint, arg7: bigint, arg8: bigint, arg9: bigint): bigint;
-  "createDecreasePosition"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: bigint, arg2: bigint, arg3: bigint, arg4: boolean, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint, arg9: boolean, arg10: bigint): bigint;
+  "createIncreasePosition"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: boolean, arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number), arg9: (bigint | number)): bigint;
+  "createDecreasePosition"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: boolean, arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number), arg9: boolean, arg10: (bigint | number)): bigint;
 }
 
 export interface GmxV1RouterMethods {
-  "approvePlugin"(arg0: bigint): void;
-  "swap"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: bigint, arg2: bigint, arg3: bigint): void;
+  "approvePlugin"(arg0: (bigint | number)): void;
+  "swap"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
 }
 
 export interface GmxV1VaultMethods {
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "increasePosition"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: boolean): void;
-  "decreasePosition"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: boolean, arg6: bigint): bigint;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "increasePosition"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: boolean): void;
+  "decreasePosition"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: boolean, arg6: (bigint | number)): bigint;
 }
 
 export interface GmxV2ExchangeRouterMethods {
-  "createOrder"(arg0: { "addresses": { "receiver": bigint; "cancellationReceiver": bigint; "callbackContract": bigint; "uiFeeReceiver": bigint; "market": bigint; "initialCollateralToken": bigint; "swapPath": (readonly (bigint)[] | SauceArray<bigint>) }; "numbers": { "sizeDeltaUsd": bigint; "initialCollateralDeltaAmount": bigint; "triggerPrice": bigint; "acceptablePrice": bigint; "executionFee": bigint; "callbackGasLimit": bigint; "minOutputAmount": bigint; "validFromTime": bigint }; "orderType": bigint; "decreasePositionSwapType": bigint; "isLong": boolean; "shouldUnwrapNativeToken": boolean; "autoCancel": boolean; "referralCode": bigint; "dataList": (readonly (bigint)[] | SauceArray<bigint>) }): bigint;
-  "cancelOrder"(arg0: bigint): void;
-  "sendTokens"(arg0: bigint, arg1: bigint, arg2: bigint): void;
+  "createOrder"(arg0: { "addresses": { "receiver": (bigint | number); "cancellationReceiver": (bigint | number); "callbackContract": (bigint | number); "uiFeeReceiver": (bigint | number); "market": (bigint | number); "initialCollateralToken": (bigint | number); "swapPath": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>) }; "numbers": { "sizeDeltaUsd": (bigint | number); "initialCollateralDeltaAmount": (bigint | number); "triggerPrice": (bigint | number); "acceptablePrice": (bigint | number); "executionFee": (bigint | number); "callbackGasLimit": (bigint | number); "minOutputAmount": (bigint | number); "validFromTime": (bigint | number) }; "orderType": (bigint | number); "decreasePositionSwapType": (bigint | number); "isLong": boolean; "shouldUnwrapNativeToken": boolean; "autoCancel": boolean; "referralCode": (bigint | number); "dataList": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>) }): bigint;
+  "cancelOrder"(arg0: (bigint | number)): void;
+  "sendTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
 }
 
 export interface HarvestVaultMethods {
-  "deposit"(arg0: bigint): bigint;
-  "withdraw"(arg0: bigint): bigint;
+  "deposit"(arg0: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number)): bigint;
   "getPricePerFullShare"(): bigint;
   "underlyingBalanceWithInvestment"(): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface HegicHegicMethods {
-  "payOff"(arg0: bigint, arg1: bigint): void;
+  "payOff"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface HopL1BridgeMethods {
-  "sendToL2"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): void;
+  "sendToL2"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): void;
 }
 
 export interface HopL2AmmWrapperMethods {
-  "swapAndSend"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): void;
+  "swapAndSend"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): void;
 }
 
 export interface HyperlaneMailboxMethods {
-  "dispatch"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): bigint;
-  "quoteDispatch"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): bigint;
+  "dispatch"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes)): bigint;
+  "quoteDispatch"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes)): bigint;
   "process"(arg0: (string | SauceBytes), arg1: (string | SauceBytes)): void;
-  "delivered"(arg0: bigint): boolean;
+  "delivered"(arg0: (bigint | number)): boolean;
 }
 
 export interface InstadappFlashAggregatorMethods {
-  "flashLoan"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: (readonly (bigint)[] | SauceArray<bigint>), arg2: bigint, arg3: (string | SauceBytes), arg4: (string | SauceBytes)): void;
+  "flashLoan"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg2: (bigint | number), arg3: (string | SauceBytes), arg4: (string | SauceBytes)): void;
   "getRoutes"(): SauceArray<bigint>;
 }
 
 export interface KelpLRTDepositPoolMethods {
-  "depositAsset"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
-  "getRsETHAmountToMint"(arg0: bigint, arg1: bigint): bigint;
+  "depositAsset"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
+  "getRsETHAmountToMint"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface KelpRsETHMethods {
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface KimRouterMethods {
-  "swapExactTokensForTokensSupportingFeeOnTransferTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint, arg5: bigint): void;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "swapExactTokensForTokensSupportingFeeOnTransferTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number)): void;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
 }
 
 export interface KyberswapElasticRouterMethods {
-  "swapExactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "minAmountOut": bigint; "limitSqrtP": bigint }): bigint;
+  "swapExactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number); "amountIn": (bigint | number); "minAmountOut": (bigint | number); "limitSqrtP": (bigint | number) }): bigint;
 }
 
 export interface KyberswapMetaAggregationRouterMethods {
-  "swap"(arg0: { "callTarget": bigint; "approveTarget": bigint; "targetData": (string | SauceBytes); "desc": { "srcToken": bigint; "dstToken": bigint; "srcReceivers": (readonly (bigint)[] | SauceArray<bigint>); "srcAmounts": (readonly (bigint)[] | SauceArray<bigint>); "feeReceivers": (readonly (bigint)[] | SauceArray<bigint>); "feeAmounts": (readonly (bigint)[] | SauceArray<bigint>); "dstReceiver": bigint; "amount": bigint; "minReturnAmount": bigint; "flags": bigint; "permit": (string | SauceBytes) }; "clientData": (string | SauceBytes) }): [bigint, bigint] & { "returnAmount": bigint; "gasUsed": bigint };
+  "swap"(arg0: { "callTarget": (bigint | number); "approveTarget": (bigint | number); "targetData": (string | SauceBytes); "desc": { "srcToken": (bigint | number); "dstToken": (bigint | number); "srcReceivers": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "srcAmounts": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "feeReceivers": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "feeAmounts": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "dstReceiver": (bigint | number); "amount": (bigint | number); "minReturnAmount": (bigint | number); "flags": (bigint | number); "permit": (string | SauceBytes) }; "clientData": (string | SauceBytes) }): [bigint, bigint] & { "returnAmount": bigint; "gasUsed": bigint };
 }
 
 export interface KyberswapAggregatorKyberSwapMetaAggregationRouterMethods {
-  "swap"(arg0: { "callTarget": bigint; "approveTarget": bigint; "targetData": (string | SauceBytes); "desc": { "srcToken": bigint; "dstToken": bigint; "srcReceivers": (readonly (bigint)[] | SauceArray<bigint>); "srcAmounts": (readonly (bigint)[] | SauceArray<bigint>); "feeReceivers": (readonly (bigint)[] | SauceArray<bigint>); "feeAmounts": (readonly (bigint)[] | SauceArray<bigint>); "dstReceiver": bigint; "amount": bigint; "minReturnAmount": bigint; "flags": bigint; "permit": (string | SauceBytes) }; "clientData": (string | SauceBytes) }): [bigint, bigint] & { "returnAmount": bigint; "gasUsed": bigint };
+  "swap"(arg0: { "callTarget": (bigint | number); "approveTarget": (bigint | number); "targetData": (string | SauceBytes); "desc": { "srcToken": (bigint | number); "dstToken": (bigint | number); "srcReceivers": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "srcAmounts": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "feeReceivers": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "feeAmounts": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "dstReceiver": (bigint | number); "amount": (bigint | number); "minReturnAmount": (bigint | number); "flags": (bigint | number); "permit": (string | SauceBytes) }; "clientData": (string | SauceBytes) }): [bigint, bigint] & { "returnAmount": bigint; "gasUsed": bigint };
 }
 
 export interface LayerbankLTokenMethods {
-  "balanceOf"(arg0: bigint): bigint;
-  "underlyingBalanceOf"(arg0: bigint): bigint;
-  "borrowBalanceOf"(arg0: bigint): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "underlyingBalanceOf"(arg0: (bigint | number)): bigint;
+  "borrowBalanceOf"(arg0: (bigint | number)): bigint;
   "exchangeRate"(): bigint;
   "underlying"(): bigint;
 }
 
 export interface LayerbankCoreMethods {
-  "enterMarkets"(arg0: (readonly (bigint)[] | SauceArray<bigint>)): void;
-  "exitMarket"(arg0: bigint): void;
-  "supply"(arg0: bigint, arg1: bigint): bigint;
-  "redeemToken"(arg0: bigint, arg1: bigint): bigint;
-  "redeemUnderlying"(arg0: bigint, arg1: bigint): bigint;
-  "borrow"(arg0: bigint, arg1: bigint): void;
-  "repayBorrow"(arg0: bigint, arg1: bigint): void;
+  "enterMarkets"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): void;
+  "exitMarket"(arg0: (bigint | number)): void;
+  "supply"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "redeemToken"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "redeemUnderlying"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "repayBorrow"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface LayerzeroEndpointV2Methods {
-  "send"(arg0: { "dstEid": bigint; "receiver": bigint; "message": (string | SauceBytes); "options": (string | SauceBytes); "payInLzToken": boolean }, arg1: bigint): { "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } };
-  "quote"(arg0: { "dstEid": bigint; "receiver": bigint; "message": (string | SauceBytes); "options": (string | SauceBytes); "payInLzToken": boolean }, arg1: bigint): { "nativeFee": bigint; "lzTokenFee": bigint };
+  "send"(arg0: { "dstEid": (bigint | number); "receiver": (bigint | number); "message": (string | SauceBytes); "options": (string | SauceBytes); "payInLzToken": boolean }, arg1: (bigint | number)): { "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } };
+  "quote"(arg0: { "dstEid": (bigint | number); "receiver": (bigint | number); "message": (string | SauceBytes); "options": (string | SauceBytes); "payInLzToken": boolean }, arg1: (bigint | number)): { "nativeFee": bigint; "lzTokenFee": bigint };
 }
 
 export interface LevelFinanceLiquidityPoolMethods {
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): void;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): void;
 }
 
 export interface LidoLidoMethods {
-  "submit"(arg0: bigint): bigint;
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "submit"(arg0: (bigint | number)): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface LidoWstETHMethods {
-  "wrap"(arg0: bigint): bigint;
-  "unwrap"(arg0: bigint): bigint;
-  "getStETHByWstETH"(arg0: bigint): bigint;
-  "getWstETHByStETH"(arg0: bigint): bigint;
+  "wrap"(arg0: (bigint | number)): bigint;
+  "unwrap"(arg0: (bigint | number)): bigint;
+  "getStETHByWstETH"(arg0: (bigint | number)): bigint;
+  "getWstETHByStETH"(arg0: (bigint | number)): bigint;
 }
 
 export interface LifiDiamondMethods {
-  "startBridgeTokensViaAcrossV4"(arg0: { "transactionId": bigint; "bridge": (string | SauceBytes); "integrator": (string | SauceBytes); "referrer": bigint; "sendingAssetId": bigint; "receiver": bigint; "minAmount": bigint; "destinationChainId": bigint; "hasSourceSwaps": boolean; "hasDestinationCall": boolean }, arg1: { "receiverAddress": bigint; "refundAddress": bigint; "sendingAssetId": bigint; "receivingAssetId": bigint; "outputAmount": bigint; "outputAmountMultiplier": bigint; "exclusiveRelayer": bigint; "quoteTimestamp": bigint; "fillDeadline": bigint; "exclusivityParameter": bigint; "message": (string | SauceBytes) }): void;
+  "startBridgeTokensViaAcrossV4"(arg0: { "transactionId": (bigint | number); "bridge": (string | SauceBytes); "integrator": (string | SauceBytes); "referrer": (bigint | number); "sendingAssetId": (bigint | number); "receiver": (bigint | number); "minAmount": (bigint | number); "destinationChainId": (bigint | number); "hasSourceSwaps": boolean; "hasDestinationCall": boolean }, arg1: { "receiverAddress": (bigint | number); "refundAddress": (bigint | number); "sendingAssetId": (bigint | number); "receivingAssetId": (bigint | number); "outputAmount": (bigint | number); "outputAmountMultiplier": (bigint | number); "exclusiveRelayer": (bigint | number); "quoteTimestamp": (bigint | number); "fillDeadline": (bigint | number); "exclusivityParameter": (bigint | number); "message": (string | SauceBytes) }): void;
   "extractBridgeData"(arg0: (string | SauceBytes)): { "transactionId": bigint; "bridge": SauceBytes; "integrator": SauceBytes; "referrer": bigint; "sendingAssetId": bigint; "receiver": bigint; "minAmount": bigint; "destinationChainId": bigint; "hasSourceSwaps": boolean; "hasDestinationCall": boolean };
 }
 
 export interface LineaBridgeLineaL1MessageServiceMethods {
-  "sendMessage"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): void;
-  "claimMessage"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: (string | SauceBytes), arg6: bigint): void;
+  "sendMessage"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes)): void;
+  "claimMessage"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (string | SauceBytes), arg6: (bigint | number)): void;
 }
 
 export interface LiquityV1BorrowerOperationsMethods {
-  "openTrove"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
+  "openTrove"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
   "closeTrove"(): void;
-  "adjustTrove"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: boolean, arg4: bigint, arg5: bigint): void;
-  "repayLUSD"(arg0: bigint, arg1: bigint, arg2: bigint): void;
+  "adjustTrove"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: boolean, arg4: (bigint | number), arg5: (bigint | number)): void;
+  "repayLUSD"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
 }
 
 export interface LiquityV2BoldTokenMethods {
-  "transfer"(arg0: bigint, arg1: bigint): boolean;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
-  "balanceOf"(arg0: bigint): bigint;
+  "transfer"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface LynexRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ({ "from": (bigint | number); "to": (bigint | number); "stable": boolean })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "stable": boolean }>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
 }
 
 export interface MakerPotMethods {
-  "join"(arg0: bigint): void;
-  "exit"(arg0: bigint): void;
+  "join"(arg0: (bigint | number)): void;
+  "exit"(arg0: (bigint | number)): void;
   "chi"(): bigint;
   "dsr"(): bigint;
 }
 
 export interface MakerSavingsDaiMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "convertToShares"(arg0: bigint): bigint;
-  "convertToAssets"(arg0: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "convertToShares"(arg0: (bigint | number)): bigint;
+  "convertToAssets"(arg0: (bigint | number)): bigint;
 }
 
 export interface MantleMethMETHMethods {
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface MantleMethMETHStakingMethods {
-  "stake"(arg0: bigint): void;
-  "mETHToETH"(arg0: bigint): bigint;
-  "ethToMETH"(arg0: bigint): bigint;
+  "stake"(arg0: (bigint | number)): void;
+  "mETHToETH"(arg0: (bigint | number)): bigint;
+  "ethToMETH"(arg0: (bigint | number)): bigint;
 }
 
 export interface MaverickV2FactoryMethods {
-  "lookup"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): SauceArray<bigint>;
+  "lookup"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceArray<bigint>;
 }
 
 export interface MaverickV2RouterMethods {
-  "exactInputSingle"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint): bigint;
-  "exactOutputSingle"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint): [bigint, bigint] & { "amountIn": bigint; "amountOut": bigint };
+  "exactInputSingle"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number)): bigint;
+  "exactOutputSingle"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number)): [bigint, bigint] & { "amountIn": bigint; "amountOut": bigint };
 }
 
 export interface MaverickV2PoolMethods {
@@ -917,99 +917,99 @@ export interface MaverickV2PoolMethods {
 }
 
 export interface MoonwellMTokenMethods {
-  "mint"(arg0: bigint): bigint;
-  "redeem"(arg0: bigint): bigint;
-  "redeemUnderlying"(arg0: bigint): bigint;
-  "borrow"(arg0: bigint): bigint;
-  "repayBorrow"(arg0: bigint): bigint;
+  "mint"(arg0: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number)): bigint;
+  "redeemUnderlying"(arg0: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number)): bigint;
+  "repayBorrow"(arg0: (bigint | number)): bigint;
 }
 
 export interface MoonwellComptrollerMethods {
-  "enterMarkets"(arg0: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
-  "exitMarket"(arg0: bigint): bigint;
+  "enterMarkets"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
+  "exitMarket"(arg0: (bigint | number)): bigint;
 }
 
 export interface MorphoBlueMorphoMethods {
-  "supply"(arg0: { "loanToken": bigint; "collateralToken": bigint; "oracle": bigint; "irm": bigint; "lltv": bigint }, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): [bigint, bigint] & { "assetsSupplied": bigint; "sharesSupplied": bigint };
-  "withdraw"(arg0: { "loanToken": bigint; "collateralToken": bigint; "oracle": bigint; "irm": bigint; "lltv": bigint }, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): [bigint, bigint] & { "assetsWithdrawn": bigint; "sharesWithdrawn": bigint };
-  "borrow"(arg0: { "loanToken": bigint; "collateralToken": bigint; "oracle": bigint; "irm": bigint; "lltv": bigint }, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): [bigint, bigint] & { "assetsBorrowed": bigint; "sharesBorrowed": bigint };
-  "repay"(arg0: { "loanToken": bigint; "collateralToken": bigint; "oracle": bigint; "irm": bigint; "lltv": bigint }, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): [bigint, bigint] & { "assetsRepaid": bigint; "sharesRepaid": bigint };
-  "supplyCollateral"(arg0: { "loanToken": bigint; "collateralToken": bigint; "oracle": bigint; "irm": bigint; "lltv": bigint }, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
-  "withdrawCollateral"(arg0: { "loanToken": bigint; "collateralToken": bigint; "oracle": bigint; "irm": bigint; "lltv": bigint }, arg1: bigint, arg2: bigint, arg3: bigint): void;
+  "supply"(arg0: { "loanToken": (bigint | number); "collateralToken": (bigint | number); "oracle": (bigint | number); "irm": (bigint | number); "lltv": (bigint | number) }, arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): [bigint, bigint] & { "assetsSupplied": bigint; "sharesSupplied": bigint };
+  "withdraw"(arg0: { "loanToken": (bigint | number); "collateralToken": (bigint | number); "oracle": (bigint | number); "irm": (bigint | number); "lltv": (bigint | number) }, arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): [bigint, bigint] & { "assetsWithdrawn": bigint; "sharesWithdrawn": bigint };
+  "borrow"(arg0: { "loanToken": (bigint | number); "collateralToken": (bigint | number); "oracle": (bigint | number); "irm": (bigint | number); "lltv": (bigint | number) }, arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): [bigint, bigint] & { "assetsBorrowed": bigint; "sharesBorrowed": bigint };
+  "repay"(arg0: { "loanToken": (bigint | number); "collateralToken": (bigint | number); "oracle": (bigint | number); "irm": (bigint | number); "lltv": (bigint | number) }, arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): [bigint, bigint] & { "assetsRepaid": bigint; "sharesRepaid": bigint };
+  "supplyCollateral"(arg0: { "loanToken": (bigint | number); "collateralToken": (bigint | number); "oracle": (bigint | number); "irm": (bigint | number); "lltv": (bigint | number) }, arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
+  "withdrawCollateral"(arg0: { "loanToken": (bigint | number); "collateralToken": (bigint | number); "oracle": (bigint | number); "irm": (bigint | number); "lltv": (bigint | number) }, arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
 }
 
 export interface MuxProtocolLiquidityPoolMethods {
-  "depositCollateral"(arg0: bigint, arg1: bigint): void;
-  "getAssetAddress"(arg0: bigint): bigint;
-  "getSubAccount"(arg0: bigint): [bigint, bigint, bigint, bigint, bigint] & { "collateral": bigint; "size": bigint; "lastIncreasedTime": bigint; "entryPrice": bigint; "entryFunding": bigint };
+  "depositCollateral"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "getAssetAddress"(arg0: (bigint | number)): bigint;
+  "getSubAccount"(arg0: (bigint | number)): [bigint, bigint, bigint, bigint, bigint] & { "collateral": bigint; "size": bigint; "lastIncreasedTime": bigint; "entryPrice": bigint; "entryFunding": bigint };
 }
 
 export interface MuxProtocolOrderBookMethods {
-  "cancelOrder"(arg0: bigint): void;
-  "placeLiquidityOrder"(arg0: bigint, arg1: bigint, arg2: boolean): void;
-  "placePositionOrder3"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: { "tpPrice": bigint; "slPrice": bigint; "tpslProfitTokenId": bigint; "tpslDeadline": bigint }): void;
+  "cancelOrder"(arg0: (bigint | number)): void;
+  "placeLiquidityOrder"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean): void;
+  "placePositionOrder3"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: { "tpPrice": (bigint | number); "slPrice": (bigint | number); "tpslProfitTokenId": (bigint | number); "tpslDeadline": (bigint | number) }): void;
 }
 
 export interface OlympusStakingMethods {
-  "stake"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: boolean): bigint;
-  "unstake"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: boolean): bigint;
-  "claim"(arg0: bigint, arg1: boolean): bigint;
+  "stake"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: boolean): bigint;
+  "unstake"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: boolean): bigint;
+  "claim"(arg0: (bigint | number), arg1: boolean): bigint;
 }
 
 export interface OneinchAggregationRouterV6Methods {
-  "swap"(arg0: bigint, arg1: { "srcToken": bigint; "dstToken": bigint; "srcReceiver": bigint; "dstReceiver": bigint; "amount": bigint; "minReturnAmount": bigint; "flags": bigint }, arg2: (string | SauceBytes)): [bigint, bigint] & { "returnAmount": bigint; "spentAmount": bigint };
-  "unoswap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
+  "swap"(arg0: (bigint | number), arg1: { "srcToken": (bigint | number); "dstToken": (bigint | number); "srcReceiver": (bigint | number); "dstReceiver": (bigint | number); "amount": (bigint | number); "minReturnAmount": (bigint | number); "flags": (bigint | number) }, arg2: (string | SauceBytes)): [bigint, bigint] & { "returnAmount": bigint; "spentAmount": bigint };
+  "unoswap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
 }
 
 export interface OpenoceanExchangeV2Methods {
-  "swap"(arg0: bigint, arg1: { "srcToken": bigint; "dstToken": bigint; "srcReceiver": bigint; "dstReceiver": bigint; "amount": bigint; "minReturnAmount": bigint; "guaranteedAmount": bigint; "flags": bigint; "referrer": bigint; "permit": (string | SauceBytes) }, arg2: (readonly ({ "target": bigint; "gasLimit": bigint; "value": bigint; "data": (string | SauceBytes) })[] | SauceArray<{ "target": bigint; "gasLimit": bigint; "value": bigint; "data": (string | SauceBytes) }>)): bigint;
+  "swap"(arg0: (bigint | number), arg1: { "srcToken": (bigint | number); "dstToken": (bigint | number); "srcReceiver": (bigint | number); "dstReceiver": (bigint | number); "amount": (bigint | number); "minReturnAmount": (bigint | number); "guaranteedAmount": (bigint | number); "flags": (bigint | number); "referrer": (bigint | number); "permit": (string | SauceBytes) }, arg2: (readonly ({ "target": (bigint | number); "gasLimit": (bigint | number); "value": (bigint | number); "data": (string | SauceBytes) })[] | SauceArray<{ "target": (bigint | number); "gasLimit": (bigint | number); "value": (bigint | number); "data": (string | SauceBytes) }>)): bigint;
 }
 
 export interface OptimismBridgeOptimismL1StandardBridgeMethods {
-  "depositETH"(arg0: bigint, arg1: (string | SauceBytes)): void;
-  "depositERC20"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): void;
-  "depositETHTo"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): void;
-  "depositERC20To"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: (string | SauceBytes)): void;
+  "depositETH"(arg0: (bigint | number), arg1: (string | SauceBytes)): void;
+  "depositERC20"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): void;
+  "depositETHTo"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes)): void;
+  "depositERC20To"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (string | SauceBytes)): void;
 }
 
 export interface OpynControllerMethods {
-  "mintPowerPerpAmount"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint];
-  "burnPowerPerpAmount"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "deposit"(arg0: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint): void;
+  "mintPowerPerpAmount"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint];
+  "burnPowerPerpAmount"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "deposit"(arg0: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface PancakeswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
-  "createPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "createPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface PancakeswapV2RouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "swapTokensForExactTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
-  "getAmountsOut"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "swapTokensForExactTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "getAmountsOut"(arg0: (bigint | number), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
 }
 
 export interface PancakeswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
   "token0"(): bigint;
   "token1"(): bigint;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
 }
 
 export interface PancakeswapV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
 }
 
 export interface PancakeswapV3NFPMMethods {
-  "mint"(arg0: { "token0": bigint; "token1": bigint; "fee": bigint; "tickLower": bigint; "tickUpper": bigint; "amount0Desired": bigint; "amount1Desired": bigint; "amount0Min": bigint; "amount1Min": bigint; "recipient": bigint; "deadline": bigint }): [bigint, bigint, bigint, bigint] & { "tokenId": bigint; "liquidity": bigint; "amount0": bigint; "amount1": bigint };
+  "mint"(arg0: { "token0": (bigint | number); "token1": (bigint | number); "fee": (bigint | number); "tickLower": (bigint | number); "tickUpper": (bigint | number); "amount0Desired": (bigint | number); "amount1Desired": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint, bigint, bigint] & { "tokenId": bigint; "liquidity": bigint; "amount0": bigint; "amount1": bigint };
 }
 
 export interface PancakeswapV3SmartRouterMethods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "exactOutputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountOut": bigint; "amountInMaximum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
+  "exactOutputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "amountOut": (bigint | number); "amountInMaximum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
 }
 
 export interface PancakeswapV3PoolMethods {
@@ -1022,85 +1022,85 @@ export interface PancakeswapV3PoolMethods {
 }
 
 export interface ParaswapAugustusV5Methods {
-  "simpleSwap"(arg0: { "fromToken": bigint; "toToken": bigint; "fromAmount": bigint; "toAmount": bigint; "expectedAmount": bigint; "callees": (readonly (bigint)[] | SauceArray<bigint>); "exchangeData": (string | SauceBytes); "startIndexes": (readonly (bigint)[] | SauceArray<bigint>); "values": (readonly (bigint)[] | SauceArray<bigint>); "beneficiary": bigint; "partner": bigint; "feePercent": bigint; "permit": (string | SauceBytes); "deadline": bigint; "uuid": bigint }): bigint;
+  "simpleSwap"(arg0: { "fromToken": (bigint | number); "toToken": (bigint | number); "fromAmount": (bigint | number); "toAmount": (bigint | number); "expectedAmount": (bigint | number); "callees": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "exchangeData": (string | SauceBytes); "startIndexes": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "values": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "beneficiary": (bigint | number); "partner": (bigint | number); "feePercent": (bigint | number); "permit": (string | SauceBytes); "deadline": (bigint | number); "uuid": (bigint | number) }): bigint;
 }
 
 export interface PendleRouterMethods {
-  "addLiquiditySingleToken"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: { "guessMin": bigint; "guessMax": bigint; "guessOffchain": bigint; "maxIteration": bigint; "eps": bigint }, arg4: { "tokenIn": bigint; "netTokenIn": bigint; "tokenMintSy": bigint; "pendleSwap": bigint; "swapData": { "swapType": bigint; "extRouter": bigint; "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg5: { "limitRouter": bigint; "epsSkipMarket": bigint; "normalFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "flashFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netLpOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
-  "removeLiquiditySingleToken"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: { "tokenOut": bigint; "minTokenOut": bigint; "tokenRedeemSy": bigint; "pendleSwap": bigint; "swapData": { "swapType": bigint; "extRouter": bigint; "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg4: { "limitRouter": bigint; "epsSkipMarket": bigint; "normalFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "flashFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netTokenOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
-  "swapExactTokenForPt"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: { "guessMin": bigint; "guessMax": bigint; "guessOffchain": bigint; "maxIteration": bigint; "eps": bigint }, arg4: { "tokenIn": bigint; "netTokenIn": bigint; "tokenMintSy": bigint; "pendleSwap": bigint; "swapData": { "swapType": bigint; "extRouter": bigint; "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg5: { "limitRouter": bigint; "epsSkipMarket": bigint; "normalFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "flashFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netPtOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
-  "swapExactTokenForYt"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: { "guessMin": bigint; "guessMax": bigint; "guessOffchain": bigint; "maxIteration": bigint; "eps": bigint }, arg4: { "tokenIn": bigint; "netTokenIn": bigint; "tokenMintSy": bigint; "pendleSwap": bigint; "swapData": { "swapType": bigint; "extRouter": bigint; "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg5: { "limitRouter": bigint; "epsSkipMarket": bigint; "normalFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "flashFills": (readonly ({ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint })[] | SauceArray<{ "order": { "salt": bigint; "expiry": bigint; "nonce": bigint; "orderType": bigint; "token": bigint; "YT": bigint; "maker": bigint; "receiver": bigint; "makingAmount": bigint; "lnImpliedRate": bigint; "failSafeRate": bigint; "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": bigint }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netYtOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
+  "addLiquiditySingleToken"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: { "guessMin": (bigint | number); "guessMax": (bigint | number); "guessOffchain": (bigint | number); "maxIteration": (bigint | number); "eps": (bigint | number) }, arg4: { "tokenIn": (bigint | number); "netTokenIn": (bigint | number); "tokenMintSy": (bigint | number); "pendleSwap": (bigint | number); "swapData": { "swapType": (bigint | number); "extRouter": (bigint | number); "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg5: { "limitRouter": (bigint | number); "epsSkipMarket": (bigint | number); "normalFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "flashFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netLpOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
+  "removeLiquiditySingleToken"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: { "tokenOut": (bigint | number); "minTokenOut": (bigint | number); "tokenRedeemSy": (bigint | number); "pendleSwap": (bigint | number); "swapData": { "swapType": (bigint | number); "extRouter": (bigint | number); "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg4: { "limitRouter": (bigint | number); "epsSkipMarket": (bigint | number); "normalFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "flashFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netTokenOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
+  "swapExactTokenForPt"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: { "guessMin": (bigint | number); "guessMax": (bigint | number); "guessOffchain": (bigint | number); "maxIteration": (bigint | number); "eps": (bigint | number) }, arg4: { "tokenIn": (bigint | number); "netTokenIn": (bigint | number); "tokenMintSy": (bigint | number); "pendleSwap": (bigint | number); "swapData": { "swapType": (bigint | number); "extRouter": (bigint | number); "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg5: { "limitRouter": (bigint | number); "epsSkipMarket": (bigint | number); "normalFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "flashFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netPtOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
+  "swapExactTokenForYt"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: { "guessMin": (bigint | number); "guessMax": (bigint | number); "guessOffchain": (bigint | number); "maxIteration": (bigint | number); "eps": (bigint | number) }, arg4: { "tokenIn": (bigint | number); "netTokenIn": (bigint | number); "tokenMintSy": (bigint | number); "pendleSwap": (bigint | number); "swapData": { "swapType": (bigint | number); "extRouter": (bigint | number); "extCalldata": (string | SauceBytes); "needScale": boolean } }, arg5: { "limitRouter": (bigint | number); "epsSkipMarket": (bigint | number); "normalFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "flashFills": (readonly ({ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) })[] | SauceArray<{ "order": { "salt": (bigint | number); "expiry": (bigint | number); "nonce": (bigint | number); "orderType": (bigint | number); "token": (bigint | number); "YT": (bigint | number); "maker": (bigint | number); "receiver": (bigint | number); "makingAmount": (bigint | number); "lnImpliedRate": (bigint | number); "failSafeRate": (bigint | number); "permit": (string | SauceBytes) }; "signature": (string | SauceBytes); "makingAmount": (bigint | number) }>); "optData": (string | SauceBytes) }): [bigint, bigint, bigint] & { "netYtOut": bigint; "netSyFee": bigint; "netSyInterm": bigint };
 }
 
 export interface Permit2Permit2Methods {
-  "approve"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "transferFrom"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "permitTransferFrom"(arg0: { "permitted": { "token": bigint; "amount": bigint }; "nonce": bigint; "deadline": bigint }, arg1: { "to": bigint; "requestedAmount": bigint }, arg2: bigint, arg3: (string | SauceBytes)): void;
-  "nonceBitmap"(arg0: bigint, arg1: bigint): bigint;
-  "lockdown"(arg0: (readonly ({ "token": bigint; "spender": bigint })[] | SauceArray<{ "token": bigint; "spender": bigint }>)): void;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "transferFrom"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "permitTransferFrom"(arg0: { "permitted": { "token": (bigint | number); "amount": (bigint | number) }; "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: { "to": (bigint | number); "requestedAmount": (bigint | number) }, arg2: (bigint | number), arg3: (string | SauceBytes)): void;
+  "nonceBitmap"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "lockdown"(arg0: (readonly ({ "token": (bigint | number); "spender": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "spender": (bigint | number) }>)): void;
 }
 
 export interface PerpetualProtocolClearingHouseMethods {
-  "openPosition"(arg0: { "baseToken": bigint; "isBaseToQuote": boolean; "isExactInput": boolean; "amount": bigint; "oppositeAmountBound": bigint; "deadline": bigint; "sqrtPriceLimitX96": bigint; "referralCode": bigint }): [bigint, bigint] & { "base": bigint; "quote": bigint };
-  "closePosition"(arg0: { "baseToken": bigint; "sqrtPriceLimitX96": bigint; "oppositeAmountBound": bigint; "deadline": bigint; "referralCode": bigint }): [bigint, bigint] & { "base": bigint; "quote": bigint };
-  "getAccountValue"(arg0: bigint): bigint;
+  "openPosition"(arg0: { "baseToken": (bigint | number); "isBaseToQuote": boolean; "isExactInput": boolean; "amount": (bigint | number); "oppositeAmountBound": (bigint | number); "deadline": (bigint | number); "sqrtPriceLimitX96": (bigint | number); "referralCode": (bigint | number) }): [bigint, bigint] & { "base": bigint; "quote": bigint };
+  "closePosition"(arg0: { "baseToken": (bigint | number); "sqrtPriceLimitX96": (bigint | number); "oppositeAmountBound": (bigint | number); "deadline": (bigint | number); "referralCode": (bigint | number) }): [bigint, bigint] & { "base": bigint; "quote": bigint };
+  "getAccountValue"(arg0: (bigint | number)): bigint;
 }
 
 export interface PerpetualProtocolVaultMethods {
-  "deposit"(arg0: bigint, arg1: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint): void;
-  "getFreeCollateral"(arg0: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "getFreeCollateral"(arg0: (bigint | number)): bigint;
 }
 
 export interface PolygonBridgePolygonRootChainManagerMethods {
-  "depositEtherFor"(arg0: bigint): void;
-  "depositFor"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): void;
+  "depositEtherFor"(arg0: (bigint | number)): void;
+  "depositFor"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes)): void;
   "exit"(arg0: (string | SauceBytes)): void;
 }
 
 export interface PremiaDiamondMethods {
-  "trade"(arg0: bigint, arg1: boolean, arg2: bigint, arg3: bigint): [bigint, { "collateral": bigint; "longs": bigint; "shorts": bigint }] & { "totalPremium": bigint; "delta": { "collateral": bigint; "longs": bigint; "shorts": bigint } };
+  "trade"(arg0: (bigint | number), arg1: boolean, arg2: (bigint | number), arg3: (bigint | number)): [bigint, { "collateral": bigint; "longs": bigint; "shorts": bigint }] & { "totalPremium": bigint; "delta": { "collateral": bigint; "longs": bigint; "shorts": bigint } };
   "exercise"(): [bigint, bigint] & { "exerciseValue": bigint; "exerciseFee": bigint };
   "settle"(): bigint;
 }
 
 export interface PufferVaultMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "convertToShares"(arg0: bigint): bigint;
-  "convertToAssets"(arg0: bigint): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "convertToShares"(arg0: (bigint | number)): bigint;
+  "convertToAssets"(arg0: (bigint | number)): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface PythOracleMethods {
   "updatePriceFeeds"(arg0: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): void;
-  "getPrice"(arg0: bigint): { "price": bigint; "conf": bigint; "expo": bigint; "publishTime": bigint };
+  "getPrice"(arg0: (bigint | number)): { "price": bigint; "conf": bigint; "expo": bigint; "publishTime": bigint };
   "getUpdateFee"(arg0: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): bigint;
 }
 
 export interface QuickswapV2RouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
 }
 
 export interface QuickswapV3SwapRouterMethods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "limitSqrtPrice": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "limitSqrtPrice": (bigint | number) }): bigint;
 }
 
 export interface QuickswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface QuickswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
   "token0"(): bigint;
   "token1"(): bigint;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
 }
 
 export interface QuickswapV3FactoryMethods {
-  "poolByPair"(arg0: bigint, arg1: bigint): bigint;
+  "poolByPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface QuickswapV3PoolMethods {
@@ -1112,41 +1112,41 @@ export interface QuickswapV3PoolMethods {
 }
 
 export interface RamsesRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ({ "from": (bigint | number); "to": (bigint | number); "stable": boolean })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "stable": boolean }>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
 }
 
 export interface ReflexerCoinJoinMethods {
-  "join"(arg0: bigint, arg1: bigint): void;
-  "exit"(arg0: bigint, arg1: bigint): void;
+  "join"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "exit"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface ReflexerETHJoinMethods {
-  "join"(arg0: bigint, arg1: bigint): void;
-  "exit"(arg0: bigint, arg1: bigint): void;
+  "join"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "exit"(arg0: (bigint | number), arg1: (bigint | number)): void;
 }
 
 export interface ReflexerSAFEEngineMethods {
-  "modifySAFECollateralization"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint): void;
-  "safes"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "lockedCollateral": bigint; "generatedDebt": bigint };
+  "modifySAFECollateralization"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number)): void;
+  "safes"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint] & { "lockedCollateral": bigint; "generatedDebt": bigint };
 }
 
 export interface RenzoEzETHMethods {
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface RenzoRestakeManagerMethods {
-  "deposit"(arg0: bigint, arg1: bigint): void;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): void;
   "depositETH"(): void;
 }
 
 export interface RocketPoolRETHMethods {
   "getExchangeRate"(): bigint;
-  "getRethValue"(arg0: bigint): bigint;
-  "getEthValue"(arg0: bigint): bigint;
-  "burn"(arg0: bigint): void;
-  "balanceOf"(arg0: bigint): bigint;
+  "getRethValue"(arg0: (bigint | number)): bigint;
+  "getEthValue"(arg0: (bigint | number)): bigint;
+  "burn"(arg0: (bigint | number)): void;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface RocketPoolRocketDepositPoolMethods {
@@ -1154,175 +1154,175 @@ export interface RocketPoolRocketDepositPoolMethods {
 }
 
 export interface SablierLockupLinearMethods {
-  "createWithDurations"(arg0: { "sender": bigint; "recipient": bigint; "totalAmount": bigint; "asset": bigint; "cancelable": boolean; "transferable": boolean; "durations": { "cliff": bigint; "total": bigint }; "broker": { "account": bigint; "fee": bigint } }): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): void;
-  "cancel"(arg0: bigint): void;
+  "createWithDurations"(arg0: { "sender": (bigint | number); "recipient": (bigint | number); "totalAmount": (bigint | number); "asset": (bigint | number); "cancelable": boolean; "transferable": boolean; "durations": { "cliff": (bigint | number); "total": (bigint | number) }; "broker": { "account": (bigint | number); "fee": (bigint | number) } }): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
+  "cancel"(arg0: (bigint | number)): void;
 }
 
 export interface SafeSafeMethods {
-  "execTransaction"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes), arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint, arg9: (string | SauceBytes)): boolean;
+  "execTransaction"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number), arg9: (string | SauceBytes)): boolean;
   "getOwners"(): SauceArray<bigint>;
   "getThreshold"(): bigint;
 }
 
 export interface ScrollBridgeScrollL1GatewayRouterMethods {
-  "depositETH"(arg0: bigint, arg1: bigint): void;
-  "depositERC20"(arg0: bigint, arg1: bigint, arg2: bigint): void;
+  "depositETH"(arg0: (bigint | number), arg1: (bigint | number)): void;
+  "depositERC20"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
 }
 
 export interface ScrollBridgeScrollL1MessengerMethods {
-  "sendMessage"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes), arg3: bigint): void;
+  "sendMessage"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes), arg3: (bigint | number)): void;
 }
 
 export interface SeamlessPoolMethods {
-  "supply"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "borrow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
-  "repay"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
+  "supply"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
+  "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
 }
 
 export interface SeaportSeaportMethods {
-  "fulfillBasicOrder"(arg0: { "considerationToken": bigint; "considerationIdentifier": bigint; "considerationAmount": bigint; "offerer": bigint; "zone": bigint; "offerToken": bigint; "offerIdentifier": bigint; "offerAmount": bigint; "basicOrderType": bigint; "startTime": bigint; "endTime": bigint; "zoneHash": bigint; "salt": bigint; "offererConduitKey": bigint; "fulfillerConduitKey": bigint; "totalOriginalAdditionalRecipients": bigint; "additionalRecipients": (readonly ({ "amount": bigint; "recipient": bigint })[] | SauceArray<{ "amount": bigint; "recipient": bigint }>); "signature": (string | SauceBytes) }): boolean;
-  "cancel"(arg0: (readonly ({ "offerer": bigint; "zone": bigint; "offer": (readonly ({ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint })[] | SauceArray<{ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint }>); "consideration": (readonly ({ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint; "recipient": bigint })[] | SauceArray<{ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint; "recipient": bigint }>); "orderType": bigint; "startTime": bigint; "endTime": bigint; "zoneHash": bigint; "salt": bigint; "conduitKey": bigint; "counter": bigint })[] | SauceArray<{ "offerer": bigint; "zone": bigint; "offer": (readonly ({ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint })[] | SauceArray<{ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint }>); "consideration": (readonly ({ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint; "recipient": bigint })[] | SauceArray<{ "itemType": bigint; "token": bigint; "identifierOrCriteria": bigint; "startAmount": bigint; "endAmount": bigint; "recipient": bigint }>); "orderType": bigint; "startTime": bigint; "endTime": bigint; "zoneHash": bigint; "salt": bigint; "conduitKey": bigint; "counter": bigint }>)): boolean;
+  "fulfillBasicOrder"(arg0: { "considerationToken": (bigint | number); "considerationIdentifier": (bigint | number); "considerationAmount": (bigint | number); "offerer": (bigint | number); "zone": (bigint | number); "offerToken": (bigint | number); "offerIdentifier": (bigint | number); "offerAmount": (bigint | number); "basicOrderType": (bigint | number); "startTime": (bigint | number); "endTime": (bigint | number); "zoneHash": (bigint | number); "salt": (bigint | number); "offererConduitKey": (bigint | number); "fulfillerConduitKey": (bigint | number); "totalOriginalAdditionalRecipients": (bigint | number); "additionalRecipients": (readonly ({ "amount": (bigint | number); "recipient": (bigint | number) })[] | SauceArray<{ "amount": (bigint | number); "recipient": (bigint | number) }>); "signature": (string | SauceBytes) }): boolean;
+  "cancel"(arg0: (readonly ({ "offerer": (bigint | number); "zone": (bigint | number); "offer": (readonly ({ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number) })[] | SauceArray<{ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number) }>); "consideration": (readonly ({ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number); "recipient": (bigint | number) })[] | SauceArray<{ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number); "recipient": (bigint | number) }>); "orderType": (bigint | number); "startTime": (bigint | number); "endTime": (bigint | number); "zoneHash": (bigint | number); "salt": (bigint | number); "conduitKey": (bigint | number); "counter": (bigint | number) })[] | SauceArray<{ "offerer": (bigint | number); "zone": (bigint | number); "offer": (readonly ({ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number) })[] | SauceArray<{ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number) }>); "consideration": (readonly ({ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number); "recipient": (bigint | number) })[] | SauceArray<{ "itemType": (bigint | number); "token": (bigint | number); "identifierOrCriteria": (bigint | number); "startAmount": (bigint | number); "endAmount": (bigint | number); "recipient": (bigint | number) }>); "orderType": (bigint | number); "startTime": (bigint | number); "endTime": (bigint | number); "zoneHash": (bigint | number); "salt": (bigint | number); "conduitKey": (bigint | number); "counter": (bigint | number) }>)): boolean;
 }
 
 export interface SiloSiloMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: boolean): [bigint, bigint] & { "collateralAmount": bigint; "collateralShare": bigint };
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: boolean): [bigint, bigint] & { "withdrawnAmount": bigint; "withdrawnShare": bigint };
-  "borrow"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "debtAmount": bigint; "debtShare": bigint };
-  "repay"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "repaidAmount": bigint; "repaidShare": bigint };
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean): [bigint, bigint] & { "collateralAmount": bigint; "collateralShare": bigint };
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean): [bigint, bigint] & { "withdrawnAmount": bigint; "withdrawnShare": bigint };
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint] & { "debtAmount": bigint; "debtShare": bigint };
+  "repay"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint] & { "repaidAmount": bigint; "repaidShare": bigint };
 }
 
 export interface SiloRepositoryMethods {
-  "getSilo"(arg0: bigint): bigint;
+  "getSilo"(arg0: (bigint | number)): bigint;
 }
 
 export interface SocketGatewayMethods {
-  "executeRoute"(arg0: bigint, arg1: (string | SauceBytes)): SauceBytes;
+  "executeRoute"(arg0: (bigint | number), arg1: (string | SauceBytes)): SauceBytes;
 }
 
 export interface SommelierCellarMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
   "totalAssets"(): bigint;
-  "convertToShares"(arg0: bigint): bigint;
-  "convertToAssets"(arg0: bigint): bigint;
+  "convertToShares"(arg0: (bigint | number)): bigint;
+  "convertToAssets"(arg0: (bigint | number)): bigint;
 }
 
 export interface SparkPoolMethods {
-  "supply"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "borrow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
-  "repay"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
+  "supply"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
+  "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
 }
 
 export interface SpookyswapRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
 }
 
 export interface SquidRouterMethods {
-  "bridgeCall"(arg0: (string | SauceBytes), arg1: bigint, arg2: (string | SauceBytes), arg3: (string | SauceBytes), arg4: (string | SauceBytes), arg5: bigint, arg6: boolean): void;
-  "callBridgeCall"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "callType": bigint; "target": bigint; "value": bigint; "callData": (string | SauceBytes); "payload": (string | SauceBytes) })[] | SauceArray<{ "callType": bigint; "target": bigint; "value": bigint; "callData": (string | SauceBytes); "payload": (string | SauceBytes) }>), arg3: (string | SauceBytes), arg4: (string | SauceBytes), arg5: (string | SauceBytes), arg6: (string | SauceBytes), arg7: bigint, arg8: boolean): void;
+  "bridgeCall"(arg0: (string | SauceBytes), arg1: (bigint | number), arg2: (string | SauceBytes), arg3: (string | SauceBytes), arg4: (string | SauceBytes), arg5: (bigint | number), arg6: boolean): void;
+  "callBridgeCall"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ({ "callType": (bigint | number); "target": (bigint | number); "value": (bigint | number); "callData": (string | SauceBytes); "payload": (string | SauceBytes) })[] | SauceArray<{ "callType": (bigint | number); "target": (bigint | number); "value": (bigint | number); "callData": (string | SauceBytes); "payload": (string | SauceBytes) }>), arg3: (string | SauceBytes), arg4: (string | SauceBytes), arg5: (string | SauceBytes), arg6: (string | SauceBytes), arg7: (bigint | number), arg8: boolean): void;
 }
 
 export interface StaderETHxMethods {
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface StaderStakePoolManagerMethods {
-  "deposit"(arg0: bigint): bigint;
+  "deposit"(arg0: (bigint | number)): bigint;
   "getExchangeRate"(): bigint;
 }
 
 export interface StargatePoolMethods {
-  "send"(arg0: { "dstEid": bigint; "to": bigint; "amountLD": bigint; "minAmountLD": bigint; "extraOptions": (string | SauceBytes); "composeMsg": (string | SauceBytes); "oftCmd": (string | SauceBytes) }, arg1: { "nativeFee": bigint; "lzTokenFee": bigint }, arg2: bigint): [{ "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } }, { "amountSentLD": bigint; "amountReceivedLD": bigint }] & { "msgReceipt": { "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } }; "oftReceipt": { "amountSentLD": bigint; "amountReceivedLD": bigint } };
-  "quoteOFT"(arg0: { "dstEid": bigint; "to": bigint; "amountLD": bigint; "minAmountLD": bigint; "extraOptions": (string | SauceBytes); "composeMsg": (string | SauceBytes); "oftCmd": (string | SauceBytes) }): [{ "minAmountLD": bigint; "maxAmountLD": bigint }, SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>, { "amountSentLD": bigint; "amountReceivedLD": bigint }] & { "oftLimit": { "minAmountLD": bigint; "maxAmountLD": bigint }; "oftFeeDetails": SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>; "oftReceipt": { "amountSentLD": bigint; "amountReceivedLD": bigint } };
+  "send"(arg0: { "dstEid": (bigint | number); "to": (bigint | number); "amountLD": (bigint | number); "minAmountLD": (bigint | number); "extraOptions": (string | SauceBytes); "composeMsg": (string | SauceBytes); "oftCmd": (string | SauceBytes) }, arg1: { "nativeFee": (bigint | number); "lzTokenFee": (bigint | number) }, arg2: (bigint | number)): [{ "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } }, { "amountSentLD": bigint; "amountReceivedLD": bigint }] & { "msgReceipt": { "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } }; "oftReceipt": { "amountSentLD": bigint; "amountReceivedLD": bigint } };
+  "quoteOFT"(arg0: { "dstEid": (bigint | number); "to": (bigint | number); "amountLD": (bigint | number); "minAmountLD": (bigint | number); "extraOptions": (string | SauceBytes); "composeMsg": (string | SauceBytes); "oftCmd": (string | SauceBytes) }): [{ "minAmountLD": bigint; "maxAmountLD": bigint }, SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>, { "amountSentLD": bigint; "amountReceivedLD": bigint }] & { "oftLimit": { "minAmountLD": bigint; "maxAmountLD": bigint }; "oftFeeDetails": SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>; "oftReceipt": { "amountSentLD": bigint; "amountReceivedLD": bigint } };
 }
 
 export interface SuperfluidCFAForwarderMethods {
-  "createFlow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): boolean;
-  "updateFlow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): boolean;
-  "deleteFlow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): boolean;
+  "createFlow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): boolean;
+  "updateFlow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes)): boolean;
+  "deleteFlow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): boolean;
 }
 
 export interface SushiswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
-  "createPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "createPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface SushiswapV2RouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "swapTokensForExactTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
-  "getAmountsOut"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "swapTokensForExactTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "getAmountsOut"(arg0: (bigint | number), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
 }
 
 export interface SushiswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
   "token0"(): bigint;
   "token1"(): bigint;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
 }
 
 export interface SwellRswETHMethods {
   "deposit"(): void;
   "rswETHToETHRate"(): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface SwellSwETHMethods {
   "deposit"(): void;
   "swETHToETHRate"(): bigint;
-  "balanceOf"(arg0: bigint): bigint;
+  "balanceOf"(arg0: (bigint | number)): bigint;
 }
 
 export interface SynapseBridgeMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "depositAndSwap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): void;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "depositAndSwap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): void;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
 }
 
 export interface SyncswapRouterMethods {
-  "swap"(arg0: (readonly ({ "steps": (readonly ({ "pool": bigint; "data": (string | SauceBytes); "callback": bigint; "callbackData": (string | SauceBytes) })[] | SauceArray<{ "pool": bigint; "data": (string | SauceBytes); "callback": bigint; "callbackData": (string | SauceBytes) }>); "tokenIn": bigint; "amountIn": bigint })[] | SauceArray<{ "steps": (readonly ({ "pool": bigint; "data": (string | SauceBytes); "callback": bigint; "callbackData": (string | SauceBytes) })[] | SauceArray<{ "pool": bigint; "data": (string | SauceBytes); "callback": bigint; "callbackData": (string | SauceBytes) }>); "tokenIn": bigint; "amountIn": bigint }>), arg1: bigint, arg2: bigint): { "token": bigint; "amount": bigint };
+  "swap"(arg0: (readonly ({ "steps": (readonly ({ "pool": (bigint | number); "data": (string | SauceBytes); "callback": (bigint | number); "callbackData": (string | SauceBytes) })[] | SauceArray<{ "pool": (bigint | number); "data": (string | SauceBytes); "callback": (bigint | number); "callbackData": (string | SauceBytes) }>); "tokenIn": (bigint | number); "amountIn": (bigint | number) })[] | SauceArray<{ "steps": (readonly ({ "pool": (bigint | number); "data": (string | SauceBytes); "callback": (bigint | number); "callbackData": (string | SauceBytes) })[] | SauceArray<{ "pool": (bigint | number); "data": (string | SauceBytes); "callback": (bigint | number); "callbackData": (string | SauceBytes) }>); "tokenIn": (bigint | number); "amountIn": (bigint | number) }>), arg1: (bigint | number), arg2: (bigint | number)): { "token": bigint; "amount": bigint };
 }
 
 export interface SynthetixV3CoreProxyMethods {
-  "deposit"(arg0: bigint, arg1: bigint, arg2: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): void;
-  "delegateCollateral"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
+  "delegateCollateral"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
 }
 
 export interface SynthetixV3PerpsMarketProxyMethods {
-  "commitOrder"(arg0: { "marketId": bigint; "accountId": bigint; "sizeDelta": bigint; "settlementStrategyId": bigint; "acceptablePrice": bigint; "trackingCode": bigint; "referrer": bigint }): [{ "commitmentTime": bigint; "request": { "marketId": bigint; "accountId": bigint; "sizeDelta": bigint; "settlementStrategyId": bigint; "acceptablePrice": bigint; "trackingCode": bigint; "referrer": bigint } }, bigint] & { "retOrder": { "commitmentTime": bigint; "request": { "marketId": bigint; "accountId": bigint; "sizeDelta": bigint; "settlementStrategyId": bigint; "acceptablePrice": bigint; "trackingCode": bigint; "referrer": bigint } }; "fees": bigint };
-  "modifyCollateral"(arg0: bigint, arg1: bigint, arg2: bigint): void;
+  "commitOrder"(arg0: { "marketId": (bigint | number); "accountId": (bigint | number); "sizeDelta": (bigint | number); "settlementStrategyId": (bigint | number); "acceptablePrice": (bigint | number); "trackingCode": (bigint | number); "referrer": (bigint | number) }): [{ "commitmentTime": bigint; "request": { "marketId": bigint; "accountId": bigint; "sizeDelta": bigint; "settlementStrategyId": bigint; "acceptablePrice": bigint; "trackingCode": bigint; "referrer": bigint } }, bigint] & { "retOrder": { "commitmentTime": bigint; "request": { "marketId": bigint; "accountId": bigint; "sizeDelta": bigint; "settlementStrategyId": bigint; "acceptablePrice": bigint; "trackingCode": bigint; "referrer": bigint } }; "fees": bigint };
+  "modifyCollateral"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
 }
 
 export interface SynthraV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "createPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "createPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
 }
 
 export interface SynthraV3SwapRouter02Methods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "exactInput"(arg0: { "path": (string | SauceBytes); "recipient": bigint; "amountIn": bigint; "amountOutMinimum": bigint }): bigint;
-  "exactOutputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountOut": bigint; "amountInMaximum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "exactOutput"(arg0: { "path": (string | SauceBytes); "recipient": bigint; "amountOut": bigint; "amountInMaximum": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
+  "exactInput"(arg0: { "path": (string | SauceBytes); "recipient": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number) }): bigint;
+  "exactOutputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "amountOut": (bigint | number); "amountInMaximum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
+  "exactOutput"(arg0: { "path": (string | SauceBytes); "recipient": (bigint | number); "amountOut": (bigint | number); "amountInMaximum": (bigint | number) }): bigint;
 }
 
 export interface SynthraV3QuoterV2Methods {
-  "quoteExactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "amountIn": bigint; "fee": bigint; "sqrtPriceLimitX96": bigint }): [bigint, bigint, bigint, bigint] & { "amountOut": bigint; "sqrtPriceX96After": bigint; "initializedTicksCrossed": bigint; "gasEstimate": bigint };
+  "quoteExactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "amountIn": (bigint | number); "fee": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): [bigint, bigint, bigint, bigint] & { "amountOut": bigint; "sqrtPriceX96After": bigint; "initializedTicksCrossed": bigint; "gasEstimate": bigint };
 }
 
 export interface SynthraV3NonfungiblePositionManagerMethods {
-  "mint"(arg0: { "token0": bigint; "token1": bigint; "fee": bigint; "tickLower": bigint; "tickUpper": bigint; "amount0Desired": bigint; "amount1Desired": bigint; "amount0Min": bigint; "amount1Min": bigint; "recipient": bigint; "deadline": bigint }): [bigint, bigint, bigint, bigint] & { "tokenId": bigint; "liquidity": bigint; "amount0": bigint; "amount1": bigint };
-  "increaseLiquidity"(arg0: { "tokenId": bigint; "amount0Desired": bigint; "amount1Desired": bigint; "amount0Min": bigint; "amount1Min": bigint; "deadline": bigint }): [bigint, bigint, bigint] & { "liquidity": bigint; "amount0": bigint; "amount1": bigint };
-  "decreaseLiquidity"(arg0: { "tokenId": bigint; "liquidity": bigint; "amount0Min": bigint; "amount1Min": bigint; "deadline": bigint }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
-  "collect"(arg0: { "tokenId": bigint; "recipient": bigint; "amount0Max": bigint; "amount1Max": bigint }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
+  "mint"(arg0: { "token0": (bigint | number); "token1": (bigint | number); "fee": (bigint | number); "tickLower": (bigint | number); "tickUpper": (bigint | number); "amount0Desired": (bigint | number); "amount1Desired": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint, bigint, bigint] & { "tokenId": bigint; "liquidity": bigint; "amount0": bigint; "amount1": bigint };
+  "increaseLiquidity"(arg0: { "tokenId": (bigint | number); "amount0Desired": (bigint | number); "amount1Desired": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint, bigint] & { "liquidity": bigint; "amount0": bigint; "amount1": bigint };
+  "decreaseLiquidity"(arg0: { "tokenId": (bigint | number); "liquidity": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
+  "collect"(arg0: { "tokenId": (bigint | number); "recipient": (bigint | number); "amount0Max": (bigint | number); "amount1Max": (bigint | number) }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
 }
 
 export interface SynthraV3PoolMethods {
@@ -1335,11 +1335,11 @@ export interface SynthraV3PoolMethods {
 }
 
 export interface ThalesSpeedMarketsAMMMethods {
-  "createNewMarket"(arg0: { "user": bigint; "asset": bigint; "strikeTime": bigint; "delta": bigint; "strikePrice": bigint; "strikePricePublishTime": bigint; "oracleSource": bigint; "direction": bigint; "collateral": bigint; "collateralAmount": bigint; "referrer": bigint; "skewImpact": bigint }): bigint;
+  "createNewMarket"(arg0: { "user": (bigint | number); "asset": (bigint | number); "strikeTime": (bigint | number); "delta": (bigint | number); "strikePrice": (bigint | number); "strikePricePublishTime": (bigint | number); "oracleSource": (bigint | number); "direction": (bigint | number); "collateral": (bigint | number); "collateralAmount": (bigint | number); "referrer": (bigint | number); "skewImpact": (bigint | number) }): bigint;
 }
 
 export interface ThalesAMMMethods {
-  "buyFromAMM"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): bigint;
+  "buyFromAMM"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): bigint;
 }
 
 export interface ThalesPositionalMarketMethods {
@@ -1347,31 +1347,31 @@ export interface ThalesPositionalMarketMethods {
 }
 
 export interface ThenaRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ({ "from": (bigint | number); "to": (bigint | number); "stable": boolean })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "stable": boolean }>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
 }
 
 export interface ThrusterV3SwapRouterMethods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
 }
 
 export interface TokemakAutopoolMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
   "totalAssets"(): bigint;
-  "convertToShares"(arg0: bigint): bigint;
-  "convertToAssets"(arg0: bigint): bigint;
+  "convertToShares"(arg0: (bigint | number)): bigint;
+  "convertToAssets"(arg0: (bigint | number)): bigint;
 }
 
 export interface TraderJoeLBFactoryMethods {
-  "getLBPairInformation"(arg0: bigint, arg1: bigint, arg2: bigint): { "binStep": bigint; "LBPair": bigint; "createdByOwner": boolean; "ignoredForRouting": boolean };
+  "getLBPairInformation"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): { "binStep": bigint; "LBPair": bigint; "createdByOwner": boolean; "ignoredForRouting": boolean };
 }
 
 export interface TraderJoeLBRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: { "pairBinSteps": (readonly (bigint)[] | SauceArray<bigint>); "versions": (readonly (bigint)[] | SauceArray<bigint>); "tokenPath": (readonly (bigint)[] | SauceArray<bigint>) }, arg3: bigint, arg4: bigint): bigint;
-  "swapTokensForExactTokens"(arg0: bigint, arg1: bigint, arg2: { "pairBinSteps": (readonly (bigint)[] | SauceArray<bigint>); "versions": (readonly (bigint)[] | SauceArray<bigint>); "tokenPath": (readonly (bigint)[] | SauceArray<bigint>) }, arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: { "tokenX": bigint; "tokenY": bigint; "binStep": bigint; "amountX": bigint; "amountY": bigint; "amountXMin": bigint; "amountYMin": bigint; "activeIdDesired": bigint; "idSlippage": bigint; "deltaIds": (readonly (bigint)[] | SauceArray<bigint>); "distributionX": (readonly (bigint)[] | SauceArray<bigint>); "distributionY": (readonly (bigint)[] | SauceArray<bigint>); "to": bigint; "refundTo": bigint; "deadline": bigint }): [bigint, bigint, bigint, bigint, SauceArray<bigint>, SauceArray<bigint>] & { "amountXAdded": bigint; "amountYAdded": bigint; "amountXLeft": bigint; "amountYLeft": bigint; "depositIds": SauceArray<bigint>; "liquidityMinted": SauceArray<bigint> };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: { "pairBinSteps": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "versions": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "tokenPath": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>) }, arg3: (bigint | number), arg4: (bigint | number)): bigint;
+  "swapTokensForExactTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: { "pairBinSteps": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "versions": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "tokenPath": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>) }, arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: { "tokenX": (bigint | number); "tokenY": (bigint | number); "binStep": (bigint | number); "amountX": (bigint | number); "amountY": (bigint | number); "amountXMin": (bigint | number); "amountYMin": (bigint | number); "activeIdDesired": (bigint | number); "idSlippage": (bigint | number); "deltaIds": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "distributionX": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "distributionY": (readonly ((bigint | number))[] | SauceArray<(bigint | number)>); "to": (bigint | number); "refundTo": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint, bigint, bigint, SauceArray<bigint>, SauceArray<bigint>] & { "amountXAdded": bigint; "amountYAdded": bigint; "amountXLeft": bigint; "amountYLeft": bigint; "depositIds": SauceArray<bigint>; "liquidityMinted": SauceArray<bigint> };
 }
 
 export interface TraderJoeLBPairMethods {
@@ -1380,61 +1380,61 @@ export interface TraderJoeLBPairMethods {
   "getBinStep"(): bigint;
   "getActiveId"(): bigint;
   "getReserves"(): [bigint, bigint] & { "reserveX": bigint; "reserveY": bigint };
-  "getBin"(arg0: bigint): [bigint, bigint] & { "binReserveX": bigint; "binReserveY": bigint };
-  "getPriceFromId"(arg0: bigint): bigint;
-  "getSwapIn"(arg0: bigint, arg1: boolean): [bigint, bigint, bigint] & { "amountIn": bigint; "amountOutLeft": bigint; "fee": bigint };
-  "getSwapOut"(arg0: bigint, arg1: boolean): [bigint, bigint, bigint] & { "amountInLeft": bigint; "amountOut": bigint; "fee": bigint };
-  "swap"(arg0: boolean, arg1: bigint): bigint;
+  "getBin"(arg0: (bigint | number)): [bigint, bigint] & { "binReserveX": bigint; "binReserveY": bigint };
+  "getPriceFromId"(arg0: (bigint | number)): bigint;
+  "getSwapIn"(arg0: (bigint | number), arg1: boolean): [bigint, bigint, bigint] & { "amountIn": bigint; "amountOutLeft": bigint; "fee": bigint };
+  "getSwapOut"(arg0: (bigint | number), arg1: boolean): [bigint, bigint, bigint] & { "amountInLeft": bigint; "amountOut": bigint; "fee": bigint };
+  "swap"(arg0: boolean, arg1: (bigint | number)): bigint;
 }
 
 export interface UniswapV2FactoryMethods {
-  "getPair"(arg0: bigint, arg1: bigint): bigint;
-  "createPair"(arg0: bigint, arg1: bigint): bigint;
+  "getPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "createPair"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface UniswapV2RouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "swapTokensForExactTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
-  "getAmountsOut"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "swapTokensForExactTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "getAmountsOut"(arg0: (bigint | number), arg1: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
 }
 
 export interface UniswapV2PairMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
   "token0"(): bigint;
   "token1"(): bigint;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
 }
 
 export interface UniswapV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "createPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "createPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
 }
 
 export interface UniswapV3NonfungiblePositionManagerMethods {
-  "mint"(arg0: { "token0": bigint; "token1": bigint; "fee": bigint; "tickLower": bigint; "tickUpper": bigint; "amount0Desired": bigint; "amount1Desired": bigint; "amount0Min": bigint; "amount1Min": bigint; "recipient": bigint; "deadline": bigint }): [bigint, bigint, bigint, bigint] & { "tokenId": bigint; "liquidity": bigint; "amount0": bigint; "amount1": bigint };
-  "increaseLiquidity"(arg0: { "tokenId": bigint; "amount0Desired": bigint; "amount1Desired": bigint; "amount0Min": bigint; "amount1Min": bigint; "deadline": bigint }): [bigint, bigint, bigint] & { "liquidity": bigint; "amount0": bigint; "amount1": bigint };
-  "decreaseLiquidity"(arg0: { "tokenId": bigint; "liquidity": bigint; "amount0Min": bigint; "amount1Min": bigint; "deadline": bigint }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
-  "collect"(arg0: { "tokenId": bigint; "recipient": bigint; "amount0Max": bigint; "amount1Max": bigint }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
+  "mint"(arg0: { "token0": (bigint | number); "token1": (bigint | number); "fee": (bigint | number); "tickLower": (bigint | number); "tickUpper": (bigint | number); "amount0Desired": (bigint | number); "amount1Desired": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint, bigint, bigint] & { "tokenId": bigint; "liquidity": bigint; "amount0": bigint; "amount1": bigint };
+  "increaseLiquidity"(arg0: { "tokenId": (bigint | number); "amount0Desired": (bigint | number); "amount1Desired": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint, bigint] & { "liquidity": bigint; "amount0": bigint; "amount1": bigint };
+  "decreaseLiquidity"(arg0: { "tokenId": (bigint | number); "liquidity": (bigint | number); "amount0Min": (bigint | number); "amount1Min": (bigint | number); "deadline": (bigint | number) }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
+  "collect"(arg0: { "tokenId": (bigint | number); "recipient": (bigint | number); "amount0Max": (bigint | number); "amount1Max": (bigint | number) }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
 }
 
 export interface UniswapV3QuoterV2Methods {
-  "quoteExactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "amountIn": bigint; "fee": bigint; "sqrtPriceLimitX96": bigint }): [bigint, bigint, bigint, bigint] & { "amountOut": bigint; "sqrtPriceX96After": bigint; "initializedTicksCrossed": bigint; "gasEstimate": bigint };
+  "quoteExactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "amountIn": (bigint | number); "fee": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): [bigint, bigint, bigint, bigint] & { "amountOut": bigint; "sqrtPriceX96After": bigint; "initializedTicksCrossed": bigint; "gasEstimate": bigint };
 }
 
 export interface UniswapV3SwapRouterMethods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "exactInput"(arg0: { "path": (string | SauceBytes); "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint }): bigint;
-  "exactOutputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "deadline": bigint; "amountOut": bigint; "amountInMaximum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "exactOutput"(arg0: { "path": (string | SauceBytes); "recipient": bigint; "deadline": bigint; "amountOut": bigint; "amountInMaximum": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
+  "exactInput"(arg0: { "path": (string | SauceBytes); "recipient": (bigint | number); "deadline": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number) }): bigint;
+  "exactOutputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number); "amountOut": (bigint | number); "amountInMaximum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
+  "exactOutput"(arg0: { "path": (string | SauceBytes); "recipient": (bigint | number); "deadline": (bigint | number); "amountOut": (bigint | number); "amountInMaximum": (bigint | number) }): bigint;
 }
 
 export interface UniswapV3SwapRouter02Methods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "exactInput"(arg0: { "path": (string | SauceBytes); "recipient": bigint; "amountIn": bigint; "amountOutMinimum": bigint }): bigint;
-  "exactOutputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountOut": bigint; "amountInMaximum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
-  "exactOutput"(arg0: { "path": (string | SauceBytes); "recipient": bigint; "amountOut": bigint; "amountInMaximum": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
+  "exactInput"(arg0: { "path": (string | SauceBytes); "recipient": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number) }): bigint;
+  "exactOutputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "amountOut": (bigint | number); "amountInMaximum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
+  "exactOutput"(arg0: { "path": (string | SauceBytes); "recipient": (bigint | number); "amountOut": (bigint | number); "amountInMaximum": (bigint | number) }): bigint;
 }
 
 export interface UniswapV3PoolMethods {
@@ -1447,49 +1447,49 @@ export interface UniswapV3PoolMethods {
 }
 
 export interface UniswapV4PoolManagerMethods {
-  "initialize"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: bigint): bigint;
-  "swap"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: { "zeroForOne": boolean; "amountSpecified": bigint; "sqrtPriceLimitX96": bigint }, arg2: (string | SauceBytes)): bigint;
-  "modifyLiquidity"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: { "tickLower": bigint; "tickUpper": bigint; "liquidityDelta": bigint; "salt": bigint }, arg2: (string | SauceBytes)): [bigint, bigint] & { "delta": bigint; "feeDelta": bigint };
-  "extsload"(arg0: bigint): bigint;
-  "extsload"(arg0: bigint, arg1: bigint): SauceArray<bigint>;
+  "initialize"(arg0: { "currency0": (bigint | number); "currency1": (bigint | number); "fee": (bigint | number); "tickSpacing": (bigint | number); "hooks": (bigint | number) }, arg1: (bigint | number)): bigint;
+  "swap"(arg0: { "currency0": (bigint | number); "currency1": (bigint | number); "fee": (bigint | number); "tickSpacing": (bigint | number); "hooks": (bigint | number) }, arg1: { "zeroForOne": boolean; "amountSpecified": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }, arg2: (string | SauceBytes)): bigint;
+  "modifyLiquidity"(arg0: { "currency0": (bigint | number); "currency1": (bigint | number); "fee": (bigint | number); "tickSpacing": (bigint | number); "hooks": (bigint | number) }, arg1: { "tickLower": (bigint | number); "tickUpper": (bigint | number); "liquidityDelta": (bigint | number); "salt": (bigint | number) }, arg2: (string | SauceBytes)): [bigint, bigint] & { "delta": bigint; "feeDelta": bigint };
+  "extsload"(arg0: (bigint | number)): bigint;
+  "extsload"(arg0: (bigint | number), arg1: (bigint | number)): SauceArray<bigint>;
 }
 
 export interface UniswapV4PositionManagerMethods {
-  "modifyLiquidities"(arg0: (string | SauceBytes), arg1: bigint): void;
+  "modifyLiquidities"(arg0: (string | SauceBytes), arg1: (bigint | number)): void;
 }
 
 export interface UniswapV4UniversalRouterMethods {
-  "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: bigint): void;
+  "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: (bigint | number)): void;
   "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): void;
 }
 
 export interface UniswapV4StateViewMethods {
-  "getSlot0"(arg0: bigint): [bigint, bigint, bigint, bigint] & { "sqrtPriceX96": bigint; "tick": bigint; "protocolFee": bigint; "lpFee": bigint };
-  "getLiquidity"(arg0: bigint): bigint;
-  "getTickInfo"(arg0: bigint, arg1: bigint): [bigint, bigint, bigint, bigint] & { "liquidityGross": bigint; "liquidityNet": bigint; "feeGrowthOutside0X128": bigint; "feeGrowthOutside1X128": bigint };
-  "getTickLiquidity"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "liquidityGross": bigint; "liquidityNet": bigint };
-  "getTickFeeGrowthOutside"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "feeGrowthOutside0X128": bigint; "feeGrowthOutside1X128": bigint };
-  "getTickBitmap"(arg0: bigint, arg1: bigint): bigint;
-  "getFeeGrowthGlobals"(arg0: bigint): [bigint, bigint] & { "feeGrowthGlobal0": bigint; "feeGrowthGlobal1": bigint };
-  "getFeeGrowthInside"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint] & { "feeGrowthInside0X128": bigint; "feeGrowthInside1X128": bigint };
-  "getPositionInfo"(arg0: bigint, arg1: bigint): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
-  "getPositionInfo"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
-  "getPositionLiquidity"(arg0: bigint, arg1: bigint): bigint;
+  "getSlot0"(arg0: (bigint | number)): [bigint, bigint, bigint, bigint] & { "sqrtPriceX96": bigint; "tick": bigint; "protocolFee": bigint; "lpFee": bigint };
+  "getLiquidity"(arg0: (bigint | number)): bigint;
+  "getTickInfo"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint, bigint, bigint] & { "liquidityGross": bigint; "liquidityNet": bigint; "feeGrowthOutside0X128": bigint; "feeGrowthOutside1X128": bigint };
+  "getTickLiquidity"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint] & { "liquidityGross": bigint; "liquidityNet": bigint };
+  "getTickFeeGrowthOutside"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint] & { "feeGrowthOutside0X128": bigint; "feeGrowthOutside1X128": bigint };
+  "getTickBitmap"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "getFeeGrowthGlobals"(arg0: (bigint | number)): [bigint, bigint] & { "feeGrowthGlobal0": bigint; "feeGrowthGlobal1": bigint };
+  "getFeeGrowthInside"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): [bigint, bigint] & { "feeGrowthInside0X128": bigint; "feeGrowthInside1X128": bigint };
+  "getPositionInfo"(arg0: (bigint | number), arg1: (bigint | number)): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
+  "getPositionInfo"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
+  "getPositionLiquidity"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
   "poolManager"(): bigint;
 }
 
 export interface UnitflowV3FactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "feeAmountTickSpacing"(arg0: bigint): bigint;
+  "getPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "feeAmountTickSpacing"(arg0: (bigint | number)): bigint;
 }
 
 export interface UnitflowV3RouterMethods {
-  "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
+  "exactInputSingle"(arg0: { "tokenIn": (bigint | number); "tokenOut": (bigint | number); "fee": (bigint | number); "recipient": (bigint | number); "deadline": (bigint | number); "amountIn": (bigint | number); "amountOutMinimum": (bigint | number); "sqrtPriceLimitX96": (bigint | number) }): bigint;
   "factory"(): bigint;
 }
 
 export interface UnitflowV3QuoterMethods {
-  "quoteExactInputSingle"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): bigint;
+  "quoteExactInputSingle"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): bigint;
 }
 
 export interface UnitflowV3PoolMethods {
@@ -1502,93 +1502,93 @@ export interface UnitflowV3PoolMethods {
 }
 
 export interface VelodromePoolFactoryMethods {
-  "getPool"(arg0: bigint, arg1: bigint, arg2: boolean): bigint;
+  "getPool"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean): bigint;
 }
 
 export interface VelodromeRouterMethods {
-  "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
-  "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
-  "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+  "swapExactTokensForTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (readonly ({ "from": (bigint | number); "to": (bigint | number); "stable": boolean; "factory": (bigint | number) })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "stable": boolean; "factory": (bigint | number) }>), arg3: (bigint | number), arg4: (bigint | number)): SauceArray<bigint>;
+  "addLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number), arg8: (bigint | number)): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
+  "removeLiquidity"(arg0: (bigint | number), arg1: (bigint | number), arg2: boolean, arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
 }
 
 export interface VelodromePoolMethods {
   "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
-  "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
+  "getAmountOut"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
   "stable"(): boolean;
   "token0"(): bigint;
   "token1"(): bigint;
-  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "swap"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes)): void;
 }
 
 export interface VenusVBNBMethods {
   "mint"(): void;
-  "redeem"(arg0: bigint): bigint;
-  "redeemUnderlying"(arg0: bigint): bigint;
-  "borrow"(arg0: bigint): bigint;
+  "redeem"(arg0: (bigint | number)): bigint;
+  "redeemUnderlying"(arg0: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number)): bigint;
   "repayBorrow"(): void;
-  "balanceOfUnderlying"(arg0: bigint): bigint;
+  "balanceOfUnderlying"(arg0: (bigint | number)): bigint;
 }
 
 export interface VenusVTokenMethods {
-  "mint"(arg0: bigint): bigint;
-  "redeem"(arg0: bigint): bigint;
-  "redeemUnderlying"(arg0: bigint): bigint;
-  "borrow"(arg0: bigint): bigint;
-  "repayBorrow"(arg0: bigint): bigint;
-  "balanceOfUnderlying"(arg0: bigint): bigint;
+  "mint"(arg0: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number)): bigint;
+  "redeemUnderlying"(arg0: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number)): bigint;
+  "repayBorrow"(arg0: (bigint | number)): bigint;
+  "balanceOfUnderlying"(arg0: (bigint | number)): bigint;
 }
 
 export interface VenusComptrollerMethods {
-  "enterMarkets"(arg0: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
-  "exitMarket"(arg0: bigint): bigint;
+  "enterMarkets"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceArray<bigint>;
+  "exitMarket"(arg0: (bigint | number)): bigint;
 }
 
 export interface VertexClearinghouseMethods {
-  "withdrawCollateral"(arg0: { "sender": bigint; "productId": bigint; "amount": bigint; "nonce": bigint }): void;
+  "withdrawCollateral"(arg0: { "sender": (bigint | number); "productId": (bigint | number); "amount": (bigint | number); "nonce": (bigint | number) }): void;
 }
 
 export interface VertexEndpointMethods {
-  "depositCollateral"(arg0: bigint, arg1: bigint, arg2: bigint): void;
+  "depositCollateral"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): void;
   "submitSlowModeTransaction"(arg0: (string | SauceBytes)): void;
 }
 
 export interface WormholeCoreBridgeMethods {
-  "publishMessage"(arg0: bigint, arg1: (string | SauceBytes), arg2: bigint): bigint;
+  "publishMessage"(arg0: (bigint | number), arg1: (string | SauceBytes), arg2: (bigint | number)): bigint;
   "messageFee"(): bigint;
 }
 
 export interface WormholeTokenBridgeMethods {
-  "transferTokens"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint): bigint;
+  "transferTokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number)): bigint;
   "completeTransfer"(arg0: (string | SauceBytes)): void;
-  "wrappedAsset"(arg0: bigint, arg1: bigint): bigint;
+  "wrappedAsset"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
 }
 
 export interface YearnV3VaultMethods {
-  "deposit"(arg0: bigint, arg1: bigint): bigint;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "redeem"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "convertToShares"(arg0: bigint): bigint;
-  "convertToAssets"(arg0: bigint): bigint;
+  "deposit"(arg0: (bigint | number), arg1: (bigint | number)): bigint;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "redeem"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "convertToShares"(arg0: (bigint | number)): bigint;
+  "convertToAssets"(arg0: (bigint | number)): bigint;
   "totalAssets"(): bigint;
   "pricePerShare"(): bigint;
-  "balanceOf"(arg0: bigint): bigint;
-  "approve"(arg0: bigint, arg1: bigint): boolean;
+  "balanceOf"(arg0: (bigint | number)): bigint;
+  "approve"(arg0: (bigint | number), arg1: (bigint | number)): boolean;
 }
 
 export interface ZerolendPoolMethods {
-  "supply"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
-  "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
-  "borrow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): void;
-  "repay"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): bigint;
+  "supply"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): void;
+  "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
+  "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): void;
+  "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): bigint;
 }
 
 export interface ZeroxExchangeProxyMethods {
-  "transformERC20"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (readonly ({ "deploymentNonce": bigint; "data": (string | SauceBytes) })[] | SauceArray<{ "deploymentNonce": bigint; "data": (string | SauceBytes) }>)): bigint;
+  "transformERC20"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (readonly ({ "deploymentNonce": (bigint | number); "data": (string | SauceBytes) })[] | SauceArray<{ "deploymentNonce": (bigint | number); "data": (string | SauceBytes) }>)): bigint;
 }
 
 export interface ZksyncBridgeZkSyncDiamondProxyMethods {
-  "requestL2Transaction"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes), arg3: bigint, arg4: bigint, arg5: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg6: bigint): bigint;
-  "l2TransactionBaseCost"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "requestL2Transaction"(arg0: (bigint | number), arg1: (bigint | number), arg2: (string | SauceBytes), arg3: (bigint | number), arg4: (bigint | number), arg5: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg6: (bigint | number)): bigint;
+  "l2TransactionBaseCost"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): bigint;
 }
 
 export interface AaveV2Source extends AaveV2LendingPoolMethods {

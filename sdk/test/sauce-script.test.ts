@@ -161,6 +161,29 @@ describe("SauceScript in an editor", () => {
     }
   });
 
+  it("takes a plain number a field deep, and still reports a field of the wrong kind", () => {
+    const file = join(work, "nested.sauce.ts");
+    // A struct a helper builds, passed where the quoter declares one.
+    const program = (fee: string) =>
+      [
+        "function params() {",
+        `  return { tokenIn: USDC, tokenOut: WETH, amountIn: 1, fee: ${fee}, sqrtPriceLimitX96: 0 };`,
+        "}",
+        "function main(): Uint256 {",
+        "  require(UniswapV3.QuoterV2);",
+        "  const [out] = UniswapV3.QuoterV2.quoteExactInputSingle(params());",
+        "  return out;",
+        "}",
+        "",
+      ].join("\n");
+    const codes = (fee: string, withPlugin: boolean) =>
+      service({ [file]: program(fee) }, withPlugin)
+        .getSemanticDiagnostics(file)
+        .map((diagnostic) => diagnostic.code);
+    expect(codes("500", false)).toEqual([]);
+    expect(codes('"500"', true)).toEqual([2345]);
+  });
+
   it.skip("takes an `await` in main's body, a body a call takes, a `try` or an `if` there, and nowhere else: await dropped from the compiler (v12 #554)", () => {
     const file = join(work, "awaited.sauce.ts");
     const opened =
@@ -272,7 +295,8 @@ describe("SauceScript in an editor", () => {
       "function main(): Uint256 {\n  require(UniswapV3.Factory);\n  let pool = 0;\n" +
         "  pool = UniswapV3.Factory.getPool(USDC, WETH, 500);\n  return pool;\n}\n",
     );
-    expect(bare).toEqual([2322, 2345, 2322]);
+    // `getPool`'s `500` is no diagnostic at all: an argument takes a plain number.
+    expect(bare).toEqual([2322, 2322]);
     expect(shown).toEqual([]);
   });
 
