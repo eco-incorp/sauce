@@ -1367,7 +1367,9 @@ stranger's `execute`, so the Pot is set up by an owner cook: `Signed.setup()` (a
 `Signed.invalidate`, which call it) ensures the three as core `Handler`s, byte for byte the handler
 files (`compile.test.ts` pins them); `sauce run @sauce/signed` stays the pre-warm. `routes/signed.ts`
 is the typed data and calls (`executeTypedData`, `encodeExecute`, …), `cli/sign.ts` is
-`sauce sign`.
+`sauce sign`, which reads the Pot and sends the setup it lacks first (`approvals.ts`: the Pot's
+deployment, then a cook of `Signed.setup()`), and `sauce_sign` its MCP twin, which plans that
+setup and signs nothing.
 `test/std/signed/compile.test.ts` derives every hand-written constant; `evm.e2e.test.ts` (gated as
 async's) runs every path and refusal, the skill's examples and its hop block, Permit2 with the Pot
 as signer, and measures beside `fixtures/SignedReference.sol`, the same check in Solidity. A hop
