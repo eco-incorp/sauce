@@ -1001,6 +1001,14 @@ function sample(type) {
   return "1";
 }
 
+/** A KyberSwap route, and any route on Solana, is built for the Pot the program runs on. */
+const swapOwner = (chain, text) =>
+  chain === "solana" && /\b(?:jupiterSwap|ecoSwap)\s*\(/.test(text)
+    ? ["--owner", SOLANA_DEV]
+    : /\bkyberSwap\s*\(/.test(text)
+      ? ["--owner", DEV]
+      : [];
+
 async function compileJson(file, chain, extra) {
   const run = await sauce(["compile", file, "--chain", chain, ...extra, "--json"]);
   if (run.code !== 0) return { error: diagnostic(run.stderr || run.stdout) };
@@ -1094,7 +1102,7 @@ async function runUsage(where, file, argv, chain, header = false) {
   if (OPENS_INTENT.test(read(file))) {
     if (!kept.includes("--intent-execution-fee")) kept.push("--intent-execution-fee", "0");
   }
-  const compiled = await compileJson(file, chain, kept);
+  const compiled = await compileJson(file, chain, [...kept, ...swapOwner(chain, read(file))]);
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
     return;
@@ -1305,15 +1313,11 @@ try {
           ? // Its deadlines default and its refundee is the block's; the fee is what a read gives.
             ["--intent-execution-fee", "0"]
           : [];
-        // A KyberSwap route, and any route on Solana, is built for the Pot the program runs on.
-        const owner = (chain) =>
-          chain === "solana" && /\b(?:jupiterSwap|ecoSwap)\s*\(/.test(block.body)
-            ? ["--owner", SOLANA_DEV]
-            : /\bkyberSwap\s*\(/.test(block.body)
-              ? ["--owner", DEV]
-              : [];
         for (const chain of chains) {
-          const compiled = await compileJson(file, chain, [...intents, ...owner(chain)]);
+          const compiled = await compileJson(file, chain, [
+            ...intents,
+            ...swapOwner(chain, block.body),
+          ]);
           if (compiled.error !== undefined) errors.push(`${chain}: ${compiled.error}`);
         }
       } else {
