@@ -137,7 +137,7 @@ describeEvm("sauce, sent to a chain", () => {
   ];
 
   describe("the unsigned transactions, sent by a wallet", () => {
-    it("`sauce tx` says the Pot is not deployed yet, and how to deploy it", async () => {
+    it("`sauce tx` plans the Pot's deploy first when the Pot is not deployed yet", async () => {
       const run = await sauce(
         "tx",
         PAY,
@@ -148,9 +148,15 @@ describeEvm("sauce, sent to a chain", () => {
         ethereum.rpcUrl,
       );
       expect(run.code).toBe(0);
-      expect(jsonOf(run).value).toBe(FEE.toString());
+      const plan = jsonOf(run) as { pot: Address; transactions: Array<Record<string, string>> };
+      const predicted = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
+      expect(plan.pot).toBe(predicted);
+      expect(plan.transactions.map((tx) => [tx.deploysPot ?? null, tx.value])).toEqual([
+        [predicted, "0"],
+        [null, FEE.toString()],
+      ]);
       expect(run.stderr).toContain(
-        `It is NOT deployed. Deploy it first (sauce pot --deploy --owner ${OWNER.address} --chain ethereum --keystore <keystore>), then fund it.`,
+        `Your Pot ${predicted} on ethereum isn't deployed yet: the first transaction deploys it`,
       );
       expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
     }, 60_000);
@@ -570,6 +576,11 @@ describeEvm("sauce, sent to a chain", () => {
 
     it("asks before deploying a missing Pot, and does only what the answer says", async () => {
       const salted = (label: string) => v12PredictPot(RAW_OWNER, potSalt(label)) as Address;
+      const question = (label: string) =>
+        new RegExp(
+          `^Your Pot ${salted(label)} on ethereum isn't deployed yet\\. Deploy it now \\(one ` +
+            "transaction, about [\\d,]+ gas, ~[\\d.]+ ETH\\), then run\\? \\[deploy/cancel\\] $",
+        );
       for (const token of [usdc, usdt]) await ethereum.mint(token, salted("yes"), FUNDED);
       const questions: string[] = [];
       const answering = (answer: boolean | undefined) => async (question: string) => {
@@ -593,17 +604,15 @@ describeEvm("sauce, sent to a chain", () => {
 
       const yes = await run("yes", true);
       expect(yes.code).toBe(0);
-      expect(questions[0]).toBe(
-        `Pot ${salted("yes")} (owner ${RAW_OWNER}, salt ${potSalt("yes")}) is not deployed on ethereum. Deploy it now? [y/N] `,
-      );
+      expect(questions[0]).toMatch(question("yes"));
       expect(await potOwner(ethereum, salted("yes"))).toBe(RAW_OWNER);
 
       const no = await run("no", false);
       expect(no.code).toBe(1);
-      expect(no.stderr).toMatch(
-        new RegExp(
-          `Pot ${salted("no")} is not deployed on ethereum, so nothing was sent. Deploy it with: sauce pot --deploy --owner ${RAW_OWNER} --chain ethereum --salt no`,
-        ),
+      expect(no.stderr).toContain(
+        `Your Pot ${salted("no")} on ethereum isn't deployed yet, so nothing was sent: run again ` +
+          "and answer deploy, or pass --yes (-y), or deploy it yourself with sauce pot --deploy " +
+          `--owner ${RAW_OWNER} --chain ethereum --salt no`,
       );
       expect(await ethereum.publicClient.getCode({ address: salted("no") })).toBeUndefined();
 
@@ -622,7 +631,7 @@ describeEvm("sauce, sent to a chain", () => {
       expect(unasked.code).toBe(1);
       expect(unasked.stderr).toContain(
         "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
-          `  deploy Pot ${salted("unasked")}\nPass --auto-approve`,
+          `  deploy Pot ${salted("unasked")}\nPass --yes (-y)`,
       );
       expect(await ethereum.publicClient.getCode({ address: salted("unasked") })).toBeUndefined();
     }, 60_000);
