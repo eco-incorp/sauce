@@ -274,6 +274,22 @@ sauce run swap.sauce.ts --chain solana --keypair <keypair.json> --args <minOut>
   most 1.4 million compute units, and a route's accounts and work count against both; its lookup
   tables are what fit its accounts into the transaction.
 
+### The aggregators' own examples, ported
+
+Each aggregator publishes an example of swapping through its API, and each is one program here,
+its header naming the original:
+
+| Original                                                                                                | Sauce program                                                                                 | What the original needs                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| KyberSwap's aggregator API example (`KyberNetwork/ks-aggregator-api-demo`): 1 USDC.e for KNC on Polygon | [examples/kyberswap-swap.sauce.ts](examples/kyberswap-swap.sauce.ts): 1 USDC for WETH, `base` | Two API calls (a route, then its calldata), then two signed transactions from the wallet: an approve of the router, then the swap         |
+| Jupiter's Swap API quickstart: 0.1 SOL for USDC                                                         | [examples/jupiter-swap.sauce.ts](examples/jupiter-swap.sauce.ts): the same swap, `solana`     | Two API calls (a quote, then a whole serialized transaction with its compute budget and priority fee), then the wallet signs and sends it |
+
+The program asks the same service while it compiles (Jupiter for the swap's instruction rather
+than a whole transaction), so what is sent is one cook: the swap, checked against `minOut` (a
+`main` input, not a slippage off the quote), with nothing standing afterwards (KyberSwap's router
+keeps no allowance). Jupiter's route swaps SPL tokens, so the SOL
+sits in the Pot's WSOL account. eco-swap publishes no example of its own.
+
 ## The guard (required on every leg)
 
 The library checks `minOut`; what is left is the input a price limit left unspent:

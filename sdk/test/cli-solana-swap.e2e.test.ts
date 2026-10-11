@@ -19,6 +19,10 @@
  * not fit until SIMD-0268 is active, when the stack holds 9. The test reads the depth off the
  * cook's logs.
  *
+ * It also runs Jupiter's own swap example as ported to Sauce, the copy the skills ship
+ * (`skills/sauce-swaps/examples/jupiter-swap.sauce.ts`) and the manual's
+ * (`docs/examples/jupiter-swap.sauce.ts`), held to be the same file: 0.1 SOL, wrapped, for USDC.
+ *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
  */
@@ -72,6 +76,13 @@ const JUPITER_SWAP = `function main(minOut: Uint256): Uint256 {
 }
 `;
 
+/** Jupiter's swap example ported to Sauce, as the skills and the manual ship it. */
+const JUPITER_PORTS = [
+  "skills/sauce-swaps/examples/jupiter-swap.sauce.ts",
+  "docs/examples/jupiter-swap.sauce.ts",
+];
+const port = (path: string): string => join(process.cwd(), "..", path);
+
 /** An amount and a floor the program computes as it runs, which only eco-swap takes. */
 const ECO_SWAP = `function main(amount: Uint256, minOut: Uint256): Uint256 {
   return ecoSwap(USDC, WSOL, amount / 2, minOut);
@@ -109,6 +120,8 @@ describeSvm("sauce on Solana: jupiterSwap and ecoSwap through the Kitchen", () =
   const asked: URL[] = [];
   /** The tolerance eco-swap's instruction carries past the floor the program writes. */
   let ecoSlippageBps = 0;
+  /** Whether the last quote sold wrapped SOL for USDC, the other way round from the rest. */
+  let solForUsdc = false;
 
   /** Jupiter's two calls, answered for the bank's accounts: a quote, then its instruction; and
    *  eco-swap's embed, the same instruction with its amount and floor left for the program. */
@@ -116,12 +129,13 @@ describeSvm("sauce on Solana: jupiterSwap and ecoSwap through the Kitchen", () =
     const url = new URL(String(input));
     asked.push(url);
     if (url.pathname === "/swap/v1/quote") {
+      solForUsdc = url.searchParams.get("inputMint") === WSOL;
       return new Response(
         JSON.stringify({
-          inputMint: USDC,
-          outputMint: WSOL,
+          inputMint: solForUsdc ? WSOL : USDC,
+          outputMint: solForUsdc ? USDC : WSOL,
           inAmount: "100000000",
-          outAmount: "834568839",
+          outAmount: solForUsdc ? "15812345" : "834568839",
           slippageBps: 50,
           routePlan: [],
         }),
@@ -133,16 +147,21 @@ describeSvm("sauce on Solana: jupiterSwap and ecoSwap through the Kitchen", () =
       isWritable,
     });
 
+    // The aggregator's USDC account takes what it is sold and its wrapped SOL account pays, and the
+    // other way round when the quote sells wrapped SOL.
+    const [potIn, vaultTakes, vaultPays, potOut, mintIn, mintOut] = solForUsdc
+      ? [potWsol, vaultOut, vaultIn, potUsdc, WSOL, USDC]
+      : [potUsdc, vaultIn, vaultOut, potWsol, USDC, WSOL];
     const accounts = [
       meta(address(TOKEN_PROGRAM)),
       meta(authority),
       meta(pot, false, true),
-      meta(potUsdc, true),
-      meta(vaultIn, true),
-      meta(vaultOut, true),
-      meta(potWsol, true),
-      meta(USDC),
-      meta(WSOL),
+      meta(potIn, true),
+      meta(vaultTakes, true),
+      meta(vaultPays, true),
+      meta(potOut, true),
+      meta(mintIn),
+      meta(mintOut),
       meta(JUPITER),
       meta(JUPITER),
       meta(config),
@@ -172,7 +191,7 @@ describeSvm("sauce on Solana: jupiterSwap and ecoSwap through the Kitchen", () =
         swapInstruction: {
           programId: JUPITER,
           accounts,
-          data: routeData(100000000n, 834568839n, 50),
+          data: routeData(100000000n, solForUsdc ? 15812345n : 834568839n, 50),
         },
         addressLookupTableAddresses: [table],
       }),
@@ -373,4 +392,59 @@ describeSvm("sauce on Solana: jupiterSwap and ecoSwap through the Kitchen", () =
       ecoSlippageBps = 0;
     }
   }, 120_000);
+
+  describe("Jupiter's swap example, ported (jupiter-swap.sauce.ts)", () => {
+    /** The swap the example makes: the Pot's 0.1 SOL, wrapped, and the aggregator's USDC to pay. */
+    const fundSol = () => {
+      setTokenAccount(harness, potWsol, WSOL, pot, 100000000n);
+      setTokenAccount(harness, vaultOut, WSOL, authority, 0n);
+      setTokenAccount(harness, vaultIn, USDC, authority, 1_000_000_000n);
+    };
+    const usdcHeld = () =>
+      harness.svm.getAccount(potUsdc).exists ? tokenAmount(harness, potUsdc) : 0n;
+
+    it("ships the same program to the skills and the manual", () => {
+      const [skill, manual] = JUPITER_PORTS.map((path) => readFileSync(port(path), "utf8"));
+      expect(manual).toBe(skill);
+    });
+
+    it.each(JUPITER_PORTS)(
+      "runs as written: 0.1 SOL for USDC, one cook through the Kitchen, from %s",
+      async (path) => {
+        fundSol();
+        pays(15_800_000n);
+        const held = usdcHeld();
+        asked.length = 0;
+
+        const done = await run(port(path), 15_000_000n);
+        expect(done.stderr).not.toMatch(/error/i);
+        expect(done.code).toBe(0);
+        // The quickstart's quote, asked while the program compiles: 0.1 SOL, wrapped, for USDC.
+        expect(asked.map((url) => url.pathname)).toEqual([
+          "/swap/v1/quote",
+          "/swap/v1/swap-instructions",
+        ]);
+        expect(asked[0]!.searchParams.get("inputMint")).toBe(WSOL);
+        expect(asked[0]!.searchParams.get("outputMint")).toBe(USDC);
+        expect(asked[0]!.searchParams.get("amount")).toBe("100000000");
+        expect(tokenAmount(harness, potWsol)).toBe(0n);
+        expect(tokenAmount(harness, vaultOut)).toBe(100000000n);
+        expect(usdcHeld()).toBe(held + 15_800_000n);
+        expect(JSON.parse(done.stdout)).toMatchObject({ pot, cook: { status: "success" } });
+      },
+      120_000,
+    );
+
+    it("refuses a fill below minOut, where the quickstart allows 50 basis points off the quote", async () => {
+      fundSol();
+      pays(14_999_999n);
+      const held = usdcHeld();
+
+      const done = await run(port(JUPITER_PORTS[0]!), 15_000_000n);
+      expect(done.code).not.toBe(0);
+      expect(done.stdout + done.stderr).toMatch(/6001|0x1771/);
+      expect(tokenAmount(harness, potWsol)).toBe(100000000n);
+      expect(usdcHeld()).toBe(held);
+    }, 120_000);
+  });
 });

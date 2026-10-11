@@ -40,7 +40,9 @@
     ],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts"
-    ]
+    ],
+    "sauce-swaps/examples/jupiter-swap.sauce.ts": ["sdk/test/cli-solana-swap.e2e.test.ts"],
+    "sauce-swaps/examples/kyberswap-swap.sauce.ts": ["sdk/test/evm/swap-routes.e2e.test.ts"]
   },
   "compileOnly": {
     "sauce-globals/examples/globals.sauce.ts": "compiled, and its token-write lowering pinned, by globals.mts; no suite executes it",

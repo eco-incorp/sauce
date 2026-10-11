@@ -11,6 +11,10 @@
  *     `main(amountIn, minOut)`, compiled here by the SDK's compiler, over `fixtures/MockV2Pair.sol`
  *     (a Uniswap V2 pair's `getReserves`/`swap` with its constant-product check).
  *
+ * It also runs KyberSwap's own aggregator example as ported to Sauce, the copy the skills ship
+ * (`skills/sauce-swaps/examples/kyberswap-swap.sauce.ts`) and the manual's
+ * (`docs/examples/kyberswap-swap.sauce.ts`), held to be the same file.
+ *
  * GATED on `SAUCE_V12_RUNTIME_CREATION_HEX` like every EVM execution suite, and a hard failure
  * without it in CI.
  */
@@ -65,6 +69,12 @@ const MOCK_ROUTER = json<{ abi: Abi; creationCode: Hex }>(
   join(HERE, "fixtures/MockKyberRouter.json"),
 );
 const MOCK_PAIR = json<{ abi: Abi; creationCode: Hex }>(join(HERE, "fixtures/MockV2Pair.json"));
+/** KyberSwap's aggregator example ported to Sauce, as the skills and the manual ship it. */
+const KYBERSWAP_PORTS = [
+  "skills/sauce-swaps/examples/kyberswap-swap.sauce.ts",
+  "docs/examples/kyberswap-swap.sauce.ts",
+];
+const port = (path: string): string => readFileSync(join(HERE, "../../..", path), "utf8");
 
 /** Anvil's first dev account: the harness's deployer, and the Pot's owner. */
 const OWNER = privateKeyToAccount(
@@ -393,4 +403,48 @@ describeEvm("kyberSwap and ecoSwap, executed on the released gated stack", () =>
       ecoProgram = compileEco("amountIn");
     }
   }, 60_000);
+
+  describe("KyberSwap's aggregator example, ported (kyberswap-swap.sauce.ts)", () => {
+    it("ships the same program to the skills and the manual", () => {
+      const [skill, manual] = KYBERSWAP_PORTS.map(port);
+      expect(manual).toBe(skill);
+    });
+
+    it.each(KYBERSWAP_PORTS)(
+      "runs as written: 1 USDC for WETH, one cook, from %s",
+      async (path) => {
+        await router(KYBER_PAYS);
+        const program = await compile(port(path));
+        // The demo's two API calls, asked while the program compiles, for its 1 USDC.
+        expect([...asked].sort()).toEqual(["/base/api/v1/route/build", "/base/api/v1/routes"]);
+        expect(program.entryParams.map((param) => `${param.name}: ${param.type}`)).toEqual([
+          "minOut: Uint256",
+          "recipient: Address",
+        ]);
+        const held = await balance(usdc, sauce.pot);
+        const before = await balance(weth, RECIPIENT);
+
+        const ran = await cook(program, [KYBER_PAYS, RECIPIENT]);
+        expect(ran).toEqual({ returned: KYBER_PAYS, status: "success" });
+        expect(await balance(weth, RECIPIENT)).toBe(before + KYBER_PAYS);
+        expect(await balance(usdc, sauce.pot)).toBe(held - 1_000_000n);
+        // The demo's standing approval is gone: exactly amountIn approved, the rest reset.
+        expect(await allowance(usdc, sauce.pot, ROUTER)).toBe(0n);
+        // The router's floor is the program's minOut, where the demo put 0.1% off the quote.
+        expect(await lastFloor()).toBe(KYBER_PAYS);
+      },
+      60_000,
+    );
+
+    it("reverts the one transaction below minOut, where the demo's swap would revert alone", async () => {
+      await router(KYBER_PAYS);
+      const program = await compile(port(KYBERSWAP_PORTS[0]!));
+      const held = await balance(usdc, sauce.pot);
+
+      const ran = await cook(program, [KYBER_PAYS + 1n, RECIPIENT]).catch((error: Error) => error);
+      expect(ran).toBeInstanceOf(Error);
+      expect(await balance(usdc, sauce.pot)).toBe(held);
+      expect(await allowance(usdc, sauce.pot, ROUTER)).toBe(0n);
+    }, 60_000);
+  });
 });
