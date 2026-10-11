@@ -1,8 +1,8 @@
 /**
  * The SVM twin of ../descriptors/accessors.ts: `Solana.<Venue>.<op>(...)`, a
  * native accessor over the SVM venue adapters registered in
- * ./venues/registry.ts, unified onto the SAME global `Solana` that already
- * carries `.route(...)` (see ../routes/globals.ts's svm branch).
+ * ./venues/registry.ts, unified onto the SAME `Solana` export that carries
+ * `.Portal` (see ../routes/composed.ts's svm branch).
  *
  * Registry-derived, walk-not-reimplement, same as its EVM counterpart: the
  * tree below enumerates `listVenues()`/`venueAdapter()` (registry.ts) — it

@@ -13,6 +13,7 @@ const EXECUTION = {
   pot: "0x1111111111111111111111111111111111111111",
   engine: "0x2222222222222222222222222222222222222222",
 } as const;
+const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 
 /** Helpers that take and return arrays and records — they cannot be written without annotations. */
 const HELPERS = `interface Leg {
@@ -87,5 +88,21 @@ function main(amount: Uint256): Uint256 {
     expect(
       compileSauceRoute("base", source, EXECUTION).compiled.bytecode[0]!.length,
     ).toBeGreaterThan(0);
+  });
+
+  it("lowers an intent opened in an annotated program", () => {
+    const source = `function main(amount: Uint256): void {
+  const held: Uint256 = USDC.balanceOf(ctx.self());
+  require(held >= amount);
+  Arbitrum.hop({ send: [{ token: USDC, amount }], receive: { token: USDC, amount }, refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+    USDC.transfer(RECIPIENT, amount);
+  });
+}`;
+    const out = compileSauceRoute("base", source, EXECUTION, {
+      defines: { RECIPIENT },
+      intents: { deadline: 4_000_000_000n, executionFee: 0n },
+    });
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

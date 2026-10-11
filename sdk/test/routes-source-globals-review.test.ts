@@ -4,7 +4,6 @@ import { join, resolve } from "node:path";
 import ts from "typescript";
 
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { sauceBodyToSource } from "../src/routes/closure.js";
 
 const cctpSource = `function main() {
   require(Cctp.TokenMessenger);
@@ -128,7 +127,7 @@ describe("source globals match the Sauce contract model", () => {
       pot: "0x1111111111111111111111111111111111111111" as const,
       engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const,
     };
-    const closure = compileSauceRoute("base", sauceBodyToSource(body), execution);
+    const closure = compileSauceRoute("base", body, execution);
     const source = compileSauceRoute("base", tokenWritesSource, execution);
     expect(closure.compiled.bytecode).toEqual(source.compiled.bytecode);
   });

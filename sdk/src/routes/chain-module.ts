@@ -34,15 +34,23 @@
  *  - every protocol namespace (`UniswapV3`, a family's `Uniswap`), its contracts bound at their
  *    addresses on the chain, an interface as a function of an address (`UniswapV3.Pool(pool)`), and
  *    a protocol's one callable contract standing for the protocol (`Lido.submit(…)`);
- *  - every chain's name: its chain id where it is compared (`chainId == Ethereum`), and its
- *    contracts (`Base.UniswapV3.Factory`), whose addresses a program passes across chains.
+ *  - every chain's name: its chain id where it is compared (`chainId == Ethereum`), its `hop(…)`,
+ *    which opens an intent whose body runs there (through the compile's level module,
+ *    {@link levelModuleSource}), and its contracts (`Base.UniswapV3.Factory`, and its eco-routes
+ *    Portal as `Base.Portal`), whose addresses a program passes across chains.
  */
 import type { Abi } from "viem";
 
 import { CANONICAL_CHAINS, requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { nativeErc20 } from "../chains/index.js";
 import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor } from "../descriptors/types.js";
 import { loadPluginData } from "../plugin/index.js";
+import {
+  ecoRoutesPortal,
+  ecoRoutesProver,
+  type EcoRoutesSelector,
+} from "../protocols/eco-routes/lookup.js";
 import {
   CHAIN_KEY_SET,
   NAMESPACE_KEYS,
@@ -50,6 +58,11 @@ import {
   type Namespace,
 } from "./accessor-index.js";
 import { pascalOfSlug } from "./pascal.js";
+import { denormalizeToEvm } from "./encode.js";
+import { rewardAssetsConflict } from "./intent.js";
+import type { IntentDefaults } from "./intent-defaults.js";
+import { resolveIntentPot } from "./intent-pot.js";
+import { toUniversalAddress } from "./normalize.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
 import { registryTokens, resolveTokenMap } from "./token-registry.js";
 import type { AddressInput } from "./types.js";
@@ -72,6 +85,10 @@ export const CHAIN_MODULE_ROOT = "/@eco-incorp/sauce/chain";
 export const CHAIN_DEFINE = "__sauce_chain";
 
 const TOKEN = "@sauce/token";
+const HOP = "@sauce/hop";
+
+/** What the names module calls to open an intent: the level module's, written per compile. */
+const HOPS = "__sauce_hops";
 
 /** The names a module exports that no registry name may take. */
 const RESERVED: ReadonlySet<string> = new Set([
@@ -439,6 +456,148 @@ export function chainModuleSource(chain: CanonicalChain, options: ChainModuleOpt
   return text;
 }
 
+/** The eco-routes Portal's descriptor, which every chain's name binds as its `Portal`. */
+function ecoRoutesPortalContract(): ContractDescriptor | undefined {
+  const namespace = resolveNamespace("EcoRoutes");
+
+  return namespace?.kind === "protocol" ? namespace.contracts.get("Portal") : undefined;
+}
+
+/** A destination's facts, as seen from `source`, for a hop there: or why it has none. */
+function destinationFacts(
+  source: CanonicalChain,
+  destination: CanonicalChain,
+  defaults: IntentDefaults,
+): string | { readonly absent: string } {
+  if (destination.kind !== "evm") {
+    return {
+      absent:
+        `an intent a program opens runs its body on an EVM chain: ${destination.slug} runs ` +
+        "programs for its Kitchen, which a route call does not issue from here yet",
+    };
+  }
+  const selector: EcoRoutesSelector = defaults;
+  let portal: `0x${string}`;
+  try {
+    portal = denormalizeToEvm(
+      toUniversalAddress(defaults.destinationPortal ?? ecoRoutesPortal(destination, selector)),
+    );
+  } catch (error) {
+    return { absent: (error as Error).message };
+  }
+  const { pot, engine } = resolveIntentPot(portal, defaults);
+  let prover = "undefined";
+  let unproven = "undefined";
+  try {
+    prover = word(
+      denormalizeToEvm(
+        toUniversalAddress(defaults.prover ?? ecoRoutesProver(source, destination, selector)),
+      ),
+    );
+  } catch (error) {
+    unproven = str((error as Error).message);
+  }
+  const fee =
+    typeof defaults.executionFee === "function"
+      ? defaults.executionFee(destination)
+      : defaults.executionFee;
+  const missing =
+    `a token a hop's \`receive\` names is ${destination.slug}'s of the same symbol, and ` +
+    `${destination.slug} registers no token of that symbol: name one it has, or give its address ` +
+    "with `Token(address)`";
+
+  return (
+    `{ chainId: ${destination.id}, portal: ${word(portal)}, ` +
+    `pot: ${word(denormalizeToEvm(toUniversalAddress(pot)))}, ` +
+    `engine: ${word(denormalizeToEvm(toUniversalAddress(engine)))}, ` +
+    `prover: ${prover}, unproven: ${unproven}, fee: ${fee === undefined ? "undefined" : fee}, ` +
+    `missing: ${str(missing)} }`
+  );
+}
+
+/** The level every intent a program on `chain` opens is built in: its Portal and its defaults. */
+function levelSource(
+  chain: CanonicalChain,
+  defaults: IntentDefaults,
+  salt: string,
+): string | undefined {
+  let portal: `0x${string}`;
+  try {
+    portal = denormalizeToEvm(
+      toUniversalAddress(defaults.sourcePortal ?? ecoRoutesPortal(chain, defaults)),
+    );
+  } catch {
+    return undefined;
+  }
+  const native = nativeErc20(chain.id);
+  const conflict =
+    native === undefined ? undefined : rewardAssetsConflict(chain.id, true, [native.address]);
+  const optional = (value: bigint | undefined): string =>
+    value === undefined ? "undefined" : `${value}`;
+
+  return (
+    `new Level({ chainId: ${chain.id}, portal: ${word(portal)}, salt: ${salt}, ` +
+    `deadline: ${optional(defaults.deadline)}, rewardDeadline: ${optional(defaults.rewardDeadline)}, ` +
+    `openedAt: ${optional(defaults.openedAt)}, fund: ${defaults.fund !== false}, ` +
+    `fundVia: ${str(defaults.fundVia ?? "transfer")}, allowPartial: ${defaults.allowPartial === true}, ` +
+    `nativeToken: ${native === undefined ? "undefined" : word(native.address)}, ` +
+    `nativeConflict: ${conflict === undefined ? "undefined" : str(conflict)} })`
+  );
+}
+
+/** What a compile's level module is written with. */
+export interface LevelModuleOptions {
+  /** The defaults every intent the program opens takes. */
+  readonly intents?: IntentDefaults;
+}
+
+/**
+ * The SauceScript module of one program's level: where the intents a program on `chain` opens are
+ * built. The names module's chains call it (`Base.hop({ … })`): it holds the level the program's
+ * intents open in, its Portal and defaults, and each destination's facts from here, or why a hop
+ * there cannot be opened. `salt` is the route salt of every intent that names none, as a word.
+ */
+export function levelModuleSource(
+  chain: CanonicalChain,
+  options: LevelModuleOptions,
+  salt: string,
+): string {
+  const defaults = options.intents ?? {};
+  const why = (message: string): string => `throw new Error(${str(message)});`;
+  if (chain.kind !== "evm") {
+    return [
+      "// GENERATED by the SDK for one compile (routes/chain-module.ts): where its intents open.",
+      `class Hops { to(id, config) { ${why(`a program on ${chain.slug} opens no intent: the Portals a program publishes through are EVM contracts`)} } }`,
+      `export const ${HOPS} = new Hops();`,
+      "",
+    ].join("\n");
+  }
+  const level = levelSource(chain, defaults, salt);
+  const branches: string[] = [];
+  if (level === undefined) {
+    branches.push(
+      why(`eco-routes has no Portal on ${chain.slug}, so a program there opens no intent`),
+    );
+  } else {
+    for (const destination of CANONICAL_CHAINS) {
+      const facts = destinationFacts(chain, destination, defaults);
+      branches.push(
+        `if (id == ${destination.id}) { ${typeof facts === "string" ? `return new Intent(${facts}, HERE, config);` : why(facts.absent)} }`,
+      );
+    }
+    branches.push(why("a chain's id names no chain"));
+  }
+
+  return [
+    "// GENERATED by the SDK for one compile (routes/chain-module.ts): where its intents open.",
+    `import { Intent, Level } from "${HOP}";`,
+    ...(level === undefined ? [] : [`const HERE = ${level};`]),
+    `class Hops { to(id, config) { ${branches.join(" ")} } }`,
+    `export const ${HOPS} = new Hops();`,
+    "",
+  ].join("\n");
+}
+
 function writeModule(
   kind: "evm" | "svm",
   chosen: { readonly chain: CanonicalChain; readonly options: ChainModuleOptions } | undefined,
@@ -528,14 +687,20 @@ function writeModule(
       ? undefined
       : new Set(policy.chainScope.map((ref) => requireChain(ref).id));
   const explain =
-    "a chain's name is its chain id and its contracts; a token is never qualified by a chain: a " +
-    "symbol alone is the chain's own, compiled for it, and another chain's is an address";
+    "a chain's name is its chain id, its `hop({ … })` and its contracts; a token is never qualified " +
+    "by a chain: a symbol alone is the chain's own, compiled for it, and another chain's is an address";
+  // Each chain's eco-routes Portal, the contract: for a low-level call or a check, never to open an
+  // intent, which is `hop`.
+  const portal = evm ? ecoRoutesPortalContract() : undefined;
+  const portals = portal === undefined ? [] : writer.contractCases(portal);
   writer.lines.push(
     [
       "class OnChain {",
       "  constructor(id, why, closed) { this.id = id; this.why = why; this.closed = closed; }",
       "  valueOf() { return this.id; }",
       "  toString() { return this.why; }",
+      `  hop(config${evm ? ": HopConfig" : ""}) { if (this.closed) throw new Error(this.why); return ${HOPS}.to(this.id, config); }`,
+      `  get Portal() { return ${byChain("this.id", portals)}; }`,
       ...namespaces.map((key) =>
         scope === undefined
           ? `  get ${key}() { return new Ns${key}(this.id); }`
@@ -558,7 +723,7 @@ function writeModule(
   const header = [
     "// GENERATED by the SDK (routes/chain-module.ts) from its registries: every name, each the value",
     `// of the chain \`${CHAIN_DEFINE}\` is, and \`undefined\` where that chain has none.`,
-    ...(evm ? [`import { TokenOf } from "${TOKEN}";`] : []),
+    ...(evm ? [`import { TokenOf } from "${TOKEN}";`, `import { HopConfig } from "${HOP}";`] : []),
     ...writer.imports.lines(),
   ];
 

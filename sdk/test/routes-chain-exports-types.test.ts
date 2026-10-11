@@ -88,11 +88,13 @@ describe("chain accessors: the names resolve through an import, and only through
     expect(diagnostics.some((d) => d.code === 2304)).toBe(true);
   });
 
-  it("`import { Base }` typechecks: Base.chain is the chain's record, typed, not `any`", () => {
+  it("`import { Base }` typechecks: Base.Portal builds an intent whose program and cook are typed, not `any`", () => {
     const diagnostics = typecheckProbe(`
-      import { Base } from ${ROOT};
-      const id: number = Base.chain.id;
-      const slug: string = Base.chain.slug;
+      import { Base, Ethereum } from ${ROOT};
+      const intent = Base.hop({ source: Ethereum, send: { token: "0x1111111111111111111111111111111111111111", amount: 2n }, refundee: "0x3333333333333333333333333333333333333333", fee: 0n })
+        .then(() => {});
+      const bytecode: Uint8Array = intent.program.bytecode;
+      const cook: { to: string; data: string; value: bigint } = intent.cook({ owner: "0x3333333333333333333333333333333333333333" }, 0n);
       export {};
     `);
     expect(diagnostics).toHaveLength(0);
@@ -110,12 +112,12 @@ describe("chain accessors: the names resolve through an import, and only through
 
   // --- the native contract-accessor tree rides on the SAME import ---
 
-  it("the imported Base ALSO carries the native accessor tree alongside .chain -- both capabilities, one name", () => {
+  it("the imported Base ALSO carries the native accessor tree alongside .Portal -- both capabilities, one name", () => {
     const diagnostics = typecheckProbe(`
       import { Base } from ${ROOT};
       const canonical: unknown = Base.UniswapV4.UniversalRouter;
       const alias: unknown = Base.Uniswap.UniversalRouter;
-      const chain: unknown = Base.chain;
+      const portal: unknown = Base.Portal;
       export {};
     `);
     expect(diagnostics).toHaveLength(0);
@@ -270,12 +272,12 @@ describe("chain accessors: the names resolve through an import, and only through
 
   // --- the svm venue accessor tree rides on Solana's export only ---
 
-  it("the imported Solana ALSO carries the svm venue accessor tree, alongside .chain", () => {
+  it("the imported Solana ALSO carries the svm venue accessor tree, alongside .Portal", () => {
     const diagnostics = typecheckProbe(`
       import { Solana } from ${ROOT};
       const programId: unknown = Solana.RaydiumCpSwap.programId;
       const swap: unknown = Solana.MeteoraDammV2.swap;
-      const chain: unknown = Solana.chain;
+      const portal: unknown = Solana.Portal;
       export {};
     `);
     expect(diagnostics).toHaveLength(0);

@@ -85,7 +85,7 @@ export interface RouteInput {
   readonly calls?: readonly CallInput[];
 }
 
-/** Caller-facing, widened `Reward` — what a `.route(reward)` call accepts. */
+/** Caller-facing, widened `Reward` — what `assembleIntent` accepts. */
 export interface RewardInput {
   readonly deadline: bigint | number | string;
   readonly creator: AddressInput;

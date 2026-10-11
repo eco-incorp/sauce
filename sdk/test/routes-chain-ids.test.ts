@@ -1,9 +1,9 @@
 /**
  * A chain's name is its chain id in compiled source: `chainId == Ethereum` is decided while
  * compiling, so a program compiled for a chain keeps only that chain's branch, byte for byte. The
- * name's members are names of their own: `Ethereum.UniswapV3.Factory` is still Ethereum's
- * contract. A chain's name called as a function, the intent form a program no longer has, is
- * refused as what it is.
+ * name's members are names of their own: `Ethereum.Portal` still opens an intent, and
+ * `Ethereum.UniswapV3.Factory` is still Ethereum's contract. A chain's name called as a function,
+ * the intent form a program no longer has, is refused with the form that replaced it.
  */
 import { bytesToHex } from "viem";
 
@@ -11,6 +11,7 @@ import { CANONICAL_CHAINS } from "../src/chains/canonical.js";
 import { pascalOfSlug } from "../src/routes/builder.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
+const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const bytecode = (chain: string, source: string): string =>
   bytesToHex(compileSauceProgram(chain, source, {}).bytecode);
 const program = (body: string): string => `function main(recipient: Address) {\n${body}\n}`;
@@ -38,7 +39,7 @@ describe("a chain's name is its chain id", () => {
     );
   });
 
-  it("leaves its members their own names: a contract on that chain", () => {
+  it("leaves its members their own names: a contract on that chain, and its Portal", () => {
     expect(
       bytecode("base", "function main(): Address { return Ethereum.UniswapV3.Factory; }"),
     ).toBe(
@@ -47,6 +48,15 @@ describe("a chain's name is its chain id", () => {
         "function main(): Address { return 0x1F98431c8aD98523631AE4a59f267346ea31F984; }",
       ),
     );
+    const opened = compileSauceProgram(
+      "base",
+      `function main() {
+  Ethereum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: ${RECIPIENT} })
+    .then(() => { USDC.transfer(${RECIPIENT}, 1); });
+}`,
+      { intents: { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}`, executionFee: 1n } },
+    ).bodies;
+    expect(opened.map((body) => body.destination.slug)).toEqual(["ethereum"]);
   });
 
   it("refuses the old intent form, a chain's name called", () => {

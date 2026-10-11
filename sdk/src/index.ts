@@ -20,8 +20,8 @@ export * as contracts from "./descriptors/index.js";
 export * as svmVenues from "./svm/accessors.js";
 
 // One named export per canonical chain: `import { Base, Solana } from "@eco-incorp/sauce"`,
-// each carrying `.chain` and the lazy contract tree (`Base.Uniswap...`). Also `chain` and
-// `Token`. Importing the SDK
+// each carrying `.chain`, `.hop` (`Base.hop({ … })`, an intent whose body runs there) and the lazy
+// contract tree (`Base.Uniswap...`, `Base.Portal`). Also `chain` and `Token`. Importing the SDK
 // installs NOTHING on `globalThis` -- see routes/globals.ts for the opt-in install.
 export * from "./routes/chain-exports.generated.js";
 // Compile-time names inside route bodies; this module installs no JavaScript values. The

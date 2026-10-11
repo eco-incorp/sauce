@@ -3,10 +3,15 @@
  *
  * `compileSauceRoute` selects the target from the destination chain, compiles the program as
  * written through the published compiler dependency — the chain's names (tokens, protocols, `self`,
- * chains) are a SauceScript module the SDK writes from its registries and hands the compiler as an
- * ambient module (`chain-module.ts`), never rewritten into the text — and delegates call encoding
- * to `buildSauceEvmCall` or `buildSauceSvmCall`. One body produces one bytecode segment and one
- * call.
+ * chains and their hops) are a SauceScript module the SDK writes from its registries and hands
+ * the compiler as an ambient module (`chain-module.ts`), never rewritten into the text — and
+ * delegates call encoding to `buildSauceEvmCall` or `buildSauceSvmCall`. One body produces one
+ * bytecode segment and one call.
+ *
+ * An intent a program opens (`Arbitrum.hop({ … }).then(() => { … })`) is `@sauce/hop`'s classes,
+ * which the compiler runs while it compiles. Its body is compiled as a program of its own,
+ * `program(body, chainId)`, with the options `programOptions` gives that chain: its own module of
+ * names, its target, and the caller's defines.
  *
  * EVM calls carry the program bytes and invoke the supplied Pot with the supplied engine.
  * SVM calls name a finalized CODE account through `execution.code`; this module does not stage
@@ -18,18 +23,25 @@
  * by the released engine. See `docs/guides/solana.md` for the execution boundary.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
-import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
+import type {
+  AccountManifest,
+  ProgramOptions,
+  ProgramScope,
+  ResolveModule,
+  ResolvePackage,
+} from "sauce-compiler";
 import { bytesToHex } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
-import { requireChain } from "../chains/canonical.js";
+import { chainById, requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
+import { compileWithRs, toRsDefines, type RsCompileResult } from "./rs-compile.js";
 import {
   CHAIN_DEFINE,
   chainModuleSource,
   isChainScalar,
   isPlainModule,
+  levelModuleSource,
   type ChainModuleOptions,
 } from "./chain-module.js";
 import { registryTokenSymbols } from "./token-registry.js";
@@ -37,6 +49,9 @@ import type { ProtocolNameOptions } from "./protocol-names.js";
 import { pascalOfSlug } from "./pascal.js";
 import { chainAmbient } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
+import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
+import { randomSalt, type IntentDefaults } from "./intent-defaults.js";
+import { INTENT_FUND_VIA } from "./portal.js";
 import {
   entryParamsOf,
   entryWords,
@@ -44,6 +59,7 @@ import {
   type EntrySignature,
   type EntryValue,
 } from "./entry.js";
+import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -86,6 +102,16 @@ export interface SauceCompileOptions {
    * always loses to user code — a name the module declares, imports or binds wins silently.
    */
   ambient?: string[];
+  /**
+   * Settings for `Chain.hop({ ... }).then(...)` written inside the
+   * program — creating an intent from a program, rather than compiling a program into one.
+   * Everything the SDK can look up it looks up; these are the fields it cannot, plus overrides, for
+   * every intent that does not set its own. See `@sauce/hop`.
+   *
+   * Omitted entirely, an intent still compiles: its deadlines and salt have defaults, and its
+   * refundee (the reward's `creator`), which has none, is its own `refundee`.
+   */
+  intents?: IntentDefaults & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
   compactArgs?: boolean;
 }
@@ -114,7 +140,8 @@ export interface CompiledSauceRoute {
   readonly source: string;
 }
 
-/** Accessor name -> chain, for every canonical chain: the chains `import { Base }` gives a caller. */
+/** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
+ *  intent for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
 let chainAccessorCache: ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> | undefined;
 export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
   chainAccessorCache ??= new Map(
@@ -161,6 +188,23 @@ function splitChainDefines(
 
 const toAddress = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
+/** `intents.fundVia` checked, refusing an option that belongs to the other mode. */
+function requireFundVia(intents: IntentDefaults): void {
+  const fundVia = intents.fundVia ?? "transfer";
+  if (!INTENT_FUND_VIA.includes(fundVia)) {
+    throw new Error(
+      `intent sugar: \`intents.fundVia\` is '${String(fundVia)}', which is not ` +
+        `${INTENT_FUND_VIA.map((via) => `"${via}"`).join(" or ")}`,
+    );
+  }
+  if (fundVia === "transfer" && intents.allowPartial === true) {
+    throw new Error(
+      'intent sugar: `intents.allowPartial` goes with `fundVia: "publishAndFund"`: funding by ' +
+        "transfer pays the whole reward into the vault, and `publish` takes no such flag",
+    );
+  }
+}
+
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
@@ -171,13 +215,24 @@ const moduleSpecifier = (chain: CanonicalChain, options: ChainModuleOptions): st
   `@sauce/chain-${chain.kind === "evm" ? "evm" : "svm"}${isPlainModule(options) ? "" : "-own"}`;
 
 /**
- * What a compile for `chain` hands the compiler beyond the program: the chain's module of names,
- * and the caller's own defines.
+ * The bare specifier one program's level module is named by in a compile: `@sauce/chain-level-base`
+ * for the program's own, `@sauce/chain-level-base-body` for every body on Base, whose intents open
+ * when that body runs and are published by no wallet.
+ */
+const levelSpecifier = (chain: CanonicalChain, body: boolean): string =>
+  `@sauce/chain-level-${chain.slug}${body ? "-body" : ""}`;
+
+/**
+ * What a compile for `chain` hands the compiler beyond the program: the chain's module of names, the
+ * modules of every chain an intent's body runs on (written as the compiler asks for them), the
+ * options each body compiles with, and the caller's own defines.
  *
- * NAMES ARE VALUED PER CHAIN. A token symbol, `chainId` or a protocol name is declared for every
- * chain in one module, and its value is the one of the chain the program is compiled for, whose id
- * the define `__sauce_chain` is. A `tokens` override and a chain value the caller chose are that
- * chain's, in a module of the compile's own; the caller's other defines (`RECIPIENT`) stay defines.
+ * NAMES ARE SCOPED PER CHAIN. A token symbol, `chainId` or a protocol name means the chain its part
+ * runs on: a body's are its destination's, from that chain's module. So every `tokens` override and
+ * every chain value the caller chose belongs to the program it was given for, and a body on another
+ * chain takes its own chain's registry values instead; the caller's other defines (`RECIPIENT`)
+ * hold at every depth. A body's own intents open when it runs, not when the file compiles, and no
+ * wallet publishes them: each names its own refundee.
  */
 function chainModules(
   chain: CanonicalChain,
@@ -186,6 +241,8 @@ function chainModules(
   readonly modules: Map<string, string>;
   readonly ambient: string[];
   readonly defines: SauceCompileOptions["defines"];
+  readonly programOptions: (scope: ProgramScope) => ProgramOptions;
+  readonly bodies: Map<number, CanonicalChain>;
 } {
   const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
   if (defines !== undefined && CHAIN_DEFINE in defines) {
@@ -193,13 +250,52 @@ function chainModules(
       `compileSauceRoute: \`${CHAIN_DEFINE}\` is the SDK's own define, set to the chain's id`,
     );
   }
+  requireFundVia(options.intents ?? {});
+  const salt = options.intents?.salt ?? randomSalt();
   const moduleOptions: ChainModuleOptions = { tokens, values, accessors: options.accessors };
+  // Every program of the compile reads the same names: a value the caller chose is its chain's, so
+  // a body on another chain reads that chain's registry values.
   const own = moduleSpecifier(chain, moduleOptions);
+  const level = levelSpecifier(chain, false);
+  const modules = new Map([
+    [own, chainModuleSource(chain, moduleOptions)],
+    [level, levelModuleSource(chain, { intents: options.intents ?? {} }, salt)],
+  ]);
+  // A level below opens its intents when its parent runs, and funds them whatever the root does: a
+  // rehearsal that leaves the root's rewards unpaid must not change the bodies it publishes.
+  const { openedAt: _openedAt, fund: _fund, ...inherited } = options.intents ?? {};
+  const bodies = new Map<number, CanonicalChain>();
+
+  const programOptions = (scope: ProgramScope): ProgramOptions => {
+    const id = typeof scope === "bigint" ? Number(scope) : NaN;
+    const destination = chainById(id);
+    if (destination === undefined) {
+      throw new Error(
+        `program(closure, scope): the SDK compiles a closure for the chain whose id \`scope\` is; ` +
+          `${String(scope)} is no chain it knows`,
+      );
+    }
+    bodies.set(id, destination);
+    const specifier = levelSpecifier(destination, true);
+    if (!modules.has(specifier)) {
+      modules.set(specifier, levelModuleSource(destination, { intents: inherited }, salt));
+    }
+
+    return {
+      target: destination.kind === "svm" ? "svm" : "evm",
+      ambient: [
+        ...new Set([...chainAmbient(destination), ...(options.ambient ?? []), own, specifier]),
+      ],
+      defines: [...(toRsDefines(defines) ?? []), [CHAIN_DEFINE, String(destination.id)]],
+    };
+  };
 
   return {
-    modules: new Map([[own, chainModuleSource(chain, moduleOptions)]]),
-    ambient: [...new Set([...(options.ambient ?? []), own])],
+    modules,
+    ambient: [...new Set([...(options.ambient ?? []), own, level])],
     defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
+    programOptions,
+    bodies,
   };
 }
 
@@ -214,11 +310,27 @@ function chainModules(
  */
 export function compileSauceRoute(
   destination: ChainRef,
-  sauce: string,
+  sauce: SauceBody,
   execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
   options: SauceCompileOptions = {},
 ): CompiledSauceRoute {
-  const { chain, compiled, source } = compileForChain(destination, sauce, options);
+  return isSauceClosure(sauce)
+    ? compileScopedRoute(destination, closureText(sauce), execution, options, "closure")
+    : compileScopedRoute(destination, sauce, execution, options);
+}
+
+/**
+ * {@link compileSauceRoute} on a program's text, a module's or a closure's — the internal route
+ * builder's entry. Not exported from the package.
+ */
+export function compileScopedRoute(
+  destination: ChainRef,
+  sauce: string,
+  execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
+  options: SauceCompileOptions,
+  entryKind: "module" | "closure" = "module",
+): CompiledSauceRoute {
+  const { chain, compiled, source } = compileForChain(destination, sauce, options, entryKind);
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
 
   if (chain.kind === "svm") {
@@ -249,6 +361,20 @@ export function compileSauceRoute(
   return { calls: [call], compiled, source };
 }
 
+/** A body the compile compiled for another chain: an intent's, cooked on that chain's shared Pot. */
+export interface CompiledBody {
+  /** The compiler's number for it, in the order it met the `program` calls. */
+  readonly id: number;
+  /** The bodies it is nested in, by number, outermost first: empty for the program's own intents. */
+  readonly path: readonly number[];
+  /** The chain it runs on. */
+  readonly destination: CanonicalChain;
+  readonly bytecode: Uint8Array;
+  /** What it reads of the program around it, by name: each a word appended to its bytecode as the
+   *  program opening the intent runs. None: the body is fixed now. */
+  readonly captures: readonly string[];
+}
+
 /** A standalone program, compiled for one chain: {@link compileSauceProgram}'s result. */
 export interface CompiledSauceProgram {
   readonly chain: CanonicalChain;
@@ -263,6 +389,9 @@ export interface CompiledSauceProgram {
   readonly entryParams: readonly EntryParam[];
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
+  /** The body of every intent the program opens, at any depth
+   *  (`Arbitrum.hop({ ... }).then(...)`), as compiled for its chain. */
+  readonly bodies: readonly CompiledBody[];
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
   /** The source the compiler was given: the program as written. */
@@ -274,11 +403,12 @@ export interface SauceProgramOptions extends SauceCompileOptions {
   /**
    * `main`'s arguments the program is compiled for, one per entry of `entryParams` and in its
    * order: `main` is compiled with each such parameter a constant of its value (and every `const`
-   * computed from them), so it takes none at run time and the result's `entryParams` is empty. On
-   * Solana an `Account` parameter is no entry of `entryParams` and takes no value here: it stays a
-   * slot of the manifest. Each value is one word: an unsigned integer, an address or a `bool`; the
-   * compiler holds each to its parameter. Leave it out to compile `main` taking its arguments as it
-   * runs.
+   * computed from them), so it takes none at run time and the result's `entryParams` is empty; an
+   * intent's body folds them in too, capturing nothing for them. On Solana an `Account` parameter
+   * is no entry of `entryParams` and takes no value here: it stays a slot of the manifest. Each
+   * value is one word: an unsigned integer, an address or a `bool`; the compiler holds each to its
+   * parameter. How a wallet publishes the intents a program opens from values known before anything
+   * runs. Leave it out to compile `main` taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
 }
@@ -287,15 +417,20 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
  * the destination half of an intent.
  *
- * It gets the chain's names (tokens, protocols, `self`, chains) and the `@sauce/token` functions with
- * no import. So one source compiles, unchanged, for any chain whose names it uses. `main` may declare typed runtime parameters; `entryParams` reports them and
+ * It gets everything an intent's body gets except the intent around it: the chain's names
+ * (tokens, protocols, `self`, chains and their hops) and the `@sauce/token` functions with no
+ * import, and intents the program itself opens
+ * (`Arbitrum.hop({ ... }).then(...)`), which take their deadline and
+ * creator from `options.intents`. So one source compiles, unchanged, for any chain whose names it
+ * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
  * `encodeEntryArguments` encodes values for them.
  */
 export function compileSauceProgram(
   chain: ChainRef,
-  source: string,
+  body: SauceBody,
   options: SauceProgramOptions = {},
 ): CompiledSauceProgram {
+  const source = isSauceClosure(body) ? closureText(body) : body;
   const resolved = requireChain(chain);
   const { args, ...given } = options;
   const ambient = Array.from(new Set([...chainAmbient(resolved), ...(given.ambient ?? [])]));
@@ -303,6 +438,7 @@ export function compileSauceProgram(
     resolved,
     source,
     { ...given, ambient: ambient.length > 0 ? ambient : given.ambient },
+    isSauceClosure(body) ? "closure" : "module",
     args === undefined ? undefined : entryWords(args),
   );
   // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
@@ -318,6 +454,7 @@ export function compileSauceProgram(
       : { entrySchema: program.compiled.entrySchema }),
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+    bodies: program.bodies,
     entrySignature: program.entrySignature,
     source: program.source,
   };
@@ -332,6 +469,7 @@ function compileForChain(
   destination: ChainRef,
   sauce: string,
   options: SauceCompileOptions,
+  entryKind: "module" | "closure" = "module",
   args?: readonly (bigint | boolean | string)[],
 ): {
   readonly chain: CanonicalChain;
@@ -340,6 +478,7 @@ function compileForChain(
   readonly source: string;
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
+  readonly bodies: readonly CompiledBody[];
   readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
@@ -363,6 +502,7 @@ function compileForChain(
   const rs = compileWithRs({
     source,
     target,
+    entryKind,
     resolve: options.resolve,
     resolvePackage: options.resolvePackage,
     defines: names.defines,
@@ -370,14 +510,30 @@ function compileForChain(
     ambient: names.ambient,
     compactArgs: options.compactArgs,
     modules: names.modules,
+    programOptions: names.programOptions,
     ...(args === undefined ? {} : { args }),
   });
-  const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;
+  const { manifest, entryEncoding, entryParams, entrySignature, programs, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
+  const bodies = programs.flatMap((report): CompiledBody[] => {
+    const on = typeof report.scope === "bigint" ? chainById(Number(report.scope)) : undefined;
+    return on === undefined
+      ? []
+      : [
+          {
+            id: report.id,
+            path: report.path,
+            destination: on,
+            bytecode: report.bytecode,
+            captures: report.captures,
+          },
+        ];
+  });
+
   return manifest === undefined
-    ? { chain, compiled, entryParams, source, entryEncoding, entrySignature }
-    : { chain, compiled, entryParams, source, entryEncoding, manifest, entrySignature };
+    ? { chain, compiled, entryParams, source, entryEncoding, bodies, entrySignature }
+    : { chain, compiled, entryParams, source, entryEncoding, manifest, bodies, entrySignature };
 }

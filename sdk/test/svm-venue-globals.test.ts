@@ -1,8 +1,8 @@
 /**
  * E2.5: unification of the svm venue accessor tree onto the SAME `Solana`
- * accessor that already carries `ChainContracts` (E2.3). Proves: the composed
- * accessor resolves the real adapter's statics, `.chain` and `.RaydiumCpSwap`
- * coexist on one object, EVM chains are
+ * accessor that already carries `.Portal` and `ChainContracts`
+ * (E2.3). Proves: the composed accessor resolves the real adapter's statics,
+ * `.Portal` and `.RaydiumCpSwap` coexist on one object, EVM chains are
  * unaffected (both at runtime and, in routes-chain-exports-types.test.ts, at
  * the type level), and the OPT-IN install/uninstall bookkeeping still covers
  * the venue namespaces.
@@ -53,18 +53,20 @@ describe("svm venue accessors: on the imported Solana accessor", () => {
   });
 });
 
-describe("svm venue accessors: coexistence with .chain", () => {
-  it("the SAME Solana object carries its chain AND .RaydiumCpSwap", () => {
+describe("svm venue accessors: coexistence with .Portal", () => {
+  it("the SAME Solana object carries its Portal AND .RaydiumCpSwap", () => {
     const solana = Solana as unknown as {
+      hop: unknown;
       RaydiumCpSwap: unknown;
       chain: { slug: string };
     };
     expect(solana.chain.slug).toBe("solana");
     expect(solana.RaydiumCpSwap).toBeDefined();
+    expect(typeof solana.hop).toBe("function");
   });
 
   it("composition never mutates the imported chainAccessors.Solana object", () => {
-    expect(Object.keys(chainAccessors.Solana)).toEqual(["chain"]);
+    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["chain", "hop"]);
   });
 });
 
@@ -95,7 +97,8 @@ describe("svm venue accessors: opt-in install bookkeeping", () => {
     const target: Record<string, unknown> = {};
     const report = installRouteGlobals({ target });
     expect(report.installed).toContain("Solana");
-    const solana = target.Solana as { RaydiumCpSwap: unknown };
+    const solana = target.Solana as { RaydiumCpSwap: unknown; Portal: unknown };
     expect(solana.RaydiumCpSwap).toBeDefined();
+    expect(solana.Portal).toBeDefined();
   });
 });

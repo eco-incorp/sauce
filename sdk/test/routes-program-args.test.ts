@@ -7,8 +7,15 @@ import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { EntryArgumentError } from "../src/routes/entry.js";
 
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
+const CREATOR = "0x4444444444444444444444444444444444444444";
 /** A mint's key, as a Solana program holds an address: the whole word. */
 const USDC_MINT = `0x${"c6".repeat(32)}`;
+const INTENTS = {
+  deadline: 2_000_000_000n,
+  salt: `0x${"5a".repeat(32)}`,
+  executionFee: 1_000n,
+} as const;
+
 const bytes = (
   chain: string,
   source: string,
@@ -37,6 +44,25 @@ describe("a program compiled for main's arguments", () => {
     const address = Uint8Array.from(Buffer.from(RECIPIENT.slice(2), "hex"));
     expect(bytes("base", source, { args: [1, "2", "0x3", address, true] })).toEqual(expected);
     expect(bytes("base", source, { args: [1n, 2n, 3n, RECIPIENT, true] })).toEqual(expected);
+  });
+
+  it("folds them into the intents main opens, whose bodies then capture nothing", () => {
+    const opened = (amount: string, recipient: string) =>
+      `Arbitrum.hop({ send: { token: USDC, amount: ${amount} }, receive: { token: USDC, amount: ${amount} * 99 / 100 }, refundee: ${CREATOR} })
+    .then(() => { USDC.transfer(${recipient}, ${amount} * 99 / 100); });`;
+    const bound = compileSauceProgram(
+      "base",
+      `function main(amount: Uint256, recipient: Address) {\n  ${opened("amount", "recipient")}\n}`,
+      { intents: INTENTS, args: [1_000_000n, RECIPIENT] },
+    );
+    const literal = compileSauceProgram(
+      "base",
+      `function main() {\n  ${opened("1000000", RECIPIENT)}\n}`,
+      { intents: INTENTS },
+    );
+    expect(bound.bodies.map((body) => body.captures)).toEqual([[]]);
+    expect(Array.from(bound.bodies[0]!.bytecode)).toEqual(Array.from(literal.bodies[0]!.bytecode));
+    expect(Array.from(bound.bytecode)).toEqual(Array.from(literal.bytecode));
   });
 
   it("on Solana leaves an Account parameter to the manifest and takes a value for each other", () => {

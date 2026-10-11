@@ -87,7 +87,8 @@ describe("chain-accessor exports drift guard", () => {
     }
     // `Composed` itself is what carries `ChainContracts` onto every one of them.
     expect(committed).toContain(
-      `type Composed<N extends keyof ChainGlobals> = ChainGlobals[N] & ChainContracts;`,
+      "type Composed<N extends keyof ChainGlobals> = ChainGlobals[N] &\n" +
+        '  ChainContracts & { readonly Portal: ChainContracts["EcoRoutes"]["Portal"] };',
     );
   });
 

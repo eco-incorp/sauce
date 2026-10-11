@@ -42,6 +42,99 @@ export interface SauceInterface<Methods> extends SauceBinding<Methods> {
  *  `.at(address)` to call another deployment of the same ABI. */
 export type SauceContract<Methods> = bigint & Methods & SauceBinding<Methods>;
 
+/** A token and an amount in an intent a program opens: a token symbol (`USDC`), an address, or a
+ *  value the program measured. */
+export interface SauceIntentTokenAmount {
+  readonly token: bigint | number;
+  readonly amount: bigint | number;
+}
+
+/** Native coin a hop sends: `{ native: amount }`. */
+export interface SauceIntentNative {
+  readonly native: bigint | number;
+}
+
+/**
+ * What a chain's `hop` takes:
+ * `Base.hop({ send: { token, amount }, receive: { token, amount }, refundee })`. Each field left
+ * out but `send` and `refundee` has its default.
+ */
+export interface SauceHopConfig {
+  /**
+   * What leaves the chain the program runs on: escrowed there, it pays the solver who fills the
+   * intent (the Portal's reward): `{ token, amount }`, `{ native: amount }`, or a list of them.
+   */
+  readonly send: SauceIntentTokenAmount | SauceIntentNative | readonly (SauceIntentTokenAmount | SauceIntentNative)[];
+  /**
+   * What the solver delivers on the destination, for the body to run with: `{ token, amount }`, or
+   * a list of them. Each token is the destination's, looked up again there by its symbol; every
+   * other value is computed where the intent opens. Left out, nothing is delivered.
+   */
+  readonly receive?: SauceIntentTokenAmount | readonly SauceIntentTokenAmount[];
+  /**
+   * Who may reclaim an unearned reward, the reward's `creator` on the Portal: after the reward's
+   * deadline a refund goes to it, and only it may send the Portal's `refundTo` to redirect one.
+   * Required on every intent: the Pot a program runs on may be shared.
+   */
+  readonly refundee: bigint;
+  /**
+   * The last second the intent may be filled, Unix seconds. Defaults to five minutes past when it
+   * opens.
+   */
+  readonly deadline?: bigint | number;
+  /**
+   * From when what was sent, if no fill is proven, may be refunded (the Portal reward's deadline),
+   * Unix seconds. Defaults to seven days past the fill deadline.
+   */
+  readonly rewardDeadline?: bigint | number;
+  /** The source chain's prover. Defaults to the registry's for the pair. */
+  readonly prover?: bigint;
+  /**
+   * The route's salt, used as written. Left out, the compile's salt mixed with how many intents the
+   * transaction has opened, so two intents built alike are two.
+   */
+  readonly salt?: bigint | number;
+  /**
+   * The destination Kitchen's fee the body's cook pays, in wei. Defaults to what the compile is
+   * given for that destination.
+   */
+  readonly fee?: bigint | number;
+}
+
+/** A hop waiting for its body: give the body to `.then(...)`. */
+export interface SauceHop {
+  /**
+   * The body: runs on the destination with what was received. It is never invoked here: it is
+   * compiled for that chain.
+   */
+  then(body: () => void): SauceHopOpened;
+}
+
+/** A hop with its body. */
+export interface SauceHopOpened {
+  /**
+   * What runs on the destination in the body's place when the body reverts: everything the body did
+   * is undone, and the fill still succeeds. `e` is what the body reverted with, at most its first
+   * 256 bytes. EVM destinations only.
+   */
+  catch(handler: (e: SauceBytes) => void): void;
+}
+
+/**
+ * A chain in compiled source: `hop` opens an intent whose body runs there,
+ * `Ethereum.hop({ send: { token, amount }, refundee }).then(() => { … })`, and `Portal` is
+ * its eco-routes Portal contract. The one definition of that SauceScript: a `.sauce.ts` file's chains
+ * (`sauce-script/index.d.ts`'s `SauceChain`) extend it. A package chain export carries the host's
+ * `hop` instead (`host-intent.ts#ChainHop`), which takes these values as well as its own, so a
+ * typed closure inside `Base.hop({ … }).then(() => { ... })` opens one with the chain it imports.
+ */
+export interface SauceIntentChain {
+  /** Opens an intent whose body runs on this chain. */
+  hop(config: SauceHopConfig): SauceHop;
+  /** This chain's eco-routes Portal, the contract: for a low-level call, never to open an intent. */
+  readonly Portal: SauceContract<EcoRoutesPortalMethods>;
+}
+
 export interface AaveV2LendingPoolMethods {
   "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
   "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;

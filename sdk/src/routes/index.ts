@@ -1,9 +1,22 @@
 /**
  * eco-routes cross-chain intents — one chain accessor per canonical chain, generated from
- * `../chains/canonical.js`: `.chain`.
+ * `../chains/canonical.js`: `.chain` and `.hop`.
  *
- * The composed accessors (`.chain` and the native contract tree) are named exports of the package
- * root; `chainAccessors` below is the BARE record, carrying `.chain` alone.
+ * The composed accessors (`.chain`, `.hop`, `.Portal` and the native contract tree) are named
+ * exports of the package root; `chainAccessors` below is the BARE record, carrying `.chain`/`.hop`
+ * alone.
+ *
+ * ```ts
+ * import { Base, Ethereum } from "@eco-incorp/sauce";
+ * const intent = Base.hop({
+ *   source: Ethereum,
+ *   send: { token, amount: 1_010_000n },
+ *   receive: { token: usdcBase, amount: 1_000_000n },
+ *   refundee: owner,
+ *   fee: kitchenFee,
+ * }).then(() => { USDC.transfer(RECIPIENT, 1000000); });
+ * const cook = intent.cook({ owner }, sourceKitchenFee); // { to, data, value }
+ * ```
  */
 export { chain, chainAccessors, pascalOfSlug } from "./accessors.js";
 export type { PascalOf } from "./accessors.js";
@@ -83,10 +96,11 @@ export type {
   SvmAddressInput,
 } from "./sauce-calls.js";
 
-// --- compiling a program for a chain ---
+// --- cross-chain intent DSL (S1) ---
 
 export { compileSauceProgram, compileSauceRoute } from "./sauce-route.js";
 export type {
+  CompiledBody,
   CompiledSauceProgram,
   CompiledSauceRoute,
   SauceCompileOptions,
@@ -105,7 +119,7 @@ export {
 } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
-export { isSauceClosure, sauceBodyToSource } from "./closure.js";
+export { closureText, isSauceClosure } from "./closure.js";
 export { chainAmbient, chainDefines } from "./ambient.js";
 export type { AmbientDefinesOptions } from "./ambient.js";
 export { sourceGlobals } from "./source-globals.js";
@@ -137,7 +151,40 @@ export type {
 } from "./token-registry.js";
 export { STOCK_ISSUERS, stockSymbol } from "./stock-tokens.js";
 export type { StockIssuer } from "./stock-tokens.js";
+export { chainHop } from "./host-intent.js";
+export { loggedIntents } from "./published.js";
+export type { IntentLog, LoggedIntent } from "./published.js";
 export { destinationPot } from "./intent-pot.js";
+export type {
+  ChainHop,
+  HopAddress,
+  HopCaughtBytes,
+  HopChain,
+  HopConfig,
+  HopDelivery,
+  HopOpened,
+  HopSend,
+  HopSendItem,
+  HopTokenAmount,
+  HostHop,
+  HostIntent,
+  PotTarget,
+} from "./host-intent.js";
+export type { SauceBody } from "./closure.js";
+export {
+  DEFAULT_FILL_WINDOW,
+  DEFAULT_REFUND_WINDOW,
+  randomSalt,
+  type IntentDefaults,
+} from "./intent-defaults.js";
+export {
+  HOP_FIELDS,
+  HOP_STAGES,
+  type HopField,
+  type HopFieldName,
+  type HopStage,
+  type HopStep,
+} from "./intent-syntax.js";
 
 export {
   approvalTxs,

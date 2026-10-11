@@ -13,6 +13,9 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbiParameter,
   AccountManifest,
+  ProgramOptions,
+  ProgramReport,
+  ProgramScope,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
@@ -233,10 +236,16 @@ export interface RsCompileInput {
   /** Compile for compact-v1 entry arguments, returning the schema they must be encoded against. */
   compactArgs?: boolean;
   /** Modules the SDK wrote for this compile, by the bare specifier a program or `ambient` names
-   *  them with (`@sauce/chain-<name>`): each chain's names (`chain-module.ts`). */
+   *  them with (`@sauce/chain-<name>`): each chain's names (`chain-module.ts`). Read as the compile
+   *  asks, so a module added while it runs — a destination's, for a body — is served too. */
   modules?: ReadonlyMap<string, string>;
+  /** The options of each closure compiled as a program of its own, `program(closure, scope)`. */
+  programOptions?: (scope: ProgramScope) => ProgramOptions | undefined;
   /** `main`'s arguments the program is compiled for, one word each, in `entryParams`' order. */
   args?: readonly (bigint | boolean | string)[];
+  /** `"closure"`: `source` is one function expression as `Function.prototype.toString` prints it,
+   *  compiled as the entry as it stands. Default `"module"`. */
+  entryKind?: "module" | "closure";
 }
 
 /** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
@@ -248,6 +257,8 @@ export interface RsCompileResult extends CompileResult {
   entryParams: readonly AbiParameter[];
   /** `main`'s signature, as far as the compile reports it. */
   entrySignature: EntrySignature;
+  /** Every closure the compile compiled as a program of its own (`program(closure, scope)`). */
+  programs: readonly ProgramReport[];
 }
 
 /**
@@ -263,12 +274,14 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
+    entryKind: input.entryKind ?? "module",
     resolve: makeResolve(input.source, input.resolve, input.modules),
     resolvePackage: makeResolvePackage(input.resolvePackage, input.modules),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
     defines: toRsDefines(input.defines, input.baseDefines),
     compactArgs: input.compactArgs,
+    ...(input.programOptions === undefined ? {} : { programOptions: input.programOptions }),
     ...(input.args === undefined ? {} : { args: [...input.args] }),
   });
 
@@ -279,6 +292,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     entryEncoding: result.entryEncoding,
     entryParams: result.entryParams,
     entrySignature: entrySignatureOf(result.entrySignature),
+    programs: result.programs,
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 

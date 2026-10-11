@@ -1,21 +1,27 @@
 /**
  * Chain-global surface machinery: every canonical chain export is a namespace carrying `.chain`
- * (its registry record).
+ * (its registry record) and `.hop` (`Base.hop({ source, send, receive, refundee }).then(body)`,
+ * an intent whose body runs on that chain, compiled into the program a Pot on the source chain
+ * cooks: `host-intent.ts`).
  *
  * `ChainRef`/`CanonicalChain` come straight from `../chains/canonical.js` (which additionally
  * accepts `bigint`), re-exported below so the public name survives at this import path.
  */
 import type { CanonicalChain, ChainRef, ChainSlug } from "../chains/canonical.js";
 import { canonicalChains } from "../chains/canonical.js";
+import { chainHop, type ChainHop } from "./host-intent.js";
 import { pascalOfSlug, type PascalOf } from "./pascal.js";
 
 export type { ChainRef, PascalOf };
 export { pascalOfSlug };
 
-/** A chain export: `.chain`. */
+/** A chain export: `.chain`, and `.hop`, which opens an intent whose body runs there. */
 export interface ChainGlobal {
   /** The registry record this export was generated from (or resolved via `chain(ref)`). */
   readonly chain: CanonicalChain;
+  /** Opens an intent whose body runs on this chain:
+   *  `hop({ source, send, receive, refundee }).then(body)`. */
+  readonly hop: ChainHop;
 }
 
 /** One generated `ChainGlobal` per canonical chain slug, PascalCase-keyed. */
@@ -37,15 +43,19 @@ const FUNCTION_INTRINSICS: ReadonlySet<string> = new Set([
   "toString",
   "constructor",
   "chain",
+  "hop",
+  "Portal",
 ]);
 
 /**
  * Builds the `ChainGlobal` for `chain` -- what a generated export (`Base`) or `chain(ref)` returns:
- * `chain`, enumerable, so `Object.keys(chainAccessors.Base)` is exactly `["chain"]`.
+ * `chain` and `hop`, enumerable, so `Object.keys(chainAccessors.Base)` is exactly
+ * `["chain", "hop"]`.
  */
 export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
   return Object.defineProperties({} as ChainGlobal, {
     chain: { value: chain, enumerable: true, configurable: false, writable: false },
+    hop: { value: chainHop(chain), enumerable: true, configurable: false, writable: false },
   });
 }
 

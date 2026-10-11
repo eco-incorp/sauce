@@ -197,6 +197,30 @@ describe("what a chain can lack", () => {
     expect(() => build("base", "return UniswapV3 + 0;")).toThrow(/names no single contract/);
   });
 
+  it("an intent's body decides it for its own chain", () => {
+    const intents = { deadline: 4_000_000_000n, executionFee: 0n } as const;
+    const program = (guarded: string) => `function main() {
+  const amount = USDC.balanceOf(self);
+  Optimism.hop({ send: [{ token: USDC, amount }], refundee: 0x3333333333333333333333333333333333333333 }).then(() => {
+    ${guarded}
+  });
+}`;
+    // PancakeSwap V3 is on Base, where the program is compiled, and not on Optimism, where the body
+    // runs: the body's branch is left out, so its program never names the factory.
+    expect(() =>
+      compileSauceProgram(
+        "base",
+        program("if (PancakeswapV3.Factory) { PancakeswapV3.Factory.getPool(USDC, WETH, 500); }"),
+        { intents },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      compileSauceProgram("base", program("PancakeswapV3.Factory.getPool(USDC, WETH, 500);"), {
+        intents,
+      }),
+    ).toThrow();
+  });
+
   it("a name the program binds is its own", () => {
     expect(build("base", "const USDC = 5;\nreturn USDC;")).toEqual(build("base", "return 5;"));
   });

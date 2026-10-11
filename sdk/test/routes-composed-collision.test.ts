@@ -1,8 +1,8 @@
 /**
  * `routes/composed.ts` refuses to compose a chain accessor when a contract or venue namespace key
- * would land on a name the accessor already owns: `chain`, or an intrinsic (`call`, `bind`,
- * `toString`, ...). A protocol slug that happened to be one of those would otherwise corrupt `Base`
- * itself for every consumer, at module-eval time.
+ * would land on a name the accessor already owns: `chain` and `Portal`, or an intrinsic (`call`,
+ * `bind`, `toString`, ...). A protocol slug that happened to be one of those would otherwise corrupt
+ * `Base` itself for every consumer, at module-eval time.
  *
  * No registry protocol collides today, so the namespace tree is replaced for this file only: the
  * descriptor layer's `chainContracts` is mocked to return whatever namespaces a case plants, and
@@ -38,7 +38,7 @@ function composeWith(key: string): { name: string; compose: () => unknown } {
 }
 
 describe("composedChainGlobal: a namespace that collides with the accessor is refused", () => {
-  it.each(["chain"])("an accessor key: %s", (key) => {
+  it.each(["chain", "Portal"])("an accessor key: %s", (key) => {
     const { name, compose } = composeWith(key);
     expect(compose).toThrow(
       `routes/composed: '${key}' collides with another name on the '${name}' accessor`,
