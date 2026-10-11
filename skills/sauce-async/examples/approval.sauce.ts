@@ -1,8 +1,8 @@
 // Pays `amount` of the chain's native coin to `recipient` once the Pot's owner approves, within a
 // day: the payment waits as a promise raced against a day's timeout. The owner approves in a later
 // cook, by the key this program returns (`Async.resolve(key, …)`); after the day, anyone may call
-// the Pot's `expire` on the timeout, and the payment never happens. The Pot must be a Private Pot
-// with @sauce/async's handlers installed (`sauce run @sauce/async --chain <chain>`).
+// the Pot's `expire` on the timeout, and the payment never happens. The Pot must be a Private Pot;
+// the program installs its public `expire` as it runs, unless it is already there.
 //
 //   sauce run approval.sauce.ts --chain <chain> --wallet <name> --password-env <NAME> \
 //     --args <recipient> <amount>
