@@ -36,7 +36,13 @@ import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
-import { bindEntryArguments, mainParams, type EntryParam, type EntryValue } from "./entry.js";
+import {
+  entryParamsOf,
+  entryWords,
+  type EntryParam,
+  type EntrySignature,
+  type EntryValue,
+} from "./entry.js";
 import type { AddressInput, CallInput } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -245,16 +251,22 @@ export interface CompiledSauceProgram {
   readonly entryParams: readonly EntryParam[];
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
-  /** Source after the SDK's rewrites, before the compiler adapter adds entry annotations. */
+  /** `main`'s signature as the compile reports it. */
+  readonly entrySignature: EntrySignature;
+  /** Source after the SDK's rewrites: what the compiler was given. */
   readonly source: string;
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
-   * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. Leave
-   * it out to compile `main` taking its arguments as it runs.
+   * `main`'s arguments the program is compiled for, one per entry of `entryParams` and in its
+   * order: `main` is compiled with each such parameter a constant of its value (and every `const`
+   * computed from them), so it takes none at run time and the result's `entryParams` is empty. On
+   * Solana an `Account` parameter is no entry of `entryParams` and takes no value here: it stays a
+   * slot of the manifest. Each value is one word: an unsigned integer, an address or a `bool`; the
+   * compiler holds each to its parameter. Leave it out to compile `main` taking its arguments as it
+   * runs.
    */
   readonly args?: readonly EntryValue[];
 }
@@ -276,16 +288,7 @@ export function compileSauceProgram(
   options: SauceProgramOptions = {},
 ): CompiledSauceProgram {
   const resolved = requireChain(chain);
-  const { args, ...given } = options;
-  const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const taken = Object.keys(bound?.constants ?? {}).find((name) =>
-    Object.hasOwn(given.defines ?? {}, name),
-  );
-  if (taken !== undefined) {
-    throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
-  }
-  const compile: SauceCompileOptions =
-    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
+  const { args, ...compile } = options;
   // The chain's bundle, in two halves. The ambient MODULES join the caller's. The chain-scoped
   // NAMES travel as a scope for this program's chain, never in `defines`, so `defines` stays exactly
   // what the caller wrote.
@@ -295,13 +298,14 @@ export function compileSauceProgram(
   };
   const program = compileForChain(
     resolved,
-    bound?.source ?? source,
+    source,
     { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
     scope,
+    args === undefined ? undefined : entryWords(args),
   );
-  const entryParams = mainParams(program.source).filter(
-    (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
-  );
+  // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
+  // carries. Nothing is read from the source.
+  const entryParams = entryParamsOf(program.entryParams);
 
   return {
     chain: resolved,
@@ -312,6 +316,7 @@ export function compileSauceProgram(
       : { entrySchema: program.compiled.entrySchema }),
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+    entrySignature: program.entrySignature,
     source: program.source,
   };
 }
@@ -327,12 +332,15 @@ function compileForChain(
   sauce: string,
   options: SauceCompileOptions,
   scope: RouteScope,
+  args?: readonly (bigint | boolean | string)[],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
   readonly source: string;
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
+  readonly entryParams: RsCompileResult["entryParams"];
+  readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -453,6 +461,7 @@ function compileForChain(
       contracts,
       ambient: options.ambient,
       compactArgs: options.compactArgs,
+      ...(args === undefined ? {} : { args }),
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call
@@ -470,13 +479,13 @@ function compileForChain(
       ) ?? error
     );
   }
-  const { manifest, entryEncoding, ...compiled } = rs;
+  const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
 
   return manifest === undefined
-    ? { chain, compiled, source, entryEncoding }
-    : { chain, compiled, source, entryEncoding, manifest };
+    ? { chain, compiled, source, entryEncoding, entryParams, entrySignature }
+    : { chain, compiled, source, entryEncoding, manifest, entryParams, entrySignature };
 }

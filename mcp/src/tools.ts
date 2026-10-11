@@ -30,7 +30,6 @@ import {
   actionsProgram,
   addressDefinesOf,
   assumedBalances,
-  bindMainArguments,
   CANONICAL_CHAINS,
   type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
@@ -259,13 +258,6 @@ const ARGS = z
       "as 0x hex, a bool as true/false, an array as an array, a tuple as an array of its fields " +
       "or an object naming them. sauce_compile's entryParams lists what main takes.",
   );
-
-/** A program file's `main` arguments, bound into it with `bindMainArguments`. */
-export function boundProgram(args: ProgramArgs & { readonly args?: readonly unknown[] }): Program {
-  const given = programOf(args);
-
-  return { ...given, input: bindMainArguments(given.input, argsOf(args).args) };
-}
 
 const COOK = {
   ...POT,
@@ -2154,16 +2146,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             "The program the hex was compiled from, to check and decode it against; or, with " +
               "no hex, the program to inspect.",
           ),
-        args: z
-          .array(z.unknown())
-          .max(LIMITS.entries)
-          .optional()
-          .describe(
-            "With source and no hex: main's arguments, in order, as JSON values, bound into the " +
-              "program, each one word: an integer in base units as a decimal string (or a " +
-              "number up to 2^53), an address as 0x hex, or a bool. A cook's arguments are " +
-              "decoded from its hex instead.",
-          ),
         rpcUrl: RPC_URL,
       },
       output: {},
@@ -2174,18 +2156,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         if (args.source === undefined) {
           throw new UsageError("give hex (calldata, a program or a transaction hash), or source");
         }
-        const program =
-          args.args === undefined
-            ? programOf({ ...args, source: args.source })
-            : boundProgram({ ...args, source: args.source });
+        const program = programOf({ ...args, source: args.source });
 
         return fromCommand(
           inspectFile(program.input.file, compileProgram(program.input, program.files)),
-        );
-      }
-      if (args.args !== undefined) {
-        throw new UsageError(
-          "args gives source's main its arguments; a cook's are decoded from its hex",
         );
       }
       const hex = hexArg(args.hex, "hex");

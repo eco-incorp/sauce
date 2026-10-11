@@ -431,7 +431,7 @@ placeholders and the lines on how it was rehearsed left out:
 
 ```text
 The cook succeeds from <owner>: gas used 729747, returns <the same three words, in hex>
-main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 738558490183795118, unspent: 0 }
+main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: { spent: 2000000000, bought: 738558490183795118, unspent: 0 }
 What moved, in order:
   [1] wallet <owner> -> Pot <Pot>          … ETH                      the cook's value
   [2] Pot            -> Kitchen <Kitchen>  … ETH                      the Kitchen's fee

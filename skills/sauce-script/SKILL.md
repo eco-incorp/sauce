@@ -306,15 +306,14 @@ Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...o
 The full list, with what each rejection says, is section 14 of
 [references/builtins.md](references/builtins.md).
 
-| Rejected                                                                                                          | Write instead                                                                                |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`                                                    | `if` chains, arrays, inline object types, plain functions                                    |
-| `try`/`catch`, `throw new Error(...)`                                                                             | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
-| arrow functions and nested functions, except the intent syntax `Chain(() => { ... })` and `.catch(() => { ... })` | top-level function declarations                                                              |
-| template literals, comparing bytes with `==`                                                                      | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
-| `as` casts, default parameters, spread, object destructuring                                                      | explicit values and field access                                                             |
-| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                        | `new Array(n)` and an index; `if`; `**`                                                      |
-| a method on a literal: ``hex`a9059cbb`.concat(d)``                                                                | bind it first: ``const selector = hex`a9059cbb`; selector.concat(d)``                        |
+| Rejected                                                             | Write instead                                                               |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `switch`, `for...in`, `enum`, `type` aliases, `await`                | `if` chains, arrays, inline object types, plain functions                   |
+| `finally`                                                            | code after the `try`; to survive a failure on EVM, `try`/`catch` (below)    |
+| arrow functions and nested functions, except `.catch(() => { ... })` | top-level function declarations                                             |
+| template literals, comparing bytes with `==`                         | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each |
+| `as` casts, default parameters, spread, object destructuring         | explicit values and field access                                            |
+| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`           | `new Array(n)` and an index; `if`; `**`                                     |
 
 ```sauce fails
 function main(x: Uint256): Uint256 {
@@ -333,9 +332,29 @@ the package emits revert the **whole transaction**: for an intent, the whole ful
 the calls that ran before the program. Nothing half-happens, so put every safety check in the
 program.
 
-The one way to survive a failure is on an external EVM call: `.catch(() => { ... })` runs instead
-when that call reverts, and the call's own effects are undone. The handler may assign locals of the
-enclosing function.
+A failure is survived on EVM, two ways. `try { ... } catch (e) { ... }` runs its block in a frame of
+its own: when anything in it reverts, everything it did is undone together and the `catch` block
+runs, with `e` what it reverted with (`bytes`, its first 256 bytes). The block reads the code around
+it but cannot assign it; the `catch` block can.
+
+```sauce chain=base
+// Sends `amount` USDC only if at least 1 USDC stays in the Pot; otherwise nothing moves, and it
+// returns the length of the reason it refused with.
+function main(to: Address, amount: Uint256): Uint256 {
+  let refused = 0;
+  try {
+    USDC.transfer(to, amount);
+    require(USDC.balanceOf(ctx.self()) >= 1000000, "would leave less than 1 USDC");
+  } catch (e) {
+    refused = e.length;
+  }
+  return refused;
+}
+```
+
+On one external call, `.catch(() => { ... })` runs instead when that call reverts, and the call's
+own effects are undone (`.catch((e) => { ... })` names its revert data). The handler may assign
+locals of the enclosing function.
 
 ```sauce chain=base
 import { ISauceRouter } from "./artifacts/ISauceRouter.json";
@@ -431,8 +450,7 @@ function's parameter has no annotation, so it is a number: annotate it, `first: 
 other message, find it in [references/builtins.md](references/builtins.md). `a nested function
 declaration is not supported` means a function declared inside another function or a block:
 declare it at the top level. `X is called but never declared` means a function that is not in
-scope, usually a typo. `calling anything other than a plain function name` at a method call on a
-literal (``hex`…`.concat(…)``) means the literal must be bound to a `const` first.
+scope, usually a typo.
 
 ## Example
 

@@ -295,7 +295,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         { name: "minOut", type: "Uint256" },
         { name: "recipient", type: "Address" },
       ]);
-      expect(out.returnType).toBe("{ pool: Address; spent: Uint256; bought: Uint256 }");
+      expect(out.returnType).toBe("{ pool: Address, spent: Uint256, bought: Uint256 }");
       expect(out.defines).toEqual([expect.objectContaining({ name: "USDC", value: usdc })]);
       expect(out.contracts).toEqual([
         expect.objectContaining({
@@ -351,7 +351,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         ...buyArgs({ budget: "100000000000", minOut: "0" }),
       );
       expectQuoted(
-        "main returns { pool: Address; spent: Uint256; bought: Uint256 }: { pool: <pool>, spent: 48361532981",
+        "main returns { pool: Address, spent: Uint256, bought: Uint256 }: { pool: <pool>, spent: 48361532981",
         text,
         roles(),
       );

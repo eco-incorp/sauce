@@ -66,7 +66,7 @@ import {
 import { linkLines, txLinks } from "./links.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
-import { mainReturnType } from "../routes/entry.js";
+import { entryReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
@@ -338,7 +338,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       entryParams: program.entryParams,
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
-      returnType: mainReturnType(input.text) ?? null,
+      returnType: entryReturnType(program.entrySignature) ?? null,
       defines,
       contracts: collected.contracts(),
       compiler: compilerPackage(),

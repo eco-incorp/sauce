@@ -6,10 +6,8 @@
 import { requireChain } from "../src/chains/canonical.js";
 import { potSalt, SAUCE_INTENT_POT_SALT } from "../src/deployments/pot.js";
 import { UsageError } from "../src/cli/args.js";
-import type { ProgramInput } from "../src/cli/commands.js";
 import {
   assumedBalances,
-  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -160,81 +158,5 @@ describe("sauce mcp, before the server loads", () => {
       expect(run.code).toBe(2);
       expect(run.stderr).toMatch(message);
     }
-  });
-});
-
-describe("bindMainArguments: main's arguments, bound into the program", () => {
-  const RECIPIENT = "0x6666666666666666666666666666666666666666";
-  const BRIDGE = [
-    "function main(amount: Uint256, reward: Uint256, recipient: Address, sweep: bool) {",
-    "  USDC.transfer(recipient, amount);",
-    "  if (sweep) USDC.transfer(recipient, reward);",
-    "}",
-    "",
-  ].join("\n");
-  const input = (text: string, defines: ProgramInput["defines"] = {}): ProgramInput => ({
-    file: "bridge.sauce.ts",
-    text,
-    chain: requireChain("ethereum"),
-    defines,
-    compactArgs: false,
-  });
-  const args = (...values: string[]) => ({ from: "--args" as const, values });
-
-  it("blanks main's parameter list in place and makes each argument its name's value", () => {
-    const bound = bindMainArguments(input(BRIDGE), args("1000000", "1010000", RECIPIENT, "true"));
-    expect(bound.defines).toEqual({
-      amount: 1_000_000n,
-      reward: 1_010_000n,
-      recipient: BigInt(RECIPIENT),
-      sweep: true,
-    });
-    expect(bound.addressDefines).toEqual(["recipient"]);
-    // Same length, same lines: the compiler's positions are still the file's.
-    expect(bound.text).toHaveLength(BRIDGE.length);
-    const list = "amount: Uint256, reward: Uint256, recipient: Address, sweep: bool";
-    expect(bound.text.split("\n")[0]).toBe(`function main(${" ".repeat(list.length)}) {`);
-    expect(bound.text.split("\n").slice(1)).toEqual(BRIDGE.split("\n").slice(1));
-  });
-
-  it("takes --args-json values as they are", () => {
-    const bound = bindMainArguments(input(BRIDGE), {
-      from: "--args-json",
-      values: [1_000_000, "1010000", RECIPIENT, false],
-    });
-    expect(bound.defines).toMatchObject({ amount: 1_000_000n, reward: 1_010_000n, sweep: false });
-  });
-
-  it("leaves a program whose main takes nothing as it is, and asks for the ones it takes", () => {
-    const fixed = input("USDC.transfer(0x1n, 1n);");
-    expect(bindMainArguments(fixed, undefined)).toBe(fixed);
-    expect(() => bindMainArguments(input(BRIDGE), undefined)).toThrow(
-      /main\(amount: Uint256, reward: Uint256, recipient: Address, sweep: bool\) takes 4 arguments: pass them after --args/,
-    );
-  });
-
-  it("refuses arguments for a file with no parameters, a wrong count, and a wrong value", () => {
-    expect(() => bindMainArguments(input("function main() {}"), args("1"))).toThrow(
-      /declares no `main` with parameters/,
-    );
-    expect(() => bindMainArguments(input(BRIDGE), args("1", "2"))).toThrow(
-      /takes 4 arguments, got 2/,
-    );
-    expect(() =>
-      bindMainArguments(input(BRIDGE), args("1", "2", "not an address", "true")),
-    ).toThrow(/argument 3 \(recipient: Address\).*is not an address/);
-  });
-
-  it("refuses a parameter no one word holds, and a --define of a parameter's name", () => {
-    const list = input("function main(path: Address[]) { }");
-    expect(() => bindMainArguments(list, args('["0x1"]'))).toThrow(
-      /argument 1 \(path: Address\[\]\): each argument is bound into the program .*\(sauce run\)/,
-    );
-    expect(() =>
-      bindMainArguments(
-        input(BRIDGE, { amount: 5n }),
-        args("1000000", "1010000", RECIPIENT, "true"),
-      ),
-    ).toThrow(/amount is main's parameter, given by --args; it cannot also be a --define/);
   });
 });

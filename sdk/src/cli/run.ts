@@ -87,7 +87,6 @@ import { globalsCommand } from "./globals.js";
 import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
   assumedBalances,
-  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -625,9 +624,6 @@ async function programInput(
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
   gate?: Gate,
-  /** `main`'s arguments, bound into the program (`bindMainArguments`), after `before` has refused
-   *  what no arguments could fix. */
-  bind?: { readonly args?: ArgsInput; readonly before?: (input: ProgramInput) => void },
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
   const sourceDir = stringFlag(args, "source-dir");
@@ -656,9 +652,8 @@ async function programInput(
     compactArgs: args.values["compact-args"] === true,
     defines,
   };
-  bind?.before?.(given);
 
-  return bind === undefined ? given : bindMainArguments(given, bind.args);
+  return given;
 }
 
 /**
@@ -3028,14 +3023,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
-        const given = argsInput(args, io, trailing);
+        if (argsInput(args, io, trailing).args !== undefined) {
+          throw new UsageError(
+            "--args: a file's main reads its arguments as it runs, and inspect compiles it " +
+              "without running it; `sauce simulate` runs it with them",
+          );
+        }
         const input = await programInput(
           args,
           io,
           piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
-          undefined,
-          undefined,
-          given.args === undefined ? undefined : given,
         );
 
         return inspectFile(input.file, compileProgram(input, io));

@@ -10,13 +10,7 @@ import type { Address } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
-import {
-  bindEntryArguments,
-  mainParams,
-  mainSignature,
-  type BoundEntryArguments,
-  type EntryValue,
-} from "../routes/entry.js";
+import { mainSignature } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import {
   parseAddress,
@@ -26,7 +20,7 @@ import {
   parseTarget,
   UsageError,
 } from "./args.js";
-import type { Approver, ArgsInput, CookInput, PotInput, ProgramInput } from "./commands.js";
+import type { Approver, CookInput, PotInput } from "./commands.js";
 import {
   FUND_MODES,
   parseFund,
@@ -107,65 +101,6 @@ export function definesReach(file: string, text: string, names: readonly string[
       );
     }
   }
-}
-
-/**
- * A program with `main`'s arguments given: the same program with each argument bound as a constant
- * (`bindEntryArguments`), so `main(amount: Uint256, recipient: Address)` with `--args 1000000 0x…`
- * is compiled as if its body read `amount` and `recipient` as those values. The program keeps its
- * shape.
- *
- * Only a single word binds this way: an integer, an address or a `bool`. A program whose `main`
- * takes bytes, a string, an array or a record is refused, naming the parameter: run it on a Pot
- * (`sauce run`), where its arguments are read as it runs. With no `args`, a program whose `main`
- * takes none is returned as it is, and one that takes some is refused, naming them.
- */
-export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefined): ProgramInput {
-  const params = mainParams(input.text);
-  const shape = `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")})`;
-  if (args === undefined) {
-    if (params.length === 0) return input;
-    throw new UsageError(
-      `${shape} takes ${params.length} argument${params.length === 1 ? "" : "s"}: pass them ` +
-        "after --args, in order, or as --args-json; the program is compiled with them",
-    );
-  }
-  if (params.length === 0) {
-    throw new UsageError(
-      `${args.from} gives main's arguments, and ${input.file} declares no \`main\` with ` +
-        "parameters: declare the values it reads as main's parameters, then pass them in order",
-    );
-  }
-  let bound: BoundEntryArguments;
-  try {
-    bound = bindEntryArguments(input.text, args.values as EntryValue[]);
-  } catch (error) {
-    const message = (error as Error).message;
-    throw new UsageError(
-      /only one word binds/.test(message)
-        ? `${args.from}: ${message.replace(/: only one word.*$/, "")}: each argument is bound into ` +
-            "the program as one word, and this one is not: an integer, an address or a bool " +
-            "binds. Run the program on a Pot instead (sauce run), where it reads its arguments as " +
-            "it runs"
-        : `${args.from}: ${message}`,
-    );
-  }
-  for (const name of Object.keys(bound.constants)) {
-    if (Object.hasOwn(input.defines, name)) {
-      throw new UsageError(
-        `${name} is main's parameter, given by ${args.from}; it cannot also be a --define`,
-      );
-    }
-  }
-
-  return {
-    ...input,
-    text: bound.source,
-    defines: { ...input.defines, ...bound.constants },
-    ...(bound.addresses.length === 0
-      ? {}
-      : { addressDefines: [...(input.addressDefines ?? []), ...bound.addresses] }),
-  };
 }
 
 /** The Pot a cook names: by address, or by its owner and salt. */

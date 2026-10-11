@@ -503,7 +503,7 @@ addresses as placeholders:
 
 ```text
 The cook succeeds from <owner>: 354383 compute units, returns <the same three words, in hex>
-main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
+main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
 Rehearsed in a local copy (LiteSVM) of the 44 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
   the 6447-byte program staged into a code buffer in 10 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
