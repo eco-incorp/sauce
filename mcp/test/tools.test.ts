@@ -970,6 +970,62 @@ describe("sauce_actions", () => {
   });
 });
 
+describe("sauce_sign", () => {
+  it("builds the typed data the Pot's owner signs, with main's arguments, and signs nothing", async () => {
+    const salt = `0x${"ab".repeat(32)}`;
+    const out = ok(
+      await mcp.call("sauce_sign", {
+        source: PAY,
+        chain: "base",
+        owner: OWNER,
+        args: [RECIPIENT, "1000000"],
+        deadline: "2000000000",
+        signedSalt: salt,
+      }),
+    );
+    const pot = v12PredictPot(OWNER, `0x${"00".repeat(32)}`);
+    assert.equal(out.chainId, 8453);
+    assert.equal(out.pot, pot);
+    assert.equal(out.salt, salt);
+    assert.equal(out.deadline, "2000000000");
+    assert.equal(out.signature, undefined);
+    const typed = out.typedData as {
+      primaryType: string;
+      domain: { name: string; version: string; chainId: number; verifyingContract: string };
+      message: { program: string; salt: string; deadline: string };
+    };
+    assert.equal(typed.primaryType, "Execute");
+    assert.deepEqual(typed.domain, {
+      name: "Sauce Pot",
+      version: "1",
+      chainId: 8453,
+      verifyingContract: pot,
+    });
+    const compiled = ok(await mcp.call("sauce_compile", { source: PAY, chain: "base" }));
+    assert.ok(typed.message.program.startsWith(compiled.bytecode as string));
+    assert.ok(typed.message.program.includes(RECIPIENT.slice(2).toLowerCase()));
+    // No endpoint: the Pot was not read, so no setup is planned.
+    assert.equal(out.setup, undefined);
+    assert.ok((out.notes as string[]).some((note) => /The Pot was not read/.test(note)));
+  });
+
+  it("is refused on a preview chain before any endpoint, and on Solana", async () => {
+    const refused = await mcp.call("sauce_sign", {
+      source: PAY,
+      chain: "arbitrum",
+      owner: OWNER,
+      args: [RECIPIENT, "1"],
+    });
+    assert.ok(JSON.stringify(refused).includes("refused"));
+    const solana = await mcp.call("sauce_sign", {
+      source: "function main(): void {}",
+      chain: "solana",
+      owner: OWNER,
+    });
+    assert.match(failed(solana), /solana has none/);
+  });
+});
+
 describe("sauce_tx", () => {
   it("builds the unsigned EVM cook on the owner's Pot, with main's arguments", async () => {
     const out = ok(

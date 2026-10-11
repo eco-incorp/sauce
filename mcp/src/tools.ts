@@ -97,6 +97,7 @@ import {
   svmTxCommand,
   svmVerifyCommand,
   tokenGiven,
+  signCommand,
   txCommand,
   UsageError,
   verifyCommand,
@@ -1027,6 +1028,7 @@ export const TOOL_NAMES = [
   "sauce_compile",
   "sauce_actions",
   "sauce_tx",
+  "sauce_sign",
   "sauce_pot",
   "sauce_simulate",
   "sauce_intent_publish",
@@ -1924,6 +1926,97 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           "sauce_tx does not rehearse the cook: run sauce_simulate to see whether it reverts now.",
         ],
       };
+    },
+  );
+
+  tool(
+    "sauce_sign",
+    {
+      title: "Build what a Pot's owner signs for anyone to run a program",
+      description:
+        "Builds what lets anyone run a program on a Private Pot (@sauce/signed): a relayer, a " +
+        "counterparty, a hop's body. Returns { chainId, pot, program, salt, deadline, typedData }: " +
+        "`program` is the bytecode with main's arguments appended, all of it signed, and " +
+        "`typedData` is the EIP-712 data (eth_signTypedData_v4) the Pot's owner signs, " +
+        "Execute { program, salt, deadline } under the Pot's domain. With the signature, the " +
+        "Pot's execute(program, salt, deadline, signature) may be sent by any account; " +
+        "routes.encodeExecute builds it, and `sauce sign` signs and builds it in one step. A Pot " +
+        "runs signed programs once it is set up, which only its owner can do: with an endpoint " +
+        "the tool reads the Pot, and when it is not set up returns `setup`, the transactions the " +
+        "owner sends first, in order (Kitchen.deployPot when it has no code, marked deploysPot; " +
+        "then the owner's cook of Signed.setup(), marked installsHandlers). The salt runs once " +
+        "(random unless signedSalt gives one); the deadline is `within` seconds from now (default " +
+        "3600) or `deadline`. Nothing is signed or sent: the owner signs typedData, and sends " +
+        `setup, with its own wallet. ${SUPPORTED_ONLY}`,
+      input: {
+        ...PROGRAM,
+        ...sourceInputs(local),
+        ...POT,
+        pot: COOK.pot,
+        args: ARGS,
+        within: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("How many seconds from now the signature runs (default 3600)."),
+        deadline: integer.optional().describe("Or the last unix second it runs, exactly."),
+        signedSalt: z
+          .string()
+          .max(66)
+          .optional()
+          .describe("The 32-byte salt it is signed under, 0x hex (default: random)."),
+        rpcUrl: RPC_URL,
+      },
+      output: refusable({
+        chainId: z.number(),
+        pot: z.string(),
+        program: z.string(),
+        salt: z.string(),
+        deadline: z.string(),
+        typedData: z.looseObject({}),
+        setup: z.array(
+          z.looseObject({ what: z.string(), to: z.string(), data: z.string(), value: z.string() }),
+        ),
+      }),
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const program = programFrom(args, local);
+      const chain = program.input.chain;
+      if (chain.kind !== "evm") {
+        throw new UsageError(
+          `a signed program runs on a Private Pot's Router, an EVM contract: ${chain.slug} has none`,
+        );
+      }
+      // Before any endpoint: the chain, and every chain an intent the program opens goes to.
+      requireSupported("signing a program for a Pot", programChains(program.input, program.files));
+      if (args.within !== undefined && args.deadline !== undefined) {
+        throw new UsageError("give within or deadline, not both");
+      }
+      const cook = evmCook(
+        { ...args, value: undefined, accounts: undefined } as unknown as CookArgs,
+        program,
+      );
+      const rpcUrl = await reach.endpoint(chain, args.rpcUrl);
+      const deadline =
+        args.deadline !== undefined
+          ? parseUnixSeconds("deadline", integerText(args.deadline, "deadline"))
+          : BigInt(Math.floor(Date.now() / 1000)) + BigInt(args.within ?? 3600);
+
+      return fromCommand(
+        await signCommand(
+          {
+            ...cook,
+            deadline,
+            ...(args.signedSalt === undefined
+              ? {}
+              : { signedSalt: args.signedSalt as `0x${string}` }),
+            ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          },
+          program.files,
+        ),
+      );
     },
   );
 
