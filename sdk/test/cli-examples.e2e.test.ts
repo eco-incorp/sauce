@@ -190,8 +190,20 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
     await base.testClient.revert({ id: snapshot });
     snapshot = await base.testClient.snapshot();
   };
-  const call = (to: Address, abi: Abi, functionName: string, args: readonly unknown[]) =>
-    base.send(base.deployer, to, encodeFunctionData({ abi, functionName, args }));
+  // A gas limit of its own rather than an estimate: an estimate is made against the pending block,
+  // and a liquidity mint mined a moment later may need more than it, as `pools-anvil.ts` found —
+  // the setup then reverted now and then.
+  const call = async (to: Address, abi: Abi, functionName: string, args: readonly unknown[]) => {
+    const hash = await base.deployer.sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      to,
+      data: encodeFunctionData({ abi, functionName, args }),
+      gas: 15_000_000n,
+    });
+    const { status } = await base.publicClient.waitForTransactionReceipt({ hash });
+    if (status !== "success") throw new Error(`${functionName} on ${to} reverted`);
+  };
   const sqrtAt = (usdcPerWeth: string): bigint => sqrtPriceX96FromPrice(usdcPerWeth, PAIR);
   const tickOf = (sqrtPriceX96: bigint): number =>
     Math.floor(Math.log(Number(sqrtPriceX96) / 2 ** 96) / Math.log(Math.sqrt(1.0001)));
