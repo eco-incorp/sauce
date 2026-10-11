@@ -188,6 +188,37 @@ export function planChain(
   return requireChain(id);
 }
 
+/**
+ * A plan's transactions by the chain each is sent on, in order: consecutive ones on one chain
+ * together, so a plan that readies another chain first (a remote message's destination Pot) is
+ * sent there, then on its own chain. A transaction that names no chain is the plan's: `given`'s,
+ * else the one chain the others name.
+ */
+export function planGroups(
+  transactions: readonly PlannedTx[],
+  given?: CanonicalChain,
+): { readonly chain: CanonicalChain; readonly transactions: readonly PlannedTx[] }[] {
+  const named = new Set(
+    transactions.flatMap((tx) => (tx.chainId === undefined ? [] : [tx.chainId])),
+  );
+  const unnamed = given ?? (named.size === 1 ? requireChain([...named][0]!) : undefined);
+  const chainOf = (tx: PlannedTx): CanonicalChain => {
+    if (tx.chainId !== undefined) return requireChain(tx.chainId);
+    if (tx.kind === "svm") return requireChain("solana");
+    if (unnamed === undefined) throw new UsageError("the transactions name no chain: give chain");
+    return unnamed;
+  };
+  const groups: { chain: CanonicalChain; transactions: PlannedTx[] }[] = [];
+  for (const tx of transactions) {
+    const chain = chainOf(tx);
+    const last = groups[groups.length - 1];
+    if (last !== undefined && last.chain.id === chain.id) last.transactions.push(tx);
+    else groups.push({ chain, transactions: [tx] });
+  }
+
+  return groups;
+}
+
 /** What was sent, one entry per transaction, in order. */
 interface SentEntry {
   readonly what: string;

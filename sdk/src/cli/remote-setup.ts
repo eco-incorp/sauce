@@ -42,7 +42,9 @@ import {
 } from "../routes/handlers.js";
 import { remoteLink, type RemoteBridge, type RemoteLink } from "../routes/remote-link.js";
 import { compileSauceProgram, type CompiledBody } from "../routes/sauce-route.js";
-import { kitchenFee } from "./chain.js";
+import type { ChainReach, SetupStep } from "./approvals.js";
+import { CliError } from "./args.js";
+import { awaitPot, kitchenFee, type TxRequest } from "./chain.js";
 import { handlersInPlace } from "./handlers.js";
 import { nativeSymbol } from "./effects.js";
 
@@ -61,40 +63,14 @@ export interface DestinationNeed {
   };
 }
 
-/** One transaction on another chain, as a step sends it. */
-export interface DestinationTx {
-  readonly to: Address;
-  readonly data: Hex;
-  readonly value: bigint;
-}
+/** What a setup step does, as its plan entry marks it (`setup`). */
+export type RemoteSetupKind = "deploy" | "install" | "fund";
 
-/** What the command reaches another chain with: `approvals.ts`'s `ChainReach`. */
-export interface DestinationReach {
-  readonly chain: CanonicalChain;
-  readonly client: PublicClient;
-  /** The signer, or the Pot's owner for an unsigned plan. */
-  readonly from?: Address;
-  /** Signs and sends through the command's own send path; only where the command signs. */
-  readonly send?: (tx: DestinationTx) => Promise<unknown>;
-}
-
-/** One setup step, as `approvals.ts`'s `SetupStep` takes it. */
-export interface DestinationStep {
-  readonly action: string;
-  readonly reason: string;
-  readonly offer: string;
-  readonly estimate: string;
-  readonly byHand?: string;
-  readonly planned: {
-    readonly what: string;
-    readonly to: Address;
-    readonly data: Hex;
-    readonly value: string;
-    readonly chainId: number;
-    /** On a funding step, the answers' fees it includes: quoted, for answers up to `bytes`. */
-    readonly quoted?: { readonly answers: number; readonly fee: string; readonly bytes: number };
-  };
-  readonly send: () => Promise<unknown>;
+/** On a funding step, the answers' fees it includes: quoted, for answers up to `bytes` each. */
+export interface RemoteQuote {
+  readonly answers: number;
+  readonly fee: string;
+  readonly bytes: number;
 }
 
 /** What setting up a destination is given beside its needs. */
@@ -103,12 +79,12 @@ export interface DestinationSetupOptions {
   readonly owner: Address;
   readonly salt: Hex;
   /** Reaches a chain: `SetupReach.on`. */
-  readonly reach: (chain: CanonicalChain) => Promise<DestinationReach>;
+  readonly reach: (chain: CanonicalChain) => Promise<ChainReach>;
   /** Prices a transaction: `approvals.ts`'s `gasEstimate`. */
   readonly estimate: (
     client: PublicClient,
     from: Address,
-    tx: DestinationTx,
+    tx: TxRequest,
     chain: CanonicalChain,
   ) => Promise<string>;
 }
@@ -314,7 +290,7 @@ export async function answerFee(
 export async function destinationSetup(
   needs: readonly DestinationNeed[],
   options: DestinationSetupOptions,
-): Promise<DestinationStep[]> {
+): Promise<SetupStep[]> {
   const byChain = new Map<
     number,
     { chain: CanonicalChain; bridges: Set<RemoteBridge>; needs: DestinationNeed[] }
@@ -333,23 +309,24 @@ export async function destinationSetup(
   const pot = getAddress(v12PredictPot(options.owner, options.salt));
   const engine = getAddress(v12EngineAddress());
   const kitchen = getAddress(v12KitchenAddress());
-  const steps: DestinationStep[] = [];
+  const steps: SetupStep[] = [];
   for (const { chain, bridges, needs: here } of byChain.values()) {
     const messages = here.length;
     const there = await options.reach(chain);
     const from = there.from ?? options.owner;
     const reason = `Your Pot on ${chain.name} can't receive this message yet`;
-    const price = (tx: DestinationTx, unpriced: string): Promise<string> =>
+    const price = (tx: TxRequest, unpriced: string): Promise<string> =>
       options.estimate(there.client, from, tx, chain).catch(() => unpriced);
     const step = (
+      kind: RemoteSetupKind,
       what: string,
       action: string,
       offer: string,
-      tx: DestinationTx,
+      tx: TxRequest,
       estimate: string,
       byHand?: string,
-      quoted?: DestinationStep["planned"]["quoted"],
-    ): DestinationStep => ({
+      quoted?: RemoteQuote,
+    ): SetupStep => ({
       action,
       reason,
       offer,
@@ -357,17 +334,27 @@ export async function destinationSetup(
       ...(byHand === undefined ? {} : { byHand }),
       planned: {
         what,
+        setup: kind,
         to: tx.to,
         data: tx.data,
         value: tx.value.toString(),
         chainId: chain.id,
         ...(quoted === undefined ? {} : { quoted }),
       },
-      send: () => {
+      send: async () => {
         if (there.send === undefined) {
-          throw new Error(`${action}: the command has no signer for ${chain.name}`);
+          throw new CliError(`${action}: the command has no signer to send it on ${chain.name}`);
         }
-        return there.send(tx);
+        const sent = await there.send(tx);
+        if (sent.status !== "success") {
+          throw new CliError(
+            `${action} reverted (${sent.hash}): your Pot on ${chain.name} is not ready`,
+          );
+        }
+        // The install that follows is rehearsed against the Pot, so wait until the chain shows it.
+        if (kind === "deploy") await awaitPot(there.client, pot, sent.blockNumber);
+
+        return sent;
       },
     });
 
@@ -380,7 +367,8 @@ export async function destinationSetup(
       };
       steps.push(
         step(
-          "deployPot",
+          "deploy",
+          `Kitchen.deployPot(${options.owner}, ${options.salt}) on ${chain.name}: deploys your Pot there, which has no code yet`,
           `deploy your Pot on ${chain.name}`,
           "Deploy it now",
           tx,
@@ -417,6 +405,7 @@ export async function destinationSetup(
       steps.push(
         step(
           "install",
+          `cook on Pot ${pot} on ${chain.name}: installs ${receiverName(named)}`,
           `install ${receiverName(named)} on your Pot on ${chain.name}`,
           "Install it now",
           tx,
@@ -469,6 +458,7 @@ export async function destinationSetup(
       steps.push(
         step(
           "fund",
+          `${formatEther(tx.value)} ${symbol} to Pot ${pot} on ${chain.name}: ${why}`,
           `fund your Pot on ${chain.name} with ${formatEther(tx.value)} ${symbol} (${why})`,
           "Fund it now",
           tx,

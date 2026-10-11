@@ -21,7 +21,7 @@ import {
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
-import type { CanonicalChain } from "../chains/canonical.js";
+import { chainById, type CanonicalChain } from "../chains/canonical.js";
 import {
   v12DeployedAddresses,
   v12EngineAddress,
@@ -43,6 +43,7 @@ import {
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
 import { handlersInPlace } from "./handlers.js";
+import { destinationSetup, remoteNeeds } from "./remote-setup.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
 import {
   awaitPot,
@@ -245,14 +246,14 @@ export function readInput(files: CliFiles, file: string): string {
 
 /** A `cast send` of exactly `to`/`data`/`value`, with the endpoint and key left to the reader —
  *  never filled in from `--rpc-url`, whose URL often carries a provider key. */
-export function castSend(to: Address, data: Hex, value?: bigint): string {
+export function castSend(to: Address, data: Hex, value?: bigint, rpcUrl = "<RPC_URL>"): string {
   return [
     "cast send",
     to,
     data,
     ...(value === undefined ? [] : ["--value", value.toString()]),
     "--rpc-url",
-    "<RPC_URL>",
+    rpcUrl,
     "--private-key",
     "<PRIVATE_KEY>",
   ].join(" ");
@@ -779,6 +780,82 @@ function setupReach(
   };
 }
 
+/**
+ * What a program's remote messages need first, on each chain they run (`remote-setup.ts`): the
+ * owner's Pot there, at the cook's own address, deployed, the receivers of the messages' bridges
+ * installed, and funded for what it runs. Asked about and sent with the cook's own setup. A chain
+ * the command cannot read is said in a note rather than set up: the message waits there until the
+ * Pot is ready.
+ */
+async function remoteSetup(
+  cook: Cook,
+  owner: Address | undefined,
+  salt: Hex | undefined,
+  reach: SetupReach,
+): Promise<{ readonly steps: readonly SetupStep[]; readonly notes: readonly string[] }> {
+  const needs = remoteNeeds(cook.program.continuations);
+  if (needs.length === 0) return { steps: [], notes: [] };
+  const where = [...new Set(needs.map((need) => need.chain.name))].join(" and ");
+  if (
+    owner === undefined ||
+    salt === undefined ||
+    getAddress(v12PredictPot(owner, salt)) !== getAddress(cook.pot)
+  ) {
+    return {
+      steps: [],
+      notes: [
+        `The program sends a remote message to ${where}, and the Pot's owner and salt are not ` +
+          "known here, so whether your Pot there can receive it is not checked: give --owner.",
+      ],
+    };
+  }
+  try {
+    const steps = await destinationSetup(needs, {
+      owner,
+      salt,
+      reach: (chain) => reach.on(chain),
+      estimate: gasEstimate,
+    });
+
+    return { steps, notes: [] };
+  } catch (error) {
+    if (!(error instanceof CliError)) throw error;
+    return {
+      steps: [],
+      notes: [
+        `Whether your Pot on ${where} can receive the program's remote message was not checked ` +
+          `(${error.message}). A message to a Pot that is not ready waits until it is.`,
+      ],
+    };
+  }
+}
+
+/** The Pot `target` names, as its owner and salt: given, or read from the Pot where it is deployed. */
+async function ownerAndSalt(
+  target: PotInput,
+  client: PublicClient | undefined,
+  pot: Address,
+  owner: Address | undefined,
+): Promise<{ readonly owner?: Address; readonly salt?: Hex }> {
+  if ("owner" in target) return { owner: target.owner, salt: target.salt };
+  if (client === undefined || owner === undefined) return {};
+  const salt = await client
+    .readContract({ address: pot, abi: POT_SALT_ABI, functionName: "userSalt" })
+    .catch(() => undefined);
+
+  return salt === undefined ? {} : { owner, salt };
+}
+
+const POT_SALT_ABI = [
+  {
+    type: "function",
+    name: "userSalt",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bytes32" }],
+  },
+] as const;
+
 /** The `sauce pot` that deploys `target`'s Pot. */
 function deployHint(chain: CanonicalChain, target: PotInput): string {
   // Any account may send the deployment; the hint names the owner, whose Pot it is.
@@ -848,6 +925,13 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   // What the cook needs first: its Pot, when it has no code and its owner and salt are known, and
   // whatever else the caller sets up. A plan then lists them, and the cook last.
   const deployFirst = state !== undefined && !state.deployed && "owner" in target;
+  const reach = setupReach(
+    input.chain,
+    input.endpointOf,
+    client === undefined ? undefined : { client, ...(owner === undefined ? {} : { from: owner }) },
+  );
+  const pot = await ownerAndSalt(target, client, cook.pot, state?.owner);
+  const remote = await remoteSetup(cook, pot.owner, pot.salt, reach);
   const setup = [
     ...(deployFirst
       ? [
@@ -859,15 +943,8 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           }),
         ]
       : []),
-    ...((await input.setup?.(
-      setupReach(
-        input.chain,
-        input.endpointOf,
-        client === undefined
-          ? undefined
-          : { client, ...(owner === undefined ? {} : { from: owner }) },
-      ),
-    )) ?? []),
+    ...((await input.setup?.(reach)) ?? []),
+    ...remote.steps,
   ];
   if (setup.length > 0) {
     const steps = setup.map((step) => step.planned);
@@ -889,9 +966,19 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
       text: JSON.stringify(json, null, 2),
       json,
       cast: [
-        ...steps.map((step) =>
-          castSend(step.to, step.data, step.value === "0" ? undefined : BigInt(step.value)),
-        ),
+        ...steps.map((step) => {
+          // A step on another chain is sent through that chain's endpoint.
+          const on =
+            typeof step.chainId === "number" && step.chainId !== input.chain.id
+              ? chainById(step.chainId)
+              : undefined;
+          return castSend(
+            step.to,
+            step.data,
+            step.value === "0" ? undefined : BigInt(step.value),
+            on === undefined ? undefined : `<${on.slug.toUpperCase().replace(/-/g, "_")}_RPC_URL>`,
+          );
+        }),
         castSend(cook.pot, sent.cook.data, value),
       ].join("\n"),
       notes: [
@@ -907,6 +994,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           .slice(deployFirst ? 1 : 0)
           .map((step) => `${step.reason}: ${step.planned.what} comes first.`),
         from,
+        ...remote.notes,
         ...sent.notes,
       ],
     };
@@ -921,6 +1009,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         : `It is NOT deployed, and --pot does not say whose it is: deploy it first ` +
           `(${deployHint(input.chain, target)}), then fund it.`,
     from,
+    ...remote.notes,
     ...sent.notes,
   ];
   const data = sent.cook.data;
@@ -1003,6 +1092,13 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
     );
   }
+  const reach = setupReach(input.chain, input.endpointOf, {
+    client,
+    from: signer,
+    signed: { rpcUrl: input.rpcUrl, account: input.account },
+  });
+  const pot = await ownerAndSalt(target, client, cook.pot, state.owner);
+  const remote = await remoteSetup(cook, pot.owner, pot.salt, reach);
   const setup = [
     ...(!state.deployed && "owner" in target
       ? [
@@ -1016,13 +1112,8 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
           }),
         ]
       : []),
-    ...((await input.setup?.(
-      setupReach(input.chain, input.endpointOf, {
-        client,
-        from: signer,
-        signed: { rpcUrl: input.rpcUrl, account: input.account },
-      }),
-    )) ?? []),
+    ...((await input.setup?.(reach)) ?? []),
+    ...remote.steps,
   ];
   // With no one to ask, every approval the run would need is named before anything is sent.
   if (!input.approver.auto && !input.approver.canAsk) {
@@ -1053,7 +1144,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
   const stored = input.onSent === undefined ? [] : await input.onSent(sent);
   const intents = sent.status === "success" ? loggedIntents(input.chain, sent.logs) : [];
-  const notes = [...(funding?.notes ?? []), ...lean.notes, ...stored];
+  const notes = [...remote.notes, ...(funding?.notes ?? []), ...lean.notes, ...stored];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
   const report =

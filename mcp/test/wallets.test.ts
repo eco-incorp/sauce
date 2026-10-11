@@ -161,6 +161,8 @@ describe("a server with wallets", () => {
       ),
       /is not ready to send: the proof has not arrived/,
     );
+    // A plan on two chains is sent chain by chain, in its order: the first, Base, has no endpoint
+    // here, so nothing is sent on either.
     assert.match(
       failed(
         await mcp.call("sauce_wallet_send", {
@@ -168,7 +170,17 @@ describe("a server with wallets", () => {
           transaction: [tx, { ...tx, chainId: 1 }],
         }),
       ),
-      /send each chain's in a call of its own/,
+      /Sending needs an RPC endpoint for base/,
+    );
+    // Each chain of it is held to the release first: a preview chain anywhere refuses the whole.
+    const mixed = await mcp.call("sauce_wallet_send", {
+      wallet: "agent",
+      transaction: [tx, { ...tx, chainId: 42161 }],
+    });
+    assert.equal(mixed.isError, true);
+    assert.equal(
+      (mixed.structuredContent as { refused?: { code?: string } }).refused?.code,
+      "preview-chain",
     );
     assert.match(
       failed(await mcp.call("sauce_wallet_send", { wallet: "sol", transaction: tx })),

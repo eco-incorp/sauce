@@ -61,6 +61,7 @@ const PASSWORD = `throwaway-${process.pid}-${Date.now()}`;
 
 describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === undefined }, () => {
   let base: LocalChain;
+  let ethereum: LocalChain;
   let usdc: Address;
   let dir: string;
   let mcp: Connected;
@@ -68,10 +69,14 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
   let pot: Address;
 
   before(async () => {
-    base = await startChain("base");
+    [base, ethereum] = await Promise.all([startChain("base"), startChain("ethereum")]);
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-e2e-"));
-    mcp = await connect(endpointsFor({ [String(base.chain.id)]: base.rpcUrl }), undefined, {
+    const endpoints = {
+      [String(base.chain.id)]: base.rpcUrl,
+      [String(ethereum.chain.id)]: ethereum.rpcUrl,
+    };
+    mcp = await connect(endpointsFor(endpoints), undefined, {
       store: new WalletStore(join(dir, "wallets")),
       password: PASSWORD,
       source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
@@ -79,7 +84,7 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
   });
   after(async () => {
     await mcp?.close();
-    await base?.stop();
+    await Promise.all([base?.stop(), ethereum?.stop()]);
     if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
   });
 
@@ -276,6 +281,36 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     );
     assert.notEqual(await base.publicClient.getCode({ address: plannerPot }), undefined);
     assert.equal(await base.balanceOf(usdc, plannerPot), 500_000n);
+  });
+
+  it("sends a plan on two chains chain by chain, in its order", async () => {
+    // As a cook whose remote message readies the Pot on another chain first plans it: that chain's
+    // transactions, then the cook's own chain's.
+    await ethereum.send(ethereum.deployer, wallet, "0x", parseEther("1"));
+    const before = await Promise.all([
+      ethereum.publicClient.getBalance({ address: RECIPIENT }),
+      base.publicClient.getBalance({ address: RECIPIENT }),
+    ]);
+    const sent = ok(
+      await mcp.call("sauce_wallet_send", {
+        wallet: "agent",
+        transaction: [
+          { chainId: 1, to: RECIPIENT, data: "0x", value: "3" },
+          { chainId: 8453, to: RECIPIENT, data: "0x", value: "5" },
+        ],
+      }),
+    ) as { ok: boolean; chains: string[]; sent: Array<{ status: string; chain: string }> };
+    assert.equal(sent.ok, true);
+    assert.deepEqual(sent.chains, ["ethereum", "base"]);
+    assert.deepEqual(
+      sent.sent.map((entry) => [entry.chain, entry.status]),
+      [
+        ["ethereum", "success"],
+        ["base", "success"],
+      ],
+    );
+    assert.equal(await ethereum.publicClient.getBalance({ address: RECIPIENT }), before[0] + 3n);
+    assert.equal(await base.publicClient.getBalance({ address: RECIPIENT }), before[1] + 5n);
   });
 
   it("never returned the wallet's key or the password", () => {

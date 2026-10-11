@@ -23,6 +23,7 @@ import {
   openWallet,
   parseChain,
   planChain,
+  planGroups,
   plannedTransactions,
   readPolicy,
   sendPlan,
@@ -233,19 +234,67 @@ export function registerWalletTools(
     },
     async (args, reach) => {
       const transactions = plannedTransactions(args.transaction);
-      const chain = planChain(
-        transactions,
-        args.chain === undefined ? undefined : parseChain(String(args.chain), "chain"),
-      );
-      const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
-      // Before any endpoint is reached: what this wallet can send there, and the release's chains,
-      // for a raw transaction as for a built one.
-      checkPlan(unlocked, chain, transactions);
-      guard.gate(chain);
-      const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
-      const sent = await sendPlan({ wallet: unlocked, guard, chain, transactions, rpcUrl });
+      const given = args.chain === undefined ? undefined : parseChain(String(args.chain), "chain");
+      // A plan that readies another chain first is sent there first, then on its own chain.
+      const groups = planGroups(transactions, given);
+      if (groups.length < 2) {
+        const chain = planChain(transactions, given);
+        const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
+        // Before any endpoint is reached: what this wallet can send there, and the release's
+        // chains, for a raw transaction as for a built one.
+        checkPlan(unlocked, chain, transactions);
+        guard.gate(chain);
+        const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
+        const sent = await sendPlan({ wallet: unlocked, guard, chain, transactions, rpcUrl });
 
-      return { json: sent.json, notes: sent.notes };
+        return { json: sent.json, notes: sent.notes };
+      }
+      const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
+      for (const group of groups) {
+        checkPlan(unlocked, group.chain, group.transactions);
+        guard.gate(group.chain);
+      }
+      // `rpcUrl` is the plan's own chain's, the last: another chain is reached through the server's.
+      const own = groups[groups.length - 1]!.chain;
+      const sent: Record<string, unknown>[] = [];
+      const notes: string[] = [];
+      let ok = true;
+      for (const group of groups) {
+        const rpcUrl = await reach.require(
+          group.chain,
+          group.chain.id === own.id ? args.rpcUrl : undefined,
+          "Sending",
+        );
+        const part = await sendPlan({
+          wallet: unlocked,
+          guard,
+          chain: group.chain,
+          transactions: group.transactions,
+          rpcUrl,
+        });
+        for (const entry of part.json.sent as Record<string, unknown>[]) {
+          sent.push({ ...entry, chain: group.chain.slug });
+        }
+        notes.push(...part.notes.filter((note) => !notes.includes(note)));
+        if (part.json.ok !== true) {
+          ok = false;
+          break;
+        }
+      }
+
+      return {
+        json: {
+          wallet: unlocked.info.name,
+          from: unlocked.info.address,
+          chain: own.slug,
+          chainId: own.id,
+          chains: groups.map((group) => group.chain.slug),
+          ok,
+          sent,
+          policy: guard.policy?.path ?? null,
+        },
+        notes,
+      };
     },
   );
 }

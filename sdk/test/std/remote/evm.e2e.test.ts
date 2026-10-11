@@ -45,20 +45,19 @@ import {
   type Hex,
   type TransactionReceipt,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createWalletClient, http } from "viem";
 
 import { v12EngineAddress } from "../../../src/deployments/v12-addresses.js";
 import { encodeEntryArguments, type EntryValue } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
-import {
-  destinationSetup,
-  remoteNeeds,
-  type DestinationReach,
-  type DestinationTx,
-} from "../../../src/cli/remote-setup.js";
-import { v12PredictPot } from "../../../src/deployments/pot.js";
+import { destinationSetup, remoteNeeds } from "../../../src/cli/remote-setup.js";
+import type { ChainReach } from "../../../src/cli/approvals.js";
+import type { Sent, TxRequest } from "../../../src/cli/chain.js";
+import { potSalt, v12PredictPot } from "../../../src/deployments/pot.js";
+import { runCommand, txCommand, type RunInput } from "../../../src/cli/commands.js";
+import { nodeIo } from "../../../src/cli/run.js";
 import { handlersInPlace } from "../../../src/cli/handlers.js";
 import { DEPLOYER, FEE, RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../cli-anvil.js";
 import { gateAnchors, POT_SALT, routerUnderTest } from "../../evm/gated-engine.js";
@@ -177,6 +176,32 @@ function potLog(
 
   return found[0]!;
 }
+
+/** `local` as a setup step reaches it, the harness's deployer sending (`approvals.ts`'s
+ *  `ChainReach`). */
+const reachOf = (local: LocalChain): ChainReach => ({
+  chain: local.chain,
+  client: local.publicClient,
+  from: DEPLOYER.address,
+  send: async (tx: TxRequest): Promise<Sent> => {
+    const hash = await local.deployer.sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      ...tx,
+      gas: 15_000_000n,
+    });
+    const receipt = await local.publicClient.waitForTransactionReceipt({ hash });
+
+    return {
+      hash,
+      status: receipt.status,
+      gasUsed: receipt.gasUsed,
+      blockNumber: receipt.blockNumber,
+      logs: receipt.logs,
+      receipt,
+    };
+  },
+});
 
 /** A skill's example program, as the file is. */
 const example = (name: string): string =>
@@ -562,35 +587,18 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     const salt = `0x${"00".repeat(31)}52` as Hex;
     const owner = DEPLOYER.address;
     const fresh = getAddress(v12PredictPot(owner, salt));
-    const sendOn = (local: LocalChain) => async (tx: DestinationTx) => {
-      const hash = await local.deployer.sendTransaction({
-        account: DEPLOYER,
-        chain: null,
-        ...tx,
-        gas: 15_000_000n,
-      });
-      const receipt = await local.publicClient.waitForTransactionReceipt({ hash });
-      if (receipt.status !== "success")
-        throw new Error(`a setup step reverted on ${local.chain.slug}`);
-      return receipt;
-    };
     const setup = () =>
       destinationSetup([{ chain: base.chain, bridge: "hyperlane" }], {
         owner,
         salt,
-        reach: async () => ({
-          chain: base.chain,
-          client: base.publicClient,
-          from: owner,
-          send: sendOn(base),
-        }),
+        reach: async () => reachOf(base),
         estimate: async () => "estimated",
       });
 
     // Nothing on Base yet: the Pot deployed, its Hyperlane receiver installed, the Kitchen's fee.
     const steps = await setup();
-    expect(steps.map((step) => [step.planned.what, step.planned.chainId])).toEqual([
-      ["deployPot", 8453],
+    expect(steps.map((step) => [step.planned.setup, step.planned.chainId])).toEqual([
+      ["deploy", 8453],
       ["install", 8453],
       ["fund", 8453],
     ]);
@@ -621,7 +629,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     ).toEqual([]);
 
     // The same Pot on Ethereum, minted and funded, sends; Base runs it.
-    await sendOn(ethereum)({
+    await reachOf(ethereum).send!({
       to: gateAnchors().kitchen,
       data: encodeFunctionData({
         abi: parseAbi(["function deployPot(address owner, bytes32 salt) returns (address)"]),
@@ -630,7 +638,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       }),
       value: 0n,
     });
-    await sendOn(ethereum)({ to: fresh, data: "0x", value: parseEther("0.01") });
+    await reachOf(ethereum).send!({ to: fresh, data: "0x", value: parseEther("0.01") });
     const out = await cook(
       ethereum,
       `function main(value: Uint256) {
@@ -655,20 +663,6 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       const salt = `0x${"00".repeat(31)}53` as Hex;
       const owner = DEPLOYER.address;
       const fresh = getAddress(v12PredictPot(owner, salt));
-      const reachOf = (local: LocalChain) => async (): Promise<DestinationReach> => ({
-        chain: local.chain,
-        client: local.publicClient,
-        from: owner,
-        send: async (tx) => {
-          const hash = await local.deployer.sendTransaction({
-            account: DEPLOYER,
-            chain: null,
-            ...tx,
-            gas: 15_000_000n,
-          });
-          return local.publicClient.waitForTransactionReceipt({ hash });
-        },
-      });
       const source = `function main(bump: Uint256) {
   Base.remote(() => {
     return ctx.chainId() * 1000;
@@ -688,10 +682,10 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       const steps = await destinationSetup(needs, {
         owner,
         salt,
-        reach: reachOf(base),
+        reach: async () => reachOf(base),
         estimate: async () => "estimated",
       });
-      expect(steps.map((step) => step.planned.what)).toEqual(["deployPot", "install", "fund"]);
+      expect(steps.map((step) => step.planned.setup)).toEqual(["deploy", "install", "fund"]);
       const fund = steps[2]!;
       expect(BigInt(fund.planned.value)).toBe(FEE + HYPERLANE_FEE);
       expect(fund.planned.quoted).toEqual({ answers: 1, fee: String(HYPERLANE_FEE), bytes });
@@ -703,7 +697,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
 
       // The same Pot on Ethereum, minted and funded for the message it sends and the Kitchen's fee of
       // the answer it runs; the cook's request installs the receiver the answer reaches.
-      const ethereumReach = await reachOf(ethereum)();
+      const ethereumReach = reachOf(ethereum);
       await ethereumReach.send!({
         to: gateAnchors().kitchen,
         data: encodeFunctionData({
@@ -733,6 +727,103 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
         ),
       ).toBe(8_453_000n + 7n);
       // Base's Pot paid the Kitchen and the answer's fee out of exactly what it was funded.
+      expect(await base.publicClient.getBalance({ address: fresh })).toBe(0n);
+    },
+    120_000,
+  );
+
+  itSettling(
+    "sauce tx plans the far Pot's setup before the cook, and sauce run sends it, approved once",
+    async () => {
+      const key = generatePrivateKey();
+      const owner = privateKeyToAccount(key).address;
+      const salt = potSalt("remote-setup");
+      const fresh = getAddress(v12PredictPot(owner, salt));
+      for (const local of [ethereum, base]) {
+        await local.testClient.setBalance({ address: owner, value: parseEther("10") });
+      }
+      const text = `function main(bump: Uint256) {
+  Base.remote(() => {
+    return ctx.chainId() * 1000;
+  }).then((result) => {
+    const [n] = abi.decode(result, ["Uint256"]);
+    evm.sstore(${slot("command.round")}, n + bump);
+  });
+}
+`;
+      const input = (approve: (action: string) => boolean): RunInput => ({
+        file: "round.sauce.ts",
+        text,
+        chain: ethereum.chain,
+        defines: {},
+        compactArgs: false,
+        intents: {},
+        target: { owner, salt },
+        args: { from: "--args", values: ["7"] },
+        // The Kitchen's fee for the cook, the message's Hyperlane fee, and the Kitchen's fee for
+        // the answer this Pot runs: what the Pot spends here, sent with the cook.
+        value: FEE + HYPERLANE_FEE + FEE,
+        rpcUrl: ethereum.rpcUrl,
+        endpointOf: (chain) => (chain.id === base.chain.id ? base.rpcUrl : undefined),
+        account: privateKeyToAccount(key),
+        approver: { auto: true, canAsk: true, approve: async (action) => approve(action) },
+      });
+
+      // Unsigned: the Pot here, then the Pot on Base readied, then the cook.
+      const plan = await txCommand(
+        input(() => false),
+        nodeIo(),
+      );
+      const transactions = plan.json.transactions as Array<{
+        what: string;
+        setup?: string;
+        chainId?: number;
+        value: string;
+        quoted?: { answers: number; fee: string; bytes: number };
+      }>;
+      expect(
+        transactions.map((tx) => [tx.setup ?? tx.what.split("(")[0], tx.chainId ?? null]),
+      ).toEqual([
+        ["Kitchen.deployPot", null],
+        ["deploy", 8453],
+        ["install", 8453],
+        ["fund", 8453],
+        [expect.stringMatching(/^cook on Pot /), null],
+      ]);
+      expect(BigInt(transactions[3]!.value)).toBe(FEE + HYPERLANE_FEE);
+      expect(transactions[3]!.quoted).toMatchObject({ answers: 1, fee: String(HYPERLANE_FEE) });
+      expect(plan.cast).toContain("<BASE_RPC_URL>");
+
+      // Signed: one approval for all four, sent in order, then the cook.
+      const approved: string[] = [];
+      const done = await runCommand(
+        input((action) => (approved.push(action), true)),
+        nodeIo(),
+      );
+      expect(approved).toEqual([
+        `deploy Pot ${fresh}`,
+        "deploy your Pot on Base",
+        "install the Hyperlane receiver on your Pot on Base",
+        expect.stringMatching(
+          /^fund your Pot on Base with [\d.]+ ETH \(1 delivery × the Kitchen fee \+ the answer's Hyperlane fee, quoted for up to \d+ bytes\)$/,
+        ),
+      ]);
+      expect(done.json).toMatchObject({ cook: { status: "success" } });
+
+      const out = await ethereum.publicClient.getTransactionReceipt({
+        hash: (done.json.cook as { hash: Hex }).hash,
+      });
+      const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      const back = await base.publicClient.getTransactionReceipt({ hash: there! });
+      await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
+      expect(
+        BigInt(
+          (await ethereum.publicClient.getStorageAt({
+            address: fresh,
+            slot: slot("command.round"),
+          })) ?? "0x0",
+        ),
+      ).toBe(8_453_000n + 7n);
       expect(await base.publicClient.getBalance({ address: fresh })).toBe(0n);
     },
     120_000,
