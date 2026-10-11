@@ -12,7 +12,12 @@ import { join } from "node:path";
 
 import { encodeAbiParameters, keccak256, toFunctionSelector, toHex } from "viem";
 
-import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import { compileHandlers, packageReader } from "../../../src/routes/handlers.js";
+import {
+  ASYNC_ENGINE_DEFINE,
+  ASYNC_INSTALLED_DEFINE,
+  compileSauceProgram,
+} from "../../../src/routes/sauce-route.js";
 
 /** jest's cwd is `sdk/`. */
 const SOURCE = readFileSync(join(process.cwd(), "src", "std", "async", "async.evm.js"), "utf8");
@@ -179,6 +184,93 @@ function main(hash: Uint256): bool {
       "Uint256",
       "bytes",
     ]);
+  });
+
+  it("a request installs the handlers it lists: each reported, neither a body nor a continuation", () => {
+    const program =
+      compile(`import { Handler, Request, fulfil, promiseKey, requireCaller } from "@sauce/async";
+
+class Echo {
+  request(value: Uint256) {
+    return new Request({
+      handlers: [
+        new Handler(0x6c0f1d2e, (caller: Address, paid: Uint256, data: bytes) => {
+          requireCaller(0x000000000000000000000000000000000000ec40, caller);
+          const [id, echoed] = abi.decode(data.slice(4, data.length), ["Uint256", "Uint256"]);
+          fulfil(promiseKey(7, id), abi.encode(echoed));
+        }),
+      ],
+      send: (continuation) => {
+        return promiseKey(7, value);
+      },
+    });
+  }
+}
+
+function main(value: Uint256, to: Address) {
+  new Echo().request(value).then((input) => {
+    evm.sstore(1, input.length + to);
+  });
+}`);
+    expect(program.handlers.map((h) => [h.selector, h.readOnly, h.destination.slug])).toEqual([
+      [0x6c0f1d2en, false, "base"],
+    ]);
+    expect(program.bodies).toEqual([]);
+    expect(program.continuations).toHaveLength(1);
+  });
+
+  it("the core's handlers are the programs its handler files compile to", () => {
+    const program = compile(`import { Erc1271, Promise } from "@sauce/async";
+
+function main(): void {
+  Erc1271.handler().ensure();
+  const d = Promise.withResolvers(60);
+  d.promise.then((value) => {
+    evm.sstore(1, value.length);
+  });
+}`);
+    const files = compileHandlers(
+      "base",
+      [
+        {
+          selector: "isValidSignature(bytes32,bytes)",
+          program: "@sauce/async/erc1271.handler.js",
+          readOnly: true,
+        },
+        { selector: "expire(bytes32)", program: "@sauce/async/expire.handler.js" },
+      ],
+      packageReader("@sauce/async"),
+    );
+    const byFile = new Map(files.map((file) => [BigInt(file.selector), file]));
+    expect(program.handlers.map((h) => h.selector).sort((a, b) => (a < b ? -1 : 1))).toEqual([
+      0x1626ba7en,
+      0xc6441798n,
+    ]);
+    for (const handler of program.handlers) {
+      const file = byFile.get(handler.selector)!;
+      expect(handler.readOnly).toBe(file.readOnly);
+      expect(hex(handler.bytecode)).toBe(hex(file.bytecode));
+    }
+  });
+
+  it("carries a handler's code to install it, and none once its sender read it installed", () => {
+    const source = `import { Promise } from "@sauce/async";
+
+function main(): void {
+  const d = Promise.withResolvers(60);
+  d.promise.then((value) => {
+    evm.sstore(1, value.length);
+  });
+}`;
+    const carried = compile(source);
+    const expire = hex(carried.handlers[0]!.bytecode);
+    expect(hex(carried.bytecode)).toContain(expire);
+    const lean = compileSauceProgram("base", source, { defines: { [ASYNC_INSTALLED_DEFINE]: 1n } });
+    expect(hex(lean.bytecode)).not.toContain(expire);
+    expect(lean.bytecode.length).toBeLessThan(carried.bytecode.length - expire.length / 2);
+    // With no engine to work its address out from, the check hashes the code it carries.
+    const hashed = compileSauceProgram("base", source, { defines: { [ASYNC_ENGINE_DEFINE]: 0n } });
+    expect(hex(hashed.bytecode)).toContain(expire);
   });
 
   it("the table's own parts, for a package that needs them directly", () => {
