@@ -18,7 +18,6 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
-import type { LoweredIntent } from "../routes/intent-sugar.js";
 import {
   addressDefines,
   CliError,
@@ -28,11 +27,9 @@ import {
   parseDefines,
   parseDefinesFile,
   parseFlags,
-  parseFundVia,
   parseLamports,
   parseSalt,
   parseTarget,
-  parseUnixSeconds,
   parseVia,
   parseWei,
   repeatedFlag,
@@ -55,7 +52,6 @@ import {
   type Confirm,
   type CookInput,
   expectingRevert,
-  pastDeadline,
   potCommand,
   potDeployCommand,
   type PotInput,
@@ -65,15 +61,12 @@ import {
   readInput,
   runCommand,
   txCommand,
-  unapproved,
 } from "./commands.js";
-import { createIntent } from "./create.js";
-import { defineLabels, fillCommand, fillTargets, type FillTarget } from "./fill.js";
+import { fillCommand, type FillTarget } from "./fill.js";
 import type { FundRequest } from "./funding.js";
 import {
   cancelCommand,
   claimCommand,
-  fileTargets,
   importCommand,
   isIntentHash,
   listCommand,
@@ -102,27 +95,13 @@ import {
   withoutShebang,
 } from "./inputs.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
-import {
-  checkIntentPots,
-  destinationFee,
-  intentCooks,
-  missingPotNote,
-  uncheckedPotNote,
-  type Endpoints,
-} from "./intents.js";
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
 import { runtimeCommand } from "./optional.js";
 import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
-import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
-import {
-  intentDestinations,
-  previewChainsNote,
-  requireSupported,
-  supportedChainNames,
-} from "./support.js";
+import { previewChainsNote, requireSupported, supportedChainNames } from "./support.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -409,36 +388,6 @@ const PROGRAM: FlagSpecs = {
     help: "Compile-time values from a JSON object of NAME to value; --define wins",
     lowLevel: true,
   },
-  "intent-deadline": {
-    type: "string",
-    value: "<unix seconds>",
-    help: "For intents the program opens: their deadline",
-  },
-  "intent-creator": {
-    type: "string",
-    value: "<address>",
-    help: "…their creator, who may reclaim an unearned reward",
-  },
-  "intent-reward-deadline": {
-    type: "string",
-    value: "<unix seconds>",
-    help: "…from when an unproven one's reward is refundable (default: the deadline)",
-  },
-  "intent-prover": {
-    type: "string",
-    value: "<address>",
-    help: "…their prover (default: the registry's for the pair)",
-  },
-  "intent-execution-fee": {
-    type: "string",
-    value: "<wei|auto>",
-    help: "…the destination Kitchen's fee, when one runs a program; auto reads it",
-  },
-  "intent-fund-via": {
-    type: "string",
-    value: "<transfer|publishAndFund>",
-    help: "…how their reward is funded: paid into the vault (default), or publishAndFund",
-  },
   "compact-args": {
     type: "boolean",
     help: "Take main's arguments as compact-v1, not ABI-v1",
@@ -631,66 +580,19 @@ function chainOf(
 }
 
 /**
- * The endpoints the command reaches the chains a program's intents go to with: `--rpc-url` for the
- * program's own `source` chain, and every other chain as {@link sharedEndpoint} finds it.
- */
-function endpointsOf(args: ParsedArgs, io: CliIo, source: CanonicalChain): Endpoints {
-  const rpcUrl = stringFlag(args, "rpc-url");
-
-  return (chain) =>
-    rpcUrl !== undefined && chain.id !== source.id
-      ? sharedEndpoint(args, io, chain)
-      : endpoint(args, io, chain);
-}
-
-/**
- * `--intent-execution-fee auto`: the fee the program's intents' destination Kitchens charge, read
- * from each through `endpoints`. The program is compiled once with a fee of zero to find which
- * intents run a program there; one with none pays no fee.
- */
-async function autoExecutionFee(
-  input: ProgramInput,
-  io: CliIo,
-  endpoints: Endpoints,
-  gate: Gate | undefined,
-): Promise<bigint | undefined> {
-  const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
-  // Before the fee is read: a command refused on these chains reads nothing for them.
-  if (gate !== undefined) gated(gate, input.chain, probe.intents);
-  const cooks = intentCooks(probe.intents);
-  if (cooks.length === 0) {
-    io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
-
-    return undefined;
-  }
-  const fee = await destinationFee(cooks, endpoints);
-  const chains = [...new Set(cooks.map((cook) => cook.destination.slug))].join(" and ");
-  io.stderr(`--intent-execution-fee auto: the Kitchen on ${chains} charges ${fee} wei\n`);
-
-  return fee;
-}
-
-/**
  * A command that builds or sends transactions, refused on a preview chain (`support.ts`) before it
  * reaches a network or a key: its name, as the refusal says it, and the chains it is refused by —
- * every chain a program and its intents involve (a cook, publishing), the intents' destinations (a
- * fill, a proof, a cancellation) or their source (a claim, a refund).
+ * the program's chain (a cook), the intents' destinations (a fill, a proof, a cancellation) or
+ * their source (a claim, a refund).
  */
 interface Gate {
   readonly action: string;
   readonly by: "all" | "destinations" | "source";
 }
 
-/** Refuses `gate`'s command on a preview chain among `source` and the `intents` it opens. */
-function gated(gate: Gate, source: CanonicalChain, intents: readonly LoweredIntent[] = []): void {
-  requireSupported(
-    gate.action,
-    gate.by === "destinations"
-      ? intents.map((intent) => intent.destination)
-      : gate.by === "source"
-        ? [source]
-        : [source, ...intentDestinations(intents)],
-  );
+/** Refuses `gate`'s command on a preview chain: a program's `source`. */
+function gated(gate: Gate, source: CanonicalChain): void {
+  requireSupported(gate.action, [source]);
 }
 
 /** What stdin carried, named in messages. */
@@ -723,8 +625,8 @@ async function programInput(
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
   gate?: Gate,
-  /** For a wallet's intents: `main`'s arguments, bound into them (`bindMainArguments`), after
-   *  `before` has refused what no arguments could fix. */
+  /** `main`'s arguments, bound into the program (`bindMainArguments`), after `before` has refused
+   *  what no arguments could fix. */
   bind?: { readonly args?: ArgsInput; readonly before?: (input: ProgramInput) => void },
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
@@ -732,12 +634,6 @@ async function programInput(
   const chain = chainOf(args, file, text, fallback);
   if (gate !== undefined && gate.by !== "destinations") gated(gate, chain);
   const definesFile = stringFlag(args, "defines");
-  const deadline = stringFlag(args, "intent-deadline");
-  const rewardDeadline = stringFlag(args, "intent-reward-deadline");
-  const creator = stringFlag(args, "intent-creator");
-  const prover = stringFlag(args, "intent-prover");
-  const fee = stringFlag(args, "intent-execution-fee");
-  const fundVia = stringFlag(args, "intent-fund-via");
   const defines = {
     ...(definesFile === undefined
       ? {}
@@ -759,29 +655,10 @@ async function programInput(
     chain,
     compactArgs: args.values["compact-args"] === true,
     defines,
-    intents: {
-      ...(deadline === undefined
-        ? {}
-        : { deadline: parseUnixSeconds("intent-deadline", deadline) }),
-      ...(rewardDeadline === undefined
-        ? {}
-        : { rewardDeadline: parseUnixSeconds("intent-reward-deadline", rewardDeadline) }),
-      ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
-      ...(prover === undefined ? {} : { prover: parseAddress("intent-prover", prover) }),
-      ...(fee === undefined || fee === "auto"
-        ? {}
-        : { executionFee: parseWei("intent-execution-fee", fee) }),
-      ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
-    },
   };
   bind?.before?.(given);
-  const input = bind === undefined ? given : bindMainArguments(given, bind.args);
-  if (fee !== "auto") return input;
-  const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
 
-  return executionFee === undefined
-    ? input
-    : { ...input, intents: { ...input.intents, executionFee } };
+  return bind === undefined ? given : bindMainArguments(given, bind.args);
 }
 
 /**
@@ -1213,41 +1090,32 @@ async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleC
 }
 
 /**
- * The intents a lifecycle command acts on: the store's, named by hash (one or several), or the
- * file's, built as `publish` builds them (`--chain` its source). `--chain` with hashes must be
- * their source.
+ * The intents a lifecycle command acts on: the store's, named by hash (one or several). `--chain`
+ * with them must be their source.
  */
-async function lifecycleTargets(
-  args: ParsedArgs,
-  io: CliIo,
-  store: IntentStore,
-  gate?: Gate,
-): Promise<Target[]> {
+function lifecycleTargets(args: ParsedArgs, store: IntentStore): Target[] {
   const operands = args.positionals;
   if (operands.length === 0) {
-    throw new UsageError("missing <file | intent-hash>: the intent, by its file or its hash");
+    throw new UsageError("missing <intent-hash>: the intent, by its hash");
   }
-  if (operands.every(isIntentHash)) {
-    const targets = operands.flatMap((hash) => storedTargets(store, hash as `0x${string}`));
-    const chainFlag = stringFlag(args, "chain");
-    if (chainFlag !== undefined) {
-      const chain = parseChain(chainFlag);
-      const other = targets.find((target) => target.record.source.chainId !== chain.id);
-      if (other !== undefined) {
-        throw new UsageError(
-          `--chain ${chain.slug} is not the source of ${other.record.intentHash}, which ` +
-            `${other.record.source.chain} published`,
-        );
-      }
+  const named = operands.find((operand) => !isIntentHash(operand));
+  if (named !== undefined) {
+    throw new UsageError(`'${named}' is not an intent hash: name a stored intent by its hash`);
+  }
+  const targets = operands.flatMap((hash) => storedTargets(store, hash as `0x${string}`));
+  const chainFlag = stringFlag(args, "chain");
+  if (chainFlag !== undefined) {
+    const chain = parseChain(chainFlag);
+    const other = targets.find((target) => target.record.source.chainId !== chain.id);
+    if (other !== undefined) {
+      throw new UsageError(
+        `--chain ${chain.slug} is not the source of ${other.record.intentHash}, which ` +
+          `${other.record.source.chain} published`,
+      );
     }
-
-    return targets;
-  }
-  if (operands.length > 1) {
-    throw new UsageError("give one <file>, or one or more intent hashes");
   }
 
-  return fileTargets(await programInput(args, io, operands[0]!, undefined, gate), io, store);
+  return targets;
 }
 
 /**
@@ -1260,7 +1128,7 @@ async function lifecycleOf(
   io: CliIo,
   gate: Gate,
 ): Promise<{ readonly targets: Target[]; readonly context: LifecycleContext }> {
-  const targets = await lifecycleTargets(args, io, storeOf(args, io), gate);
+  const targets = lifecycleTargets(args, storeOf(args, io));
   requireSupported(
     gate.action,
     targets.map(({ record }) =>
@@ -1269,147 +1137,6 @@ async function lifecycleOf(
   );
 
   return { targets, context: await lifecycleContext(args, io) };
-}
-
-/** The questions `sauce intent publish` asks with no file, as flags. */
-const CREATE: FlagSpecs = {
-  source: { type: "string", value: "<chain>", help: "No file: the source chain (the reward's)" },
-  destination: { type: "string", value: "<chain>", help: "…the destination chain" },
-  token: { type: "string", value: "<symbol|address>", help: "…the token delivered there" },
-  amount: { type: "string", value: "<n>", help: "…how much, in whole units" },
-  recipient: { type: "string", value: "<address>", help: "…to whom (default: the signer)" },
-  "reward-token": { type: "string", value: "<symbol|address>", help: "…the reward's token" },
-  reward: { type: "string", value: "<n>", help: "…the reward, in whole units" },
-  prover: { type: "string", value: "<role|address>", help: "…the prover (HyperProver)" },
-  "fill-deadline": {
-    type: "string",
-    value: "<when>",
-    help: "…the last second to fill: unix seconds, or +30m, +2h, +1d",
-  },
-  "reward-deadline": {
-    type: "string",
-    value: "<when>",
-    help: "…from when it is refundable, if no fill is proven",
-  },
-  out: { type: "string", value: "<path>", help: "…the .sauce.ts file to write" },
-};
-
-/**
- * `sauce intent publish` with no file: the intent made step by step (`create.ts`), written as a
- * file, rehearsed on both chains, then — with a signer, once approved — published and stored, as
- * `sauce intent publish <file>` with the same flags would.
- */
-async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOutput> {
-  // The chains the flags name are refused here, before an endpoint or a key; one asked for is
-  // refused as soon as it is chosen (`create.ts`), and only supported ones are offered.
-  const named = [
-    stringFlag(args, "source") ?? stringFlag(args, "chain"),
-    stringFlag(args, "destination"),
-  ];
-  requireSupported(
-    "publishing intents",
-    named.flatMap((chain) => (chain === undefined ? [] : [parseChain(chain)])),
-  );
-  const lookup = await endpointLookup(args, io);
-  const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
-  const flag = (name: string) => stringFlag(args, name);
-  const given = {
-    ...((flag("source") ?? flag("chain")) ? { source: (flag("source") ?? flag("chain"))! } : {}),
-    ...(flag("destination") === undefined ? {} : { destination: flag("destination")! }),
-    ...(flag("token") === undefined ? {} : { token: flag("token")! }),
-    ...(flag("amount") === undefined ? {} : { amount: flag("amount")! }),
-    ...(flag("recipient") === undefined ? {} : { recipient: flag("recipient")! }),
-    ...(flag("reward-token") === undefined ? {} : { rewardToken: flag("reward-token")! }),
-    ...(flag("reward") === undefined ? {} : { reward: flag("reward")! }),
-    ...(flag("prover") === undefined ? {} : { prover: flag("prover")! }),
-    ...(flag("fill-deadline") === undefined ? {} : { fillDeadline: flag("fill-deadline")! }),
-    ...(flag("reward-deadline") === undefined ? {} : { rewardDeadline: flag("reward-deadline")! }),
-    ...(flag("intent-fund-via") === undefined ? {} : { fundVia: flag("intent-fund-via")! }),
-    ...(flag("out") === undefined ? {} : { out: flag("out")! }),
-  };
-  const created = await createIntent({
-    given,
-    ...(io.ask === undefined ? {} : { ask: io.ask }),
-    endpoint: lookup,
-    ...(account === undefined ? {} : { signer: account.address }),
-    now: BigInt(Math.floor(Date.now() / 1000)),
-    writeText: io.writeText,
-    exists: (path) => io.readModule(path) !== undefined,
-  });
-  io.stderr(`${created.summary.join("\n")}\n\n`);
-  const creator = account?.address ?? (flag("intent-creator") as `0x${string}` | undefined);
-  if (creator === undefined) {
-    throw new UsageError(
-      `${created.file} is written; publishing it needs a signer (the creator), or ` +
-        "--intent-creator with --format json to print the transactions unsigned",
-    );
-  }
-  const program: ProgramInput = {
-    file: created.file,
-    text: created.text,
-    chain: created.source,
-    compactArgs: false,
-    defines: {},
-    intents: {
-      deadline: created.deadline,
-      rewardDeadline: created.rewardDeadline,
-      creator,
-      prover: created.prover,
-      fundVia: created.fundVia,
-    },
-  };
-  const rpcUrl = lookup(created.source);
-  if (rpcUrl === undefined) {
-    throw new UsageError(`publishing needs ${created.source.slug}'s endpoint: --config with it`);
-  }
-  // Rehearsed on the source, then on the destination, before anything is sent.
-  const dry = await publishCommand({ ...program, dryRun: true, rpcUrl, from: creator }, io);
-  io.stderr(`Publishing, rehearsed on ${created.source.slug}:\n${dry.text}\n\n`);
-  if (dry.exitCode !== undefined && dry.exitCode !== 0) {
-    return {
-      ...dry,
-      notes: [`${created.file} is written, and not published: the rehearsal reverts`],
-    };
-  }
-  if (lookup(created.destination) !== undefined) {
-    const fill = await fillCommand({
-      intents: fillTargets(program, io),
-      from: created.file,
-      labels: [],
-      endpointOf: (chain) => lookup(chain) ?? requiredEndpoint(args, io, chain),
-      sourceEndpointOf: lookup,
-      endpointFlag: "--config",
-    });
-    io.stderr(
-      `Filling, rehearsed on ${created.destination.slug} (as a solver will):\n${fill.text}\n\n`,
-    );
-  }
-  if (account === undefined) {
-    return publishCommand({ ...program, dryRun: false, format: "json", rpcUrl, from: creator }, io);
-  }
-  const action = `publish ${created.file} from ${account.address}`;
-  const approver = approverOf(args, io);
-  const answer = await approver.approve(
-    action,
-    `Publish ${created.file} from ${account.address}? [y/N] `,
-  );
-  if (answer === undefined) {
-    throw new CliError(
-      `${created.file} is written, and not published: ${unapproved([action], approver.why).message}`,
-    );
-  }
-  if (!answer) throw new CliError(`${created.file} is written, and not published: you declined`);
-
-  return publishCommand(
-    {
-      ...program,
-      dryRun: false,
-      rpcUrl,
-      account,
-      onSent: storing(args, io, created.source, rpcUrl),
-    },
-    io,
-  );
 }
 
 /** The Eco API gateway, an optional second source of an intent's status. */
@@ -1662,185 +1389,14 @@ const SUPPORTED_ONLY = (what: string): string[] => [
 ];
 
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
-  publish: {
-    usage: [
-      "sauce intent publish <file | -> --chain <source> (--keystore <path> | --private-key <hex>) [options] [--args <value>…]",
-      "sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …",
-    ],
-    summary: "Publish a file's fixed intents from a wallet (or make one, step by step)",
-    trailing: "args",
-    flags: {
-      ...PROGRAM,
-      "args-json": COOK["args-json"]!,
-      ...ENDPOINT,
-      ...SIGNER,
-      ...CREATE,
-      yes: LIFECYCLE.yes!,
-      "auto-approve": LIFECYCLE["auto-approve"]!,
-      from: {
-        type: "string",
-        value: "<address>",
-        help: "With --dry-run or --format and no signer: whose wallet",
-      },
-      "dry-run": {
-        type: "boolean",
-        help: "Rehearse the transactions together (eth_simulateV1); send nothing",
-      },
-      "assume-balance": {
-        type: "string",
-        multiple: true,
-        value: "<TOKEN:amount>",
-        help: "With --dry-run: give the wallet this balance, in whole tokens, for the rehearsal only",
-      },
-      format: {
-        type: "string",
-        value: "<json|cast>",
-        help: "Print the unsigned transactions instead of sending them",
-      },
-      store: LIFECYCLE.store!,
-      ...JSON_FLAG,
-      ...HELP,
-      ...ARGS,
-    },
-    details: [
-      "For a file whose intents are fixed when it is built — every amount a literal, one of main's",
-      "arguments or a top-level `const` of a literal — builds each intent off-chain (the SDK's own",
-      "lowering) and sends the source chain's transactions from the signer's wallet: each reward token",
-      "transferred to the intent's vault (and the native amount sent to it), then Portal.publish.",
-      "No approval is asked for. The vault is the SDK's offline derivation, which the Portal's own",
-      "intentVaultAddress must agree with or nothing is sent; only what the vault does not hold",
-      "yet is transferred, and publish is sent only once the Portal counts the intent funded.",
-      "Prints the intent hashes and the transactions. A file whose intent uses a value the program",
-      "measures or computes while it runs, or that does anything besides open its intents, is",
-      "refused: use `sauce run` on a Pot.",
-      "",
-      "main's arguments (--args, in order, or --args-json) are the values the intents are built",
-      "with: a wallet publishes what it knows before anything runs, so each is bound into the",
-      "intents as it is. Each is one word: an integer, an address or a bool.",
-      "",
-      "--intent-fund-via publishAndFund funds it through the Portal instead: each reward token",
-      "approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20",
-      "does), then publishAndFund, which records the intent Funded and emits IntentFunded.",
-      "",
-      "--dry-run rehearses the transactions together through eth_simulateV1 from the signer's",
-      "wallet, or --from's with no key, then asks the Portal whether each intent is funded, and",
-      "sends nothing. --assume-balance TOKEN:amount gives that wallet a balance for the rehearsal",
-      "only, by state override (repeatable; the amount as `sauce run --fund` takes it;",
-      "ETH:<amount> for the native currency), so a wallet that does not hold the reward yet can",
-      "rehearse publishing it.",
-      "",
-      "With no <file>, it makes one: which chains, what is delivered and to whom, the reward",
-      "(suggested: what is delivered plus a margin over the solver's destination costs — gas, the",
-      "proof's fee, a Kitchen fee where one runs — priced through a Uniswap V3 pool there, and",
-      "doubled so a fill is worth a solver's while), the fill and reward deadlines, the prover",
-      "and how the reward is funded (--intent-fund-via, a transfer to the vault by default), each",
-      "asked at a terminal unless its flag gives it (with no terminal, every flag still needed is",
-      "named). It writes the intent as a .sauce.ts file (--out, default",
-      "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, rehearses",
-      "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
-      "with a signer publishes it once you approve (or with --yes), storing it. It reads",
-      "both chains.",
-      ...SUPPORTED_ONLY("Publishes (or prints the transactions)"),
-      "",
-      "Examples:",
-      "  sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \\",
-      "    --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…",
-      "  sauce intent publish --keystore ~/.keys/me.json",
-      "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
-      "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
-      "    --fill-deadline +1h --reward-deadline +1d --keystore <path>",
-    ].join("\n"),
-    run: async (args, io, trailing) => {
-      if (args.positionals.length === 0) return createAndPublish(args, io);
-      const created = Object.keys(CREATE).find((flag) => args.values[flag] !== undefined);
-      if (created !== undefined) {
-        throw new UsageError(`--${created} makes a new intent: give it with no <file>`);
-      }
-      const format = stringFlag(args, "format");
-      // A dry run rehearses on every chain; transactions, printed or sent, need supported ones.
-      const gate: Gate | undefined =
-        args.values["dry-run"] === true && format === undefined
-          ? undefined
-          : { action: "publishing intents", by: "all" };
-      const program = await programInput(args, io, undefined, undefined, gate, {
-        ...argsInput(args, io, trailing),
-        // Before main's arguments: no argument makes a Solana file publishable.
-        before: ({ chain }) => {
-          if (chain.kind !== "svm") return;
-          throw new UsageError(
-            "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
-              "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
-              "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
-              "EVM chain; its destination may be Solana.",
-          );
-        },
-      });
-      if (format !== undefined && format !== "json" && format !== "cast") {
-        throw new UsageError(`--format: '${format}' is not json or cast`);
-      }
-      // Compiled once: refused before the signer or any endpoint, then the Pots checked.
-      const compiled = compileProgram(program, io);
-      if (gate !== undefined) gated(gate, program.chain, compiled.intents);
-      const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
-      const from = stringFlag(args, "from");
-      if (from !== undefined && account !== undefined) {
-        throw new UsageError(
-          "--from is for when there is no signer: the signer's wallet publishes",
-        );
-      }
-      const rpcUrl =
-        format === undefined && args.values["dry-run"] !== true
-          ? requiredEndpoint(args, io, program.chain)
-          : endpoint(args, io, program.chain);
-
-      const assume = assumedBalancesOf(args, program.chain);
-      if (assume.length > 0 && args.values["dry-run"] !== true) {
-        throw new UsageError(
-          "--assume-balance goes with --dry-run: it gives the wallet a balance for a rehearsal, " +
-            "and nothing to a transaction that is sent",
-        );
-      }
-
-      // Before anything is sent: an intent whose Pot is not deployed is one no solver can fill.
-      const pots = await checkIntentPots(
-        intentCooks(compiled.intents),
-        endpointsOf(args, io, program.chain),
-      );
-      for (const check of pots) {
-        if (check.deployed !== true) {
-          io.stderr(
-            `${check.deployed === false ? missingPotNote(check) : uncheckedPotNote(check)}\n`,
-          );
-        }
-      }
-
-      return publishCommand(
-        {
-          ...program,
-          ...(format === undefined ? {} : { format }),
-          dryRun: args.values["dry-run"] === true,
-          ...(assume.length === 0 ? {} : { assume }),
-          ...(rpcUrl === undefined ? {} : { rpcUrl }),
-          ...(account === undefined ? {} : { account }),
-          ...(from === undefined ? {} : { from: parseAddress("from", from) }),
-          ...(rpcUrl === undefined ? {} : { onSent: storing(args, io, program.chain, rpcUrl) }),
-        },
-        io,
-      );
-    },
-  },
   fill: {
     usage: [
-      "sauce intent fill <file | -> --chain <source> [options] [--args <value>…]",
       "sauce intent fill <intent-hash> [options]",
-      "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--yes]",
+      "sauce intent fill <intent-hash> … --send (--keystore <path> | --private-key <hex>) [--yes]",
       "sauce intent fill <intent-hash> --claimant <address> --send --keypair <path>   (to Solana)",
     ],
-    summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
-    trailing: "args",
+    summary: "Fill stored intents on their destination: rehearsed, or --send",
     flags: {
-      ...PROGRAM,
-      "args-json": COOK["args-json"]!,
       "rpc-url": {
         type: "string",
         value: "<url>",
@@ -1877,11 +1433,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
-      ...ARGS,
     },
     details: [
-      "Builds each intent the file opens, as `sauce intent publish` does (or takes the intent the store",
-      "holds under that hash), and fills it on its destination chain as a solver does: one",
+      "Takes the intent the store holds under that hash and fills it on its destination chain as a",
+      "solver does: one",
       "eth_simulateV1 block, every call from the solver — Kitchen.deployPot for the destination's",
       "shared intent Pot when the route cooks on it and it is not deployed yet (any account may",
       "send it), the solver's approval of the Portal for each token the route delivers (reset to",
@@ -1901,8 +1456,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "terminal, or with --yes. Then the transactions are sent in order, and the intent and its",
       "fill go into the store (--store, default ~/.sauce/intents).",
       "",
-      "Prints the gas and what the fill moved — the transfers, each address's net change, labelled",
-      "with the defines that name it (RECIPIENT, REFUND_TO) — what it left in the shared Pot and the",
+      "Prints the gas and what the fill moved — the transfers, each address's net change — what it",
+      "left in the shared Pot and the",
       "Portal's Executor, which every intent through that Portal shares, the Portal's",
       "IntentFulfilled record, and, sent, the Hyperlane message the proof travels as; or the",
       "decoded reason it reverts (exit 1), a failed route call unwrapped to the program's own",
@@ -1910,9 +1465,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "It runs on the DESTINATION, and reads the source to check the source prover trusts the",
       "destination's; --rpc-url is the destination's endpoint, for intents that all go to one",
-      "chain. The intent must be fixed when it is built, as for publish: one using a value the",
-      "program measures on chain has no route until it runs (name it by the hash `sauce run`",
-      "stored). Needs an endpoint that serves eth_simulateV1.",
+      "chain. Needs an endpoint that serves eth_simulateV1.",
       "",
       "An intent to Solana (one `sauce intent import` stored from its publishing transaction) is",
       "filled through Solana's Portal program: Portal.fulfill, the solver's token accounts paying",
@@ -1924,12 +1477,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("--send sends a fill"),
       "",
       "Examples:",
-      "  sauce intent fill swap-on-base.sauce.ts --chain ethereum \\",
-      "    --intent-deadline 2000000000 --intent-creator 0x… --intent-execution-fee 1000000000000 \\",
-      "    --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>",
+      "  sauce intent fill 0x<intent hash>",
       "  sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json",
     ].join("\n"),
-    run: async (args, io, trailing) => {
+    run: async (args, io) => {
       const store = storeOf(args, io);
       const rpcUrl = stringFlag(args, "rpc-url");
       const solver = stringFlag(args, "solver");
@@ -1959,43 +1510,25 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         throw new UsageError(`--${yes} approves what --send spends: give --send`);
       }
       const operands = args.positionals;
-      let targets: readonly FillTarget[];
-      let labels: ReadonlyArray<readonly [`0x${string}`, string]> = [];
-      let from: string;
+      if (operands.length === 0) {
+        throw new UsageError("missing <intent-hash>: the intent, by its hash");
+      }
+      const named = operands.find((operand) => !isIntentHash(operand));
+      if (named !== undefined) {
+        throw new UsageError(`'${named}' is not an intent hash: name a stored intent by its hash`);
+      }
       const gate: Gate | undefined = sending
         ? { action: "sending a fill", by: "destinations" }
         : undefined;
-      if (operands.length > 0 && operands.every(isIntentHash)) {
-        if (argsInput(args, io, trailing).args !== undefined) {
-          throw new UsageError(
-            "--args gives a file's main its arguments; a stored intent is built already",
-          );
-        }
-        targets = operands.flatMap((hash) =>
-          storedTargets(store, hash as `0x${string}`).map(({ record }) => ({
-            intent: intentOf(record),
-            source: parseChain(String(record.source.chainId)),
-            destination: parseChain(String(record.destination.chainId)),
-            sourcePortal: record.source.portal,
-          })),
-        );
-        from = operands.length === 1 ? operands[0]! : "the intents named";
-      } else {
-        const program = await programInput(
-          args,
-          io,
-          undefined,
-          undefined,
-          gate,
-          argsInput(args, io, trailing),
-        );
-        // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
-        const past = pastDeadline(program);
-        if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
-        targets = fillTargets(program, io);
-        labels = defineLabels(program);
-        from = program.file;
-      }
+      const targets: readonly FillTarget[] = operands.flatMap((hash) =>
+        storedTargets(store, hash as `0x${string}`).map(({ record }) => ({
+          intent: intentOf(record),
+          source: parseChain(String(record.source.chainId)),
+          destination: parseChain(String(record.destination.chainId)),
+          sourcePortal: record.source.portal,
+        })),
+      );
+      const from = operands.length === 1 ? operands[0]! : "the intents named";
       // A rehearsal runs on every chain; a fill is sent only to a supported destination.
       if (gate !== undefined) {
         requireSupported(
@@ -2040,7 +1573,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       return fillCommand({
         intents: targets,
         from,
-        labels,
+        labels: [],
         endpointOf: (chain) => requiredEndpoint(args, io, chain),
         ...(lookup === undefined ? {} : { sourceEndpointOf: lookup }),
         endpointFlag: rpcUrl === undefined ? "--config" : "--rpc-url",
@@ -2054,7 +1587,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   prove: {
-    usage: "sauce intent prove <file | intent-hash…> [--keystore <path> | --private-key <hex>]",
+    usage: "sauce intent prove <intent-hash…> [--keystore <path> | --private-key <hex>]",
     summary: "Send the proof of filled (or cancelled) intents, paying the prover's fee",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -2066,9 +1599,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "Prints the transaction and the Hyperlane message the proof travels as. With no signer,",
       "prints the unsigned transaction instead.",
       "",
-      "The intent is a hash the store holds (`sauce intent publish`, `run`, `fill` and `intents import`",
-      "store them), or the file that opens it (with --chain, its source, and the flags it was",
-      "built with). It reads the destination, and the source to skip what is proven already.",
+      "The intent is a hash the store holds (`fill` and `intent import` store them). It reads the",
+      "destination, and the source to skip what is proven already.",
       ...SUPPORTED_ONLY("Proves (or prints the transaction)"),
       "",
       "Example:",
@@ -2084,7 +1616,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   claim: {
-    usage: "sauce intent claim <file | intent-hash…> --chain <source> [signer]",
+    usage: "sauce intent claim <intent-hash…> --chain <source> [signer]",
     summary: "Withdraw proven intents' rewards to their claimants, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -2112,7 +1644,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   refund: {
-    usage: "sauce intent refund <file | intent-hash…> --chain <source> [signer]",
+    usage: "sauce intent refund <intent-hash…> --chain <source> [signer]",
     summary: "Return unearned rewards from their vaults to their creators, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -2139,7 +1671,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   cancel: {
-    usage: "sauce intent cancel <file | intent-hash…> [--and-prove] [signer]",
+    usage: "sauce intent cancel <intent-hash…> [--and-prove] [signer]",
     summary: "Cancel unfilled intents after their route's deadline, for an early refund",
     flags: {
       ...LIFECYCLE,
@@ -2181,7 +1713,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   status: {
-    usage: "sauce intent status <file | intent-hash…>",
+    usage: "sauce intent status <intent-hash…>",
     summary: "Where intents stand on both chains, and what can be done next",
     flags: { ...PROGRAM, ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
@@ -2199,7 +1731,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
-      const targets = await lifecycleTargets(args, io, context.store);
+      const targets = lifecycleTargets(args, context.store);
       const shown = await Promise.all(targets.map((target) => showCommand(target, context)));
 
       return {
@@ -2214,8 +1746,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     summary: "Every intent the store keeps, and where each stands",
     flags: { ...ENDPOINT, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
-      "The store (--store, default ~/.sauce/intents) keeps every intent `sauce intent publish`,",
-      "`sauce run`, and the intent commands touch, and those `sauce intent import` brings in:",
+      "The store (--store, default ~/.sauce/intents) keeps every intent the intent commands touch,",
+      "and those `sauce intent import` brings in:",
       "one directory per intent hash, its intent.json written once and never changed, and",
       "events.jsonl, one line appended per thing that happened (published, funded, filled,",
       "proving, claimed, refunded, cancelled) with its chain, transaction, block and time. Where",
@@ -2527,9 +2059,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     details: [
       "Compiles the file as a standalone program for the chain (routes.compileSauceProgram):",
       "its token symbols (USDC), protocol namespaces (Uniswap.UniversalRouter), chainId, the",
-      "zero-import @sauce/token functions, SafeERC20 token writes (USDC.transfer,",
-      "Token(addr).approve) and intents opened inside the program all resolve against it, so",
-      "one file compiles for any chain whose names it uses. Relative imports are read from beside",
+      "zero-import @sauce/token functions and SafeERC20 token writes (USDC.transfer,",
+      "Token(addr).approve) all resolve against it, so one file compiles for any chain whose",
+      "names it uses. Relative imports are read from beside",
       "the file. A file may name its chain in a leading `// @chain base` line. An actions",
       "document compiles too (`sauce actions`).",
       "",
@@ -2537,15 +2069,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  defines    each name the chain gave the file (a token symbol, a protocol contract, the",
       "             chain id) and each low-level --define it read, with its value and source",
       "  contracts  each protocol contract it calls or reads (UniswapV3.Factory), resolved on its",
-      "             chain: an intent body's on the intent's own",
+      "             chain",
       "  size       the program's bytes; payload: the program with main's arguments (--args)",
       "  cook       on Solana, the cook's transaction against the 1232-byte limit, measured",
       "             with --account where given and a distinct account for each other slot, as",
       "             the Kitchen's cook or, --via engine, the engine's direct one",
-      "  intentPots each intent that runs a program on its destination: the Pot it cooks on (the",
-      "             one the destination Portal's Executor owns, salt 0) and, read from that",
-      "             chain, whether it is deployed; a missing one is warned",
-      "             about, since no solver can fill the intent until it is",
       "A --define the file never reads is named on stderr: it changes nothing.",
       "",
       "Examples:",
@@ -2574,7 +2102,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...argsInput(args, io, trailing),
           ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
           ...(via === undefined ? {} : { via: parseVia(via) }),
-          endpoints: endpointsOf(args, io, program.chain),
         },
         io,
       );
@@ -2864,8 +2391,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           io,
         );
       }
-      // Every chain the cook involves, its intents' too, before the key is unlocked.
-      requireSupported("sending the cook", programChains(program, io));
+      // The cook's chain, before the key is unlocked.
+      requireSupported("sending the cook", programChains(program));
       const account = await signerOf(args, io);
       const input = cookInput(args, io, trailing, account.address, program);
       const rpcUrl = requiredEndpoint(args, io, input.chain);
@@ -2890,7 +2417,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "sauce intent <verb> [options]",
       "sauce intent [--keystore <path> | --private-key <hex>]",
     ],
-    summary: "Publish, fill, prove, claim, refund and cancel cross-chain intents",
+    summary: "Fill, prove, claim, refund and cancel cross-chain intents",
     flags: {
       ...ENDPOINT,
       ...EVM_SIGNER,
@@ -2906,15 +2433,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
       ),
       "",
-      "An intent is a file that opens one (`Base(() => { … }).reward({ … })`), named with the",
-      "flags it is built with, or its hash once the store keeps it: `publish`, `fill` and",
-      "`import` store every intent they touch (--store, default ~/.sauce/intents), and every verb",
-      "takes the hash. With no verb, at a terminal: a list of the stored intents, read live from",
+      "An intent is its hash once the store keeps it: `fill` and `import` store every intent",
+      "they touch (--store, default ~/.sauce/intents), and every verb takes the hash. With no verb, at a terminal: a list of the stored intents, read live from",
       "the chains, to pick one from, then a menu that runs these verbs on it, with the same",
       "approvals (with a signer, they send). With no terminal, the plain list.",
       "",
       "Examples:",
-      "  sauce intent publish                          (guided, at a terminal)",
+      "  sauce intent import 0x<tx hash> --chain ethereum",
       "  sauce intent fill 0x<intent hash> --send --keystore <path>",
       "  sauce intent claim 0x<intent hash> --keystore <path>",
     ].join("\n"),
@@ -3175,7 +2700,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Every name a program compiled for the chain may use without declaring it, from the SDK's",
       "registries (routes.sourceGlobals) — the ones the compile resolves: token symbols with",
       "their addresses and decimals, protocol namespaces with each contract's address (and,",
-      "with --protocol, its methods), the chain names that open intents, the defines, and the",
+      "with --protocol, its methods), the chain names, the defines, and the",
       "zero-import @sauce/token functions. With no filter it lists everything but the chain's",
       "tokenized stocks, which it counts: Ethereum and Solana have over a thousand each. A stock",
       "token is named like any other (SPCXc.balanceOf(...), balanceOf(TSLAx, account) on",
@@ -3477,21 +3002,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ARGS,
     },
     details: [
-      "Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine, its",
-      "program, the intents the program opens), a Kitchen.deployPot (the Pot it makes), a Portal",
+      "Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine and its",
+      "program), a Kitchen.deployPot (the Pot it makes), a Portal",
       "publish or publishAndFund (the route and the reward), an ERC-20 call, or a bare program.",
       "A 32-byte hash with --chain (or --rpc-url) is a transaction, fetched first.",
       "With --source, a cook's program is checked against that file's and the arguments after it",
-      "are decoded against its main. A file operand is compiled and its intents listed, with",
-      "each value it measures at run time named; with --args, main's arguments are bound into",
-      "them, as `sauce intent publish` binds them. No opcode listing: programs are reported by",
-      "size, hash and what they open.",
+      "are decoded against its main. A file operand is compiled and reported; with --args,",
+      "main's arguments are bound into it. No opcode listing: programs are reported by size and",
+      "hash.",
       "",
       "Examples:",
       "  sauce inspect 0x… --chain base --source split.sauce.ts",
       "  sauce inspect 0x<tx hash> --chain base",
-      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x… \\",
-      "    --args 1000000 0x…",
+      "  sauce inspect buy.sauce.ts --chain base --args 1000000 0x…",
     ].join("\n"),
     run: async (args, io, trailing) => {
       const [operand, ...extra] = args.positionals;
@@ -3899,7 +3422,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     flags: { ...MCP_FLAGS, ...HELP },
     details: [
       "The Sauce MCP server. Its tools are this command's building half — sauce_compile,",
-      "sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,",
+      "sauce_actions, sauce_tx, sauce_pot, sauce_simulate,",
       "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price, sauce_pools",
       "and sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
       "sauce_install_skills) and as resources, at sauce://skills/<path>. It takes no key: every",

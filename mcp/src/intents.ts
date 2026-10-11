@@ -5,8 +5,8 @@
  * are a layer over. Each tool calls one of its functions and returns that function's JSON.
  *
  * Stateless. The command line keeps intents in a store under `~/.sauce`; this server keeps
- * nothing, so every call names its intent: the `record` a tool returned (sauce_intent_publish,
- * sauce_intent_import, sauce_intent_status), as the store would hold it, or the source
+ * nothing, so every call names its intent: the `record` a tool returned (sauce_intent_import,
+ * sauce_intent_status), as the store would hold it, or the source
  * transaction that published it (`txHash` with `chain`), whose `IntentPublished` log is read back.
  * A record is checked against its own hash before anything is built from it (`intentOf`).
  */
@@ -21,18 +21,14 @@ import {
   buildFill,
   buildProve,
   buildRefund,
-  defineLabels,
   fillCommand,
-  fillTargets,
   importIntents,
   INTENT_SCHEMA,
   intentOf,
-  intentRecord,
   intentStatus,
   parseAddress,
   parseChain,
   parsePubkey,
-  pastDeadline,
   requireChain,
   requireSupported,
   UsageError,
@@ -42,14 +38,11 @@ import {
 } from "./sdk.js";
 import { noEndpoint } from "./config.js";
 import {
-  boundProgram,
   CLAIMANT,
   chainRef,
   endpointsByChain,
   fromCommand,
-  INTENT_ARGS,
   LIMITS,
-  PROGRAM,
   READS_CHAIN,
   refusable,
   RPC_URLS,
@@ -57,7 +50,6 @@ import {
   toolRegistrar,
   TX_HASH,
   UNSIGNED,
-  type ProgramArgs,
   type ToolContext,
   type ToolOutput,
 } from "./tools.js";
@@ -91,7 +83,7 @@ const RECORD = z.looseObject({
 const RECORD_INPUT = z.union([z.looseObject({}), z.string().min(2).max(LIMITS.source)]);
 
 const RECORD_HELP =
-  `The intent in full: the \`record\` sauce_intent_publish, sauce_intent_import or ` +
+  `The intent in full: the \`record\` sauce_intent_import or ` +
   `sauce_intent_status returns (schema ${INTENT_SCHEMA}), as an object or its JSON text. Its ` +
   "route and reward are checked against its intentHash. Give this or txHash.";
 
@@ -174,7 +166,7 @@ function recordOf(value: unknown, where: string): IntentRecord {
       .join("; ");
     throw new UsageError(
       `${where} is not an intent record (${INTENT_SCHEMA}): ${issues}. Pass the record ` +
-        "sauce_intent_import or sauce_intent_publish returns",
+        "sauce_intent_import returns",
     );
   }
   const record = shaped.data as unknown as IntentRecord;
@@ -219,7 +211,7 @@ async function located(
 ): Promise<{ readonly records: IntentRecord[]; readonly endpoints: Record<string, string> }> {
   if ((args.intent === undefined) === (args.txHash === undefined)) {
     throw new UsageError(
-      "give intent (its record, as sauce_intent_import or sauce_intent_publish returns it) or " +
+      "give intent (its record, as sauce_intent_import returns it) or " +
         "txHash with chain (the transaction that published it), not both",
     );
   }
@@ -476,28 +468,15 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "On a Solana destination: the Portal's fulfill as a base64 transaction, the solver its " +
         "fee payer, then the proof to send once it lands, with claimant (the EVM source address " +
         "the reward pays) required. " +
-        "Name the intent by its record or txHash, or give the program that opens it (source " +
-        "and the sauce_intent_publish inputs, chain the SOURCE). With dryRun, instead rehearse " +
+        "Name the intent by its record, or by txHash with chain (the SOURCE). With dryRun, " +
+        "instead rehearse " +
         "the fill there in one eth_simulateV1 block, from any solver (no from needed): per " +
         "intent ok with gas and what moved, or the decoded reason it reverts. Needs the " +
         "destination's endpoint, and the source's to check the prover. The rehearsal works on " +
         "every chain; the fill is built only for a supported destination. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
-        ...PROGRAM,
-        source: PROGRAM.source
-          .optional()
-          .describe(
-            "Or the SauceScript program that opens the intents, as sauce_intent_publish takes " +
-              "it: every intent it opens, fixed when it is built.",
-          ),
-        args: INTENT_ARGS,
-        chain: chainRef
-          .optional()
-          .describe(
-            "The SOURCE chain: where the program publishes (with source), or where txHash was " +
-              "sent.",
-          ),
+        chain: chainRef.optional().describe("The SOURCE chain: where txHash was sent."),
         intent: MANY.intent,
         txHash: ONE.txHash,
         index: ONE.index,
@@ -538,11 +517,10 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const named = [args.source, args.intent, args.txHash].filter((each) => each !== undefined);
+      const named = [args.intent, args.txHash].filter((each) => each !== undefined);
       if (named.length !== 1) {
         throw new UsageError(
-          "name the intents one way: source (the program that opens them), intent (a record or " +
-            "a list), or txHash with chain",
+          "name the intents one way: intent (a record or a list), or txHash with chain",
         );
       }
       if (args.claimant !== undefined && !CLAIMANT.test(args.claimant)) {
@@ -550,37 +528,14 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           `claimant: '${args.claimant}' is neither an address (20 bytes) nor 32 bytes of hex`,
         );
       }
-      let records: IntentRecord[];
-      let endpoints: Record<string, string>;
-      let labels: ReturnType<typeof defineLabels> = [];
-      let from = "the call's intent";
-      // A program whose deadline has passed is filled anyway, so the Portal's own refusal shows.
-      let past: string | undefined;
       // A rehearsal fills nothing, on any chain; a fill is built only for a supported destination.
       const gate: Gate | undefined =
         args.dryRun === true ? undefined : { action: "building a fill", side: "destination" };
-      if (args.source !== undefined) {
-        const program = boundProgram(args as ProgramArgs & { readonly args?: readonly unknown[] });
-        past = pastDeadline(program.input);
-        const targets = fillTargets(program.input, program.files);
-        records = targets.map((target) =>
-          intentRecord(target.intent, { sourcePortal: target.sourcePortal }),
-        );
-        labels = defineLabels(program.input);
-        from = program.input.file;
-        // A program's intents are named by the program, and their endpoints by the call.
-        ({ endpoints } = await located(
-          { intent: records, rpcUrl: args.rpcUrl, rpcUrls: args.rpcUrls },
-          reach,
-          { side: "destination", many: true, ...(gate === undefined ? {} : { gate }) },
-        ));
-      } else {
-        ({ records, endpoints } = await located(args, reach, {
-          side: "destination",
-          many: true,
-          ...(gate === undefined ? {} : { gate }),
-        }));
-      }
+      const { records, endpoints } = await located(args, reach, {
+        side: "destination",
+        many: true,
+        ...(gate === undefined ? {} : { gate }),
+      });
       const claimant = args.claimant as Hex | undefined;
 
       if (args.dryRun === true) {
@@ -602,8 +557,8 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         }));
         const output = await fillCommand({
           intents: targets,
-          from,
-          labels,
+          from: "the call's intent",
+          labels: [],
           endpointOf: (chain) => {
             const url = endpoints[String(chain.id)];
             if (url === undefined) throw noEndpoint(chain, serverEndpoints, "Rehearsing a fill");
@@ -617,17 +572,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           ...(args.prove === undefined ? {} : { prove: args.prove }),
         });
 
-        const rehearsed = fromCommand(output);
-
-        return past === undefined
-          ? rehearsed
-          : {
-              ...rehearsed,
-              notes: [
-                `${past}: the rehearsal shows the Portal refusing it`,
-                ...(rehearsed.notes ?? []),
-              ],
-            };
+        return fromCommand(output);
       }
       if (args.from === undefined) {
         throw new UsageError(
@@ -657,7 +602,6 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         fills.push({ intentHash: record.intentHash, destination: destination.slug, ...fill });
         notes.push(...said);
       }
-      if (past !== undefined) notes.unshift(`${past}: the Portal refuses a fill now`);
       notes.push(
         `Only ${args.from} may send these, in order, on each intent's destination: the Portal ` +
           "pulls what the route delivers from the account that calls fulfill.",

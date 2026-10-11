@@ -21,7 +21,6 @@ const EXECUTION = {
   pot: "0x1111111111111111111111111111111111111111",
   engine: "0x2222222222222222222222222222222222222222",
 } as const;
-const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 const BASE = requireChain("base");
 
 /** Helpers that take and return arrays and records — they cannot be written without annotations. */
@@ -98,23 +97,6 @@ function main(amount: Uint256): Uint256 {
     expect(
       compileSauceRoute("base", source, EXECUTION).compiled.bytecode[0]!.length,
     ).toBeGreaterThan(0);
-  });
-
-  it("lowers an intent opened in an annotated program", () => {
-    const source = `function main(amount: Uint256): void {
-  const held: Uint256 = USDC.balanceOf(ctx.self());
-  require(held >= amount);
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
-}`;
-    const out = compileSauceRoute("base", source, EXECUTION, {
-      defines: { RECIPIENT },
-      intents: { deadline: 4_000_000_000n, creator: "0x3333333333333333333333333333333333333333" },
-    });
-
-    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-    expect(out.source).toContain("function main(amount: Uint256): void {");
   });
 });
 

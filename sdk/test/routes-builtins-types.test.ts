@@ -1,8 +1,8 @@
 /**
  * A typed route closure that uses SauceScript's builtins typechecks.
  *
- * `Base(() => { ... })` is TypeScript the host compiles before the SDK reads the closure's text, so
- * every name in it has to mean something to `tsc`. The token symbols and protocol namespaces
+ * A closure handed to the SDK (`routes.sauceBodyToSource(() => { ... })`) is TypeScript the host
+ * compiles before the SDK reads the closure's text, so every name in it has to mean something to `tsc`. The token symbols and protocol namespaces
  * always did (`source-globals.generated.ts`); the language's own builtins did not, and a closure
  * that compiled as SauceScript failed `tsc` on `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`,
  * `log`, `require(cond, message)`, `.toBytesBe` and `evm`. They are declared in
@@ -147,8 +147,10 @@ const TYPED_ELSEWHERE = new Set(["binding"]);
 
 const GENERATED = resolve(SDK, "src/routes/builtins.generated.ts");
 
-const PRELUDE = `import { Base } from ${JSON.stringify(resolve(SDK, "src/index.ts"))};
-declare const OPTIONS: Parameters<typeof Base>[1];
+const PRELUDE = `import { routes } from ${JSON.stringify(resolve(SDK, "src/index.ts"))};
+const Base = (body: () => unknown, options: routes.SauceProgramOptions) =>
+  routes.compileSauceProgram("base", routes.sauceBodyToSource(body), options);
+declare const OPTIONS: routes.SauceProgramOptions;
 `;
 
 const WRONG_SHAPES = `

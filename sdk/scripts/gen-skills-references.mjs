@@ -159,8 +159,7 @@ export function globalsIndex(sdk, ecoRoutes, support) {
   for (const { chain, globals } of listed) {
     for (const ns of globals.protocols) {
       for (const contract of ns.contracts) {
-        // The Portal and its provers are left to the intent syntax: a program opens an intent with
-        // `Arbitrum(() => { ... }).reward(...)` (`sauce-intents`), never by calling them by name.
+        // The Portal and its provers are left out: a program never calls them by name.
         if (contract.protocol === INTENT_PROTOCOL) continue;
         const name = `${ns.namespace}.${contract.name}`;
         if (ns.kind === "protocol") {
@@ -553,8 +552,7 @@ const CHOOSING = {
     "Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to",
     "Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)",
     "settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the",
-    "destination; LI.FI, Socket and Squid route across bridges from an off-chain quote. To continue a",
-    "program on another chain, not only move a token, open a Sauce intent (`sauce-intents`).",
+    "destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.",
   ],
   "cross-chain": [
     "Messaging protocols (LayerZero, Wormhole, Axelar, Chainlink CCIP, Hyperlane) carry arbitrary",
@@ -607,8 +605,7 @@ const CHOOSING = {
   infrastructure: [
     "Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),",
     "ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,",
-    "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer",
-    "(`sauce-intents`).",
+    "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer.",
   ],
 };
 
@@ -717,7 +714,6 @@ const DOCS_FOR_SKILL = {
     "the distributed swap on Solana",
     "guides/solana-distributed-swap.md",
   ],
-  "sauce-intents": ["intents", "guides/intents.md"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],
   "sauce-actions": ["actions", "guides/actions.md"],
@@ -768,14 +764,12 @@ const DOCS_SITE = {
   /** What a reader of the manual also needs about the release's chains. */
   chainIndexNotes: [
     "On a preview chain the `sauce` command and the MCP server still rehearse and read:",
-    "`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and",
-    "every read. What they refuse there, before any endpoint is reached or any key is read, is",
-    "building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)",
-    "and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent",
-    "publishes only when its source and every destination it opens are supported; the later levels",
-    "of a cascade (an intent opened inside another's body) are not checked, so keep every level on a",
-    "supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a",
-    "proof or a cancellation by the destination, a claim or a refund by the source. Every refusal",
+    "`sauce simulate`, `sauce intent fill` without `--send`, and every read. What they refuse there,",
+    "before any endpoint is reached or any key is read, is building or sending a transaction;",
+    "[the command's](../guides/cli.md#supported-and-preview-chains) and",
+    "[the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. Each step",
+    "after publishing is refused by the chain it is sent on: a fill, a proof or a cancellation by the",
+    "destination, a claim or a refund by the source. Every refusal",
     "names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.",
     "",
     "The TypeScript SDK is not gated: its builders take every chain below and build its",
@@ -906,9 +900,8 @@ function renderGlobals(data) {
     "",
     "# Chain globals",
     "",
-    "A chain name opens an intent from inside a program (`Ethereum(() => { ... }).reward({ ... })`) and",
-    "qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains",
-    "to take intents; each line says whether its chain does. Each line also says whether the initial",
+    "A chain name qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). Each line says",
+    "whether its chain takes intents, and whether the initial",
     "release supports the chain: a program compiles and simulates on every chain, and its transactions",
     "are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
     "server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a",
@@ -1055,7 +1048,7 @@ function supportLines(chain, supported) {
     `**Preview chain.** For the initial release, Sauce supports transactions on ${names} only.`,
     `On ${chain.name} a program compiles and simulates (\`sauce compile\`, \`sauce simulate\`, the dry`,
     "runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,",
-    "`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are",
+    "`sauce run`, `sauce pot --deploy` and the intent steps sent here are",
     "refused, naming the supported chains and how to request this one.",
     "",
     `To request ${chain.name}, look for [its existing request](${chain.request.searchUrl}) and add your`,
@@ -1379,8 +1372,6 @@ function renderDeploymentsPage(data) {
     `| Salt | \`${evm.intentPot.salt}\`: \`SAUCE_INTENT_POT_SALT\` |`,
     "",
     "The Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account.",
-    "[The destination Pot](../guides/intents.md#the-destination-pot) says who deploys it and what a",
-    "body may leave in it.",
     "",
     "## Solana",
     "",

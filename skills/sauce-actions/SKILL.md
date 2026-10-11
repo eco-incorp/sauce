@@ -34,12 +34,12 @@ Base and Arbitrum, each time to that chain's USDC, WETH and factory.
 
 ## Actions or SauceScript
 
-| An actions document, when                                       | A SauceScript program (`sauce-script`), when                                  |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| the job is a fixed sequence of the operations listed below      | it needs logic: conditions, loops, a price read and compared, a best venue    |
-| the steps come from a service, a form or another language       | it opens an intent to another chain from inside the program (`sauce-intents`) |
-| the document must be validated, stored or signed before it runs | it calls a contract or a method no action covers                              |
-| every amount is fixed, an argument, or a balance read on chain  | it spends across several venues at once (`sauce-distributed-swap`)            |
+| An actions document, when                                       | A SauceScript program (`sauce-script`), when                               |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| the job is a fixed sequence of the operations listed below      | it needs logic: conditions, loops, a price read and compared, a best venue |
+| the steps come from a service, a form or another language       | it reads state and decides what to do from it                              |
+| the document must be validated, stored or signed before it runs | it calls a contract or a method no action covers                           |
+| every amount is fixed, an argument, or a balance read on chain  | it spends across several venues at once (`sauce-distributed-swap`)         |
 
 Every action an actions document can hold is listed, with every field, in
 [references/actions.md](references/actions.md), generated from the document's JSON Schema. A

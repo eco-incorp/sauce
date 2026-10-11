@@ -12,8 +12,6 @@ Start with the [quick start](../docs/guides/quick-start.md), then use the
 [documentation hub](../docs/README.md).
 
 - [Protocols and tokens](../docs/guides/protocols-and-tokens.md) — call `USDC.approve(...)` and protocol methods by name inside a program.
-- [Create an intent](../docs/guides/intents.md) — build with `Base(() => ...).reward(...)`, fund it, and inspect the requests.
-- [Nested intents](../docs/guides/nested-intents.md) — chain intents, including from an amount only known on chain.
 - [Compiling programs](../docs/guides/compiling.md) — standalone programs and runtime arguments.
 - [Solana](../docs/guides/solana.md) — account plans and Kitchen execution.
 - [Examples](../docs/examples/README.md) — complete programs to copy.

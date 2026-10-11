@@ -12,10 +12,6 @@ engine executes it inside one transaction: on an EVM chain through your Pot's
 has control flow, reads and checks, and the engine runs it as written: it is not a multicall, and
 it does not use a magic header.
 
-On top of the runtime sit **intents**: an offer of work on another chain, with a reward escrowed on
-this one, written as a chain name called as a function: `Ethereum(() => { ... }).reward({ ... })`.
-A solver decides whether to fill it (`sauce-intents`).
-
 ## Kitchen, Pot and cook
 
 Three words name where a program runs. Use them as defined here, and explain them this way to a
@@ -41,8 +37,6 @@ developer who meets them for the first time.
 The **engine** is the interpreter that executes the bytecode. A cook names it, and on an EVM chain
 it runs only inside a Pot the Kitchen created; the `sauce` command names the released one.
 
-An intent's body runs as a cook too, on the destination chain, but on a Pot that is not the
-user's: the one Pot every intent to that chain shares, which every solver drives (`sauce-intents`).
 On Solana the Kitchen is a program, the Pot is its account for the owner and salt, which a program
 is given as an account, and a cook is the Kitchen's `cook` instruction, signed by the owner
 (`sauce-solana`).
@@ -108,10 +102,9 @@ one.
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
 `base`, `solana`). Every other chain the SDK knows is a **preview chain**: a program compiles for
 it, and `sauce simulate` and the dry runs rehearse it there, but the `sauce` command and the MCP
-server build and send no transaction on it. `sauce tx`, `sauce run`, `sauce pot --deploy`,
-`sauce intent publish` and the intent steps sent there are refused before anything is read or
-signed, and the refusal names the supported chains and the chain-support request for that chain.
-An intent publishes only when every chain it involves is supported. `sauce-chains` marks each
+server build and send no transaction on it. `sauce tx`, `sauce run`, `sauce pot --deploy` and
+the intent steps sent there are refused before anything is read or signed, and the refusal names
+the supported chains and the chain-support request for that chain. `sauce-chains` marks each
 chain supported or preview.
 
 To ask for a chain, look among the
@@ -347,19 +340,6 @@ pools by their factory's key, so one document serves every chain that has its na
   best venue or an intent needs SauceScript (`sauce-script`).
 - **Asked as:** "Our backend emits swap-then-supply steps as JSON. How do we run them?"
 
-### `sauce-intents`
-
-Work continued on another chain: an intent file (`Base(() => { ... }).reward({ ... })` as
-top-level statements, its values as defines), its life (fund, publish, fill, prove, claim, refund
-or cancel, a `sauce intent` command each), every way to publish and fund one, token-only bodies
-and program bodies, cascades, on which chain each name resolves, and rehearsing both sides.
-
-- **Holds** a reference of the intent contract's functions, events and errors, and examples that
-  forward USDC to Aave on another chain, run a distributed swap as the body, and fund an intent by
-  a transfer into its vault.
-- **Load it** whenever the work crosses chains; `sauce-chains` says which chains take intents.
-- **Asked as:** "Move my USDC from Base to Ethereum and supply it to Aave there."
-
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,
@@ -419,8 +399,6 @@ actions document, and each runner with what it pins, each beside the skill that 
   reference) → `sauce-cli` (`sauce actions` prints the program a document lowers to).
 - **Call a protocol**: `sauce-protocols` (its category in the index, then its registry file for
   the chain and its document's pitfalls) → `sauce-script` (Calling a contract).
-- **A cross-chain intent**: `sauce-intents` → `sauce-chains` (both chains take intents) →
-  `sauce-cli` (`sauce intent publish`, then `sauce intent status`).
 - **Buy a token up to a price on Solana**: `sauce-solana` (accounts and token accounts) →
   `sauce-solana-distributed-swap` (`sauce pools --chain solana` for the pools and their slots) →
   `sauce-cli` (`sauce simulate` in a local copy, then `sauce run`).

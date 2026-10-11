@@ -48,7 +48,7 @@ export function compileApproval(pot: routes.AddressInput, engine: routes.Address
 }
 ```
 
-The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The same body can be a callback to `Base(() => { ... }, options).reward(...)`; see [creating intents](intents.md).
+The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction.
 
 The supported Universal Router spelling is `UniswapV4.UniversalRouter`, or the unambiguous family alias `Uniswap.UniversalRouter`. `UniswapV3.UniversalRouter` is not registered. The router's `execute` method takes the arguments declared by its ABI; the namespace does not construct swap commands or select a route for you.
 
@@ -137,7 +137,6 @@ compile everywhere: a token the chain lacks is an unknown name in any branch tha
 - A name the registry does not know on any chain is an error, not `false`, as are an ambiguous
   family name and an interface, so a typo cannot quietly drop a branch. A program that declares its
   own `available` keeps it.
-- Inside an intent to another chain, `Arbitrum(() => { ... })`, it is decided for that chain.
 
 In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
 token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is a type error.
@@ -183,7 +182,7 @@ The raw ABI call is **not** SafeERC20: `Erc20.ERC20.at(address).transfer(...)`, 
 reverts on a token that returns nothing and accepts one that returns `false`. Use it only when that
 is the behavior you want; otherwise use one of the spellings above.
 
-Use `tokenDefines` on an intent to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; `IntentOptions.tokens` instead declares the **token amounts** a solver must deliver for the route.
+Use `tokens` on `compileSauceRoute`'s compile options to add or override symbols. Overrides merge per symbol with the registry. The map contains **addresses**.
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
@@ -317,7 +316,7 @@ reference](../api/contracts.md) lists every property and option.
 
 ## Chain selection and ABI bindings
 
-A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Use separate intents and [nesting](nested-intents.md) for cross-chain execution. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
+A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Cross-chain execution takes an intent. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
 
 Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every registry ABI declares its contract's deployed types, so the selectors it computes are the ones the deployed contract dispatches.
 

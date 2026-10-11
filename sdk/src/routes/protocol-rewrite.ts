@@ -701,8 +701,7 @@ export function rewriteProtocolAccessors(
 ): ProtocolRewriteResult {
   // A module parse, annotations included -- this pass runs unconditionally (default ON), so it
   // must take whatever the compiler does, including a source that ALREADY carries a leading
-  // `import { X } from "./X.json";` line, e.g. the ERC20-import-prefixed transfer program
-  // `nest.ts#nestedTransferProgram` can hand `compileSauceRoute` before this pass ever sees it.
+  // `import { X } from "./X.json";` line.
   const program = parseSauce(source);
   const shadowed = collectDeclaredNames(program);
 

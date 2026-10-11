@@ -13,18 +13,10 @@ import { formatUnits, getAddress, type Address, type Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
-import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, sendAndWait, type Sent } from "./chain.js";
-import {
-  compileProgram,
-  type CliFiles,
-  unapproved,
-  type Approver,
-  type CommandOutput,
-  type ProgramInput,
-} from "./commands.js";
+import { unapproved, type Approver, type CommandOutput } from "./commands.js";
 import { addressLabels, effectLines, effectsJson, effectsOf, nativeSymbol } from "./effects.js";
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, type Cost } from "./receipt.js";
@@ -37,7 +29,6 @@ import {
   gatewayStatus,
   importIntents,
   intentOf,
-  intentRecord,
   intentStatus,
   publishedIntents,
   txRequest,
@@ -84,42 +75,13 @@ export interface Target {
 export function storedTargets(store: IntentStore, hash: Hex): Target[] {
   if (!store.has(hash)) {
     throw new CliError(
-      `no intent ${hash.toLowerCase()} in ${store.dir}: name the file that opens it, or import ` +
-        "the transaction that published it (`sauce intent import <tx hash> --chain <source>`)",
+      `no intent ${hash.toLowerCase()} in ${store.dir}: import the transaction that published ` +
+        "it (`sauce intent import <tx hash> --chain <source>`)",
     );
   }
   const stored = store.load(hash);
 
   return [{ record: stored.record, stored }];
-}
-
-/** The intents a file opens, each published through its source chain's registry Portal. */
-export function fileTargets(input: ProgramInput, files: CliFiles, store: IntentStore): Target[] {
-  if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `the intents ${input.file} opens would be published on ${input.chain.slug}, and the ` +
-        "eco-routes Portal this SDK publishes through is EVM only",
-    );
-  }
-  const intents = compileProgram(input, files).intents;
-  if (intents.length === 0) throw new UsageError(`${input.file} opens no intent`);
-  const measured = intents.find((intent) => intent.captures.length > 0);
-  if (measured !== undefined) {
-    throw new CliError(
-      `the intent to ${measured.destination.slug} uses ` +
-        `${measured.captures.map((name) => `\`${name}\``).join(", ")}, which the program measures ` +
-        "or computes while it runs, so the file does not say what it is: name it by its hash, " +
-        "which `sauce run` stored when it published it",
-    );
-  }
-
-  return intents.map((intent) => {
-    const record = intentRecord(intent.intent, { sourcePortal: ecoRoutesPortal(input.chain) });
-
-    return store.has(record.intentHash)
-      ? { record, stored: store.load(record.intentHash) }
-      : { record };
-  });
 }
 
 /** Every chain `targets` touch, with the endpoint each has. */
@@ -948,7 +910,7 @@ export async function importCommand(
   };
 }
 
-/** Records the intents a sent transaction published (`publish`, `run`) in the store. */
+/** Records the intents a sent transaction published (`run`) in the store. */
 export async function rememberPublished(
   store: IntentStore,
   chain: CanonicalChain,

@@ -4,12 +4,11 @@
 
 `@eco-incorp/sauce/actions` compiles **action programs** — ordered lists of protocol operations
 (swaps, bridges, wrapping, staking, lending, transfers, approvals) written as plain JSON — into one
-Sauce program that executes atomically in a Pot, directly or as the destination route of an Eco
-intent. Install `@eco-incorp/sauce` to use it. Tokens and contracts are named the way a Sauce
+Sauce program that executes atomically in a Pot. Install `@eco-incorp/sauce` to use it. Tokens and contracts are named the way a Sauce
 program names them, so one document compiles for every chain that has them:
 
 ```ts
-import { compileProgram, parseProgram, programIntent } from "@eco-incorp/sauce/actions";
+import { compileProgram, parseProgram } from "@eco-incorp/sauce/actions";
 
 const program = parseProgram({
   version: 1,
@@ -29,7 +28,6 @@ const program = parseProgram({
 
 const onBase = compileProgram(program, { chain: "base" }); // Pot.cook(engine, onBase.bytecode)
 const onEthereum = compileProgram(program, { chain: "ethereum" }); // the same source, Ethereum's addresses
-// or, as an intent on a chain: programIntent(program, { ...intentOptions, chain: "base" }).reward(reward)
 ```
 
 From the command line, `sauce actions swap.json --chain base` prints the SauceScript the document
@@ -42,7 +40,6 @@ lowers to and its bytecode, and `sauce tx`, `simulate` and `run` take the docume
 | `serializeProgram(program)`         | Canonical JSON text                                                                       |
 | `programSchema()`                   | The JSON Schema, also shipped as [action-program.schema.json](action-program.schema.json) |
 | `compileProgram(program, options?)` | Bytecode, source, and the payload for runtime arguments, for `options.chain`              |
-| `programIntent(program, options)`   | The program as an intent route on `options.chain` (or its `chainId`)                      |
 | `quoteAction(action, options?)`     | The `eth_call` that prices a swap action                                                  |
 | `compileSplitSwap(splitSwap)`       | One program that splits a swap across venues by on-chain quotes                           |
 
@@ -60,8 +57,8 @@ lowers to and its bytecode, and `sauce tx`, `simulate` and `run` take the docume
   shape it accepts.
 - **Composition is part of the document.** An action spends its `amount`, an earlier output named
   with `saveOutputAs`/`amountRef`, or the previous action's output. A `balanceOf` action spends what
-  the Pot actually holds, which is how a child of a dynamic `.nest()` spends exactly what its parent
-  delivered; an `argument` action makes an amount a runtime parameter of one compiled program.
+  the Pot actually holds, which is how an action spends exactly what an earlier one delivered; an
+  `argument` action makes an amount a runtime parameter of one compiled program.
 - **One swap implementation.** A swap at one of [`@sauce/router`](../docs/api/router.md)'s nine
   venues is a call into that SauceScript library, so an action program and a hand-written Sauce
   program trade a venue through the same code.

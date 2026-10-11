@@ -73,112 +73,38 @@ command and the MCP server rehearse them there but build and send no transaction
 [Chains](docs/reference/chains.md) has the policy, every chain's tokens and protocols, and how to
 request a chain.
 
-## A program that creates a cross-chain intent
-
-A program can spend what a Pot holds, and it can also create the next intent. That is where the
-runtime and the routes layer meet. This program measures an amount nobody knew in advance and offers
-an intent carrying it onward.
-
-```js
-// Create a cross-chain intent from inside a Sauce program.
-//
-// This runs on your Pot, measures the USDC the calls before it left there, and offers a NEW intent
-// that carries that amount to `recipient` on another chain. The amount is never known in advance —
-// it is whatever the swap, bridge or transfer just before it produced — which is the reason to
-// build the intent here rather than off-chain.
-//
-// `Ethereum(() => { ... }).reward({ ... })` is the whole of it. `amount` is an ordinary variable of
-// this program and `recipient` one of its parameters, and using them inside the intent is enough:
-// the SDK splices their run-time values into the encoded intent, and fills in the Portal, the
-// prover, the vault and the encoding.
-//
-// `USDC` is a registered symbol, and inside the braces it means Ethereum's USDC, because that is the
-// chain those calls run on. In `.reward(...)` it means the USDC of the chain this program runs on,
-// which escrows the reward.
-//
-//   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
-//     --intent-deadline <unix seconds> --intent-creator <address> --args <recipient> <minAmount>
-//
-//   recipient: Address   who the intent pays on Ethereum
-//   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
-//                        below it the whole transaction reverts and nothing is published
-function main(recipient: Address, minAmount: Uint256) {
-  const amount = USDC.balanceOf(ctx.self());
-  require(amount >= minAmount, "nothing to forward");
-
-  Ethereum(() => {
-    USDC.transfer(recipient, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
-}
-```
-
-That is the whole program. What you did not have to do:
-
-- **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in your Pot.
-- **Import anything.** `USDC`, `Ethereum` and `ctx` need no import line.
-- **Encode the intent.** No Portal, prover, selector, approval or ABI encoding appears. The SDK
-  looks up the Portal and prover in its eco-routes deployment tables and emits the rest.
-- **Know the amount in advance.** `amount` is an ordinary variable, and the published intent
-  carries the value the program measured.
-- **Roll back by hand.** Below `minAmount` the `require` reverts the whole transaction: nothing is
-  published.
-
-Without Sauce, this step is either a contract you write and deploy (read the balance, encode the
-intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
-a second transaction you build yourself after reading what the first produced.
-
-`USDC` is a registered token symbol, and inside the braces it means **Ethereum's** USDC, because
-that is where those calls run. In `.reward(...)` it means the USDC of the chain the program runs
-on — Base, in the line above — because the program escrows the reward there. `recipient` and
-`minAmount` are `main`'s parameters: they arrive with the transaction (`--args`), so one compiled
-program serves every call.
-
-What the SDK cannot know you give once, for every intent the program opens: a deadline, and the
-creator who may reclaim the reward if nobody earns it. The intent is an offer; a solver still
-decides to fill it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
-builds the same transaction from TypeScript, and runs on every release;
-[nested intents](docs/guides/nested-intents.md) opens one intent inside another's body, and covers
-cascades several hops deep.
-
 ## A program that calls protocols and tokens by name
 
-Inside a route body the SDK resolves token symbols and protocol contracts against the destination
-chain, so a program reads like the operation it performs. This example builds a complete intent
-offline; the creator and the fee are fixtures and nothing is sent.
+The SDK resolves token symbols and protocol contracts against the chain a program is compiled for,
+so a program reads like the operation it performs. From TypeScript, this example compiles a program
+for Base that approves Uniswap's router, offline; nothing is sent.
 
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { routes } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
+const program = routes.compileSauceProgram(
+  "base",
+  `function main(amount: Uint256) {
+    USDC.approve(Uniswap.UniversalRouter, amount);
+  }`,
+);
 
-const built = Base(
-  () => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  },
-  { execution: { value: executionFee }, deadline: 2_000_000_000n },
-).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-});
-
-console.log(built.hash().intentHash);
+// What a Pot cooks: the bytecode, with main's argument appended.
+const args = routes.encodeEntryArguments(program, [1_000_000n]);
+console.log(`${program.bytecode.length} bytes, plus ${args.length} of arguments`);
 ```
 
-What the snippet leaves out, the SDK fills in from what it records: the eco-routes Portal on both
-chains, the prover for the pair, the destination Pot and engine, and the native amount the solver
-sends, which is the cook's fee. The options take any of them as an override. What stays yours are
-the deadlines, the creator, the reward and the fee, which is on-chain state the destination's
-Kitchen sets: `destinationExecutionFee()` builds the read.
+What you did not have to do:
 
-Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the
-package puts nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the SDK resolves
-them to Base's addresses and binds the ABI, so there is no address to look up and no JavaScript
-object to import. The callback is read as source text and never invoked, so it captures nothing;
-application values reach it through `defines`.
+- **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in your Pot.
+- **Import anything into the program.** `USDC` and `Uniswap` are **program syntax**: the SDK
+  resolves them to Base's addresses and binds the ABI, so there is no address to look up and no
+  JavaScript object to import.
+- **Compile once per amount.** `amount` is `main`'s parameter: it arrives with the cook, so one
+  compiled program serves every call.
 
-`.reward(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
-requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
+`sauce run` sends the same program as a cook from a terminal (`--args` gives `main`'s arguments).
+[Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
 ## Agent wallets
@@ -204,8 +130,8 @@ coin and per token. These are hot wallets: keep small balances in them.
 ## Where to go next
 
 - [Documentation](docs/README.md): every guide and reference page, one line each.
-- [Quick start](docs/guides/quick-start.md): build a first intent, offline.
-- [The sauce command](docs/guides/cli.md): compile, rehearse, run and publish from a terminal.
+- [Quick start](docs/guides/quick-start.md): compile a first program, offline.
+- [The sauce command](docs/guides/cli.md): compile, rehearse and run from a terminal.
 - [Agent skills](docs/guides/skills.md): the skills that teach a coding agent to write and run
   programs, beside [the MCP server](docs/guides/mcp.md).
 - [Chains](docs/reference/chains.md), [protocols](docs/reference/protocols.md) and

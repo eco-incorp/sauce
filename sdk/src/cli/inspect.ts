@@ -16,7 +16,6 @@ import {
   hexToBigInt,
   hexToBytes,
   keccak256,
-  numberToHex,
   slice,
   toFunctionSelector,
   type Address,
@@ -399,7 +398,6 @@ function programPart(
     // Not the settle: nothing to claim.
   }
   let code = program;
-  let known: Part[] | undefined;
   const source = depth === 0 ? context.source : undefined;
   if (source !== undefined) {
     const compiled = source.program.bytecode;
@@ -412,8 +410,6 @@ function programPart(
       );
     } else {
       code = compiled;
-      // The program is the file's, so its intents are the compile's, with each measured value named.
-      known = sourceIntents(source.program);
       const tail = program.slice(compiled.length);
       let values: EntryValue[] | undefined;
       let problem: string | undefined;
@@ -448,7 +444,7 @@ function programPart(
     }
   }
   if (scan) {
-    const intents = known ?? embeddedIntents(code, context, depth);
+    const intents = embeddedIntents(code, context, depth);
     json.intents = intents.map((intent) => intent.json);
     lines.push(...indent(intents.flatMap((intent) => intent.lines)));
   }
@@ -547,60 +543,9 @@ export function describeData(data: Hex, given: InspectContext): Part {
   return { json: { call: null, program: program.json }, lines: program.lines };
 }
 
-/** `part` with each sentinel shown as the local whose value the program splices in for it. */
-function named(
-  part: Part,
-  sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[],
-): Part {
-  if (sentinels.length === 0) return part;
-  const names = new Map<string, string>();
-  for (const { sentinel, capture } of sentinels) {
-    names.set(sentinel.toString(), `<${capture}>`);
-    names.set(numberToHex(sentinel, { size: 20 }), `<${capture}>`);
-  }
-  const swap = (text: string): string =>
-    text.replace(
-      /0x[0-9a-fA-F]{40}\b|\b\d{20,}\b/g,
-      (word) => names.get(word.toLowerCase()) ?? word,
-    );
-  const deep = (value: unknown): unknown =>
-    typeof value === "string"
-      ? swap(value)
-      : Array.isArray(value)
-        ? value.map(deep)
-        : value !== null && typeof value === "object"
-          ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, deep(v)]))
-          : value;
-
-  return { json: deep(part.json) as Record<string, unknown>, lines: part.lines.map(swap) };
-}
-
-/** The intents a compiled program opens, from the compile itself: each measured value named. */
-function sourceIntents(program: CompiledSauceProgram): Part[] {
-  return program.intents.map((lowered) =>
-    fundedBy(
-      named(
-        intentPart(
-          BigInt(lowered.destination.id),
-          lowered.intent.route,
-          lowered.intent.reward,
-          // A measured value is a placeholder until the program runs, and the vault follows from
-          // the hash those values are part of — so there is no vault to show before then.
-          { chain: program.chain, ...(lowered.captures.length > 0 ? { measured: true } : {}) },
-          0,
-        ),
-        lowered.sentinels,
-      ),
-      lowered.fundVia,
-    ),
-  );
-}
-
-/** `sauce inspect <file>`: the program the file compiles to, what it takes, the intents it opens. */
+/** `sauce inspect <file>`: the program the file compiles to, and what it takes. */
 export function inspectFile(file: string, program: CompiledSauceProgram): CommandOutput {
-  // The file's own intents come from the compile; the bytes are not scanned for them.
   const described = programPart(program.bytecode, {}, 1, false);
-  const intents = sourceIntents(program);
   const params = program.entryParams.map((param) => `${param.name}: ${param.type}`).join(", ");
 
   return {
@@ -619,7 +564,6 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
               )
               .join(", ")}`,
           ]),
-      ...indent(intents.flatMap((intent) => intent.lines)),
     ].join("\n"),
     json: {
       file,
@@ -631,7 +575,6 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
         entryParams: program.entryParams,
         ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
       },
-      intents: intents.map((intent) => intent.json),
     },
   };
 }

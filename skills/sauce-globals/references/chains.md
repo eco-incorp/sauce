@@ -2,9 +2,8 @@
 
 # Chain globals
 
-A chain name opens an intent from inside a program (`Ethereum(() => { ... }).reward({ ... })`) and
-qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains
-to take intents; each line says whether its chain does. Each line also says whether the initial
+A chain name qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). Each line says
+whether its chain takes intents, and whether the initial
 release supports the chain: a program compiles and simulates on every chain, and its transactions
 are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP
 server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a

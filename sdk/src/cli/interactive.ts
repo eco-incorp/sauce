@@ -69,9 +69,7 @@ export async function interactiveIntents(
     const { intents: stored, warnings } = context.store.list();
     for (const warning of warnings) io.stderr(`${warning}\n`);
     if (stored.length === 0) {
-      io.stdout(
-        `No intents in ${context.store.dir}. Publish one (\`sauce intent publish\`) or import one.\n`,
-      );
+      io.stdout(`No intents in ${context.store.dir}. Import one (\`sauce intent import\`).\n`);
 
       return 0;
     }

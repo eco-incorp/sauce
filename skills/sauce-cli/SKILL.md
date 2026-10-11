@@ -1,6 +1,6 @@
 ---
 name: sauce-cli
-description: The sauce command line. Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Transactions are built and sent on Ethereum, Base and Solana, the chains the initial release supports; every other chain is a preview chain, where programs compile and simulate and a transaction is refused with the link to request the chain. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, create or use an agent's own wallet and its policy, or when a command refuses a preview chain.
+description: The sauce command line. Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or fill, prove, claim, refund or cancel a published cross-chain intent. Transactions are built and sent on Ethereum, Base and Solana, the chains the initial release supports; every other chain is a preview chain, where programs compile and simulate and a transaction is refused with the link to request the chain. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, create or use an agent's own wallet and its policy, or when a command refuses a preview chain.
 ---
 
 # The sauce command
@@ -33,7 +33,7 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 | `sauce simulate` | Rehearses the cook from the Pot's owner, with no key: gas, or why it reverts      |
 | `sauce run`      | Compiles, rehearses, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
-| `sauce intent`   | Publishes, fills, proves, claims, refunds and cancels intents (`sauce-intents`)   |
+| `sauce intent`   | Fills, proves, claims, refunds and cancels published intents                      |
 | `sauce wallet`   | Creates, lists and imports the wallets `--wallet` signs with                      |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
 | `sauce verify`   | Checks that a payload, cook or transaction runs the audited settle program        |
@@ -45,15 +45,13 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana**
 (`--chain ethereum`, `base`, `solana`). Every other chain is a **preview chain**: `globals`,
 `compile`, `actions`, `simulate`, `inspect`, `verify`, `price`, `pools`,
-`sauce intent publish --dry-run`, `sauce intent fill` without `--send`, `sauce intent status` and
+`sauce intent fill` without `--send`, `sauce intent status` and
 `sauce intent import` work there, and `sauce pot` predicts the Pot (and reads it)
 but leaves its deployment out.
 Everything that leaves a transaction ready to sign, unsigned JSON included, or sends one is refused
-there before anything is read or signed: `tx`, `run`, `pot --deploy`, `pot --format cast`,
-`sauce intent publish` and the intent steps sent there (`sauce intent fill --send`, `prove`,
-`claim`, `refund`, `cancel`). An intent publishes only when its source and every destination it
-opens are supported; each later step is refused by the chain it is sent on. A cascade's later
-levels are not checked: keep them on supported chains too.
+there before anything is read or signed: `tx`, `run`, `pot --deploy`, `pot --format cast`, and
+the intent steps sent there (`sauce intent fill --send`, `prove`, `claim`, `refund`, `cancel`):
+each is refused by the chain it is sent on.
 There is no flag that overrides it.
 
 The refusal exits 1 and names the supported chains and the chain-support request for the chain:
@@ -82,7 +80,7 @@ volume and timing). The command's own help ends with the same note.
   `--keystore <keystore>`, a JSON keystore; either's password comes from the source named, or is
   asked for at the terminal. `--private-key <hex>` also works but lands in shell history. On
   Solana, a Solana `--wallet <name>` or `--keypair <keypair>`. The signer is the Pot's owner: `run` and `pot --deploy` act
-  for it, and `sauce intent publish` publishes from it. On an EVM chain `pot --deploy --owner <address>` deploys another
+  for it. On an EVM chain `pot --deploy --owner <address>` deploys another
   owner's Pot instead, the signer paying; the Pot is that owner's alone.
 - Pass each flag and each value as a word of its own, in any order: a shell variable holding
   several flags reaches the command as one word unless the shell splits it.
@@ -114,7 +112,7 @@ sauce wallet address agent
 
 `new` prints the wallet's name, kind and address, never its key. Fund the address, then sign with
 `--wallet <name>` and the same password source wherever a key signs: `run`, `pot --deploy`,
-`simulate --fund`, `sauce intent publish` and `sauce intent fill --send` and the steps after it. An
+`simulate --fund`, and `sauce intent fill --send` and the steps after it. An
 EVM wallet signs on an EVM chain, a Solana one on Solana:
 
 ```sh
@@ -353,8 +351,7 @@ isn't deployed yet. Deploy it now (one transaction, about <gas>), then run? [dep
 
 7. **Check** what was sent:
    `sauce inspect <tx hash> --chain base --source buy.sauce.ts` reads the transaction back:
-   the Pot, the engine, the arguments the program got, what moved, and the route and reward of
-   every intent it opens:
+   the Pot, the engine, the arguments the program got, and what moved:
 
    ```text
    transaction <tx hash> on base: success, block <block>, gas used 273670
@@ -374,8 +371,7 @@ isn't deployed yet. Deploy it now (one transaction, about <gas>), then run? [dep
    ```
 
    A cook sent with `--fund` runs the program with the pulls around it, and `--source` says it is
-   not the file's program. `inspect` also reads calldata, and a file (its intents, with every
-   value measured at run time named).
+   not the file's program. `inspect` also reads calldata, and a file.
 
 The transaction's value defaults to the Kitchen's execution fee, read from the chain; pass
 `--value <wei>` when the program also spends native currency.
@@ -436,7 +432,7 @@ against its declared type before anything is sent: `Address`, `Uint256`, `bool`,
   (`transfer(token, to, amount)`, `approve`, `balanceOf`). `sauce-globals` explains them.
 - `USDC.transfer(...)`, `USDC.approve(...)` and `Token(address).transfer(...)` are SafeERC20 writes,
   so USDT works. A token the chain does not register is `Token(address)`.
-- Every input is a parameter of `main`, an intent file's included, and a value the program fixes
+- Every input is a parameter of `main`, and a value the program fixes
   is a module-level `const`. An address in a program, as on the command line, is its hex: Base's
   USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`.
 - In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
@@ -486,42 +482,26 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 ## Intents and Solana
 
-- **A file that opens intents** (`Ethereum(() => { … }).reward({ … })`) also takes
-  `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
-  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination). `compile` and
-  `sauce intent publish` warn while the Pot such an intent cooks on
-  is not deployed on its destination: no solver can fill it until then (`sauce intent fill`
-  deploys it first), and the warning names the `sauce pot --deploy` that deploys it by hand. `sauce run` opens them from the Pot, which is the way when
-  an amount is measured on chain. `sauce intent publish` opens them from a wallet with no Pot: it
-  takes `main`'s arguments with `--args`, as `sauce run` does, and fixes them into the intents, and
-  `sauce intent publish <file> --chain <chain> --from <address> --args <arguments> --format json` prints its unsigned
-  transfers and `publish` for any wallet to send, in that order. Both fund each reward by a transfer
-  into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
-  either to an approve and `publishAndFund`. `sauce intent publish … --dry-run --assume-balance
-USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
-  `sauce intent fill <file> --chain <chain> --args <arguments>` rehearses each intent where its
-  body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
-  `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
-  in the shared Pot, and why it reverts.
-  `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
-  vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
-  `refund`, `cancel`, `status`, `import`). Publishing, from a wallet or a Pot, needs every chain the
-  intent involves supported; the rehearsals run on any chain.
+- **A published intent** is named by its hash once the store keeps it (`sauce intent import <tx
+hash> --chain <source>` brings one in). `sauce intent fill <intent-hash>` rehearses it where its
+  body runs: on its destination chain, as the solver who fills it, with no key and nothing sent,
+  and prints what the body moved, what it left in the shared Pot, and why it reverts. `--send`
+  fills it; `prove`, `claim`, `refund`, `cancel` and `status` take the same hash.
 - **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
   `--keypair`, and the execution fee is read from the cluster and printed as `fee`, with no
   `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it. `--via kitchen`,
   the default, cooks through the Kitchen on the owner's Pot; `--via engine` calls the engine
   directly, with no Pot: the signer pays the fee and is the authority the program acts with
   (`--account NAME=owner`), and the program's own calls get one more level of CPI depth. `--fund`
-  and `sauce intent publish` are EVM only. A `simulate` that succeeds lists what the cook moved: each token
+  is EVM only. A `simulate` that succeeds lists what the cook moved: each token
   account's balance change and each account's lamports, read from the accounts as the simulation
   leaves them. `sauce-solana` covers writing and running one.
 
 ## Without the CLI: the MCP tools
 
 The same commands are tools of the Sauce MCP server (`sauce mcp`), by one rule:
-each `sauce <command>` is the tool `sauce_<command>` (`sauce intent publish` is
-`sauce_intent_publish`), its flags are the tool's inputs in camelCase, the program goes in as
+each `sauce <command>` is the tool `sauce_<command>` (`sauce intent fill` is
+`sauce_intent_fill`), its flags are the tool's inputs in camelCase, the program goes in as
 `source`, and an endpoint of the user's own, optional, is the call's `rpcUrl`. Each tool's own
 description gives its inputs. `sauce_simulate` returns `leftInPot` first after `ok`, and a note
 when the cook leaves anything in the Pot: tell the user.
@@ -543,8 +523,8 @@ Over HTTP, nothing signs.
   was refused and which limit.
 - Before writing a program that produces assets, ask the user whether they should end in their
   wallet or stay in the Pot: what stays in the Pot is theirs, but only another cook moves it out.
-- Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's
-  body) before the first real send. Then show the user the program, its arguments and what the
+- Rehearse with `sauce simulate` (and `sauce intent fill` for an intent's body) before the first
+  real send. Then show the user the program, its arguments and what the
   rehearsal says will happen (what leaves the wallet, what arrives where, what is left in the
   Pot), and send, or hand over `sauce tx`'s transaction, only once they confirm.
 - Report every transaction sent with its explorer link and its trace link, for the user to open,

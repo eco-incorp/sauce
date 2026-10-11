@@ -1,7 +1,7 @@
 /**
  * Per-chain token symbol -> address registry, the DEFAULT source for U4's `rewriteTokenMembers`
  * (`token-rewrite.ts`) and the balance sugar it now also implements — so a bare `USDC.transfer(to,
- * amt)` inside a `Base.route(...)` compiles with NO `IntentOptions.tokenDefines`.
+ * amt)` in a program compiles with no `tokens` option.
  *
  * DISCOVERY (measured, not assumed): this SDK has no existing per-chain token-address source to
  * reuse. `protocols/erc20/addresses.ts` is deliberately empty ("ERC20 is a standard interface, not
@@ -69,16 +69,10 @@ import type { StockIssuer } from "./stock-tokens.js";
 import { STOCK_ISSUERS } from "./stock-tokens.js";
 import type { AddressInput } from "./types.js";
 
-// Mirrors token-rewrite.ts's own `REWRITABLE_METHODS` -- duplicated here rather than imported.
-// token-rewrite.ts imports accessor-index.ts (for the balance-sugar holder-rejection checks),
-// which imports builder.ts, which imports intent-dsl.ts, which imports sauce-route.ts, which
-// imports THIS file (`resolveTokenMap`) -- so an import of token-rewrite.ts's export back here
-// would close a genuine module-eval cycle: this file's own top-level validation loop (below) runs
-// synchronously as part of resolving that cycle, before token-rewrite.ts's own top-level code has
-// reached its `export const REWRITABLE_METHODS = ...` line, tripping a TDZ `ReferenceError`
-// (confirmed reachable — this is not a hypothetical). Three well-known method names duplicated is
-// a far smaller cost than restructuring that import graph; token-rewrite.ts's own module doc cross-
-// references this list for anyone changing one who needs to remember the other.
+// Mirrors token-rewrite.ts's own `REWRITABLE_METHODS` -- duplicated here rather than imported, so
+// this file's own top-level validation loop (below) depends on no module that imports it back.
+// token-rewrite.ts's own module doc cross-references this list for anyone changing one who needs to
+// remember the other.
 const REWRITABLE_METHODS: ReadonlySet<string> = new Set([
   "transfer",
   "approve",

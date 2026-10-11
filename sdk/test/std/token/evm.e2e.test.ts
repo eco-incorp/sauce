@@ -19,7 +19,7 @@
  * `const t = Token(addr); t.transfer(...)`, compiled by `compileSauceRoute` — and every one must
  * land it identically. The raw `IERC20.at(addr)` binding runs beside them as the contrast: it is
  * what the route syntax used to lower to, and it gets the no-return and `false` cells wrong. The
- * shipped `plain-transfer` recipe runs too, at the registry's own USDC address. The misbehaving
+ * registry's `USDC.transfer(...)` runs too, at the registry's own USDC address. The misbehaving
  * tokens and the OpenZeppelin reference are the other
  * `fixtures/*.sol`, vendored beside them as `{ abi, creationCode }` compiled by
  * `solc 0.8.36 --optimize` (each file says how).
@@ -51,6 +51,7 @@
  * Also needs `anvil` on PATH (Foundry, which CI already installs).
  */
 import type { ChildProcess } from "node:child_process";
+import { freePortSync, spawnAnvil } from "../../anvil-process.js";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -75,8 +76,6 @@ import { safeApproveStatements, safeTransferStatements } from "../../../src/toke
 import { compileSauceRoute } from "../../../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../../../src/routes/token-registry.js";
 import { requireChain } from "../../../src/chains/canonical.js";
-import { buildPlainTransfer } from "../../../src/recipes/cctp-transfer.js";
-import { freePortSync, spawnAnvil } from "../../anvil-process.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -776,10 +775,10 @@ describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
     }, 60_000);
   });
 
-  // A shipped recipe, executed: `plain-transfer.sauce.ts` resolves `USDC` from the registry, so the
-  // cell's token is installed at the registry's own USDC address for the destination rather than
-  // handed in. Each cell gets a fresh recipient, since the address's storage outlives its code.
-  describe("the plain-transfer recipe at the registry's USDC address", () => {
+  // `USDC.transfer(...)` resolves `USDC` from the registry, so the cell's token is installed at the
+  // registry's own USDC address for the destination rather than handed in. Each cell gets a fresh
+  // recipient, since the address's storage outlives its code.
+  describe("a USDC.transfer at the registry's USDC address", () => {
     const destination = requireChain("arbitrum");
     const usdc = numberToHex(registryTokenAddress(destination, "USDC")!, { size: 20 });
     const RECIPIENTS = {
@@ -810,22 +809,13 @@ describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
       async (kind, status) => {
         await install(kind);
         const recipient = RECIPIENTS[kind];
-        const built = buildPlainTransfer({
-          from: "base",
-          to: destination.slug,
-          amount: AMOUNT,
-          perMessageLimit: AMOUNT,
-          recipient,
-          pot: sauce.pot,
-          engine: sauce.engine,
-          portal: "0x2222222222222222222222222222222222222222",
-          deadline: 2000n,
-          creator: DEPLOYER.address,
-          prover: "0x4444444444444444444444444444444444444444",
-          reward: 0n,
-        });
+        const route = compileSauceRoute(
+          destination,
+          `USDC.transfer(${literal(recipient)}, ${AMOUNT}n);`,
+          { pot: sauce.pot, engine: sauce.engine },
+        );
 
-        expect(await attemptCall(built.intent.route.calls[0]!.data)).toBe(status);
+        expect(await attemptCall(route.calls[0]!.data)).toBe(status);
         if (kind !== "noCode") {
           expect(await balanceOf(usdc, recipient)).toBe(status === "success" ? AMOUNT : 0n);
         }

@@ -440,12 +440,6 @@ const UNDECLARED_NAMES = {
     getCreateAssociatedTokenIdempotentInstruction:
       "@solana-program/token's ATA creation, a dependency the package re-exports none of",
   },
-  "sauce-intents": {
-    CallFailed:
-      "the eco-routes Executor's error for a route call that reverted; the registry declares the Portal's errors, not the Executor's",
-    CallToEOA:
-      "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
-  },
   "sauce-solana-distributed-swap": {
     SqrtPriceLimitOverflow:
       "Raydium CLMM's error for a price limit on the wrong side of the price, a venue program's, which the package does not decode",
@@ -1671,11 +1665,9 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     const [family, contract] = name.split(".");
     return [...(members.get(family) ?? [])].some((ns) => contracts.has(`${ns}.${contract}`));
   };
-  // The globals index leaves the eco-routes namespace out: a program opens an intent with the chain
-  // syntax, never by calling the Portal. The one exception is the skill that names the Portal, for
-  // an intent built elsewhere: `fund-by-transfer.sauce.ts` publishes one through the registry's
-  // Portal by name rather than by hand-written selectors. Each entry must still be used.
-  const PORTAL_GLOBALS = new Set(["EcoRoutes.Portal"]);
+  // The globals index leaves the eco-routes namespace out: no program calls the Portal by name. An
+  // exception is a name here, for the skill that names the Portal; each entry must still be used.
+  const PORTAL_GLOBALS = new Set();
   const portalGlobalsUsed = new Set();
   const inIntentsSkill = (where) => where.split(/[\\/]/).includes(INTENTS_SKILL);
   const uses = (where, text, strict) => {

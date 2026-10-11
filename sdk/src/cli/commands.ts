@@ -33,7 +33,6 @@ import { v12PredictPot } from "../deployments/pot.js";
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
-import type { IntentFundVia } from "../routes/portal.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
@@ -65,26 +64,13 @@ import {
   type SetupStep,
 } from "./approvals.js";
 import { linkLines, txLinks } from "./links.js";
-import {
-  checkIntentPots,
-  intentCooks,
-  missingPotNote,
-  potCheckJson,
-  type PotCheck,
-  type Endpoints,
-} from "./intents.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
-import {
-  intentDestinations,
-  previewRefusal,
-  requireSupported,
-  type PreviewChainRefusal,
-} from "./support.js";
+import { previewRefusal, requireSupported, type PreviewChainRefusal } from "./support.js";
 
 /** The filesystem the commands read, injected so the tests can drive them without a process. */
 export interface CliFiles {
@@ -164,58 +150,11 @@ export interface ProgramInput {
   readonly addressDefines?: readonly string[];
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
   readonly compactArgs: boolean;
-  /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
-  readonly intents: {
-    readonly deadline?: bigint;
-    /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
-    readonly rewardDeadline?: bigint;
-    readonly creator?: Address;
-    /** The reward's prover; the registry's for the pair by default. */
-    readonly prover?: Address;
-    readonly executionFee?: bigint;
-    /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
-     *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
-    readonly fundVia?: IntentFundVia;
-  };
   /**
    * ABI bindings the program calls through without declaring them — an actions document's
    * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
    */
   readonly contracts?: SauceCompileOptions["contracts"];
-}
-
-/** Why `--intent-deadline` has passed, or `undefined` while it is still ahead. */
-export function pastDeadline(
-  program: Pick<ProgramInput, "intents">,
-  now: number = Date.now(),
-): string | undefined {
-  const deadline = program.intents.deadline;
-  if (deadline === undefined || deadline > BigInt(Math.floor(now / 1000))) return undefined;
-
-  return (
-    `--intent-deadline ${deadline} (${new Date(Number(deadline) * 1000).toISOString()}) has ` +
-    "passed: an intent can be filled only until its deadline"
-  );
-}
-
-/**
- * Refuses a program whose intents' deadline has passed: the commands that build an intent to
- * publish — `compileCommand`, `cookOf` (simulate, tx, run), the Solana cook, `publishCommand` —
- * would build one no solver could ever fill. Here, in the commands both front ends call, so the
- * CLI and the MCP tools refuse it alike. `fill` rehearses one anyway, with a note, and `inspect`
- * reads what was.
- */
-export function refusePastDeadline(
-  program: Pick<ProgramInput, "intents">,
-  now: number = Date.now(),
-): void {
-  const past = pastDeadline(program, now);
-  if (past === undefined) return;
-  const later = BigInt(Math.floor(now / 1000)) + 86_400n;
-  throw new UsageError(
-    `${past}, so this one never could be. Give a later Unix time in seconds, such as ${later} ` +
-      "(a day from now).",
-  );
 }
 
 /** An input file's text — the program, a defines file — or a precise reason it has none. */
@@ -247,8 +186,8 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
 
 /**
  * The options every compile here runs with, on top of the chain's ambient names that
- * `compileSauceProgram` adds itself: the defines, the intent settings, the argument encoding, and a
- * resolver that serves the program's own relative imports from beside the file.
+ * `compileSauceProgram` adds itself: the defines, the argument encoding, and a resolver that serves
+ * the program's own relative imports from beside the file.
  */
 function compileOptions(
   input: ProgramInput,
@@ -256,21 +195,10 @@ function compileOptions(
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
-  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia } = input.intents;
-  const intents = {
-    ...(deadline === undefined ? {} : { deadline }),
-    ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
-    ...(creator === undefined ? {} : { creator }),
-    ...(prover === undefined ? {} : { prover }),
-    ...(executionFee === undefined ? {} : { executionFee }),
-    ...(fundVia === undefined ? {} : { fundVia }),
-  };
 
   return {
     defines: input.defines,
-    ...(Object.keys(intents).length === 0 ? {} : { intents }),
     ...(input.compactArgs ? { compactArgs: true } : {}),
-    // The intents the program opens compile with these options too, so this hears their contracts.
     ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
@@ -306,18 +234,10 @@ export function compileProgram(
   }
 }
 
-/**
- * The chains a cook of `input` is refused by: its own, and the destination of each intent it opens
- * — what {@link requireSupported} is asked about before anything that publishes them. A fee the
- * intents' cooks are not given yet is zero here: the chains do not depend on it.
- */
-export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
-  const probe = compileProgram(
-    { ...input, intents: { ...input.intents, executionFee: input.intents.executionFee ?? 0n } },
-    files,
-  );
-
-  return [input.chain, ...intentDestinations(probe.intents)];
+/** The chains a cook of `input` is refused by — what {@link requireSupported} is asked about
+ *  before anything that sends it: its own. */
+export function programChains(input: ProgramInput): CanonicalChain[] {
+  return [input.chain];
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */
@@ -355,8 +275,6 @@ export interface CompileInput extends ProgramInput {
   readonly accounts?: Readonly<Record<string, string>>;
   /** Solana: size the Kitchen's cook (the default) or the engine's direct one. */
   readonly via?: CookVia;
-  /** Endpoints for the intents' destinations: where given, each intent's Pot is checked. */
-  readonly endpoints?: Endpoints;
 }
 
 /**
@@ -366,7 +284,6 @@ export interface CompileInput extends ProgramInput {
  * the cook's transaction against the one-transaction limit.
  */
 export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
-  refusePastDeadline(input);
   const collected = contractCollector();
   const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
@@ -390,18 +307,11 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           input.via,
         )
       : undefined;
-  const cooks = intentCooks(program.intents);
-  const pots: readonly PotCheck[] =
-    input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
   const notes = [
     ...priceLimitNotes(input, program.entryParams, input.args),
-    ...pots.filter((check) => check.deployed === false).map(missingPotNote),
-    ...unread.map(({ name, readOn }) =>
-      readOn.length === 0
-        ? `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`
-        : `--define ${name}: ${input.file} reads ${name} only in intents on ${readOn.join(", ")}, ` +
-          `where it is that chain's own: a define of a name each chain sets holds on ` +
-          `${input.chain.slug} alone, so this one changes nothing`,
+    ...unread.map(
+      (name) =>
+        `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`,
     ),
     ...(cook === undefined || cook.fits
       ? []
@@ -431,7 +341,6 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       returnType: mainReturnType(input.text) ?? null,
       defines,
       contracts: collected.contracts(),
-      ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
@@ -593,7 +502,6 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
-  refusePastDeadline(input);
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
@@ -761,10 +669,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   if (input.value === undefined && input.rpcUrl === undefined)
     valueOf(undefined, undefined, input.chain);
   const cook = cookOf(input, files);
-  requireSupported("building the cook transaction", [
-    input.chain,
-    ...intentDestinations(cook.program.intents),
-  ]);
+  requireSupported("building the cook transaction", [input.chain]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
   const state = client === undefined ? undefined : await potState(client, cook.pot);
@@ -906,7 +811,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     );
   }
   const cook = cookOf(input, files);
-  requireSupported("sending the cook", [input.chain, ...intentDestinations(cook.program.intents)]);
+  requireSupported("sending the cook", [input.chain]);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
   // What the cook needs sent first, approved together in one question: the Pot, when it has no

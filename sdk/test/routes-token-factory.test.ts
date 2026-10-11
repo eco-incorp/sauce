@@ -9,33 +9,16 @@
  * return, no code — is `test/std/token/evm.e2e.test.ts`'s matrix. This file pins the rewrite.
  */
 import { rewriteTokenFactory } from "../src/routes/token-rewrite.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { openRoute } from "../src/routes/index.js";
-import type { IntentOptions } from "../src/routes/index.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const SPENDER = "0x2626664c2603336E57B271c5C0b26F421741e481" as const;
 /** `approve(address,uint256)` selector — present iff the wrapper lowered to a real ERC20 approve. */
 const APPROVE_SELECTOR = "095ea7b3";
 /** `allowance(address,address)` — only the SafeERC20 approve reads it, for its zero-first reset. */
 const ALLOWANCE_SELECTOR = "dd62ed3e";
-
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
 
 const hex = (b: Uint8Array): string => Buffer.from(b).toString("hex");
 const compileRoute = (body: string) =>
@@ -250,36 +233,23 @@ describe("Token(addr) through compileSauceRoute", () => {
     expect(bytes(body).length).toBeGreaterThan(0);
   });
 
-  it("the ambient `@sauce/token` openRoute adds does not collide with the aliased import", () => {
-    const built = openRoute(
+  it("the ambient `@sauce/token` a program compile adds does not collide with the aliased import", () => {
+    const built = compileSauceProgram(
       "base",
       `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);\ntransfer(${USDC}, ${SPENDER}, 1n);`,
-      evmOptions(),
-    ).reward(0n);
-    expect(hex(built.compiled.bytecode[0]!).includes(APPROVE_SELECTOR)).toBe(true);
+    );
+    expect(hex(built.bytecode).includes(APPROVE_SELECTOR)).toBe(true);
   });
 
   it("Token(USDC) resolves its argument through the ambient chain define", () => {
     // `USDC` here is not a literal — it is the chain-scoped ambient define, resolved underneath.
-    const built = openRoute(
-      "base",
-      `Token(USDC).transfer(${BigInt(SPENDER)}n, 5n);`,
-      evmOptions(),
-    ).reward(0n);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    const built = compileSauceProgram("base", `Token(USDC).transfer(${BigInt(SPENDER)}n, 5n);`);
+    expect(built.bytecode.length).toBeGreaterThan(0);
   });
 
   it("an svm destination rejects Token(addr) with the EVM-only error", () => {
     expect(() =>
-      openRoute("solana", `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`, {
-        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-        deadline: 2000n,
-        portal: PORTAL,
-        source: "base",
-        creator: "0x3333333333333333333333333333333333333333",
-        prover: "0x4444444444444444444444444444444444444444",
-        rewardDeadline: 1000n,
-      }).reward(0n),
+      compileSauceProgram("solana", `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`),
     ).toThrow(/svm/);
   });
 });

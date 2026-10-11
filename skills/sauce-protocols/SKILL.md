@@ -73,7 +73,6 @@ that lacks it.
 | A chain may lack it          | `if (available(Namespace.Contract)) { … }`                                                               |
 | A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
 | A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`), not the protocol's own router                  |
-| Code on another chain        | a Sauce intent (`sauce-intents`), not a bridge call alone                                                |
 
 ## Workflow
 

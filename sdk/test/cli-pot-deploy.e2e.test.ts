@@ -253,7 +253,6 @@ describeEvm("a command deploys the Pot it needs", () => {
         chain: requireChain("ethereum"),
         defines: {},
         compactArgs: false,
-        intents: {},
         target: { owner: fresh.address, salt: fresh.salt },
         args: { from: "--args", values: ["41"] },
         rpcUrl: local.rpcUrl,

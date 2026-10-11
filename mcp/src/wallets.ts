@@ -175,7 +175,7 @@ export function registerWalletTools(
       description:
         "Signs and sends, from one of this server's wallets, the transactions another tool built " +
         "unsigned: pass that tool's whole result as `transaction` — sauce_tx, sauce_pot, " +
-        "sauce_actions (with owner), sauce_intent_publish, sauce_intent_fill, sauce_intent_prove, " +
+        "sauce_actions (with owner), sauce_intent_fill, sauce_intent_prove, " +
         "sauce_intent_claim, sauce_intent_refund, sauce_intent_cancel — or one transaction ({ to, " +
         "data, value }, or a Solana { transaction }), or a list. First it rehearses them: on an " +
         "EVM chain all together in one eth_simulateV1 block from the wallet, on Solana each as " +

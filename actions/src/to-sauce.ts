@@ -37,7 +37,6 @@ import {
   encodeArgs,
   fn,
   hexToBytes,
-  indent,
   newEmitter,
   slotVar,
   type Emitter,
@@ -448,22 +447,6 @@ export function renderProgram(lowered: Lowered): string {
   const params = lowered.parameters.map((name) => `${argumentVar(name)}: Uint256`);
 
   return `${routerImport(lowered.router)}${fn("main", params, "void", lowered.body)}\n`;
-}
-
-/**
- * `main` for an SDK route body: no return annotation, because the route compiler's adapter adds the
- * `void` itself. A route body is compiled with no arguments, so a program with `argument` actions
- * cannot be one.
- */
-export function renderRouteBody(lowered: Lowered): string {
-  if (lowered.parameters.length > 0) {
-    throw new Error(
-      `an intent route takes no runtime arguments, but this program declares ` +
-        `${lowered.parameters.map((p) => `'${p}'`).join(", ")}. Read the amount on-chain instead ` +
-        `(a \`balanceOf\` action), or compile it standalone with \`compileProgram\`.`,
-    );
-  }
-  return `${routerImport(lowered.router)}function main() {\n${indent(lowered.body)}\n}\n`;
 }
 
 /**

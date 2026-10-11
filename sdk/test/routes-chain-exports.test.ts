@@ -6,8 +6,8 @@
  *
  * Imports the package ROOT (`../src/index.js`), not `routes/`, because the
  * thing under test is what a consumer actually gets from one import: the full
- * composed accessor (callable + `.chain`/`.route` + the lazy contract tree,
- * plus the svm venue tree on an svm chain) and an untouched `globalThis`.
+ * composed accessor (`.chain` + the lazy contract tree, plus the svm venue
+ * tree on an svm chain) and an untouched `globalThis`.
  */
 import * as sauce from "../src/index.js";
 import { Base, Ethereum, Solana, Token, chain, canonicalChains } from "../src/index.js";
@@ -20,33 +20,18 @@ import {
   svmTokenRows,
 } from "../src/routes/token-registry.js";
 import { venueAdapter } from "../src/svm/venues/registry.js";
-import type { IntentOptions } from "../src/routes/index.js";
 
 /** The same module namespace, indexable by a chain name computed at run time. */
 const sdk = sauce as unknown as Record<string, unknown>;
 const g = globalThis as unknown as Record<string, unknown>;
 
-function evmOptions(): IntentOptions {
-  return {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-    deadline: 2000n,
-    portal: "0x3333333333333333333333333333333333333333",
-    source: "base",
-    creator: "0x5555555555555555555555555555555555555555",
-    prover: "0x6666666666666666666666666666666666666666",
-    rewardDeadline: 1000n,
-  };
-}
-
 describe("chain accessors: one named export per canonical chain", () => {
   it("every canonical chain is exported under its PascalCase name, over the SAME CanonicalChain", () => {
     for (const c of canonicalChains) {
       const key = pascalOfSlug(c.slug);
-      const exported = sdk[key] as { chain: unknown; route: unknown } | undefined;
+      const exported = sdk[key] as { chain: unknown } | undefined;
       expect(exported).toBeDefined();
       expect(exported!.chain).toEqual(chainAccessors[key as keyof typeof chainAccessors].chain);
-      expect(typeof exported!.route).toBe("function");
     }
   });
 
@@ -58,13 +43,9 @@ describe("chain accessors: one named export per canonical chain", () => {
     expect(g.Token).toBeUndefined();
   });
 
-  it("the export is CALLABLE and `Base(...)` === `Base.route(...)` in behavior", () => {
-    const opts = evmOptions();
-    const viaCall = Base("function main() { return 1n; }", opts).reward(0n);
-    const viaRoute = Base.route("function main() { return 1n; }", opts).reward(0n);
-    const viaAccessor = chainAccessors.Base("function main() { return 1n; }", opts).reward(0n);
-    expect(viaCall.intent).toEqual(viaAccessor.intent);
-    expect(viaRoute.intent).toEqual(viaAccessor.intent);
+  it("the export is a namespace, not a function", () => {
+    expect(typeof Base).toBe("object");
+    expect(Base.chain).toBe(chainAccessors.Base.chain);
   });
 
   it("carries the native contract accessor tree, with the family alias resolving to the SAME accessor", () => {
@@ -80,8 +61,8 @@ describe("chain accessors: one named export per canonical chain", () => {
   });
 
   it("composing never mutates the underlying chainAccessors entry", () => {
-    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "route"]);
-    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["chain", "route"]);
+    expect(Object.keys(chainAccessors.Base)).toEqual(["chain"]);
+    expect(Object.keys(chainAccessors.Solana)).toEqual(["chain"]);
   });
 
   it("an svm chain ALSO carries the venue tree; an EVM chain provably does not", () => {

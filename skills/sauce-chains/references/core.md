@@ -5,7 +5,7 @@
 **Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
 On Core a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
 runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
+`sauce run`, `sauce pot --deploy` and the intent steps sent here are
 refused, naming the supported chains and how to request this one.
 
 To request Core, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Core%22) and add your

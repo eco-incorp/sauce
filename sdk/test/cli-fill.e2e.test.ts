@@ -1,6 +1,6 @@
 /**
- * `sauce intent fill`: a solver's fill of a file's intent, rehearsed on the destination with no key and
- * nothing sent — on a local anvil standing in for Base, with the released gated stack
+ * `sauce intent fill`: a solver's fill of a stored intent, rehearsed on the destination with no key
+ * and nothing sent — on a local anvil standing in for Base, with the released gated stack
  * (`cli-anvil.ts`) and the real eco-routes Portal (`evm/fixtures/Portal.json`, its own forge
  * creation code) at the address the SDK records for Base, so the CLI runs with no override.
  *
@@ -12,23 +12,45 @@
  * fulfill below runs the copy's real `_fulfill`: the hash check, the token pulls,
  * `Executor.execute` and its `onlyPortal`.
  *
+ * Each intent is built by hand (`assembleIntent`: a route that moves the delivered USDC from the
+ * Executor into the shared Pot and cooks a program there, or one plain transfer) and saved in the
+ * store, which is how `sauce intent import` leaves one; the fill names it by its hash.
+ *
  * Nothing is ever sent: after every rehearsal the shared Pot is not deployed, the solver holds
  * nothing and the block has not moved.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md).
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getAddress, pad, parseAbi, type Address, type Hex } from "viem";
+import {
+  bytesToHex,
+  encodeFunctionData,
+  erc20Abi,
+  getAddress,
+  pad,
+  parseAbi,
+  type Address,
+  type Hex,
+} from "viem";
 
-import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { requireChain } from "../src/chains/canonical.js";
 import { DEFAULT_SOLVER } from "../src/cli/fill.js";
+import { intentRecord } from "../src/cli/lifecycle.js";
+import { IntentStore } from "../src/cli/store.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { v12EngineAddress } from "../src/deployments/v12-addresses.js";
 import {
   ecoRoutesExecutorOf,
   ecoRoutesPortal,
+  ecoRoutesProver,
   ecoRoutesVaultImplementationOf,
 } from "../src/protocols/eco-routes/lookup.js";
+import { assembleIntent } from "../src/routes/intent.js";
+import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import { registryTokenAddress } from "../src/routes/token-registry.js";
 import {
   describeEvm,
   FEE,
@@ -47,74 +69,104 @@ const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const REFUND_TO: Address = "0x7777777777777777777777777777777777777777";
 const CREATOR: Address = "0x5a0Ce0000000000000000000000000000000Beef";
 const AMOUNT_IN = 5_000_000n;
-const DEADLINE = "2000000000";
+const DEADLINE = 2_000_000_000n;
 
-/** The intent: Base USDC delivered to the shared Pot, a floor checked, all of it sent on. */
+/** The body of the cooked intent: the USDC delivered to the shared Pot, a floor checked, all of it
+ *  sent on. */
 const COOKED = [
-  "Base(",
-  "  () => {",
-  "    const usdc = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n;",
-  "    const got = Token(usdc).balanceOf(ctx.self());",
-  '    require(got >= MIN_OUT, "output below MIN_OUT");',
-  "    Token(usdc).transfer(RECIPIENT, got - KEEP - REFUND);",
-  "    if (REFUND > 0n) {",
-  "      Token(usdc).transfer(REFUND_TO, REFUND);",
-  "    }",
-  "  },",
-  "  { tokens: [{ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: AMOUNT_IN }] }",
-  ").reward({ tokens: [{ token: USDC, amount: 6000000n }] });",
-  "",
-].join("\n");
-
-/** An intent whose body is plain token transfers: route calls the Executor runs, no Pot. */
-const DIRECT = [
-  "Base(() => {",
-  "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT_IN);",
-  "}).reward({ tokens: [{ token: USDC, amount: 6000000n }] });",
-  "",
-].join("\n");
-
-/** A program that measures what its intent carries, so the intent has no route until it runs. */
-const MEASURED = [
   "function main() {",
-  "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base(() => {",
-  "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, amount);",
-  "  }).reward({ tokens: [{ token: USDC, amount }] });",
+  "  const usdc = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n;",
+  "  const got = Token(usdc).balanceOf(ctx.self());",
+  '  require(got >= MIN_OUT, "output below MIN_OUT");',
+  "  Token(usdc).transfer(RECIPIENT, got - KEEP - REFUND);",
+  "  if (REFUND > 0n) {",
+  "    Token(usdc).transfer(REFUND_TO, REFUND);",
+  "  }",
   "}",
   "",
 ].join("\n");
 
+const address = (value: bigint): Address => getAddress(`0x${value.toString(16).padStart(40, "0")}`);
+const BASE_USDC = address(registryTokenAddress(requireChain("base"), "USDC")!);
+const ARBITRUM_USDC = address(registryTokenAddress(requireChain("arbitrum"), "USDC")!);
+const transfer = (to: Address, amount: bigint): Hex =>
+  encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [to, amount] });
+
 describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", () => {
   let base: LocalChain;
   let work: string;
+  let store: string;
   let usdc: Address;
   const portal = getAddress(ecoRoutesPortal("base"));
   const executor = getAddress(ecoRoutesExecutorOf(portal));
   const pot = getAddress(v12PredictPot(executor, SAUCE_INTENT_POT_SALT) as Address);
 
-  const defines = (overrides: Record<string, string> = {}): string[] =>
-    Object.entries({
-      AMOUNT_IN: String(AMOUNT_IN),
-      MIN_OUT: String(AMOUNT_IN),
-      RECIPIENT,
-      REFUND_TO,
-      KEEP: "0",
-      REFUND: "0",
-      ...overrides,
-    }).flatMap(([name, value]) => ["--define", `${name}=${value}`]);
-  const file = (name: string, text: string): string => {
-    const path = join(work, name);
-    writeFileSync(path, text);
-
-    return path;
-  };
-  const fill = (path: string, ...flags: string[]) =>
-    sauce(
-      ...["intent", "fill", path, "--chain", "arbitrum", "--rpc-url", base.rpcUrl],
-      ...["--intent-deadline", DEADLINE, "--intent-creator", CREATOR],
-      ...flags,
+  /** An intent from Arbitrum to Base, saved in the store: Arbitrum USDC as its reward, and on
+   *  Base its `tokens` and `calls`. Returns its hash. */
+  const stored = (route: {
+    tokens: Array<{ token: Address; amount: bigint }>;
+    calls: Array<{ target: Hex; data: Hex; value: bigint }>;
+    deadline?: bigint;
+  }): Hex => {
+    const intent = assembleIntent(
+      requireChain("arbitrum"),
+      requireChain("base"),
+      {
+        deadline: route.deadline ?? DEADLINE,
+        portal,
+        tokens: route.tokens,
+        calls: route.calls,
+        nativeAmount: route.calls.reduce((sum, call) => sum + call.value, 0n),
+      },
+      {
+        deadline: DEADLINE,
+        creator: CREATOR,
+        prover: ecoRoutesProver("arbitrum", "base"),
+        tokens: [{ token: ARBITRUM_USDC, amount: 6_000_000n }],
+      },
     );
+    const record = intentRecord(intent, { sourcePortal: ecoRoutesPortal("arbitrum") });
+    new IntentStore(store).save(record);
+
+    return record.intentHash;
+  };
+  /** The cooked intent: `AMOUNT_IN` USDC delivered, moved from the Executor into the shared Pot,
+   *  then `COOKED` cooked there with `fee` as the Kitchen's. */
+  const cooked = (fee: bigint, defines: Record<string, bigint> = {}): Hex => {
+    const program = compileSauceProgram("base", COOKED, {
+      defines: {
+        MIN_OUT: AMOUNT_IN,
+        RECIPIENT: BigInt(RECIPIENT),
+        REFUND_TO: BigInt(REFUND_TO),
+        KEEP: 0n,
+        REFUND: 0n,
+        ...defines,
+      },
+    });
+    const cook = buildSauceEvmCall({
+      pot,
+      engine: v12EngineAddress() as Hex,
+      program: bytesToHex(program.bytecode),
+      value: fee,
+    });
+
+    return stored({
+      tokens: [{ token: BASE_USDC, amount: AMOUNT_IN }],
+      calls: [
+        { target: BASE_USDC, data: transfer(pot, AMOUNT_IN), value: 0n },
+        { target: cook.to, data: cook.data, value: cook.value },
+      ],
+    });
+  };
+  /** An intent whose route is one plain transfer of `token`, which the Executor runs: no Pot. */
+  const direct = (token: Address = BASE_USDC, deadline?: bigint): Hex =>
+    stored({
+      tokens: [{ token, amount: AMOUNT_IN }],
+      calls: [{ target: token, data: transfer(RECIPIENT, AMOUNT_IN), value: 0n }],
+      ...(deadline === undefined ? {} : { deadline }),
+    });
+  const fill = (hash: Hex, ...flags: string[]) =>
+    sauce("intent", "fill", hash, "--store", store, "--rpc-url", base.rpcUrl, ...flags);
   /** What a rehearsal must leave as it found it. */
   const untouched = async (block: bigint): Promise<void> => {
     expect(await base.publicClient.getBlockNumber()).toBe(block);
@@ -125,6 +177,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-fill-e2e-"));
+    store = join(work, "store");
     base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     // The real Portal, deployed wherever it lands, then moved to the registry's address.
@@ -149,15 +202,9 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   });
 
   it("deploys the shared Pot, approves and fulfills in one block, and shows what moved", async () => {
-    const path = file("cooked.sauce.ts", COOKED);
+    const hash = cooked(FEE, { REFUND: 1_000_000n });
     const block = await base.publicClient.getBlockNumber();
-    const run = await fill(
-      path,
-      ...defines({ REFUND: "1000000" }),
-      "--intent-execution-fee",
-      String(FEE),
-      "--json",
-    );
+    const run = await fill(hash, "--json");
     expect(run.code).toBe(0);
     const out = JSON.parse(run.stdout) as {
       ok: boolean;
@@ -197,14 +244,8 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
       deltas: Array<{ token: string; amount: string }>;
     }>;
     const change = (address: Address) => changes.find((entry) => entry.address === address);
-    expect(change(RECIPIENT)).toMatchObject({
-      label: "RECIPIENT",
-      deltas: [{ token: usdc, amount: "4000000" }],
-    });
-    expect(change(REFUND_TO)).toMatchObject({
-      label: "REFUND_TO",
-      deltas: [{ token: usdc, amount: "1000000" }],
-    });
+    expect(change(RECIPIENT)).toMatchObject({ deltas: [{ token: usdc, amount: "4000000" }] });
+    expect(change(REFUND_TO)).toMatchObject({ deltas: [{ token: usdc, amount: "1000000" }] });
     expect(change(DEFAULT_SOLVER)?.deltas).toEqual(
       expect.arrayContaining([expect.objectContaining({ token: usdc, amount: "-5000000" })]),
     );
@@ -219,12 +260,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   }, 120_000);
 
   it("prints the block, what it assumed, what moved and what was left", async () => {
-    const run = await fill(
-      file("cooked.sauce.ts", COOKED),
-      ...defines(),
-      "--intent-execution-fee",
-      String(FEE),
-    );
+    const run = await fill(cooked(FEE));
     expect(run.code).toBe(0);
     expect(run.stdout).toMatch(/^Intent 0x[0-9a-f]{64} from arbitrum to base: the fill succeeds/);
     expect(run.stdout).toContain(`  1. Kitchen.deployPot(${executor}, ${SAUCE_INTENT_POT_SALT})`);
@@ -234,7 +270,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     expect(run.stdout).toMatch(
       new RegExp(
         ` {2}\\[\\d\\] shared intent Pot(?: ${pot.slice(0, 6)}…${pot.slice(-4)})? +-> ` +
-          `RECIPIENT ${RECIPIENT.slice(0, 6)}…${RECIPIENT.slice(-4)} +5 USDC$`,
+          `${RECIPIENT.slice(0, 6)}…${RECIPIENT.slice(-4)} +5 USDC$`,
         "m",
       ),
     );
@@ -244,13 +280,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
 
   it("decodes a body that reverts down to the program's own message", async () => {
     const block = await base.publicClient.getBlockNumber();
-    const run = await fill(
-      file("cooked.sauce.ts", COOKED),
-      ...defines({ MIN_OUT: String(AMOUNT_IN + 1n) }),
-      "--intent-execution-fee",
-      String(FEE),
-      "--json",
-    );
+    const run = await fill(cooked(FEE, { MIN_OUT: AMOUNT_IN + 1n }), "--json");
     expect(run.code).toBe(1);
     const [one] = (JSON.parse(run.stdout) as { intents: Array<Record<string, unknown>> }).intents;
     expect(one).toMatchObject({ ok: false, stage: "fulfill" });
@@ -262,17 +292,8 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   }, 120_000);
 
   it("names the Portal's own refusal: a route whose deadline has passed", async () => {
-    const run = await sauce(
-      ...["intent", "fill", file("direct.sauce.ts", DIRECT), "--chain", "arbitrum"],
-      ...["--rpc-url", base.rpcUrl, ...defines()],
-      ...["--intent-deadline", "1000", "--intent-creator", CREATOR],
-    );
+    const run = await fill(direct(BASE_USDC, 1000n));
     expect(run.code).toBe(1);
-    // fill rehearses it anyway, where compile and publish refuse it, and says so.
-    expect(run.stderr).toContain(
-      "--intent-deadline 1000 (1970-01-01T00:16:40.000Z) has passed: an intent can be filled " +
-        "only until its deadline: the rehearsal shows the Portal refusing it",
-    );
     expect(run.stdout).toContain(
       "the fill reverts: IntentExpired(): the route's deadline, 1000 (1970-01-01T00:16:40.000Z), " +
         "has passed",
@@ -280,12 +301,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   }, 60_000);
 
   it("names a Kitchen fee the route underpays, and the revert it causes", async () => {
-    const run = await fill(
-      file("cooked.sauce.ts", COOKED),
-      ...defines(),
-      "--intent-execution-fee",
-      "0",
-    );
+    const run = await fill(cooked(0n));
     expect(run.code).toBe(1);
     expect(run.stderr).toContain(
       `route call 2 pays the Kitchen 0 wei, and base's Kitchen charges ${FEE}`,
@@ -294,12 +310,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   }, 120_000);
 
   it("warns when the fill leaves tokens in the shared Pot", async () => {
-    const run = await fill(
-      file("cooked.sauce.ts", COOKED),
-      ...defines({ KEEP: "7" }),
-      "--intent-execution-fee",
-      String(FEE),
-    );
+    const run = await fill(cooked(FEE, { KEEP: 7n }));
     expect(run.code).toBe(0);
     expect(run.stdout).toContain(`${pot} (the shared intent Pot) ends holding 0.000007 USDC`);
     expect(run.stderr).toContain(
@@ -311,15 +322,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     const solver = getAddress("0x8888888888888888888888888888888888888888");
     const block = await base.publicClient.getBlockNumber();
     const out = jsonOf(
-      await fill(
-        file("direct.sauce.ts", DIRECT),
-        ...defines(),
-        "--solver",
-        solver,
-        "--claimant",
-        `0x${"ab".repeat(32)}`,
-        "--json",
-      ),
+      await fill(direct(), "--solver", solver, "--claimant", `0x${"ab".repeat(32)}`, "--json"),
     );
     const [one] = out.intents as Array<Record<string, unknown>>;
     expect(one).toMatchObject({
@@ -341,13 +344,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     const deploy = jsonOf(await sauce("pot", "--owner", executor, "--chain", "base"));
     await base.send(base.deployer, deploy.to as Address, deploy.data as Hex);
     try {
-      const run = await fill(
-        file("cooked.sauce.ts", COOKED),
-        ...defines(),
-        "--intent-execution-fee",
-        String(FEE),
-        "--json",
-      );
+      const run = await fill(cooked(FEE), "--json");
       expect(run.code).toBe(0);
       expect(run.stderr).not.toContain("is not deployed");
       const [one] = (JSON.parse(run.stdout) as { intents: Array<Record<string, unknown>> }).intents;
@@ -365,13 +362,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     // A token whose balanceOf is computed (always 7): no storage word to write.
     const computed: Address = "0x5a0Ce00000000000000000000000000000000007";
     await base.testClient.setCode({ address: computed, bytecode: "0x600760005260206000f3" });
-    const run = await fill(
-      file(
-        "computed.sauce.ts",
-        `Base(() => {\n  Token(${computed.toLowerCase()}n).transfer(RECIPIENT, AMOUNT_IN);\n}).reward({ tokens: [{ token: USDC, amount: 6000000n }] });\n`,
-      ),
-      ...defines(),
-    );
+    const run = await fill(direct(computed));
     expect(run.code).toBe(1);
     expect(run.stderr).toContain(
       `the solver delivers ${computed}, and the rehearsal cannot give it a balance: no storage ` +
@@ -380,22 +371,11 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     expect(run.stderr).toContain("Pass --solver <an address that holds it>.");
   }, 60_000);
 
-  it("refuses an intent with no route until its program runs", async () => {
-    const run = await fill(file("measured.sauce.ts", MEASURED), ...defines());
-    expect(run.code).toBe(1);
-    expect(run.stderr).toContain(
-      "uses `amount`, which the program measures or computes while it runs",
-    );
-  }, 60_000);
-
   it("names the destination when --rpc-url serves another chain", async () => {
     const other = await startChain("arbitrum");
     try {
       const run = await sauce(
-        ...["intent", "fill", file("cooked.sauce.ts", COOKED), "--chain", "arbitrum"],
-        ...["--rpc-url", other.rpcUrl, ...defines()],
-        ...["--intent-deadline", DEADLINE, "--intent-creator", CREATOR],
-        ...["--intent-execution-fee", String(FEE)],
+        ...["intent", "fill", cooked(FEE), "--store", store, "--rpc-url", other.rpcUrl],
       );
       expect(run.code).toBe(1);
       expect(run.stderr).toContain("--rpc-url is base's endpoint, not arbitrum's");
