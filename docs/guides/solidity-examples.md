@@ -19,11 +19,13 @@ not ship with.
 
 | Example | Ported from | Solidity lines (code) | Sauce lines (code) |
 | --- | --- | ---: | ---: |
-| [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 125 (81) |
+| [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 128 (84) |
+| [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 75 (31) |
+| [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 162 (116) |
 
 ## Uniswap V3: the swap examples
 
-Ported from Uniswap/docs, [`content/examples/smart-contracts/SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol): 163 lines of Solidity, 80 of them code. In Sauce, `uniswap-v3-swap-examples.sauce.ts`: 125 lines, 81 of them code.
+Ported from Uniswap/docs, [`content/examples/smart-contracts/SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol): 163 lines of Solidity, 80 of them code. In Sauce, `uniswap-v3-swap-examples.sauce.ts`: 128 lines, 84 of them code.
 
 ```ts
 // Uniswap's swap examples, ported: the four swaps of the `SwapExamples` contract in Uniswap's V3
@@ -71,6 +73,7 @@ function path(a: Address, feeAB: Uint256, b: Address, feeBC: Uint256, c: Address
 }
 
 function swapExactInputSingle(amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, amountIn);
   return UniswapV3.SwapRouter.exactInputSingle({
     tokenIn: Maker.Dai,
@@ -85,6 +88,7 @@ function swapExactInputSingle(amountIn: Uint256, minOut: Uint256, recipient: Add
 }
 
 function swapExactOutputSingle(amountOut: Uint256, maxIn: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, maxIn);
   const amountIn = UniswapV3.SwapRouter.exactOutputSingle({
     tokenIn: Maker.Dai,
@@ -105,6 +109,7 @@ function swapExactOutputSingle(amountOut: Uint256, maxIn: Uint256, recipient: Ad
 }
 
 function swapExactInputMultihop(amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, amountIn);
   return UniswapV3.SwapRouter.exactInput({
     path: path(Maker.Dai, STABLE_FEE, USDC, POOL_FEE, WETH),
@@ -116,6 +121,7 @@ function swapExactInputMultihop(amountIn: Uint256, minOut: Uint256, recipient: A
 }
 
 function swapExactOutputMultihop(amountOut: Uint256, maxIn: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, maxIn);
   // An exact-output path runs backwards, from the token bought to the token paid.
   const amountIn = UniswapV3.SwapRouter.exactOutput({
@@ -138,7 +144,6 @@ function main(
   limit: Uint256,
   recipient: Address,
 ): Uint256 {
-  require(UniswapV3.SwapRouter);
   require(Maker.Dai);
   const spendable = balanceOf(Maker.Dai, ctx.self());
   require(spendable >= (exactOutput ? limit : amount), "the DAI to spend is not in the Pot");
@@ -150,5 +155,256 @@ function main(
   return exactOutput
     ? swapExactOutputSingle(amount, limit, recipient)
     : swapExactInputSingle(amount, limit, recipient);
+}
+```
+
+## Uniswap V3: a flash, as a flash swap
+
+Ported from Uniswap/v3-periphery, [`contracts/examples/PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol): 149 lines of Solidity, 109 of them code. In Sauce, `uniswap-v3-pair-flash.sauce.ts`: 75 lines, 31 of them code.
+
+```ts
+// Uniswap's flash example, ported: `PairFlash` borrows from one Uniswap V3 pool, trades the loan
+// through the pair's other pools, repays the loan with its fee and pays what is left to the caller.
+// Here the loan is a flash swap: `amountIn` of `tokenIn` is sold in the `borrowFee` pool, and its
+// `tokenOut` is in the Pot before anything is paid; a program then sells that `tokenOut` back in the
+// `repayFee` pool for at least `amountIn`; the borrow pool is paid `amountIn` out of it, and the rest
+// is the profit, sent to `payer` and returned. Nothing the Pot already held is spent: a trade that
+// cannot repay reverts the whole transaction, as PairFlash's does.
+//
+// Ported from Uniswap/v3-periphery, contracts/examples/PairFlash.sol (149 lines, 109 of code):
+// https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol
+//
+// What changes in Sauce: a pool's `flash` pays the borrower and then calls it back
+// (`uniswapV3FlashCallback`) to be repaid, and a Pot cannot be called back by a program: its fallback
+// runs its Router. The Router's `flash(callback, swap)` is Sauce's flash: it runs one swap, whose
+// pool sends the output first, runs `callback` inside the pool's callback, and pays the pool after
+// it. `program()` compiles the callback, a closure that reads the program's own values, and
+// SauceRouterFlash.json beside this file declares `flash`. So the loan is one token, sold rather
+// than lent, and its fee is the borrow pool's swap fee; PairFlash's second loan and third pool are
+// the same trade the other way round.
+//
+//   sauce run uniswap-v3-pair-flash.sauce.ts --chain <chain> --keystore <keystore> \
+//     --args <tokenIn> <tokenOut> <borrowFee> <amountIn> <repayFee> <payer>
+//
+//   tokenIn: Address      the token the borrow pool is paid in, after the callback
+//   tokenOut: Address     the token the borrow pool sends first
+//   borrowFee: Uint256    the borrow pool's fee tier, in millionths: 500 is 0.05%
+//   amountIn: Uint256     how much `tokenIn` the borrow pool is paid, in its smallest units:
+//                         1000000000000000000 is 1 WETH (18 decimals)
+//   repayFee: Uint256     the fee tier of the pool the borrowed `tokenOut` is sold back in
+//   payer: Address        who receives the profit, in `tokenIn`
+//
+// On Ethereum, 1 WETH's worth of USDC borrowed from the 0.05% pool and sold back for WETH in the
+// 0.3% pool:
+//
+//   sauce run uniswap-v3-pair-flash.sauce.ts --chain ethereum --keystore <keystore> \
+//     --args 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \
+//     500 1000000000000000000 3000 <payer>
+import { uniswapV3 } from "@sauce/router";
+import SauceRouterFlash from "./SauceRouterFlash.json";
+
+function main(
+  tokenIn: Address,
+  tokenOut: Address,
+  borrowFee: Uint256,
+  amountIn: Uint256,
+  repayFee: Uint256,
+  payer: Address,
+): Uint256 {
+  require(UniswapV3.Factory);
+  const self = ctx.self();
+  const borrowPool = UniswapV3.Factory.getPool(tokenIn, tokenOut, borrowFee);
+  const repayPool = UniswapV3.Factory.getPool(tokenIn, tokenOut, repayFee);
+  require(borrowPool != 0 && repayPool != 0, "no pool at those fee tiers");
+  const inBefore = Token(tokenIn).balanceOf(self);
+  const outBefore = Token(tokenOut).balanceOf(self);
+
+  // The callback: the borrow pool has sent `tokenOut` and is not paid yet. Sell what it sent back
+  // for at least what it is owed, into the Pot, which pays it.
+  const repay = program(() => {
+    const received = Token(tokenOut).balanceOf(self) - outBefore;
+    uniswapV3(repayPool, tokenOut, tokenIn, received, 0, amountIn, self);
+  }, chainId);
+  // The swap the Router runs around it, as the calldata of its own `swapV3`.
+  const swapV3 = (crypto.keccak256("swapV3(address,address,bool,uint256,uint160,address)") >> 224)
+    .toBytesBe(4)
+    .concat(abi.encode(borrowPool, tokenIn, tokenIn < tokenOut, amountIn, 0, self));
+  SauceRouterFlash.at(self).flash(repay.code.concat(repay.args), swapV3);
+
+  // What the repayment left of `tokenIn`, beyond what the Pot held: the profit.
+  const profit = Token(tokenIn).balanceOf(self) - inBefore;
+  if (profit > 0) {
+    Token(tokenIn).transfer(payer, profit);
+  }
+  return profit;
+}
+```
+
+## Uniswap V3: the liquidity examples
+
+Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol): 243 lines of Solidity, 157 of them code. In Sauce, `uniswap-v3-liquidity-examples.sauce.ts`: 162 lines, 116 of them code.
+
+```ts
+// Uniswap's liquidity examples, ported: the `LiquidityExamples` contract of Uniswap's V3 guides
+// keeps a DAI/USDC position's NFT for its owner and mints it, collects its fees, takes half its
+// liquidity out, adds to it and hands the NFT back. Here the Pot is that contract: the position is
+// minted to the Pot, and only its owner cooks it. `step` picks the function, and each returns the
+// position's `tokenId`, the liquidity it added or removed, and the DAI and USDC that moved.
+//
+// Ported from Uniswap/docs, content/examples/smart-contracts/LiquidityExamples.sol (243 lines, 157 of code):
+// https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol
+//
+// What changes in Sauce: the contract recorded each deposit's owner, because anyone could call it;
+// a Pot is cooked by its owner alone, so there is no record and no owner check, and `owner` is
+// where the tokens and the NFT go. It pulled the tokens from its caller and refunded what the
+// position did not take; the Pot's tokens stay in the Pot. Its full range was TickMath's, which no
+// 0.3% pool accepts (a tick must be a multiple of the tier's spacing, 60): here it is that range
+// rounded in. Its `decreaseLiquidityInHalf` sent the owner tokens the position had only credited,
+// not paid: here it collects them first. Position reads and the NFT's transfer are in
+// UniswapV3Positions.json beside this file, which the registry's ABI for the position manager
+// leaves out.
+//
+//   sauce run uniswap-v3-liquidity-examples.sauce.ts --chain <chain> --keystore <keystore> \
+//     --args <step> <tokenId> <amount0> <amount1> <owner>
+//
+//   step: Uint256      0 mint a position, 1 collect all its fees, 2 take half its liquidity out,
+//                      3 add to it, 4 hand its NFT to `owner`
+//   tokenId: Uint256   the position (0 to mint one)
+//   amount0: Uint256   the DAI to mint or add with, in its smallest units (18 decimals):
+//                      1000000000000000000000 is 1,000 DAI
+//   amount1: Uint256   the USDC to mint or add with, in its smallest units (6 decimals):
+//                      1000000000 is 1,000 USDC
+//   owner: Address     who receives the fees, the liquidity taken out and the NFT
+//
+// On Ethereum, a full-range position minted with up to 1,000 DAI and 1,000 USDC:
+//
+//   sauce run uniswap-v3-liquidity-examples.sauce.ts --chain ethereum --keystore <keystore> \
+//     --args 0 0 1000000000000000000000 1000000000 <owner>
+import UniswapV3Positions from "./UniswapV3Positions.json";
+
+const POOL_FEE = 3000;
+// TickMath's MIN_TICK and MAX_TICK, rounded in to the 0.3% tier's tick spacing of 60.
+const MIN_TICK = -887220;
+const MAX_TICK = 887220;
+const MAX_UINT128 = 2 ** 128 - 1;
+
+interface Moved {
+  tokenId: Uint256;
+  liquidity: Uint256;
+  amount0: Uint256;
+  amount1: Uint256;
+}
+
+function mintNewPosition(amount0ToMint: Uint256, amount1ToMint: Uint256): Moved {
+  require(UniswapV3.NonfungiblePositionManager && Maker.Dai);
+  const manager = UniswapV3.NonfungiblePositionManager;
+  approve(Maker.Dai, manager, amount0ToMint);
+  USDC.approve(manager, amount1ToMint);
+  const [tokenId, liquidity, amount0, amount1] = manager.mint({
+    token0: Maker.Dai,
+    token1: USDC,
+    fee: POOL_FEE,
+    tickLower: MIN_TICK,
+    tickUpper: MAX_TICK,
+    amount0Desired: amount0ToMint,
+    amount1Desired: amount1ToMint,
+    amount0Min: 0,
+    amount1Min: 0,
+    recipient: ctx.self(),
+    deadline: ctx.timestamp(),
+  });
+  // What the position did not take stays in the Pot; the allowance for it does not stand.
+  if (amount0 < amount0ToMint) {
+    approve(Maker.Dai, manager, 0);
+  }
+  if (amount1 < amount1ToMint) {
+    USDC.approve(manager, 0);
+  }
+  return { tokenId, liquidity, amount0, amount1 };
+}
+
+function collectAllFees(tokenId: Uint256, owner: Address): Moved {
+  require(UniswapV3.NonfungiblePositionManager);
+  const [amount0, amount1] = UniswapV3.NonfungiblePositionManager.collect({
+    tokenId,
+    recipient: owner,
+    amount0Max: MAX_UINT128,
+    amount1Max: MAX_UINT128,
+  });
+  return { tokenId, liquidity: 0, amount0, amount1 };
+}
+
+function decreaseLiquidityInHalf(tokenId: Uint256, owner: Address): Moved {
+  require(UniswapV3.NonfungiblePositionManager);
+  const manager = UniswapV3.NonfungiblePositionManager;
+  const position = UniswapV3Positions.at(manager).positions(tokenId);
+  const halfLiquidity = position.liquidity / 2;
+  const [amount0, amount1] = manager.decreaseLiquidity({
+    tokenId,
+    liquidity: halfLiquidity,
+    amount0Min: 0,
+    amount1Min: 0,
+    deadline: ctx.timestamp(),
+  });
+  // Taking liquidity out credits the position; collecting pays the credit to `owner`.
+  manager.collect({ tokenId, recipient: owner, amount0Max: amount0, amount1Max: amount1 });
+  return { tokenId, liquidity: halfLiquidity, amount0, amount1 };
+}
+
+function increaseLiquidityCurrentRange(
+  tokenId: Uint256,
+  amountAdd0: Uint256,
+  amountAdd1: Uint256,
+): Moved {
+  require(UniswapV3.NonfungiblePositionManager);
+  const manager = UniswapV3.NonfungiblePositionManager;
+  const position = UniswapV3Positions.at(manager).positions(tokenId);
+  approve(position.token0, manager, amountAdd0);
+  approve(position.token1, manager, amountAdd1);
+  const [liquidity, amount0, amount1] = manager.increaseLiquidity({
+    tokenId,
+    amount0Desired: amountAdd0,
+    amount1Desired: amountAdd1,
+    amount0Min: 0,
+    amount1Min: 0,
+    deadline: ctx.timestamp(),
+  });
+  if (amount0 < amountAdd0) {
+    approve(position.token0, manager, 0);
+  }
+  if (amount1 < amountAdd1) {
+    approve(position.token1, manager, 0);
+  }
+  return { tokenId, liquidity, amount0, amount1 };
+}
+
+function retrieveNFT(tokenId: Uint256, owner: Address): Moved {
+  require(UniswapV3.NonfungiblePositionManager);
+  const manager = UniswapV3.NonfungiblePositionManager;
+  UniswapV3Positions.at(manager).safeTransferFrom(ctx.self(), owner, tokenId);
+  return { tokenId, liquidity: 0, amount0: 0, amount1: 0 };
+}
+
+function main(
+  step: Uint256,
+  tokenId: Uint256,
+  amount0: Uint256,
+  amount1: Uint256,
+  owner: Address,
+): Moved {
+  if (step == 0) {
+    return mintNewPosition(amount0, amount1);
+  }
+  if (step == 1) {
+    return collectAllFees(tokenId, owner);
+  }
+  if (step == 2) {
+    return decreaseLiquidityInHalf(tokenId, owner);
+  }
+  if (step == 3) {
+    return increaseLiquidityCurrentRange(tokenId, amount0, amount1);
+  }
+  require(step == 4, "step is 0 to 4");
+  return retrieveNFT(tokenId, owner);
 }
 ```

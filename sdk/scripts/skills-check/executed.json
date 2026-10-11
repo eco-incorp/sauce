@@ -32,6 +32,9 @@
     "sauce-examples/examples/supply-idle.sauce.ts": [
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
+    "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
+    ],
     "sauce-solana/examples/pay.sauce.ts": [
       "sdk/test/cli-solana-token-methods.e2e.test.ts",
       "dev-tools/test/testing/solana-examples.test.ts"
@@ -46,6 +49,9 @@
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
+    ],
+    "sauce-swaps/examples/uniswap-v3-pair-flash.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
     ],
     "sauce-swaps/examples/uniswap-v3-swap-examples.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
