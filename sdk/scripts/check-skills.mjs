@@ -437,6 +437,10 @@ const UNDECLARED_NAMES = {
     wallet_addresses:
       "Phantom MCP's tool that gives its wallet's addresses, a third-party MCP server's, not the package's",
   },
+  "sauce-protocols": {
+    executeOperation:
+      "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why Aave's flash loan does not port",
+  },
   "sauce-swaps": {
     executeOperation:
       "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",

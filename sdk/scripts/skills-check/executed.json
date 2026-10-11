@@ -32,6 +32,9 @@
     "sauce-examples/examples/supply-idle.sauce.ts": [
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
+    "sauce-protocols/examples/aave-v3-credit-delegation.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
+    ],
     "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
     ],

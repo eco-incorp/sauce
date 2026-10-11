@@ -103,6 +103,7 @@ export const PORTED_EXAMPLES = [
     "Uniswap V3: the liquidity examples",
     "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts",
   ],
+  ["Aave V3: credit delegation", "sauce-protocols/examples/aave-v3-credit-delegation.sauce.ts"],
 ];
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
@@ -2112,7 +2113,7 @@ function renderPortedGuide(examples) {
   const ported = examples.map(({ heading, path, text }) => {
     const lines = text.split("\n");
     const at = lines.findIndex((line) => line.startsWith("// Ported from "));
-    const source = /^\/\/ Ported from (.+), (\S+) \((\d+) lines, (\d+) of code\):$/.exec(
+    const source = /^\/\/ Ported from ([^,]+), (.+) \((\d+) lines, (\d+) of code\):$/.exec(
       lines[at] ?? "",
     );
     const url = /^\/\/ (https:\/\/\S+)$/.exec(lines[at + 1] ?? "");
@@ -2145,6 +2146,13 @@ function renderPortedGuide(examples) {
     "Every program here runs, not only compiles, before the package ships: through `sauce simulate`",
     "and `sauce run` on Ethereum's state at a fixed block, against the protocols' deployed contracts,",
     "with each result held to the protocol's own quotes and accounts.",
+    "",
+    "A flash loan changes most. A lender pays first and then calls its borrower back to be repaid,",
+    "Uniswap's pool through `uniswapV3FlashCallback` and Aave's Pool through `executeOperation`, and",
+    "a Pot cannot be called back by a program. The flash a program has is its Router's: a swap whose",
+    "output arrives first, with a program run inside the swap's callback, before the pool is paid.",
+    "Uniswap's `PairFlash` is ported that way below; Aave's flash-loan receiver has no port, since",
+    "the same trade is that flash swap.",
     "",
     "Lines are counted whole, and as code: neither blank nor only a comment. A Solidity count leaves",
     "out the libraries and interfaces the example imports; a Sauce program imports nothing it does",
