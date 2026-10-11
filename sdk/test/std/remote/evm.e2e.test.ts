@@ -52,7 +52,12 @@ import { v12EngineAddress } from "../../../src/deployments/v12-addresses.js";
 import { encodeEntryArguments, type EntryValue } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
-import { destinationSetup, type DestinationTx } from "../../../src/cli/remote-setup.js";
+import {
+  destinationSetup,
+  remoteNeeds,
+  type DestinationReach,
+  type DestinationTx,
+} from "../../../src/cli/remote-setup.js";
 import { v12PredictPot } from "../../../src/deployments/pot.js";
 import { DEPLOYER, FEE, RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../cli-anvil.js";
 import { gateAnchors, POT_SALT, routerUnderTest } from "../../evm/gated-engine.js";
@@ -642,6 +647,90 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       ),
     ).toBe(52n);
   }, 120_000);
+
+  itSettling(
+    "readies a fresh Pot on Base for a round trip, the answer's fee quoted, and the round trip completes",
+    async () => {
+      const salt = `0x${"00".repeat(31)}53` as Hex;
+      const owner = DEPLOYER.address;
+      const fresh = getAddress(v12PredictPot(owner, salt));
+      const reachOf = (local: LocalChain) => async (): Promise<DestinationReach> => ({
+        chain: local.chain,
+        client: local.publicClient,
+        from: owner,
+        send: async (tx) => {
+          const hash = await local.deployer.sendTransaction({
+            account: DEPLOYER,
+            chain: null,
+            ...tx,
+            gas: 15_000_000n,
+          });
+          return local.publicClient.waitForTransactionReceipt({ hash });
+        },
+      });
+      const source = `function main(bump: Uint256) {
+  Base.remote(() => {
+    return ctx.chainId() * 1000;
+  }).then((result) => {
+    const [n] = abi.decode(result, ["Uint256"]);
+    evm.sstore(${slot("fresh.round")}, n + bump);
+  });
+}`;
+
+      // What the program's message needs, from its compile: Base over Hyperlane, answered back.
+      const needs = remoteNeeds(compileSauceProgram("ethereum", source).continuations);
+      expect(
+        needs.map((need) => [need.chain.slug, need.bridge, need.answer?.to.slug, need.answer?.gas]),
+      ).toEqual([["base", "hyperlane", "ethereum", 500_000n]]);
+      const bytes = needs[0]!.answer!.bytes;
+
+      const steps = await destinationSetup(needs, {
+        owner,
+        salt,
+        reach: reachOf(base),
+        estimate: async () => "estimated",
+      });
+      expect(steps.map((step) => step.planned.what)).toEqual(["deployPot", "install", "fund"]);
+      const fund = steps[2]!;
+      expect(BigInt(fund.planned.value)).toBe(FEE + HYPERLANE_FEE);
+      expect(fund.planned.quoted).toEqual({ answers: 1, fee: String(HYPERLANE_FEE), bytes });
+      expect(fund.action).toBe(
+        `fund your Pot on Base with ${formatEther(FEE + HYPERLANE_FEE)} ETH (1 delivery × the ` +
+          `Kitchen fee + the answer's Hyperlane fee, quoted for up to ${bytes} bytes)`,
+      );
+      for (const step of steps) await step.send();
+
+      // The same Pot on Ethereum, readied the same way for the answer it receives, and funded for
+      // the message it sends.
+      for (const step of await destinationSetup([{ chain: ethereum.chain, bridge: "hyperlane" }], {
+        owner,
+        salt,
+        reach: reachOf(ethereum),
+        estimate: async () => "estimated",
+      })) {
+        await step.send();
+      }
+      await reachOf(ethereum)().then((there) =>
+        there.send!({ to: fresh, data: "0x", value: HYPERLANE_FEE }),
+      );
+
+      const out = await cook(ethereum, source, [7n], fresh);
+      const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+      const back = await base.publicClient.getTransactionReceipt({ hash: there! });
+      await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);
+      expect(
+        BigInt(
+          (await ethereum.publicClient.getStorageAt({
+            address: fresh,
+            slot: slot("fresh.round"),
+          })) ?? "0x0",
+        ),
+      ).toBe(8_453_000n + 7n);
+      // Base's Pot paid the Kitchen and the answer's fee out of exactly what it was funded.
+      expect(await base.publicClient.getBalance({ address: fresh })).toBe(0n);
+    },
+    120_000,
+  );
 
   itSettling(
     "runs a .then with no parameter back on Ethereum, once the body ran on Base",

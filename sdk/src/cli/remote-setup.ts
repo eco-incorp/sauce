@@ -5,6 +5,9 @@
  * message. These are the steps the command offers before a cook that sends there, each one
  * transaction on that chain.
  *
+ * What a program's messages need is read from its compile: `@sauce/remote` gives each program it
+ * compiles for another chain a scope saying what it is to a message (`remoteNeeds`).
+ *
  * Anyone may deploy a Pot (`Kitchen.deployPot` is permissionless), but only the Pot's owner, or the
  * Pot itself, may install a handler (`Router.setHandler`): the receiver is the owner's own
  * transaction on that chain, and no executor or solver can send it.
@@ -16,11 +19,13 @@
 import {
   bytesToHex,
   concat,
+  encodeAbiParameters,
   formatEther,
   getAddress,
   getContractAddress,
   keccak256,
   pad,
+  parseAbi,
   toHex,
   zeroHash,
   type Address,
@@ -28,7 +33,7 @@ import {
   type PublicClient,
 } from "viem";
 
-import type { CanonicalChain } from "../chains/canonical.js";
+import { chainById, type CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress, v12KitchenAddress } from "../deployments/v12-addresses.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { v12Kitchen, v12Pot } from "../evm/engine.js";
@@ -38,17 +43,24 @@ import {
   packageHandlers,
   type CompiledHandler,
 } from "../routes/handlers.js";
-import { compileSauceProgram } from "../routes/sauce-route.js";
+import { remoteLink, type RemoteBridge, type RemoteLink } from "../routes/remote-link.js";
+import { compileSauceProgram, type CompiledBody } from "../routes/sauce-route.js";
 import { kitchenFee } from "./chain.js";
 import { nativeSymbol } from "./effects.js";
 
-/** The bridges a remote message travels over. */
-export type RemoteBridge = "hyperlane" | "layerzero" | "metalayer" | "polymer";
-
-/** What a remote message needs where it runs: the chain, and the bridge that delivers it there. */
+/** What a remote message needs where it runs: the chain, the bridge that delivers it there, and for
+ *  a round trip the answer the Pot there sends back over the same bridge and pays for. */
 export interface DestinationNeed {
   readonly chain: CanonicalChain;
   readonly bridge: RemoteBridge;
+  readonly answer?: {
+    /** The chain the answer goes to: where the program was cooked. */
+    readonly to: CanonicalChain;
+    /** The gas the answer's handler is given there (`replyGas`). */
+    readonly gas: bigint;
+    /** At most how many bytes the answer is, which its fee is quoted for. */
+    readonly bytes: number;
+  };
 }
 
 /** One transaction on another chain, as a step sends it. */
@@ -81,6 +93,8 @@ export interface DestinationStep {
     readonly data: Hex;
     readonly value: string;
     readonly chainId: number;
+    /** On a funding step, the answers' fees it includes: quoted, for answers up to `bytes`. */
+    readonly quoted?: { readonly answers: number; readonly fee: string; readonly bytes: number };
   };
   readonly send: () => Promise<unknown>;
 }
@@ -194,6 +208,146 @@ function receiverName(bridges: ReadonlySet<RemoteBridge>): string {
   return `the ${joined} receiver${names.length === 1 ? "" : "s"}`;
 }
 
+/** What a round trip's answer value is at most when its body declares no static result: the most a
+ *  rejection carries (what the body reverted with, at most its first 256 bytes), and the bound
+ *  stated for a result of no declared size. */
+export const ANSWER_VALUE_BYTES = 256;
+
+const words = (bytes: number): number => Math.ceil(bytes / 32) * 32;
+
+/** The bytes a body's declared result is, when it is one word; else undefined. */
+function resultBytes(returns: string | undefined): number | undefined {
+  if (returns === "void") return 0;
+  return returns !== undefined &&
+    /^(U?[Ii]nt\d*|Address|bool|boolean|number|bigint|bytes32)$/.test(returns)
+    ? 32
+    : undefined;
+}
+
+/** A scope's field, where the scope is an object. */
+const field = (scope: CompiledBody["scope"], name: string): CompiledBody["scope"] | undefined =>
+  typeof scope === "object" && !Array.isArray(scope) ? scope[name] : undefined;
+
+/**
+ * What the remote messages a program sends need, from its compile's continuations: each program
+ * `@sauce/remote` compiled for another chain names in its scope the bridge (`{ bridge }`), and a
+ * round trip's also the chain and gas of its answer (`{ bridge, answer, replyGas }`). An answer is
+ * `Message.settle`'s encoding — six words, then the continuation it carries back and the value — so
+ * it is at most the largest continuation compiled for that chain and the body's result: one word
+ * when the body declares a one-word result, `ANSWER_VALUE_BYTES` when it does not, and never less
+ * than what a rejection carries.
+ */
+export function remoteNeeds(continuations: readonly CompiledBody[]): DestinationNeed[] {
+  const needs: DestinationNeed[] = [];
+  for (const body of continuations) {
+    const remote = field(body.scope, "remote");
+    const bridge = field(remote ?? "", "bridge");
+    if (typeof bridge !== "string" || !Object.hasOwn(RECEIVERS, bridge)) continue;
+    const answer = field(remote!, "answer");
+    const to = typeof answer === "bigint" ? chainById(Number(answer)) : undefined;
+    if (to === undefined) {
+      needs.push({ chain: body.destination, bridge: bridge as RemoteBridge });
+      continue;
+    }
+    const result = continuations.find(
+      (inner) => inner.path.includes(body.id) && inner.scope === "body",
+    );
+    const value = Math.max(resultBytes(result?.returns) ?? ANSWER_VALUE_BYTES, ANSWER_VALUE_BYTES);
+    // The continuations `@sauce/async` compiled for the answer's chain, its arguments a word each.
+    const back = Math.max(
+      0,
+      ...continuations
+        .filter(
+          (other) => other.destination.id === to.id && field(other.scope, "remote") === undefined,
+        )
+        .map((other) => other.bytecode.length + 32 * other.captures.length),
+    );
+    const gas = field(remote!, "replyGas");
+    needs.push({
+      chain: body.destination,
+      bridge: bridge as RemoteBridge,
+      answer: {
+        to,
+        gas: typeof gas === "bigint" ? gas : 500_000n,
+        bytes: 6 * 32 + 32 + words(back) + 32 + words(value),
+      },
+    });
+  }
+
+  return needs;
+}
+
+const MAILBOX = parseAbi([
+  "function quoteDispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody, bytes metadata) view returns (uint256)",
+]);
+const ENDPOINT = parseAbi([
+  "function quote((uint32 dstEid, bytes32 receiver, bytes message, bytes options, bool payInLzToken) params, address sender) view returns ((uint256 nativeFee, uint256 lzTokenFee))",
+]);
+
+/** Hyperlane's standard hook metadata, as `@sauce/remote` writes it: variant 1, the value, the
+ *  gas, and who is refunded. */
+const hookMetadata = (value: bigint, gas: bigint, refund: Address): Hex =>
+  concat([
+    "0x0001",
+    encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [value, gas]),
+    refund,
+  ]);
+
+/**
+ * What the Pot on `from` pays `bridge` to send an answer of `bytes` bytes to itself on `to`, given
+ * `gas` there, quoted from the bridge on `from` as `@sauce/remote` quotes it when it sends: a
+ * Polymer answer is a log and costs nothing.
+ */
+export async function answerFee(
+  client: PublicClient,
+  bridge: RemoteBridge,
+  from: RemoteLink,
+  to: RemoteLink,
+  pot: Address,
+  gas: bigint,
+  bytes: number,
+): Promise<bigint> {
+  const message = bytesToHex(new Uint8Array(bytes));
+  const recipient = pad(pot);
+  if (bridge === "hyperlane") {
+    return client.readContract({
+      address: from.hyperlane!.mailbox,
+      abi: MAILBOX,
+      functionName: "quoteDispatch",
+      args: [to.hyperlane!.domain, recipient, message, hookMetadata(0n, gas, pot)],
+    });
+  }
+  if (bridge === "metalayer") {
+    return client.readContract({
+      address: from.metalayer!.router,
+      abi: MAILBOX,
+      functionName: "quoteDispatch",
+      args: [to.metalayer!.domain, recipient, message, hookMetadata(10n ** 36n, gas, pot)],
+    });
+  }
+  if (bridge === "layerzero") {
+    const { nativeFee } = await client.readContract({
+      address: from.layerzero!.endpoint,
+      abi: ENDPOINT,
+      functionName: "quote",
+      args: [
+        {
+          dstEid: to.layerzero!.eid,
+          receiver: recipient,
+          message,
+          options: concat(["0x000301001101", toHex(gas, { size: 16 })]),
+          payInLzToken: false,
+        },
+        pot,
+      ],
+    });
+
+    return nativeFee;
+  }
+
+  return 0n;
+}
+
 /**
  * The steps that make the Pot of `options.owner` and `options.salt` ready, on every chain in
  * `needs`, for the remote messages a program sends there: on each chain, the Pot deployed when it
@@ -207,16 +361,16 @@ export async function destinationSetup(
 ): Promise<DestinationStep[]> {
   const byChain = new Map<
     number,
-    { chain: CanonicalChain; bridges: Set<RemoteBridge>; messages: number }
+    { chain: CanonicalChain; bridges: Set<RemoteBridge>; needs: DestinationNeed[] }
   >();
   for (const need of needs) {
     const entry = byChain.get(need.chain.id) ?? {
       chain: need.chain,
       bridges: new Set<RemoteBridge>(),
-      messages: 0,
+      needs: [],
     };
     entry.bridges.add(need.bridge);
-    entry.messages += 1;
+    entry.needs.push(need);
     byChain.set(need.chain.id, entry);
   }
 
@@ -224,7 +378,8 @@ export async function destinationSetup(
   const engine = getAddress(v12EngineAddress());
   const kitchen = getAddress(v12KitchenAddress());
   const steps: DestinationStep[] = [];
-  for (const { chain, bridges, messages } of byChain.values()) {
+  for (const { chain, bridges, needs: here } of byChain.values()) {
+    const messages = here.length;
     const there = await options.reach(chain);
     const from = there.from ?? options.owner;
     const reason = `Your Pot on ${chain.name} can't receive this message yet`;
@@ -237,13 +392,21 @@ export async function destinationSetup(
       tx: DestinationTx,
       estimate: string,
       byHand?: string,
+      quoted?: DestinationStep["planned"]["quoted"],
     ): DestinationStep => ({
       action,
       reason,
       offer,
       estimate,
       ...(byHand === undefined ? {} : { byHand }),
-      planned: { what, to: tx.to, data: tx.data, value: tx.value.toString(), chainId: chain.id },
+      planned: {
+        what,
+        to: tx.to,
+        data: tx.data,
+        value: tx.value.toString(),
+        chainId: chain.id,
+        ...(quoted === undefined ? {} : { quoted }),
+      },
       send: () => {
         if (there.send === undefined) {
           throw new Error(`${action}: the command has no signer for ${chain.name}`);
@@ -310,22 +473,54 @@ export async function destinationSetup(
       );
     }
 
-    // The Pot pays the Kitchen's fee for each delivery its receiver runs: exactly that, less what
-    // it holds, and nothing kept back.
-    const needed = fee * BigInt(messages);
+    // The Pot pays the Kitchen's fee for each delivery its receiver runs, and a round trip's
+    // bridge for the answer it sends back, quoted for the answer's most bytes: that, less what it
+    // holds. What is left over stays in the Pot, which is the owner's.
+    const link = remoteLink(chain);
+    const answers = here.filter((need) => need.answer !== undefined);
+    let answered = 0n;
+    for (const need of answers) {
+      answered += await answerFee(
+        there.client,
+        need.bridge,
+        link,
+        remoteLink(need.answer!.to),
+        pot,
+        need.answer!.gas,
+        need.answer!.bytes,
+      );
+    }
+    const needed = fee * BigInt(messages) + answered;
     const balance = await there.client.getBalance({ address: pot });
     if (balance < needed) {
       const tx = { to: pot, data: "0x" as Hex, value: needed - balance };
-      const deliveries = `${messages} ${messages === 1 ? "delivery" : "deliveries"} × the Kitchen fee`;
-      const held =
-        balance === 0n ? "" : `, less the ${formatEther(balance)} ${nativeSymbol(chain)} it holds`;
+      const symbol = nativeSymbol(chain);
+      const bytes = Math.max(0, ...answers.map((need) => need.answer!.bytes));
+      const bridgeNames = [...new Set(answers.map((need) => BRIDGE_NAMES[need.bridge]))].join(
+        " and ",
+      );
+      const why = [
+        `${messages} ${messages === 1 ? "delivery" : "deliveries"} × the Kitchen fee`,
+        ...(answers.length === 0
+          ? []
+          : [
+              answers.length === 1
+                ? ` + the answer's ${bridgeNames} fee, quoted for up to ${bytes} bytes`
+                : ` + ${answers.length} answers' ${bridgeNames} fees, quoted for up to ${bytes} bytes each`,
+            ]),
+        balance === 0n ? "" : `, less the ${formatEther(balance)} ${symbol} it holds`,
+      ].join("");
       steps.push(
         step(
           "fund",
-          `fund your Pot on ${chain.name} with ${formatEther(tx.value)} ${nativeSymbol(chain)} (${deliveries}${held})`,
+          `fund your Pot on ${chain.name} with ${formatEther(tx.value)} ${symbol} (${why})`,
           "Fund it now",
           tx,
           await price(tx, "gas not estimated"),
+          undefined,
+          answers.length === 0
+            ? undefined
+            : { answers: answers.length, fee: answered.toString(), bytes },
         ),
       );
     }

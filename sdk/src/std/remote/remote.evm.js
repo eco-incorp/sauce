@@ -245,7 +245,7 @@ export class Remote {
       this._here,
       this._there,
       via,
-      Message.run(Reply.compiled(this._body, this._there.chainId), hex``),
+      Message.run(Reply.compiled(this._body, this._there.chainId, { bridge: via }), hex``),
       this._gas(),
     );
   }
@@ -283,8 +283,10 @@ export class Remote {
       chain: here.chainId,
       deadline: this._deadline,
       send: (continuation) => {
+        // Its scope tells the SDK the message: the bridge, and the chain and gas of the answer.
         const reply = program(remote._reply(via, continuation.key, continuation.stored), {
           continuation: there.chainId,
+          remote: { bridge: via, answer: here.chainId, replyGas: remote._replyGas() },
         });
         Bridge.send(
           here,
@@ -317,9 +319,13 @@ export class Remote {
       evm
         .delegate(
           Reply.engine(),
-          Reply.compiled(() => {
-            Reply.keep(run(Reply.compiled(body, there.chainId), hex``));
-          }, there.chainId),
+          Reply.compiled(
+            () => {
+              Reply.keep(run(Reply.compiled(body, there.chainId, "body"), hex``));
+            },
+            there.chainId,
+            "keep",
+          ),
         )
         .catch((e) => {
           ok = 0;
@@ -350,9 +356,11 @@ class Message {
 
 // The way back from the destination, compiled into the program the destination runs.
 class Reply {
-  // `body` as a program for `chainId`, with its arguments.
-  static compiled(body, chainId) {
-    const compiled = program(body, { continuation: chainId });
+  // `body` as a program for `chainId`, with its arguments. `remote` tells the SDK, which reads it
+  // from the program's scope, what the program is to a message: a one-way message's body, by the
+  // bridge it travels over, or a round trip's body.
+  static compiled(body, chainId, remote) {
+    const compiled = program(body, { continuation: chainId, remote });
     return compiled.code.concat(compiled.args);
   }
 
