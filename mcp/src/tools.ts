@@ -791,7 +791,14 @@ async function cookTransaction(
     );
   }
 
-  return txCommand({ ...cook, ...(rpcUrl === undefined ? {} : { rpcUrl }) }, program.files);
+  return txCommand(
+    {
+      ...cook,
+      ...(rpcUrl === undefined ? {} : { rpcUrl }),
+      endpointOf: (other) => reach.endpoint(other, undefined),
+    },
+    program.files,
+  );
 }
 
 /** `sauce compile --json`: the command's own report, its defines among it. */
@@ -1846,18 +1853,27 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "an EVM chain it returns { chainId, to: the Pot, data: Pot.cook(engine, program ++ " +
         "arguments), value }; only the owner may send it, and value (wei) is the Kitchen's fee " +
         "plus any native the program spends — give it, or an endpoint to read the fee from, " +
-        "which also says whether the Pot is deployed. On Solana it returns { chain, via, " +
-        "feePayer, pot, fee, maxExecutionFee, transaction }: the Kitchen cook (or, via engine, " +
-        "the engine's own paid cook, with no Pot) as a base64 transaction for the owner to sign, " +
-        "which needs an endpoint (its blockhash and the fee). `notes` say what must be true for " +
-        `it to land: a deployed, funded Pot (sauce_pot deploys it). \`sourceSha256\` is the ` +
-        `sha256 of the program's text. ${UNSIGNED} ${SUPPORTED_ONLY}`,
+        "which also says whether the Pot is deployed. When the endpoint shows the Pot has no " +
+        "code yet, it returns { chainId, pot, transactions } instead: first Kitchen.deployPot " +
+        "(marked deploysPot; any account may send it), then the cook — send them in order, or " +
+        "pass the whole result to a wallet that sends a plan. On Solana it returns { chain, " +
+        "via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction }: the Kitchen cook " +
+        "(or, via engine, the engine's own paid cook, with no Pot) as a base64 transaction for " +
+        "the owner to sign, which needs an endpoint (its blockhash and the fee); a Pot not " +
+        "created yet is created by the same transaction (createsPot). `notes` say what must be " +
+        "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
+        `${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: { ...PROGRAM, ...sourceInputs(local), ...COOK },
       output: refusable({
         chainId: z.number(),
         to: z.string(),
         data: z.string(),
         value: z.string(),
+        pot: z.string(),
+        transactions: z.array(
+          z.looseObject({ what: z.string(), to: z.string(), data: z.string(), value: z.string() }),
+        ),
+        createsPot: z.boolean(),
         transaction: z.string(),
         sourceSha256: z.string(),
       }),
@@ -1881,12 +1897,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const rpcUrl = await reach.endpoint(chain, args.rpcUrl);
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
+      // The Pot: the cook's `to`, or, where the plan deploys it first, its `pot`.
+      const pot = (output.json.pot ?? output.json.to) as Address;
       const owner =
         args.owner !== undefined
           ? parseAddress("owner", args.owner)
           : client === undefined
             ? undefined
-            : (await potState(client, output.json.to as Address)).owner;
+            : (await potState(client, pot)).owner;
 
       return {
         json: {
