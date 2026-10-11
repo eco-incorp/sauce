@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import {
   bytesToHex,
   concat,
+  decodeAbiParameters,
   decodeEventLog,
   encodeAbiParameters,
   encodeFunctionData,
@@ -35,6 +36,7 @@ import {
   keccak256,
   pad,
   parseAbi,
+  parseAbiParameters,
   parseEther,
   toHex,
   type Address,
@@ -45,7 +47,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createWalletClient, http } from "viem";
 
 import { v12EngineAddress } from "../../../src/deployments/v12-addresses.js";
-import { encodeEntryArguments } from "../../../src/routes/entry.js";
+import { encodeEntryArguments, type EntryValue } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import { DEPLOYER, FEE, RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../cli-anvil.js";
@@ -121,12 +123,67 @@ let pot: Address;
 const read = async (local: LocalChain, name: string): Promise<bigint> =>
   BigInt((await local.publicClient.getStorageAt({ address: pot, slot: slot(name) })) ?? "0x0");
 
+/** The word at `at` in the Pot's storage on `local`. */
+const word = async (local: LocalChain, at: Hex | bigint): Promise<bigint> =>
+  BigInt(
+    (await local.publicClient.getStorageAt({
+      address: pot,
+      slot: typeof at === "bigint" ? toHex(at, { size: 32 }) : at,
+    })) ?? "0x0",
+  );
+
+/** The slot of `key` in the mapping a ported example keeps at keccak256(`name`), as Solidity lays
+ *  out a mapping: keccak256(abi.encode(key, base)). */
+const entry = (key: bigint | Hex, name: string): Hex =>
+  keccak256(
+    encodeAbiParameters(parseAbiParameters("bytes32, bytes32"), [
+      typeof key === "bigint" ? toHex(key, { size: 32 }) : key,
+      keccak256(toHex(name)),
+    ]),
+  );
+
+/** The bytes a ported example keeps at `at`: their length there, and their words from
+ *  keccak256(at) on. */
+async function kept(local: LocalChain, at: Hex): Promise<Hex> {
+  const length = await word(local, at);
+  const first = BigInt(keccak256(at));
+  const words: Hex[] = [];
+  for (let i = 0n; i * 32n < length; i++)
+    words.push(toHex(await word(local, first + i), { size: 32 }));
+
+  return `0x${concat(["0x", ...words]).slice(2, 2 + Number(length) * 2)}`;
+}
+
+/** The one log the Pot emitted in `receipt` under `signature`. */
+function potLog(
+  receipt: TransactionReceipt,
+  signature: string,
+): TransactionReceipt["logs"][number] {
+  const topic = keccak256(toHex(signature));
+  const found = receipt.logs.filter(
+    (log) => log.address.toLowerCase() === pot.toLowerCase() && log.topics[0] === topic,
+  );
+  expect(found).toHaveLength(1);
+
+  return found[0]!;
+}
+
+/** A skill's example program, as the file is. */
+const example = (name: string): string =>
+  readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      `../../../../skills/sauce-remote/examples/${name}`,
+    ),
+    "utf8",
+  );
+
 /** Cooks `source`, compiled for `local`'s chain with `args` for its `main`, on the Pot, as its
  *  owner, paying the Kitchen's fee; answers the receipt. */
 async function cook(
   local: LocalChain,
   source: string,
-  args: readonly (bigint | Hex)[] = [],
+  args: readonly EntryValue[] = [],
 ): Promise<TransactionReceipt> {
   const program = compileSauceProgram(local.chain.slug, source);
   const input = bytesToHex(concat([program.bytecode, encodeEntryArguments(program, args)]));
@@ -367,16 +424,9 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
   itSettling(
     "runs the skill's example: pays on Base, and records back on Ethereum what is left there",
     async () => {
-      const example = readFileSync(
-        join(
-          dirname(fileURLToPath(import.meta.url)),
-          "../../../../skills/sauce-remote/examples/pay-on-base.sauce.ts",
-        ),
-        "utf8",
-      );
       const recipient = "0x000000000000000000000000000000000000beef" as Address;
       const amount = parseEther("0.001");
-      const out = await cook(ethereum, example, [recipient, amount]);
+      const out = await cook(ethereum, example("pay-on-base.sauce.ts"), [recipient, amount]);
       const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
       expect(await base.publicClient.getBalance({ address: recipient })).toBe(amount);
       const left = await base.publicClient.getBalance({ address: pot });
@@ -393,6 +443,109 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     },
     120_000,
   );
+
+  // The bridges' own examples, ported: each skill example runs as its usage line runs it, from
+  // Ethereum, and leaves on both chains what the original contracts would.
+
+  it("runs Hyperlane's Hello World, ported: counts and logs the send here and the receipt on Base", async () => {
+    const message = "Hello, Base";
+    const out = await cook(ethereum, example("hello-world.sauce.ts"), [message]);
+    const sent = potLog(out, "SentHelloWorld(uint32,uint32,string)");
+    expect(sent.topics.slice(1)).toEqual([toHex(1, { size: 32 }), toHex(8453, { size: 32 })]);
+    expect(decodeAbiParameters(parseAbiParameters("string"), sent.data)).toEqual([message]);
+    expect(await word(ethereum, keccak256(toHex("helloworld.sent")))).toBe(1n);
+    expect(await word(ethereum, entry(8453n, "helloworld.sentTo"))).toBe(1n);
+
+    const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
+    const delivered = await base.publicClient.getTransactionReceipt({ hash: there! });
+    const received = potLog(delivered, "ReceivedHelloWorld(uint32,uint32,bytes32,string)");
+    expect(received.topics.slice(1)).toEqual([toHex(1, { size: 32 }), toHex(8453, { size: 32 })]);
+    expect(decodeAbiParameters(parseAbiParameters("bytes32, string"), received.data)).toEqual([
+      pad(pot).toLowerCase(),
+      message,
+    ]);
+    expect(await word(base, keccak256(toHex("helloworld.received")))).toBe(1n);
+    expect(await word(base, entry(1n, "helloworld.receivedFrom"))).toBe(1n);
+    expect(await word(base, keccak256(toHex("helloworld.sent")))).toBe(0n);
+  }, 120_000);
+
+  it("runs LayerZero's OApp example, ported: Base keeps the last string it received", async () => {
+    const lastMessage = keccak256(toHex("myoapp.lastMessage"));
+    for (const text of [
+      "Hello from Ethereum",
+      "A string longer than one word, which Base keeps a word to a slot, three of them",
+    ]) {
+      const out = await cook(ethereum, example("my-oapp.sauce.ts"), [text]);
+      await relayLayerZero(out, ethereumBridges, base, baseBridges);
+      expect(await kept(base, lastMessage)).toBe(toHex(text));
+    }
+    expect(await word(ethereum, lastMessage)).toBe(0n);
+  }, 120_000);
+
+  itSettling(
+    "runs Metalayer's block-height reader, ported: Base's block number, logged back on Ethereum",
+    async () => {
+      const out = await cook(ethereum, example("block-height.sauce.ts"));
+      const [there] = await relayMetalayer(out, ethereumBridges, base, baseBridges);
+      const delivered = await base.publicClient.getTransactionReceipt({ hash: there! });
+      const [back] = await relayMetalayer(delivered, baseBridges, ethereum, ethereumBridges);
+      const answered = await ethereum.publicClient.getTransactionReceipt({ hash: back! });
+      const logged = potLog(answered, "BlockHeightReceived(uint32,address,uint256)");
+      expect(
+        decodeAbiParameters(parseAbiParameters("uint32, address, uint256"), logged.data),
+      ).toEqual([8453, pot, delivered.blockNumber]);
+    },
+    120_000,
+  );
+
+  it("runs Polymer's State Sync, ported: Base takes each version once, and never an older one", async () => {
+    const key = "greeting";
+    const hashedKey = keccak256(concat([pot, toHex(key)]));
+    const write = async (value: Hex) => {
+      const out = await cook(ethereum, example("state-sync.sauce.ts"), [key, value]);
+      const index = out.logs.findIndex(
+        (log) =>
+          log.address.toLowerCase() === pot.toLowerCase() && log.topics[0] === REMOTE_MESSAGE_TOPIC,
+      );
+      const proof = await polymerProof(ethereum, out, index, base, baseBridges);
+
+      return {
+        out,
+        deliver: encodeFunctionData({ abi: potAbi, functionName: "deliver", args: [proof] }),
+      };
+    };
+    const stranger = createWalletClient({ account: STRANGER, transport: http(base.rpcUrl) });
+
+    const first = await write("0x68656c6c6f");
+    const set = potLog(first.out, "ValueSet(address,string,bytes,uint256,bytes32,uint256)");
+    expect(set.topics.slice(1)).toEqual([pad(pot).toLowerCase(), hashedKey]);
+    expect(
+      decodeAbiParameters(parseAbiParameters("string, bytes, uint256, uint256"), set.data),
+    ).toEqual([key, "0x68656c6c6f", 0n, 1n]);
+    expect(await kept(ethereum, entry(hashedKey, "statesync.store"))).toBe("0x68656c6c6f");
+    expect(await word(ethereum, entry(hashedKey, "statesync.keyVersions"))).toBe(1n);
+
+    const delivered = await base.publicClient.waitForTransactionReceipt({
+      hash: await base.send(stranger, pot, first.deliver),
+    });
+    const updated = potLog(delivered, "ValueUpdated(bytes32,bytes,uint256)");
+    expect(updated.topics.slice(1)).toEqual([hashedKey]);
+    expect(decodeAbiParameters(parseAbiParameters("bytes, uint256"), updated.data)).toEqual([
+      "0x68656c6c6f",
+      1n,
+    ]);
+    expect(await kept(base, entry(hashedKey, "statesync.store"))).toBe("0x68656c6c6f");
+
+    // Two more versions, their proofs submitted out of order: the newer is taken, the older refused.
+    const second = await write(toHex("hello again"));
+    const third = await write(toHex("hello a third time"));
+    await base.send(stranger, pot, third.deliver);
+    expect(await reverts(base, STRANGER.address, pot, second.deliver)).toContain(
+      "Version must be newer than current version",
+    );
+    expect(await kept(base, entry(hashedKey, "statesync.store"))).toBe(toHex("hello a third time"));
+    expect(await word(base, entry(hashedKey, "statesync.keyVersions"))).toBe(3n);
+  }, 120_000);
 
   itSettling(
     "runs a .then with no parameter back on Ethereum, once the body ran on Base",
