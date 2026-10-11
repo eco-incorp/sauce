@@ -213,7 +213,7 @@ export interface FundingGiven {
   readonly send: boolean;
   /** Who signs the pulls; absent, a simulation credits the Pot instead. */
   readonly account?: PrivateKeyAccount;
-  /** Who approves the transactions a run sends before its cook (`--auto-approve`, or a person). */
+  /** Who approves the transactions a run sends before its cook (`--yes`, or a person). */
   readonly approver: Approver;
 }
 
