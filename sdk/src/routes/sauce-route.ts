@@ -649,6 +649,7 @@ function compileForChain(
         destination: on,
         bytecode: report.bytecode,
         captures: report.captures,
+        scope,
         selector,
         readOnly: scopeFlag(scope.readOnly),
       },
