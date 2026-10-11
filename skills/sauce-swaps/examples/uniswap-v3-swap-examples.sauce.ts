@@ -43,6 +43,7 @@ function path(a: Address, feeAB: Uint256, b: Address, feeBC: Uint256, c: Address
 }
 
 function swapExactInputSingle(amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, amountIn);
   return UniswapV3.SwapRouter.exactInputSingle({
     tokenIn: Maker.Dai,
@@ -57,6 +58,7 @@ function swapExactInputSingle(amountIn: Uint256, minOut: Uint256, recipient: Add
 }
 
 function swapExactOutputSingle(amountOut: Uint256, maxIn: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, maxIn);
   const amountIn = UniswapV3.SwapRouter.exactOutputSingle({
     tokenIn: Maker.Dai,
@@ -77,6 +79,7 @@ function swapExactOutputSingle(amountOut: Uint256, maxIn: Uint256, recipient: Ad
 }
 
 function swapExactInputMultihop(amountIn: Uint256, minOut: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, amountIn);
   return UniswapV3.SwapRouter.exactInput({
     path: path(Maker.Dai, STABLE_FEE, USDC, POOL_FEE, WETH),
@@ -88,6 +91,7 @@ function swapExactInputMultihop(amountIn: Uint256, minOut: Uint256, recipient: A
 }
 
 function swapExactOutputMultihop(amountOut: Uint256, maxIn: Uint256, recipient: Address): Uint256 {
+  require(UniswapV3.SwapRouter && Maker.Dai);
   approve(Maker.Dai, UniswapV3.SwapRouter, maxIn);
   // An exact-output path runs backwards, from the token bought to the token paid.
   const amountIn = UniswapV3.SwapRouter.exactOutput({
@@ -110,7 +114,6 @@ function main(
   limit: Uint256,
   recipient: Address,
 ): Uint256 {
-  require(UniswapV3.SwapRouter);
   require(Maker.Dai);
   const spendable = balanceOf(Maker.Dai, ctx.self());
   require(spendable >= (exactOutput ? limit : amount), "the DAI to spend is not in the Pot");

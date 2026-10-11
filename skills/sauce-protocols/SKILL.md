@@ -117,6 +117,23 @@ lacks it.
 - [ ] Its transaction goes to a supported chain (Ethereum, Base or Solana); a protocol on a preview
       chain is compiled and simulated, and the chain requested.
 
+## Porting a protocol's own example
+
+A protocol's Solidity example is a contract its user deploys, funds and calls; a Sauce program is
+that contract's functions, cooked on the user's Pot with nothing deployed. The Pot plays the
+contract's part: it holds the tokens, receives what the protocol pays its caller, and keeps what
+the protocol mints it, a Uniswap V3 position's NFT included. A Pot is cooked by its owner alone, so
+the records and checks a contract keeps of who may call it fall away. Each Solidity function becomes
+a function of the program and `main` picks one; `msg.sender`'s tokens are already in the Pot, and
+an address the example hardcodes is the registry's name for it. Each ported example's header names
+the file it ports, pinned to a commit, and says what changed and why.
+
+[examples/uniswap-v3-liquidity-examples.sauce.ts](examples/uniswap-v3-liquidity-examples.sauce.ts)
+ports Uniswap's `LiquidityExamples`: a full-range DAI/USDC position minted to the Pot, its fees
+collected, half its liquidity taken out, liquidity added and its NFT handed back, with the
+position reads the registry's ABI leaves out in
+[examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
+
 ## Example
 
 [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has it,

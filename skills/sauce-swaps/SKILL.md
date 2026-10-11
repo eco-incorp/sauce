@@ -207,6 +207,22 @@ ports the four swaps of Uniswap's own `SwapExamples` contract to `UniswapV3.Swap
 input and exact output, in one pool and along a path through two, each the function it was in
 Solidity, with the minimum (or maximum) a `main` input where the original passed none.
 
+## Flash swaps
+
+A flash loan's lender pays first and then calls the borrower back to be repaid
+(`uniswapV3FlashCallback`, Aave's `executeOperation`); a Pot cannot be called back by a program,
+since its fallback runs its Router. The Router's own `flash(callback, swap)` is the flash a program
+has: it runs one swap whose pool sends the output first (the calldata of `swapV3`, `swapV4`,
+`swapMaverickV2`, `swapInfinityCL` or `swapInfinityBin`), runs `callback` as a program inside the
+pool's callback, and pays the pool after it, out of what the Pot then holds. A callback that leaves
+the Pot short fails the payment, and the whole transaction reverts. `program(closure, chainId)`
+compiles the callback from a closure that reads the program's own values, and its `code` with its
+`args` appended is the callback's bytes; the program declares `flash` in an ABI beside it, since
+`@sauce/router` has no function for it, and calls it on `ctx.self()`.
+[examples/uniswap-v3-pair-flash.sauce.ts](examples/uniswap-v3-pair-flash.sauce.ts) ports Uniswap's
+`PairFlash` this way, with [examples/SauceRouterFlash.json](examples/SauceRouterFlash.json): the
+output of a swap in one pool, sold back in another before the first is paid, the profit to a payer.
+
 ## The guard (required on every leg)
 
 The library checks `minOut`; what is left is the input a price limit left unspent:

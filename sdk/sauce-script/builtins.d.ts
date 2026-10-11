@@ -171,6 +171,16 @@ declare function revert(data?: SauceData): never;
 declare function log(data: SauceData, ...topics: SauceInt[]): void;
 /** Runs another program, with arguments. */
 declare function eval(program: SauceData, ...args: SauceInt[]): SauceBytes;
+
+/**
+ * A closure compiled as a program of its own, for the chain `scope` names (its id, `chainId` for the
+ * program's own, or the chain itself): its `code`, and the `args` it reads of the program around
+ * it, which its caller appends to the code.
+ */
+declare function program(
+  closure: (...args: never[]) => unknown,
+  scope: SauceInt | object,
+): { readonly code: SauceBytes; readonly args: SauceBytes };
 /** Bytes from hex digits: hex`a9059cbb`. */
 declare function hex(strings: TemplateStringsArray): SauceBytes;
 

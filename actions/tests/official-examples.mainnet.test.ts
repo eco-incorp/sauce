@@ -34,6 +34,15 @@ function named(name: string): Address {
 const QUOTER: Address = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
 
 const abi = {
+  erc20: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
+  swapRouter: parseAbi([
+    "function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) payable returns (uint256 amountOut)",
+  ]),
+  positionManager: parseAbi([
+    "function positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)",
+    "function ownerOf(uint256 tokenId) view returns (address)",
+    "function collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max)) payable returns (uint256 amount0, uint256 amount1)",
+  ]),
   quoter: parseAbi([
     "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
     "function quoteExactOutputSingle((address tokenIn, address tokenOut, uint256 amount, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
@@ -244,6 +253,228 @@ describe(
         const more = await simulate(FILE, ["false", "false", String(HELD + 1n), "0", recipient]);
         assert.equal(more.ok, false);
         assert.match(String(more.reason), /the DAI to spend is not in the Pot/);
+      });
+    });
+
+    describe("Uniswap V3's PairFlash, as a flash swap through the Router", () => {
+      const FILE = example("sauce-swaps", "uniswap-v3-pair-flash");
+      const USDC = named("USDC");
+      const WETH = named("WETH");
+      const ROUTER = named("UniswapV3_SwapRouter");
+      const WETH_BALANCE = { slot: 3n };
+      const ONE_WETH = 10n ** 18n;
+
+      const quoteIn = async (
+        tokenIn: Address,
+        tokenOut: Address,
+        amountIn: bigint,
+        fee: number,
+      ) => {
+        const { result } = await env.publicClient.simulateContract({
+          address: QUOTER,
+          abi: abi.quoter,
+          functionName: "quoteExactInputSingle",
+          args: [{ tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96: 0n }],
+        });
+
+        return result[0];
+      };
+
+      /** Someone else sells `amount` WETH into the 0.3% pool, so WETH is cheaper there than at 0.05%. */
+      async function dumpWeth(amount: bigint): Promise<void> {
+        const whale = env.account.address;
+        await setBalance(env, WETH, WETH_BALANCE, whale, amount);
+        for (const request of [
+          { address: WETH, abi: abi.erc20, functionName: "approve", args: [ROUTER, amount] },
+          {
+            address: ROUTER,
+            abi: abi.swapRouter,
+            functionName: "exactInputSingle",
+            args: [
+              {
+                tokenIn: WETH,
+                tokenOut: USDC,
+                fee: 3000,
+                recipient: whale,
+                deadline: 2n ** 40n,
+                amountIn: amount,
+                amountOutMinimum: 0n,
+                sqrtPriceLimitX96: 0n,
+              },
+            ],
+          },
+        ] as const) {
+          const hash = await env.walletClient.writeContract(request as never);
+          assert.equal(
+            (await env.publicClient.waitForTransactionReceipt({ hash })).status,
+            "success",
+          );
+        }
+      }
+
+      it("borrows USDC from the 0.05% pool for 1 WETH, sells it back at 0.3%, repays and pays the profit", async () => {
+        const [payer] = PEOPLE;
+        await dumpWeth(1000n * ONE_WETH);
+        // What the flash swap sends first, and what selling it back at 0.3% returns: both pools'
+        // own quotes, the borrow pool's before the flash swap moves it.
+        const borrowed = await quoteIn(WETH, USDC, ONE_WETH, 500);
+        const back = await quoteIn(USDC, WETH, borrowed, 3000);
+        assert.ok(back > ONE_WETH, "the trade above makes the cycle pay");
+        const held = {
+          usdc: await balanceOf(env, USDC, env.pot),
+          weth: await balanceOf(env, WETH, env.pot),
+        };
+
+        const returned = await cook(FILE, [WETH, USDC, "500", String(ONE_WETH), "3000", payer]);
+        assert.equal(BigInt(returned as string), back - ONE_WETH);
+        assert.equal(await balanceOf(env, WETH, payer), back - ONE_WETH);
+        // The Pot started with nothing of either and ends with nothing: the loan paid for itself.
+        assert.deepEqual(
+          {
+            usdc: await balanceOf(env, USDC, env.pot),
+            weth: await balanceOf(env, WETH, env.pot),
+          },
+          held,
+        );
+      });
+
+      it("reverts, moving nothing, when selling back does not repay the borrow pool", async () => {
+        const [payer] = PEOPLE;
+        const rehearsal = await simulate(FILE, [
+          WETH,
+          USDC,
+          "500",
+          String(ONE_WETH),
+          "3000",
+          payer,
+        ]);
+        assert.equal(rehearsal.ok, false, "with no trade before it, the cycle loses both fees");
+      });
+    });
+    describe("Uniswap V3's LiquidityExamples, the Pot keeping the position", () => {
+      const FILE = example("sauce-protocols", "uniswap-v3-liquidity-examples");
+      const DAI = named("Maker_Dai");
+      const USDC = named("USDC");
+      const MANAGER = named("UniswapV3_NonfungiblePositionManager");
+      const ROUTER = named("UniswapV3_SwapRouter");
+      const DAI_BALANCE = { slot: 2n };
+      const USDC_BALANCE = { slot: 9n };
+      const DAI_UNIT = 10n ** 18n;
+      const USDC_UNIT = 10n ** 6n;
+
+      interface Moved {
+        tokenId: string;
+        liquidity: string;
+        amount0: string;
+        amount1: string;
+      }
+      const step = async (args: readonly (string | bigint)[]): Promise<Moved> =>
+        (await cook(FILE, args.map(String))) as Moved;
+      const position = (tokenId: bigint) =>
+        env.publicClient.readContract({
+          address: MANAGER,
+          abi: abi.positionManager,
+          functionName: "positions",
+          args: [tokenId],
+        });
+      const ownerOf = (tokenId: bigint) =>
+        env.publicClient.readContract({
+          address: MANAGER,
+          abi: abi.positionManager,
+          functionName: "ownerOf",
+          args: [tokenId],
+        });
+
+      /** Someone else trades DAI and USDC both ways in the 0.3% pool: fees for the position. */
+      async function trade(): Promise<void> {
+        const trader = env.account.address;
+        await setBalance(env, DAI, DAI_BALANCE, trader, 100n * DAI_UNIT);
+        await setBalance(env, USDC, USDC_BALANCE, trader, 100n * USDC_UNIT);
+        for (const [tokenIn, tokenOut, amountIn] of [
+          [DAI, USDC, 100n * DAI_UNIT],
+          [USDC, DAI, 100n * USDC_UNIT],
+        ] as const) {
+          for (const request of [
+            { address: tokenIn, abi: abi.erc20, functionName: "approve", args: [ROUTER, amountIn] },
+            {
+              address: ROUTER,
+              abi: abi.swapRouter,
+              functionName: "exactInputSingle",
+              args: [
+                {
+                  tokenIn,
+                  tokenOut,
+                  fee: 3000,
+                  recipient: trader,
+                  deadline: 2n ** 40n,
+                  amountIn,
+                  amountOutMinimum: 0n,
+                  sqrtPriceLimitX96: 0n,
+                },
+              ],
+            },
+          ] as const) {
+            const hash = await env.walletClient.writeContract(request as never);
+            assert.equal(
+              (await env.publicClient.waitForTransactionReceipt({ hash })).status,
+              "success",
+            );
+          }
+        }
+      }
+
+      it("mints into the Pot, adds, collects fees, takes half out and hands the NFT back", async () => {
+        const [owner] = PEOPLE;
+        const held = { dai: 5000n * DAI_UNIT, usdc: 5000n * USDC_UNIT };
+        await setBalance(env, DAI, DAI_BALANCE, env.pot, held.dai);
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, held.usdc);
+
+        // mintNewPosition: the NFT is the Pot's, the position holds what the mint says it took.
+        const minted = await step([0n, 0n, 1000n * DAI_UNIT, 1000n * USDC_UNIT, owner]);
+        const tokenId = BigInt(minted.tokenId);
+        assert.equal(await ownerOf(tokenId), env.pot);
+        assert.equal((await position(tokenId))[7], BigInt(minted.liquidity));
+        assert.ok(BigInt(minted.liquidity) > 0n);
+        assert.equal(await balanceOf(env, DAI, env.pot), held.dai - BigInt(minted.amount0));
+        assert.equal(await balanceOf(env, USDC, env.pot), held.usdc - BigInt(minted.amount1));
+        assert.equal(await allowance(env, DAI, env.pot, MANAGER), 0n);
+        assert.equal(await allowance(env, USDC, env.pot, MANAGER), 0n);
+
+        // increaseLiquidityCurrentRange: the position grows by what the call says it added.
+        const added = await step([3n, tokenId, 500n * DAI_UNIT, 500n * USDC_UNIT, owner]);
+        assert.equal(
+          (await position(tokenId))[7],
+          BigInt(minted.liquidity) + BigInt(added.liquidity),
+        );
+
+        // collectAllFees: what the position manager itself would pay the Pot, paid to the owner.
+        await trade();
+        const { result: owed } = await env.publicClient.simulateContract({
+          account: env.pot,
+          address: MANAGER,
+          abi: abi.positionManager,
+          functionName: "collect",
+          args: [
+            { tokenId, recipient: owner, amount0Max: 2n ** 128n - 1n, amount1Max: 2n ** 128n - 1n },
+          ],
+        });
+        assert.ok(owed[0] + owed[1] > 0n, "the trades paid the position fees");
+        const fees = await step([1n, tokenId, 0n, 0n, owner]);
+        assert.deepEqual([BigInt(fees.amount0), BigInt(fees.amount1)], [...owed]);
+        assert.equal(await balanceOf(env, DAI, owner), owed[0]);
+        assert.equal(await balanceOf(env, USDC, owner), owed[1]);
+
+        // decreaseLiquidityInHalf: half the liquidity out, and the tokens it frees at the owner.
+        const before = (await position(tokenId))[7];
+        const halved = await step([2n, tokenId, 0n, 0n, owner]);
+        assert.equal(BigInt(halved.liquidity), before / 2n);
+        assert.equal((await position(tokenId))[7], before - before / 2n);
+        assert.equal(await balanceOf(env, DAI, owner), owed[0] + BigInt(halved.amount0));
+        assert.equal(await balanceOf(env, USDC, owner), owed[1] + BigInt(halved.amount1));
+
+        // retrieveNFT: the position is the owner's.
+        await step([4n, tokenId, 0n, 0n, owner]);
+        assert.equal(await ownerOf(tokenId), owner);
       });
     });
   },

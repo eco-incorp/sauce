@@ -101,6 +101,11 @@ export const SOLIDITY_EXAMPLES_GUIDE = "../guides/solidity-examples.md";
  */
 export const PORTED_EXAMPLES = [
   ["Uniswap V3: the swap examples", "sauce-swaps/examples/uniswap-v3-swap-examples.sauce.ts"],
+  ["Uniswap V3: a flash, as a flash swap", "sauce-swaps/examples/uniswap-v3-pair-flash.sauce.ts"],
+  [
+    "Uniswap V3: the liquidity examples",
+    "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts",
+  ],
 ];
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------

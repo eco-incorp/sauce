@@ -34,12 +34,18 @@
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
+    "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
+    ],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
     ],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts"
+    ],
+    "sauce-swaps/examples/uniswap-v3-pair-flash.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
     ],
     "sauce-swaps/examples/uniswap-v3-swap-examples.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"

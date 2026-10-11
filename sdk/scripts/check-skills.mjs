@@ -434,6 +434,10 @@ const UNDECLARED_NAMES = {
   "sauce-script": {
     arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
   },
+  "sauce-swaps": {
+    executeOperation:
+      "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",
+  },
   "sauce-chains": {
     getAccountInfo:
       "Solana's JSON-RPC method that reads an account, a node's API, not the package's",

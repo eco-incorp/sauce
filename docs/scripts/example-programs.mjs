@@ -136,8 +136,10 @@ export function executedExamplesProblems({
 export function registryNames(sdk, protocols, builtins) {
   const addresses = new Map();
   const selectors = new Map();
-  // The SDK's own source-level names: the `Token(...)` cast and bare `self`.
-  const globals = new Set(["Token", "self"]);
+  // The SDK's own source-level names: the `Token(...)` cast and bare `self`; and the compiler's
+  // `program(closure, scope)`, which the reference documents in prose (§4) rather than as an
+  // intrinsic of builtins.json.
+  const globals = new Set(["Token", "self", "program"]);
   const add = (map, key, name) => map.set(key, (map.get(key) ?? new Set()).add(name));
   for (const chain of sdk.CANONICAL_CHAINS) {
     const sourceGlobals = sdk.routes.sourceGlobals(chain.slug);
