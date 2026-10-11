@@ -34,6 +34,7 @@ import { getAddress, parseEther, type Address, type Hex } from "viem";
 
 import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
+import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import {
   fixture,
@@ -226,6 +227,55 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     ) as { policy: string | null };
     assert.match(String(within.policy), /agent\.policy\.json$/);
     assert.equal(await base.balanceOf(usdc, RECIPIENT), 7_000_000n);
+  });
+
+  it("sends sauce_tx's plan for a Pot with no code, the deploy and then the cook, within `to`", async () => {
+    const created = ok(await mcp.call("sauce_wallet_create", { name: "planner" }));
+    const planner = getAddress(String(created.address));
+    const plannerPot = getAddress(v12PredictPot(planner, ZERO_SALT) as Address);
+    await base.send(base.deployer, planner, "0x", parseEther("1"));
+    await base.mint(usdc, plannerPot, 1_000_000n);
+    const planOf = async () =>
+      ok(
+        await mcp.call("sauce_tx", {
+          source: PAY,
+          chain: "base",
+          owner: planner,
+          args: [RECIPIENT, "500000"],
+        }),
+      );
+    const plan = await planOf();
+    const steps = plan.transactions as Array<{ deploysPot?: string; to: string }>;
+    assert.deepEqual(
+      steps.map((step) => [step.deploysPot ?? null, getAddress(step.to)]),
+      [
+        [plannerPot, getAddress(v12KitchenAddress())],
+        [null, plannerPot],
+      ],
+    );
+    // A policy whose `to` is some other address: the deploy is refused, naming the Pot to add.
+    const policy = join(dir, "wallets", "planner.policy.json");
+    writeFileSync(policy, JSON.stringify({ to: [RECIPIENT] }), { mode: 0o600 });
+    const refusal = failed(
+      await mcp.call("sauce_wallet_send", { wallet: "planner", transaction: plan }),
+    );
+    assert.match(
+      refusal,
+      new RegExp(`deploys the wallet's Pot ${plannerPot}, which is not one of them: add it to to`),
+    );
+    assert.equal(await base.publicClient.getTransactionCount({ address: planner }), 0);
+    // With the Pot in `to`, its own deploy is allowed too: both are sent, in order.
+    writeFileSync(policy, JSON.stringify({ to: [plannerPot] }), { mode: 0o600 });
+    const sent = ok(
+      await mcp.call("sauce_wallet_send", { wallet: "planner", transaction: await planOf() }),
+    ) as { ok: boolean; sent: Array<{ status: string }> };
+    assert.equal(sent.ok, true);
+    assert.deepEqual(
+      sent.sent.map((each) => each.status),
+      ["success", "success"],
+    );
+    assert.notEqual(await base.publicClient.getCode({ address: plannerPot }), undefined);
+    assert.equal(await base.balanceOf(usdc, plannerPot), 500_000n);
   });
 
   it("never returned the wallet's key or the password", () => {
