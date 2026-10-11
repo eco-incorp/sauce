@@ -13,7 +13,8 @@
 //
 //   sauce simulate data-feed.sauce.ts --chain ethereum --owner <address>
 //
-// The contract is 50 lines of Solidity, 17 of them code; this program is 3.
+// The contract is 50 lines of Solidity, 17 of them code; this program is 4.
 function main(): Uint256 {
+  require(Chainlink.EthUsdFeed); // the chain has the feed
   return Chainlink.EthUsdFeed.latestRoundData().answer;
 }

@@ -230,7 +230,7 @@ The checks the contracts write or inherit, the forwarder, the workflow owner and
 
 | Contract                                | Source                                                                                                                                                                                                                                    | Solidity                                               | Sauce    |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------- |
-| Data Feeds' `DataConsumerV3`            | [documentation `DataConsumerV3.sol`](https://github.com/smartcontractkit/documentation/blob/5dbdbb0fcfe5401df47a13389b806120b78d7f73/public/samples/DataFeeds/DataConsumerV3.sol)                                                         | 50 lines, 17 of code                                   | 3 lines  |
+| Data Feeds' `DataConsumerV3`            | [documentation `DataConsumerV3.sol`](https://github.com/smartcontractkit/documentation/blob/5dbdbb0fcfe5401df47a13389b806120b78d7f73/public/samples/DataFeeds/DataConsumerV3.sol)                                                         | 50 lines, 17 of code                                   | 4 lines  |
 | CRE's proof-of-reserve `ReserveManager` | [cre-templates `ReserveManager.sol`](https://github.com/smartcontractkit/cre-templates/blob/d0223f31182c76bc36b1cc9d47b13b18efcf2bf6/starter-templates/custom-data-feed/cre-custom-data-feed-go/contracts/evm/src/ReserveManager.sol)     | 33 lines, 25 of code                                   | 12 lines |
 | CRE's `ProtocolWithBreaker`             | [cre-templates `ProtocolWithBreaker.sol`](https://github.com/smartcontractkit/cre-templates/blob/d0223f31182c76bc36b1cc9d47b13b18efcf2bf6/starter-templates/circuit-breaker/circuit-breaker-ts/contracts/evm/src/ProtocolWithBreaker.sol) | 65 lines, 44 of code, on a 242-line `ReceiverTemplate` | 20 lines |
 
@@ -239,6 +239,7 @@ feed's latest answer. In Sauce a program names the chain's feed and calls it, wi
 
 ```js
 function main(): Uint256 {
+  require(Chainlink.EthUsdFeed); // the chain has the feed
   return Chainlink.EthUsdFeed.latestRoundData().answer;
 }
 ```

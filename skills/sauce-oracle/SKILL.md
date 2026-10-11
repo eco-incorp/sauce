@@ -106,7 +106,7 @@ only what the contract does with the report.
 
 | Example                                                                | Ported from                                                                                                                         | Solidity                                               | Sauce    |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------- |
-| [examples/data-feed.sauce.ts](examples/data-feed.sauce.ts)             | Data Feeds' `DataConsumerV3` (smartcontractkit/documentation, `public/samples/DataFeeds/DataConsumerV3.sol`)                        | 50 lines, 17 of code                                   | 3 lines  |
+| [examples/data-feed.sauce.ts](examples/data-feed.sauce.ts)             | Data Feeds' `DataConsumerV3` (smartcontractkit/documentation, `public/samples/DataFeeds/DataConsumerV3.sol`)                        | 50 lines, 17 of code                                   | 4 lines  |
 | [examples/reserve-manager.sauce.ts](examples/reserve-manager.sauce.ts) | CRE's proof-of-reserve `ReserveManager` (smartcontractkit/cre-templates, `starter-templates/custom-data-feed/…/ReserveManager.sol`) | 33 lines, 25 of code, beside `IReceiver`               | 12 lines |
 | [examples/circuit-breaker.sauce.ts](examples/circuit-breaker.sauce.ts) | CRE's `ProtocolWithBreaker` (smartcontractkit/cre-templates, `starter-templates/circuit-breaker/…/ProtocolWithBreaker.sol`)         | 65 lines, 44 of code, on a 242-line `ReceiverTemplate` | 20 lines |
 
