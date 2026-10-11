@@ -185,8 +185,9 @@ function routeLines(
       ? []
       : [
           `Kitchen.deployPot(${owner}, ${deploy.salt})${gas(rehearsal.ok ? rehearsal.deployGas : undefined)}: ` +
-            `Pot ${pot} is not deployed on ${chain} yet. Any account may send this; the Pot is the ` +
-            "owner's either way." +
+            `Pot ${pot} is not deployed on ${chain} yet, so the rehearsal deploys it first, as ` +
+            "sauce run does (asking, or with --yes) and sauce tx plans. Any account may send it; " +
+            "the Pot is the owner's either way." +
             (rehearsal.path === "eth_call"
               ? " The Pot it deploys is put in place by state override."
               : ""),

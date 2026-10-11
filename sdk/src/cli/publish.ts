@@ -15,6 +15,7 @@
  */
 import type { PrivateKeyAccount } from "viem/accounts";
 
+import type { EndpointOf } from "./approvals.js";
 import { CliError, UsageError } from "./args.js";
 import type { Sent } from "./chain.js";
 import {
@@ -41,6 +42,8 @@ export interface PublishInput extends CookInput {
   readonly account?: PrivateKeyAccount;
   /** Who approves what the cook needs sent first: the Pot's deployment, `--fund`'s approvals. */
   readonly approver?: Approver;
+  /** Another chain's endpoint, for what the cook needs sent first there (as `sauce run` has it). */
+  readonly endpointOf?: EndpointOf;
   /** `--assume-balance`, with a dry run: what the Pot holds, for the rehearsal only. */
   readonly assume?: readonly FundRequest[];
   /** Called with the cook once it is sent, for what it published (the store); returns notes. */

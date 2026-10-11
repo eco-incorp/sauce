@@ -28,11 +28,14 @@ import {
 } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { v12PotAbi } from "../src/evm/engine.js";
+import { v12KitchenAddress } from "../src/deployments/index.js";
+import { v12PredictPot } from "../src/deployments/pot.js";
+import { v12Kitchen, v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
 import {
   guardOf,
   guardWallet,
   noPolicyNote,
+  ownPotDeployed,
   parsePolicy,
   PolicyRefusal,
   readPolicy,
@@ -327,6 +330,39 @@ describe("the guard", () => {
     await expect(
       toRecipient.evm(client([]), { to: RECIPIENT, data: "0x", value: 0n }),
     ).resolves.toBeDefined();
+  });
+
+  it("counts the Kitchen's deploy of the wallet's own Pot, for `to`, as a transaction to that Pot", async () => {
+    const salt = pad("0x01", { size: 32 });
+    const ownPot = getAddress(v12PredictPot(WALLET, salt) as Address);
+    const deploy = (owner: Address, value = 0n) => ({
+      to: getAddress(v12KitchenAddress()),
+      data: v12Kitchen.encodeDeployPot(owner, salt),
+      value,
+    });
+    expect(ownPotDeployed(deploy(WALLET), WALLET)).toBe(ownPot);
+    // Another owner's Pot, a value, the three-argument deploy and any other call stay the Kitchen's.
+    expect(ownPotDeployed(deploy(RECIPIENT), WALLET)).toBeUndefined();
+    expect(ownPotDeployed(deploy(WALLET, 1n), WALLET)).toBeUndefined();
+    const pinned = encodeFunctionData({
+      abi: v12KitchenAbi,
+      functionName: "deployPot",
+      args: [WALLET, salt, true],
+    });
+    expect(ownPotDeployed({ ...deploy(WALLET), data: pinned }, WALLET)).toBeUndefined();
+    expect(ownPotDeployed({ ...deploy(WALLET), to: USDC }, WALLET)).toBeUndefined();
+    // So a policy that lets the wallet cook on its Pot lets it deploy that Pot first...
+    await expect(guarded({ to: [ownPot] }).evm(client([]), deploy(WALLET))).resolves.toBeDefined();
+    // ...and one that does not refuses the deploy, naming the Pot, not the Kitchen.
+    const refusal = await refused(guarded({ to: [RECIPIENT] }).evm(client([]), deploy(WALLET)));
+    expect(refusal.limit).toBe("to");
+    expect(refusal.message).toContain(
+      `this transaction deploys the wallet's Pot ${ownPot}, which is not one of them`,
+    );
+    // Another owner's Pot is a transaction to the Kitchen, which `to` does not name.
+    expect(
+      (await refused(guarded({ to: [ownPot] }).evm(client([]), deploy(RECIPIENT)))).message,
+    ).toMatch(/and this transaction goes to 0x/);
   });
 
   it("checks a whole plan before any of it is sent, its transactions counted together", async () => {

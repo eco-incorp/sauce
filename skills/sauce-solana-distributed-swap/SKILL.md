@@ -452,7 +452,7 @@ a trailing `n`, the same in base units.
 4. **Send** with `sauce run`, signed by the owner's `--keypair` (or `--wallet`). The budget must be
    in the Pot's USDC account first: a transfer into it from any wallet. `sauce run` creates the Pot
    and the Pot's or owner's token accounts the cook names that do not exist yet (asking first, or
-   with `--auto-approve`; the owner pays their rent), stages the
+   with `--yes`; the owner pays their rent), stages the
    program in a code buffer, creates an address lookup table holding the cook's accounts (it prints
    its address; a later cook naming the same accounts reuses it with `--lookup-table <address>`),
    rehearses the staged cook, sends it, and closes the buffer again:
