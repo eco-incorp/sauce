@@ -1348,8 +1348,12 @@ answers over `PotMessage(bytes32 hash)` under the same domain, never the raw has
 owner signs for itself must not spend the Pot's tokens. `compile.test.ts` holds the core's
 constants to this package's and the declared handler to the core's bytes. The run paths
 (`execute`, `executeAcross`) are FLAT for the engine's frame cost, so the salt and signature code
-is repeated in each; keep them identical. `routes/signed.ts` is the typed
-data and calls (`executeTypedData`, `encodeExecute`, …), `cli/sign.ts` is `sauce sign`.
+is repeated in each; keep them identical. No request of the owner's precedes a
+stranger's `execute`, so the Pot is set up by an owner cook: `Signed.setup()` (and `Signed.cancel`/
+`Signed.invalidate`, which call it) ensures the three as core `Handler`s, byte for byte the handler
+files (`compile.test.ts` pins them); `sauce run @sauce/signed` stays the pre-warm. `routes/signed.ts`
+is the typed data and calls (`executeTypedData`, `encodeExecute`, …), `cli/sign.ts` is
+`sauce sign`.
 `test/std/signed/compile.test.ts` derives every hand-written constant; `evm.e2e.test.ts` (gated as
 async's) runs every path and refusal, the skill's examples and its hop block, Permit2 with the Pot
 as signer, and measures beside `fixtures/SignedReference.sol`, the same check in Solidity. A hop

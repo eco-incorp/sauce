@@ -27,16 +27,24 @@ it was not written with:
 | `executeAcross(bytes program, bytes32 salt, uint256 deadline, bytes32[] executions, uint256 index, bytes signature)` | a cook, paid by the Pot     |
 | `isValidSignature(bytes32 hash, bytes signature) returns (bytes4)`                                                   | a view, static, with no fee |
 
-## Installing it on a Pot
+## Setting a Pot up
 
-Install it once per Pot, by giving the package where a program file goes:
+A stranger's `execute` reaches only a Pot that answers it, and only the Pot's owner can make it
+answer. So a Pot is set up once, by a cook of its owner's:
 
-```sh
-sauce run @sauce/signed --chain base --wallet <name> --password-env <NAME>
-```
+- **Any owner cook that uses `Signed`** installs what the Pot lacks as it runs: `Signed.setup()`,
+  and `Signed.cancel(salt)` and `Signed.invalidate(word, mask)`, which call it. A later cook finds
+  the handlers in place and installs nothing.
+- **Or ahead of time,** by giving the package where a program file goes:
+
+  ```sh
+  sauce run @sauce/signed --chain base --wallet <name> --password-env <NAME>
+  ```
+
+What a Pot needs:
 
 - **A Private Pot whose Router is not fixed.** A Shared Pot, and a Private Pot whose Router is fixed,
-  refuse the install. The owner may be an account or a contract wallet.
+  refuse the setup. The owner may be an account or a contract wallet.
 - **The native coin for the fee.** Each `execute` is a cook of the Pot, and the Kitchen's fee comes
   from the Pot's own balance, whoever sends the call. A call that is refused pays nothing.
 
@@ -169,9 +177,9 @@ The program signed for Base must ask for no more than `delivered`, and should `r
 
 Only an unused salt can be cancelled. The owner marks it used with a program it cooks on the Pot,
 and the signature never runs:
-[`examples/cancel-salt.sauce.ts`](examples/cancel-salt.sauce.ts), `cancel(salt)`.
-`invalidate(word, mask)` cancels up to 256 at once: the salts `word * 256` to `word * 256 + 255`
-whose bits `mask` sets. The Pot logs `SaltsCancelled(uint256 indexed word, uint256 mask)`.
+[`examples/cancel-salt.sauce.ts`](examples/cancel-salt.sauce.ts), `Signed.cancel(salt)`.
+`Signed.invalidate(word, mask)` cancels up to 256 at once: the salts `word * 256` to
+`word * 256 + 255` whose bits `mask` sets. Both set the Pot up too, if it is not yet. The Pot logs `SaltsCancelled(uint256 indexed word, uint256 mask)`.
 `isUsed(salt)` reads whether a salt was used or cancelled.
 
 ## One signature for several chains

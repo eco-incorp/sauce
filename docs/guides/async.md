@@ -184,7 +184,9 @@ the owner's Pot on another chain. The Pot runs it with everything it holds, once
 - its salt is not used yet;
 - its deadline has not passed.
 
-Install it once per Pot:
+A Pot is set up once, by a cook of its owner's, because only the owner can make the Pot answer a
+selector. Any owner cook that uses `Signed` sets it up as it runs: `Signed.setup()`, and
+`Signed.cancel(salt)` and `Signed.invalidate(word, mask)`, which call it. Or do it ahead of time:
 
 ```sh
 sauce run @sauce/signed --chain base --wallet <name>
@@ -263,8 +265,8 @@ once the USDC is there.
 
 ### Cancelling, and one signature for several chains
 
-- **Cancelling:** the owner cancels an unused salt with a program it cooks, `cancel(salt)`.
-  `invalidate(word, mask)` cancels up to 256 salts that share a word. Salts are Permit2's unordered
+- **Cancelling:** the owner cancels an unused salt with a program it cooks, `Signed.cancel(salt)`.
+  `Signed.invalidate(word, mask)` cancels up to 256 salts that share a word. Salts are Permit2's unordered
   nonces: one bit per salt, 256 to a word, in the ERC-7201 namespace `sauce.storage.Signed`.
   `routes.signedSaltSlot(salt)` says where a salt is recorded, and `routes.cancelSaltsSource(salts)`
   writes the cancelling program.
