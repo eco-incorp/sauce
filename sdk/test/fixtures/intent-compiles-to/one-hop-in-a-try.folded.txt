@@ -1,5 +1,5 @@
-// one-hop-in-a-try: the program is 1686 bytes; the intent 1952 bytes, encoded once (holes: salt, delivered, beneficiary, refundTo, amount)
-try { // a program of its own, 1437 bytes to the engine
+// one-hop-in-a-try: the program is 1608 bytes; the intent 1920 bytes, encoded once (holes: salt, delivered, beneficiary, refundTo, amount)
+try { // a program of its own, 1416 bytes to the engine
   const intent = abi.encode(
     8453, // destination: base
     route: abi.encode({
@@ -10,7 +10,7 @@ try { // a program of its own, 1437 bytes to the engine
       tokens: [{ token: USDC(base), amount: «delivered» }],
       calls: [
         { target: USDC(base), data: transfer(0x6340080a1967a03caad490a170828d4c59ee5983 /* the shared Pot */, «delivered»), value: 0 },
-        { target: 0x6340080a1967a03caad490a170828d4c59ee5983 /* the shared Pot */, data: cook(engine, <body: 548 bytes> ‖ [«beneficiary», «delivered», «refundTo»]), value: 777 },
+        { target: 0x6340080a1967a03caad490a170828d4c59ee5983 /* the shared Pot */, data: cook(engine, <body: 527 bytes> ‖ [«beneficiary», «delivered», «refundTo»]), value: 777 },
       ],
     }),
     reward: { deadline: 1900605100, creator: «refundTo», prover: 0xec08fb4647f3f50d1162a578d481266687c60fc5, nativeAmount: 0,

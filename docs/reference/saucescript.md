@@ -244,12 +244,20 @@ program rarely needs to.
   `toUpperCase`, `toLowerCase` and `length`. An array known only at run time has none of them:
   "`.map` needs a value known while compiling, and this one is known only when the program runs".
 - A `const` holding a string the compiler knows compares as that string, so an `if` that compares
-  it is decided while compiling (the example below), and `+` joins a known string with the
+  it is decided while compiling (the first example below), and `+` joins a known string with the
   text of what the compiler knows. With a value known only at run time it is an error: "`+` with a
   string needs a value known while compiling, and this one is known only when the program runs".
 - A function with no return type that returns an object, an array, an instance, an arrow or a string runs
   while compiling, at every call, as does a call that passes an unannotated parameter a string, an object, a
   record or `undefined`.
+- `program(closure, scope)` compiles a closure as a program of its own, for the chain `scope` names
+  (its id, or the chain itself, `Base`), and answers `{ code, args }`: the program, and the values it
+  reads of the program around it, which its caller appends. This is how a hop's body is built. The
+  closure reads that program's run-time numbers, addresses, bools, `bytes`, arrays and records (on
+  SVM, words, `bytes` and arrays of words), and may take plain parameters of its own,
+  `program((input: bytes) => { … }, Base)`, whose encoding its caller appends after `code ++ args`:
+  "a closure compiled as a program of its own takes plain parameters, which its program's caller
+  passes: no default, pattern or rest parameter".
 - `const xs = []` is an empty array of this kind; an empty array in a `let` needs a declared type (§2).
 - A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown
   message.
@@ -299,6 +307,28 @@ function main(order: Order): Uint256 {
 }
 ```
 
+A hop's body reads the program's run-time `bytes` and arrays as it reads a number, and `program()`
+compiles a closure that takes a parameter, for a chain:
+
+```sauce chain=base
+function main(target: Address, data: bytes, amounts: Uint256[], refundTo: Address) {
+  Ethereum.hop({ send: { token: USDC, amount: amounts[0] }, refundee: refundTo }).then(() => {
+    // `data` and `amounts` are bytes and an array of the program on Base, read whole on Ethereum.
+    evm.call(target, 0, data);
+    evm.sstore(1, amounts[amounts.length - 1]);
+  });
+}
+```
+
+```sauce chain=base
+function main(): Uint256 {
+  const deliver = program((input: bytes) => {
+    evm.sstore(1, input.length);
+  }, Base);
+  return deliver.code.length;
+}
+```
+
 **`main`'s arguments**
 
 - `main`'s parameters are the program's runtime inputs. One compiled program serves every argument value.
@@ -306,6 +336,9 @@ function main(order: Order): Uint256 {
   compact encoding; encode them with `encodeCompactArguments` and the schema the compile returns.
 - Parameters may be any combination of scalars, bytes, arrays and records, with at most 4 levels of nested
   arrays.
+- A program can also be compiled for its arguments (the compile option `args`): each is then the constant a
+  program would write for its parameter — a number, an address, a `bool`, `bytes`, a string, an array or a
+  record — and `main` takes none as it runs.
 - On **SVM**, `Account` parameters are not encoded arguments: they are the accounts attached to the transaction,
   in declaration order.
 
@@ -458,7 +491,9 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - `crypto.keccak256(data)`, **Both**
   - Types: `(bytes) → number`
   - The keccak-256 hash. A number argument gives "keccak256's argument requires a bytes value"; hash
-    a word with `crypto.keccak256(x.toBytesBe(32))`.
+    a word with `crypto.keccak256(x.toBytesBe(32))`. Over bytes the compiler knows (a literal, a string, a
+    `.concat` of them, through the `const`s they are computed from) it is a constant: the program holds the
+    digest wherever that is no larger than hashing them as it runs.
   - Example: `const topic = crypto.keccak256("Transfer(address,address,uint256)");`
 - `crypto.ecdsaVerify(hash, signature, signer)`, **Both**
   - Types: `(scalar, bytes, scalar) → bool`. `signature` is the 65-byte `r‖s‖v`.
