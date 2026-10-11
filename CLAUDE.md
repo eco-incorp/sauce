@@ -328,7 +328,7 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
   `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
   `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
-  (`cookbook-{ethereum,base}`) ~135 KB each, and the ported examples' `official-ethereum` ~420 KB.
+  (`cookbook-{ethereum,base}`) ~135 KB each, and the ported examples' `official-ethereum` ~520 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,

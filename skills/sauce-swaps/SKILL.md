@@ -150,6 +150,9 @@ guide: the Universal Router approved through `Permit2.Permit2` for exactly the i
 `V4_SWAP` command whose actions swap in one pool, settle the input and take the output, its inputs
 built with `abi.encode` and checked against what arrived. To swap on V4 inside a program, the
 library's `uniswapV4` is shorter; this is how a program speaks to a router that takes commands.
+[examples/balancer-v2-batch-swap.sauce.ts](examples/balancer-v2-batch-swap.sauce.ts) ports
+Balancer's batch swap examples: token A to token C through B across two pools in one `batchSwap`,
+given in or given out, with the Vault's limits (positive in, negative out) from a `main` input.
 
 ## Flash swaps
 
@@ -166,6 +169,12 @@ appended is the callback's bytes; the program declares `flash` in an ABI beside 
 [examples/uniswap-v3-pair-flash.sauce.ts](examples/uniswap-v3-pair-flash.sauce.ts) ports Uniswap's
 `PairFlash` this way, with [examples/SauceRouterFlash.json](examples/SauceRouterFlash.json): the
 output of a swap in one pool, sold back in another before the first is paid, the profit to a payer.
+
+Balancer's flash swap needs none of that: one `batchSwap` that sells a token to one pool and buys it
+back from another is settled by the Vault as a whole, so the Pot sends nothing (its limits are zero)
+and receives the profit, and a cycle that would cost anything reverts on the limits.
+[examples/balancer-v2-flash-swap.sauce.ts](examples/balancer-v2-flash-swap.sauce.ts) ports Balancer's
+own example of it.
 
 ## Price limits and partial fills
 

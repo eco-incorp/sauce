@@ -59,6 +59,12 @@
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
     ],
+    "sauce-swaps/examples/balancer-v2-batch-swap.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
+    ],
+    "sauce-swaps/examples/balancer-v2-flash-swap.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
+    ],
     "sauce-swaps/examples/uniswap-v3-pair-flash.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
     ],
