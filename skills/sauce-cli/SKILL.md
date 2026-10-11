@@ -87,7 +87,7 @@ volume and timing). The command's own help ends with the same note.
 - A program can come from stdin: give `-` as the file (`cat buy.sauce.ts | sauce compile -
 --chain base`). Its relative imports then resolve against the current directory, or
   `--source-dir <dir>`. Stdin is then spent, so questions go to the terminal; with none, pass a
-  password source for a wallet or keystore, and `--auto-approve` once the user agrees to what the
+  password source for a wallet or keystore, and `--yes` (`-y`) once the user agrees to what the
   run lists.
 
 ## Wallets
@@ -137,7 +137,8 @@ send. Every field is optional, and amounts are strings in whole tokens (`"100"` 
 }
 ```
 
-`chains` and `to` (a list of addresses) allow only those. `native` and each token count what
+`chains` and `to` (a list of addresses) allow only those; deploying the wallet's own Pot counts
+as a transaction to that Pot, so a `to` naming the Pot lets a run deploy it first. `native` and each token count what
 leaves the wallet or the Pot a transaction cooks on, measured by rehearsing it; `perDay` is the
 last 24 hours on every chain. A send that breaks a limit is refused, naming it, and nothing is
 sent. With no policy, sends work, and each says no limits are set.
@@ -185,8 +186,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    ```
 
    runs the cook from the owner with no key and nothing sent, and needs neither a deployed Pot nor
-   a funded one. A Pot not deployed yet is deployed in the same rehearsal first: anyone may send a
-   Pot's deployment, and the Pot is the owner's either way. `--assume-balance TOKEN:amount`
+   a funded one. A Pot not deployed yet is deployed in the same rehearsal first, as `sauce run`
+   deploys it: anyone may send a Pot's deployment, and the Pot is the owner's either way. `--assume-balance TOKEN:amount`
    (repeatable; `ETH:<amount>` for the native currency) gives the Pot that balance for the
    rehearsal only; a token that keeps no stored balance (rebasing, shares) is refused. On a local
    chain with Uniswap V3's own pools at 2,650 USDC per WETH, it printed, addresses written as their
@@ -196,7 +197,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
    main returns { pool: Address, spent: Uint256, bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
    Rehearsed with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
-     1. Kitchen.deployPot(<owner>, …), gas used 535944: Pot <Pot> is not deployed on base yet. …
+     1. Kitchen.deployPot(<owner>, …), gas used 535944: Pot <Pot> is not deployed on base yet, so the rehearsal deploys it first, …
      2. the cook, from the owner <owner>, gas used 273670
    Assumed for this rehearsal only, by state override:
      the Pot holds 100 USDC: --assume-balance (…)
@@ -276,10 +277,11 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    own) prints the Pot's address, known before it exists, and its deploy transaction (on a preview
    chain the address alone, with `refused` saying why the deployment is left out). It also
    says whether the chain has the released engine and Kitchen (and the Kitchen's
-   fee) and whether the Pot is deployed.
+   fee) and whether the Pot is deployed. There is no deploy step to take: a command deploys your
+   Pot when it first needs it (asks, or `--yes`), and `sauce tx` puts its deployment first.
    `sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys the signer's
-   Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an exact
-   salt); use the same salt in every later command.
+   Pot by hand. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an
+   exact salt); use the same salt in every later command.
 5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
    pass `--fund USDC:100`, 100 whole USDC (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer into the Pot in the same cook; `--sweep` returns what is
    left. `--fund-mode` picks how:
@@ -338,10 +340,14 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    open in a browser. Never fetch or read them yourself: what you report is what the command
    printed, what left the wallet, what arrived where and what stayed in the Pot.
 
-   A Pot not deployed yet is deployed first once the user agrees at the prompt. `--auto-approve`
+   A command deploys your Pot when it first needs it: `run` asks `Your Pot <address> on base
+isn't deployed yet. Deploy it now (one transaction, about <gas>), then run? [deploy/cancel]`,
+   then sends the deployment and the cook. `--yes` (`-y`; `--auto-approve` is its older name)
    approves, in advance, everything a run sends before its cook (deploying the Pot, approving
-   Permit2 or the Pot for `--fund`) and names each; with no terminal the run lists what it needs
-   approved and sends nothing until it is given. Ask the user before passing `--auto-approve`.
+   Permit2 or the Pot for `--fund`) and names each; with no terminal, or with `--json`, the run
+   lists what it needs approved and sends nothing until it is given. On Solana a missing Pot is
+   created in the cook's own transaction, with nothing asked, when the two fit in one. Ask the
+   user before passing `--yes`.
 
 7. **Check** what was sent:
    `sauce inspect <tx hash> --chain base --source buy.sauce.ts` reads the transaction back:
@@ -527,5 +533,5 @@ Over HTTP, nothing signs.
 - Send only on a supported chain: Ethereum, Base or Solana. On a preview chain, compile and
   simulate, and offer the user the chain-support request the refusal names; never look for another
   way to send there.
-- Do not pass `--auto-approve` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
+- Do not pass `--yes` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
   `--fund` it also approves Permit2 (or the Pot) to move the user's tokens.
