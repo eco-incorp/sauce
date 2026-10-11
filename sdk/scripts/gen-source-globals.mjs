@@ -443,7 +443,10 @@ function valueType(parameter, input, returns, path = []) {
     return input ? `(readonly (${element})[] | SauceArray<${element}>)` : `SauceArray<${element}>`;
   }
   if (/^int\d*$/.test(parameter.type)) return "Int256";
+  // An argument takes any SauceScript number, a plain `500` included, a field deep or more as
+  // much as at the top; what comes back is a bigint.
   if (/^(u?int\d*|address|bytes\d+)$/.test(parameter.type)) {
+    if (input) return "(bigint | number)";
     const contract = returns?.get(path.join("."));
     return contract === undefined ? "bigint" : `bigint & ${contract}`;
   }
