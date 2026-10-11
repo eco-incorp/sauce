@@ -1157,7 +1157,21 @@ shared by HTTP's per-request servers). Only `main.ts` creates the check, so an i
 (every test, the skills checker) reads no registry, and the bin-spawning checks
 (`transports.test.ts`, the packed check) pass `--no-update-check`. `no-embedded-rpc.test.ts` holds
 the registry's name to `npm-registry.ts`, and its importers and the check's to the command's own
-modules. `run --fund` (`funding.ts`)
+modules. **No one deploys a Pot as a step of their own**: what a cook needs sent first is a
+`SetupStep` (`approvals.ts`: an action, a reason, a gas estimate, its plan entry and its send), and
+`approveAll` asks ONE question for every step (`[deploy/cancel]`; `-y`/`--yes`, the new name of
+`--auto-approve`, approves each and says so; no terminal or `--json` refuses, naming each). `sauce
+run` puts the Pot's deployment (`commands.ts#potDeployStep`) first, sent through `sendAndWait`;
+`sauce tx` and `sauce_tx` list the same steps unsigned as `{ chainId, pot, transactions }` ahead
+of the cook, with no top-level `to`/`data` so a wallet sends the whole plan; `RunInput.setup` and
+`TxInput.setup` take a command's further steps (another chain's setup) into the same question and
+plan rather than a second prompt; each gets a `SetupReach` — the cook's chain, and `on(chain)` for
+any other through the command's own endpoint finder (`endpointOf`: `--config`, the public ones;
+MCP's reach) and signer, its `send` going through `sendAndWait` — so a step opens no transport
+and touches no key of its own. On Solana `create_pot` rides in the cook's own transaction when
+the two fit in one, and falls back to a step otherwise. A wallet policy's `to` counts the
+released Kitchen's `deployPot` of the wallet's own Pot, with no value, as a transaction to that
+Pot (`policy.ts#ownPotDeployed`). `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last

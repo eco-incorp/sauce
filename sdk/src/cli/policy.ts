@@ -15,7 +15,10 @@
  *
  *  - `chains`: the only chains it sends on (slugs, aliases or ids).
  *  - `to`: the only addresses a transaction may be sent to — on Solana, the programs its
- *    instructions call (the compute-budget program aside).
+ *    instructions call (the compute-budget program aside). The released Kitchen's `deployPot` of
+ *    the wallet's own Pot, with no value, counts as a transaction to that Pot: deploying a Pot the
+ *    policy lets the wallet cook on grants nothing cooking on it does not, so a command that
+ *    deploys the Pot it is about to cook on is allowed whenever the cook is.
  *  - `native`: the chain's native coin, in its own units (ETH, SOL), leaving the wallet or the Pot
  *    a transaction cooks on; on Solana the fee and any rent it pays are included.
  *  - `tokens`: by registry symbol or by address (an EVM token, a Solana mint); what leaves the
@@ -75,7 +78,8 @@ import {
 } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
-import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { v12KitchenAddress, v12SvmKitchenProgramId } from "../deployments/index.js";
+import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
@@ -331,6 +335,8 @@ export interface Measured {
   readonly chain: CanonicalChain;
   /** Where it goes: an EVM `to`, or the programs a Solana transaction calls. */
   readonly to: readonly string[];
+  /** The wallet's own Pot it deploys through the released Kitchen, which `to` counts it as. */
+  readonly deploysPot?: string;
   readonly native: Outflow;
   readonly tokens: readonly Outflow[];
   readonly approvals: readonly Approval[];
@@ -342,6 +348,31 @@ const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523
 const APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
 /** Where `traceTransfers` reports native transfers, as ERC-20 Transfer logs. */
 const NATIVE_EMITTER = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+/** `Kitchen.deployPot(owner, salt)`, as `sauce run` and `sauce tx` send it. */
+const DEPLOY_POT = toFunctionSelector("function deployPot(address owner, bytes32 salt)");
+
+/**
+ * The Pot `call` deploys, when it is the released Kitchen's `deployPot` of `wallet`'s own Pot with
+ * no value; `undefined` for any other call. The Pot is the one cooking on it would reach: the
+ * CREATE2 address over (wallet, salt) that `v12PredictPot` gives, and the Kitchen derives.
+ */
+export function ownPotDeployed(call: TxRequest, wallet: Address): Address | undefined {
+  if (call.value !== 0n || getAddress(call.to) !== getAddress(v12KitchenAddress()))
+    return undefined;
+  if (call.data.slice(0, 10).toLowerCase() !== DEPLOY_POT) return undefined;
+  try {
+    const [owner, salt] = decodeAbiParameters(
+      [{ type: "address" }, { type: "bytes32" }],
+      `0x${call.data.slice(10)}`,
+    );
+    if (getAddress(owner) !== getAddress(wallet)) return undefined;
+
+    return getAddress(v12PredictPot(owner, salt) as Address);
+  } catch {
+    return undefined;
+  }
+}
+
 const COOK = toFunctionSelector(
   v12PotAbi.find((item) => item.type === "function" && item.name === "cook")!,
 );
@@ -435,9 +466,11 @@ export async function measureEvm(
   for (const [index, call] of calls.entries()) {
     const cook = call.data.slice(0, 10).toLowerCase() === COOK ? getAddress(call.to) : undefined;
     const ours = new Set<string>([getAddress(wallet), ...(cook === undefined ? [] : [cook])]);
+    const deploysPot = ownPotDeployed(call, wallet);
     const base = {
       chain,
-      to: [call.to.toLowerCase()],
+      to: [(deploysPot ?? call.to).toLowerCase()],
+      ...(deploysPot === undefined ? {} : { deploysPot }),
       approvals: [] as Approval[],
     };
     const nativeOf = (amount: bigint): Outflow => ({
@@ -794,7 +827,11 @@ function spendOf(
     if (off !== undefined) {
       refuse(
         "to",
-        `to allows ${policy.to.length} address(es), and this transaction goes to ${off}`,
+        measured.deploysPot === undefined
+          ? `to allows ${policy.to.length} address(es), and this transaction goes to ${off}`
+          : `to allows ${policy.to.length} address(es), and this transaction deploys the ` +
+              `wallet's Pot ${measured.deploysPot}, which is not one of them: add it to to, as ` +
+              "cooking on it needs",
       );
     }
   }

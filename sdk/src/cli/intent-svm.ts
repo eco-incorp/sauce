@@ -181,7 +181,7 @@ export async function svmFillCommand(
       action,
       `${[...head, ...rehearsed].join("\n")}\nSend it? [y/N] `,
     );
-    if (answer === undefined) throw unapproved([action]);
+    if (answer === undefined) throw unapproved([action], context.approver.why);
     if (!answer) throw new CliError("not sent: you declined");
     // A Solana blockhash lasts about a minute: after a person's answer, build the fill again.
     if (!context.approver.auto) fill = await build();
@@ -218,7 +218,7 @@ export async function svmFillCommand(
           proveAction,
           `${tx.what}\nIt spends ${spend}. Send it? [y/N] `,
         );
-        if (ok === undefined) throw unapproved([proveAction]);
+        if (ok === undefined) throw unapproved([proveAction], context.approver.why);
         if (ok) {
           const proven = await sendPlannedSvm(
             url,
