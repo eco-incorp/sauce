@@ -393,6 +393,13 @@ export const rejections = [
     src: 'function main(n: Uint256): bytes { return "n=" + n; }',
   },
   {
+    quotes: [
+      "a closure compiled as a program of its own takes plain parameters, which its program's caller passes: no default, pattern or rest parameter",
+    ],
+    targets: ["evm"],
+    src: "function main(): Uint256 { const p = program((n = 1n) => { evm.sstore(1n, n); }, 8453n); return 0n; }",
+  },
+  {
     row: "spread of a run-time array, `f(...xs)`",
     quotes: [
       "a spread of an array needs a value known while compiling, and this one is known only when the program runs",

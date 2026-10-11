@@ -84,7 +84,7 @@
     "@solana-program/token": "^0.14.0",
     "@solana/kit": "^6.10.0",
     "litesvm": "1.2.1",
-    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-names-7bac4fcf",
+    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-names-e394938c",
     "viem": "^2.45.1"
   },
   "devDependencies": {
