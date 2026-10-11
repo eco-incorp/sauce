@@ -3335,6 +3335,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "The salt it is signed under, which runs once (default: random)",
       },
       ...SIGNER,
+      yes: { ...YES, help: "Approve, without asking, setting the Pot up first (deploy, handlers)" },
+      ...ENDPOINT,
       ...FORMAT,
       ...HELP,
       ...ARGS,
@@ -3349,11 +3351,15 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "as { to: the Pot, data, value: 0 }, for any account to send. Without one, the typed data",
       "alone, for the owner to sign elsewhere.",
       "",
-      "The Pot needs @sauce/signed installed (sauce run @sauce/signed --chain <chain>) and the",
-      "native coin for the Kitchen's fee, which it pays from its balance. The salt runs once; the",
-      "owner cancels an unused one with a program calling @sauce/signed's cancel(salt). Anyone",
-      "may send the call as soon as it is signed, so the program checks what it needs. Reads no",
-      "chain.",
+      "A stranger's execute reaches only a Pot set up for it, which only its owner can do. So the",
+      "command reads the Pot (--offline reads nothing) and sets up what it lacks first: deploys it",
+      "if it has no code, then cooks Signed.setup(), which installs @sauce/signed's handlers. It asks",
+      "once (--yes approves); with no signer the steps are listed as `setup`, for the owner to send",
+      "first. sauce run @sauce/signed --chain <chain> does the same ahead of time.",
+      "",
+      "The Pot pays the Kitchen's fee for each execute from its balance. The salt runs once; the",
+      "owner cancels an unused one with a program calling @sauce/signed's Signed.cancel(salt).",
+      "Anyone may send the call as soon as it is signed, so the program checks what it needs.",
       ...SUPPORTED_ONLY("Signs"),
       "",
       "Examples:",
@@ -3379,6 +3385,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         throw new UsageError(`--within: '${within}' is not a number of seconds (e.g. 600)`);
       }
       const signedSalt = stringFlag(args, "signed-salt");
+      const rpcUrl = endpoint(args, io, input.chain);
 
       return signCommand(
         {
@@ -3389,6 +3396,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
               : BigInt(Math.floor(Date.now() / 1000)) +
                 (within === undefined ? 3600n : BigInt(within)),
           ...(signedSalt === undefined ? {} : { signedSalt: signedSalt as `0x${string}` }),
+          ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          approver: approverOf(args, io),
         },
         io,
         signer,

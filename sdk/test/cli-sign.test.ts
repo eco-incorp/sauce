@@ -2,7 +2,8 @@
  * `sauce sign` (`cli/sign.ts`): a program signed for a Pot with `@sauce/signed`. The typed data it
  * prints is the SDK's (`routes/signed.ts`), which `std/signed/evm.e2e.test.ts` holds to what the
  * Pot checks; here, that the command prints it, that its signature recovers to the Pot's owner, that
- * `execute` carries exactly the program with its arguments, and what it refuses. Reads no chain.
+ * `execute` carries exactly the program with its arguments, and what it refuses. Given no endpoint,
+ * it reads no chain; setting a Pot up is `std/signed/evm.e2e.test.ts`'s, on anvil.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -122,7 +123,7 @@ describe("sauce sign", () => {
     const call = decodeFunctionData({ abi: signedAbi, data: signed.execute!.data });
     expect(call.functionName).toBe("execute");
     expect(call.args).toEqual([program, salt, 2_000_000_000n, signed.signature]);
-    expect(run.stderr).toContain("@sauce/signed installed");
+    expect(run.stderr).toContain("The Pot was not read (no endpoint)");
   });
 
   it("prints the typed data alone with no signer, for the owner to sign elsewhere", async () => {

@@ -23,7 +23,8 @@
  */
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,6 +50,8 @@ import {
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
+import { nodeIo, runCli } from "../../../src/cli/run.js";
+import { potSalt, v12PredictPot } from "../../../src/deployments/pot.js";
 import { Base } from "../../../src/index.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { potMessageTypedData } from "../../../src/routes/erc1271.js";
@@ -89,9 +92,8 @@ const PERMIT2 = JSON.parse(
 
 /** Anvil's first dev account: the Kitchen's owner and the Pot's. The others sign or call as
  *  strangers, and own the contract wallet. */
-const OWNER = privateKeyToAccount(
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-);
+const OWNER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const OWNER = privateKeyToAccount(OWNER_KEY);
 const STRANGER = privateKeyToAccount(
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
 );
@@ -939,6 +941,112 @@ function main(hash: Uint256): void {
       expect((await usdc(recipient)) - before).toBe(delivered);
       expect(await usdc(shared)).toBe(0n);
       expect(await used(execution.salt)).toBe(true);
+    });
+  });
+
+  describe("sauce sign, the first time for a Pot", () => {
+    let work: string;
+    let file: string;
+    beforeAll(() => {
+      work = mkdtempSync(join(tmpdir(), "sauce-sign-setup-"));
+      file = join(work, "writer.sauce.ts");
+      writeFileSync(file, WRITER);
+    });
+    afterAll(() => rmSync(work, { recursive: true, force: true }));
+
+    /** What `sauce sign` prints, as these cases read it. */
+    interface Signed {
+      pot: Address;
+      signature?: Hex;
+      execute: { data: Hex };
+      setup: { what: string; installsHandlers?: string[] }[];
+      setupSent?: { what: string; hash: Hex }[];
+    }
+
+    /** `sauce sign`, in process, against this suite's chain. */
+    async function sauceSign(...argv: string[]) {
+      let stdout = "";
+      let stderr = "";
+      const code = await runCli(["sign", file, "--chain", CHAIN, "--rpc-url", RPC_URL, ...argv], {
+        ...nodeIo(),
+        stdout: (text) => void (stdout += text),
+        stderr: (text) => void (stderr += text),
+      });
+      return { code, stderr, json: (code === 0 ? JSON.parse(stdout) : {}) as Signed };
+    }
+
+    it("plans the Pot's deployment and its setup before the signature, with no signer", async () => {
+      const planned = await sauceSign(
+        "--owner",
+        OWNER.address,
+        "--salt",
+        "unsigned-plan",
+        "--args",
+        "1",
+      );
+      expect(planned.code).toBe(0);
+      expect(planned.json.signature).toBeUndefined();
+      expect(planned.json.setup.map((step) => step.what.split(":")[0])).toEqual([
+        expect.stringContaining("Kitchen.deployPot"),
+        "Pot.cook(engine, Signed.setup())",
+      ]);
+      expect(planned.json.setup[1].installsHandlers).toEqual([
+        "0x82bf0988",
+        "0xdf288b73",
+        "0x1626ba7e",
+      ]);
+    });
+
+    it("deploys a bare Pot, sets it up and signs, once approved; the next signature needs nothing", async () => {
+      const first = await sauceSign(
+        "--salt",
+        "signed-setup",
+        "--private-key",
+        OWNER_KEY,
+        "--yes",
+        "--args",
+        "71",
+      );
+      expect(first.code).toBe(0);
+      expect(first.json.setupSent).toHaveLength(2);
+      expect(first.stderr).toContain("auto-approved: deploy Pot");
+      expect(first.stderr).toContain("auto-approved: set up Pot");
+      const pot = first.json.pot;
+      // The Pot pays the Kitchen's fee for each execute.
+      await createTestClient({ mode: "anvil", transport: http(RPC_URL) }).setBalance({
+        address: pot,
+        value: parseEther("1"),
+      });
+      expect((await send(stranger, pot, first.json.execute.data)).ok).toBe(true);
+      expect(await slot(WRITTEN_SLOT, pot)).toBe(71n);
+
+      const next = await sauceSign(
+        "--salt",
+        "signed-setup",
+        "--private-key",
+        OWNER_KEY,
+        "--args",
+        "72",
+      );
+      expect(next.code).toBe(0);
+      expect(next.json.setupSent).toBeUndefined();
+      expect(next.stderr).toContain("The Pot is set up to run signed programs.");
+    });
+
+    it("sends nothing and signs nothing when the setup is not approved", async () => {
+      const refused = await sauceSign(
+        "--salt",
+        "never-approved",
+        "--private-key",
+        OWNER_KEY,
+        "--args",
+        "1",
+      );
+      expect(refused.code).not.toBe(0);
+      expect(refused.stderr).toContain("nothing was sent");
+      expect(refused.stderr).toContain("set up Pot");
+      const pot = v12PredictPot(OWNER.address, potSalt("never-approved")) as Address;
+      expect(await publicClient.getCode({ address: pot })).toBeUndefined();
     });
   });
 
