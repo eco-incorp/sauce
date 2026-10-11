@@ -1268,6 +1268,8 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         "// @chain solana",
         "function main() {",
         `  const blob = hex\`${"cd".repeat(1500)}\`;`,
+        // Logged, so the blob is in the program: a known blob's length is answered while compiling.
+        "  log(blob);",
         "  require(blob.length == 1500);",
         "}",
         "",
