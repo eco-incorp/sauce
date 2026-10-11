@@ -20,8 +20,7 @@
 //   sauce run price-gate.sauce.ts --chain base --wallet <name> \
 //     --args <owner> ETH/USD 400000000000 <recipient> 1000000
 //
-// The Pot holds the USDC, and the native coin for the cook the report pays from it, and has
-// `@sauce/oracle` installed: `sauce run @sauce/oracle --chain <chain> --wallet <name>`.
+// The Pot holds the USDC, and the native coin for the cook the report pays from it.
 import { Oracle } from "@sauce/oracle";
 
 function main(owner: Address, pair: string, limit: Uint256, recipient: Address, amount: Uint256) {
