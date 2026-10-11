@@ -273,8 +273,11 @@ Solana is one of the three chains the initial release supports, with Ethereum an
 Pots and intent steps are built and sent there.
 
 - **The Pot** is the Kitchen's address for the owner and salt.
-  `sauce pot --chain solana --owner <pubkey>` prints it;
-  `sauce pot --deploy --chain solana --keypair <keypair>` creates it.
+  `sauce pot --chain solana --owner <pubkey>` prints it. It needs no step of its own: a cook on a
+  Pot the Kitchen has not created yet creates it in the same transaction, ahead of the cook
+  (`sauce run` asks nothing; `sauce tx`'s transaction carries it, `createsPot`), and where the two
+  do not fit in one transaction `sauce run` asks first, or creates it with `--yes`.
+  `sauce pot --deploy --chain solana --keypair <keypair>` creates it by hand.
   A cook names its Pot by `--owner` (and `--salt`), never `--pot`.
 - **The cook** pays the execution fee in lamports, read from the cluster and printed as `fee`, so
   there is no `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it.
@@ -298,7 +301,7 @@ Pots and intent steps are built and sent there.
   `--assume-balance USDC:1000` gives the account the cook spends USDC from (the Pot's, or the
   owner's with `--via engine`) that balance, whole tokens as `--fund` takes them, and a
   `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a
-  note; `sauce run` creates it before the cook (asking first, or with `--auto-approve`). The
+  note; `sauce run` creates it before the cook (asking first, or with `--yes`). The
   owner must be a wallet, or an address with no account: it signs and pays.
 - **Through the Kitchen or directly.** `--via kitchen`, the default, is the Kitchen's cook on the
   owner's Pot: the program holds and spends what the Pot owns and can write the Pot's storage.
