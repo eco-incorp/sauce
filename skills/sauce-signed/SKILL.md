@@ -30,8 +30,11 @@ it was not written with:
 ## Setting a Pot up
 
 A stranger's `execute` reaches only a Pot that answers it, and only the Pot's owner can make it
-answer. So a Pot is set up once, by a cook of its owner's:
+answer. So a Pot is set up once, by its owner:
 
+- **The first time the owner signs for it,** `sauce sign` reads the Pot and sets up what it lacks
+  before it signs: it deploys the Pot if it has no code, then installs the handlers. It asks once,
+  and `--yes` approves. With no signer, it lists the steps as `setup`, for the owner to send first.
 - **Any owner cook that uses `Signed`** installs what the Pot lacks as it runs: `Signed.setup()`,
   and `Signed.cancel(salt)` and `Signed.invalidate(word, mask)`, which call it. A later cook finds
   the handlers in place and installs nothing.
@@ -98,7 +101,9 @@ sauce sign pay-when-delivered.sauce.ts --chain base --wallet <name> --password-e
 }
 ```
 
-- **With no signer**, it prints the typed data alone, for the owner to sign elsewhere.
+- **With no signer**, it prints the typed data alone, for the owner to sign elsewhere, after the
+  `setup` steps a Pot not set up yet needs first.
+- **The Pot** is read first, and set up if it is not yet (above); `--offline` reads nothing.
 - **The Pot** is the signer's own (`--salt` names another of theirs), or `--pot <address>`.
 - **The salt** is random unless `--signed-salt` gives one.
 - **The deadline** is `--within <seconds>` from now (an hour by default), or `--deadline <unix>`.

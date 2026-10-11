@@ -184,9 +184,11 @@ the owner's Pot on another chain. The Pot runs it with everything it holds, once
 - its salt is not used yet;
 - its deadline has not passed.
 
-A Pot is set up once, by a cook of its owner's, because only the owner can make the Pot answer a
-selector. Any owner cook that uses `Signed` sets it up as it runs: `Signed.setup()`, and
-`Signed.cancel(salt)` and `Signed.invalidate(word, mask)`, which call it. Or do it ahead of time:
+A Pot is set up once, by its owner, because only the owner can make the Pot answer a selector.
+The first time you sign for a Pot, `sauce sign` sets it up before it signs: it deploys the Pot if
+it has no code and installs the handlers, asking once (`--yes` approves). Any owner cook that uses
+`Signed` sets it up too as it runs: `Signed.setup()`, and `Signed.cancel(salt)` and
+`Signed.invalidate(word, mask)`, which call it. Or do it ahead of time:
 
 ```sh
 sauce run @sauce/signed --chain base --wallet <name>
@@ -237,7 +239,8 @@ data, and with the owner's key the signature and the `execute` call for anyone t
 sauce sign pay.sauce.ts --chain base --wallet <name> --within 3600 --args 0x… 25000000
 ```
 
-- **With no signer**, it prints the typed data alone.
+- **With no signer**, it prints the typed data alone, after the `setup` transactions a Pot not set
+  up yet needs first, for the owner to send.
 - **The deadline** is `--within <seconds>` from now, or `--deadline <unix seconds>`.
 - **The salt** is random unless `--signed-salt` gives one.
 
