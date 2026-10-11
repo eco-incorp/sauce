@@ -200,9 +200,9 @@ bytes args)`, which the workflow's EVM Log trigger listens for. `args` is what t
 - **A request nobody answers** expires: give it `deadline` (a unix time) or `.within(seconds)`, and
   after it anyone may call the Pot's `expire(bytes32 key)`, which runs `.catch` with
   `Timeout(bytes32 key)`.
-- **Installing** `@sauce/oracle` on a Pot registers the `onReport` handler and declares the Pot an
-  `IReceiver`, which the forwarder checks over ERC-165 before each delivery. It runs on Ethereum
-  and Base.
+- **The first request** on a Pot installs what it lacks: the `onReport` handler, and `IReceiver`
+  declared, which the forwarder checks over ERC-165 before each delivery. It runs on Ethereum and
+  Base.
 - **The delivery's gas is the workflow's.** The forwarder runs the body in the report's
   transaction: about 250,000 gas for a short body, plus what the body spends, in the workflow's
   report write.
@@ -210,3 +210,53 @@ bytes args)`, which the workflow's EVM Log trigger listens for. `args` is what t
 Chainlink Functions, the request-and-callback product CRE replaces, no longer answers on mainnet:
 its routers still accept a request, and the LINK it holds stays locked until the request times
 out.
+
+### Chainlink's own examples, in Sauce
+
+Chainlink's official consumers, ported to Sauce and executed in the SDK's tests: the CRE ones
+through Chainlink's own forwarder, the data feed against Ethereum's state. A CRE consumer contract
+waits for its workflow to push a report; a Pot asks for one, and the report runs the body, which
+does what the contract's `onReport` does, in the Pot's storage and with the contract's own events.
+The checks the contracts write or inherit, the forwarder, the workflow owner and ERC-165, are
+`@sauce/oracle`'s, so a port is only what the contract does with the report.
+
+| Contract                                | Source                                                                                                                                                                                                                                    | Solidity                                               | Sauce    |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------- |
+| Data Feeds' `DataConsumerV3`            | [documentation `DataConsumerV3.sol`](https://github.com/smartcontractkit/documentation/blob/5dbdbb0fcfe5401df47a13389b806120b78d7f73/public/samples/DataFeeds/DataConsumerV3.sol)                                                         | 50 lines, 17 of code                                   | 3 lines  |
+| CRE's proof-of-reserve `ReserveManager` | [cre-templates `ReserveManager.sol`](https://github.com/smartcontractkit/cre-templates/blob/d0223f31182c76bc36b1cc9d47b13b18efcf2bf6/starter-templates/custom-data-feed/cre-custom-data-feed-go/contracts/evm/src/ReserveManager.sol)     | 33 lines, 25 of code                                   | 12 lines |
+| CRE's `ProtocolWithBreaker`             | [cre-templates `ProtocolWithBreaker.sol`](https://github.com/smartcontractkit/cre-templates/blob/d0223f31182c76bc36b1cc9d47b13b18efcf2bf6/starter-templates/circuit-breaker/circuit-breaker-ts/contracts/evm/src/ProtocolWithBreaker.sol) | 65 lines, 44 of code, on a 242-line `ReceiverTemplate` | 20 lines |
+
+`DataConsumerV3` is a read: the contract is deployed with its feed's address and returns the
+feed's latest answer. In Sauce a program names the chain's feed and calls it, with no deployment:
+
+```js
+function main(): Uint256 {
+  return Chainlink.EthUsdFeed.latestRoundData().answer;
+}
+```
+
+`ReserveManager` records the total minted and the total reserve a proof-of-reserve workflow
+reports, counts the update, and emits `RequestReserveUpdate`. In Sauce the program asks the
+workflow, and the report runs the same steps:
+
+```js
+import { Oracle } from "@sauce/oracle";
+
+function main(owner: Address) {
+  Oracle.cre({ owner }).then((report) => {
+    const [totalMinted, totalReserve] = abi.decode(report, ["Uint256", "Uint256"]);
+    // Where the Pot keeps what the contract keeps, at keccak256 of each name.
+    evm.sstore(crypto.keccak256("ReserveManager.lastTotalMinted"), totalMinted);
+    evm.sstore(crypto.keccak256("ReserveManager.lastTotalReserve"), totalReserve);
+    const counter = crypto.keccak256("ReserveManager.requestIdCounter");
+    evm.sstore(counter, evm.sload(counter) + 1);
+    const update = crypto.keccak256("RequestReserveUpdate((uint256,uint256))");
+    log(abi.encode(totalMinted, totalReserve), update);
+  });
+}
+```
+
+The contract takes `onReport` from anyone; the Pot runs the body only for a report Chainlink's
+forwarder delivers from the workflow owner it asked. `ProtocolWithBreaker` is the same shape with
+a branch: a report of `(uint8 action, string reason)` pauses the protocol and counts a trip, or
+resumes it, each with the contract's event.

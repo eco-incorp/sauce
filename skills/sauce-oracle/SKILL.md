@@ -72,18 +72,13 @@ the DON's signatures and calls the Pot's `onReport(bytes metadata, bytes report)
 
 With no `.catch`, a failed request runs nothing.
 
-## Installing it on a Pot
+## What the Pot needs
 
-A Private Pot answers the forwarder once `@sauce/oracle` is installed on it, on Ethereum or Base:
-
-```sh
-sauce run @sauce/oracle --chain <chain> --wallet <name>
-```
-
-One cook, which registers the program the Pot runs for `onReport(bytes,bytes)` and declares the
-Pot an `IReceiver`: the forwarder asks every receiver that over ERC-165 before it delivers, and a
-Pot that does not answer never receives the report. A chain without a forwarder gets no `onReport`
-handler. A Shared Pot answers no report.
+A Private Pot on Ethereum or Base. The first request on it installs what it lacks to answer the
+forwarder: the program it runs for `onReport(bytes,bytes)`, and `IReceiver` declared, which the
+forwarder asks every receiver over ERC-165 before it delivers; a Pot that does not answer never
+receives the report. A chain without a forwarder has no `onReport` to install. A Shared Pot answers
+no report.
 
 ## What a delivery costs
 
@@ -101,7 +96,24 @@ routers still accept a request, and the LINK it holds stays locked until the req
 CRE replaces it: a workflow's EVM Log trigger in place of the request, `onReport` in place of the
 callback.
 
-## Example
+## Chainlink's own examples, in Sauce
+
+Chainlink's official consumers, ported. A CRE consumer contract waits for its workflow to push a
+report; a Pot asks for one, and the report runs the body, which does what the contract's
+`onReport` does, in the Pot's storage and with the contract's own events. The checks a contract
+writes or inherits (the forwarder, the workflow owner, ERC-165) are `@sauce/oracle`'s, so a port is
+only what the contract does with the report.
+
+| Example                                                                | Ported from                                                                                                                         | Solidity                                               | Sauce    |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------- |
+| [examples/data-feed.sauce.ts](examples/data-feed.sauce.ts)             | Data Feeds' `DataConsumerV3` (smartcontractkit/documentation, `public/samples/DataFeeds/DataConsumerV3.sol`)                        | 50 lines, 17 of code                                   | 3 lines  |
+| [examples/reserve-manager.sauce.ts](examples/reserve-manager.sauce.ts) | CRE's proof-of-reserve `ReserveManager` (smartcontractkit/cre-templates, `starter-templates/custom-data-feed/…/ReserveManager.sol`) | 33 lines, 25 of code, beside `IReceiver`               | 12 lines |
+| [examples/circuit-breaker.sauce.ts](examples/circuit-breaker.sauce.ts) | CRE's `ProtocolWithBreaker` (smartcontractkit/cre-templates, `starter-templates/circuit-breaker/…/ProtocolWithBreaker.sol`)         | 65 lines, 44 of code, on a 242-line `ReceiverTemplate` | 20 lines |
+
+The data feed is a read, answered in the same transaction, so it needs no request: a program names
+the chain's feed (`Chainlink.EthUsdFeed`) and calls it. Each port's header names its source.
+
+## Examples
 
 [examples/price-gate.sauce.ts](examples/price-gate.sauce.ts) pays USDC only if a workflow reports a
-price at or under a limit, with an hour to answer.
+price at or under a limit, with an hour to answer. The three ports above are beside it.
