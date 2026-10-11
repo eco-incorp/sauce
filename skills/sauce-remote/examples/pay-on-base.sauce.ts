@@ -1,8 +1,9 @@
 // Pays `amount` of Base's native coin to `recipient` from this Pot on Base, from a program cooked
 // on Ethereum, and records back on Ethereum what the Pot holds on Base afterwards, in its storage at
 // keccak256("base.balance"). The body runs on Base as this same Pot, when Hyperlane delivers it;
-// the `.then` runs on Ethereum when the answer comes back. Both Pots answer the bridge once
-// `sauce run @sauce/remote` installed their handlers, and hold the native coin each leg pays.
+// the `.then` runs on Ethereum when the answer comes back. The Pot on Ethereum installs the receiver
+// the answer reaches as the program runs; the Pot on Base must already answer Hyperlane, and both
+// hold the native coin each leg pays.
 //
 //   sauce run pay-on-base.sauce.ts --chain <chain> --wallet <name> --args <recipient> <amount>
 //

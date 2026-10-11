@@ -223,9 +223,13 @@ chain, with its names, and reads the program around it as it was when the messag
   bridge's fee, which the program reads from the bridge as it sends, and on the receiving side the
   Kitchen's fee for each message the handler runs. Fund both Pots before you send.
 
-Install `@sauce/remote`'s handlers on the Pot on every chain it sends to or hears from:
-`sauce run @sauce/remote --chain base --wallet <name>`. A chain installs a handler for each bridge
-it has:
+A bridge delivers a message by calling the Pot with its own callback, which the Pot answers with
+the bridge's receiver: a handler. The Pot a round trip is cooked on installs the receiver its answer
+reaches as the program runs, unless it is there already. The Pot on the other chain must already
+answer when the message lands: deployed there, its receiver installed by its owner (only the owner
+can), and holding the Kitchen's fee for the message and, for a round trip, the bridge's fee for the
+answer. `sauce run @sauce/remote --chain base --wallet <name>` installs every receiver a chain has
+ahead of time:
 
 | Bridge    | The Pot answers                                                                                      |
 | --------- | ---------------------------------------------------------------------------------------------------- |

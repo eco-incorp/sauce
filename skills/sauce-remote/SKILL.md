@@ -1,6 +1,6 @@
 ---
 name: sauce-remote
-description: Remote messages written in Sauce — a program that runs code on your own Private Pot on another chain, Base.remote(() => { … }) in main, the body compiled for that chain and run there as the same Pot when a bridge delivers it; a round trip as a promise, .then((result) => { … }) back here with what the body returned, .catch((e) => { … }) with what it reverted with there, .within, Promise.all and race over several chains; the bridge (Hyperlane, LayerZero, Metalayer or Polymer, the first both chains have, or via) and each leg's gas; which Pot pays what; the handlers both Pots install with sauce run @sauce/remote and what each checks; Polymer proofs anyone submits; a message that waits for money an intent brings. Use when a program should run code on the same Pot on another chain, read or change its state there, get an answer back from one or several chains, or when the user mentions remote messages, cross-chain calls or messaging, Hyperlane, LayerZero, Metalayer or Polymer.
+description: Remote messages written in Sauce — a program that runs code on your own Private Pot on another chain, Base.remote(() => { … }) in main, the body compiled for that chain and run there as the same Pot when a bridge delivers it; a round trip as a promise, .then((result) => { … }) back here with what the body returned, .catch((e) => { … }) with what it reverted with there, .within, Promise.all and race over several chains; the bridge (Hyperlane, LayerZero, Metalayer or Polymer, the first both chains have, or via) and each leg's gas; which Pot pays what; the receivers each Pot answers with, installed as a round trip runs, the far Pot ready first, and their checks; Polymer proofs anyone submits; a message that waits for money an intent brings. Use when a program should run code on the same Pot on another chain, read or change its state there, get an answer back from one or several chains, or when the user mentions remote messages, cross-chain calls or messaging, Hyperlane, LayerZero, Metalayer or Polymer.
 ---
 
 # Remote messages in Sauce
@@ -151,12 +151,19 @@ live chain its hooks add to the send, and its checks to each delivery, which the
 `gas` is what the destination's handler is given out of that; 500,000 covers these bodies, and a
 body that does more needs more.
 
-## Install the handlers on both Pots
+## The receivers on both Pots
 
 A bridge delivers a message by calling the Pot with its own callback. A Private Pot answers a call
-it was not written for with the program its owner installed for that selector. Install
-`@sauce/remote`'s once on each chain the Pot sends to or hears from, giving the package as the
-program:
+it was not written for with the program installed for that selector: the bridge's receiver.
+
+- **The Pot a round trip is cooked on** installs the receiver its answer reaches, for the bridge
+  the message takes, as the program runs, unless it is there already. There is no step to take.
+- **The Pot on the other chain** must already answer the bridge when the message lands: deployed
+  there, its receiver installed, and holding the Kitchen's fee for the message (and, for a round
+  trip, the bridge's fee for the answer it sends back). Only its owner can install a receiver, so
+  this is a transaction of the owner's on that chain. Any program the owner runs there that takes
+  the same bridge back installs it; so does installing `@sauce/remote`'s receivers ahead, every
+  bridge the chain has at once:
 
 ```sh
 sauce run @sauce/remote --chain base --wallet <name>
