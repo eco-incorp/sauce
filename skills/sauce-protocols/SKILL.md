@@ -150,3 +150,12 @@ Comet and CometRewards functions are in [examples/Comet.json](examples/Comet.jso
 principal, an `Int256`, shows signed arithmetic beside unsigned: the sign is read with `>= 0`, each
 part converted with `Uint256(…)`, and the debt kept apart from the collateral until `Int256(…)`
 takes one from the other.
+
+[examples/morpho-blue-snippets.sauce.ts](examples/morpho-blue-snippets.sauce.ts) ports Morpho's
+own snippets for a Morpho Blue market, the market named by its id: supply, collateral in and out,
+withdrawals and repayments by an amount, half or all (by shares, their cost worked out as Morpho
+rounds it and approved exactly), a borrow, and the views a position needs, with Morpho's reads,
+the IRM's rate and the oracle's price in
+[examples/MorphoBlueReads.json](examples/MorphoBlueReads.json). A Solidity view that computes
+interest accrued since the market was last touched becomes `accrueInterest` and a read: a program
+runs as a transaction, even under `sauce simulate`.
