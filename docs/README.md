@@ -50,6 +50,7 @@ Write programs:
 
 - [Programs and arguments](guides/cli-programs.md): the program file, `--args`, compile errors, your editor, and JSON actions documents.
 - [Protocols and tokens](guides/protocols-and-tokens.md): call tokens and protocols by name inside a program, in SauceScript and in TypeScript.
+- [From Solidity examples to Sauce](guides/solidity-examples.md): the protocols' own Solidity examples ported to Sauce and run, each beside its source.
 - [Actions](guides/actions.md): write the steps as JSON instead of code, then run them.
 - [Look things up](guides/cli-lookup.md): a chain's names, prices, pools, and taking transactions apart.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several pools.
