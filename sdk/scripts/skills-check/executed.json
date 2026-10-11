@@ -38,6 +38,12 @@
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
     "sauce-random/examples/coin-flip.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
     "sauce-random/examples/draw.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
+    "sauce-random/examples/entropy-coin-flip.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
+    "sauce-random/examples/entropy-growth.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
+    "sauce-random/examples/vrf-d20-house.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
+    "sauce-random/examples/vrf-d20.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
+    "sauce-random/examples/vrf-direct-funding.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
+    "sauce-random/examples/vrf-subscription.sauce.ts": ["sdk/test/std/random/evm.e2e.test.ts"],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts"
     ],

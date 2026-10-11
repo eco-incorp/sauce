@@ -1089,4 +1089,225 @@ function main(bump: Uint256): void {
       },
     );
   });
+
+  describe("the official examples, ported", () => {
+    /** The Pot's storage slot `index` past the word `base`, as the examples lay their records out. */
+    const at = (base: Hex, index = 0n): Hex => toHex(BigInt(base) + index, { size: 32 });
+    /** `keccak256(abi.encode(key, namespace))`: a record of a mapping, as the examples key one. */
+    const record = (key: bigint | Address, namespace: Hex): Hex =>
+      keccak256(
+        encodeAbiParameters(
+          [{ type: typeof key === "bigint" ? "uint256" : "address" }, { type: "bytes32" }],
+          [key, namespace],
+        ),
+      );
+    const namespace = (name: string): Hex => keccak256(toHex(name));
+    const event = (signature: string): Hex => keccak256(toHex(signature));
+    const read = async (slot: Hex): Promise<bigint> => storage(slot);
+    /** Cooks a skill example with `args`, answering its receipt. */
+    const run = async (name: string, args: readonly (bigint | Hex)[] = []) => {
+      const receipt = await cook(compiled(skillExample(name), args));
+      expect(receipt.status).toBe("success");
+      return receipt;
+    };
+    /** What a skill example refuses, cooked as an `eth_call` from the Pot's owner. */
+    const refusal = async (name: string, args: readonly (bigint | Hex)[] = []) =>
+      (
+        await callAs(
+          OWNER.address,
+          stack.pot,
+          encodeFunctionData({
+            abi: potAbi,
+            functionName: "cook",
+            args: [stack.engine, compiled(skillExample(name), args)],
+          }),
+          15_000_000n,
+          FEE,
+        )
+      ).reason;
+    const vrfIdIn = (receipt: TransactionReceipt): bigint =>
+      (eventsOf(receipt, WRAPPER, WRAPPER_MOCK.abi)[0]!.args as { requestId: bigint }).requestId;
+    const sequenceIn = (receipt: TransactionReceipt): bigint =>
+      (eventsOf(receipt, ENTROPY, ENTROPY_MOCK.abi)[0]!.args as { sequenceNumber: bigint })
+        .sequenceNumber;
+    const reveal = (sequence: bigint, value: bigint) =>
+      send(
+        stranger,
+        ENTROPY,
+        encodeFunctionData({
+          abi: ENTROPY_MOCK.abi,
+          functionName: "reveal",
+          args: [PROVIDER, sequence, word(value)],
+        }),
+      );
+
+    itSettling(
+      "sauce-random/examples/vrf-direct-funding keeps DirectFundingConsumer's request status and words",
+      async () => {
+        const requests = namespace("DirectFundingConsumer.requests");
+        const wrapperBefore = await publicClient.getBalance({ address: WRAPPER });
+        const receipt = await run("vrf-direct-funding");
+        const n = await read(requests);
+        const status = record(n, requests);
+        const paid = await read(status);
+        expect(paid).toBe((await publicClient.getBalance({ address: WRAPPER })) - wrapperBefore);
+        expect(paid).toBeGreaterThan(0n);
+        expect(potLogs(receipt)).toContainEqual([
+          event("RequestSent(uint256,uint32)"),
+          encodeAbiParameters([{ type: "uint256" }, { type: "uint32" }], [n, 2]),
+        ]);
+        expect(await read(at(status, 1n))).toBe(0n);
+
+        const fulfilled = await send(stranger, WRAPPER, fulfill(vrfIdIn(receipt), [11n, 22n]));
+        expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect([
+          await read(at(status, 1n)),
+          await read(at(status, 2n)),
+          await read(at(status, 3n)),
+        ]).toEqual([1n, 11n, 22n]);
+        expect(potLogs(fulfilled)).toContainEqual([
+          event("RequestFulfilled(uint256,uint256[],uint256)"),
+          encodeAbiParameters(
+            [{ type: "uint256" }, { type: "uint256[]" }, { type: "uint256" }],
+            [n, [11n, 22n], paid],
+          ),
+        ]);
+      },
+    );
+
+    itSettling(
+      "sauce-random/examples/vrf-subscription keeps SubscriptionConsumer's request status and words",
+      async () => {
+        const requests = namespace("SubscriptionConsumer.requests");
+        const receipt = await run("vrf-subscription");
+        const n = await read(requests);
+        const status = record(n, requests);
+        expect(await read(status)).toBe(1n);
+        const fulfilled = await send(stranger, WRAPPER, fulfill(vrfIdIn(receipt), [5n, 6n]));
+        expect(eventsOf(fulfilled, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect([
+          await read(at(status, 1n)),
+          await read(at(status, 2n)),
+          await read(at(status, 3n)),
+        ]).toEqual([1n, 5n, 6n]);
+        expect(potLogs(fulfilled)).toContainEqual([
+          event("RequestFulfilled(uint256,uint256[])"),
+          encodeAbiParameters([{ type: "uint256" }, { type: "uint256[]" }], [n, [5n, 6n]]),
+        ]);
+      },
+    );
+
+    itSettling(
+      "sauce-random/examples/vrf-d20 rolls VRFD20's die once per roller, and vrf-d20-house reads the house",
+      async () => {
+        const roller = "0x00000000000000000000000000000000000000e1" as Address;
+        const results = namespace("VRFD20.results");
+        const house = async (player: Address) => {
+          const { ok, data, reason } = await callAs(
+            OWNER.address,
+            stack.pot,
+            encodeFunctionData({
+              abi: potAbi,
+              functionName: "cook",
+              args: [stack.engine, compiled(skillExample("vrf-d20-house"), [player])],
+            }),
+            15_000_000n,
+            FEE,
+          );
+          // The cook answers what the program returns, as it is: the house's name.
+          return ok ? Buffer.from(data.slice(2), "hex").toString("utf8") : reason;
+        };
+        expect(await house(roller)).toBe("Dice not rolled");
+
+        const receipt = await run("vrf-d20", [roller]);
+        const n = await read(results);
+        expect(await read(record(roller, results))).toBe(42n);
+        expect(potLogs(receipt)).toContainEqual([
+          event("DiceRolled(uint256,address)"),
+          word(n),
+          toHex(BigInt(roller), { size: 32 }),
+          "0x",
+        ]);
+        expect(await refusal("vrf-d20", [roller])).toBe("Already rolled");
+        expect(await house(roller)).toBe("Roll in progress");
+
+        // 2 % 20 + 1 = 3: Stark.
+        const landed = await send(stranger, WRAPPER, fulfill(vrfIdIn(receipt), [2n]));
+        expect(eventsOf(landed, WRAPPER, WRAPPER_MOCK.abi)).toEqual([]);
+        expect(await read(record(roller, results))).toBe(3n);
+        expect(potLogs(landed)).toContainEqual([
+          event("DiceLanded(uint256,uint256)"),
+          word(n),
+          word(3n),
+          "0x",
+        ]);
+        expect(await house(roller)).toBe("Stark");
+      },
+    );
+
+    itSettling(
+      "sauce-random/examples/entropy-coin-flip flips CoinFlip's coin: heads on an even number",
+      async () => {
+        const flips = namespace("CoinFlip.flips");
+        for (const [value, isHeads] of [
+          [10n, true],
+          [7n, false],
+        ] as const) {
+          const receipt = await run("entropy-coin-flip");
+          const n = await read(flips);
+          expect(potLogs(receipt)).toContainEqual([
+            event("FlipRequest(uint64)"),
+            encodeAbiParameters([{ type: "uint64" }], [n]),
+          ]);
+          const revealed = await reveal(sequenceIn(receipt), value);
+          expect(potLogs(revealed)).toContainEqual([
+            event("FlipResult(uint64,bool)"),
+            encodeAbiParameters([{ type: "uint64" }, { type: "bool" }], [n, isHeads]),
+          ]);
+        }
+      },
+    );
+
+    itSettling(
+      "sauce-random/examples/entropy-growth grows NFTGrowth's token: up, nothing, death, and unlocks past ten minutes",
+      async () => {
+        const nfts = namespace("NFTGrowth.nftInfo");
+        const token = 7n;
+        const info = record(token, nfts);
+        const state = async () => [
+          await read(info),
+          await read(at(info, 1n)),
+          await read(at(info, 2n)),
+        ];
+        const grow = async (value: bigint, expected: readonly bigint[], result: number) => {
+          const receipt = await run("entropy-growth", [token]);
+          expect((await state())[2]).toBe(1n);
+          expect(await refusal("entropy-growth", [token])).toBe("NFT is locked");
+          const revealed = await reveal(sequenceIn(receipt), value);
+          expect(await state()).toEqual(expected);
+          expect(potLogs(revealed)).toContainEqual([
+            event("NFTResult(uint256,uint256,bool,uint8)"),
+            word(token),
+            encodeAbiParameters(
+              [{ type: "uint256" }, { type: "bool" }, { type: "uint8" }],
+              [expected[0]!, expected[1] === 1n, result],
+            ),
+          ]);
+        };
+        await grow(1_234n, [2n, 0n, 0n], 0); // below 4000: a level up
+        await grow(5_000n, [2n, 0n, 0n], 1); // below 8000: nothing
+        await grow(9_000n, [2n, 1n, 0n], 2); // the rest: death
+        expect(await refusal("entropy-growth", [token])).toBe("NFT is dead");
+
+        // Another token, its number never revealed: past ten minutes anyone expires it, and it unlocks.
+        const other = record(8n, nfts);
+        const receipt = await run("entropy-growth", [8n]);
+        expect(await read(at(other, 2n))).toBe(1n);
+        await warp(601);
+        expect((await expire(entropyKey(PROVIDER, sequenceIn(receipt)))).status).toBe("success");
+        expect(await read(at(other, 2n))).toBe(0n);
+        expect(await read(other)).toBe(1n);
+      },
+    );
+  });
 });
