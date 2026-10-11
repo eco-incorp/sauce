@@ -90,6 +90,12 @@ const abi = {
     "function borrowRateView(MarketParams marketParams, Market market) view returns (uint256)",
     "function price() view returns (uint256)",
   ]),
+  v4Quoter: parseAbi([
+    "function quoteExactInputSingle(((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData) params) returns (uint256 amountOut, uint256 gasEstimate)",
+  ]),
+  permit2: parseAbi([
+    "function allowance(address user, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)",
+  ]),
   quoter: parseAbi([
     "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
     "function quoteExactOutputSingle((address tokenIn, address tokenOut, uint256 amount, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
@@ -921,6 +927,68 @@ describe(
         await step(3, WAD, receiver);
         assert.equal((await position()).collateral, 0n);
         assert.equal(await balanceOf(env, WETH, receiver), WAD);
+      });
+    });
+    describe("Uniswap V4's swap guide, through the Universal Router", () => {
+      const FILE = example("sauce-swaps", "uniswap-v4-swap");
+      const USDC = named("USDC");
+      const WETH = named("WETH");
+      const ROUTER = named("UniswapV4_UniversalRouter");
+      const PERMIT2 = named("Permit2_Permit2");
+      const USDC_BALANCE = { slot: 9n };
+      /** Uniswap's V4Quoter on Ethereum: what the swap is held to. */
+      const V4_QUOTER: Address = "0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203";
+      const KEY = {
+        currency0: USDC,
+        currency1: WETH,
+        fee: 500,
+        tickSpacing: 10,
+        hooks: "0x0000000000000000000000000000000000000000" as Address,
+      };
+      const AMOUNT_IN = 1000n * 10n ** 6n;
+
+      it("approves through Permit2 and sells 1,000 USDC for WETH in the 0.05% pool, as the quoter quotes", async () => {
+        const held = 3000n * 10n ** 6n;
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, held);
+        const { result } = await env.publicClient.simulateContract({
+          address: V4_QUOTER,
+          abi: abi.v4Quoter,
+          functionName: "quoteExactInputSingle",
+          args: [{ poolKey: KEY, zeroForOne: true, exactAmount: AMOUNT_IN, hookData: "0x" }],
+        });
+        const quoted = result[0];
+        assert.ok(quoted > 0n);
+
+        const key = JSON.stringify({ ...KEY, fee: KEY.fee, tickSpacing: KEY.tickSpacing });
+        const returned = await cook(FILE, [key, String(AMOUNT_IN), String(quoted)]);
+        assert.equal(BigInt(returned as string), quoted);
+        assert.equal(await balanceOf(env, WETH, env.pot), quoted);
+        assert.equal(await balanceOf(env, USDC, env.pot), held - AMOUNT_IN);
+        // Both approvals were exactly what the swap spent: nothing stands after it.
+        assert.equal(await allowance(env, USDC, env.pot, PERMIT2), 0n);
+        const [left] = await env.publicClient.readContract({
+          address: PERMIT2,
+          abi: abi.permit2,
+          functionName: "allowance",
+          args: [env.pot, USDC, ROUTER],
+        });
+        assert.equal(left, 0n);
+      });
+
+      it("refuses a minimum the pool cannot meet", async () => {
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, AMOUNT_IN);
+        const { result } = await env.publicClient.simulateContract({
+          address: V4_QUOTER,
+          abi: abi.v4Quoter,
+          functionName: "quoteExactInputSingle",
+          args: [{ poolKey: KEY, zeroForOne: true, exactAmount: AMOUNT_IN, hookData: "0x" }],
+        });
+        const rehearsal = await simulate(FILE, [
+          JSON.stringify(KEY),
+          String(AMOUNT_IN),
+          String(result[0] + 1n),
+        ]);
+        assert.equal(rehearsal.ok, false);
       });
     });
   },

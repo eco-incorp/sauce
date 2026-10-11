@@ -580,6 +580,9 @@ const KNOWN_ADDRESSES = new Set();
     }
     if (typeof value === "object") for (const v of Object.values(value)) collect(v, depth + 1);
   };
+  // The zero address names no contract: it is the value a field takes for none (a V4 pool's hooks,
+  // native ETH as a currency).
+  KNOWN_ADDRESSES.add(`0x${"0".repeat(40)}`);
   collect(sdk.routes.TOKEN_REGISTRY);
   const modules = await Promise.all(
     sdk.listProtocolSlugs().map((slug) => load(`${PKG}/protocols/${slug}`).catch(() => ({}))),
