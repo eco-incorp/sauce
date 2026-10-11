@@ -261,9 +261,9 @@ on the chain it is cooked on, Ethereum below, and its body on the same Pot on Ba
 | Bridge    | Official example                                                                                                                                                                                                                                                                                                                               | Solidity | Sauce |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----- |
 | Hyperlane | [HelloWorld.sol](https://github.com/hyperlane-xyz/hyperlane-monorepo/blob/18c32ed2b608bfb02183b5028e2406c5153a3754/typescript/helloworld/contracts/HelloWorld.sol)                                                                                                                                                                             | 62       | 25    |
-| LayerZero | [MyOApp.sol](https://github.com/LayerZero-Labs/devtools/blob/508363b50abf8215363a9d3aaddaf2ca5021c9ec/examples/oapp/contracts/MyOApp.sol)                                                                                                                                                                                                      | 38       | 15    |
+| LayerZero | [MyOApp.sol](https://github.com/LayerZero-Labs/devtools/blob/508363b50abf8215363a9d3aaddaf2ca5021c9ec/examples/oapp/contracts/MyOApp.sol)                                                                                                                                                                                                      | 38       | 14    |
 | Metalayer | BlockHeightReader.sol and BlockHeightProvider.sol, in the `@metalayer/contracts` npm package                                                                                                                                                                                                                                                   | 67       | 9     |
-| Polymer   | [StateSyncV2.sol](https://github.com/dpbmaverick98/polymer-state-sync/blob/e277c1ec466acfc028d2e99f1adf028a44f4a06c/contracts/StateSyncV2.sol), the State Sync example [Polymer's quickstart](https://github.com/polymerdao/developer-hub/blob/dc3ca3aec2a93b4a0cc933acaad07cd3a8105078/docs/build/get%20started/quickstart.mdx) walks through | 145      | 45    |
+| Polymer   | [StateSyncV2.sol](https://github.com/dpbmaverick98/polymer-state-sync/blob/e277c1ec466acfc028d2e99f1adf028a44f4a06c/contracts/StateSyncV2.sol), the State Sync example [Polymer's quickstart](https://github.com/polymerdao/developer-hub/blob/dc3ca3aec2a93b4a0cc933acaad07cd3a8105078/docs/build/get%20started/quickstart.mdx) walks through | 145      | 44    |
 
 The counts are code lines, comments and blank lines left out, and the Solidity is the example's file
 alone, not the base contract it inherits (Hyperlane's Router, LayerZero's OApp). The originals'
@@ -313,11 +313,11 @@ function main(text: string) {
     () => {
       const lastMessage = crypto.keccak256("myoapp.lastMessage");
       const words = crypto.keccak256(lastMessage.toBytesBe(32));
-      const zero = 0;
-      const padded = text.concat(zero.toBytesBe(32));
+      // As the original encodes it: an offset, the length, then the bytes padded to whole words.
+      const encoded = abi.encode(text);
       evm.sstore(lastMessage, text.length);
       for (let i = 0; i < text.length; i += 32) {
-        evm.sstore(words + i / 32, padded.slice(i, i + 32).toBe());
+        evm.sstore(words + i / 32, encoded.slice(64 + i, 96 + i).toBe());
       }
     },
     { via: "layerzero" },
@@ -352,11 +352,11 @@ only the owner's programs write to the Pot, and a proof delivers once. Run it wi
 ```js
 function keep(slot: Uint256, data: bytes): void {
   const words = crypto.keccak256(slot.toBytesBe(32));
-  const zero = 0;
-  const padded = data.concat(zero.toBytesBe(32));
+  // An offset, the length, then the bytes padded to whole words.
+  const encoded = abi.encode(data);
   evm.sstore(slot, data.length);
   for (let i = 0; i < data.length; i += 32) {
-    evm.sstore(words + i / 32, padded.slice(i, i + 32).toBe());
+    evm.sstore(words + i / 32, encoded.slice(64 + i, 96 + i).toBe());
   }
 }
 

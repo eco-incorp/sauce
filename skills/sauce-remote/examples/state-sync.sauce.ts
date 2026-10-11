@@ -8,7 +8,7 @@
 // quickstart walks through (polymerdao/developer-hub, docs/build/get started/quickstart.mdx)
 //   https://github.com/dpbmaverick98/polymer-state-sync/blob/e277c1ec466acfc028d2e99f1adf028a44f4a06c/contracts/StateSyncV2.sol
 // The original is a contract deployed on every chain: 145 lines of Solidity (comments left out).
-// This program is 45 and deploys nothing. Only its owner's programs write to the Pot, so the
+// This program is 44 and deploys nothing. Only its owner's programs write to the Pot, so the
 // original's per-key owners fall away; a proof delivers once (the Pot keeps each delivered log's
 // place), which is the original's replay check; its two demonstration events are left out.
 //
@@ -22,11 +22,11 @@
 //   sauce run state-sync.sauce.ts --chain ethereum --wallet <name> --args greeting 0x68656c6c6f
 function keep(slot: Uint256, data: bytes): void {
   const words = crypto.keccak256(slot.toBytesBe(32));
-  const zero = 0;
-  const padded = data.concat(zero.toBytesBe(32));
+  // An offset, the length, then the bytes padded to whole words.
+  const encoded = abi.encode(data);
   evm.sstore(slot, data.length);
   for (let i = 0; i < data.length; i += 32) {
-    evm.sstore(words + i / 32, padded.slice(i, i + 32).toBe());
+    evm.sstore(words + i / 32, encoded.slice(64 + i, 96 + i).toBe());
   }
 }
 

@@ -226,9 +226,9 @@ chain it is cooked on, and its body on the same Pot on the other.
 | Bridge    | Official example                                    | Solidity | Sauce | Program                                                          |
 | --------- | --------------------------------------------------- | -------- | ----- | ---------------------------------------------------------------- |
 | Hyperlane | HelloWorld, Hyperlane's Hello World app             | 62       | 25    | [examples/hello-world.sauce.ts](examples/hello-world.sauce.ts)   |
-| LayerZero | MyOApp, LayerZero's OApp example                    | 38       | 15    | [examples/my-oapp.sauce.ts](examples/my-oapp.sauce.ts)           |
+| LayerZero | MyOApp, LayerZero's OApp example                    | 38       | 14    | [examples/my-oapp.sauce.ts](examples/my-oapp.sauce.ts)           |
 | Metalayer | BlockHeightReader and BlockHeightProvider           | 67       | 9     | [examples/block-height.sauce.ts](examples/block-height.sauce.ts) |
-| Polymer   | State Sync (StateSyncV2), from Polymer's quickstart | 145      | 45    | [examples/state-sync.sauce.ts](examples/state-sync.sauce.ts)     |
+| Polymer   | State Sync (StateSyncV2), from Polymer's quickstart | 145      | 44    | [examples/state-sync.sauce.ts](examples/state-sync.sauce.ts)     |
 
 Lines are code lines, comments and blank lines left out, and the Solidity is the example's own file
 only, not the bridge's base contract it inherits (Hyperlane's Router, LayerZero's OApp). Each
