@@ -43,8 +43,9 @@ callback and for approving its own requests installed on it.
 
 - **The callback carries no request id.** Only the image id and the journal identify what was
   proven. Anyone may fund a request naming any contract as its callback, so a receiver keys what it
-  waits for by what the journal commits (the requests `@sauce/zk` makes have the guest commit the
-  sha256 of its stdin first, and their stdin begins with the request's id).
+  waits for by what the journal commits (`@sauce/zk` keys a request by the image id and either the
+  journal it named in advance, asked for with a `DigestMatch`, or the sha256 of the guest's stdin,
+  which begins with the request's id and which the guest commits first).
 - **At least once.** A proof may be delivered again, and a failed callback (`CallbackFailed`) is
   not retried; the prover is paid either way.
 - **A contract client approves its own requests.** With ERC-1271, every lock of a request whose id

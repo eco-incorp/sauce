@@ -124,6 +124,8 @@ address.
 | [Squid Router](../protocols/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
 | [Stargate](../protocols/stargate.md) | poolNative | `0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C7` | `Stargate.PoolNative` |
 | [Stargate](../protocols/stargate.md) | poolUSDC | `0x27a16dc786820B16E5c9028b75B99F6f604b5d26` | `Stargate.PoolUSDC` |
+| [Succinct SP1](../protocols/succinct.md) | verifierGatewayGroth16 | `0x397A5f7f3dBd538f23DE225B51f532c34448dA9B` | `Succinct.VerifierGatewayGroth16` |
+| [Succinct SP1](../protocols/succinct.md) | verifierGatewayPlonk | `0x3B6041173B80E77f038f3F2C0f9744f04837185e` | `Succinct.VerifierGatewayPlonk` |
 | [Superfluid](../protocols/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
 | [Superfluid](../protocols/superfluid.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
 | [Synapse Protocol](../protocols/synapse.md) | synapseBridge | `0xf07d1C752fAb503E47FEF309bf14fbDD3E867089` | `Synapse.SynapseBridge` |

@@ -1277,6 +1277,16 @@ export interface StargatePoolMethods {
   "quoteOFT"(arg0: { "dstEid": bigint; "to": bigint; "amountLD": bigint; "minAmountLD": bigint; "extraOptions": (string | SauceBytes); "composeMsg": (string | SauceBytes); "oftCmd": (string | SauceBytes) }): [{ "minAmountLD": bigint; "maxAmountLD": bigint }, SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>, { "amountSentLD": bigint; "amountReceivedLD": bigint }] & { "oftLimit": { "minAmountLD": bigint; "maxAmountLD": bigint }; "oftFeeDetails": SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>; "oftReceipt": { "amountSentLD": bigint; "amountReceivedLD": bigint } };
 }
 
+export interface SuccinctSP1VerifierGatewayMethods {
+  "addRoute"(arg0: bigint): void;
+  "freezeRoute"(arg0: bigint): void;
+  "owner"(): bigint;
+  "renounceOwnership"(): void;
+  "routes"(arg0: bigint): [bigint, boolean] & { "verifier": bigint; "frozen": boolean };
+  "transferOwnership"(arg0: bigint): void;
+  "verifyProof"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes)): void;
+}
+
 export interface SuperfluidCFAForwarderMethods {
   "createFlow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): boolean;
   "updateFlow"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): boolean;
@@ -1741,7 +1751,7 @@ export interface BenqiSource extends BenqiComptrollerMethods {
 }
 
 export interface BoundlessSource extends BoundlessMarketMethods {
-  readonly Market: SauceContract<BoundlessMarketMethods>;
+  readonly Market?: SauceContract<BoundlessMarketMethods>;
 }
 
 export interface CamelotSource {
@@ -2193,8 +2203,8 @@ export interface SommelierSource {
 }
 
 export interface SpaceAndTimeSource {
-  readonly QueryRouter: SauceContract<SpaceAndTimeQueryRouterMethods>;
-  readonly CallbackExecutor: SauceContract<SpaceAndTimeCallbackExecutorMethods>;
+  readonly QueryRouter?: SauceContract<SpaceAndTimeQueryRouterMethods>;
+  readonly CallbackExecutor?: SauceContract<SpaceAndTimeCallbackExecutorMethods>;
 }
 
 export interface SparkSource extends SparkPoolMethods {
@@ -2219,6 +2229,11 @@ export interface StargateSource {
   readonly PoolNative?: SauceContract<StargatePoolMethods>;
   readonly PoolUSDC?: SauceContract<StargatePoolMethods>;
   readonly PoolUSDT?: SauceContract<StargatePoolMethods>;
+}
+
+export interface SuccinctSource {
+  readonly VerifierGatewayGroth16?: SauceContract<SuccinctSP1VerifierGatewayMethods>;
+  readonly VerifierGatewayPlonk?: SauceContract<SuccinctSP1VerifierGatewayMethods>;
 }
 
 export interface SuperfluidSource extends SuperfluidCFAForwarderMethods {
@@ -2581,6 +2596,7 @@ declare global {
   const Squid: SquidSource;
   const Stader: StaderSource;
   const Stargate: StargateSource;
+  const Succinct: SuccinctSource;
   const Superfluid: SuperfluidSource;
   const SushiswapV2: SushiswapV2Source;
   const Swell: SwellSource;

@@ -223,8 +223,8 @@
         "required": {
           "submitRequest((uint256,((address,uint96),(uint8,bytes),bytes4),string,(uint8,bytes),(uint256,uint256,uint64,uint32,uint32,uint32,uint256)),bytes)": "std/zk/zk.evm.js Zk.risc0, the call a program's proof request is submitted and its price deposited with",
           "eip712DomainSeparator()": "std/zk/zk.evm.js Zk.risc0, which hashes the request as the market does, to approve it as the Pot's own (ERC-1271)",
-          "slash(uint256)": "std/zk/zk.evm.js Zk.cancel, which slashes an expired locked request so its price comes back",
-          "withdraw(uint256)": "std/zk/zk.evm.js Zk.cancel, which withdraws an unanswered request's price"
+          "slash(uint256)": "std/zk/zk.evm.js Zk.reclaim, which slashes an expired locked request so its price comes back",
+          "withdraw(uint256)": "std/zk/zk.evm.js Zk.reclaim, which withdraws an unanswered request's price"
         }
       }
     },
@@ -420,7 +420,7 @@
       "PortalABI": {
         "roles": ["Portal"],
         "required": {
-          "publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "routes/portal.ts publishTx, the transaction that publishes an intent whose vault was paid directly — the SDK's default way to fund one, from a wallet (sauce publish) or a Pot",
+          "publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "routes/portal.ts publishTx, the transaction that publishes an intent whose vault was paid directly \u2014 the SDK's default way to fund one, from a wallet (sauce publish) or a Pot",
           "intentVaultAddress(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "the program a Pot runs to fund an intent it opens (routes/intent-sugar.ts), which reads the vault it pays from the Portal in the same cook, and sauce publish's cross-check of the SDK's offline vault prediction"
         }
       },
@@ -1185,6 +1185,14 @@
     "stargate": {
       "StargatePoolABI": {
         "roles": ["poolNative", "poolUSDC", "poolUSDT"]
+      }
+    },
+    "succinct": {
+      "SP1VerifierGatewayABI": {
+        "roles": ["verifierGatewayGroth16", "verifierGatewayPlonk"],
+        "required": {
+          "verifyProof(bytes32,bytes,bytes)": "skills/sauce-zk/examples/fibonacci.sauce.ts, which verifies an SP1 proof through the gateway before acting on its public values"
+        }
       }
     },
     "superfluid": {

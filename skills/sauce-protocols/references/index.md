@@ -340,7 +340,7 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (10)
+## Infrastructure and standards (11)
 
 ### Choosing between them
 
@@ -349,7 +349,8 @@ ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances)
 ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
 (`sauce-intents`). Boundless is RISC Zero's proof market, on Base: it proves a guest program
 ran and calls the requester back with its journal; a program waits on it with `@sauce/zk`
-(`sauce-zk`).
+(`sauce-zk`). Succinct's SP1 verifier gateways check a proof that an SP1 program ran in the
+same call, on Ethereum and Base, for a program that brings its proof with it.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
@@ -363,3 +364,4 @@ ran and calls the requester back with its journal; a program waits on it with `@
 | [Instadapp](instadapp.md) ([registry](registry/instadapp.md)) | — | `Instadapp`: ethereum | ethereum |
 | [Permit2](permit2.md) ([registry](registry/permit2.md)) | — | `Permit2`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
 | [Safe](safe.md) ([registry](registry/safe.md)) | — | `Safe`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
+| [Succinct SP1](succinct.md) ([registry](registry/succinct.md)) | — | `Succinct`: ethereum, base | ethereum, base |

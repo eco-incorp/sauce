@@ -238,6 +238,8 @@ and in each chain's file in `sauce-chains`.
 - `Stargate.PoolNative` ([`stargate`](../../sauce-protocols/references/registry/stargate.md))
 - `Stargate.PoolUSDC` ([`stargate`](../../sauce-protocols/references/registry/stargate.md))
 - `Stargate.PoolUSDT` ([`stargate`](../../sauce-protocols/references/registry/stargate.md))
+- `Succinct.VerifierGatewayGroth16` ([`succinct`](../../sauce-protocols/references/registry/succinct.md))
+- `Succinct.VerifierGatewayPlonk` ([`succinct`](../../sauce-protocols/references/registry/succinct.md))
 - `Superfluid.CFAForwarder` ([`superfluid`](../../sauce-protocols/references/registry/superfluid.md), default)
 - `Superfluid.Host` ([`superfluid`](../../sauce-protocols/references/registry/superfluid.md))
 - `SushiswapV2.Factory` ([`sushiswap-v2`](../../sauce-protocols/references/registry/sushiswap-v2.md))

@@ -617,7 +617,8 @@ const CHOOSING = {
     "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer",
     "(`sauce-intents`). Boundless is RISC Zero's proof market, on Base: it proves a guest program",
     "ran and calls the requester back with its journal; a program waits on it with `@sauce/zk`",
-    "(`sauce-zk`).",
+    "(`sauce-zk`). Succinct's SP1 verifier gateways check a proof that an SP1 program ran in the",
+    "same call, on Ethereum and Base, for a program that brings its proof with it.",
   ],
 };
 

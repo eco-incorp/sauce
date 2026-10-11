@@ -227,6 +227,8 @@ address.
 | [Stargate](../protocols/stargate.md) | poolNative | `0x77b2043768d28E9C9aB44E1aBfC95944bcE57931` | `Stargate.PoolNative` |
 | [Stargate](../protocols/stargate.md) | poolUSDC | `0xc026395860Db2d07ee33e05fE50ed7bD583189C7` | `Stargate.PoolUSDC` |
 | [Stargate](../protocols/stargate.md) | poolUSDT | `0x933597a323Eb81cAe705C5bC29985172fd5A3973` | `Stargate.PoolUSDT` |
+| [Succinct SP1](../protocols/succinct.md) | verifierGatewayGroth16 | `0x397A5f7f3dBd538f23DE225B51f532c34448dA9B` | `Succinct.VerifierGatewayGroth16` |
+| [Succinct SP1](../protocols/succinct.md) | verifierGatewayPlonk | `0x3B6041173B80E77f038f3F2C0f9744f04837185e` | `Succinct.VerifierGatewayPlonk` |
 | [Superfluid](../protocols/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
 | [Superfluid](../protocols/superfluid.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
 | [SushiSwap V2](../protocols/sushiswap-v2.md) | factory | `0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac` | `SushiswapV2.Factory` |

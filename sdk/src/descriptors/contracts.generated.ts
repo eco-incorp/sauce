@@ -230,6 +230,8 @@ import * as staderAbis from "../protocols/stader/abis.js";
 import { deployments as staderDeployments } from "../protocols/stader/addresses.js";
 import * as stargateAbis from "../protocols/stargate/abis.js";
 import { deployments as stargateDeployments } from "../protocols/stargate/addresses.js";
+import * as succinctAbis from "../protocols/succinct/abis.js";
+import { deployments as succinctDeployments } from "../protocols/succinct/addresses.js";
 import * as superfluidAbis from "../protocols/superfluid/abis.js";
 import { deployments as superfluidDeployments } from "../protocols/superfluid/addresses.js";
 import * as sushiswapV2Abis from "../protocols/sushiswap-v2/abis.js";
@@ -394,6 +396,7 @@ export const PROTOCOL_SOURCES = {
   "squid": { abis: squidAbis, deployments: squidDeployments },
   "stader": { abis: staderAbis, deployments: staderDeployments },
   "stargate": { abis: stargateAbis, deployments: stargateDeployments },
+  "succinct": { abis: succinctAbis, deployments: succinctDeployments },
   "superfluid": { abis: superfluidAbis, deployments: superfluidDeployments },
   "sushiswap-v2": { abis: sushiswapV2Abis, deployments: sushiswapV2Deployments },
   "swell": { abis: swellAbis, deployments: swellDeployments },
@@ -420,7 +423,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 319 contracts across 137 protocols. */
+/** One entry per contract: 321 contracts across 138 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -679,6 +682,8 @@ export const CONTRACT_LINKS = [
   { protocol: "stargate", contract: "PoolNative", kind: "singleton", roleKey: "poolNative", abiExport: "StargatePoolABI" },
   { protocol: "stargate", contract: "PoolUSDC", kind: "singleton", roleKey: "poolUSDC", abiExport: "StargatePoolABI" },
   { protocol: "stargate", contract: "PoolUSDT", kind: "singleton", roleKey: "poolUSDT", abiExport: "StargatePoolABI" },
+  { protocol: "succinct", contract: "VerifierGatewayGroth16", kind: "singleton", roleKey: "verifierGatewayGroth16", abiExport: "SP1VerifierGatewayABI" },
+  { protocol: "succinct", contract: "VerifierGatewayPlonk", kind: "singleton", roleKey: "verifierGatewayPlonk", abiExport: "SP1VerifierGatewayABI" },
   { protocol: "superfluid", contract: "CFAForwarder", kind: "singleton", roleKey: "cfaForwarder", abiExport: "CFAForwarderABI" },
   { protocol: "superfluid", contract: "Host", kind: "address-only", roleKey: "host", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "sushiswap-v2", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "SushiSwapV2FactoryABI" },
@@ -1339,6 +1344,11 @@ export interface StargateContracts {
   readonly PoolUSDT: Contract<typeof stargateAbis.StargatePoolABI>;
 }
 
+export interface SuccinctContracts {
+  readonly VerifierGatewayGroth16: Contract<typeof succinctAbis.SP1VerifierGatewayABI>;
+  readonly VerifierGatewayPlonk: Contract<typeof succinctAbis.SP1VerifierGatewayABI>;
+}
+
 export interface SuperfluidContracts {
   readonly CFAForwarder: Contract<typeof superfluidAbis.CFAForwarderABI>;
   readonly Host: AddressOnlyContract;
@@ -1702,6 +1712,7 @@ export interface ChainContracts {
   readonly Squid: SquidContracts;
   readonly Stader: StaderContracts;
   readonly Stargate: StargateContracts;
+  readonly Succinct: SuccinctContracts;
   readonly Superfluid: SuperfluidContracts;
   readonly SushiswapV2: SushiswapV2Contracts;
   readonly Swell: SwellContracts;
