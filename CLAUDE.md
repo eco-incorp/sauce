@@ -1308,10 +1308,12 @@ data) => …)]`, compiled under the `{ handler: chainId, selector, readOnly }` p
 reported as `program.handlers`), and installs each as it runs, in the same transaction, unless the
 Router's record (ERC-7201 `sauce.storage.Handlers`) already names its code contract, the CREATE2
 address of `0x00 ++ engine ++ program` from the Pot; a promise with a deadline installs the core's
-public `expire` too. `SAUCE_ASYNC_ENGINE`, which the SDK sets to the release engine on an EVM chain,
+public `expire` too, and a request's `interfaces` are declared the same way (`ensureInterface`, one
+read of the Router's `sauce.storage.Interfaces` record when declared). `SAUCE_ASYNC_ENGINE`, which the SDK sets to the release engine on an EVM chain,
 folds that check at compile time (+7k, no handler bytes needed for it); `SAUCE_ASYNC_INSTALLED=1`,
-which `sauce run`/`sauce tx` set after reading every reported handler in place
-(`cli/handlers.ts#handlersInPlace`), drops the handler bytes and makes a missing one revert. The
+which `sauce run`, `sauce tx` and `sauce simulate` set after reading every reported handler in
+place (`cli/handlers.ts#handlersInPlace`, through `commands.ts#sentCook`; the MCP tools reach it
+through the same command functions), drops the handler bytes and makes a missing one revert. The
 handler: `requireCaller`, then `fulfil(key, value)` or `reject` (once: an unknown or settled key is
 logged ignored and returns), which runs the continuation by `evm.delegate` into the in-flight engine
 (one fee). A continuation is `program((input: bytes, mode: Uint256) => …)`, run with
