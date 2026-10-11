@@ -43,7 +43,8 @@
 // finds nothing pending, and the callback returns. The router answers a query once.
 //
 // THE RESULT is Proof of SQL's table, serialized: `Zk.cell(result, column, row)` reads one value of
-// a fixed-width column, and `Zk.rows(result)` how many rows it has.
+// a fixed-width column, `Zk.text(result, column, row)` the bytes of a VARCHAR or VARBINARY one, and
+// `Zk.rows(result)` how many rows it has.
 //
 // BOUNDLESS (`Zk.risc0`, Base), RISC Zero's proof market.
 //
@@ -53,6 +54,12 @@
 // guest's stdin is the request's id (32 bytes) followed by `input`, so no two requests share one,
 // and the guest must commit the sha256 of its whole stdin as the first 32 bytes of its journal: the
 // request's predicate requires it (a `PrefixMatch` on that digest).
+//
+// A JOURNAL KNOWN IN ADVANCE. A guest whose output the program can state — one that proves a claim
+// about its input, as Boundless's own examples do — is asked with `journal`, what it must commit:
+// its stdin is then `input` alone, as the guest reads it unchanged, and the request asks for exactly
+// that journal (a `DigestMatch` on its sha256), as Boundless's own tooling asks by default. The Pot
+// has one such request pending per guest and journal.
 //
 // THE POT SIGNS ITS OWN REQUESTS. A prover locks a request by asking its client
 // `isValidSignature(requestHash, signature)` (ERC-1271), static, with 100,000 gas, and the lock spends
@@ -66,7 +73,10 @@
 // bytes seal)`. The promise's key is the image id with the journal's first word, the sha256 of the
 // guest's stdin (`promiseKey(RISC0, keccak256(abi.encode(imageId, digest)))`), so the handler finds
 // the promise from the callback alone, and a proof of the same guest over another input finds
-// nothing. The body is handed the rest of the journal. A proof delivered again finds the promise
+// nothing. The body is handed the rest of the journal. A request that named its journal is keyed by
+// the image and the journal's sha256 under a tag of its own (`promiseKey(RISC0_JOURNAL, …)`), which
+// the handler looks for first, and its body is handed the whole journal: a proof of that guest and
+// that journal settles it, whichever request it answers. A proof delivered again finds the promise
 // settled.
 //
 // The request expires at its deadline (`rampUpStart + timeout`), and so does its promise; there
@@ -107,6 +117,9 @@ const SAUCE_ZK_TIMEOUT = 0xe6cc9dd0;
 // The tag a Boundless request's promise key is made under: keccak256("sauce.zk.risc0").
 const SAUCE_ZK_RISC0 = 0xb99128647b7cf726b7c5d344394fa65fa7c24e2e70f54d99faf3927ff32222c4;
 
+// The tag of a request that named its journal: keccak256("sauce.zk.risc0.journal").
+const SAUCE_ZK_RISC0_JOURNAL = 0x10e9789322c7f6448ed33bcb3bd452509b688c131efd2f80581bb15729c6ac60;
+
 // The ERC-7201 namespace of the Boundless requests, in the Pot's storage:
 // keccak256(abi.encode(uint256(keccak256("sauce.storage.ZkRisc0")) - 1)) & ~bytes32(uint256(0xff)).
 // Its first word counts the requests the Pot has made, each request's index. At
@@ -137,9 +150,6 @@ const SAUCE_ZK_NO_PARAMETERS = hex`0000000000000000`;
 const SAUCE_ZK_GAS_LIMIT = 1000000;
 const SAUCE_ZK_TIMEOUT_SECONDS = 3600;
 
-// The requests a program makes: `Zk.sql(query)`, `Zk.risc0(request)`, and what their `.catch` and
-// `.then` call. Each coprocessor's takes its own calls, so a program names only the contracts of the
-// coprocessors it asks: one for Ethereum, which has no Boundless market, names none of its.
 // What `Zk.sql` and `Zk.risc0` take. The compiler refuses a field these do not declare, naming it, and
 // a read of a member an object never set unless its type declares it optional, so each is optional
 // here and each method says which it requires.
@@ -166,10 +176,14 @@ interface ProofRequest {
   imageId?: Uint256;
   imageUrl?: bytes;
   input?: bytes;
+  journal?: bytes;
   offer?: ProofOffer;
   gasLimit?: Uint256;
 }
 
+// The requests a program makes: `Zk.sql(query)`, `Zk.risc0(request)`, and what their `.catch` and
+// `.then` call. Each coprocessor's takes its own calls, so a program names only the contracts of the
+// coprocessors it asks: one for Ethereum, which has no Boundless market, names none of its.
 class Requests {
   // A SQL query to Space and Time:
   //
@@ -243,6 +257,10 @@ class Requests {
   //   imageId   the guest's image id; required
   //   imageUrl  where provers download the guest, its UTF-8 bytes; required
   //   input     what the guest reads from stdin after the request's id: none when left out
+  //   journal   what the guest must commit, when the program knows it: the guest then reads
+  //             `input` alone, the request asks for exactly this journal, and the body is handed
+  //             it; left out, the guest commits the sha256 of its stdin and then its output, and
+  //             the body is handed the output
   //   offer     the price and its timing, as the market's Offer: `maxPrice` (wei, deposited),
   //             `rampUpPeriod`, `lockTimeout`, `timeout` (seconds from now) and `lockCollateral`
   //             (ZKC's base units) required, `minPrice` 0 when left out
@@ -283,6 +301,8 @@ class Requests {
           config.imageId,
           config.imageUrl,
           config.input === undefined ? hex`` : config.input,
+          config.journal !== undefined,
+          config.journal === undefined ? hex`` : config.journal,
           offer.minPrice === undefined ? 0 : offer.minPrice,
           offer.maxPrice,
           offer.rampUpPeriod,
@@ -317,6 +337,12 @@ class Requests {
   // negative number is its two's complement in the type's width.
   cell(result, column, row) {
     return cell(result, column, row);
+  }
+
+  // One value of a VARCHAR or VARBINARY column, column `column`'s `row`th: its bytes, UTF-8 for a
+  // VARCHAR.
+  text(result, column, row) {
+    return text(result, column, row);
   }
 
   // How many rows a result has.
@@ -414,6 +440,8 @@ export function requestProof(
   imageId: Uint256,
   imageUrl: bytes,
   input: bytes,
+  exact: bool,
+  journal: bytes,
   minPrice: Uint256,
   maxPrice: Uint256,
   rampUpPeriod: Uint256,
@@ -426,20 +454,36 @@ export function requestProof(
   require(index < 1 << 32, "zk: the Pot has made every request it can");
   evm.sstore(SAUCE_ZK_RISC0_NAMESPACE, index);
   const id = requestIdOf(index);
-  // The guest's stdin, its id first; the input as the market carries it, a version byte (0, raw)
-  // first; and the predicate, the guest's image and the sha256 of its stdin, which its journal must
-  // begin with.
-  const stdin = abi.encode(id).concat(input);
+  // The guest's stdin, its id first unless the program named the journal; the input as the market
+  // carries it, a version byte (0, raw) first; and the predicate, the guest's image and a sha256:
+  // of the journal named, which the journal must be (a `DigestMatch`, 0), or else of the stdin,
+  // which the journal must begin with (a `PrefixMatch`, 1). The promise's key is the predicate's
+  // hash under the tag of its kind.
+  let stdin = input;
+  let committed = journal;
+  let predicateType = 0;
+  let tag = SAUCE_ZK_RISC0_JOURNAL;
+  if (!exact) {
+    stdin = abi.encode(id).concat(input);
+    committed = stdin;
+    predicateType = 1;
+    tag = SAUCE_ZK_RISC0;
+  }
   const data = hex`00`.concat(stdin);
-  const [digest] = abi.decode(evm.static(2, stdin), ["Uint256"]);
+  const [digest] = abi.decode(evm.static(2, committed), ["Uint256"]);
   const predicate = abi.encode(imageId, digest);
+  const key = promiseKey(tag, crypto.keccak256(predicate));
+  require(evm.sload(risc0SlotOf(key)) ==
+    0, "zk: the Pot has a request pending for that guest and journal");
   const rampUpStart = ctx.timestamp();
   // The request's EIP-712 hash, as the market's `_hashTypedDataV4(request.eip712Digest())`.
   const requirements = crypto.keccak256(
     abi.encode(
       SAUCE_ZK_REQUIREMENTS_TYPEHASH,
       crypto.keccak256(abi.encode(SAUCE_ZK_CALLBACK_TYPEHASH, ctx.self(), gasLimit)),
-      crypto.keccak256(abi.encode(SAUCE_ZK_PREDICATE_TYPEHASH, 1, crypto.keccak256(predicate))),
+      crypto.keccak256(
+        abi.encode(SAUCE_ZK_PREDICATE_TYPEHASH, predicateType, crypto.keccak256(predicate)),
+      ),
       0,
     ),
   );
@@ -475,7 +519,7 @@ export function requestProof(
           id,
           requirements: {
             callback: { addr: ctx.self(), gasLimit },
-            predicate: { predicateType: 1, data: predicate },
+            predicate: { predicateType, data: predicate },
             selector: 0,
           },
           imageUrl,
@@ -494,15 +538,15 @@ export function requestProof(
       ),
     ),
   );
-  const key = promiseKey(SAUCE_ZK_RISC0, crypto.keccak256(abi.encode(imageId, digest)));
   evm.sstore(risc0SlotOf(key), index | (maxPrice << 32));
   return key;
 }
 
 // The body of the handler for `handleProof(bytes32,bytes,bytes)`, the call a fulfilled request lands
-// on: from `market` (the chain's BoundlessMarket) alone, it fulfils the promise the image id and the
-// journal's first word name with the rest of the journal. A proof of another request finds nothing
-// pending, and the call returns.
+// on: from `market` (the chain's BoundlessMarket) alone, it fulfils a promise. One whose request named
+// its journal is found by the image id and the journal's sha256, and handed the whole journal; any
+// other by the image id and the journal's first word, and handed the rest. A proof of another request
+// finds nothing pending, and the call returns.
 export function handleProof(market: Address, caller: Address, data: bytes): void {
   requireCaller(market, caller);
   const [imageId, journal, seal] = abi.decode(data.slice(4, data.length), [
@@ -510,7 +554,11 @@ export function handleProof(market: Address, caller: Address, data: bytes): void
     "bytes",
     "bytes",
   ]);
-  if (journal.length < 32) {
+  const [digest] = abi.decode(evm.static(2, journal), ["Uint256"]);
+  const named = promiseKey(SAUCE_ZK_RISC0_JOURNAL, crypto.keccak256(abi.encode(imageId, digest)));
+  if (evm.sload(risc0SlotOf(named)) != 0 || journal.length < 32) {
+    evm.sstore(risc0SlotOf(named), 0);
+    fulfil(named, journal);
     return;
   }
   const key = promiseKey(
@@ -621,6 +669,20 @@ export function cell(result: bytes, column: Uint256, row: Uint256): Uint256 {
   require(row < result.slice(at, at + 8).toBe(), "zk: the result has no such row");
   const start = at + 8 + row * width;
   return result.slice(start, start + width).toBe();
+}
+
+// The body of `Zk.text`.
+export function text(result: bytes, column: Uint256, row: Uint256): bytes {
+  const found = columnAt(result, column);
+  require(widthOf(found[1]) == 0, "zk: the column is of a fixed width");
+  let at = found[0];
+  require(row < result.slice(at, at + 8).toBe(), "zk: the result has no such row");
+  at = at + 8;
+  for (let r = 0; r < row; r += 1) {
+    at = at + 8 + result.slice(at, at + 8).toBe();
+  }
+  const length = result.slice(at, at + 8).toBe();
+  return result.slice(at + 8, at + 8 + length);
 }
 
 // The body of `Zk.rows`: the first column's row count, which every column shares.
