@@ -196,6 +196,17 @@ require generation 4.
 | `swapInfinityCL(vault, key, tokenIn, zeroForOne, amountIn, sqrtPriceLimitX96, recipient)` | `sqrtPriceLimitX96` |
 | `swapInfinityBin(vault, key, tokenIn, swapForY, amountIn, recipient)`                     | none                |
 
+## A protocol's router, as its own examples call it
+
+A protocol's router works in a program too, called as the protocol's Solidity examples call it:
+approve it for the input (`USDC.approve(router, amount)`, or `approve(token, router, amount)` for a
+token the registry names only as a contract), then call it through its namespace. Its exact-output
+forms are the one thing the library has no function for: Uniswap V3's SwapRouter buys an exact
+amount for at most a maximum. [examples/uniswap-v3-swap-examples.sauce.ts](examples/uniswap-v3-swap-examples.sauce.ts)
+ports the four swaps of Uniswap's own `SwapExamples` contract to `UniswapV3.SwapRouter`: exact
+input and exact output, in one pool and along a path through two, each the function it was in
+Solidity, with the minimum (or maximum) a `main` input where the original passed none.
+
 ## The guard (required on every leg)
 
 The library checks `minOut`; what is left is the input a price limit left unspent:
