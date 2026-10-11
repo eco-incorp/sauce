@@ -161,8 +161,10 @@ declare const svm: {
   remainingAccounts(): Account[];
 };
 
-/** Fails the whole program, and the transaction with it, unless `condition` holds. */
-declare function require(condition: unknown, message?: SauceData): void;
+/** Fails the whole program, and the transaction with it, unless `condition` holds. On a name a
+ *  chain may lack, `require(UniswapV3.Factory, "…")`, it is the compile that fails where the name is
+ *  `undefined`, and the name is present after it. */
+declare function require(condition: unknown, message?: SauceData): asserts condition;
 /** Fails the program with `data` as its revert data. */
 declare function revert(data?: SauceData): never;
 /** Emits a log; topics are EVM only. */
@@ -272,6 +274,25 @@ declare function permitTransferFrom(
   signature: SauceData,
   permit2: SauceInt,
 ): void;
+/** An ERC-20 token as a chain's names hold one, made while compiling: a registry symbol (`USDC`)
+ *  and `Token(address)` are instances. EVM only. */
+interface SauceTokenOf {
+  readonly symbol: string | undefined;
+  readonly address: bigint;
+  readonly decimals: bigint | undefined;
+  transfer(to: SauceInt, amount: SauceInt): void;
+  approve(spender: SauceInt, amount: SauceInt): void;
+  transferFrom(from: SauceInt, to: SauceInt, amount: SauceInt): void;
+  balanceOf(holder: SauceInt): bigint;
+}
+/** `@sauce/token`'s token class, `new TokenOf(symbol, address, decimals)`: `TokenOf`, not `Token`,
+ *  which the chain's names export as `Token(address)`. */
+type SauceTokenOfClass = new (
+  symbol: string | undefined,
+  address: SauceInt,
+  decimals: SauceInt | undefined,
+) => SauceTokenOf;
+declare const TokenOf: SauceTokenOfClass;
 
 /** The same functions, imported by name. */
 declare module "@sauce/token" {
@@ -287,6 +308,7 @@ declare module "@sauce/token" {
   export const transfer: typeof globalThis.transfer;
   export const transferChecked: typeof globalThis.transferChecked;
   export const transferFrom: typeof globalThis.transferFrom;
+  export const TokenOf: SauceTokenOfClass;
 }
 
 // The catch-all modules — a JSON ABI beside the program, another `@sauce/` library — are declared

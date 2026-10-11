@@ -1,6 +1,6 @@
 // Compiles holdings.sauce.ts for Ethereum and for Base the way `sauce compile` does, and holds the
 // sauce-chains skill to what that resolves: each name in the skill's table is, on each chain, the
-// address the compile resolves, the one the chain's reference file records and the one the
+// address `sauce globals` lists, the one the chain's reference file records and the one the
 // compiled program carries, and `chainId` is the chain's id. A name the chain lacks is refused with
 // the words the skill quotes; a chain-qualified contract is that chain's address, called or not,
 // and a chain-qualified token is refused. Then payout-solana.sauce.ts: its accounts in order with their
@@ -34,17 +34,13 @@ const skill = read("../SKILL.md");
 const holdings = read("./holdings.sauce.ts");
 const CHAINS = ["ethereum", "base"] as const;
 
-/** Compiles `source` for `chain`, with each contract reference the compile resolved. */
+/** Compiles `source` for `chain`: the program, and its bytes as hex. */
 function compile(chain: string, source: string) {
-  const contracts = new Map<string, { chain: string; address: string }>();
-  const program = routes.compileSauceProgram(chain, source, {
-    accessors: {
-      onContract: (reference, target) =>
-        contracts.set(reference, { chain: target.chain.slug, address: target.address }),
-    },
-  });
-  return { program, contracts, hex: Buffer.from(program.bytecode).toString("hex") };
+  const program = routes.compileSauceProgram(chain, source);
+  return { program, hex: Buffer.from(program.bytecode).toString("hex") };
 }
+/** Whether `hex` carries `address`. */
+const carries = (hex: string, address: string) => hex.includes(address.slice(2).toLowerCase());
 
 /** The message `source` is refused with on `chain`. */
 function refusal(chain: string, source: string): string {
@@ -68,7 +64,7 @@ check(
   `the table names USDC, WETH, bCSPX, UniswapV3.Factory and chainId, not ${rows.map((r) => r.name)}`,
 );
 for (const chain of CHAINS) {
-  const { contracts, hex } = compile(chain, holdings);
+  const { hex } = compile(chain, holdings);
   const globals = routes.sourceGlobals(chain);
   const recorded = read(`../references/${chain}.md`) + read(`../references/${chain}-stocks.md`);
   for (const { name, on } of rows) {
@@ -85,35 +81,33 @@ for (const chain of CHAINS) {
         .find((one) => one.namespace === namespace)
         ?.contracts.find((one) => one.name === contract)?.address;
       check(listed === cell, `sauce globals lists ${name} on ${chain} at ${cell}, not ${listed}`);
-      const resolved = contracts.get(name);
-      check(
-        resolved?.chain === chain && resolved.address === cell,
-        `${name} compiles to ${cell} on ${chain}`,
-      );
     } else {
       const listed = globals.tokens.find((one) => one.symbol === name)?.address;
       check(listed === cell, `sauce globals lists ${name} on ${chain} at ${cell}, not ${listed}`);
-      check(hex.includes(cell.slice(2).toLowerCase()), `${name} compiles to ${cell} on ${chain}`);
     }
+    check(carries(hex, cell), `${name} compiles to ${cell} on ${chain}`);
   }
   console.log(`holdings.sauce.ts on ${chain}: ${rows.map((row) => row.on[chain]).join(", ")}`);
 }
 
-// A name the chain lacks is refused when the file is compiled, in the words the skill quotes.
+// A name the chain lacks is `undefined` there: a use of it is refused when the file is compiled, in
+// the words the skill quotes, and a test of it compiles, leaving its branch out.
 const quoted = (message: string, words: string) => {
   check(message.includes(words), `the refusal says "${words}": ${message}`);
   check(skill.includes(words), `the skill quotes "${words}"`);
 };
-quoted(
-  refusal("base", "function main(to: Address, amount: Uint256) { USDT.transfer(to, amount); }"),
-  "`USDT` is not a token or protocol on base. Did you mean `USDC`?",
+refusal("base", "function main(to: Address, amount: Uint256) { USDT.transfer(to, amount); }");
+compile(
+  "base",
+  "function main(to: Address, amount: Uint256) { if (USDT) { USDT.transfer(to, amount); } }",
 );
 quoted(
-  refusal(
-    "ethereum",
-    "function main(fee: Uint256): Address { return AerodromeSlipstream.CLFactory.getPool(USDC, WETH, fee); }",
-  ),
-  "Contract 'CLFactory' (aerodrome-slipstream) is not deployed on 'ethereum'",
+  refusal("ethereum", "function main(): Address { return AerodromeSlipstream.CLFactory; }"),
+  "`AerodromeSlipstream.CLFactory` is `undefined`, so it has no run-time value here",
+);
+quoted(
+  refusal("base", "function main(): Address { return USDCC; }"),
+  "not a declared variable; did you mean `USDC`?",
 );
 // Tesla is a different symbol per issuer and chain: TSLAx on Ethereum and Solana, TSLAc or bTSLA
 // on Base, which refuses TSLAx.
@@ -125,7 +119,10 @@ const tesla = (chain: string) =>
 check(tesla("ethereum").includes("TSLAx") && tesla("solana").includes("TSLAx"), "TSLAx");
 check(tesla("base").join() === "TSLAc,bTSLA", `Tesla on Base is TSLAc or bTSLA: ${tesla("base")}`);
 compile("ethereum", "function main(): Address { return TSLAx; }");
-quoted(refusal("base", "function main(): Address { return TSLAx; }"), "is not a declared variable");
+quoted(
+  refusal("base", "function main(): Address { return TSLAx; }"),
+  "so it has no run-time value here",
+);
 
 // Another chain's contract, by its name: its address there, as a value in a program for this one.
 const factoryOnBase = rows.find((row) => row.name === "UniswapV3.Factory")!.on.base;
@@ -134,7 +131,7 @@ const qualified = compile(
   "function main(): Address { return Base.UniswapV3.Factory; }",
 );
 check(
-  qualified.contracts.get("Base.UniswapV3.Factory")?.address === factoryOnBase,
+  carries(qualified.hex, factoryOnBase),
   "Base.UniswapV3.Factory is Base's factory in a program for Ethereum",
 );
 // Called, it is still that address: a program for Ethereum calls Base's address on Ethereum.
@@ -143,15 +140,14 @@ const called = compile(
   "function main(): Address { return Base.UniswapV3.Factory.getPool(USDC, WETH, 500); }",
 );
 check(
-  called.contracts.get("Base.UniswapV3.Factory")?.address === factoryOnBase &&
-    called.hex.includes(factoryOnBase.slice(2).toLowerCase()),
+  carries(called.hex, factoryOnBase),
   "a call on Base.UniswapV3.Factory, compiled for Ethereum, goes to Base's address",
 );
 check(skill.includes("calls that address on Ethereum"), "the skill says where the call goes");
 // A token is never qualified: the symbol is the chain's own, or an address.
 quoted(
   refusal("ethereum", "function main(): Address { return Base.USDC; }"),
-  "'USDC' is not a known protocol or family alias",
+  "a token is never qualified by a chain",
 );
 
 // payout-solana.sauce.ts: every account is a slot, in order, with its role; the scalars are the

@@ -5,10 +5,9 @@
  * resolved on their chain.
  *
  * Nothing here decides anything the compile does not. The defines follow the compile's own rule
- * (`sauce-route.ts#levelOn`): each part of the program reads its own chain's values — an intent's
- * body and delivery the destination's, its reward the enclosing chain's — and a user define named
- * like a chain-scoped value stays on the chain it was given for, while any other holds at every
- * depth. The contracts are the ones the protocol rewrite resolved (`accessors.onContract`).
+ * (`sauce-route.ts#chainModules`): the program reads the values of the chain it is compiled for,
+ * and a user define named like one of them replaces it there. The contracts are the registry names the file writes, resolved by the same rules the
+ * chain's module of names is written by (`protocol-names.ts`).
  */
 import { getAddressDecoder } from "@solana/kit";
 import { getAddress, hexToBytes, numberToHex } from "viem";
@@ -17,9 +16,11 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
-import type { AccessorTarget } from "../routes/protocol-rewrite.js";
+import { resolveContractReference } from "../routes/protocol-names.js";
+import { isChainKey, resolveNamespace } from "../routes/accessor-index.js";
+import { addressOn } from "../descriptors/query.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
-import { pascalOfSlug } from "../routes/builder.js";
+import { pascalOfSlug } from "../routes/pascal.js";
 import type { DefineValue } from "./args.js";
 
 /** One define the program reads, as the compile applied it. */
@@ -171,26 +172,65 @@ export function appliedDefines(
   };
 }
 
-/** Collects the contracts a compile resolves, through `accessors.onContract`. */
-export function contractCollector(): {
-  readonly onContract: (reference: string, target: AccessorTarget) => void;
-  readonly contracts: () => readonly UsedContract[];
-} {
+/**
+ * The protocol contracts `text` names, each resolved on `chain`, or on the chain a qualified name
+ * names:
+ * `UniswapV3.Factory`, a family's `Uniswap.UniversalRouter`, a protocol's one contract `AaveV3`, and
+ * `Ethereum.AaveV3.Pool`. A name the chain does not deploy is left out, as the compile refuses it.
+ */
+export function usedContracts(text: string, chain: CanonicalChain): readonly UsedContract[] {
+  let program: AstNode;
+  try {
+    program = parseSauce(text);
+  } catch {
+    return [];
+  }
   const seen = new Map<string, UsedContract>();
+  const inner = new Set<AstNode>();
+  walk(program, (node) => {
+    if (node.type === "MemberExpression") inner.add(node.object as AstNode);
+  });
+  walk(program, (node) => {
+    if (node.type !== "MemberExpression" || inner.has(node)) return;
+    const path: string[] = [];
+    let at: AstNode = node;
+    while (at.type === "MemberExpression" && at.computed !== true) {
+      path.unshift((at.property as AstNode).name as string);
+      at = at.object as AstNode;
+    }
+    if (at.type !== "Identifier") return;
+    const head = at.name as string;
+    const qualified = isChainKey(head);
+    const rest = qualified ? path : [head, ...path];
+    if (rest.length === 0 || resolveNamespace(rest[0]!) === undefined) return;
+    for (const take of [2, 1]) {
+      if (rest.length < take) continue;
+      try {
+        const found = resolveContractReference(
+          qualified ? head : rest[0]!,
+          qualified ? rest.slice(0, take) : rest.slice(1, take),
+          chain,
+          undefined,
+          "",
+          "",
+        );
+        const address = addressOn(found.descriptor, found.chain);
+        if (address === undefined) break;
+        const reference = [...(qualified ? [head] : []), ...rest.slice(0, take)].join(".");
+        seen.set(`${found.chain.slug} ${reference}`, {
+          reference,
+          contract: `${pascalOfSlug(found.protocol)}.${found.contract}`,
+          chain: found.chain.slug,
+          address: getAddress(address),
+        });
+        break;
+      } catch {
+        // Not a contract with that many segments: try fewer.
+      }
+    }
+  });
 
-  return {
-    onContract: (reference, target) => {
-      const used: UsedContract = {
-        reference,
-        contract: `${pascalOfSlug(target.protocol)}.${target.contract}`,
-        chain: target.chain.slug,
-        address: getAddress(target.address),
-      };
-      seen.set(`${used.chain} ${reference}`, used);
-    },
-    contracts: () =>
-      [...seen.values()].sort(
-        (a, b) => a.chain.localeCompare(b.chain) || (a.reference < b.reference ? -1 : 1),
-      ),
-  };
+  return [...seen.values()].sort(
+    (a, b) => a.chain.localeCompare(b.chain) || (a.reference < b.reference ? -1 : 1),
+  );
 }

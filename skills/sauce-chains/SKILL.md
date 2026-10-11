@@ -70,8 +70,9 @@ file in [references/](references/index.md) says the same, with every stock in
 
 ### A name the chain lacks
 
-A name is either the chain's or a compile error, never a zero address at run time. Base registers
-no USDT:
+A name is either the chain's or `undefined`, never a zero address at run time: every name is
+declared on every chain, and one the chain lacks is `undefined` there. Base registers no USDT, so a
+use of it does not compile for Base:
 
 ```sauce chain=base fails
 function main(recipient: Address, amount: Uint256) {
@@ -79,16 +80,24 @@ function main(recipient: Address, amount: Uint256) {
 }
 ```
 
-```text
-sauce compile: pay.sauce.ts does not compile for base
-compileSauceRoute: `USDT` is not a token or protocol on base. Did you mean `USDC`? A token the registry does not carry is `Token(address)`, …
+A test of it does, leaving its branch out where the chain lacks it:
+
+```sauce chain=base,ethereum
+function main(recipient: Address, amount: Uint256) {
+  if (USDT) {
+    USDT.transfer(recipient, amount);
+  }
+}
 ```
 
-A contract the chain does not have is refused the same way, naming the chains that do:
-`AerodromeSlipstream.CLFactory` compiled for Ethereum fails with
-`Contract 'CLFactory' (aerodrome-slipstream) is not deployed on 'ethereum' (available: …)`. A
-symbol the chain lacks, used as a value rather than called, is reported as a name the file never
-declared: `return TSLAx;` compiled for Base is refused as `TSLAx` "is not a declared variable".
+A contract the chain does not have is the same. `AerodromeSlipstream.CLFactory` compiled for
+Ethereum, where a value is needed, fails with
+"`AerodromeSlipstream.CLFactory` is `undefined`, so it has no run-time value here". A symbol the
+chain lacks is the same wherever it is used: `return TSLAx;` compiled for Base fails, "so it has no
+run-time value here". A name no chain has is the compiler's error on every chain, with its closest
+name: `USDCC` is
+"not a declared variable; did you mean `USDC`?".
+
 The same company often has a different symbol per issuer and chain: Tesla is `TSLAx` on Ethereum
 and on Solana, but `TSLAc` or `bTSLA` on Base, so search by name or ticker on each chain. Then pick
 a chain that has the name, or, for a token the registry does not carry, use `Token(address)` with
@@ -112,8 +121,8 @@ function main(): Address {
 }
 ```
 
-- **A token is never qualified.** `Base.USDC` is refused
-  (`'USDC' is not a known protocol or family alias`); the symbol is always the compiled-for chain's.
+- **A token is never qualified.** `Base.USDC` is refused (`a token is never qualified by a chain`);
+  the symbol is always the compiled-for chain's, and another chain's token is an address.
 
 ## EVM chains and Solana
 

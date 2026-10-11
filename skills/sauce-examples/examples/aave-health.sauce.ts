@@ -24,6 +24,8 @@ function main(
   trigger: Uint256,
   target: Uint256,
 ): { before: Uint256; after: Uint256; repaid: Uint256 } {
+  require(AaveV3.Pool);
+  require(AaveV3.PoolAddressesProvider);
   require(trigger > 1000000000000000000 && target >= trigger, "need 1 < trigger <= target");
   const self = ctx.self();
   const account = AaveV3.Pool.getUserAccountData(self);

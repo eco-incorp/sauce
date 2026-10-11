@@ -33,7 +33,6 @@ import { v12PredictPot } from "../deployments/pot.js";
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
-import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
@@ -65,7 +64,7 @@ import {
 } from "./approvals.js";
 import { linkLines, txLinks } from "./links.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
-import { appliedDefines, contractCollector } from "./report.js";
+import { appliedDefines, usedContracts } from "./report.js";
 import { entryReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
@@ -189,17 +188,12 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
  * `compileSauceProgram` adds itself: the defines, the argument encoding, and a resolver that serves
  * the program's own relative imports from beside the file.
  */
-function compileOptions(
-  input: ProgramInput,
-  files: CliFiles,
-  onContract?: (reference: string, target: AccessorTarget) => void,
-): SauceCompileOptions {
+function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
   const dir = sourceDirOf(input);
 
   return {
     defines: input.defines,
     ...(input.compactArgs ? { compactArgs: true } : {}),
-    ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
@@ -209,17 +203,10 @@ function compileOptions(
 export const sourceDirOf = (input: ProgramInput): string =>
   resolvePath(input.sourceDir ?? (input.stdin === true ? "." : dirname(resolvePath(input.file))));
 
-/**
- * Compiles the file as a standalone program, turning a failure into one message about the file.
- * `onContract` is told each protocol contract the compile resolves.
- */
-export function compileProgram(
-  input: ProgramInput,
-  files: CliFiles,
-  onContract?: (reference: string, target: AccessorTarget) => void,
-): CompiledSauceProgram {
+/** Compiles the file as a standalone program, turning a failure into one message about the file. */
+export function compileProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
   try {
-    return compileSauceProgram(input.chain, input.text, compileOptions(input, files, onContract));
+    return compileSauceProgram(input.chain, input.text, compileOptions(input, files));
   } catch (error) {
     const described = describeCompileError(error, input.file, input.text, input.chain);
     // A relative import that did not resolve, from a program with no directory of its own.
@@ -284,8 +271,7 @@ export interface CompileInput extends ProgramInput {
  * the cook's transaction against the one-transaction limit.
  */
 export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
-  const collected = contractCollector();
-  const program = compileProgram(input, files, collected.onContract);
+  const program = compileProgram(input, files);
   const bytecode = bytesToHex(program.bytecode);
   const { defines, unread } = appliedDefines(
     input.text,
@@ -340,7 +326,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
       returnType: entryReturnType(program.entrySignature) ?? null,
       defines,
-      contracts: collected.contracts(),
+      contracts: usedContracts(input.text, input.chain),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined ? {} : { manifest: program.manifest }),

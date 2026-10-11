@@ -186,11 +186,21 @@ const poolLimit = (limit: bigint, fee: bigint, paysToken0: boolean) => {
 const chain = routes.chain("base").chain;
 const program = routes.compileSauceProgram("base", source);
 check(
-  /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(program.source),
+  /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(source),
   "every swap is a @sauce/router call",
 );
+// A `Token(address)` write is @sauce/token's SafeERC20 function: the same bytes as the call by hand.
+const tokenWrite = (body: string, imports = "") =>
+  Buffer.from(
+    routes.compileSauceProgram(
+      "base",
+      `${imports}function main(token: Address, to: Address, amount: Uint256) { ${body} }`,
+    ).bytecode,
+  );
 check(
-  /__sauce_transfer\(pay, refundTo, unspent\)/.test(program.source),
+  tokenWrite("const pay = Token(token); pay.transfer(to, amount);").equals(
+    tokenWrite("transfer(token, to, amount);", 'import { transfer } from "@sauce/token";\n'),
+  ) && source.includes("pay.transfer(refundTo, unspent);"),
   "the refund is a SafeERC20 transfer of what is left of the budget",
 );
 // On a chain without Slipstream's factory, naming it is the compile error the skill quotes; less its
@@ -201,10 +211,14 @@ try {
 } catch (error) {
   refused = String(error);
 }
-const quoted = "Contract 'CLFactoryGaugesV3' (aerodrome-slipstream) is not deployed on 'ethereum'";
+const quoted =
+  "`AerodromeSlipstream.CLFactoryGaugesV3` is `undefined`, so it has no run-time value here";
 check(refused.includes(quoted), `Ethereum refuses the Slipstream venue: ${refused}`);
 check(prose.includes(quoted), "the skill quotes that error");
-const loop = /\n {2}for \(const spacing of [^\n]*\n[^\n]*\n[^\n]*\n {2}\}/.exec(source);
+const loop =
+  /\n {2}require\(AerodromeSlipstream\.CLFactoryGaugesV3\);\n {2}for \(const spacing of [^\n]*\n[^\n]*\n[^\n]*\n {2}\}/.exec(
+    source,
+  );
 check(loop !== null, "the program has a Slipstream loop");
 routes.compileSauceProgram("ethereum", source.replace(loop[0], ""));
 check(

@@ -1,6 +1,6 @@
 ---
 name: sauce-globals
-description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, …, on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, available(...) for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
+description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, …, on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, comparing with zero for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
 ---
 
 # Globals in a Sauce program
@@ -64,11 +64,10 @@ function main(payee: Address, amount: Uint256) {
 }
 ```
 
-**`IERC20` is low level, and only imported.** `import { IERC20 as Erc20 } from
-"./artifacts/IERC20.json"` binds the raw ERC-20 ABI for a call the token syntax does not offer. Its
-writes decode the declared `bool`, so they are not SafeERC20 (USDT's `transfer` reverts there, and
-a `false` return passes): never write a token transfer or approval through it. Import it under a
-name of its own, as here, in a file that also uses the token syntax, which binds `IERC20` itself.
+**`IERC20` is low level, and only imported.** `import { IERC20 } from "./artifacts/IERC20.json"`
+binds the raw ERC-20 ABI for a call the token syntax does not offer. Its writes decode the declared
+`bool`, so they are not SafeERC20 (USDT's `transfer` reverts there, and a `false` return passes):
+never write a token transfer or approval through it.
 
 ## Tokenized stocks
 
@@ -167,17 +166,20 @@ function main(
   its factory returned (`.at(pool)` is the same).
   [references/protocols.md](references/protocols.md) lists every interface.
 
-**A venue a chain may not have** is asked with `available(<name>)`, decided when the program is
-compiled for a chain: `if (available(UniswapV3.Factory)) { ... }` keeps its branch where the chain
-has the contract, and removes it, names and all, where it does not. It takes a contract or a token
-symbol (`available(USDT)`); it folds `if`/`else`, `?:`, `&&`, `||` and `!`; and a guard
-`if (!available(X)) { return 0; }` drops the rest of its function. A name no chain has is an
-error rather than `false`, so a typo cannot quietly drop a branch. `Namespace.Contract` without it
-is for a contract the program requires: on a chain without it, the program does not compile.
+**A venue a chain may not have** is `undefined` on that chain, and a program tests it: the test is
+decided when the program is compiled for a chain, so `if (UniswapV3.Factory) { ... }` keeps its
+branch where the chain has the contract, and leaves it out, names and all, where it does not. The
+test folds `if`/`else`, `?:`, `&&`, `||` and `!`, and a guard `if (!UniswapV3.Factory) { return 0; }`
+drops the rest of its function. `require(UniswapV3.Factory, "…")` makes the program compile only for
+chains that have it. Any other use of an absent contract is a compile error naming it. `undefined`
+is not `0`: `UniswapV3.Factory != 0` is true where the contract is absent, so test the name itself.
+A token symbol is the same: one the chain lacks is `undefined`, so `if (USDT) { ... }` is decided
+while compiling. Every name is declared on every chain, so a name no chain has, a misspelled one, is a compile error
+everywhere, and a typo cannot quietly drop a branch.
 
 ```sauce chain=base,linea
 function main(tokenA: Address, tokenB: Address) {
-  if (available(UniswapV3.Factory)) {
+  if (UniswapV3.Factory) {
     const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500);
     require(pool != 0, "no 0.05% pool");
   }
@@ -187,11 +189,14 @@ function main(tokenA: Address, tokenB: Address) {
 ## Chains, context, imports
 
 - **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) qualify
-  a contract with another chain's address: `Ethereum.UniswapV4.UniversalRouter`. Every chain's names
+  a contract with another chain's address: `Ethereum.UniswapV4.UniversalRouter`.
+  A chain's name alone is its chain id, so `if (chainId == Ethereum) { … } else { … }` is decided
+  while compiling: a program compiled for a chain keeps only that chain's branch. Every chain's names
   compile; for the initial release its transactions are built and sent only on Ethereum, Base and
   Solana, and [references/chains.md](references/chains.md) marks every other chain a preview chain
   (`sauce-chains` says how to request one).
-- **`chainId`** is the chain the program is compiled for.
+- **`chainId`** is the chain the program is compiled for, a constant like a chain's name;
+  `ctx.chainId()` reads the same id as the program runs, and decides nothing while compiling.
 - **`ctx`**: context reads, each a call. The complete list, with what each returns per target, is
   section 6 of [../sauce-script/references/builtins.md](../sauce-script/references/builtins.md).
 
@@ -215,4 +220,4 @@ There is no read for the transaction origin.
 
 [examples/globals.sauce.ts](examples/globals.sauce.ts) uses each kind of name;
 [examples/globals.mts](examples/globals.mts) compiles it and pins the SafeERC20 lowering, the
-`IERC20` import rule, the family-alias rules and `available(...)`.
+`IERC20` import rule, the family-alias rules and the comparison with zero.

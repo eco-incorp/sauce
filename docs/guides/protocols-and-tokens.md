@@ -98,22 +98,22 @@ alias resolves to where, and `contracts.listContracts(slug)` a protocol's contra
 
 ## Use a venue only where the chain has it
 
-`available(<name>)` asks, when the program is compiled, whether the chain it is compiled for has a
-contract or a token. A branch it rules out is removed before any name in it is resolved, so one
-program can name a venue some of its chains lack:
+A contract the chain a program is compiled for does not have is `undefined` there, and testing it
+is decided when the program is compiled. A branch that test rules out is never compiled, so nothing
+in it is resolved, and one program can name a venue some of its chains lack:
 
 ```js
-// One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
-// from Uniswap V3 where it does not, and nothing where it has neither venue or lacks either token.
+// One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has
+// it, from Uniswap V3 where it does not, and nothing where it has neither venue.
 //
-// `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
-// the branches it rules out are removed before anything in them is resolved.
+// A contract the chain lacks is `undefined` there, so testing it is decided when the program is
+// compiled, for the chain it is compiled for: a branch it rules out is never compiled. A token the
+// chain lacks is `undefined` too: used without a test, the program does not compile there.
 function main() {
-  if (!available(USDC) || !available(WETH)) return 0;
   let pool = 0;
-  if (available(PancakeswapV3.Factory)) {
+  if (PancakeswapV3.Factory) {
     pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);
-  } else if (available(UniswapV3.Factory)) {
+  } else if (UniswapV3.Factory) {
     pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   }
   return pool;
@@ -121,29 +121,28 @@ function main() {
 ```
 
 Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, which has no
-PancakeSwap V3, it compiles to the Uniswap V3 lookup alone; compiled for a chain with neither, or
-without USDC or WETH, it returns 0 and calls nothing. The guard on the tokens is what makes it
-compile everywhere: a token the chain lacks is an unknown name in any branch that is kept.
-[registry-names.ts](../examples/registry-names.ts) compiles it for Base and Optimism.
+PancakeSwap V3, it compiles to the Uniswap V3 lookup alone. [registry-names.ts](../examples/registry-names.ts)
+compiles it for both.
 
-- It takes a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
-  `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is available where the chain's
-  token map has it, which includes the `tokens` you pass.
-- It folds `if`/`else`, `?:`, `&&`, `||` and `!`. A guard that returns,
-  `if (!available(X)) return 0;`, removes the rest of its block where `X` is absent.
-- Anywhere else it is the literal `true` or `false`. A branch that depends on it only through a
-  runtime value (`const has = available(X); if (has) ...`) is live code, and every name in it must
-  still resolve.
-- A name the registry does not know on any chain is an error, not `false`, as are an ambiguous
-  family name and an interface, so a typo cannot quietly drop a branch. A program that declares its
-  own `available` keeps it.
+- Every name is declared for every chain: every registry contract (`UniswapV3.Factory`,
+  `Uniswap.UniversalRouter`, one on a named chain, `Arbitrum.UniswapV3.Factory`) and every token
+  symbol. Where the chain has none, its value is `undefined`, so `if (UniswapV3.Factory)` or
+  `if (USDT)` is decided while compiling. A token's chain map is the registry's, plus the `tokens`
+  you pass.
+- Testing it is the one use of a name the chain lacks: any other use is a compile error naming it.
+  The test folds `if`/`else`, `?:`, `&&`, `||` and `!`, and a guard that returns,
+  `if (!UniswapV3.Factory) return 0;`, drops the rest of its block where the contract is absent.
+  `require(UniswapV3.Factory, "…")` makes the program compile only for chains that have it.
+- `undefined` is not `0`: `UniswapV3.Factory != 0` is true on a chain without it, so test the name
+  itself.
+- A name no chain has, `Uniswapp` or `UniswapV3.Factroy`, is a compile error on every chain, so a
+  typo cannot quietly drop a branch. A program that declares the name owns it.
 
 In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
 token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is a type error.
 
-A name used as a token or a protocol that the chain does not have at all fails when the program
-compiles, naming it and the chain's closest names: `USDCC.balanceOf(...)` on Base reports
-"`USDCC` is not a token or protocol on base. Did you mean `USDC`?".
+A name no chain has fails when the program compiles, on every chain, with the closest declared
+name: `USDCC.balanceOf(...)` reports "`USDCC` is not a declared variable; did you mean `USDC`?".
 
 ## Token methods and balances
 
@@ -316,7 +315,7 @@ reference](../api/contracts.md) lists every property and option.
 
 ## Chain selection and ABI bindings
 
-A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Cross-chain execution takes an intent. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
+A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Cross-chain execution takes an intent. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed. A chain's name alone is its chain id, as `chainId` is the compiled-for chain's: `if (chainId == Ethereum) { ... } else { ... }` is decided while compiling, and a program compiled for a chain keeps only that chain's branch.
 
 Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every registry ABI declares its contract's deployed types, so the selectors it computes are the ones the deployed contract dispatches.
 

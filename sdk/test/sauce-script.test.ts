@@ -199,7 +199,7 @@ describe("SauceScript in an editor", () => {
   it("takes a local that starts at 0 and is later given a contract's result", () => {
     const { bare, shown } = plain(
       "zeroed",
-      "function main(): Uint256 {\n  let pool = 0;\n" +
+      "function main(): Uint256 {\n  require(UniswapV3.Factory);\n  let pool = 0;\n" +
         "  pool = UniswapV3.Factory.getPool(USDC, WETH, 500);\n  return pool;\n}\n",
     );
     expect(bare).toEqual([2322, 2345, 2322]);
@@ -247,20 +247,30 @@ describe("SauceScript in an editor", () => {
     expect(shown).toEqual([]);
   });
 
-  it("declares every function @sauce/token exports, on either arm, and nothing it does not", () => {
-    const exported = (file: string): string[] =>
+  it("declares everything @sauce/token exports, on either arm, and nothing it does not", () => {
+    const exported = (file: string, kind: "function" | "class"): string[] =>
       [
         ...readFileSync(join(SDK, "src/std/token", file), "utf8").matchAll(
-          /^export function (\w+)/gm,
+          new RegExp(`^export ${kind} (\\w+)`, "gm"),
         ),
       ].map((match) => match[1]!);
-    const library = [...new Set([...exported("token.evm.js"), ...exported("token.svm.js")])].sort();
+    const functions = [
+      ...new Set([
+        ...exported("token.evm.js", "function"),
+        ...exported("token.svm.js", "function"),
+      ]),
+    ];
+    const classes = [
+      ...new Set([...exported("token.evm.js", "class"), ...exported("token.svm.js", "class")]),
+    ];
     const builtins = readFileSync(join(SDK, "sauce-script/builtins.d.ts"), "utf8");
     const module = /declare module "@sauce\/token" \{([^}]*)\}/.exec(builtins)![1]!;
     const declared = [...module.matchAll(/export const (\w+)/g)].map((match) => match[1]!).sort();
-    expect(declared).toEqual(library);
-    // And each is the global a program calls with no import.
-    for (const name of library) expect(builtins).toContain(`declare function ${name}(`);
+    expect(declared).toEqual([...functions, ...classes].sort());
+    // And each is the global a program reaches with no import: a function it calls, the class
+    // (`TokenOf`) it constructs.
+    for (const name of functions) expect(builtins).toContain(`declare function ${name}(`);
+    for (const name of classes) expect(builtins).toContain(`declare const ${name}: `);
   });
 
   it("still reports a real mistake: a misspelled builtin, a wrong argument count, an unknown method", () => {

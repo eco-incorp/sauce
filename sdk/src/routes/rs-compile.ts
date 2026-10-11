@@ -19,6 +19,7 @@ import type {
 } from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
+import { CHAIN_MODULE_ROOT, chainModuleAbi } from "./chain-module.js";
 import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
 const ENTRY = "main.js";
@@ -55,7 +56,7 @@ function pairsOf(
  * `defines` as the compiler's pairs. `base` is the frozen object `defines` is, or was spread from:
  * a value `defines` still has from it keeps the spelling worked out once for `base`.
  */
-function toRsDefines(
+export function toRsDefines(
   defines: Readonly<Record<string, bigint | boolean | number>> | undefined,
   base?: Readonly<Record<string, bigint | boolean | number>>,
 ): Array<[string, string]> | undefined {
@@ -106,11 +107,18 @@ function toInlineContracts(
  * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
  * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
  */
-function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+function makeResolve(
+  source: string,
+  own: ResolveModule | undefined,
+  modules: ReadonlyMap<string, string> | undefined,
+): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
+  const utf8 = new TextEncoder();
 
   return (path) => {
     if (path === ENTRY) return entryBytes;
+    const generated = generatedModule(path, modules);
+    if (generated !== undefined) return utf8.encode(generated);
     if (own !== undefined && sdkStdPath(path) === undefined) {
       const bytes = own(path);
       if (bytes !== undefined && bytes !== null) return bytes;
@@ -120,10 +128,36 @@ function makeResolve(source: string, own: ResolveModule | undefined): ResolveMod
   };
 }
 
-/** Bare specifiers: the SDK's standard library first, then the caller's `resolvePackage`. */
-function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
+/** The bare specifier a generated module is imported by, `@sauce/chain-<name>`, and back. */
+const GENERATED = "@sauce/chain-";
+
+/** The text of a generated module or of an ABI one imports, at `path`. */
+function generatedModule(
+  path: string,
+  modules: ReadonlyMap<string, string> | undefined,
+): string | undefined {
+  const absolute = path.startsWith(`.${CHAIN_MODULE_ROOT}/`) ? path.slice(1) : path;
+  if (!absolute.startsWith(`${CHAIN_MODULE_ROOT}/`)) return undefined;
+  const rest = absolute.slice(CHAIN_MODULE_ROOT.length + 1);
+  if (rest.startsWith("abi/")) return chainModuleAbi(rest);
+  const name = /^([\w-]+)\.js$/.exec(rest)?.[1];
+
+  return name === undefined ? undefined : modules?.get(`${GENERATED}${name}`);
+}
+
+/** Bare specifiers: a generated module, the SDK's standard library, then the caller's
+ *  `resolvePackage`. */
+function makeResolvePackage(
+  own: ResolvePackage | undefined,
+  modules: ReadonlyMap<string, string> | undefined,
+): ResolvePackage {
   return (specifier, importer) =>
-    resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
+    (modules?.has(specifier) === true
+      ? `${CHAIN_MODULE_ROOT}/${specifier.slice(GENERATED.length)}.js`
+      : undefined) ??
+    resolveSdkPackage(specifier) ??
+    own?.(specifier, importer) ??
+    undefined;
 }
 
 /**
@@ -198,6 +232,9 @@ export interface RsCompileInput {
   ambient?: string[];
   /** Compile for compact-v1 entry arguments, returning the schema they must be encoded against. */
   compactArgs?: boolean;
+  /** Modules the SDK wrote for this compile, by the bare specifier a program or `ambient` names
+   *  them with (`@sauce/chain-<name>`): each chain's names (`chain-module.ts`). */
+  modules?: ReadonlyMap<string, string>;
   /** `main`'s arguments the program is compiled for, one word each, in `entryParams`' order. */
   args?: readonly (bigint | boolean | string)[];
 }
@@ -226,8 +263,8 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolve: makeResolve(input.source, input.resolve),
-    resolvePackage: makeResolvePackage(input.resolvePackage),
+    resolve: makeResolve(input.source, input.resolve, input.modules),
+    resolvePackage: makeResolvePackage(input.resolvePackage, input.modules),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
     defines: toRsDefines(input.defines, input.baseDefines),

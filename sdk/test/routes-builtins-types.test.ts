@@ -30,6 +30,7 @@ Base(() => {
   require(held > 0n, "empty");
   log(held.toBytesBe(32n));
   const raw = evm.sload(0n);
+  require(UniswapV3.Factory);
   const b = UniswapV3.Factory.getPool(USDC, WETH, 500n);
   const x = chainId;
 }, OPTIONS);

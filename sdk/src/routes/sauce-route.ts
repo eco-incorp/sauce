@@ -1,9 +1,12 @@
 /**
  * Compile a Sauce program for a route's destination and construct its execution call.
  *
- * `compileSauceRoute` selects the target from the destination chain, applies SDK token/protocol
- * rewrites, compiles through the published compiler dependency, and delegates call encoding to
- * `buildSauceEvmCall` or `buildSauceSvmCall`. One body produces one bytecode segment and one call.
+ * `compileSauceRoute` selects the target from the destination chain, compiles the program as
+ * written through the published compiler dependency — the chain's names (tokens, protocols, `self`,
+ * chains) are a SauceScript module the SDK writes from its registries and hands the compiler as an
+ * ambient module (`chain-module.ts`), never rewritten into the text — and delegates call encoding
+ * to `buildSauceEvmCall` or `buildSauceSvmCall`. One body produces one bytecode segment and one
+ * call.
  *
  * EVM calls carry the program bytes and invoke the supplied Pot with the supplied engine.
  * SVM calls name a finalized CODE account through `execution.code`; this module does not stage
@@ -23,18 +26,16 @@ import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
 import {
-  rewriteTokenFactory,
-  rewriteTokenMembers,
-  tokenImportLines,
-  type SafeWrite,
-  type TokenImports,
-} from "./token-rewrite.js";
-import { resolveTokenMap } from "./token-registry.js";
-import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
-import { rewriteAvailability } from "./available.js";
-import { unknownGlobalError } from "./unknown-global.js";
-import { pascalOfSlug } from "./accessors.js";
-import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
+  CHAIN_DEFINE,
+  chainModuleSource,
+  isChainScalar,
+  isPlainModule,
+  type ChainModuleOptions,
+} from "./chain-module.js";
+import { registryTokenSymbols } from "./token-registry.js";
+import type { ProtocolNameOptions } from "./protocol-names.js";
+import { pascalOfSlug } from "./pascal.js";
+import { chainAmbient } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import {
   entryParamsOf,
@@ -43,7 +44,7 @@ import {
   type EntrySignature,
   type EntryValue,
 } from "./entry.js";
-import type { AddressInput, CallInput } from "./types.js";
+import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
   /** Defaults by destination `ChainKind`: `'v12'` for evm, `'svm'` for svm. */
@@ -68,27 +69,24 @@ export interface SauceCompileOptions {
    */
   defines?: Record<string, bigint | boolean | number>;
   /** Caller token symbol -> address OVERRIDES, merged per-key on top of `token-registry.ts`'s
-   *  default per-chain registry (see `resolveTokenMap`) -- the merged map drives both `<Sym>.
-   *  transfer/.approve/.balanceOf(...)` and `<holder>.<Sym>` balance-sugar rewrites (see
-   *  `token-rewrite.ts`). A bare `USDC.transfer(...)` on a chain the registry covers now compiles
-   *  with NO entry here at all. EVM destinations only -- an svm destination throws if any site
-   *  actually rewrites, pointing at the SPL account-plan `Token` emitter instead. */
+   *  default per-chain registry (see `resolveTokenMap`): the symbols the chain's host declares, so
+   *  `USDC.transfer/.approve/.transferFrom/.balanceOf(...)` and `<holder>.USDC` reach `@sauce/token`
+   *  for that address. A symbol the registry covers needs NO entry here. On an svm destination a
+   *  symbol is the mint's key, a plain value with no token methods. */
   tokens?: Readonly<Record<string, AddressInput>>;
-  /** Parsed ABI bindings merged with the protocol-accessor rewrite's bindings and adapted to the
-   *  compiler's inlineContracts option. A same-named binding with a different ABI throws. */
+  /** Parsed ABI bindings, adapted to the compiler's inlineContracts option. */
   contracts?: ContractsConfig;
-  /** Resolve registered protocol calls and addresses, and rewrite bare `self` to `ctx.self()`.
-   *  Enabled by default; pass false to disable this pass or an options object to configure it.
-   *  Contract accessor rewrites require an EVM destination. */
-  accessors?: boolean | ProtocolRewriteOptions;
+  /** The registry's protocol names (`UniswapV3.Factory`): declared by the chain's host by default;
+   *  `false` declares none, and an options object configures them (`protocol-names.ts`). Contracts
+   *  are EVM-only. */
+  accessors?: boolean | ProtocolNameOptions;
   /**
    * Module specifiers whose exports are broadcast into every module with no `import` line: an
    * ambient module's exported functions and consts become callable/readable with no import. Ambient
    * always loses to user code — a name the module declares, imports or binds wins silently.
    */
   ambient?: string[];
-  /** Compile for compact-v1 entry arguments; a caller wanting entry arguments generally uses the
-   *  raw compiler. */
+  /** Compile for compact-v1 entry arguments. */
   compactArgs?: boolean;
 }
 
@@ -112,7 +110,7 @@ export type SauceSvmExecutionInput = SauceSvmCallParams;
 export interface CompiledSauceRoute {
   readonly calls: readonly CallInput[];
   readonly compiled: CompileResult;
-  /** Source after the SDK's rewrites, before the compiler adapter adds entry annotations. */
+  /** The source the compiler was given: the program as written. */
   readonly source: string;
 }
 
@@ -125,57 +123,84 @@ export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAI
   return chainAccessorCache;
 }
 
-type ChainRefResolved = ReturnType<typeof requireChain>;
-
 type DefineValue = bigint | boolean | number;
 
 /**
- * The chain-scoped values a compile gets beyond the caller's options. Internal to the SDK — passed
- * beside the options rather than inside them, so the public option surface stays what
- * `compileSauceRoute` documents. `compileSauceProgram` supplies one for the program it compiles.
+ * `defines` split by what each name is. One named like a chain-scoped name — a registered token
+ * symbol, `chainId`, a protocol contract's address key — is the caller choosing that chain's value
+ * for it, so it goes into the chain's module (`tokens`, `values`) for this chain alone; a body on
+ * another chain names its own. The rest are the caller's own compile-time values, which hold at
+ * every depth.
+ *
+ * WHY NOT LEAVE THEM DEFINES. A define replaces a module's `const` of that name in EVERY module, the
+ * chain's module included: a `USDC` define would put a plain number where the module has the
+ * `Token` `USDC`, and `USDC.transfer(...)` would stop compiling — in the program it was given for,
+ * and in every body, where it would name this chain's value on another.
  */
-export interface RouteScope {
-  /**
-   * The compile-time values that belong to ONE chain: `chainId`, its protocol contracts and its
-   * token symbols (`ambient.ts#chainDefines`). A function rather than values because the values
-   * differ per chain.
-   */
-  readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
-}
-
-/** A chain's defines with `tokens` over its registry's: the chain's own, built once, with none. */
-function definesOf(
-  chain: ChainRefResolved,
+function splitChainDefines(
+  defines: SauceCompileOptions["defines"],
   tokens: SauceCompileOptions["tokens"],
-): Readonly<Record<string, DefineValue>> {
-  return tokens === undefined ? sharedChainDefines(chain) : chainDefines(chain, { tokens });
-}
-
-/** The chain's defines a compile starts from: its token map, then its scope's values, merged once
- *  for each pair of them. A chain's own map and values are one object each on every compile
- *  (`resolveTokenMap`, `sharedChainDefines`), so their merge is kept, by both. */
-const baseDefinesCache = new WeakMap<
-  ReadonlyMap<string, bigint>,
-  WeakMap<object, Readonly<Record<string, DefineValue>>>
->();
-const NO_SCOPE = {};
-
-function baseDefines(
-  tokenMap: ReadonlyMap<string, bigint>,
-  scoped: Readonly<Record<string, DefineValue>> | undefined,
-): Readonly<Record<string, DefineValue>> {
-  const byScope = baseDefinesCache.get(tokenMap) ?? new WeakMap();
-  baseDefinesCache.set(tokenMap, byScope);
-  let merged = byScope.get(scoped ?? NO_SCOPE);
-  if (merged === undefined) {
-    merged = Object.freeze({ ...Object.fromEntries(tokenMap), ...scoped });
-    byScope.set(scoped ?? NO_SCOPE, merged);
+): {
+  readonly defines: SauceCompileOptions["defines"];
+  readonly tokens: SauceCompileOptions["tokens"];
+  readonly values: Readonly<Record<string, bigint>>;
+} {
+  if (defines === undefined) return { defines, tokens, values: {} };
+  const symbols = registryTokenSymbols();
+  const moved: Record<string, AddressInput> = {};
+  const values: Record<string, bigint> = {};
+  const kept: Record<string, DefineValue> = {};
+  for (const [name, value] of Object.entries(defines)) {
+    if (symbols.has(name) && typeof value === "bigint") moved[name] = toAddress(value);
+    else if (isChainScalar(name) && typeof value !== "boolean") values[name] = BigInt(value);
+    else kept[name] = value;
   }
-  return merged;
+
+  return { defines: kept, tokens: { ...moved, ...tokens }, values };
 }
+
+const toAddress = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
+}
+
+/** The bare specifier a compile's module of names is named by: `@sauce/chain-evm`, the one module of
+ *  the target, or `@sauce/chain-evm-own` for a compile that chose values of its own. */
+const moduleSpecifier = (chain: CanonicalChain, options: ChainModuleOptions): string =>
+  `@sauce/chain-${chain.kind === "evm" ? "evm" : "svm"}${isPlainModule(options) ? "" : "-own"}`;
+
+/**
+ * What a compile for `chain` hands the compiler beyond the program: the chain's module of names,
+ * and the caller's own defines.
+ *
+ * NAMES ARE VALUED PER CHAIN. A token symbol, `chainId` or a protocol name is declared for every
+ * chain in one module, and its value is the one of the chain the program is compiled for, whose id
+ * the define `__sauce_chain` is. A `tokens` override and a chain value the caller chose are that
+ * chain's, in a module of the compile's own; the caller's other defines (`RECIPIENT`) stay defines.
+ */
+function chainModules(
+  chain: CanonicalChain,
+  options: SauceCompileOptions,
+): {
+  readonly modules: Map<string, string>;
+  readonly ambient: string[];
+  readonly defines: SauceCompileOptions["defines"];
+} {
+  const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
+  if (defines !== undefined && CHAIN_DEFINE in defines) {
+    throw new Error(
+      `compileSauceRoute: \`${CHAIN_DEFINE}\` is the SDK's own define, set to the chain's id`,
+    );
+  }
+  const moduleOptions: ChainModuleOptions = { tokens, values, accessors: options.accessors };
+  const own = moduleSpecifier(chain, moduleOptions);
+
+  return {
+    modules: new Map([[own, chainModuleSource(chain, moduleOptions)]]),
+    ambient: [...new Set([...(options.ambient ?? []), own])],
+    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
+  };
 }
 
 /**
@@ -183,7 +208,7 @@ function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
  * `CallInput` via the existing `buildSauceEvmCall`/`buildSauceSvmCall` fork — never a new encoder.
  *
  * `sauce` is a SauceScript file: a module declaring `function main`, or a script whose top-level
- * statements run as the entry. It reaches the compiler as written, apart from the SDK's rewrites.
+ * statements run as the entry. It reaches the compiler as written.
  * A value-returning or early-exiting program declares `main`, since a top-level `return` is not
  * SauceScript.
  */
@@ -193,20 +218,7 @@ export function compileSauceRoute(
   execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
   options: SauceCompileOptions = {},
 ): CompiledSauceRoute {
-  return compileScopedRoute(destination, sauce, execution, options, {});
-}
-
-/**
- * {@link compileSauceRoute} with a {@link RouteScope}. Not exported from the package.
- */
-export function compileScopedRoute(
-  destination: ChainRef,
-  sauce: string,
-  execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
-  options: SauceCompileOptions,
-  scope: RouteScope,
-): CompiledSauceRoute {
-  const { chain, compiled, source } = compileForChain(destination, sauce, options, scope);
+  const { chain, compiled, source } = compileForChain(destination, sauce, options);
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
 
   if (chain.kind === "svm") {
@@ -253,7 +265,7 @@ export interface CompiledSauceProgram {
   readonly manifest?: AccountManifest;
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
-  /** Source after the SDK's rewrites: what the compiler was given. */
+  /** The source the compiler was given: the program as written. */
   readonly source: string;
 }
 
@@ -275,12 +287,9 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
  * the destination half of an intent.
  *
- * It gets the chain's ambient bundle (`chainId`, protocol addresses and token symbols as
- * compile-time values scoped to this chain, and the `@sauce/token` functions with no import) and
- * the token and protocol syntax. So one source compiles, unchanged, for any chain whose names it
- * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
- * `encodeEntryArguments` encodes values for them. Or `options.args` binds them into the program as
- * it compiles.
+ * It gets the chain's names (tokens, protocols, `self`, chains) and the `@sauce/token` functions with
+ * no import. So one source compiles, unchanged, for any chain whose names it uses. `main` may declare typed runtime parameters; `entryParams` reports them and
+ * `encodeEntryArguments` encodes values for them.
  */
 export function compileSauceProgram(
   chain: ChainRef,
@@ -288,19 +297,12 @@ export function compileSauceProgram(
   options: SauceProgramOptions = {},
 ): CompiledSauceProgram {
   const resolved = requireChain(chain);
-  const { args, ...compile } = options;
-  // The chain's bundle, in two halves. The ambient MODULES join the caller's. The chain-scoped
-  // NAMES travel as a scope for this program's chain, never in `defines`, so `defines` stays exactly
-  // what the caller wrote.
-  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(compile.ambient ?? [])]));
-  const scope: RouteScope = {
-    chainDefines: (on) => definesOf(on, compile.tokens),
-  };
+  const { args, ...given } = options;
+  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(given.ambient ?? [])]));
   const program = compileForChain(
     resolved,
     source,
-    { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
-    scope,
+    { ...given, ambient: ambient.length > 0 ? ambient : given.ambient },
     args === undefined ? undefined : entryWords(args),
   );
   // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
@@ -322,24 +324,22 @@ export function compileSauceProgram(
 }
 
 /**
- * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
- * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
- * because the bytecode depends on none of them — and none of the chain's ambient bundle beyond what
- * `scope` supplies, which `compileSauceRoute` deliberately leaves to its caller.
+ * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: the compile, with
+ * the chain's names, for `destination`, with no execution — no Pot, engine or staged code account,
+ * because the bytecode depends on none of them.
  */
 function compileForChain(
   destination: ChainRef,
   sauce: string,
   options: SauceCompileOptions,
-  scope: RouteScope,
   args?: readonly (bigint | boolean | string)[],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
+  readonly entryParams: RsCompileResult["entryParams"];
   readonly source: string;
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
-  readonly entryParams: RsCompileResult["entryParams"];
   readonly entrySignature: EntrySignature;
 } {
   const chain = requireChain(destination);
@@ -356,136 +356,28 @@ function compileForChain(
     );
   }
 
-  // The registry-resolved token map (registry defaults + options.tokens overrides, per-key -- see
-  // token-registry.ts#resolveTokenMap). Computed unconditionally: the registry may supply symbols
-  // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
-  // On svm they are values only: the token syntax below still throws there, by name.
-  const tokenMap = resolveTokenMap(chain, options.tokens);
-
   // The source is the program, as written: a module with a `main`, or a script whose top-level
-  // statements are the entry. The compiler tells the two apart; nothing here has to.
-  let source = sauce;
-
-  // `available(...)` FIRST: it removes the branches that name a contract or token this chain lacks,
-  // before any other pass resolves a name in them (see available.ts). A closure body is left for its
-  // own chain's compile.
-  source = rewriteAvailability(source, chain, tokenMap).source;
-
-  let contracts: ContractsConfig | undefined = options.contracts;
-  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
-  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
-  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
-  // scoped values, when `compileSauceProgram` supplied a scope (ambient.ts#chainDefines resolves the SAME
-  // registry, so the token symbols agree), and the caller's own defines over both.
-  const scoped = scope.chainDefines?.(chain);
-  // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
-  // over as they are when the caller adds none, so the compile adapter converts them once.
-  const chainValues =
-    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
-  const defines: Readonly<Record<string, DefineValue>> | undefined =
-    chainValues === undefined
-      ? options.defines
-      : options.defines === undefined || Object.keys(options.defines).length === 0
-        ? chainValues
-        : { ...chainValues, ...options.defines };
-
-  // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
-  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
-  // textually; if it ran first, `self.USDC` would become `ctx.self().USDC` and the balance
-  // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
-  // other direction: the accessor pass cannot claim the token pass's output (`__sauce_<write>(...)`
-  // is a bare call, and `IERC20` is neither a namespace nor a chain key and its call sits
-  // mid-chain, which `decomposeMemberChain` declines), and its
-  // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
-  // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
-  // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
-  // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
-  // Two ERC20 rewrites: the `<Sym>.transfer(...)` symbol syntax (when the chain has resolved token
-  // symbols) and the `Token(addr)` global wrapper (always — it takes an arbitrary address, not a
-  // registry symbol). Both lower a WRITE to `@sauce/token`'s SafeERC20 function and a READ to the
-  // typed `IERC20.at(...)` binding, so their imports are collected across both and injected ONCE
-  // (the SDK serves both modules itself); on svm either is the same EVM-only error.
-  const writes = new Set<SafeWrite>();
-  let erc20 = false;
-  let tokenRewrote = false;
-  const absorb = (rewritten: TokenImports & { source: string; rewrote: boolean }): void => {
-    if (!rewritten.rewrote) return;
-    source = rewritten.source;
-    tokenRewrote = true;
-    for (const write of rewritten.writes) writes.add(write);
-    erc20 ||= rewritten.erc20;
-  };
-  if (tokenMap.size > 0) absorb(rewriteTokenMembers(source, tokenMap));
-  absorb(rewriteTokenFactory(source));
-  if (tokenRewrote) {
-    if (chain.kind === "svm") {
-      throw new Error(
-        `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 token rewrite ` +
-          "(`Token(addr)` / `<Sym>.transfer(...)` / `self.<Sym>`) is EVM-only. On svm a token " +
-          "symbol is the mint, a value for the @sauce/token functions with the accounts as " +
-          "Account parameters: `transfer(USDC, tokenProgram, source, dest, authority, amount)`, " +
-          "`balanceOf(USDC, account)`; or the SPL account-plan `Token` emitter (see token/api.ts).",
-      );
-    }
-    source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
-  }
-
-  if (options.accessors !== false) {
-    const accessorOpts: ProtocolRewriteOptions =
-      typeof options.accessors === "object" ? options.accessors : {};
-    const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
-      ...accessorOpts,
-      existingContracts: contracts,
-    });
-    if (rewrittenAccessors.rewrote) {
-      if (chain.kind === "svm") {
-        throw new Error(
-          `compileSauceRoute: destination '${chain.slug}' is svm — the protocol-accessor rewrite ` +
-            "(options.accessors) is EVM-only; contract bindings are not supported on target 'svm'.",
-        );
-      }
-      source = rewrittenAccessors.source;
-      contracts = { ...contracts, ...rewrittenAccessors.contracts };
-    }
-  }
-
-  let rs: RsCompileResult;
-  try {
-    rs = compileWithRs({
-      source,
-      target,
-      resolve: options.resolve,
-      resolvePackage: options.resolvePackage,
-      defines,
-      ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
-      contracts,
-      ambient: options.ambient,
-      compactArgs: options.compactArgs,
-      ...(args === undefined ? {} : { args }),
-    });
-  } catch (error) {
-    // A token or protocol name the chain does not have, reported as one rather than as the call
-    // the compiler could not lower. Asked only of a program the compiler refused.
-    throw (
-      unknownGlobalError(
-        source,
-        chain,
-        {
-          defines: Object.keys(defines ?? {}),
-          contracts: Object.keys(contracts ?? {}),
-          tokens: tokenMap.keys(),
-        },
-        error,
-      ) ?? error
-    );
-  }
+  // statements are the entry. Nothing here reads or rewrites it.
+  const source = sauce;
+  const names = chainModules(chain, options);
+  const rs = compileWithRs({
+    source,
+    target,
+    resolve: options.resolve,
+    resolvePackage: options.resolvePackage,
+    defines: names.defines,
+    contracts: options.contracts,
+    ambient: names.ambient,
+    compactArgs: options.compactArgs,
+    modules: names.modules,
+    ...(args === undefined ? {} : { args }),
+  });
   const { manifest, entryEncoding, entryParams, entrySignature, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
-
   return manifest === undefined
-    ? { chain, compiled, source, entryEncoding, entryParams, entrySignature }
-    : { chain, compiled, source, entryEncoding, manifest, entryParams, entrySignature };
+    ? { chain, compiled, entryParams, source, entryEncoding, entrySignature }
+    : { chain, compiled, entryParams, source, entryEncoding, manifest, entrySignature };
 }

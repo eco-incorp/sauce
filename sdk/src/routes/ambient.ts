@@ -19,7 +19,7 @@
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { loadPlugin, loadPluginData } from "../plugin/index.js";
-import { pascalOfSlug } from "./builder.js";
+import { pascalOfSlug } from "./pascal.js";
 import type { AddressInput } from "./types.js";
 
 export interface AmbientDefinesOptions {

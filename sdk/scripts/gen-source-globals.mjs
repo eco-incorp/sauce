@@ -5,7 +5,9 @@
 //     from (`CONTRACT_LINKS`, every protocol's ABIs and deployments), and the TypeScript type of the
 //     host tree `Base.UniswapV3.QuoterV2`;
 //   src/routes/source-globals.generated.ts — the declarations a compiled route body sees: the same
-//     namespaces as Sauce scalars (`UniswapV3.QuoterV2`), the token symbols, and `available`.
+//     namespaces as Sauce scalars (`UniswapV3.QuoterV2`) and the token symbols. A contract a chain
+//     lacks is `undefined` there, so its member is optional and a program tests it before a use:
+//     `if (UniswapV3.Factory) { … }`.
 //
 // WHERE A CONTRACT COMES FROM. A protocol's `addresses.ts` names each deployed contract by a role
 // key, and its `abis.ts` exports ABIs; `test/fixtures/registry-abi/targets.json` binds the two — it
@@ -310,7 +312,6 @@ const reserved = new Map([
   ["chain", "the chain front door"],
   ["chainId", "the chain id define"],
   ["CHAIN_ID", "the chain id define"],
-  ["available", "the presence check"],
 ]);
 function claim(name, what) {
   if (!ts.isIdentifierText(name, ts.ScriptTarget.Latest))
@@ -417,13 +418,19 @@ for (const [key, slug] of namespaceOf) {
     if (shadowed.length > 0)
       fail(`${slug}: default-contract method '${shadowed[0].name}' collides with a contract name`);
   }
-  const fields = contracts.map((c) => `  readonly ${c.contract}: ${sourceContractType(c)};`);
+  // A deployed contract is `undefined` on a chain without it, so a program tests it before a use;
+  // an interface is an ABI, on every chain.
+  const fields = contracts.map(
+    (c) =>
+      `  readonly ${c.contract}${c.kind === "interface" ? "" : "?"}: ${sourceContractType(c)};`,
+  );
   sourceDefinitions.push(`export interface ${key}Source${heritage} {\n${fields.join("\n")}\n}`);
   globalDeclarations.push(`  const ${key}: ${key}Source;`);
 }
 for (const [family, members] of families) {
   const fields = familyContracts(members).map(
-    ([name, slug]) => `  readonly ${name}: ${pascal(slug)}Source[${JSON.stringify(name)}];`,
+    ([name, slug]) =>
+      `  readonly ${name}${registry.get(slug).contracts.find((c) => c.contract === name)?.kind === "interface" ? "" : "?"}: ${pascal(slug)}Source[${JSON.stringify(name)}];`,
   );
   sourceDefinitions.push(`export interface ${family}FamilySource {\n${fields.join("\n")}\n}`);
   globalDeclarations.push(`  const ${family}: ${family}FamilySource;`);
@@ -482,12 +489,6 @@ ${globalDeclarations.join("\n")}
   /** The id of the chain the program is compiled for. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
-  /**
-   * Whether the destination chain has a registry contract or token, decided at compile time:
-   * \`available(UniswapV3.Factory)\`, \`available(Arbitrum.UniswapV3.Factory)\`, \`available(USDT)\`.
-   * A branch it rules out (\`if\`, \`?:\`, \`&&\`, \`||\`) is removed before anything in it resolves.
-   */
-  function available(name: bigint): boolean;
 }
 `;
 

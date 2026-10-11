@@ -235,7 +235,7 @@ what a program costs, and compile errors.
 
 The names a program uses with no import, resolved on the chain it is compiled for: token symbols
 and tokenized stocks, `Token(address)`, the SafeERC20 token methods and the `@sauce/token`
-functions, protocol namespaces and family aliases, `available(...)`, chain names and `ctx`.
+functions, protocol namespaces and family aliases, the comparison with zero for a venue a chain may lack, chain names and `ctx`.
 
 - **Holds** generated indexes of names, the lists `sauce globals` prints:
   [tokens](../sauce-globals/references/tokens.md),
@@ -271,7 +271,7 @@ file.
 
 Every protocol the registry knows: how to choose between protocols that do the same job, and how a
 program reaches each (a namespace contract, an address only, an interface called with an address,
-or an imported ABI), with `available(...)` for a chain that may lack it.
+or an imported ABI), tested on a chain that may lack it.
 
 - **Holds** [references/index.md](../sauce-protocols/references/index.md), every protocol by
   category with "Choosing between them"; per protocol, a generated registry file

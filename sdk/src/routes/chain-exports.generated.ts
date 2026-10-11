@@ -25,9 +25,8 @@
 // `Token(addr).approve(...)` typecheck in a TYPED CLOSURE body and not only in one
 // supplied as source text. It is intersected here rather than declared on `TokenApi`
 // because the runtime `Token` value is a frozen object and is not callable -- the
-// `Token(x)` spelling is rewritten before the compiler sees it (a write to
-// `@sauce/token`'s SafeERC20 function, a read to `IERC20.at(x)`) and is never invoked
-// by the host.
+// `Token(x)` spelling is the chain module's (`@sauce/token`'s `TokenOf`: a write is its
+// SafeERC20 function, a read the typed `balanceOf` call) and is never invoked by the host.
 import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
@@ -130,6 +129,6 @@ export const Solana = composedChainGlobal("Solana") as Composed<"Solana"> & SvmV
 export { chain } from "./accessors.js";
 
 /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. Callable as
- *  `Token(addr)` in a route body (the wrapper, rewritten to `IERC20.at(addr)`), and carries
- *  the runtime spec-object API for use outside one. */
+ *  `Token(addr)` in a program (the chain module's `Token`), and carries the runtime
+ *  spec-object API for use outside one. */
 export const Token: TokenApi & TokenFactory = tokenApi as TokenApi & TokenFactory;

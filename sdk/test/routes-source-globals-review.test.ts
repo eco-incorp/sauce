@@ -7,6 +7,7 @@ import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { sauceBodyToSource } from "../src/routes/closure.js";
 
 const cctpSource = `function main() {
+  require(Cctp.TokenMessenger);
   Cctp.TokenMessenger.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
   return 1n;
 }`;
@@ -30,6 +31,15 @@ describe("source globals match the Sauce contract model", () => {
     writeFileSync(
       probePath,
       `
+        // Each contract a chain may lack is required before a use, which narrows it.
+        require(Uniswap.UniversalRouter);
+        require(UniswapV2.Router);
+        require(Aave.Pool);
+        require(AaveV3.PoolAddressesProvider);
+        require(MorphoBlue.Bundler3);
+        require(UniswapV3.Factory);
+        require(PancakeswapV3.Factory);
+        require(AerodromeSlipstream.CLFactory);
         ${cctpSource}
         // TokenMessengerV2.depositForBurn returns nothing.
         const burned: void = Cctp.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
@@ -70,10 +80,10 @@ describe("source globals match the Sauce contract model", () => {
         // A namespace for every registry protocol, not only the formerly linked ones.
         const pancake: bigint = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
         const clPool: bigint = AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
-        // The presence check takes a contract or a token, and is a compile-time boolean.
-        const has: boolean = available(PancakeswapV3.Factory) && available(USDT);
-        // @ts-expect-error The presence check takes a registry name, not an interface.
-        available(Erc4626.Vault);
+        // A contract or a token the chain lacks is undefined there; a comparison still types.
+        const has: boolean = PancakeswapV3.Factory != 0n && USDT != 0n;
+        // @ts-expect-error An unbound interface has no address to compare.
+        const unbound: boolean = Erc4626.Vault != 0n;
         // @ts-expect-error Factory is ambiguous across Uniswap versions.
         const factory: unknown = Uniswap.Factory;
         // @ts-expect-error Even a single-member family alias requires the contract name.
@@ -110,7 +120,7 @@ describe("source globals match the Sauce contract model", () => {
 
   it("compiles token writes and reads identically from a typed closure and source text", () => {
     const body = () => {
-      USDC.approve(Uniswap.UniversalRouter, 1n);
+      if (Uniswap.UniversalRouter) USDC.approve(Uniswap.UniversalRouter, 1n);
       USDC.transfer(1n, 1n);
       return USDC.balanceOf(1n);
     };

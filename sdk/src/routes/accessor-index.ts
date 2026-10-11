@@ -18,7 +18,7 @@
 import { canonicalChains, type ChainSlug } from "../chains/canonical.js";
 import { DESCRIPTORS } from "../descriptors/registry.js";
 import type { ContractDescriptor } from "../descriptors/types.js";
-import { pascalOfSlug } from "./builder.js";
+import { pascalOfSlug } from "./pascal.js";
 
 export interface ProtocolNamespace {
   readonly kind: "protocol";

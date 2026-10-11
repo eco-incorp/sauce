@@ -119,8 +119,6 @@ export type {
   SourceNamespace,
   SourceToken,
 } from "./source-globals.js";
-export { rewriteTokenMembers, REWRITABLE_METHODS, tokenImportLines } from "./token-rewrite.js";
-export type { SafeWrite, TokenImports, TokenRewriteResult, TokenSymbols } from "./token-rewrite.js";
 export {
   knownTokenSymbols,
   registryTokenAddress,
