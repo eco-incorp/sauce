@@ -35,7 +35,9 @@ private Pot. An intent's executor-owned Pot is private even though several inten
    prints it. An owner has one Pot per salt, and the default salt is zero.
 2. **It is deployed once.** The Kitchen's `deployPot(owner, salt)` creates it. Anyone may send that
    transaction, and the Pot is the owner's whoever sends it; sending it again returns the Pot
-   already there. `sauce pot --deploy` sends it, and `sauce run` offers to when the Pot is missing.
+   already there. You need not do it as a step of your own: a command deploys your Pot when it
+   first needs it (asks, or `--yes`), `sauce tx` puts the deployment first, and on Solana the
+   cook's own transaction creates it. `sauce pot --deploy` does it by hand.
 3. **It is funded like any address.** Send it tokens or native coin from any wallet, or let
    `sauce run --fund` pull them from your wallet as part of the run.
 4. **Its owner cooks programs on it.** Each cook is one transaction from the owner to the Pot, and
@@ -167,15 +169,15 @@ The [Solana guide](../guides/solana.md) covers accounts, staging and both ways t
 
 ## In code
 
-| To                          | With the `sauce` command           | In TypeScript                                                                    |
-| --------------------------- | ---------------------------------- | -------------------------------------------------------------------------------- |
-| Find a Pot's address        | `sauce pot --owner <address>`      | `v12PredictPot(owner, salt)` from `@eco-incorp/sauce`                            |
-| Deploy a Pot                | `sauce pot --deploy`               | `routes.sauceEvmDeployPotCall({ owner, salt })`                                  |
-| Rehearse a cook             | `sauce simulate`                   | an `eth_call` of the cook from the owner, on a deployed Pot                      |
-| Build a cook                | `sauce tx`                         | `v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine`         |
-| Send a cook                 | `sauce run`                        | your own wallet client, with the cook as `to`, `data` and `value`                |
-| Read the fee                | read by `sauce run` and `sauce tx` | `destinationExecutionFee()`                                                      |
-| Find the Kitchen and engine | `sauce pot` prints the Kitchen     | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments` |
+| To                          | With the `sauce` command                        | In TypeScript                                                                    |
+| --------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| Find a Pot's address        | `sauce pot --owner <address>`                   | `v12PredictPot(owner, salt)` from `@eco-incorp/sauce`                            |
+| Deploy a Pot                | `sauce run` (when needed), `sauce pot --deploy` | `routes.sauceEvmDeployPotCall({ owner, salt })`                                  |
+| Rehearse a cook             | `sauce simulate`                                | an `eth_call` of the cook from the owner, on a deployed Pot                      |
+| Build a cook                | `sauce tx`                                      | `v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine`         |
+| Send a cook                 | `sauce run`                                     | your own wallet client, with the cook as `to`, `data` and `value`                |
+| Read the fee                | read by `sauce run` and `sauce tx`              | `destinationExecutionFee()`                                                      |
+| Find the Kitchen and engine | `sauce pot` prints the Kitchen                  | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments` |
 
 The [CLI guide's EVM flow](../guides/cli.md#the-flow-on-an-evm-chain) runs a program on your own Pot
 from start to finish, and [cross-chain-intent.ts](../examples/cross-chain-intent.ts) builds the same

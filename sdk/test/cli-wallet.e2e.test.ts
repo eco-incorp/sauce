@@ -147,4 +147,40 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     expect(refused.stderr).toMatch(/chains allows ethereum, and this transaction is on base/);
     expect(await base.publicClient.getTransactionCount({ address: wallet })).toBe(nonce);
   }, 120_000);
+
+  it("deploys its own Pot under a policy whose `to` allows that Pot, and refuses it otherwise", async () => {
+    const created = await sauce("wallet", "new", "builder", ...PASSWORD, "--json");
+    expect(created.code).toBe(0);
+    const builder = getAddress((JSON.parse(created.stdout) as { address: string }).address);
+    const builderPot = getAddress(v12PredictPot(builder, SAUCE_INTENT_POT_SALT) as Address);
+    await base.send(base.deployer, builder, "0x", parseEther("1"));
+    await base.mint(usdc, builderPot, 1_000_000n);
+    const policy = join(wallets, "builder.policy.json");
+    const build = () =>
+      sauce(
+        ...["run", program, "--chain", "base", "--rpc-url", base.rpcUrl],
+        ...["--wallet", "builder", ...PASSWORD, "--yes", "--json"],
+        ...["--args", RECIPIENT, "500000"],
+      );
+    // `to` names another address: the deploy is refused before anything is sent, naming the Pot.
+    writeFileSync(policy, JSON.stringify({ to: [RECIPIENT] }), { mode: 0o600 });
+    const refused = await build();
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain(
+      `this transaction deploys the wallet's Pot ${builderPot}, which is not one of them: add ` +
+        "it to to",
+    );
+    expect(await base.publicClient.getTransactionCount({ address: builder })).toBe(0);
+    expect(await base.publicClient.getCode({ address: builderPot })).toBeUndefined();
+    // `to` names the Pot: deploying it is allowed, as cooking on it is, though the Kitchen is not.
+    writeFileSync(policy, JSON.stringify({ to: [builderPot] }), { mode: 0o600 });
+    const sent = await build();
+    expect(sent.code).toBe(0);
+    expect(JSON.parse(sent.stdout)).toMatchObject({
+      pot: builderPot,
+      deployPot: { status: "success" },
+      cook: { status: "success" },
+    });
+    expect(await potOwner(base, builderPot)).toBe(builder);
+  }, 120_000);
 });
