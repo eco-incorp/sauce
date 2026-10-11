@@ -204,6 +204,41 @@ function main(heads: Address, tails: Address, prize: Uint256) {
 - **Keys** are the provider's own ids: VRF's request id under its wrapper, and Entropy's sequence
   number under its provider and the Entropy contract, since sequence numbers count per provider.
 
+### The official examples, in Sauce
+
+Chainlink's and Pyth's own example consumers port to Sauce with their behaviour kept: the
+contract's state in the Pot's storage, its events from the Pot, its callback as `.then`. A Pot
+already has what a contract needs only to exist (a constructor, an owner check, a `receive`, the
+check on who calls back), so each port is a fraction of the original:
+
+| Official example (Solidity)              | In Sauce                                                                   | Lines (code)        |
+| ---------------------------------------- | -------------------------------------------------------------------------- | ------------------- |
+| Chainlink `DirectFundingConsumer.sol`    | two VRF words, paid by direct funding; the request's status kept           | 119 (66) → 42 (18)  |
+| Chainlink `SubscriptionConsumer.sol`     | the same, paid by direct funding in place of a subscription                | 109 (57) → 41 (19)  |
+| Chainlink `VRFD20.sol`                   | a d20 rolled once per roller, and `house(player)` as a read                | 173 (80) → 86 (46)  |
+| Pyth `CoinFlip.sol`                      | a fair coin, `FlipRequest` and `FlipResult` logged                         | 128 (64) → 33 (11)  |
+| Pyth `NFTGrowth.sol` (and its `NFT.sol`) | a token levelled up, unchanged or killed; its ten-minute unlock a deadline | 183 (141) → 61 (34) |
+
+The sources are `smartcontractkit/documentation`'s `public/samples/VRF/v2-5/` and
+`pyth-network/pyth-examples`' `entropy/`; code lines leave out comments, blank lines, and the pragma and import lines. Each port numbers its requests in the Pot's own storage, so a record is keyed by that
+number rather than by the provider's id, which keys the promise. Pyth's CoinFlip, whole:
+
+```js
+import { Random } from "@sauce/random";
+
+function main(): Uint256 {
+  const flips = crypto.keccak256("CoinFlip.flips");
+  const sequenceNumber = evm.sload(flips) + 1;
+  evm.sstore(flips, sequenceNumber);
+  Random.entropy().then((randomNumber) => {
+    const isHeads = randomNumber % 2 == 0;
+    log(abi.encode(sequenceNumber, isHeads), crypto.keccak256("FlipResult(uint64,bool)"));
+  });
+  log(abi.encode(sequenceNumber), crypto.keccak256("FlipRequest(uint64)"));
+  return sequenceNumber;
+}
+```
+
 Install the handlers once per Pot. On a chain with one provider, only its handler installs:
 
 ```sh

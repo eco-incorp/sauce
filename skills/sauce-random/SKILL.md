@@ -1,6 +1,6 @@
 ---
 name: sauce-random
-description: Verifiable randomness in a Sauce program with @sauce/random — Random.vrf, Chainlink VRF random words paid in the native coin through the chain's VRF wrapper (Ethereum and Base), and Random.entropy, a Pyth Entropy random number (Base), each a promise whose .then body runs with the randomness when the provider calls the Pot back. Covers each request's fields (words, confirmations, provider, gas, deadline), what the Pot pays and must keep for the callback, how the callback's gas is sized and when to give it, what happens when a callback fails, comes twice or never comes (deadlines, expire, racing Async.timeout), installing the handlers on a Private Pot, and the chains each provider is on. Use when a program needs a random number, a lottery, a raffle, a draw, a coin flip, a shuffle or a fair pick, or when the user mentions Chainlink VRF, Pyth Entropy, randomness, rawFulfillRandomWords or _entropyCallback.
+description: Verifiable randomness in a Sauce program with @sauce/random — Random.vrf, Chainlink VRF random words paid in the native coin through the chain's VRF wrapper (Ethereum and Base), and Random.entropy, a Pyth Entropy random number (Base), each a promise whose .then body runs with the randomness when the provider calls the Pot back. Covers each request's fields (words, confirmations, provider, gas, deadline), what the Pot pays and must keep for the callback, how the callback's gas is sized and when to give it, what happens when a callback fails, comes twice or never comes (deadlines, expire, racing Async.timeout), installing the handlers on a Private Pot, the chains each provider is on, and Chainlink's and Pyth's official example consumers ported. Use when a program needs a random number, a lottery, a raffle, a draw, a coin flip, a shuffle or a fair pick, or when the user mentions Chainlink VRF, Pyth Entropy, randomness, rawFulfillRandomWords or _entropyCallback.
 ---
 
 # Randomness with `@sauce/random`
@@ -116,6 +116,34 @@ promise table and its combinators.
   heads or tails, which anyone may expire after a day.
 - [`examples/draw.sauce.ts`](examples/draw.sauce.ts): an Entropy draw among three entrants, raced
   against an hour.
+
+## The official examples, in Sauce
+
+Chainlink's and Pyth's own example consumers, each ported as a program that keeps the original's
+behaviour: its state in the Pot's storage, its events from the Pot, its callback as `.then`. Each
+file's header names the source, says where each part of the contract went, and lists what is left
+out. What a contract needs to exist at all (a constructor, an owner check, a `receive`, the
+callback's sender check) a Pot already has, so a port runs to between a sixth and a little over half
+of the original's code lines.
+
+| Ported from                                        | Sauce                                                                                                                                                     | Lines (code)        |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| Chainlink `DirectFundingConsumer.sol`              | [`examples/vrf-direct-funding.sauce.ts`](examples/vrf-direct-funding.sauce.ts)                                                                            | 119 (66) → 42 (18)  |
+| Chainlink `SubscriptionConsumer.sol`               | [`examples/vrf-subscription.sauce.ts`](examples/vrf-subscription.sauce.ts), paid by direct funding in place of a subscription                             | 109 (57) → 41 (19)  |
+| Chainlink `VRFD20.sol`                             | [`examples/vrf-d20.sauce.ts`](examples/vrf-d20.sauce.ts), and its `house(player)` as [`examples/vrf-d20-house.sauce.ts`](examples/vrf-d20-house.sauce.ts) | 173 (80) → 86 (46)  |
+| Pyth `CoinFlip.sol`                                | [`examples/entropy-coin-flip.sauce.ts`](examples/entropy-coin-flip.sauce.ts)                                                                              | 128 (64) → 33 (11)  |
+| Pyth `NFTGrowth.sol` (with its `NFT.sol`, 41 more) | [`examples/entropy-growth.sauce.ts`](examples/entropy-growth.sauce.ts): its ten-minute unlock is the request's deadline and `.catch`                      | 183 (141) → 61 (34) |
+
+The Chainlink sources are `smartcontractkit/documentation`'s `public/samples/VRF/v2-5/`, and the
+Pyth ones `pyth-network/pyth-examples`' `entropy/`. Code lines leave out comments, blank lines, and the pragma and import lines.
+
+- **A Pot numbers its own requests.** Each program counts its requests in the Pot's storage and keys
+  its records by that number, where the original keys them by the provider's request id or sequence
+  number: the program never needs the provider's id, which keys the promise.
+- **A view is a read.** A `view` function becomes a program that returns the value, simulated
+  rather than sent (`vrf-d20-house.sauce.ts`).
+- **The Pot pays.** A request is paid from the Pot's balance in the native coin, so the original's
+  LINK payment, subscription, fee checks and withdraw functions have no part here.
 
 The providers' own facts (addresses per chain, the wrapper's limits, how each calls back) are in
 `sauce-protocols`, its `chainlink-vrf` and `pyth-entropy` documents.
