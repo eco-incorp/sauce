@@ -44,6 +44,8 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 - [A distributed swap on Solana](guides/solana-distributed-swap.md): the same limit order over
   the pools of every Solana venue whose swap stops at a price limit, each pool's accounts from
   `sauce pools`.
+- [From Solidity examples to Sauce](guides/solidity-examples.md): the protocols' own Solidity
+  examples ported to Sauce and run, each beside its source.
 - [Actions](guides/actions.md): write protocol actions as JSON, then run them or make an intent.
 - [Builders](guides/builders-and-actions.md): generate programs from structured data.
 - [Solana](guides/solana.md): plan accounts, stage code and execute on Solana.
