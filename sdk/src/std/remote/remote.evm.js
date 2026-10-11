@@ -43,7 +43,7 @@
 // ABIs: Hyperlane's `dispatch(uint32,bytes32,bytes,bytes)`, LayerZero's
 // `send((uint32,bytes32,bytes,bytes,bool),address)`, the MetalayerRouter's
 // `dispatch(uint32,bytes32,(uint32,address,bytes)[],bytes,uint8,uint256)`, and for Polymer a log.
-import { Request, requireCaller, requireSelf, run, settleCarried } from "@sauce/async";
+import { Handler, Request, requireCaller, requireSelf, run, settleCarried } from "@sauce/async";
 import Mailbox from "./hyperlane-mailbox.abi.json";
 import Endpoint from "./layerzero-endpoint.abi.json";
 import MetalayerRouter from "./metalayer-router.abi.json";
@@ -67,6 +67,19 @@ const SAUCE_REMOTE_OUT = 0x060f47f4cf8915d03a5bd9eecaa2f85d38b0536343fffc5d1adbc
 // The gas the destination's handler is given when a message names none: the Router's dispatch, the
 // Kitchen's cook, the handler's checks, and the program it runs.
 const SAUCE_REMOTE_GAS = 500000;
+
+// The callbacks a Pot answers each bridge with, by selector: Hyperlane's
+// `handle(uint32,bytes32,bytes)`, Metalayer's
+// `handle(uint32,bytes32,bytes,(uint32,address,bytes)[],bytes[])`, LayerZero's
+// `lzReceive((uint32,bytes32,uint64),bytes32,bytes,address,bytes)` with its read-only
+// `allowInitializePath((uint32,bytes32,uint64))` and `nextNonce(uint32,bytes32)`, and Polymer's
+// `deliver(bytes)`.
+const SAUCE_REMOTE_HYPERLANE = 0x56d5d475;
+const SAUCE_REMOTE_METALAYER = 0x7403de90;
+const SAUCE_REMOTE_LZ_RECEIVE = 0x13137d65;
+const SAUCE_REMOTE_LZ_PATH = 0xff7bd03d;
+const SAUCE_REMOTE_LZ_NONCE = 0x7d25a05e;
+const SAUCE_REMOTE_POLYMER = 0x22133eaf;
 
 // The chain a program runs on, as every message it sends or receives sees it: its chain id, its name,
 // and its bridges, each one's contract here and the id it names this chain by. A bridge this chain
@@ -282,6 +295,9 @@ export class Remote {
       carries: true,
       chain: here.chainId,
       deadline: this._deadline,
+      // The answer comes back over the same bridge: this Pot answers it with that bridge's receiver,
+      // installed as the request runs unless it is already.
+      handlers: Receivers.of(via),
       send: (continuation) => {
         // Its scope tells the SDK the message: the bridge, and the chain and gas of the answer.
         const reply = program(remote._reply(via, continuation.key, continuation.stored), {
@@ -467,6 +483,64 @@ class Bridge {
 // origin is this same Pot, then runs the message's program in this cook, handed its input. `caller`
 // and `data` are the handler's own arguments: who called the Pot, and the whole calldata, selector
 // included.
+// The receivers of each bridge, as the request of a round trip installs them on the Pot it runs on
+// for the answer: the same programs as the package's `*.handler.js`, so a Pot that ran `sauce run
+// @sauce/remote` already answers with them. Only the bridge a message takes is named, since a chain
+// without the others has no names for their contracts.
+class Receivers {
+  static of(via) {
+    if (via == "hyperlane") {
+      return [
+        new Handler(
+          SAUCE_REMOTE_HYPERLANE,
+          (caller: Address, value: Uint256, data: bytes): void => {
+            Receive.hyperlane(Hyperlane.Mailbox, caller, data);
+          },
+        ),
+      ];
+    }
+    if (via == "metalayer") {
+      return [
+        new Handler(
+          SAUCE_REMOTE_METALAYER,
+          (caller: Address, value: Uint256, data: bytes): void => {
+            Receive.metalayer(Metalayer.Router, caller, data);
+          },
+        ),
+      ];
+    }
+    if (via == "layerzero") {
+      return [
+        new Handler(
+          SAUCE_REMOTE_LZ_RECEIVE,
+          (caller: Address, value: Uint256, data: bytes): void => {
+            Receive.layerzero(Layerzero.EndpointV2, caller, data);
+          },
+        ),
+        new Handler(
+          SAUCE_REMOTE_LZ_PATH,
+          (caller: Address, value: Uint256, data: bytes): bool => {
+            return Receive.allowInitializePath(data);
+          },
+          true,
+        ),
+        new Handler(
+          SAUCE_REMOTE_LZ_NONCE,
+          (caller: Address, value: Uint256, data: bytes): Uint256 => {
+            return 0;
+          },
+          true,
+        ),
+      ];
+    }
+    return [
+      new Handler(SAUCE_REMOTE_POLYMER, (caller: Address, value: Uint256, data: bytes): void => {
+        Receive.polymer(Polymer.CrossL2ProverV2, data);
+      }),
+    ];
+  }
+}
+
 export class Receive {
   // handle(uint32 origin, bytes32 sender, bytes message), from the Mailbox.
   static hyperlane(mailbox, caller, data) {

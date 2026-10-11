@@ -59,6 +59,7 @@ import {
   type DestinationTx,
 } from "../../../src/cli/remote-setup.js";
 import { v12PredictPot } from "../../../src/deployments/pot.js";
+import { handlersInPlace } from "../../../src/cli/handlers.js";
 import { DEPLOYER, FEE, RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../cli-anvil.js";
 import { gateAnchors, POT_SALT, routerUnderTest } from "../../evm/gated-engine.js";
 import {
@@ -649,7 +650,7 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
   }, 120_000);
 
   itSettling(
-    "readies a fresh Pot on Base for a round trip, the answer's fee quoted, and the round trip completes",
+    "readies a fresh Pot on Base for a round trip, the answer's fee quoted; the cook installs its own receiver, and the round trip completes",
     async () => {
       const salt = `0x${"00".repeat(31)}53` as Hex;
       const owner = DEPLOYER.address;
@@ -700,21 +701,26 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       );
       for (const step of steps) await step.send();
 
-      // The same Pot on Ethereum, readied the same way for the answer it receives, and funded for
-      // the message it sends.
-      for (const step of await destinationSetup([{ chain: ethereum.chain, bridge: "hyperlane" }], {
-        owner,
-        salt,
-        reach: reachOf(ethereum),
-        estimate: async () => "estimated",
-      })) {
-        await step.send();
-      }
-      await reachOf(ethereum)().then((there) =>
-        there.send!({ to: fresh, data: "0x", value: HYPERLANE_FEE }),
-      );
+      // The same Pot on Ethereum, minted and funded for the message it sends and the Kitchen's fee of
+      // the answer it runs; the cook's request installs the receiver the answer reaches.
+      const ethereumReach = await reachOf(ethereum)();
+      await ethereumReach.send!({
+        to: gateAnchors().kitchen,
+        data: encodeFunctionData({
+          abi: parseAbi(["function deployPot(address owner, bytes32 salt) returns (address)"]),
+          functionName: "deployPot",
+          args: [owner, salt],
+        }),
+        value: 0n,
+      });
+      await ethereumReach.send!({ to: fresh, data: "0x", value: HYPERLANE_FEE + FEE });
+      const receiver = packageHandlers("ethereum", "@sauce/remote")
+        .filter((handler) => handler.signature === "handle(uint32,bytes32,bytes)")
+        .map((handler) => ({ ...handler, selector: BigInt(handler.selector) }));
+      expect(await handlersInPlace(ethereum.publicClient, fresh, receiver)).toBe(false);
 
       const out = await cook(ethereum, source, [7n], fresh);
+      expect(await handlersInPlace(ethereum.publicClient, fresh, receiver)).toBe(true);
       const [there] = await relayHyperlane(out, ethereumBridges, base, baseBridges);
       const back = await base.publicClient.getTransactionReceipt({ hash: there! });
       await relayHyperlane(back, baseBridges, ethereum, ethereumBridges);

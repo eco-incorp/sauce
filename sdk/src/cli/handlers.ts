@@ -65,7 +65,10 @@ export function handlerSlot(selector: bigint): Hex {
 
 /** The record `handler` leaves on `pot` once installed: the code contract `0x00 ++ engine ++
  *  program` the Router deploys by CREATE2 from the Pot with salt zero, its mode in the byte above. */
-export function handlerRecord(pot: Address, handler: InstalledHandler): bigint {
+export function handlerRecord(
+  pot: Address,
+  handler: Pick<InstalledHandler, "bytecode" | "readOnly">,
+): bigint {
   const code = handler.bytecode;
   const init = concat([
     "0x61",
@@ -92,7 +95,7 @@ export function handlerRecord(pot: Address, handler: InstalledHandler): bigint {
 export async function handlersInPlace(
   client: Pick<PublicClient, "getStorageAt">,
   pot: Address,
-  handlers: readonly InstalledHandler[],
+  handlers: readonly Pick<InstalledHandler, "selector" | "bytecode" | "readOnly">[],
 ): Promise<boolean> {
   if (handlers.length === 0) return false;
   for (const handler of handlers) {

@@ -22,12 +22,9 @@ import {
   encodeAbiParameters,
   formatEther,
   getAddress,
-  getContractAddress,
-  keccak256,
   pad,
   parseAbi,
   toHex,
-  zeroHash,
   type Address,
   type Hex,
   type PublicClient,
@@ -46,6 +43,7 @@ import {
 import { remoteLink, type RemoteBridge, type RemoteLink } from "../routes/remote-link.js";
 import { compileSauceProgram, type CompiledBody } from "../routes/sauce-route.js";
 import { kitchenFee } from "./chain.js";
+import { handlersInPlace } from "./handlers.js";
 import { nativeSymbol } from "./effects.js";
 
 /** What a remote message needs where it runs: the chain, the bridge that delivers it there, and for
@@ -134,58 +132,16 @@ const BRIDGE_NAMES: Readonly<Record<RemoteBridge, string>> = {
   polymer: "Polymer",
 };
 
-/** Where a Pot's Router keeps its handler records, in the Pot's storage: ERC-7201
- *  `sauce.storage.Handlers`, a mapping from selector to one word. */
-export const HANDLERS_LOCATION: Hex =
-  "0x3ede71929532386d53b5e25665f65f4ad4a552935973d8ba46f290dd0524c500";
-
-/** The Router's init code for a handler's code contract opens with `PUSH2 <size>` and copies the
- *  rest out: `0x00`, the engine, then the program. */
-const COPY_RETURN_TAIL: Hex = "0x80600a3d393df3";
-
-/** The storage slot of `selector`'s record: a `bytes4` key, left-aligned in its word. */
-export function handlerRecordSlot(selector: Hex): Hex {
-  return keccak256(concat([pad(selector, { dir: "right", size: 32 }), HANDLERS_LOCATION]));
-}
-
-/** The code contract a Pot keeps `program` in for `engine`: CREATE2 from the Pot, with salt zero,
- *  of the init code the Router writes, so its address is a function of its bytes. */
-export function handlerCodeAddress(pot: Address, engine: Address, program: Uint8Array): Address {
-  const initCode = concat([
-    "0x61",
-    toHex(21 + program.length, { size: 2 }),
-    COPY_RETURN_TAIL,
-    "0x00",
-    engine,
-    bytesToHex(program),
-  ]);
-
-  return getContractAddress({
-    opcode: "CREATE2",
-    from: pot,
-    salt: zeroHash,
-    bytecodeHash: keccak256(initCode),
-  });
-}
-
-/** Whether `handler` is installed on `pot`: its record names the code contract of `engine` and the
- *  handler's program, and runs it read-only exactly when the handler is. */
-export async function handlerInstalled(
+/** Whether `handler` is installed on `pot`: the Router's record for its selector is the one
+ *  installing it leaves (`handlers.ts`'s check, which a program's own handlers are held to). */
+function handlerInstalled(
   client: PublicClient,
   pot: Address,
-  engine: Address,
   handler: CompiledHandler,
 ): Promise<boolean> {
-  const word = BigInt(
-    (await client.getStorageAt({ address: pot, slot: handlerRecordSlot(handler.selector) })) ??
-      "0x0",
-  );
-  const code = getAddress(toHex(word & ((1n << 160n) - 1n), { size: 20 }));
-  const readOnly = ((word >> 160n) & 0xffn) !== 0n;
-
-  return (
-    code === handlerCodeAddress(pot, engine, handler.bytecode) && readOnly === handler.readOnly
-  );
+  return handlersInPlace(client, pot, [
+    { selector: BigInt(handler.selector), bytecode: handler.bytecode, readOnly: handler.readOnly },
+  ]);
 }
 
 /** The `@sauce/remote` handlers that receive over `bridges` on `chain`. */
@@ -439,7 +395,7 @@ export async function destinationSetup(
       ? (
           await Promise.all(
             handlers.map(async (handler) =>
-              (await handlerInstalled(there.client, pot, engine, handler)) ? undefined : handler,
+              (await handlerInstalled(there.client, pot, handler)) ? undefined : handler,
             ),
           )
         ).filter((handler): handler is CompiledHandler => handler !== undefined)

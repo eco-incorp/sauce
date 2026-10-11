@@ -324,3 +324,45 @@ describe("the bridges' own examples, ported", () => {
     expect(blocks).toEqual(PORTS.map((name) => program(file(name))));
   });
 });
+
+describe("the receivers a round trip installs for its answer", () => {
+  const RECEIVERS: Record<string, string[]> = {
+    hyperlane: ["handle(uint32,bytes32,bytes)"],
+    metalayer: ["handle(uint32,bytes32,bytes,(uint32,address,bytes)[],bytes[])"],
+    layerzero: [
+      "lzReceive((uint32,bytes32,uint64),bytes32,bytes,address,bytes)",
+      "allowInitializePath((uint32,bytes32,uint64))",
+      "nextNonce(uint32,bytes32)",
+    ],
+    polymer: ["deliver(bytes)"],
+  };
+
+  it.each(Object.keys(RECEIVERS))(
+    "over %s: that bridge's receivers only, each the package's handler file byte for byte",
+    (via) => {
+      const program = compile(`function main(bump: Uint256) {
+  Base.remote(() => {
+    return 1;
+  }, { via: "${via}" }).then((result) => {
+    evm.sstore(1, result.length + bump);
+  });
+}`);
+      const files = new Map(
+        packageHandlers("ethereum", "@sauce/remote").map((file) => [BigInt(file.selector), file]),
+      );
+      expect(program.handlers.map((handler) => files.get(handler.selector)?.signature)).toEqual(
+        RECEIVERS[via],
+      );
+      for (const handler of program.handlers) {
+        const file = files.get(handler.selector)!;
+        expect(handler.destination.slug).toBe("ethereum");
+        expect(handler.readOnly).toBe(file.readOnly);
+        expect(hex(handler.bytecode)).toBe(hex(file.bytecode));
+      }
+    },
+  );
+
+  it("a one-way message installs none: nothing comes back", () => {
+    expect(compile(ONE_WAY()).handlers).toEqual([]);
+  });
+});
