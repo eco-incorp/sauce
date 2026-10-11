@@ -141,3 +141,12 @@ borrower borrow against it (the debt token's `approveDelegation`, with the Pool'
 Aave's flash loan does not port: its Pool pays the receiver and then calls it back
 (`executeOperation`) to be repaid, and a Pot cannot be called back by a program. The flash a program
 has is a flash swap through the Pot's Router (`sauce-swaps`).
+
+[examples/compound-v3-my-contract.sauce.ts](examples/compound-v3-my-contract.sauce.ts) ports
+Compound's `MyContract`, its Compound III developer FAQ's example: supply, withdraw (a borrow past
+what is supplied), a whole borrow repaid and rewards claimed by `step`, each cook returning the
+contract's views for the Pot, and step 0 changing nothing, so `sauce simulate` is the read. The
+Comet and CometRewards functions are in [examples/Comet.json](examples/Comet.json). Its signed
+principal, an `Int256`, shows signed arithmetic beside unsigned: the sign is read with `>= 0`, each
+part converted with `Uint256(…)`, and the debt kept apart from the collateral until `Int256(…)`
+takes one from the other.

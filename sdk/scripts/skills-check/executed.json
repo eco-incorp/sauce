@@ -35,6 +35,9 @@
     "sauce-protocols/examples/aave-v3-credit-delegation.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
     ],
+    "sauce-protocols/examples/compound-v3-my-contract.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
+    ],
     "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
     ],

@@ -60,6 +60,27 @@ const abi = {
   debtToken: parseAbi([
     "function borrowAllowance(address fromUser, address toUser) view returns (uint256)",
   ]),
+  comet: parseAbi([
+    "struct AssetInfo { uint8 offset; address asset; address priceFeed; uint64 scale; uint64 borrowCollateralFactor; uint64 liquidateCollateralFactor; uint64 liquidationFactor; uint128 supplyCap; }",
+    "function getUtilization() view returns (uint256)",
+    "function getSupplyRate(uint256) view returns (uint64)",
+    "function getBorrowRate(uint256) view returns (uint64)",
+    "function getPrice(address) view returns (uint256)",
+    "function baseTokenPriceFeed() view returns (address)",
+    "function totalSupply() view returns (uint256)",
+    "function totalBorrow() view returns (uint256)",
+    "function baseTrackingSupplySpeed() view returns (uint64)",
+    "function baseTrackingBorrowSpeed() view returns (uint64)",
+    "function baseIndexScale() pure returns (uint64)",
+    "function baseScale() view returns (uint256)",
+    "function numAssets() view returns (uint8)",
+    "function getAssetInfo(uint8) view returns (AssetInfo)",
+    "function getAssetInfoByAddress(address) view returns (AssetInfo)",
+    "function totalsCollateral(address) view returns (uint128 totalSupplyAsset, uint128 _reserved)",
+    "function userCollateral(address, address) view returns (uint128 balance, uint128 _reserved)",
+    "function borrowBalanceOf(address) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+  ]),
   quoter: parseAbi([
     "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
     "function quoteExactOutputSingle((address tokenIn, address tokenOut, uint256 amount, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
@@ -585,6 +606,157 @@ describe(
         const withdrawn = await balanceOf(env, WETH, owner);
         assert.ok(withdrawn >= rehearsedOut && withdrawn >= supplied, `withdrew ${withdrawn}`);
         assert.equal(await balanceOf(env, aWeth, env.pot), 0n);
+      });
+    });
+    describe("Compound's MyContract, on Compound III's USDC market", () => {
+      const FILE = example("sauce-protocols", "compound-v3-my-contract");
+      const COMET = named("CompoundV3_CUSDCv3");
+      const USDC = named("USDC");
+      const WETH = named("WETH");
+      const WETH_BALANCE = { slot: 3n };
+      const USDC_BALANCE = { slot: 9n };
+      /** COMP, and Compound's CometRewards on Ethereum, as Compound's docs list them. */
+      const COMP: Address = "0xc00e94Cb662C3520282E6f5717214004A7f26888";
+      const REWARDS: Address = "0x1B0e765F6224C21223AeA2af16c1C46E38885a40";
+      const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
+
+      interface Market {
+        moved: string;
+        supplyApr: string;
+        borrowApr: string;
+        rewardAprForSupplyBase: string;
+        rewardAprForBorrowBase: string;
+        borrowable: string;
+        borrowCollateralFactor: string;
+        liquidateCollateralFactor: string;
+        price: string;
+        rewardsOwed: string;
+        tvl: string;
+      }
+      const read = <T>(
+        functionName: string,
+        args: readonly unknown[] = [],
+        address: Address = COMET,
+      ): Promise<T> =>
+        env.publicClient.readContract({
+          address,
+          abi: abi.comet,
+          functionName,
+          args,
+        } as never) as Promise<T>;
+
+      /** What MyContract's views compute, read off the Comet here, for the Pot. */
+      async function expected(asset: Address, rewardFeed: Address) {
+        const utilization = await read<bigint>("getUtilization");
+        const baseFeed = await read<Address>("baseTokenPriceFeed");
+        const basePrice = await read<bigint>("getPrice", [baseFeed]);
+        const rewardPrice = await read<bigint>("getPrice", [rewardFeed]);
+        const perDay = async (speed: string) =>
+          (await read<bigint>(speed)) *
+          86400n *
+          ((await read<bigint>("baseIndexScale")) / (await read<bigint>("baseScale")));
+        const info = await read<{
+          priceFeed: Address;
+          borrowCollateralFactor: bigint;
+          liquidateCollateralFactor: bigint;
+        }>("getAssetInfoByAddress", [asset]);
+        let tvl =
+          ((await read<bigint>("totalSupply")) * basePrice) /
+          10n ** BigInt(await read<number>("decimals"));
+        for (let i = 0; i < (await read<number>("numAssets")); i++) {
+          const each = await read<{ asset: Address; priceFeed: Address }>("getAssetInfo", [i]);
+          const [supplied] = await read<[bigint, bigint]>("totalsCollateral", [each.asset]);
+          const decimals = await read<number>("decimals", [], each.asset);
+          tvl +=
+            (supplied * (await read<bigint>("getPrice", [each.priceFeed]))) /
+            10n ** BigInt(decimals);
+        }
+        return {
+          supplyApr: (await read<bigint>("getSupplyRate", [utilization])) * SECONDS_PER_YEAR * 100n,
+          borrowApr: (await read<bigint>("getBorrowRate", [utilization])) * SECONDS_PER_YEAR * 100n,
+          rewardAprForSupplyBase:
+            ((rewardPrice * (await perDay("baseTrackingSupplySpeed"))) /
+              ((await read<bigint>("totalSupply")) * basePrice)) *
+            365n,
+          rewardAprForBorrowBase:
+            ((rewardPrice * (await perDay("baseTrackingBorrowSpeed"))) /
+              ((await read<bigint>("totalBorrow")) * basePrice)) *
+            365n,
+          borrowCollateralFactor: info.borrowCollateralFactor,
+          liquidateCollateralFactor: info.liquidateCollateralFactor,
+          price: await read<bigint>("getPrice", [info.priceFeed]),
+          tvl,
+        };
+      }
+
+      it("reads the market as MyContract's views do, supplies WETH, borrows, repays in full, claims", async () => {
+        const rewardFeed = (await read<{ priceFeed: Address }>("getAssetInfoByAddress", [COMP]))
+          .priceFeed;
+        const args = (step: number, asset: Address, amount: bigint) => [
+          String(step),
+          COMET,
+          asset,
+          String(amount),
+          REWARDS,
+          rewardFeed,
+        ];
+        const asNumbers = (market: Market) =>
+          Object.fromEntries(Object.entries(market).map(([k, v]) => [k, BigInt(v)]));
+
+        // Step 0, simulated: every view, as the Comet's own reads give it.
+        const viewed = await simulate(FILE, args(0, WETH, 0n));
+        assert.equal(viewed.ok, true, viewed.reason);
+        const market = asNumbers(viewed.returned as Market);
+        assert.deepEqual(
+          { ...market, moved: undefined, borrowable: undefined, rewardsOwed: undefined },
+          {
+            ...(await expected(WETH, rewardFeed)),
+            moved: undefined,
+            borrowable: undefined,
+            rewardsOwed: undefined,
+          },
+        );
+        assert.equal(market.borrowable, 0n);
+
+        // supply: 10 WETH of collateral, what the Pot can borrow its value at the factor.
+        const tenWeth = 10n * 10n ** 18n;
+        await setBalance(env, WETH, WETH_BALANCE, env.pot, tenWeth);
+        const supplied = asNumbers((await cook(FILE, args(1, WETH, tenWeth))) as Market);
+        assert.equal(supplied.moved, tenWeth);
+        assert.equal((await read<[bigint, bigint]>("userCollateral", [env.pot, WETH]))[0], tenWeth);
+        const collateralUsd =
+          (((tenWeth * market.price) / 10n ** 8n) * market.borrowCollateralFactor) / 10n ** 18n;
+        assert.equal(supplied.borrowable, collateralUsd);
+
+        // withdraw past nothing supplied: a 1,000 USDC borrow, the Pot's limit less the debt.
+        const loan = 1000n * 10n ** 6n;
+        await cook(FILE, args(2, USDC, loan));
+        assert.equal(await balanceOf(env, USDC, env.pot), loan);
+        const owed = await read<bigint>("borrowBalanceOf", [env.pot]);
+        assert.ok(owed >= loan, `owes ${owed}`);
+        const after = asNumbers((await simulate(FILE, args(0, USDC, 0n))).returned as Market);
+        const basePrice = await read<bigint>("getPrice", [
+          await read<Address>("baseTokenPriceFeed"),
+        ]);
+        const debtUsd = (owed * basePrice) / 10n ** 8n;
+        // The borrow, read at the present index as a negative principal: within a unit of rounding.
+        assert.ok(
+          after.borrowable <= collateralUsd - debtUsd + 1n &&
+            after.borrowable >= collateralUsd - debtUsd - 1n,
+          `borrowable ${after.borrowable}, expected about ${collateralUsd - debtUsd}`,
+        );
+
+        // repayFullBorrow: the whole debt, from more USDC than it needs, no allowance left.
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, 2n * loan);
+        await cook(FILE, args(3, USDC, 0n));
+        assert.equal(await read<bigint>("borrowBalanceOf", [env.pot]), 0n);
+        const repaid = 2n * loan - (await balanceOf(env, USDC, env.pot));
+        assert.ok(repaid >= owed && repaid < loan + loan / 1000n, `repaid ${repaid}`);
+        assert.equal(await allowance(env, USDC, env.pot, COMET), 0n);
+
+        // claimCometRewards: whatever the Pot is owed arrives in COMP.
+        const claimed = asNumbers((await cook(FILE, args(4, USDC, 0n))) as Market);
+        assert.equal(await balanceOf(env, COMP, env.pot), claimed.moved);
       });
     });
   },
