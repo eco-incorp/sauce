@@ -32,6 +32,7 @@ import {
   decodeEventLog,
   encodeAbiParameters,
   encodeFunctionData,
+  getAddress,
   getCreate2Address,
   keccak256,
   pad,
@@ -50,6 +51,8 @@ import { v12EngineAddress } from "../../../src/deployments/v12-addresses.js";
 import { encodeEntryArguments, type EntryValue } from "../../../src/routes/entry.js";
 import { handlersInstallSource, packageHandlers } from "../../../src/routes/handlers.js";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
+import { destinationSetup, type DestinationTx } from "../../../src/cli/remote-setup.js";
+import { v12PredictPot } from "../../../src/deployments/pot.js";
 import { DEPLOYER, FEE, RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../cli-anvil.js";
 import { gateAnchors, POT_SALT, routerUnderTest } from "../../evm/gated-engine.js";
 import {
@@ -178,19 +181,20 @@ const example = (name: string): string =>
     "utf8",
   );
 
-/** Cooks `source`, compiled for `local`'s chain with `args` for its `main`, on the Pot, as its
- *  owner, paying the Kitchen's fee; answers the receipt. */
+/** Cooks `source`, compiled for `local`'s chain with `args` for its `main`, on the Pot (or on
+ *  `at`), as its owner, paying the Kitchen's fee; answers the receipt. */
 async function cook(
   local: LocalChain,
   source: string,
   args: readonly EntryValue[] = [],
+  at: Address = pot,
 ): Promise<TransactionReceipt> {
   const program = compileSauceProgram(local.chain.slug, source);
   const input = bytesToHex(concat([program.bytecode, encodeEntryArguments(program, args)]));
   const hash = await local.deployer.sendTransaction({
     account: DEPLOYER,
     chain: null,
-    to: pot,
+    to: at,
     data: encodeFunctionData({
       abi: potAbi,
       functionName: "cook",
@@ -545,6 +549,92 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     );
     expect(await kept(base, entry(hashedKey, "statesync.store"))).toBe(toHex("hello a third time"));
     expect(await word(base, entry(hashedKey, "statesync.keyVersions"))).toBe(3n);
+  }, 120_000);
+
+  it("sets up a Pot on Base a message cannot reach yet, and the message then runs there", async () => {
+    const salt = `0x${"00".repeat(31)}52` as Hex;
+    const owner = DEPLOYER.address;
+    const fresh = getAddress(v12PredictPot(owner, salt));
+    const sendOn = (local: LocalChain) => async (tx: DestinationTx) => {
+      const hash = await local.deployer.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        ...tx,
+        gas: 15_000_000n,
+      });
+      const receipt = await local.publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success")
+        throw new Error(`a setup step reverted on ${local.chain.slug}`);
+      return receipt;
+    };
+    const setup = () =>
+      destinationSetup([{ chain: base.chain, bridge: "hyperlane" }], {
+        owner,
+        salt,
+        reach: async () => ({
+          chain: base.chain,
+          client: base.publicClient,
+          from: owner,
+          send: sendOn(base),
+        }),
+        estimate: async () => "estimated",
+      });
+
+    // Nothing on Base yet: the Pot deployed, its Hyperlane receiver installed, the Kitchen's fee.
+    const steps = await setup();
+    expect(steps.map((step) => [step.planned.what, step.planned.chainId])).toEqual([
+      ["deployPot", 8453],
+      ["install", 8453],
+      ["fund", 8453],
+    ]);
+    expect(steps[1]!.action).toBe("install the Hyperlane receiver on your Pot on Base");
+    for (const step of steps) await step.send();
+    expect(await base.publicClient.getCode({ address: fresh })).toBeDefined();
+    expect(await setup()).toEqual([]);
+    // The harness's Pot, every receiver installed as the Router recorded it, needs nothing.
+    expect(getAddress(v12PredictPot(owner, POT_SALT))).toBe(getAddress(pot));
+    expect(
+      await destinationSetup(
+        (["hyperlane", "layerzero", "metalayer", "polymer"] as const).map((bridge) => ({
+          chain: base.chain,
+          bridge,
+        })),
+        {
+          owner,
+          salt: POT_SALT,
+          reach: async () => ({ chain: base.chain, client: base.publicClient, from: owner }),
+          estimate: async () => "estimated",
+        },
+      ),
+    ).toEqual([]);
+
+    // The same Pot on Ethereum, minted and funded, sends; Base runs it.
+    await sendOn(ethereum)({
+      to: gateAnchors().kitchen,
+      data: encodeFunctionData({
+        abi: parseAbi(["function deployPot(address owner, bytes32 salt) returns (address)"]),
+        functionName: "deployPot",
+        args: [owner, salt],
+      }),
+      value: 0n,
+    });
+    await sendOn(ethereum)({ to: fresh, data: "0x", value: parseEther("0.01") });
+    const out = await cook(
+      ethereum,
+      `function main(value: Uint256) {
+  Base.remote(() => {
+    evm.sstore(${slot("setup")}, value);
+  });
+}`,
+      [52n],
+      fresh,
+    );
+    await relayHyperlane(out, ethereumBridges, base, baseBridges);
+    expect(
+      BigInt(
+        (await base.publicClient.getStorageAt({ address: fresh, slot: slot("setup") })) ?? "0x0",
+      ),
+    ).toBe(52n);
   }, 120_000);
 
   itSettling(
