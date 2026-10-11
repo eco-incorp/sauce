@@ -2048,7 +2048,7 @@ export interface MaverickSource {
 }
 
 export interface MetalayerSource extends MetalayerRouterMethods {
-  readonly Router: SauceContract<MetalayerRouterMethods>;
+  readonly Router?: SauceContract<MetalayerRouterMethods>;
 }
 
 export interface MoonwellSource extends MoonwellComptrollerMethods {
@@ -2129,7 +2129,7 @@ export interface PolygonBridgeSource extends PolygonBridgePolygonRootChainManage
 }
 
 export interface PolymerSource extends PolymerCrossL2ProverV2Methods {
-  readonly CrossL2ProverV2: SauceContract<PolymerCrossL2ProverV2Methods>;
+  readonly CrossL2ProverV2?: SauceContract<PolymerCrossL2ProverV2Methods>;
 }
 
 export interface PremiaSource {
