@@ -1479,6 +1479,51 @@ function main(hash: Uint256, signature: bytes): Uint256 {
     },
   );
 
+  itAlways(
+    "a request declares the ERC-165 interfaces its protocol checks the Pot for",
+    async () => {
+      const pot = await freshPot(0x1a31n);
+      const supports = async (id: Hex): Promise<boolean> =>
+        (await publicClient.readContract({
+          address: pot,
+          abi: parseAbi(["function supportsInterface(bytes4) view returns (bool)"]),
+          functionName: "supportsInterface",
+          args: [id],
+        })) as boolean;
+      /** The calls a transaction made to the Pot's `setInterface(bytes4,bool)`, which the Pot
+       *  delegates to its Router: the calls, not the delegations. */
+      const declarations = async (hash: Hex): Promise<number> => {
+        interface Frame {
+          type?: string;
+          input?: string;
+          calls?: Frame[];
+        }
+        const trace = (await publicClient.request({
+          method: "debug_traceTransaction" as never,
+          params: [hash, { tracer: "callTracer" }] as never,
+        })) as Frame;
+        const count = (frame: Frame): number =>
+          (frame.type === "CALL" && frame.input?.startsWith("0xc0a43a7c") ? 1 : 0) +
+          (frame.calls ?? []).reduce((n, call) => n + count(call), 0);
+
+        return count(trace);
+      };
+      expect(await supports("0x805f2132")).toBe(false);
+      const source = lazyEchoSource(echo, "").replace(
+        "      send: (continuation) => {",
+        "      interfaces: [0x805f2132],\n      send: (continuation) => {",
+      );
+      const first = await cook(compiled(source, [3n, 0n]), pot);
+      expect(first.ok).toBe(true);
+      expect(await supports("0x805f2132")).toBe(true);
+      expect(await declarations(first.hash)).toBe(1);
+      // Again: declared already, so one read of the Router's record and no declaration.
+      const again = await cook(compiled(source, [4n, 0n]), pot);
+      expect(again.ok).toBe(true);
+      expect(await declarations(again.hash)).toBe(0);
+    },
+  );
+
   itSettling("a request with a deadline installs the public expire too", async () => {
     const pot = await freshPot(0x1a30n);
     const [id] = await nextIds(1);

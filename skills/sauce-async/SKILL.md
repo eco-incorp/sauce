@@ -106,7 +106,8 @@ the owner's later cook that resolves it by its key.
 
 ## Writing a package
 
-A package's request returns `new Request({ send, deliver, handlers, carries, chain, deadline })`, from a
+A package's request returns `new Request({ send, deliver, handlers, interfaces, carries, chain,
+deadline })`, from a
 method on an object the program reads (the echo protocol's `request` above) or a plain function; or
 it is a class that extends `Request` and hands `super` the same options. The three compile to the
 same program:
@@ -116,7 +117,8 @@ same program:
 - `deliver(input, body, fail)` runs when the promise is fulfilled: it decodes what arrived and calls
   `body(value)`, or `fail(reason)` when the protocol reports a failure.
 - `handlers` are the handlers the protocol's callback reaches (below), installed on the Pot as the
-  request runs, unless they already are.
+  request runs, unless they already are; `interfaces` the ERC-165 ids a protocol checks the Pot
+  for before it calls back, declared the same way.
 - `carries: true` is for a protocol that carries the requester's bytes back (a bridge's message, a
   proof's extra data): the key is picked first, and `send` is handed `{ key, stored, program }`. A
   plain `.then` stores nothing: the message carries `program`. With a deadline or a combinator,

@@ -31,7 +31,8 @@
 //   requireCaller, requireSelf  a handler's checks
 //   Handler             a program the Pot answers a selector with, which a request installs as it
 //                       runs (`handlers`) unless the Pot already answers with it
-//   ensureInstalled, install, declareInterface  installing a handler, and an ERC-165 id
+//   ensureInstalled, ensureInterface, install, declareInterface  installing a handler, and
+//                       declaring an ERC-165 id
 //   isValidSignature, Erc1271   the Pot as an ERC-1271 signer: a hash a program approved, or its
 //                               owner's signature over the hash bound to the Pot
 //
@@ -638,6 +639,17 @@ export function ensureInstalled(selector: Uint256, program: bytes, readOnly: boo
   return true;
 }
 
+// The ERC-7201 namespace of the interfaces the Pot declares, the Router's: id to bool.
+const SAUCE_INTERFACES_LOCATION = 0x99b3efc2afff06a288b0539bd1133d6df6b4bb3a023c886d2f313f67c9b57800;
+
+// Declare the ERC-165 interface `id` on the Pot unless it already does: one read of the Router's
+// record when it does.
+export function ensureInterface(id: Uint256): void {
+  if (evm.sload(crypto.keccak256(abi.encode(id << 224, SAUCE_INTERFACES_LOCATION))) == 0) {
+    declareInterface(id, true);
+  }
+}
+
 // Declare (or stop declaring) the ERC-165 interface `id` (its four bytes) on the Pot this program
 // runs on, which its Router then answers natively to `supportsInterface`: what a protocol that
 // checks its receiver before it calls back asks.
@@ -871,6 +883,7 @@ class Lists {
 // rest when the protocol needs them.
 interface RequestOptions {
   handlers?: any;
+  interfaces?: any;
   send?: (continuation: any) => any;
   deliver?: (input: bytes, body: any, fail: any) => void;
   carries?: bool;
@@ -890,6 +903,7 @@ export class Request {
     }
     this._send = spec.send;
     this._handlers = spec.handlers;
+    this._interfaces = spec.interfaces;
     this._deliver = spec.deliver;
     this._carries = spec.carries === true;
     this._chain = spec.chain;
@@ -957,12 +971,18 @@ export class Request {
     return this._chain === undefined ? chainId : this._chain;
   }
 
-  // Before the request: the handlers its callback reaches, and with a deadline the public
-  // `expire`, installed on the Pot unless they are already.
+  // Before the request: the handlers its callback reaches, the ERC-165 interfaces its protocol
+  // checks the Pot for, and with a deadline the public `expire`, installed on the Pot unless they
+  // are already.
   _install() {
     if (this._handlers !== undefined) {
       for (const handler of this._handlers) {
         handler.ensure();
+      }
+    }
+    if (this._interfaces !== undefined) {
+      for (const id of this._interfaces) {
+        ensureInterface(id);
       }
     }
     if (this._deadline !== undefined) {

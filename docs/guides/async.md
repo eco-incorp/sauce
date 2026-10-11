@@ -138,6 +138,7 @@ checks its receiver before it calls back.
 | `expire(key)`                                                                        | Reject a promise past its deadline with `Timeout(bytes32)`.                           |
 | `new Handler(selector, (caller, value, data) => { … }, readOnly?)`                   | A handler a request installs (`handlers`); `.ensure()` installs it unless in place.   |
 | `ensureInstalled(selector, program, readOnly)`                                       | The same for a program known only as the request runs.                                |
+| `ensureInterface(id)`                                                                | Declare an ERC-165 id unless declared: a request's `interfaces`.                      |
 | `install(selector, program, readOnly)`, `declareInterface(id, supported)`            | What installing a handler calls.                                                      |
 | `winner()`                                                                           | In a race's or an any's continuation: the child that settled it.                      |
 | `received()`, `fulfilled()`                                                          | Deprecated: what `run` handed its program. A continuation takes it as its parameters. |
