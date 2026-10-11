@@ -16,6 +16,7 @@
 import {
   bytesToHex,
   concat,
+  formatEther,
   getAddress,
   getContractAddress,
   keccak256,
@@ -39,6 +40,7 @@ import {
 } from "../routes/handlers.js";
 import { compileSauceProgram } from "../routes/sauce-route.js";
 import { kitchenFee } from "./chain.js";
+import { nativeSymbol } from "./effects.js";
 
 /** The bridges a remote message travels over. */
 export type RemoteBridge = "hyperlane" | "layerzero" | "metalayer" | "polymer";
@@ -308,15 +310,19 @@ export async function destinationSetup(
       );
     }
 
-    // The Pot pays the Kitchen's fee for each message its receiver runs.
+    // The Pot pays the Kitchen's fee for each delivery its receiver runs: exactly that, less what
+    // it holds, and nothing kept back.
     const needed = fee * BigInt(messages);
     const balance = await there.client.getBalance({ address: pot });
     if (balance < needed) {
       const tx = { to: pot, data: "0x" as Hex, value: needed - balance };
+      const deliveries = `${messages} ${messages === 1 ? "delivery" : "deliveries"} × the Kitchen fee`;
+      const held =
+        balance === 0n ? "" : `, less the ${formatEther(balance)} ${nativeSymbol(chain)} it holds`;
       steps.push(
         step(
           "fund",
-          `send your Pot on ${chain.name} the Kitchen's fee for ${messages === 1 ? "the message" : `${messages} messages`}`,
+          `fund your Pot on ${chain.name} with ${formatEther(tx.value)} ${nativeSymbol(chain)} (${deliveries}${held})`,
           "Fund it now",
           tx,
           await price(tx, "gas not estimated"),

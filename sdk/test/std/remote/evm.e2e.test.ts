@@ -32,6 +32,7 @@ import {
   decodeEventLog,
   encodeAbiParameters,
   encodeFunctionData,
+  formatEther,
   getAddress,
   getCreate2Address,
   keccak256,
@@ -588,6 +589,11 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
       ["fund", 8453],
     ]);
     expect(steps[1]!.action).toBe("install the Hyperlane receiver on your Pot on Base");
+    // Exactly the Kitchen's fee for the one delivery, which the Pot sends value for.
+    expect(BigInt(steps[2]!.planned.value)).toBe(FEE);
+    expect(steps[2]!.action).toBe(
+      `fund your Pot on Base with ${formatEther(FEE)} ETH (1 delivery × the Kitchen fee)`,
+    );
     for (const step of steps) await step.send();
     expect(await base.publicClient.getCode({ address: fresh })).toBeDefined();
     expect(await setup()).toEqual([]);
