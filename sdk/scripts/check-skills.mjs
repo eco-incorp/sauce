@@ -434,6 +434,10 @@ const UNDECLARED_NAMES = {
   "sauce-script": {
     arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
   },
+  "sauce-protocols": {
+    executeOperation:
+      "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why Aave's flash loan does not port",
+  },
   "sauce-swaps": {
     executeOperation:
       "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",

@@ -134,6 +134,14 @@ collected, half its liquidity taken out, liquidity added and its NFT handed back
 position reads the registry's ABI leaves out in
 [examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
 
+[examples/aave-v3-credit-delegation.sauce.ts](examples/aave-v3-credit-delegation.sauce.ts) ports
+Aave's own credit delegation example onto `AaveV3.Pool`: the Pot supplies collateral, lets a
+borrower borrow against it (the debt token's `approveDelegation`, with the Pool's reserve reads, in
+[examples/AaveV3Delegation.json](examples/AaveV3Delegation.json)), repays that debt and withdraws.
+Aave's flash loan does not port: its Pool pays the receiver and then calls it back
+(`executeOperation`) to be repaid, and a Pot cannot be called back by a program. The flash a program
+has is a flash swap through the Pot's Router (`sauce-swaps`).
+
 ## Example
 
 [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has it,

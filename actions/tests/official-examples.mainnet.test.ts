@@ -11,7 +11,16 @@
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { getAddress, parseAbi, toHex, type Address, type Hex } from "viem";
+import {
+  createWalletClient,
+  getAddress,
+  http,
+  parseAbi,
+  toHex,
+  type Address,
+  type Hex,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain, routes } from "../../sdk/dist/index.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
@@ -42,6 +51,14 @@ const abi = {
     "function positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)",
     "function ownerOf(uint256 tokenId) view returns (address)",
     "function collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max)) payable returns (uint256 amount0, uint256 amount1)",
+  ]),
+  aave: parseAbi([
+    "function getReserveAToken(address asset) view returns (address)",
+    "function getReserveVariableDebtToken(address asset) view returns (address)",
+    "function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)",
+  ]),
+  debtToken: parseAbi([
+    "function borrowAllowance(address fromUser, address toUser) view returns (uint256)",
   ]),
   quoter: parseAbi([
     "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
@@ -475,6 +492,99 @@ describe(
         // retrieveNFT: the position is the owner's.
         await step([4n, tokenId, 0n, 0n, owner]);
         assert.equal(await ownerOf(tokenId), owner);
+      });
+    });
+    describe("Aave's credit delegation, on Aave V3", () => {
+      const FILE = example("sauce-protocols", "aave-v3-credit-delegation");
+      const USDC = named("USDC");
+      const WETH = named("WETH");
+      const POOL = named("AaveV3_Pool");
+      const WETH_BALANCE = { slot: 3n };
+      const USDC_BALANCE = { slot: 9n };
+      const TEN_WETH = 10n * 10n ** 18n;
+      const LOAN = 1000n * 10n ** 6n;
+      /** The borrower: anvil's second dev account, which signs its own borrow. */
+      const BORROWER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+
+      const reserve = (
+        functionName: "getReserveAToken" | "getReserveVariableDebtToken",
+        asset: Address,
+      ) =>
+        env.publicClient.readContract({
+          address: POOL,
+          abi: abi.aave,
+          functionName,
+          args: [asset],
+        });
+
+      it("supplies, delegates, the borrower borrows on the Pot's credit, the Pot repays and withdraws", async () => {
+        const borrower = privateKeyToAccount(BORROWER_KEY);
+        const [, owner] = PEOPLE;
+        const aWeth = await reserve("getReserveAToken", WETH);
+        const usdcDebt = await reserve("getReserveVariableDebtToken", USDC);
+        await setBalance(env, WETH, WETH_BALANCE, env.pot, TEN_WETH);
+
+        // depositCollateral: the Pot's WETH supplied, its aTokens the Pot's.
+        assert.equal(
+          BigInt((await cook(FILE, ["0", WETH, String(TEN_WETH), owner])) as string),
+          TEN_WETH,
+        );
+        const supplied = await balanceOf(env, aWeth, env.pot);
+        assert.ok(supplied >= TEN_WETH - 1n && supplied <= TEN_WETH, `aWETH ${supplied}`);
+        assert.equal(await balanceOf(env, WETH, env.pot), 0n);
+
+        // approveBorrower: the debt token records the allowance.
+        await cook(FILE, ["1", USDC, String(LOAN), borrower.address]);
+        assert.equal(
+          await env.publicClient.readContract({
+            address: usdcDebt,
+            abi: abi.debtToken,
+            functionName: "borrowAllowance",
+            args: [env.pot, borrower.address],
+          }),
+          LOAN,
+        );
+
+        // The borrower borrows on the Pot's credit, from its own wallet: the debt is the Pot's.
+        const wallet = createWalletClient({
+          account: borrower,
+          chain: env.walletClient.chain,
+          transport: http(env.rpc),
+        });
+        const hash = await wallet.writeContract({
+          address: POOL,
+          abi: abi.aave,
+          functionName: "borrow",
+          args: [USDC, LOAN, 2n, 0, env.pot],
+        });
+        assert.equal(
+          (await env.publicClient.waitForTransactionReceipt({ hash })).status,
+          "success",
+        );
+        assert.equal(await balanceOf(env, USDC, borrower.address), LOAN);
+        const debt = await balanceOf(env, usdcDebt, env.pot);
+        assert.ok(debt >= LOAN, `the Pot owes ${debt}`);
+
+        // repayBorrower: more than is owed, so all of it; the debt is gone, the rest stays.
+        await setBalance(env, USDC, USDC_BALANCE, env.pot, 2n * LOAN);
+        // The rehearsal ran a block before the cook, so the cook repaid that block's interest too.
+        const rehearsed = BigInt(
+          (await cook(FILE, ["2", USDC, String(2n * LOAN), owner])) as string,
+        );
+        const repaid = 2n * LOAN - (await balanceOf(env, USDC, env.pot));
+        assert.ok(
+          repaid >= rehearsed && repaid - rehearsed < 1000n,
+          `repaid ${repaid}, rehearsed ${rehearsed}`,
+        );
+        assert.ok(repaid >= debt && repaid < LOAN + LOAN / 1000n, `repaid ${repaid}`);
+        assert.equal(await balanceOf(env, usdcDebt, env.pot), 0n);
+        assert.equal(await allowance(env, USDC, env.pot, POOL), 0n);
+
+        // withdrawCollateral: every aToken redeemed, the WETH to the owner.
+        const rehearsedOut = BigInt((await cook(FILE, ["3", WETH, "0", owner])) as string);
+        const withdrawn = await balanceOf(env, WETH, owner);
+        assert.ok(withdrawn >= rehearsedOut && withdrawn >= supplied, `withdrew ${withdrawn}`);
+        assert.equal(await balanceOf(env, aWeth, env.pot), 0n);
       });
     });
   },
