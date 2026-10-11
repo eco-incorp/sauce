@@ -162,6 +162,13 @@ the IRM's rate and the oracle's price in
 interest accrued since the market was last touched becomes `accrueInterest` and a read: a program
 runs as a transaction, even under `sauce simulate`.
 
+[examples/pendle-router-sample.sauce.ts](examples/pendle-router-sample.sauce.ts) ports Pendle's own
+router samples: PT and YT bought and sold back, a zap into a market's liquidity and out, SY and PT
+with YT minted and redeemed, and a zap that keeps its YT, each a `step` on one market, with the
+router's approximation, token and limit-order arguments built as Pendle's StructGen builds them
+and the functions the registry's ABI leaves out in
+[examples/PendleRouterSample.json](examples/PendleRouterSample.json).
+
 ## Example
 
 [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has it,

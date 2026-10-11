@@ -43,6 +43,9 @@
     "sauce-protocols/examples/morpho-blue-snippets.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
     ],
+    "sauce-protocols/examples/pendle-router-sample.sauce.ts": [
+      "actions/tests/official-examples.mainnet.test.ts"
+    ],
     "sauce-protocols/examples/uniswap-v3-liquidity-examples.sauce.ts": [
       "actions/tests/official-examples.mainnet.test.ts"
     ],

@@ -1252,5 +1252,84 @@ describe(
         assert.match(String(rehearsal.reason), /BAL#507/);
       });
     });
+    describe("Pendle's router samples, on its wstETH market", () => {
+      const FILE = example("sauce-protocols", "pendle-router-sample");
+      const ROUTER = named("Pendle_Router");
+      const WSTETH = named("Lido_WstETH");
+      const WSTETH_BALANCE = { slot: 0n };
+      /** Pendle's wstETH market on Ethereum, expiring at the end of 2027. */
+      const MARKET = getAddress("0x34280882267ffa6383b363e278b027be083bbe3b");
+      const ONE = 10n ** 18n;
+      const HELD = 3n * ONE;
+      const pendleAbi = parseAbi([
+        "function readTokens() view returns (address sy, address pt, address yt)",
+      ]);
+
+      const roundTrips = [
+        // The least share of the wstETH each round trip pays back: YT's leverage costs more (a
+        // fifth, at the pinned block).
+        [1, "buys PT and sells it back", 98n],
+        [2, "buys YT and sells it back", 75n],
+        [3, "zaps into the market's liquidity and out", 98n],
+        [4, "mints SY and redeems it", 98n],
+        [5, "mints PT and YT and redeems them", 98n],
+      ] as const;
+      for (const [step, what, percent] of roundTrips) {
+        it(`step ${step} ${what}: wstETH back, nothing else left, no allowance`, async () => {
+          const [sy, pt, yt] = await env.publicClient.readContract({
+            address: MARKET,
+            abi: pendleAbi,
+            functionName: "readTokens",
+          });
+          await setBalance(env, WSTETH, WSTETH_BALANCE, env.pot, HELD);
+          const legs = (await cook(FILE, [
+            String(step),
+            MARKET,
+            WSTETH,
+            String(ONE),
+            String((ONE * percent) / 100n),
+          ])) as {
+            out: string;
+            back: string;
+          };
+          assert.ok(BigInt(legs.out) > 0n, "the first leg bought something");
+          const back = (await balanceOf(env, WSTETH, env.pot)) - (HELD - ONE);
+          assert.ok(back >= (ONE * percent) / 100n && back <= ONE, `wstETH back: ${back}`);
+          for (const [name, token] of [
+            ["SY", sy],
+            ["PT", pt],
+            ["YT", yt],
+            ["LP", MARKET],
+          ] as const)
+            assert.equal(await balanceOf(env, token, env.pot), 0n, `${name} left in the Pot`);
+          for (const token of [WSTETH, sy, pt, yt, MARKET]) {
+            assert.equal(await allowance(env, token, env.pot, ROUTER), 0n);
+          }
+        });
+      }
+
+      it("step 6 zaps in with no price impact, keeping the YT it mints", async () => {
+        const [, , yt] = await env.publicClient.readContract({
+          address: MARKET,
+          abi: pendleAbi,
+          functionName: "readTokens",
+        });
+        await setBalance(env, WSTETH, WSTETH_BALANCE, env.pot, HELD);
+        const legs = (await cook(FILE, ["6", MARKET, WSTETH, String(ONE), "0"])) as {
+          out: string;
+          back: string;
+        };
+        assert.ok(BigInt(legs.out) > 0n && BigInt(legs.back) > 0n);
+        assert.equal(await balanceOf(env, MARKET, env.pot), BigInt(legs.out));
+        assert.equal(await balanceOf(env, yt, env.pot), BigInt(legs.back));
+        assert.equal(await balanceOf(env, WSTETH, env.pot), HELD - ONE);
+      });
+
+      it("refuses a round trip that pays back less than minBack", async () => {
+        await setBalance(env, WSTETH, WSTETH_BALANCE, env.pot, HELD);
+        const rehearsal = await simulate(FILE, ["1", MARKET, WSTETH, String(ONE), String(ONE)]);
+        assert.equal(rehearsal.ok, false);
+      });
+    });
   },
 );
