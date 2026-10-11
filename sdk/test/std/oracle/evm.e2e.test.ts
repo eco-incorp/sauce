@@ -107,7 +107,12 @@ const PROBE = fixture<{ abi: Abi; creationCode: Hex }>("Erc165Probe.json");
 const MOCK_ERC20 = JSON.parse(
   readFileSync(join(HERE, "../token/fixtures/MockERC20.json"), "utf8"),
 ) as { abi: Abi; creationCode: Hex };
-/** The `sauce-oracle` skill's example, executed as it is written. */
+/** The `sauce-oracle` skill's examples, executed as they are written: its own, and its ports of
+ *  Chainlink's official CRE consumers. */
+const exampleOf = (name: string): string =>
+  readFileSync(join(HERE, `../../../../skills/sauce-oracle/examples/${name}.sauce.ts`), "utf8");
+const RESERVE_MANAGER = exampleOf("reserve-manager");
+const CIRCUIT_BREAKER = exampleOf("circuit-breaker");
 const PRICE_GATE = readFileSync(
   join(HERE, "../../../../skills/sauce-oracle/examples/price-gate.sauce.ts"),
   "utf8",
@@ -241,16 +246,14 @@ const cook = (program: Hex) =>
   );
 
 /** Requests a price from `WORKFLOW_OWNER`'s workflow, answering the request's id as logged. */
-async function request(
-  limit: bigint,
-  source = REQUEST,
-  more: readonly (bigint | Hex)[] = [],
+/** Cooks `source` with `args` for its `main`, which makes one request of `WORKFLOW_OWNER`'s
+ *  workflow carrying `carried`: the request's id, as logged. */
+async function requestWith(
+  source: string,
+  args: readonly (bigint | Hex)[],
+  carried: Hex,
 ): Promise<Hex> {
-  // What the workflow reads: the pair's name as one ABI-encoded string, which the skill's example
-  // takes as a `string` and encodes itself.
-  const pair = encodeAbiParameters([{ type: "string" }], ["ETH/USD"]);
-  const given = source === PRICE_GATE ? "ETH/USD" : pair;
-  const { ok, hash } = await cook(compiled(source, [WORKFLOW_OWNER, given as Hex, limit, ...more]));
+  const { ok, hash } = await cook(compiled(source, args));
   expect(ok).toBe(true);
   const receipt = await publicClient.getTransactionReceipt({ hash });
   const logged = receipt.logs
@@ -262,9 +265,23 @@ async function request(
     .map((l) => decodeEventLog({ abi: requestEvent, data: l.data, topics: l.topics }));
   expect(logged).toHaveLength(1);
   expect(logged[0].args.owner).toBe(WORKFLOW_OWNER);
-  expect(logged[0].args.args).toBe(pair);
+  expect(logged[0].args.args).toBe(carried);
 
   return logged[0].args.id;
+}
+
+/** Requests a price from `WORKFLOW_OWNER`'s workflow, answering the request's id as logged. */
+async function request(
+  limit: bigint,
+  source = REQUEST,
+  more: readonly (bigint | Hex)[] = [],
+): Promise<Hex> {
+  // What the workflow reads: the pair's name as one ABI-encoded string, which the skill's example
+  // takes as a `string` and encodes itself.
+  const pair = encodeAbiParameters([{ type: "string" }], ["ETH/USD"]);
+  const given = source === PRICE_GATE ? "ETH/USD" : pair;
+
+  return requestWith(source, [WORKFLOW_OWNER, given as Hex, limit, ...more], pair);
 }
 
 let executions = 0n;
@@ -333,6 +350,15 @@ async function delivered(
 /** Whether `onReport` succeeded for a report of `payload`. */
 const report = async (payload: Hex, workflowOwner: Address = WORKFLOW_OWNER): Promise<boolean> =>
   (await delivered(payload, workflowOwner)).result;
+
+/** The Pot's logs in a transaction whose first topic is `topic`: their other topics and data. */
+async function potEvents(hash: Hex, topic: Hex): Promise<{ topics: Hex[]; data: Hex }[]> {
+  const receipt = await publicClient.getTransactionReceipt({ hash });
+
+  return receipt.logs
+    .filter((l) => getAddress(l.address) === getAddress(stack.pot) && l.topics[0] === topic)
+    .map((l) => ({ topics: l.topics.slice(1) as Hex[], data: l.data }));
+}
 
 /** The data of the Pot's logs with no topic in a transaction: what a program's `log(data)` wrote. */
 async function potData(hash: Hex): Promise<Hex[]> {
@@ -630,6 +656,88 @@ describeOracle("@sauce/oracle through Chainlink's KeystoneForwarder", () => {
       expect(over.result).toBe(true);
       expect(await potData(over.hash)).toContainEqual(toHex("above the limit"));
       expect(await balance()).toBe(1_000_000n);
+    },
+  );
+
+  itSettling(
+    "Chainlink's ReserveManager, ported: the report's totals are recorded, counted and logged as the contract emits them",
+    async () => {
+      const slot = (name: string): Hex => keccak256(toHex(`ReserveManager.${name}`));
+      const updates = async () =>
+        BigInt(
+          (await publicClient.getStorageAt({
+            address: stack.pot,
+            slot: slot("requestIdCounter"),
+          })) ?? "0x0",
+        );
+      const before = await updates();
+      const id = await requestWith(RESERVE_MANAGER, [WORKFLOW_OWNER], "0x");
+      const totals = encodeAbiParameters(
+        [{ type: "uint256" }, { type: "uint256" }],
+        [1_000_000n * 10n ** 6n, 1_050_000n * 10n ** 6n],
+      );
+
+      const { result, hash } = await delivered(payloadOf(id, true, totals));
+      expect(result).toBe(true);
+      expect(
+        await publicClient.getStorageAt({ address: stack.pot, slot: slot("lastTotalMinted") }),
+      ).toBe(toHex(1_000_000n * 10n ** 6n, { size: 32 }));
+      expect(
+        await publicClient.getStorageAt({ address: stack.pot, slot: slot("lastTotalReserve") }),
+      ).toBe(toHex(1_050_000n * 10n ** 6n, { size: 32 }));
+      expect(await updates()).toBe(before + 1n);
+      // RequestReserveUpdate(UpdateReserves u): the struct, not indexed, as the contract emits it.
+      expect(
+        await potEvents(hash, keccak256(toHex("RequestReserveUpdate((uint256,uint256))"))),
+      ).toEqual([{ topics: [], data: totals }]);
+    },
+  );
+
+  itSettling(
+    "Chainlink's ProtocolWithBreaker, ported: a pause report trips it, and an unpause report resets it",
+    async () => {
+      const slot = (name: string): Hex => keccak256(toHex(`ProtocolWithBreaker.${name}`));
+      const read = async (name: string) =>
+        BigInt(
+          (await publicClient.getStorageAt({ address: stack.pot, slot: slot(name) })) ?? "0x0",
+        );
+      const report = (action: number, reason: string): Hex =>
+        encodeAbiParameters([{ type: "uint8" }, { type: "string" }], [action, reason]);
+      const trips = await read("tripCount");
+
+      const pause = await requestWith(CIRCUIT_BREAKER, [WORKFLOW_OWNER], "0x");
+      const tripped = await delivered(payloadOf(pause, true, report(1, "price deviated 12%")));
+      expect(tripped.result).toBe(true);
+      expect(await read("paused")).toBe(1n);
+      expect(await read("tripCount")).toBe(trips + 1n);
+      const [event] = await potEvents(
+        tripped.hash,
+        keccak256(toHex("CircuitBreakerTripped(string,uint256,uint256)")),
+      );
+      expect(event!.topics).toEqual([toHex(trips + 1n, { size: 32 })]);
+      const block = await publicClient.getBlock({
+        blockNumber: (await publicClient.getTransactionReceipt({ hash: tripped.hash })).blockNumber,
+      });
+      expect(event!.data).toBe(
+        encodeAbiParameters(
+          [{ type: "string" }, { type: "uint256" }],
+          ["price deviated 12%", block.timestamp],
+        ),
+      );
+
+      const unpause = await requestWith(CIRCUIT_BREAKER, [WORKFLOW_OWNER], "0x");
+      const reset = await delivered(payloadOf(unpause, true, report(2, "")));
+      expect(reset.result).toBe(true);
+      expect(await read("paused")).toBe(0n);
+      expect(await read("tripCount")).toBe(trips + 1n);
+      const [resetEvent] = await potEvents(
+        reset.hash,
+        keccak256(toHex("CircuitBreakerReset(uint256)")),
+      );
+      const resetBlock = await publicClient.getBlock({
+        blockNumber: (await publicClient.getTransactionReceipt({ hash: reset.hash })).blockNumber,
+      });
+      expect(resetEvent!.data).toBe(toHex(resetBlock.timestamp, { size: 32 }));
     },
   );
 });

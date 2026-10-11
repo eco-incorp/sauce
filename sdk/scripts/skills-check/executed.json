@@ -36,7 +36,10 @@
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
+    "sauce-oracle/examples/circuit-breaker.sauce.ts": ["sdk/test/std/oracle/evm.e2e.test.ts"],
+    "sauce-oracle/examples/data-feed.sauce.ts": ["actions/tests/examples-cookbook.mainnet.test.ts"],
     "sauce-oracle/examples/price-gate.sauce.ts": ["sdk/test/std/oracle/evm.e2e.test.ts"],
+    "sauce-oracle/examples/reserve-manager.sauce.ts": ["sdk/test/std/oracle/evm.e2e.test.ts"],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts"
     ],
