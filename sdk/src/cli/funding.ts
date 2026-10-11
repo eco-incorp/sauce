@@ -312,7 +312,7 @@ async function agreed(
   if (answer === true) return;
   throw new CliError(
     answer === undefined
-      ? `${refused}, or pass --auto-approve to let the run do it`
+      ? `${refused}, or pass --yes (-y) to let the run do it`
       : `${refused}; nothing was sent`,
   );
 }
@@ -550,7 +550,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
           beforeCook.push(...approvalsBefore(funded, permit2, maxUint256, allowed, what));
           notes.push(
             `${funded.request.label}: Permit2 (${permit2}) may not move your tokens yet: sauce run ` +
-              "asks to approve it first (--auto-approve approves it), and the rehearsal runs that " +
+              "asks to approve it first (--yes approves it), and the rehearsal runs that " +
               "approval before the cook",
           );
         } else {
@@ -650,7 +650,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
           beforeCook.push(...approvalsBefore(funded, input.pot, funded.amount, allowed, what));
           notes.push(
             `${funded.request.label}: the Pot may not pull it yet: sauce run asks to approve it ` +
-              "first (--auto-approve approves it), and the rehearsal runs that approval before the " +
+              "first (--yes approves it), and the rehearsal runs that approval before the " +
               "cook",
           );
         } else {
