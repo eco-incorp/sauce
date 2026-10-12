@@ -150,8 +150,12 @@ export interface LocalChain {
 }
 
 /** Starts an anvil standing in for `slug`, on a port the OS hands out (`anvil-process.ts`): a
- *  suite never names one, so no two suites can share one. */
-export async function startChain(slug: string): Promise<LocalChain> {
+ *  suite never names one, so no two suites can share one. `options` reaches the gated stack: a
+ *  suite that runs a Router not yet released passes it (`routerUnderTest()`). */
+export async function startChain(
+  slug: string,
+  options: gated.GatedEngineOptions = {},
+): Promise<LocalChain> {
   const chain = requireChain(slug);
   const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
@@ -203,6 +207,7 @@ export async function startChain(slug: string): Promise<LocalChain> {
       { publicClient, walletClient: deployer, testClient },
       DEPLOYER.address,
       creationCode,
+      options,
     );
     // The CLI names the engine the SDK records. A harness that deploys it at that release address
     // needs nothing more; one that deploys it elsewhere moves it there.

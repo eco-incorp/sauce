@@ -410,6 +410,12 @@ function main(target: Address, query: bytes): Uint256 {
 }
 ```
 
+## Waiting for a callback
+
+A request whose answer arrives later, in a transaction of its own (randomness, an oracle, a message
+from another chain, a proof), is a promise: its `.then` body runs when the protocol calls the Pot
+back. `sauce-async` covers it, with `Promise.all`, `race`, timeouts and deferreds.
+
 ## What a program costs
 
 On an EVM chain, a cook's gas is the transaction's own, the Kitchen's and the Pot's, plus the

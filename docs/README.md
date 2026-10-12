@@ -37,6 +37,8 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
   chain.
 - [Nested intents](guides/nested-intents.md): open an intent inside another's body, from an amount
   it measured.
+- [Waiting for a callback](guides/async.md): ask a protocol now and continue when it calls the Pot
+  back, with `.then` and the handlers a package installs on a Private Pot.
 - [Compiling programs](guides/compiling.md): compile a standalone program and pass it runtime
   arguments.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several

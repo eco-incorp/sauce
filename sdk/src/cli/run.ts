@@ -46,6 +46,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
+import { isPackageOperand, packageOperandText } from "./handlers.js";
 import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
 import {
   type Approver,
@@ -818,13 +819,25 @@ async function programInput(
 }
 
 /**
- * A compiling command's operand: a SauceScript file, or an actions document (a JSON object with
+ * A compiling command's operand: a SauceScript file, an actions document (a JSON object with
  * `actions`), which `actions.ts` lowers into the same `ProgramInput` — so its compile, cook, Pot,
- * arguments and funding are every program's.
+ * arguments and funding are every program's — or a package of the async family (`@sauce/random`),
+ * whose handlers `handlers.ts` writes the program installing.
  */
 async function programOperand(args: ParsedArgs, io: CliIo, gate?: Gate): Promise<ProgramInput> {
+  const file = fileOperand(args);
+  // A package of the async family: the program installing its handlers on the Pot.
+  if (isPackageOperand(file)) {
+    const chain = stringFlag(args, "chain");
+    if (chain === undefined) {
+      throw new UsageError(`${file}'s handlers are compiled for a chain: give --chain`);
+    }
+    const text = packageOperandText(file, chainOf(args, file, ""));
+
+    return programInput(args, io, { file, text, stdin: false }, undefined, gate);
+  }
   // Read once, from the file or stdin (`-`), then told apart.
-  const operand = programText(io, fileOperand(args));
+  const operand = programText(io, file);
   if (!isActionsDocument(operand.text)) return programInput(args, io, operand, undefined, gate);
   const program = await actionsProgram(actionsOperand(args, operand.file, operand.text));
   if (gate !== undefined) gated(gate, program.chain);
@@ -2807,7 +2820,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Token(addr).approve) and intents opened inside the program all resolve against it, so",
       "one file compiles for any chain whose names it uses. Relative imports are read from beside",
       "the file. A file may name its chain in a leading `// @chain base` line. An actions",
-      "document compiles too (`sauce actions`).",
+      "document compiles too (`sauce actions`), and so does a package of the async family",
+      "(@sauce/random): the program installing its handlers on a Pot.",
       "",
       "--json also says what the compile applied and how large the result is:",
       "  defines    each name the chain gave the file (a token symbol, a protocol contract, the",
@@ -3115,6 +3129,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Both pay the same execution fee into the Kitchen's treasury. The cook signs the fee it read",
       "as its max_execution_fee, so it pays that or fails; --max-execution-fee <lamports> refuses",
       "a fee above it before anything is sent.",
+      "",
+      "A package of the async family as the operand (sauce run @sauce/random) installs its",
+      "handlers on your Pot, one per selector it answers: the programs the Pot's Router runs when",
+      "the protocol calls the Pot back, which continue what a program's requests left parked.",
       ...SUPPORTED_ONLY("Runs"),
       "",
       "Examples:",

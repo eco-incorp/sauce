@@ -14,6 +14,7 @@ import {
   bytesToHex,
   getAddress,
   hexToBytes,
+  toHex,
   type Address,
   type Hex,
   type PublicClient,
@@ -36,10 +37,12 @@ import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
 import type { IntentFundVia } from "../routes/portal.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
+  ASYNC_INSTALLED_DEFINE,
   compileSauceProgram,
   type CompiledSauceProgram,
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
+import { handlersInPlace } from "./handlers.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
 import {
   awaitPot,
@@ -627,6 +630,41 @@ export function cookOf(input: CookInput, files: CliFiles, rehearsal = false): Co
   return { pot, engine, data, program };
 }
 
+/**
+ * The cook to send, once the Pot is read: a program that installs handlers (`@sauce/async`'s
+ * `Handler`s) whose handlers are all in place on the Pot is compiled again to carry none of them,
+ * and says so; otherwise the cook as it is, with a note of what it installs as it runs.
+ */
+export async function sentCook(
+  client: Pick<PublicClient, "getStorageAt">,
+  cook: Cook,
+  input: CookInput,
+  files: CliFiles,
+): Promise<{ readonly cook: Cook; readonly input: CookInput; readonly notes: string[] }> {
+  // The program's own handlers: those it installs on this Pot itself, outside any body or
+  // continuation. Only they are read here, and only the program is compiled knowing them in place;
+  // a body on another chain, or anything a promise runs later, carries its own (`foreignDefines`).
+  const handlers = cook.program.handlers.filter((handler) => handler.path.length === 0);
+  if (handlers.length === 0) return { cook, input, notes: [] };
+  const selectors = handlers.map((h) => toHex(h.selector, { size: 4 })).join(", ");
+  if (!(await handlersInPlace(client, cook.pot, handlers))) {
+    return {
+      cook,
+      input,
+      notes: [`It installs its handlers (${selectors}) on Pot ${cook.pot} as it runs.`],
+    };
+  }
+  const lean = { ...input, defines: { ...input.defines, [ASYNC_INSTALLED_DEFINE]: 1n } };
+
+  return {
+    cook: cookOf(lean, files),
+    input: lean,
+    notes: [
+      `Its handlers (${selectors}) are in place on Pot ${cook.pot}: compiled to carry none of them.`,
+    ],
+  };
+}
+
 /** What a run says of a Pot it cooks on that has no code yet. */
 export const potMissing = (pot: string, chain: CanonicalChain): string =>
   `Your Pot ${pot} on ${chain.slug} isn't deployed yet`;
@@ -790,6 +828,10 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
   const state = client === undefined ? undefined : await potState(client, cook.pot);
+  const sent =
+    client === undefined || state?.deployed !== true
+      ? { cook, notes: [] as string[] }
+      : await sentCook(client, cook, input, files);
   const value = valueOf(input.value, fee, input.chain);
   const target = input.target;
   const owner = state?.owner ?? ("owner" in target ? target.owner : undefined);
@@ -829,7 +871,12 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
       pot: cook.pot,
       transactions: [
         ...steps,
-        { what: `cook on Pot ${cook.pot}`, to: cook.pot, data: cook.data, value: value.toString() },
+        {
+          what: `cook on Pot ${cook.pot}`,
+          to: cook.pot,
+          data: sent.cook.data,
+          value: value.toString(),
+        },
       ],
     };
 
@@ -840,7 +887,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...steps.map((step) =>
           castSend(step.to, step.data, step.value === "0" ? undefined : BigInt(step.value)),
         ),
-        castSend(cook.pot, cook.data, value),
+        castSend(cook.pot, sent.cook.data, value),
       ].join("\n"),
       notes: [
         head,
@@ -855,6 +902,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           .slice(deployFirst ? 1 : 0)
           .map((step) => `${step.reason}: ${step.planned.what} comes first.`),
         from,
+        ...sent.notes,
       ],
     };
   }
@@ -868,13 +916,15 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         : `It is NOT deployed, and --pot does not say whose it is: deploy it first ` +
           `(${deployHint(input.chain, target)}), then fund it.`,
     from,
+    ...sent.notes,
   ];
-  const json = { chainId: input.chain.id, to: cook.pot, data: cook.data, value: value.toString() };
+  const data = sent.cook.data;
+  const json = { chainId: input.chain.id, to: cook.pot, data, value: value.toString() };
 
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    cast: castSend(cook.pot, cook.data, value),
+    cast: castSend(cook.pot, data, value),
     notes,
   };
 }
@@ -982,8 +1032,11 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
   // carry, and the program wrapped to pull, run and sweep.
   const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, signer);
+  const lean = await sentCook(client, cook, input, files);
   const funded =
-    funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
+    funding === undefined
+      ? lean.cook
+      : cookOf({ ...lean.input, text: funding.wrap(input.text) }, files);
   const value =
     valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
     (funding?.value ?? 0n);
@@ -991,7 +1044,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
   const stored = input.onSent === undefined ? [] : await input.onSent(sent);
   const intents = sent.status === "success" ? loggedIntents(input.chain, sent.logs) : [];
-  const notes = [...(funding?.notes ?? []), ...stored];
+  const notes = [...(funding?.notes ?? []), ...lean.notes, ...stored];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
   const report =
