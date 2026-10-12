@@ -54,4 +54,76 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("picks its mode by what it is given, and refuses what it cannot do", async () => {
+    const upstream = await local();
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-modes-"));
+    const state = join(dir, "modes.json.gz");
+    try {
+      const block = Number(await upstream.client.getBlockNumber());
+      const multiply = { args: [6n, 7n, 100n] };
+
+      // No state named: a live fork, which writes nothing.
+      const live = await fork("base", { block, rpcUrl: upstream.rpcUrl });
+      assert.equal(live.mode, "live");
+      assert.equal((await live.run(program("multiply"), multiply)).returned, 42n);
+      await live.stop();
+      assert.equal(existsSync(state), false);
+
+      // A state file not there yet, with an endpoint: recorded.
+      const first = await fork("base", { block, state, rpcUrl: upstream.rpcUrl });
+      assert.equal(first.mode, "record");
+      await first.run(program("multiply"), multiply);
+      await first.stop();
+      assert.equal(existsSync(state), true);
+
+      // The file there: replayed, the endpoint never read.
+      const again = await fork("base", { block, state, rpcUrl: "http://127.0.0.1:9" });
+      assert.equal(again.mode, "replay");
+      await again.stop();
+
+      // What none of the modes can do.
+      const missing = join(dir, "missing.json.gz");
+      await assert.rejects(
+        fork("base", { block, state: missing }),
+        /pass `rpcUrl` once to record it/,
+      );
+      await assert.rejects(fork("base", { block }), /a live fork needs `rpcUrl`/);
+      await assert.rejects(
+        fork("base", { block, state: missing, mode: "replay" }),
+        /replay needs a recorded state file/,
+      );
+      await assert.rejects(
+        fork("base", { block, rpcUrl: upstream.rpcUrl, mode: "record" }),
+        /recording needs `state`/,
+      );
+      await assert.rejects(
+        fork("base", { block: block + 1, state, mode: "replay" }),
+        /holds chain 8453 at block \d+, not chain 8453 at/,
+      );
+    } finally {
+      await upstream.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes no file when the endpoint failed during the recording", async () => {
+    const upstream = await local();
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-failed-"));
+    const state = join(dir, "failed.json.gz");
+    try {
+      const block = Number(await upstream.client.getBlockNumber());
+      const recording = await fork("base", { block, state, rpcUrl: upstream.rpcUrl });
+      // The endpoint goes away, and the test reads an account the recording has not seen.
+      await upstream.stop();
+      await recording.client
+        .getBalance({ address: "0x00000000000000000000000000000000000000f1" })
+        .catch(() => undefined);
+      await assert.rejects(recording.stop(), /recording failed/);
+      assert.equal(existsSync(state), false);
+    } finally {
+      await upstream.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
