@@ -251,6 +251,11 @@ On EVM chains:
 - `permit(token: Address, owner: Address, spender: Address, value: Uint256, deadline: Uint256, v: Uint256, r: Uint256, s: Uint256): void`
 - `permitTransferFrom(token: Address, owner: Address, amount: Uint256, nonce: Uint256, deadline: Uint256, signature: bytes, permit2: Address): void`
 
+On EVM chains:
+
+- `kyberSwap(tokenIn, tokenOut, amountIn, minOut)`
+- `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`
+
 On Solana:
 
 - `balanceOf(token: Address, account: Account): Uint256`
@@ -263,3 +268,8 @@ On Solana:
 - `approve(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void`
 - `transferChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, dest: Account, authority: Account, amount: Uint256, decimals: Uint256): void`
 - `approveChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, delegate: Account, authority: Account, amount: Uint256, decimals: Uint256): void`
+
+On Solana:
+
+- `jupiterSwap(tokenIn, tokenOut, amountIn, minOut)`
+- `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`

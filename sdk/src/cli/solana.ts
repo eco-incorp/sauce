@@ -88,21 +88,26 @@ import {
   GROWTH_STEP,
   lookupTableBatches,
   MAX_POT_LEN,
+  type RemainingAccount,
+  remainingMetas,
   resolveAccounts,
   resolveTokenProgramByOwner,
   type SauceSvmClient,
   type SimulateExecuteResult,
+  type SimulateOpts,
   svmTokenAccount,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from "../svm/index.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
+import { svmSwapTail } from "../routes/swap-host.js";
 import {
   type Approver,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
   compileProgram,
+  withSwapRoutes,
   payloadOf,
   type ProgramInput,
   refusePastDeadline,
@@ -633,6 +638,37 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
   return accounts;
 }
 
+/** One `--remaining` account, as given: its value, as `--account` takes one, and its role. */
+export interface RemainingGiven {
+  readonly value: string;
+  readonly writable: boolean;
+  readonly signer: boolean;
+}
+
+/**
+ * `--remaining <value>[,writable][,signer]`, in order: the accounts the program reads after its
+ * named ones (`svm.remainingAccounts()`). A value is what `--account` takes; the flags are the role
+ * the program's call gives the account.
+ */
+export function parseRemaining(raws: readonly string[]): RemainingGiven[] {
+  return raws.map((raw) => {
+    const [value = "", ...roles] = raw.split(",").map((part) => part.trim());
+    const unknown = roles.find((role) => role !== "writable" && role !== "signer");
+    if (unknown !== undefined || value === "") {
+      throw new UsageError(
+        `--remaining: expected <address | pot | owner | pot:<token>>[,writable][,signer], got '${raw}'`,
+      );
+    }
+    if (value !== "pot" && value !== "owner" && !isAddress(value) && !TOKEN_NAMED.test(value)) {
+      throw new UsageError(
+        `--remaining: '${value}' is not an address, pot, owner, or a token's account (pot:USDC)`,
+      );
+    }
+
+    return { value, writable: roles.includes("writable"), signer: roles.includes("signer") };
+  });
+}
+
 /** One `<whose>:<token>` resolved: the account, what it is for a person, and which kind it is. */
 interface TokenAccountNamed {
   readonly address: Address;
@@ -769,12 +805,6 @@ function resolution(
   via: CookVia = "kitchen",
 ): AccountResolution {
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
-  if (manifest.accounts.some((entry) => entry.kind === "remaining")) {
-    throw new UsageError(
-      "the program takes a variable list of accounts after its named ones, which the CLI cannot " +
-        "attach yet: build that cook with the SDK's Solana client",
-    );
-  }
   const names = slots.map((slot) => slot.name);
   const unknown = Object.keys(given).filter((name) => !names.includes(name));
   if (unknown.length > 0) {
@@ -816,6 +846,9 @@ const saltBytes = (salt: Hex): Uint8Array => hexToBytes(salt);
 
 const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
+
+/** The Kitchen's Pot for `target`'s owner and salt. */
+export const svmPotAddress = potOf;
 
 /** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
 export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
@@ -1025,6 +1058,8 @@ function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined):
 
 export interface SvmCookInput extends ProgramInput, SvmTarget {
   readonly accounts: Readonly<Record<string, string>>;
+  /** `--remaining`: the accounts the program reads after its named ones, in order. */
+  readonly remaining?: readonly RemainingGiven[];
   readonly args?: ArgsInput;
   readonly rpcUrl: string;
   /**
@@ -1123,6 +1158,12 @@ interface Prepared {
   readonly given: Awaited<ReturnType<typeof resolveTokenAccounts>>;
   /** `--lookup-table`'s tables, each with the addresses it holds now. */
   readonly lookupTables: AddressesByLookupTableAddress;
+  /** The accounts every cook of it carries after the manifest's slots, which the program reads
+   *  with `svm.remainingAccounts()`: `--remaining`'s, or a routed swap's. */
+  readonly remaining: readonly RemainingAccount[];
+  /** The instructions every cook of it carries ahead of the cook: the creation of the Pot's account
+   *  a routed swap pays into, where the cluster has none yet. */
+  readonly setup: readonly Instruction[];
 }
 
 /** Each of `tables`, read from the cluster: the addresses it holds. */
@@ -1152,6 +1193,73 @@ const tablesOption = (
 ): { lookupTables?: AddressesByLookupTableAddress } =>
   Object.keys(tables).length === 0 ? {} : { lookupTables: tables };
 
+/**
+ * What every cook of `prepared` is built with beyond its slots: the lookup tables it is compressed
+ * against (`tables`, the prepared ones unless a run made its own), the accounts after its slots,
+ * and the instructions ahead of it: `prepends`, then what a routed swap pays into, created.
+ */
+const cookOptions = (
+  prepared: Prepared,
+  tables: AddressesByLookupTableAddress = prepared.lookupTables,
+  prepends: readonly Instruction[] = [],
+): Pick<SimulateOpts, "lookupTables" | "remaining" | "prepends"> => {
+  const ahead = [...prepends, ...prepared.setup];
+
+  return {
+    ...tablesOption(tables),
+    ...(prepared.remaining.length === 0 ? {} : { remaining: prepared.remaining }),
+    ...(ahead.length === 0 ? {} : { prepends: ahead }),
+  };
+};
+
+/**
+ * `--remaining` resolved as `--account` is: `pot:<token>` to the Pot's account, `pot` attached
+ * unsigned (the Kitchen signs for it with `invoke_signed`), `owner` signing with `signer`.
+ */
+async function remainingOf(
+  input: SvmCookInput,
+  manifest: AccountManifest,
+  rpc: Rpc,
+  pot: Address,
+  signer: TransactionSigner,
+  via: CookVia,
+): Promise<RemainingAccount[]> {
+  const given = input.remaining ?? [];
+  if (given.length === 0) return [];
+  if (!manifest.accounts.some((entry) => entry.kind === "remaining")) {
+    throw new UsageError(
+      "--remaining: the program reads no account after its named ones (`svm.remainingAccounts()`), " +
+        `so the ${given.length} given would reach nothing`,
+    );
+  }
+  const named = await resolveTokenAccounts(
+    Object.fromEntries(given.map((account, index) => [`#${index}`, account.value])),
+    input.owner,
+    pot,
+    input.chain,
+    via,
+    mintProgramOn(rpc, input.rpcUrl),
+  );
+
+  return given.map((account, index) => {
+    const value = named.accounts[`#${index}`]!;
+    if (via === "engine" && value === "pot" && account.signer) {
+      throw new UsageError(
+        "--remaining pot,signer: cooked directly to the engine (--via engine) nothing signs for " +
+          "the Pot; cook --via kitchen, or give owner",
+      );
+    }
+    const at = value === "pot" ? pot : value === "owner" ? input.owner : address(value);
+
+    return {
+      address: at,
+      writable: account.writable,
+      // The Pot signs through the Kitchen's invoke_signed, never the transaction.
+      signer: at === pot ? false : account.signer && at === input.owner ? signer : account.signer,
+    };
+  });
+}
+
 /** Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. */
 async function prepare(
   input: SvmCookInput,
@@ -1160,11 +1268,13 @@ async function prepare(
 ): Promise<Prepared> {
   refusePastDeadline(input);
   const via = input.via ?? "kitchen";
-  const program = compileProgram(input, files);
+  const pot = await potOf(input);
+  // A routed swap is built for the Pot, which signs it through the Kitchen; a direct cook has none.
+  const routed = await withSwapRoutes(input, files, via === "kitchen" ? pot : undefined);
+  const program = compileProgram(routed, files);
   const bytecode = svmPayload(program, input.args);
   const manifest = program.manifest ?? { accounts: [] };
   const rpc = createSolanaRpc(input.rpcUrl);
-  const pot = await potOf(input);
   const given = await resolveTokenAccounts(
     input.accounts,
     input.owner,
@@ -1191,9 +1301,56 @@ async function prepare(
     maxExecutionFee: fee,
     via,
   });
-  const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, input.lookupTables ?? []);
+  const route = svmSwapTail(program.swaps);
+  if ((input.remaining ?? []).length > 0 && route.accounts.length > 0) {
+    throw new UsageError(
+      "--remaining: the program's routed swap takes every account after its named ones, so it " +
+        "takes none given by hand",
+    );
+  }
+  const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, [
+    ...(input.lookupTables ?? []),
+    ...route.lookupTables.map((table) => address(table)),
+  ]);
+  const remaining = [
+    ...(await remainingOf(input, manifest, rpc, pot, signer, via)),
+    // A route's accounts, as its instruction takes them: the Pot unsigned, which the Kitchen signs.
+    ...route.accounts.map((account) => ({
+      address: address(account.address),
+      writable: account.writable,
+      signer: false,
+    })),
+  ];
+  // The Pot's account the swap pays into, created ahead of the cook when it does not exist yet,
+  // the signer paying its rent. One that exists costs the transaction nothing.
+  const setup: Instruction[] = [];
+  for (const output of route.outputs) {
+    const account = address(output.account);
+    if (await exists(rpc, input.rpcUrl, account, `the Pot's account ${account}`)) continue;
+    const { instruction } = await buildAtaPrepend({
+      payer: signer,
+      owner: address(output.owner),
+      mint: address(output.mint),
+      tokenProgram: address(output.tokenProgram),
+    });
+    setup.push(instruction);
+  }
 
-  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest, given, lookupTables };
+  return {
+    rpc,
+    via,
+    pot,
+    fee,
+    program,
+    bytecode,
+    client,
+    accounts,
+    manifest,
+    given,
+    lookupTables,
+    remaining,
+    setup,
+  };
 }
 
 /** A staged cook's options: directly to the engine it is pinned to the staged bytes' digest. */
@@ -1218,7 +1375,7 @@ async function fits(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { computeUnitLimit: 1_400_000, prepends, ...tablesOption(prepared.lookupTables) },
+    { computeUnitLimit: 1_400_000, ...cookOptions(prepared, undefined, prepends) },
   );
   const size = getTransactionSize(transaction);
 
@@ -1438,7 +1595,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { prepends, accounts: tracked, ...tablesOption(prepared.lookupTables) },
+    { accounts: tracked, ...cookOptions(prepared, undefined, prepends) },
   );
   const moved =
     result.ok && result.accounts !== undefined
@@ -1588,7 +1745,10 @@ async function stagedRehearsal(
       }),
     ],
   ];
-  const tail = resolveAccounts(prepared.manifest, prepared.accounts, owner);
+  const tail = [
+    ...resolveAccounts(prepared.manifest, prepared.accounts, owner),
+    ...remainingMetas(prepared.manifest, prepared.remaining),
+  ];
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen());
   const cook = direct
     ? buildCookAndPayFromAccountPinnedInstruction({
@@ -1713,6 +1873,7 @@ async function stagedRehearsal(
   const instructions = [
     buildHeapFramePrepend(),
     ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
+    ...prepared.setup,
     cook,
   ];
   const lookupTables = fork.table(tableAddresses(await transactionOf(instructions)));
@@ -1845,7 +2006,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { ...(createInCook ? { prepends: createPot } : {}), ...tablesOption(prepared.lookupTables) },
+    cookOptions(prepared, undefined, createInCook ? createPot : []),
   );
   const json = {
     chain: "solana",
@@ -2229,7 +2390,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         prepared.bytecode,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto", prepends, ...tablesOption(prepared.lookupTables) },
+        { computeUnitLimit: "auto", ...cookOptions(prepared, undefined, prepends) },
       );
     } catch (error) {
       return wouldFail(error);
@@ -2245,7 +2406,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       {
         computeUnitLimit: 1_400_000,
         ...stagedPin(prepared, staged),
-        ...tablesOption(prepared.lookupTables),
+        ...cookOptions(prepared),
       },
     );
     if (getTransactionSize(unsized) > TRANSACTION_SIZE_LIMIT) {
@@ -2271,7 +2432,11 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         staged.codeBuffer,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto", ...stagedPin(prepared, staged), ...tablesOption(tables) },
+        {
+          computeUnitLimit: "auto",
+          ...stagedPin(prepared, staged),
+          ...cookOptions(prepared, tables),
+        },
       );
     } catch (error) {
       return wouldFail(error, staged, tables);
@@ -2389,14 +2554,17 @@ async function rehearsalLogs(
   try {
     const result =
       staged === undefined
-        ? await prepared.client.simulate(prepared.bytecode, prepared.manifest, prepared.accounts, {
-            ...tablesOption(tables),
-          })
+        ? await prepared.client.simulate(
+            prepared.bytecode,
+            prepared.manifest,
+            prepared.accounts,
+            cookOptions(prepared, tables),
+          )
         : await prepared.client.simulateStaged(
             staged.codeBuffer,
             prepared.manifest,
             prepared.accounts,
-            { ...stagedPin(prepared, staged), ...tablesOption(tables) },
+            { ...stagedPin(prepared, staged), ...cookOptions(prepared, tables) },
           );
 
     return result.ok ? { lines: result.logs } : { reason: simulated(result), lines: result.logs };

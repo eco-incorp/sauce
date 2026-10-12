@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/swap",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript swaps whose route a service builds when the program compiles: `kyberSwap` and `ecoSwap` on EVM chains, `jupiterSwap` and `ecoSwap` on Solana. Every compile is handed it as an ambient module, so a program calls them with no import. Each reads its route with `globalIn` from a module the SDK writes for it while the program compiles, and returns the amount of `tokenOut` the swap delivered to the Pot. `main` names the NEUTRAL BASE the compiler suffixes per target (swap.evm.js / swap.svm.js); there is no swap.js.",
+  "main": "swap.js"
+}

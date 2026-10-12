@@ -3,6 +3,8 @@
   "executed": {
     "cross-chain-cascade.sauce.ts": ["sdk/test/routes-intent-chains.e2e.test.ts"],
     "cross-chain-intent.sauce.ts": ["actions/tests/docs-examples.mainnet.test.ts"],
+    "jupiter-swap.sauce.ts": ["sdk/test/cli-solana-swap.e2e.test.ts"],
+    "kyberswap-swap.sauce.ts": ["sdk/test/evm/swap-routes.e2e.test.ts"],
     "nested-intent.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "nested-swap.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
     "router-route.sauce.ts": ["actions/tests/docs-examples.mainnet.test.ts"],

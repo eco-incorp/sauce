@@ -57,3 +57,19 @@ On Solana:
 - `approve(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void`
 - `transferChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, dest: Account, authority: Account, amount: Uint256, decimals: Uint256): void`
 - `approveChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, delegate: Account, authority: Account, amount: Uint256, decimals: Uint256): void`
+
+## Swap functions
+
+Every program can call these `@sauce/swap` functions with no import: a swap along a route a
+service builds while the program compiles, returning the amount of `tokenOut` that reached the
+Pot and reverting below `minOut`.
+
+On EVM chains:
+
+- `kyberSwap(tokenIn, tokenOut, amountIn, minOut)`
+- `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`
+
+On Solana:
+
+- `jupiterSwap(tokenIn, tokenOut, amountIn, minOut)`
+- `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`

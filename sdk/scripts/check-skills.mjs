@@ -93,6 +93,7 @@ import {
   skillsReferences,
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
+import { swapStub } from "./skills-check/swap-stub.mjs";
 import {
   defineFlagProblems,
   executedExamplesProblems,
@@ -185,6 +186,19 @@ const sdk = await load(PKG);
 const compilerApi = await load(`${PKG}/compiler`);
 const deploymentsApi = await load(`${PKG}/deployments`);
 const ecoRoutes = await load(`${PKG}/protocols/eco-routes`);
+// The services `kyberSwap`/`jupiterSwap`/`ecoSwap` ask for routes, stubbed: a program that swaps
+// this way compiles offline, its route built as the real service builds one.
+const SWAP_APIS = {
+  kyber: "https://kyber.invalid",
+  jupiter: "https://jupiter.invalid",
+  eco: "https://eco.invalid",
+  fetch: swapStub({
+    encodeFunctionData: (await load("viem")).encodeFunctionData,
+    kyberAbi: (await load(`${PKG}/protocols/kyberswap`)).KyberSwapMetaAggregationRouterABI,
+    compiler: deploymentsApi.v12DeployedAddresses().compiler,
+    svmTokenAccount: (await load(`${PKG}/svm`)).svmTokenAccount,
+  }),
+};
 const { runCli } = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/run.js")).href);
 // Which chains the command builds transactions on: the CLI's own policy, which the package exports
 // none of, read from the bin's module as `runCli` is.
@@ -207,6 +221,8 @@ const NODE_TYPES = (() => {
 // anvil's first dev account: a real, well-known address for the developer's inputs (an owner, a
 // recipient, a creator) in an offline check. It is never written into a skill.
 const DEV = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+// A Solana owner, for the Pot a route on Solana is built for. It is never written into a skill.
+const SOLANA_DEV = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw";
 const DEADLINE = String(Math.floor(Date.now() / 1000) + 86_400);
 
 // ---- The sauce command, in-process ----------------------------------------------------------------
@@ -233,6 +249,7 @@ async function sauce(argv) {
     },
     promptPassword: () => Promise.reject(new Error("no terminal")),
     confirm: async () => undefined,
+    swapApis: SWAP_APIS,
   };
   const code = await runCli(argv, io);
   return { code, stdout, stderr };
@@ -984,6 +1001,14 @@ function sample(type) {
   return "1";
 }
 
+/** A KyberSwap route, and any route on Solana, is built for the Pot the program runs on. */
+const swapOwner = (chain, text) =>
+  chain === "solana" && /\b(?:jupiterSwap|ecoSwap)\s*\(/.test(text)
+    ? ["--owner", SOLANA_DEV]
+    : /\bkyberSwap\s*\(/.test(text)
+      ? ["--owner", DEV]
+      : [];
+
 async function compileJson(file, chain, extra) {
   const run = await sauce(["compile", file, "--chain", chain, ...extra, "--json"]);
   if (run.code !== 0) return { error: diagnostic(run.stderr || run.stdout) };
@@ -1077,7 +1102,7 @@ async function runUsage(where, file, argv, chain, header = false) {
   if (OPENS_INTENT.test(read(file))) {
     if (!kept.includes("--intent-execution-fee")) kept.push("--intent-execution-fee", "0");
   }
-  const compiled = await compileJson(file, chain, kept);
+  const compiled = await compileJson(file, chain, [...kept, ...swapOwner(chain, read(file))]);
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
     return;
@@ -1289,7 +1314,10 @@ try {
             ["--intent-execution-fee", "0"]
           : [];
         for (const chain of chains) {
-          const compiled = await compileJson(file, chain, intents);
+          const compiled = await compileJson(file, chain, [
+            ...intents,
+            ...swapOwner(chain, block.body),
+          ]);
           if (compiled.error !== undefined) errors.push(`${chain}: ${compiled.error}`);
         }
       } else {

@@ -3,10 +3,10 @@
  * against Solana in process: `globalThis.fetch` answers the calls to `url` from the bank and passes
  * every other request on, so an anvil beside it is reached as usual. It answers what the CLI's
  * Solana steps ask — the blockhash, the clock and accounts, balances, simulation (with the
- * accounts it is asked to report), sending, statuses with their slot, the landed transaction and
- * the finalized slot (one behind the tip, held in SlotHashes as a cluster's is) — and refuses
- * anything else by name. `sendTransaction` checks every signature
- * against the message first, so a test proves the CLI signed what it sent.
+ * accounts it is asked to report, and its return data), sending, statuses with their slot, the
+ * landed transaction and the finalized slot (one behind the tip, held in SlotHashes as a cluster's
+ * is) — and refuses anything else by name. `sendTransaction` checks every signature against the
+ * message first, so a test proves the CLI signed what it sent.
  */
 import {
   address,
@@ -70,6 +70,8 @@ export interface SolanaShim {
   readonly url: string;
   /** Every transaction sent, in order, decoded. */
   readonly sent: Transaction[];
+  /** The logs of the transaction the bank landed as `signature`. */
+  logsOf(signature: string): readonly string[] | undefined;
   install(): void;
   restore(): void;
 }
@@ -190,6 +192,8 @@ export function solanaShim(
         const meta = result.meta();
         const asked = (params[1] as { accounts?: { addresses: string[] } } | undefined)?.accounts;
         const post = failed ? [] : result.postAccounts();
+        // The last return data set, by the program that set it, as a node reports it.
+        const returned = meta.returnData();
 
         return answer(id, {
           context: context(),
@@ -197,7 +201,13 @@ export function solanaShim(
             err: failed ? rpcError(result.err()) : null,
             logs: meta.logs(),
             unitsConsumed: Number(meta.computeUnitsConsumed()),
-            returnData: null,
+            returnData:
+              returned.data().length === 0
+                ? null
+                : {
+                    programId: getBase58Decoder().decode(returned.programId()),
+                    data: [b64(returned.data()), "base64"],
+                  },
             accounts:
               asked === undefined || failed
                 ? null
@@ -291,6 +301,7 @@ export function solanaShim(
   return {
     url,
     sent,
+    logsOf: (signature) => landed.get(signature)?.logs,
     install: () => {
       globalThis.fetch = stub as unknown as typeof fetch;
     },

@@ -51,9 +51,12 @@ function wholeNumber(flag: string, raw: string, min: number, max: number): numbe
 }
 
 async function serve(options: McpServeOptions): Promise<void> {
+  const configured = readConfig(options.config);
   const endpoints: Endpoints = {
-    ...readConfig(options.config),
+    ...configured,
     ...(options.publicRpcs === undefined ? {} : { public: options.publicRpcs }),
+    // `--swap-api`, over the config file's, over the built-in public one.
+    swapApis: { ...options.swapApis, ...configured.swapApis, ...options.swapApisGiven },
   };
   const maxBody =
     options.maxBody === undefined

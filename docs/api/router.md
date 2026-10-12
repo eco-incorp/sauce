@@ -230,6 +230,192 @@ function main(legs: Leg[], amountIn: Uint256, minOut: Uint256): Uint256 {
 arguments. Nothing about the legs is known to the compiler, so the bytecode — and its hash — is the
 same for every route.
 
+## Routes a service builds
+
+`kyberSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`
+swap along a route a service builds while the program compiles: KyberSwap's aggregator, whose
+router calldata the program calls, or eco-swap, whose program the Pot runs. Each returns the amount
+of `tokenOut` that reached the Pot, leaves it there, and reverts below `minOut`. They are
+`@sauce/swap`'s, a module the SDK hands every compile as an ambient one, so there is no import; a
+failure is caught with `try`, and another venue stands in:
+
+```js
+// Base: 1000 USDC for WETH through KyberSwap, or through eco-swap when that reverts.
+function main(recipient: Address, minOut: Uint256) {
+  let filled = true;
+  try {
+    const out = kyberSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  } catch {
+    filled = false;
+  }
+  if (!filled) {
+    const out = ecoSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  }
+}
+```
+
+The tokens are known when the program compiles, and so is `kyberSwap`'s `amountIn`, which its
+calldata fixes; `ecoSwap` also takes an amount the program computes. The fallback goes after the
+`try`, not inside its `catch`, which holds only a few hundred bytes of compiled code.
+
+Each is a function the compiler runs at its call. It names its route by what the compiler knows of
+the call — the provider, the chain it runs on, the tokens and, for KyberSwap, the amount — and reads
+it with `globalIn` from a module the SDK writes for it while the program compiles, so the route is
+constants in the program and nothing in its text is rewritten. `kyberSwap` approves the registry's
+KyberSwap router for exactly `amountIn`, runs the calldata with `minOut` written where the router
+keeps its own floor, and resets whatever approval is left; `ecoSwap` runs eco-swap's program in
+the Pot, for any amount, and refuses one that spends more than `amountIn`. Both measure what reached
+the Pot, never its whole balance, which on an intent's destination every intent shares. A KyberSwap
+route is refused when the program compiles unless it calls the registry's router, swaps exactly
+`amountIn` and pays the Pot it is built for: the one the program runs on, or an intent body's
+destination Pot.
+
+From TypeScript, `routes.compileSauceProgramAsync` compiles twice: once to learn what each swap
+asks for, then, with every route fetched, for real. The SDK ships no URL, so each service is named:
+
+```ts
+const program = await routes.compileSauceProgramAsync("base", source, {
+  swap: {
+    pot, // the Pot the program runs on: KyberSwap's sender and recipient
+    kyber: { url: kyberApiUrl },
+    eco: { url: ecoApiUrl },
+  },
+});
+```
+
+`program.swaps` lists each call with its request and its route. The `sauce` command asks KyberSwap's
+and Jupiter's public APIs unless `--swap-api kyber=<url>` or `--swap-api jupiter=<url>` names
+another, and eco-swap only at `--swap-api eco=<url>`. A route expires twenty minutes after it is
+built and its quote moves, so compile close to running and keep a fallback.
+
+### On Solana
+
+`jupiterSwap(tokenIn, tokenOut, amountIn, minOut)` swaps along a route Jupiter's aggregator
+builds, and `ecoSwap` along eco-swap's. `kyberSwap` is refused on Solana and `jupiterSwap` on an
+EVM chain when the program compiles. A Solana route is one instruction, built for the Pot, which
+the Pot signs as the swap's authority through the Kitchen:
+
+```js
+// Solana: 100 USDC for wrapped SOL through Jupiter.
+function main(minOut: Uint256): Uint256 {
+  return jupiterSwap(USDC, WSOL, 100000000, minOut);
+}
+```
+
+The route is the instruction's data, read as the EVM routes are. Its accounts are not in the
+program: they are the accounts the cook attaches after the program's own, in order, which the
+library reads with `svm.remainingAccounts()`, so a program on Solana makes one such swap. Jupiter's
+own floor is the program's: the route's quoted output is set to `minOut` with no slippage, written
+into the instruction as the program runs. eco-swap's amount and floor go where its instruction
+says, so `ecoSwap` also takes an amount the program computes. The library measures what reached the
+Pot's account for `tokenOut` and refuses less than `minOut`.
+
+From TypeScript, name Jupiter's API (`jupiter: { url }`) and the Pot's key in `swap`.
+`routes.svmSwapTail(program.swaps)` lists what the cook needs beyond the program: the route's
+accounts with their flags (the client's `remaining`, the Pot unsigned), the lookup tables to read
+(its `lookupTables`) and the Pot's account for the output, which must exist before the swap pays
+into it. The `sauce` command attaches them, reads the tables and creates that account ahead of the
+cook.
+
+A route fills Solana's whole call depth: the Kitchen's instruction calls the engine, the engine the
+aggregator, the aggregator a pool and the pool the token program, five levels, the most a
+transaction allows until SIMD-0268 raises it to nine. A route whose pool calls further, such as a
+Token-2022 transfer hook, fails. A route's accounts also count against the 64 a transaction can
+lock, and its work against 1.4 million compute units.
+
+### The aggregators' own examples
+
+KyberSwap and Jupiter each publish an example of swapping through their API. Each is one program
+here, its header naming the original. Where the original makes two API calls and then signs and
+sends from a wallet — KyberSwap's an approve of its router and the swap, Jupiter's the whole
+transaction its API serializes — the program asks the same service while it compiles, and what is
+sent is one cook: the swap, checked against `minOut`, a `main` input rather than a slippage off the
+quote, with no allowance left standing.
+
+[kyberswap-swap.sauce.ts](../examples/kyberswap-swap.sauce.ts), KyberSwap's aggregator API example
+on Base with the registry's tokens:
+
+```js
+// KyberSwap's own example of its aggregator API, as one Sauce program.
+//
+// Ported from: github.com/KyberNetwork/ks-aggregator-api-demo (src/operations/V1Swap.ts, with
+// src/apis/V1Get.ts and src/apis/V1Post.ts), the example KyberSwap's docs give for executing a swap
+// with the aggregator API. It sells 1 USDC.e for KNC on Polygon from a wallet, in four steps:
+//
+//   1. GET /{chain}/api/v1/routes         a route for tokenIn, tokenOut and amountIn
+//   2. POST /{chain}/api/v1/route/build   the router's calldata for that route: the wallet as sender
+//                                         and recipient, 0.1% slippage off the quote
+//   3. approve                            a signed transaction: the router may pull amountIn
+//   4. swap                               a signed transaction to the router, with the calldata
+//
+// Two API calls and two transactions, each signed and sent on its own; an approval the swap leaves
+// unused stays standing.
+//
+// Here the same swap, 1 USDC for WETH with the registry's tokens, is one program the Pot runs in one
+// transaction. `kyberSwap` asks the same two endpoints while the program compiles, the route built
+// for the Pot. As the program runs, the Pot approves the router for exactly amountIn, the router's
+// floor is `minOut` (an input, rather than a slippage off the quote), what reached the Pot is
+// measured, and whatever approval is left is reset. A route expires twenty minutes after it is
+// built, so compile close to running.
+//
+//   sauce run kyberswap-swap.sauce.ts --chain <chain> --keystore <keystore> --fund USDC:1 \
+//     --args <minOut> <recipient>
+//
+//   minOut: Uint256     the least WETH to accept, in its smallest units (18 decimals):
+//                       300000000000000 is 0.0003 WETH; below it the whole transaction reverts
+//   recipient: Address  who receives the WETH, the demo's wallet
+//
+// On Base, at least 0.0003 WETH for the 1 USDC the Pot is funded with:
+//
+//   sauce run kyberswap-swap.sauce.ts --chain base --keystore <keystore> --fund USDC:1 \
+//     --args 300000000000000 <recipient>
+function main(minOut: Uint256, recipient: Address): Uint256 {
+  const out = kyberSwap(USDC, WETH, 1000000, minOut);
+  WETH.transfer(recipient, out);
+  return out;
+}
+```
+
+[jupiter-swap.sauce.ts](../examples/jupiter-swap.sauce.ts), Jupiter's Swap API quickstart:
+
+```js
+// Jupiter's own swap example, as one Sauce program.
+//
+// Ported from: Jupiter's Swap API quickstart, developers.jup.ag/docs/swap-api (its pages Get Quote,
+// Build Swap Transaction and Send Swap Transaction). It sells 0.1 SOL for USDC from a wallet, in
+// three steps:
+//
+//   1. GET /swap/v1/quote   inputMint SOL, outputMint USDC, amount 100000000, slippageBps 50
+//   2. POST /swap/v1/swap   the quote and the wallet's key: a whole transaction, serialized, with
+//                           its compute budget and priority fee
+//   3. sign and send        the wallet signs that transaction and sends it
+//
+// Here the same swap is one program the Pot runs through the Kitchen. `jupiterSwap` asks Jupiter for
+// the quote and for the swap's instruction (POST /swap/v1/swap-instructions) while the program
+// compiles, built for the Pot as the swap's authority; the instruction's accounts ride after the
+// program's, with the lookup tables the route names. Jupiter's floor is `minOut`, an input rather
+// than 50 basis points off the quote, written into the instruction as the program runs, and what
+// reached the Pot's USDC account is measured, returned and left there. The Pot swaps SPL tokens, so
+// the SOL is wrapped: the Pot's WSOL account holds the 100000000 lamports, 0.1 SOL. The cook creates
+// the Pot's USDC account when it has none.
+//
+//   sauce run jupiter-swap.sauce.ts --chain <chain> --keypair <keypair.json> --args <minOut>
+//
+//   minOut: Uint256   the least USDC to accept, in its smallest units (6 decimals): 15000000 is
+//                     15 USDC; below it the whole transaction reverts
+//
+// On Solana, at least 15 USDC for the Pot's 0.1 SOL:
+//
+//   sauce run jupiter-swap.sauce.ts --chain solana --keypair <keypair.json> --args 15000000
+function main(minOut: Uint256): Uint256 {
+  return jupiterSwap(WSOL, USDC, 100000000, minOut);
+}
+```
+
+eco-swap publishes no example of its own.
+
 ## From JSON
 
 Each [action](../guides/actions.md#swaps) at these venues is a call into this library with the

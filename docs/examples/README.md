@@ -25,6 +25,8 @@ application calls them.
 | [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program — token symbols, a pool by key — compiled for two chains, with a runtime amount                     |
 | [router-swap.sauce.ts](router-swap.sauce.ts)                   | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript                                  |
 | [router-swap.ts](router-swap.ts)                               | Compiling that program for Ethereum and appending its floor as `main`'s argument                                                         |
+| [kyberswap-swap.sauce.ts](kyberswap-swap.sauce.ts)             | KyberSwap's aggregator API example, ported: 1 USDC for WETH on Base in one cook, where the original signs an approve and a swap          |
+| [jupiter-swap.sauce.ts](jupiter-swap.sauce.ts)                 | Jupiter's Swap API quickstart, ported: 0.1 SOL, wrapped, for USDC through `jupiterSwap`, the Pot the swap's authority                    |
 | [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                                          |
 | [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                           |
 | [evm-execution.ts](evm-execution.ts)                           | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                                   |

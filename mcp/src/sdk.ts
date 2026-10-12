@@ -40,12 +40,15 @@ export {
   probeProgram,
   programChains,
   txCommand,
+  refuseSwappingBodies,
   type CliFiles,
   type CommandOutput,
   type CompileInput,
   type CookInput,
   type ProgramInput,
+  type ProgramSwaps,
 } from "../../sdk/dist/cli/commands.js";
+export { KYBER_PUBLIC_API } from "../../sdk/dist/cli/public-swap-apis.js";
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export { randomSalt } from "../../sdk/dist/routes/intent-defaults.js";
 export {

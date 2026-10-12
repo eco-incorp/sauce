@@ -60,6 +60,16 @@ import {
   type EntrySignature,
   type EntryValue,
 } from "./entry.js";
+import { resolveIntentPot } from "./intent-pot.js";
+import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
+import { fetchSwapRoutes, type SwapApis } from "./swap-apis.js";
+import {
+  SWAP_BODY_DEFINE,
+  swapHost,
+  swapScopeError,
+  type SwapBindOptions,
+  type SwapSite,
+} from "./swap-host.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
@@ -115,7 +125,17 @@ export interface SauceCompileOptions {
   intents?: IntentDefaults & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
   compactArgs?: boolean;
+  /**
+   * The routes of the program's `kyberSwap`/`jupiterSwap`/`ecoSwap` calls: the Pot they are built
+   * for, the routes fetched for them, and where each provider is asked
+   * (`compileSauceProgramAsync`). See `swap-host.ts`.
+   */
+  swap?: SwapCompileOptions;
 }
+
+/** {@link SauceCompileOptions.swap}: what a compile's swaps are bound with, and where their routes
+ *  are asked for. */
+export interface SwapCompileOptions extends SwapBindOptions, SwapApis {}
 
 export interface SauceEvmExecutionInput {
   /** The Pot contract to `cook()` on — see `sauce-calls.ts#SauceEvmCallParams`, never defaulted. */
@@ -244,11 +264,17 @@ function chainModules(
   readonly defines: SauceCompileOptions["defines"];
   readonly programOptions: (scope: ProgramScope) => ProgramOptions;
   readonly bodies: Map<number, CanonicalChain>;
+  readonly swaps: ReturnType<typeof swapHost>;
 } {
   const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
   if (defines !== undefined && CHAIN_DEFINE in defines) {
     throw new Error(
       `compileSauceRoute: \`${CHAIN_DEFINE}\` is the SDK's own define, set to the chain's id`,
+    );
+  }
+  if (defines !== undefined && SWAP_BODY_DEFINE in defines) {
+    throw new Error(
+      `compileSauceRoute: \`${SWAP_BODY_DEFINE}\` is the SDK's own define, set to whether a program is an intent's body`,
     );
   }
   requireFundVia(options.intents ?? {});
@@ -266,8 +292,21 @@ function chainModules(
   // rehearsal that leaves the root's rewards unpaid must not change the bodies it publishes.
   const { openedAt: _openedAt, fund: _fund, ...inherited } = options.intents ?? {};
   const bodies = new Map<number, CanonicalChain>();
+  // A swap's route, which `@sauce/swap` reads with `globalIn` from a module the host writes for it;
+  // an intent body's is built for the destination's shared Pot, the one its cook names.
+  const swaps = swapHost({
+    chain,
+    options: options.swap ?? {},
+    bodyPot: (destination) =>
+      resolveIntentPot(
+        inherited.destinationPortal ?? ecoRoutesPortal(destination, inherited),
+        inherited,
+      ).pot,
+  });
 
   const programOptions = (scope: ProgramScope): ProgramOptions => {
+    const swap = swaps.answer(scope, modules);
+    if (swap !== undefined) return swap;
     const id = typeof scope === "bigint" ? Number(scope) : NaN;
     const destination = chainById(id);
     if (destination === undefined) {
@@ -287,16 +326,21 @@ function chainModules(
       ambient: [
         ...new Set([...chainAmbient(destination), ...(options.ambient ?? []), own, specifier]),
       ],
-      defines: [...(toRsDefines(defines) ?? []), [CHAIN_DEFINE, String(destination.id)]],
+      defines: [
+        ...(toRsDefines(defines) ?? []),
+        [CHAIN_DEFINE, String(destination.id)],
+        [SWAP_BODY_DEFINE, "1"],
+      ],
     };
   };
 
   return {
     modules,
     ambient: [...new Set([...(options.ambient ?? []), own, level])],
-    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
+    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id), [SWAP_BODY_DEFINE]: 0n },
     programOptions,
     bodies,
+    swaps,
   };
 }
 
@@ -395,6 +439,9 @@ export interface CompiledSauceProgram {
   readonly bodies: readonly CompiledBody[];
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
+  /** Each route the program's `kyberSwap(...)`/`jupiterSwap(...)`/`ecoSwap(...)` calls ask for, at
+   *  any depth, with the route bound for it — none where a placeholder was (`swap.placeholders`). */
+  readonly swaps: readonly SwapSite[];
   /** The source the compiler was given: the program as written. */
   readonly source: string;
 }
@@ -459,8 +506,39 @@ export function compileSauceProgram(
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     bodies: program.bodies,
     entrySignature: program.entrySignature,
+    swaps: program.swaps,
     source: program.source,
   };
+}
+
+/**
+ * {@link compileSauceProgram}, with each `kyberSwap(...)`/`jupiterSwap(...)`/`ecoSwap(...)` the
+ * program calls given its route by its service. The compiler's callbacks are synchronous, so it
+ * compiles twice: once with a placeholder for each route, to learn what each asks for, then — after
+ * the routes are fetched (`swap-apis.ts#fetchSwapRoutes`) — with them bound. A program with no swap,
+ * or whose routes are all given in `swap.routes`, compiles once.
+ */
+export async function compileSauceProgramAsync(
+  chain: ChainRef,
+  body: SauceBody,
+  options: SauceProgramOptions = {},
+): Promise<CompiledSauceProgram> {
+  const swap = options.swap ?? {};
+  const probe = compileSauceProgram(chain, body, {
+    ...options,
+    swap: { ...swap, placeholders: true },
+  });
+  const missing = probe.swaps.filter((site) => site.route === undefined);
+  if (missing.length === 0) return probe;
+  const fetched = await fetchSwapRoutes(
+    missing.map((site) => site.request),
+    swap,
+  );
+
+  return compileSauceProgram(chain, body, {
+    ...options,
+    swap: { ...swap, placeholders: false, routes: [...(swap.routes ?? []), ...fetched] },
+  });
 }
 
 /**
@@ -483,6 +561,7 @@ function compileForChain(
   readonly manifest?: AccountManifest;
   readonly bodies: readonly CompiledBody[];
   readonly entrySignature: EntrySignature;
+  readonly swaps: readonly SwapSite[];
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -502,20 +581,31 @@ function compileForChain(
   // statements are the entry. Nothing here reads or rewrites it.
   const source = sauce;
   const names = chainModules(chain, options);
-  const rs = compileWithRs({
-    source,
-    target,
-    entryKind,
-    resolve: options.resolve,
-    resolvePackage: options.resolvePackage,
-    defines: names.defines,
-    contracts: options.contracts,
-    ambient: names.ambient,
-    compactArgs: options.compactArgs,
-    modules: names.modules,
-    programOptions: names.programOptions,
-    ...(args === undefined ? {} : { args }),
-  });
+  let rs: RsCompileResult;
+  try {
+    rs = compileWithRs({
+      source,
+      target,
+      entryKind,
+      resolve: options.resolve,
+      resolvePackage: options.resolvePackage,
+      defines: names.defines,
+      contracts: options.contracts,
+      ambient: names.ambient,
+      compactArgs: options.compactArgs,
+      modules: names.modules,
+      programOptions: names.programOptions,
+      ...(args === undefined ? {} : { args }),
+    });
+  } catch (error) {
+    // A swap the host refused, in the host's words: the compiler's carry them under its own.
+    const refused = names.swaps.refusal;
+    throw (
+      (refused === undefined ? undefined : new Error(refused.message, { cause: error })) ??
+      swapScopeError(source, error) ??
+      error
+    );
+  }
   const { manifest, entryEncoding, entryParams, entrySignature, programs, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
@@ -536,7 +626,19 @@ function compileForChain(
         ];
   });
 
+  const swaps = names.swaps.sites;
+
   return manifest === undefined
-    ? { chain, compiled, entryParams, source, entryEncoding, bodies, entrySignature }
-    : { chain, compiled, entryParams, source, entryEncoding, manifest, bodies, entrySignature };
+    ? { chain, compiled, entryParams, source, entryEncoding, bodies, entrySignature, swaps }
+    : {
+        chain,
+        compiled,
+        entryParams,
+        source,
+        entryEncoding,
+        manifest,
+        bodies,
+        entrySignature,
+        swaps,
+      };
 }

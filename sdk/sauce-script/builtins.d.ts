@@ -311,5 +311,35 @@ declare module "@sauce/token" {
   export const TokenOf: SauceTokenOfClass;
 }
 
+// `@sauce/swap`, the other library every program calls with no import: a swap along a route a
+// service builds while the program compiles, which returns the amount of `tokenOut` that reached
+// the Pot and reverts below `minOut`. `kyberSwap` on an EVM chain, `jupiterSwap` on Solana,
+// `ecoSwap` on either.
+declare function kyberSwap(
+  tokenIn: SauceInt,
+  tokenOut: SauceInt,
+  amountIn: SauceInt,
+  minOut: SauceInt,
+): bigint;
+declare function jupiterSwap(
+  tokenIn: SauceInt,
+  tokenOut: SauceInt,
+  amountIn: SauceInt,
+  minOut: SauceInt,
+): bigint;
+declare function ecoSwap(
+  tokenIn: SauceInt,
+  tokenOut: SauceInt,
+  amountIn: SauceInt,
+  minOut: SauceInt,
+): bigint;
+
+/** The same functions, imported by name. */
+declare module "@sauce/swap" {
+  export const kyberSwap: typeof globalThis.kyberSwap;
+  export const jupiterSwap: typeof globalThis.jupiterSwap;
+  export const ecoSwap: typeof globalThis.ecoSwap;
+}
+
 // The catch-all modules — a JSON ABI beside the program, another `@sauce/` library — are declared
 // last, in index.d.ts: of the patterns a specifier matches, TypeScript takes the first declared.

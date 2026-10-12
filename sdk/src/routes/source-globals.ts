@@ -254,13 +254,22 @@ function moduleFunctions(specifier: string, target: CanonicalChain["kind"]): str
   const base = entry.slice(SDK_STD_ROOT.length + 1).replace(/\.js$/, "");
   const text = STD_SOURCES[`${base}.${target}.js`] ?? STD_SOURCES[`${base}.js`] ?? "";
   const signatures: string[] = [];
-  for (const match of text.matchAll(/^export function (\w+)\(([^)]*)\)(?:\s*:\s*([\w[\]]+))?/gm)) {
-    const params = match[2]!
+  const paramsOf = (text: string): string =>
+    text
       .split(",")
       .map((param) => param.trim())
       .filter((param) => param !== "")
       .join(", ");
-    signatures.push(`${match[1]}(${params})${match[3] === undefined ? "" : `: ${match[3]}`}`);
+  for (const match of text.matchAll(/^export function (\w+)\(([^)]*)\)(?:\s*:\s*([\w[\]]+))?/gm)) {
+    signatures.push(
+      `${match[1]}(${paramsOf(match[2]!)})${match[3] === undefined ? "" : `: ${match[3]}`}`,
+    );
+  }
+  // An arrow function the compiler runs at its call (`@sauce/swap`'s), by its parameters. One that
+  // takes none is the arm's refusal of a name the other target has, which no program calls.
+  for (const match of text.matchAll(/^export const (\w+) = \(([^)]*)\) =>/gm)) {
+    const params = paramsOf(match[2]!);
+    if (params !== "") signatures.push(`${match[1]}(${params})`);
   }
 
   return signatures;

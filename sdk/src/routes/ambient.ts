@@ -105,8 +105,8 @@ function buildChainDefines(
  * `sauce-route.ts#SauceCompileOptions.ambient`/`rs-compile.ts`).
  *
  * Currently a SINGLE source of truth, not yet chain-specific: every chain gets the same list, the
- * plugin manifest's own `ambient` array (`plugin/index.ts#loadPlugin`) — `["@sauce/token"]` by
- * default, resolved to the SDK's own vendored copy on the route path. Extensible to a genuinely
+ * plugin manifest's own `ambient` array (`plugin/index.ts#loadPlugin`) — `["@sauce/token",
+ * "@sauce/swap"]` by default, each resolved to the SDK's own copy on the route path. Extensible to a genuinely
  * per-chain bundle later (e.g. an SVM destination activating an SVM-only ambient module an EVM one
  * shouldn't see) without changing this function's signature — a caller already threads `chain`
  * through.

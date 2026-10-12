@@ -26,13 +26,16 @@
  * `website`/`github` and block explorers. A URL that is none of the above but not RPC-shaped (an ABI
  * source, a package registry) is simply not matched.
  *
- * The npm registry is the `sauce` command's one other network access, and one module names it and
+ * The npm registry is another network access of the `sauce` command, and one module names it and
  * reads it, `sdk/src/cli/npm-registry.ts`: for `sauce update` when it runs, and for the update
  * check's refresh (`update-check.ts`), in a process of its own. Only the command's own modules
  * import either, and only its executable (`main.ts`) creates the check, so neither a browser nor a
  * library import ever reaches the registry. npm reaches it too, as the user's npm configuration
  * says, where the command runs npm: `sauce init --install`, the package managers of `sauce update`,
  * and `npm ci` into a runtime folder (`runtime.ts`, which only the executable gives the process).
+ * KyberSwap's public aggregator API and Jupiter's public Swap API are the other: `kyberSwap` and
+ * `jupiterSwap` routes come from them when the command is given no other, exactly one file names
+ * them, `sdk/src/cli/public-swap-apis.ts`, and nothing a browser loads imports that.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -351,6 +354,25 @@ describe("the SDK ships no RPC endpoints", () => {
       "sdk/src/cli/main.ts: nodeUpdateCheck",
       "sdk/src/cli/main.ts: nodeUpdater",
     ]);
+  });
+
+  it("shipped code names the public swap APIs only in the command's list, which no browser loads", () => {
+    const shipped = scanned(SHIPPED_ROOTS);
+    for (const api of [
+      /https?:\/\/aggregator-api\.kyberswap\.com/,
+      /https?:\/\/(?:lite-)?api\.jup\.ag/,
+    ]) {
+      const naming = [...shipped]
+        // As a URL: the registry's provenance comments name a host, which reaches nothing.
+        .filter(([, text]) => api.test(text))
+        .map(([file]) => file);
+      expect(naming).toEqual(["sdk/src/cli/public-swap-apis.ts"]);
+    }
+    const importers = [...shipped]
+      .filter(([, text]) => /from\s+["'][^"']*\/public-swap-apis(?:\.js)?["']/.test(text))
+      .map(([file]) => file);
+    expect(importers.length).toBeGreaterThan(0);
+    for (const file of importers) expect(file.startsWith("sdk/src/cli/")).toBe(true);
   });
 
   it("the RPC config example holds placeholders only", () => {

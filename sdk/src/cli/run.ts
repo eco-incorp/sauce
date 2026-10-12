@@ -54,6 +54,13 @@ import {
   type CommandOutput,
   compileCommand,
   compileProgram,
+  NAMES_A_SWAP,
+  parseSwapApi,
+  potOf,
+  refuseSwappingBodies,
+  SWAP_API_PROVIDERS,
+  type ProgramSwaps,
+  type SwapApiUrls,
   type Confirm,
   type CookInput,
   expectingRevert,
@@ -129,6 +136,8 @@ import {
   loadKeypair,
   parseAccounts,
   parsePubkey,
+  parseRemaining,
+  svmPotAddress,
   svmAssumedBalances,
   svmPotCommand,
   svmPotDeployCommand,
@@ -221,6 +230,12 @@ export interface CliIo extends CliFiles {
    * (`main.ts`); without them, as in a test, such a chain is not read.
    */
   readonly publicRpcs?: PublicEndpoints | undefined;
+  /**
+   * The built-in swap APIs, which `kyberSwap`/`jupiterSwap` ask for routes when neither
+   * `--swap-api` nor the `--config` file names one (`public-swap-apis.ts`), and how they are
+   * reached. The executable gives them (`main.ts`); without them, as in a test, none is asked.
+   */
+  readonly swapApis?: (SwapApiUrls & { readonly fetch?: typeof fetch }) | undefined;
   /**
    * What `sauce update` reaches: this package's directory, the npm registry and the package
    * managers (`update.ts`). The executable gives it (`main.ts`); without it, as in a test, nothing
@@ -449,6 +464,12 @@ const PROGRAM: FlagSpecs = {
     value: "<dir>",
     help: "Resolve the program's relative imports here (default: beside it; from stdin, .)",
   },
+  "swap-api": {
+    type: "string",
+    multiple: true,
+    value: "<kyber|eco|jupiter>=<url>",
+    help: "Where a swap asks for its route (KyberSwap's and Jupiter's public APIs by default)",
+  },
 };
 
 const SALT: FlagSpecs = {
@@ -496,6 +517,13 @@ const COOK: FlagSpecs = {
     type: "string",
     value: "<kitchen|engine>",
     help: "The Kitchen's cook on the Pot (default), or the engine's own, with no Pot",
+    only: "svm",
+  },
+  remaining: {
+    type: "string",
+    multiple: true,
+    value: "<value>[,writable][,signer]",
+    help: "An account the program reads after its named ones (svm.remainingAccounts()), in order: an address, pot, owner or pot:USDC, with its role",
     only: "svm",
   },
   "max-execution-fee": {
@@ -673,6 +701,8 @@ async function autoExecutionFee(
         },
       },
       io,
+      // The intents are what it looks for, not the swaps' routes, which are asked for later.
+      true,
     );
   } catch (error) {
     if (told) throw error;
@@ -724,6 +754,69 @@ function gated(gate: Gate, source: CanonicalChain, bodies: readonly CompiledBody
 
 /** What stdin carried, named in messages. */
 export const STDIN = "<stdin>";
+
+/** The swap APIs a `--config` file names, `{ "swapApis": { "<provider>": "<url>" } }`. */
+function configSwapApis(path: string, text: string): SwapApiUrls {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new UsageError(`--config ${path}: not JSON`);
+  }
+  const apis = (parsed as { swapApis?: unknown } | null)?.swapApis;
+  if (apis === undefined) return {};
+  if (apis === null || typeof apis !== "object" || Array.isArray(apis)) {
+    throw new UsageError(`--config ${path}: expected "swapApis": { "<provider>": "<url>" }`);
+  }
+  const out: { -readonly [K in keyof SwapApiUrls]: SwapApiUrls[K] } = {};
+  for (const [provider, url] of Object.entries(apis as Record<string, unknown>)) {
+    if (!(SWAP_API_PROVIDERS as readonly string[]).includes(provider)) {
+      throw new UsageError(
+        `--config ${path}: swapApis.${provider}: the providers are ${SWAP_API_PROVIDERS.join(", ")}`,
+      );
+    }
+    if (typeof url !== "string" || !/^https?:\/\//.test(url)) {
+      throw new UsageError(`--config ${path}: swapApis.${provider} is not an http(s) URL`);
+    }
+    out[provider as keyof SwapApiUrls] = url;
+  }
+
+  return out;
+}
+
+/**
+ * Where `kyberSwap`/`jupiterSwap`/`ecoSwap` ask for routes: `--swap-api`, over the `--config`
+ * file's `swapApis`, over the built-in public ones (`CliIo.swapApis`); none with `--offline`, which
+ * refuses a program that needs one. A URL given is a secret: an eco-swap endpoint may be a private
+ * one.
+ */
+function swapsOf(args: ParsedArgs, io: CliIo): ProgramSwaps {
+  const offline = args.values.offline === true;
+  const given: { -readonly [K in keyof SwapApiUrls]: SwapApiUrls[K] } = {};
+  for (const entry of repeatedFlag(args, "swap-api")) {
+    const [provider, url] = parseSwapApi(entry);
+    if (offline) throw new UsageError("--offline asks no service: give it without --swap-api");
+    given[provider] = url;
+  }
+  const config = stringFlag(args, "config");
+  const configured = config === undefined ? {} : configSwapApis(config, readInput(io, config));
+  const apis = offline
+    ? {}
+    : {
+        ...(io.swapApis?.kyber === undefined ? {} : { kyber: io.swapApis.kyber }),
+        ...(io.swapApis?.eco === undefined ? {} : { eco: io.swapApis.eco }),
+        ...(io.swapApis?.jupiter === undefined ? {} : { jupiter: io.swapApis.jupiter }),
+        ...configured,
+        ...given,
+      };
+  for (const url of [...Object.values(configured), ...Object.values(given)]) secret(url);
+
+  return {
+    apis,
+    ...(offline ? { offline } : {}),
+    ...(io.swapApis?.fetch === undefined ? {} : { fetch: io.swapApis.fetch }),
+  };
+}
 
 /** A program's text, and where it came from. */
 interface ProgramText {
@@ -779,6 +872,8 @@ async function programInput(
   const given: ProgramInput = {
     file,
     text,
+    // Read only for a program that names a swap: no other has a route to ask for.
+    ...(NAMES_A_SWAP.test(text) ? { swaps: swapsOf(args, io) } : {}),
     ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
     ...(stdin ? { stdin } : {}),
     ...(sourceDir === undefined ? {} : { sourceDir }),
@@ -945,6 +1040,11 @@ function cookInput(
     throw new UsageError(
       `--lookup-table takes a Solana cook's accounts through a lookup table; a cook on ` +
         `${program.chain.slug} has none`,
+    );
+  }
+  if (repeatedFlag(args, "remaining").length > 0) {
+    throw new UsageError(
+      `--remaining names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
     );
   }
   for (const flag of ["via", "max-execution-fee"]) {
@@ -1737,12 +1837,14 @@ function svmCookInput(
   const lookupTables = repeatedFlag(args, "lookup-table").map((table) =>
     parsePubkey("lookup-table", table),
   );
+  const remaining = parseRemaining(repeatedFlag(args, "remaining"));
 
   return {
     ...program,
     owner: svmOwner(args, signer),
     ...saltOf(args),
     accounts: accountsOf(args, io),
+    ...(remaining.length === 0 ? {} : { remaining }),
     ...argsInput(args, io, trailing),
     rpcUrl: requiredEndpoint(args, io, program.chain),
     ...(via === undefined ? {} : { via: parseVia(via) }),
@@ -2791,6 +2893,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "<kitchen|engine>",
         help: "Solana: size the Kitchen's cook (default) or the engine's direct one",
       },
+      owner: {
+        type: "string",
+        value: "<address>",
+        help: "The Pot's owner, deriving the Pot a routed swap is built for (with the salt)",
+      },
+      pot: { type: "string", value: "<address>", help: "Or that Pot itself", only: "evm" },
+      ...SALT,
       ...ENDPOINT,
       out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
       json: {
@@ -2822,6 +2931,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "             one the destination Portal's Executor owns, salt 0) and, read from that",
       "             chain, whether it is deployed; a missing one is warned",
       "             about, since no solver can fill the intent until it is",
+      "  swaps      each kyberSwap, jupiterSwap and ecoSwap: what its service was asked, the",
+      "             Pot its route is built for (--owner and --salt, or --pot) and what it quoted",
       "A --define the file never reads is named on stderr: it changes nothing.",
       "",
       "Examples:",
@@ -2844,9 +2955,18 @@ const COMMANDS: Readonly<Record<string, Command>> = {
             "the Pot's",
         );
       }
+      const named = stringFlag(args, "owner") ?? stringFlag(args, "pot");
+      // The Pot a routed swap is built for: on Solana the Kitchen's for the owner and salt.
+      const swapPot =
+        named === undefined
+          ? undefined
+          : program.chain.kind === "svm"
+            ? await svmPotAddress({ owner: svmOwner(args), ...saltOf(args) })
+            : potOf(potInput(args));
       const output = await compileCommand(
         {
           ...program,
+          ...(swapPot === undefined ? {} : { swaps: { apis: {}, ...program.swaps, pot: swapPot } }),
           ...argsInput(args, io, trailing),
           ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
           ...(via === undefined ? {} : { via: parseVia(via) }),
@@ -3794,7 +3914,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
         );
 
-        return inspectFile(input.file, compileProgram(input, io));
+        // A file's intents carry no route of the program's own swaps, which take placeholders;
+        // a body's swap is another route, so another intent, each time the file compiles.
+        refuseSwappingBodies(input, io);
+
+        return inspectFile(input.file, compileProgram(input, io, true));
       }
       if (argsInput(args, io, trailing).args !== undefined) {
         throw new UsageError(
@@ -3834,7 +3958,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ...(fetched === undefined ? {} : { rpcUrl: fetched.rpcUrl }),
         ...(source === undefined
           ? {}
-          : { source: { file: source.file, program: compileProgram(source, io) } }),
+          : { source: { file: source.file, program: compileProgram(source, io, true) } }),
       });
     },
   },
