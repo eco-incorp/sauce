@@ -125,7 +125,9 @@ export class TestChain {
       rpcUrls: { default: { http: [rpcUrl] } },
     });
     const transport = http(rpcUrl);
-    this.client = createPublicClient({ chain: this.viemChain, transport });
+    // No cached reads: a test chain changes with every call a test makes, and viem would otherwise
+    // answer `getBlockNumber` from what it read up to 4 seconds before.
+    this.client = createPublicClient({ chain: this.viemChain, transport, cacheTime: 0 });
     this.test = createTestClient({ chain: this.viemChain, mode: "anvil", transport });
     this.accounts = Array.from({ length: 10 }, (_, index) => {
       const hd = mnemonicToAccount(DEV_MNEMONIC, { addressIndex: index });
@@ -401,26 +403,30 @@ export class TestChain {
     return this.result(compiled, owner, call.data, call.gasUsed, call.logs ?? []);
   }
 
-  /** Sends `program` as a cook from `options.from`'s Pot and waits for it. What `main` returned is
-   *  read from a rehearsal in the same state just before. Throws {@link CookReverted} when it
-   *  reverts, before sending anything. */
+  /**
+   * Sends `program` as a cook from `options.from`'s Pot, waits for it, and reports that transaction:
+   * what `main` returned is the mined transaction's return data, read from the node's trace of it.
+   * Nothing but the gas is rehearsed first, so a cook valid only in the block it is mined in is sent.
+   * Throws {@link CookReverted} when the mined transaction reverts, with its own revert data.
+   */
   async run(program: ProgramInput, options: CookOptions = {}): Promise<CookResult> {
     const compiled = this.compile(program);
     const { owner, to, data, value } = await this.cookCall(compiled, options);
-    let returnData: Hex;
-    try {
-      ({ data: returnData = "0x" } = await this.client.call({
-        account: owner.address,
-        to,
-        data,
-        value,
-      }));
-    } catch (error) {
-      throw revertOf(error);
-    }
-    const hash = await this.wallet(owner).sendTransaction({ to, data, value });
+    // What an estimate on the latest block measures; when that reverts, the block's whole limit,
+    // so the transaction itself decides, in its own block.
+    const gas = await this.client
+      .estimateGas({ account: owner.address, to, data, value })
+      .catch(async () => (await this.client.getBlock()).gasLimit);
+    const hash = await this.wallet(owner).sendTransaction({ to, data, value, gas });
     const receipt = await this.client.waitForTransactionReceipt({ hash });
-    if (receipt.status !== "success") throw new CookReverted(undefined, undefined);
+    const trace = (await rpc(this.rpcUrl, "debug_traceTransaction", [
+      hash,
+      { tracer: "callTracer", tracerConfig: { onlyTopCall: true } },
+    ])) as { output?: Hex };
+    const returnData = trace.output ?? "0x";
+    if (receipt.status !== "success") {
+      throw new CookReverted(reasonOf(returnData), returnData === "0x" ? undefined : returnData);
+    }
 
     return this.result(compiled, owner, returnData, receipt.gasUsed, receipt.logs, hash);
   }

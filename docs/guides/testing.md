@@ -153,8 +153,13 @@ that chain's own, fee included; pass `zeroFee: true` to clear it.
 - `gasUsed`, and `hash` after `run`.
 
 A cook that reverts throws `CookReverted`. Its `reason` is the program's `require` or `throw`
-message, or a called contract's error; `data` is the raw revert data. `run` rehearses first, so a
-reverting cook is never sent.
+message, or a called contract's error; `data` is the raw revert data.
+
+What `run` reports is the transaction it mined: `returned` and a revert's reason are read from the
+node's trace of that transaction, so a program reading the block number or the time returns what
+it read in its own block. Only the gas is estimated first, and a cook is sent even when the
+estimate reverts. A reverted cook is mined like any other transaction: it moves nothing, but it
+takes a block and a nonce. `simulate` is the rehearsal.
 
 ## Funding
 
