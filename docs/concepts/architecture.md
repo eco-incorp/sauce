@@ -56,8 +56,8 @@ a Pot is, what a cook does, and who may do what. This section adds what an integ
 ### EVM
 
 A program runs through `Pot.cook(engine, program)`. A Pot has an owner; the engine is named on each
-cook, so a call needs **both** addresses. A direct `compileSauceRoute` takes them from you. An intent's
-route runs on the released engine and the Pot the recorded Portal's Executor owns under salt zero
+cook, so a call needs **both** addresses. A direct `compileSauceRoute` takes them from you. An intent
+derives them: the released engine, and the Pot the recorded Portal's Executor owns under salt zero
 (`SAUCE_INTENT_POT_SALT`). That Pot must exist before the route runs; the solver deploys it. An
 engine accepts only Pots created by its own Kitchen, with the Pot bytecode it was built for: a
 Kitchen release that changes the Pot's bytecode starts a new family of Pot addresses, and a Pot
@@ -88,6 +88,7 @@ balance as the USDC ERC-20 ([Arc: USDC is the native coin](../reference/chains/a
 One route body is one program and one cook, however many statements it contains. For a Portal-driven
 intent the Pot's owner must be the destination `Portal.executor()`, and the Pot is shared: put
 assets in, use them and take the remainder out within the same fulfillment.
+[The destination Pot](../guides/intents.md#the-destination-pot) covers deployment and overrides.
 
 ### Solana
 
@@ -100,11 +101,19 @@ larger program through the Kitchen before executing it. See the [Solana guide](.
 
 ## Intents connect executions across chains
 
-An Eco intent offers a route — calls, and a program among them — to be executed on another chain,
-in exchange for a reward escrowed on this one. A solver fulfills the destination, and the route's
-program runs there on the shared Pot. A cascade of intents is a chain of separate executions, not
-one call stack spanning chains. [Routes](../api/routes.md) covers the intent records, the Portal's
-calls and the hashes.
+`Base.hop({ source, send, receive, refundee }).then(body)` builds an Eco intent whose route
+executes on Base. The SDK compiles the program that opens it, with the destination program inside,
+and hands back that program and the cook that publishes it.
+
+A program can also create an intent itself, with `Chain.hop({ send, receive, refundee })` written
+in its body and the code that runs on that chain in its `.then(() => { … })` — which is how a hop whose amount is
+only known on arrival gets built at all. See [create an intent from inside a
+program](../guides/intents.md#create-an-intent-from-inside-a-program).
+
+Building an intent publishes nothing. Your application submits the source-chain transactions, and a
+solver fulfills the destination. A nested intent is opened by the body of the one before it, when
+that body runs — a cascade of separate executions, not one call stack spanning chains. See
+[create an intent](../guides/intents.md) and [nested intents](../guides/nested-intents.md).
 
 ## Versions travel with artifacts
 

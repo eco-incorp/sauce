@@ -19,6 +19,7 @@ import {
   decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
+  erc20Abi,
   getAddress,
   getCreate2Address,
   hexToBytes,
@@ -29,11 +30,13 @@ import {
 } from "viem";
 
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
-import { canonicalChains, routes } from "../../sdk/dist/index.js";
+import { canonicalChains, destinationPot, routes } from "../../sdk/dist/index.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { legs, program, routeProgram, type Leg } from "../../docs/examples/router-route.js";
 import { minOut as swapFloor, payload as swapPayload } from "../../docs/examples/router-swap.js";
 import { onBase, onOptimism } from "../../docs/examples/registry-names.js";
+import { built as firstIntent } from "../../docs/examples/first-intent.js";
+import { v12KitchenAddress } from "../../sdk/dist/deployments/v12-addresses.js";
 import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { balanceOf, setBalance, type BalanceSlot } from "./swap-venues.js";
 
@@ -58,6 +61,9 @@ const abi = {
   ]),
   factory: parseAbi(["function getPool(address, address, uint24) view returns (address)"]),
 };
+
+/** A universal (32-byte) address the SDK decodes as the 20-byte EVM address it holds. */
+const denormalize = (address: Hex) => getAddress(`0x${address.slice(-40)}`);
 
 /** `cook`'s eth_call returns `main`'s bytes as they are: here one word. */
 const word = (data: Hex): bigint => decodeAbiParameters([{ type: "uint256" }], data)[0];
@@ -448,8 +454,17 @@ function usageLine(file: string, command: string): string[] {
   return words.slice(1);
 }
 
-describe("venue-where-deployed on Base state", SUITE, () => {
+describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () => {
+  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const ETHEREUM_USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+  const CROSS_CHAIN = resolve(REPO_ROOT, "docs/examples/cross-chain-intent.sauce.ts");
+  const RECIPIENT = "0x000000000000000000000000000000000000c0DE";
+  const HELD = 12_345_678n;
+  /** A fixture: Ethereum's Kitchen fee, which the body's cook pays. */
+  const ETHEREUM_FEE = 1_234n;
+
   let env: Anvil;
+  let snapshot: Hex;
 
   before(async () => {
     env = await startAnvil({ mainnet: "docs-examples-base", chain: "base" });
@@ -457,9 +472,119 @@ describe("venue-where-deployed on Base state", SUITE, () => {
   after(async () => {
     await env?.stop();
   });
+  beforeEach(async () => {
+    snapshot = await env.testClient.snapshot();
+  });
+  afterEach(async () => {
+    await env.testClient.revert({ id: snapshot });
+  });
 
   it("as registry-names.ts compiles it for Base, venue-where-deployed returns PancakeSwap V3's USDC/WETH 0.05% pool", async () => {
     await assertVenuePool(env, "base", onBase.compiled.bytecode[0]!, "pancake");
+  });
+
+  /** cross-chain-intent's usage line, run as written from the Pot's owner, with `minAmount`. */
+  const run = (minAmount: bigint) =>
+    sauce(
+      usageLine(CROSS_CHAIN, "run").flatMap((word, i, words) => {
+        if (word === "cross-chain-intent.sauce.ts") return [CROSS_CHAIN];
+        // The replay is the endpoint, whichever the line names or leaves to the defaults.
+        if (word === "--config" || words[i - 1] === "--config") return [];
+        if (word === "<keystore>") return [OWNER_KEY];
+        if (word === "--keystore") return ["--private-key"];
+        if (word === "<unix seconds>" || word === "<unix") return ["2000000000"];
+        if (word === "seconds>") return [];
+        if (word === "<address>") return [env.account.address];
+        if (word === "<recipient>") return [RECIPIENT];
+        if (word === "<minAmount>") return [`${minAmount}`];
+        if (word === "<refundTo>") return [env.account.address];
+        if (word === "--args") {
+          // Ethereum's Kitchen fee, which the line leaves the command to read on Ethereum: the
+          // replay is Base alone.
+          const fee = ["--intent-execution-fee", String(ETHEREUM_FEE)];
+          return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, ...fee, "--json", "--args"];
+        }
+        return [word];
+      }),
+    );
+
+  it("cross-chain-intent's usage line publishes an intent paying `recipient` on Ethereum exactly what the Pot held", async () => {
+    await setBalance(env, USDC, { slot: 9n }, env.pot, HELD);
+    const ran = await run(1_000_000n);
+    assert.equal(ran.code, 0, `${ran.stderr}\n${ran.stdout}`);
+    const { cook } = JSON.parse(ran.stdout) as { cook: { hash: Hex; status: string } };
+    assert.equal(cook.status, "success");
+
+    const receipt = await env.publicClient.getTransactionReceipt({ hash: cook.hash });
+    const published = receipt.logs.flatMap((log) => {
+      const found = routes.intentFromPublished(log, 8453n);
+      return found === undefined ? [] : [{ ...found, portal: log.address }];
+    });
+    assert.equal(published.length, 1, "one intent published");
+    const [{ intent, portal }] = published as [(typeof published)[number]];
+    assert.equal(intent.destination, 1n, "to Ethereum");
+    // The reward: everything the Pot held, in Base's USDC, paid into the intent's vault.
+    assert.deepEqual(
+      intent.reward.tokens.map((t) => [denormalize(t.token), t.amount]),
+      [[getAddress(USDC), HELD]],
+    );
+    const vault = routes.predictIntentVault(intent, { portal });
+    assert.equal(await balanceOf(env, USDC, vault), HELD);
+    assert.equal(await balanceOf(env, USDC, env.pot), 0n);
+    // Delivered: Ethereum's USDC, moved into Ethereum's shared Pot, whose cook runs the body with
+    // the `recipient` given on the command line, paying Ethereum's Kitchen fee.
+    const pot = getAddress(destinationPot("ethereum"));
+    assert.deepEqual(
+      intent.route.tokens.map((t) => [denormalize(t.token), t.amount]),
+      [[getAddress(ETHEREUM_USDC), HELD]],
+    );
+    assert.equal(intent.route.nativeAmount, ETHEREUM_FEE);
+    const [moved, cooked] = intent.route.calls;
+    assert.deepEqual(
+      [denormalize(moved!.target), moved!.data, moved!.value],
+      [
+        getAddress(ETHEREUM_USDC),
+        encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [pot, HELD] }),
+        0n,
+      ],
+    );
+    assert.deepEqual([denormalize(cooked!.target), cooked!.value], [pot, ETHEREUM_FEE]);
+    assert.ok(cooked!.data.toLowerCase().includes(RECIPIENT.slice(2).toLowerCase()));
+  });
+
+  it("first-intent.ts's cook publishes its intent from a Pot holding the reward, its hash read from the log", async () => {
+    const reward = 1_010_000n;
+    await setBalance(env, USDC, { slot: 9n }, env.pot, reward);
+    const fee = await env.publicClient.readContract({
+      address: getAddress(v12KitchenAddress()),
+      abi: parseAbi(["function executionFee() view returns (uint256)"]),
+      functionName: "executionFee",
+    });
+    const cook = firstIntent.cook(env.pot, fee);
+    const receipt = await env.send({ to: cook.to, data: cook.data, value: cook.value });
+    assert.equal(receipt.status, "success");
+    const [published, ...more] = firstIntent.intents(receipt.logs);
+    assert.equal(more.length, 0, "one intent published");
+    assert.equal(published!.destination.slug, "ethereum");
+    // The hash the Portal announced, which the intent rebuilt from its log hashes to.
+    assert.equal(published!.intentHash, routes.hashIntent(published!.intent).intentHash);
+    assert.deepEqual(
+      published!.intent.reward.tokens.map((t) => [denormalize(t.token), t.amount]),
+      [[getAddress(USDC), reward]],
+    );
+    const vault = routes.predictIntentVault(published!.intent, { portal: published!.portal });
+    assert.equal(await balanceOf(env, USDC, vault), reward);
+    assert.deepEqual(
+      published!.intent.route.tokens.map((t) => [denormalize(t.token), t.amount]),
+      [[getAddress(ETHEREUM_USDC), 1_000_000n]],
+    );
+  });
+
+  it("below `minAmount` the whole transaction reverts and nothing is published", async () => {
+    await setBalance(env, USDC, { slot: 9n }, env.pot, HELD);
+    const ran = await run(HELD + 1n);
+    assert.notEqual(ran.code, 0, "the cook reverted");
+    assert.equal(await balanceOf(env, USDC, env.pot), HELD, "nothing moved");
   });
 });
 

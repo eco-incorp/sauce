@@ -148,7 +148,8 @@ Each bridge has its own trust model and delay. Canonical rollup bridges (Arbitru
 Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to
 Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
 settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the
-destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.
+destination; LI.FI, Socket and Squid route across bridges from an off-chain quote. To continue a
+program on another chain, not only move a token, open a Sauce intent ([intents](../guides/intents.md)).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
@@ -341,7 +342,8 @@ Seaport fills orders that makers signed off chain.
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
-ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer.
+ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
+([intents](../guides/intents.md)).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |

@@ -56,6 +56,8 @@ zero. One Executor serves every EVM chain that takes intents, so one Pot does:
 | Salt | `0x0000000000000000000000000000000000000000000000000000000000000000`: `SAUCE_INTENT_POT_SALT` |
 
 The Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account.
+[The destination Pot](../guides/intents.md#the-destination-pot) says who deploys it and what a
+body may leave in it.
 
 ## Solana
 

@@ -5,7 +5,7 @@
 **Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
 On Arc a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
 runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
-`sauce run`, `sauce pot --deploy` and the intent steps sent here are
+`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
 refused, naming the supported chains and how to request this one.
 
 To request Arc, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Arc%22) and add your
@@ -49,9 +49,9 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
   native coin are refused for Arc.
 - Native value sent to the zero address, to or from a blocklisted address, or to a
   self-destructed account reverts, also when a contract forwards it.
-- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one
-  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is
-  built. Fold the two into one amount.
+- A hop's `send`, the intent's reward, offers native value or `USDC`, not both: Arc's Portal
+  takes them for one asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a
+  `send` when it is built. Fold the two into one amount.
 
 ## In a program
 

@@ -43,6 +43,18 @@ node diff.mjs baselines/rewrite61-5d9f38f3.json candidate.json   # exits 1 when 
   `resolve` answered, each `programOptions` scope and its answer), so a compile replays with no SDK.
   `replay-all.mjs <logs dir> name=<pkg> …` times the recordings on several builds, interleaved.
 
+## Where a cook's gas goes
+
+`cook-gas.mts` (run with the workspace's tsx: `../../../mcp/node_modules/.bin/tsx cook-gas.mts`,
+with `SAUCE_V12_RUNTIME_CREATION_HEX` set) cooks `intent-compiles-to.e2e`'s programs (`one-hop`,
+`one-hop-in-a-try`, `two-hops`, or `-e '<source>'`) on an anvil with the released stack and
+eco-routes' Portal, and breaks each cook's gas down from the opcode trace: intrinsic and calldata,
+the Pot's and the Kitchen's steps around the engine, the engine's own steps (between its calls, by
+EVM opcode, and by the program's instructions, a call whole in the instruction that makes it), each
+call whole, every storage write and log, and the refund; the rows sum to the receipt's `gasUsed`.
+`--usdc` puts USDC's own proxy and FiatToken in place of the mock; `--rpc <url> --hash <tx>` breaks
+down any transaction on a node that keeps opcode traces.
+
 ## Compiler asks still held
 
 `repros/held-asks.mjs <pkg> [<pkg> …]` compiles the two programs each open ask compares: a run-time

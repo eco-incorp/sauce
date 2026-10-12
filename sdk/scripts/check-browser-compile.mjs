@@ -47,15 +47,15 @@ function argument(name, fallback) {
 const packageRoot = realpathSync(argument("--package-root", REPO));
 const consumer = realpathSync(argument("--consumer", packageRoot));
 
-/** The README's TypeScript program example, as JavaScript that exports what it compiled. */
+/** The README's TypeScript route example, as JavaScript that exports what it built. */
 function readmeRoute() {
   const readme = readFileSync(join(packageRoot, "README.md"), "utf8");
   const fence = [...readme.matchAll(/```ts\n([^]*?)```/g)].map((match) => match[1]);
-  const example = fence.find((code) => code.includes("compileSauceProgram("));
-  assert.ok(example, "the README has no TypeScript `compileSauceProgram(...)` example");
+  const example = fence.find((code) => code.includes(".hop({"));
+  assert.ok(example, "the README has no TypeScript `Base.hop({ … })` intent example");
   const { code } = esbuild.transformSync(example, { loader: "ts", format: "esm" });
 
-  return `${code}\nexport { program, args };\n`;
+  return `${code}\nexport { built };\n`;
 }
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm" };
@@ -166,7 +166,7 @@ window.__sauce = (async () => {
     `check-browser-compile: headless Chromium ${browser.version()} compiled the same bytes as Node ` +
       `${process.version}, with ready() given no source, the bytes and a URL ` +
       `(${(bundleBytes / 1e6).toFixed(1)} MB bundle):\n` +
-      `  README program ${expected.readme.bytecode.length / 2} bytes, arguments ${expected.readme.args.length / 2}\n` +
+      `  README intent ${expected.readme.bytes} bytes, cooked on ${expected.readme.pot}\n` +
       `  settle        ${expected.settle.length / 2} bytes\n` +
       `  swap/deposit  ${expected.swap[0].length / 2} / ${expected.deposit[0].length / 2} bytes\n` +
       `  compact       evm ${expected.raw.evm.bytecode.length / 2}, svm ${expected.raw.svm.bytecode.length / 2} bytes\n` +

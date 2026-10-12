@@ -41,6 +41,26 @@ as written.
 Entry argument encoding does not determine return encoding. For ABI-decodable
 EVM output, [return `abi.encode(...)`](../guides/compiling.md#return-values-an-abi-decoder-can-read).
 
+The SDK provides a second authoring form: a route body passed to a chain helper.
+
+```js
+() => {
+  USDC.approve(Uniswap.UniversalRouter, 1_000_000);
+};
+```
+
+Pass this body to an intent's `.then(body)`, `Base.hop({ … }).then(body)`, as
+shown in the [intent guide](../guides/intents.md). The SDK extracts its text, wraps it in
+`main`, resolves SDK global names, and compiles it. For a body that falls through,
+the compilation adapter adds a `void` entry annotation.
+
+The callback must be synchronous, take no parameters, and retain source text the
+SDK can parse. It captures **no host variables**. A host `const amount = ...`
+does not make `amount` available to the compiler; pass it through
+`options.compile.defines`, write it into generated source, or use a standalone
+program with runtime entry arguments. If bundling/minification rewrites callback
+names or bodies, use explicit source strings or source assets.
+
 ## Three ways values enter a program
 
 | Channel                             | When resolved                          | Effect on the compiled program                                                      |
@@ -149,8 +169,8 @@ defines replace same-named module `const` values. Pick specific define names
 because that replacement also reaches imported dependencies.
 
 The SDK adds chain selection, token symbols, and protocol member access around
-that compiler API. `compileSauceProgram` supplies chain defines and the
-default `@sauce/token` ambient module. Direct `compileSauceRoute()` accepts an
+that compiler API. `compileSauceProgram`, and so a TypeScript intent, supplies the chain's names
+and the default `@sauce/token` ambient module. Direct `compileSauceRoute()` accepts an
 explicit `ambient` list and does not add that default list. Raw `compile()` adds
 neither the SDK registry nor its filesystem resolver. See the
 [compilation guide](../guides/compiling.md) for the exact boundary.

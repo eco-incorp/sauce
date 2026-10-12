@@ -39,9 +39,9 @@ export const DEV_TOPICS: ReadonlyArray<{
 }> = [
   {
     topic: "start",
-    about: "install the package and compile a first program from TypeScript",
+    about: "install the package and build a first intent from TypeScript",
     keywords: ["start", "install", "quick", "first", "hello", "begin", "typescript"],
-    files: ["guides/quick-start.md"],
+    files: ["guides/quick-start.md", "examples/first-intent.ts"],
   },
   {
     topic: "compile",
@@ -62,8 +62,7 @@ export const DEV_TOPICS: ReadonlyArray<{
   },
   {
     topic: "intents",
-    about:
-      "cross-chain intents from TypeScript: their records, the Portal's calls, their lifecycle",
+    about: "cross-chain intents from TypeScript: a chain's hop, its program and cook, publishing",
     keywords: [
       "intent",
       "intents",
@@ -71,19 +70,26 @@ export const DEV_TOPICS: ReadonlyArray<{
       "routes",
       "openroute",
       "reward",
+      "send",
       "portal",
       "crosschain",
       "nest",
       "nested",
       "cascade",
     ],
-    files: ["api/routes.md"],
+    files: [
+      "guides/intents.md",
+      "guides/nested-intents.md",
+      "api/routes.md",
+      "examples/cross-chain-intent.ts",
+      "examples/cross-chain-intent.sauce.ts",
+    ],
   },
   {
     topic: "protocols",
     about: "tokens and protocols from TypeScript: the registries, the namespaces, coverage",
     keywords: ["registry", "registries", "coverage", "descriptor", "descriptors", "viem"],
-    files: ["guides/protocols-and-tokens.md", "api/coverage.md", "examples/registry-names.ts"],
+    files: ["guides/protocols-and-tokens.md", "api/coverage.md", "examples/protocol-approval.ts"],
   },
   {
     topic: "actions",

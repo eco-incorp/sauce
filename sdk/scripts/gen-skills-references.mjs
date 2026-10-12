@@ -159,7 +159,8 @@ export function globalsIndex(sdk, ecoRoutes, support) {
   for (const { chain, globals } of listed) {
     for (const ns of globals.protocols) {
       for (const contract of ns.contracts) {
-        // The Portal and its provers are left out: a program never calls them by name.
+        // The Portal and its provers are left to the intent syntax: a program opens an intent with
+        // `Arbitrum.hop({ ... }).then(...)` (`sauce-intents`), never by calling them by name.
         if (contract.protocol === INTENT_PROTOCOL) continue;
         const name = `${ns.namespace}.${contract.name}`;
         if (ns.kind === "protocol") {
@@ -448,6 +449,11 @@ export async function skillsReferences(api, documented) {
     chains,
     protocols,
     familyMembers,
+    // What an intent's modifiers are when they are left out: the SDK's own constants.
+    intentDefaults: {
+      fill: sdk.routes.DEFAULT_FILL_WINDOW,
+      refund: sdk.routes.DEFAULT_REFUND_WINDOW,
+    },
     deployments: {
       compiler: release.compiler,
       releases: release.releases,
@@ -552,7 +558,8 @@ const CHOOSING = {
     "Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to",
     "Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)",
     "settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the",
-    "destination; LI.FI, Socket and Squid route across bridges from an off-chain quote.",
+    "destination; LI.FI, Socket and Squid route across bridges from an off-chain quote. To continue a",
+    "program on another chain, not only move a token, open a Sauce intent (`sauce-intents`).",
   ],
   "cross-chain": [
     "Messaging protocols (LayerZero, Wormhole, Axelar, Chainlink CCIP, Hyperlane) carry arbitrary",
@@ -605,7 +612,8 @@ const CHOOSING = {
   infrastructure: [
     "Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),",
     "ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,",
-    "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer.",
+    "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer",
+    "(`sauce-intents`).",
   ],
 };
 
@@ -633,9 +641,9 @@ const CHAIN_NOTES = {
     "  native coin are refused for Arc.",
     "- Native value sent to the zero address, to or from a blocklisted address, or to a",
     "  self-destructed account reverts, also when a contract forwards it.",
-    "- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one",
-    "  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is",
-    "  built. Fold the two into one amount.",
+    "- A hop's `send`, the intent's reward, offers native value or `USDC`, not both: Arc's Portal",
+    "  takes them for one asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a",
+    "  `send` when it is built. Fold the two into one amount.",
   ],
   base: [
     "Base's own documentation: `eth_call` and `eth_estimateGas` against the `pending` block tag see",
@@ -714,6 +722,7 @@ const DOCS_FOR_SKILL = {
     "the distributed swap on Solana",
     "guides/solana-distributed-swap.md",
   ],
+  "sauce-intents": ["intents", "guides/intents.md"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],
   "sauce-actions": ["actions", "guides/actions.md"],
@@ -764,12 +773,14 @@ const DOCS_SITE = {
   /** What a reader of the manual also needs about the release's chains. */
   chainIndexNotes: [
     "On a preview chain the `sauce` command and the MCP server still rehearse and read:",
-    "`sauce simulate`, `sauce intent fill` without `--send`, and every read. What they refuse there,",
-    "before any endpoint is reached or any key is read, is building or sending a transaction;",
-    "[the command's](../guides/cli.md#supported-and-preview-chains) and",
-    "[the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. Each step",
-    "after publishing is refused by the chain it is sent on: a fill, a proof or a cancellation by the",
-    "destination, a claim or a refund by the source. Every refusal",
+    "`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and",
+    "every read. What they refuse there, before any endpoint is reached or any key is read, is",
+    "building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)",
+    "and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent",
+    "publishes only when its source and every destination it opens are supported; the later levels",
+    "of a cascade (an intent opened inside another's body) are not checked, so keep every level on a",
+    "supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a",
+    "proof or a cancellation by the destination, a claim or a refund by the source. Every refusal",
     "names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.",
     "",
     "The TypeScript SDK is not gated: its builders take every chain below and build its",
@@ -901,8 +912,10 @@ function renderGlobals(data) {
     "# Chain globals",
     "",
     "A chain name is its chain id, so `chainId == Ethereum` is decided while compiling and a program",
-    "keeps only the branch of the chain it is compiled for. It also qualifies a contract address",
-    "(`Ethereum.UniswapV4.UniversalRouter`). Each line says whether its chain takes intents, and whether the initial",
+    "keeps only the branch of the chain it is compiled for. It opens an intent from inside a program",
+    "(`Ethereum.hop({ send, receive, refundee }).then(() => { … })`) and qualifies a contract",
+    "address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains",
+    "to take intents; each line says whether its chain does. Each line also says whether the initial",
     "release supports the chain: a program compiles and simulates on every chain, and its transactions",
     "are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
     "server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a",
@@ -1049,7 +1062,7 @@ function supportLines(chain, supported) {
     `**Preview chain.** For the initial release, Sauce supports transactions on ${names} only.`,
     `On ${chain.name} a program compiles and simulates (\`sauce compile\`, \`sauce simulate\`, the dry`,
     "runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,",
-    "`sauce run`, `sauce pot --deploy` and the intent steps sent here are",
+    "`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are",
     "refused, naming the supported chains and how to request this one.",
     "",
     `To request ${chain.name}, look for [its existing request](${chain.request.searchUrl}) and add your`,
@@ -1373,6 +1386,8 @@ function renderDeploymentsPage(data) {
     `| Salt | \`${evm.intentPot.salt}\`: \`SAUCE_INTENT_POT_SALT\` |`,
     "",
     "The Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account.",
+    "[The destination Pot](../guides/intents.md#the-destination-pot) says who deploys it and what a",
+    "body may leave in it.",
     "",
     "## Solana",
     "",
@@ -1686,6 +1701,7 @@ export function renderSkillsReferences(data) {
     ...renderGlobals(data),
     [site.chainIndex]: renderChainIndex(data, site),
     [site.protocolIndex]: renderProtocolIndex(data, site),
+    [INTENT_DEFAULTS_SKILL]: renderIntentDefaults(data),
     [site.deployments]: renderDeploymentsJson(data),
   };
   for (const chain of data.chains) {
@@ -1697,6 +1713,60 @@ export function renderSkillsReferences(data) {
     files[site.protocol(p.slug)] = renderProtocolRegistry(p, data, site);
 
   return files;
+}
+
+// ---- An intent's defaults: one table, for the skill and the manual ------------------------------
+
+/** The skill's copy of the defaults table, and the manual's. */
+const INTENT_DEFAULTS_SKILL = "sauce-intents/references/defaults.md";
+const INTENT_DEFAULTS_DOCS = "intent-defaults.md";
+
+/**
+ * What each of a hop's fields is when it is left out — `Chain.hop({ send, receive, refundee, … })`
+ * — and why, as one table both audiences read. From the SDK's constants, so a
+ * changed window changes both.
+ */
+function renderIntentDefaults(data) {
+  const { fill, refund } = data.intentDefaults;
+  const days = Number(refund) / 86_400;
+
+  return [
+    HEADER,
+    "",
+    "# Intent defaults",
+    "",
+    "An intent opened with `Chain.hop({ send, receive, refundee }).then(…)` may give each of these",
+    "fields in the same object. Left out, each but the refundee is what Eco's Portal app gives an",
+    "intent:",
+    "",
+    "| Field | Sets | Left out |",
+    "| --- | --- | --- |",
+    "| `refundee` | The refund address: who may reclaim what was sent, unearned, where an unfilled intent's `send` goes | Required on every intent, at any depth |",
+    "| `receive` | What the solver delivers on the destination, for the body: `{ token, amount }` or a list | Nothing delivered |",
+    `| \`deadline\` | The last second the intent may be filled, Unix seconds | ${fill} seconds (${Number(fill) / 60} minutes) after the intent opens, the window Eco's solver quotes |`,
+    `| \`rewardDeadline\` | From when what was sent, if no fill is proven, may be refunded to the refundee (the Portal reward's deadline) | ${refund} seconds (${days} days) after the fill deadline: Eco's solver fills no intent whose reward is refundable sooner |`,
+    "| `prover` | The source chain's prover, which accepts the proof of the fill | The one the registry records on both chains, the HyperProver first |",
+    "| `salt` | The route's salt: two otherwise identical intents differ by it | 32 random bytes, as Eco's app picks, mixed with how many intents the transaction has opened, so two intents built alike are two, in one program or in two |",
+    "| `fee` | The destination Kitchen's fee, in wei, that the body's cook pays | That Kitchen's fee, read from it when the intent is built, for each destination |",
+    "| `{ native: amount }` in `send` | Native coin sent, in wei | None |",
+    "",
+    "**The refundee has no default.** An intent is published by a program a Pot runs, and the Pot may",
+    "be shared, so a refund there could go to anyone: every intent, the one a file opens itself and",
+    "every one a body opens below it, names its own `refundee`, usually one of `main`'s parameters",
+    "(`refundee: refundTo`), or the compile refuses it. Nothing stands in for it, not even the wallet",
+    "that sends the cook.",
+    "",
+    "**An intent opens when it is built.** The `sauce` command and its MCP server build the intents a",
+    "file opens once per run (`sauce intent publish`, `sauce run`), with one time and one random salt",
+    "for the run, so each run builds new intents unless `--intent-deadline` and `--intent-salt` are",
+    "given. Compiled with no such time, an intent opens when the program that opens it runs, at",
+    "`ctx.timestamp()`; an intent a body opens, one level down, always opens when that body runs.",
+    "",
+    "A field's value may be one the program computes as it runs, such as",
+    "`deadline: ctx.timestamp() + 3600`. Only the `sauce` command and its MCP server read a Kitchen,",
+    "so compiled any other way, every hop needs a `fee`: its body is a program, whose cook pays it.",
+    "",
+  ].join("\n");
 }
 
 // ---- The manual's reference -------------------------------------------------------------------------
@@ -1928,6 +1998,7 @@ export function renderDocsReference(data, skillFiles) {
     [site.protocolIndex]: renderProtocolIndex(data, site),
     [site.deployments]: renderDeploymentsPage(data),
     "tokens.md": renderTokens(data, skillFiles.globals),
+    [INTENT_DEFAULTS_DOCS]: renderIntentDefaults(data),
     // Byte for byte below its note: its anchors are the skill's, and it links nothing outside itself.
     "saucescript.md": `${copiedFrom(BUILTINS)}\n\n${skillFiles.builtins}`,
     // A how-to rather than a reference, so it sits among the guides; this generator owns it.

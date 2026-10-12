@@ -1,6 +1,6 @@
 # Actions
 
-[Documentation](../README.md) · [Compiling](compiling.md) · [Protocols and tokens](protocols-and-tokens.md)
+[Documentation](../README.md) · [Intents](intents.md) · [Nested intents](nested-intents.md) · [Compiling](compiling.md)
 
 An **action** is one protocol operation written as data: swap on a Uniswap V3 pool, supply to Aave, bridge through Across, wrap ETH. An **action program** is an ordered list of actions. `@eco-incorp/sauce/actions` compiles it, for a chain, into one Sauce program that executes, atomically, in a Pot on that chain.
 
@@ -216,7 +216,7 @@ An action's output is one of:
 - **its amount** — the amount the action spent, unchanged: transfers, approvals, supplies, borrows, repayments, bridges, WETH wrapping.
 - **the value read** — for a source action.
 
-When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "self"` to keep an unspent output in the Pot.
+When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "self"` to keep an unspent output in the Pot, for example for an intent the program's body opens with it.
 
 ### Source actions
 
@@ -238,6 +238,15 @@ A source action whose value nothing reads is an error.
   }
 ]
 ```
+
+## Run a program as an intent's body
+
+An action program has no action that opens an intent. To run one on another chain, write the intent
+in SauceScript and put the program's statements in its body: `sauce actions file.json --chain
+<destination>` prints the SauceScript the document lowers to, whose `main` body is the statements
+and whose imports go at the top of the file that opens the intent. Everything in
+[creating an intent](intents.md) applies: the body runs on the destination's shared Pot, its own
+statements move what was delivered, and its cook pays the Kitchen fee.
 
 ## Runtime amounts
 
@@ -264,6 +273,9 @@ export function reusableApproval(chain: string) {
 ```
 
 Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(name)` is where it starts in the payload. With `compileProgram(program, { chain, compactArgs: true })` they are compact-v1, which is smaller; pass `{ scalarWidth: 32 }` to `payload` to encode every number at a fixed width, so `argumentOffset(name, { scalarWidth: 32 })` locates it. A fixed offset is what lets a caller splice a number measured later into a payload built earlier. The [compiler guide](compiling.md#pass-arguments-with-compact-v1) describes both encodings. On the command line, `sauce tx|simulate|run` take the arguments after `--args`, in the order the `argument` actions declare them.
+
+Inside an intent's body there are no arguments: read a runtime amount on-chain with `balanceOf`
+instead.
 
 ## Quotes and split swaps
 

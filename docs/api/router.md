@@ -253,7 +253,7 @@ which are the program globals of those names, and three may name their pool by k
 
 ## Compile it yourself
 
-`compileSauceRoute`, `compileSauceProgram` and the actions package resolve `@sauce/router`
+`compileSauceRoute`, `compileSauceProgram`, a TypeScript intent and the actions package resolve `@sauce/router`
 with no option. A raw `compile()` resolves it through the SDK's own resolvers, which serve the
 library, the `@sauce/token` it imports and the pool ABIs it binds from memory:
 

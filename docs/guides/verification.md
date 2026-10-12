@@ -1,6 +1,6 @@
 # Verifying settlement programs
 
-[Documentation](../README.md) · [Routes](../api/routes.md) · [Compiler API](../api/compiler.md)
+[Documentation](../README.md) · [Intents](intents.md) · [Compiler API](../api/compiler.md)
 
 Somebody hands you an intent and says it settles a swap to your address. These helpers answer one
 question about it: **is the program inside really the settlement program, and with what parameters?**

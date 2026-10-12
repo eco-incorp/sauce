@@ -43,7 +43,6 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
-import { v12EngineAddress } from "../src/deployments/v12-addresses.js";
 import { destinationExecutionFee } from "../src/evm/execution-fee.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import {
@@ -52,7 +51,8 @@ import {
   ecoRoutesPortal,
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
-import { EVM_ROUTE_PARAM } from "../src/routes/encode.js";
+import { EVM_ROUTE_PARAM, encodeRouteEvm, hashIntent } from "../src/routes/encode.js";
+import { assembleIntent } from "../src/routes/intent.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import {
@@ -61,12 +61,16 @@ import {
   fulfillApprovalTxs,
   hyperlaneProverData,
   isIntentFundedCall,
+  predictIntentVault,
   proverFeeCall,
   provenIntentCall,
   withdrawTx,
   type PortalTx,
 } from "../src/routes/portal.js";
 import { sauceEvmDeployPotCall } from "../src/routes/sauce-calls.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { requireChain } from "../src/chains/canonical.js";
+import { v12EngineAddress } from "../src/deployments/index.js";
 import { Base, Ethereum } from "../src/index.js";
 import {
   describeEvm,
@@ -425,6 +429,103 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(await ethereum.balanceOf(ethereumUsdc, SOLVER.address)).toBe(before + REWARD);
   }, 240_000);
 
+  it("the nested-intents guide's file: published on Ethereum, its body opens the next on Base", async () => {
+    // docs/examples/nested-intent.sauce.ts, as written: all SauceScript, opened on Ethereum, its
+    // main's arguments given with --args as the guide gives them.
+    const nested = fileURLToPath(
+      new URL("../../docs/examples/nested-intent.sauce.ts", import.meta.url),
+    );
+    const store = mkdtempSync(join(work, "store-"));
+    const send = ["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"];
+    const pot = destinationPot("base");
+    expect(await base.balanceOf(baseUsdc, pot)).toBe(0n);
+
+    // ---- Ethereum: the creator publishes the outer intent from a wallet -----------------------
+    await ethereum.mint(ethereumUsdc, OWNER.address, REWARD);
+    const start = [await now(base), await now(ethereum)].reduce((a, b) => (a > b ? a : b));
+    const flags = [
+      ...["intent", "publish", nested, "--chain", "ethereum"],
+      ...["--intent-deadline", String(start + 3600n)],
+      ...["--intent-reward-deadline", String(start + 7200n)],
+      ...["--intent-execution-fee", String(FEE), "--intent-salt", `0x${"00".repeat(32)}`],
+      ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, ...FUNDED],
+      ...["--args", RECIPIENT, String(AMOUNT), String(REWARD), OWNER.address],
+    ];
+    // Rehearsed first: the intent the dry run reads from the Portal's log is the one that is sent.
+    const rehearsed = jsonOf(await sauce(...flags, "--dry-run", "--json"));
+    const published = jsonOf(await sauce(...flags, "--store", store, "--json"));
+    const outer = (published.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+    expect((rehearsed.intents as Array<{ intentHash: Hex }>).map((one) => one.intentHash)).toEqual([
+      outer,
+    ]);
+
+    // ---- Base: a solver fills it; the body publishes the inner one with what it delivered ------
+    await base.mint(baseUsdc, SOLVER.address, AMOUNT);
+    const filled = jsonOf(await lifecycle("fill", outer, store, ...send));
+    const fulfil = (
+      filled.intents as Array<{ transactions: Array<{ kind: string; hash: Hex }> }>
+    )[0]!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
+    expect(await base.balanceOf(baseUsdc, pot)).toBe(0n);
+    const imported = jsonOf(
+      await sauce(
+        ...["intent", "import", fulfil, "--chain", "base"],
+        ...["--config", config, "--store", store, "--json"],
+      ),
+    );
+    const [inner] = imported.intents as Array<{
+      record: {
+        intentHash: Hex;
+        destination: { chainId: number };
+        route: { deadline: string };
+        reward: {
+          deadline: string;
+          creator: string;
+          prover: string;
+          tokens: Array<{ token: string; amount: string }>;
+        };
+      };
+    }>;
+    // The whole delivery became its reward, in Base's USDC, escrowed on Base. Its deadlines are the
+    // flags', as every level's are, and its creator the `refundTo` it names; its prover is the
+    // registry's for Base to Ethereum, which is Base's own HyperProver.
+    expect(inner!.record.destination.chainId).toBe(1);
+    expect(inner!.record.route.deadline).toBe(String(start + 3600n));
+    expect(inner!.record.reward.deadline).toBe(String(start + 7200n));
+    expect(getAddress(inner!.record.reward.creator)).toBe(OWNER.address);
+    expect(getAddress(inner!.record.reward.prover)).toBe(
+      getAddress(ecoRoutesProver("base", "ethereum")),
+    );
+    expect(inner!.record.reward.tokens.map((t) => [getAddress(t.token), BigInt(t.amount)])).toEqual(
+      [[baseUsdc, AMOUNT]],
+    );
+    const status = jsonOf(await lifecycle("status", inner!.record.intentHash, store, "--json"));
+    expect((status.intents as Array<{ status: { state: string } }>)[0]!.status.state).toBe(
+      "funded",
+    );
+
+    // ---- Ethereum: a solver fills the inner one, in Ethereum's USDC, less the tenth of a percent
+    const payout = AMOUNT - AMOUNT / 1000n;
+    await ethereum.mint(ethereumUsdc, SOLVER.address, payout);
+    const paid = await ethereum.balanceOf(ethereumUsdc, RECIPIENT);
+    const innerFill = jsonOf(await lifecycle("fill", inner!.record.intentHash, store, ...send));
+    expect(await ethereum.balanceOf(ethereumUsdc, RECIPIENT)).toBe(paid + payout);
+
+    // ---- Its proof reaches Base's HyperProver, the prover the lowering chose for that level ----
+    const innerFulfil = (
+      innerFill.intents as Array<{ transactions: Array<{ kind: string; hash: Hex }> }>
+    )[0]!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
+    expect(await relay(ethereum, ethereumMailbox, innerFulfil, base, baseMailbox)).toBe(1);
+    const before = await base.balanceOf(baseUsdc, SOLVER.address);
+    const claimed = await lifecycle(
+      "claim",
+      inner!.record.intentHash,
+      store,
+      ...["--private-key", SOLVER_KEY, "--json"],
+    );
+    expect(claimed.code).toBe(0);
+    expect(await base.balanceOf(baseUsdc, SOLVER.address)).toBe(before + AMOUNT);
+  }, 240_000);
+
   it("a dry run reads the intent the cook then publishes, and its record is the store's", async () => {
     const store = mkdtempSync(join(work, "store-"));
     const start = await now(base);
@@ -550,6 +651,73 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(getAddress(published!.args.creator)).toBe(SOLVER.address);
     expect(route.deadline >= before + 300n && route.deadline <= after + 300n).toBe(true);
     expect(published!.args.rewardDeadline).toBe(route.deadline + 604_800n);
+  }, 240_000);
+
+  it("sauce-intents' fund-by-transfer publishes an intent built elsewhere, funded from a Pot", async () => {
+    // The skill's file as written: the vault read and the publish go through the registry's Portal
+    // by name, so nothing names the Portal here either.
+    const program = fileURLToPath(
+      new URL("../../skills/sauce-intents/examples/fund-by-transfer.sauce.ts", import.meta.url),
+    );
+    const start = await now(ethereum);
+    // An intent encoded by something other than the program that publishes it.
+    const { calls } = compileSauceRoute("base", "function main() { return 1n; }", {
+      pot: destinationPot("base"),
+      engine: v12EngineAddress() as Hex,
+      value: FEE,
+    });
+    const intent = assembleIntent(
+      requireChain("ethereum"),
+      requireChain("base"),
+      {
+        salt: `0x${"f0".repeat(32)}`,
+        deadline: start + 3600n,
+        portal: ecoRoutesPortal("base"),
+        nativeAmount: FEE,
+        tokens: [],
+        calls,
+      },
+      {
+        deadline: start + 7200n,
+        creator: OWNER.address,
+        prover: ecoRoutesContract("ethereum", "HyperProver"),
+        tokens: [{ token: ethereumUsdc, amount: REWARD }],
+      },
+    );
+    const { reward } = intent;
+    const rewardJson = JSON.stringify({
+      deadline: reward.deadline.toString(),
+      creator: OWNER.address,
+      prover: getAddress(ecoRoutesContract("ethereum", "HyperProver")),
+      nativeAmount: "0",
+      tokens: [{ token: ethereumUsdc, amount: REWARD.toString() }],
+    });
+    // The owner's Pot holds the reward it pays into the vault.
+    const pot = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
+    await ethereum.mint(ethereumUsdc, pot, REWARD);
+
+    const run = jsonOf(
+      await sauce(
+        ...["run", program, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
+        ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
+        ...["--args", "8453", encodeRouteEvm(intent.route), rewardJson],
+      ),
+    );
+    const { hash } = (run as { cook: { hash: Hex } }).cook;
+    const receipt = await ethereum.publicClient.getTransactionReceipt({ hash });
+    const [published] = parseEventLogs({
+      abi: PortalABI,
+      logs: receipt.logs,
+      eventName: "IntentPublished",
+    });
+    expect(published!.args.intentHash).toBe(hashIntent(intent).intentHash);
+    const portal = { portal: ecoRoutesPortal("ethereum") };
+    const funded = isIntentFundedCall(intent, portal);
+    const answer = await ethereum.publicClient.call({ to: funded.to, data: funded.data });
+    expect(funded.decode(answer.data!)).toBe(true);
+    const vault = predictIntentVault(intent, portal) as Address;
+    expect(await ethereum.balanceOf(ethereumUsdc, vault)).toBe(REWARD);
+    expect(await ethereum.balanceOf(ethereumUsdc, pot)).toBe(0n);
   }, 240_000);
 
   it("publishes through publishAndFund with --intent-fund-via, recorded Funded", async () => {

@@ -24,7 +24,7 @@ A namespace is its protocol's slug in PascalCase, a contract its role in the pro
 [Names](../guides/protocols-and-tokens.md#names) has the rules, and each protocol's page in the
 [reference](../reference/protocols.md) the names they give. `contracts.deriveContractName` derives an
 interface's name from its ABI export. No protocol, family, token or venue name can collide with a
-chain export's own `chain`, or a function property: composing the export refuses it.
+chain export's own `route`, `chain`, or a function property: composing the export refuses it.
 
 ## TypeScript: chain exports
 
@@ -32,6 +32,8 @@ chain export's own `chain`, or a function property: composing the export refuses
 
 | Property           | What it is                                                                                                                                                                                            |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Base.hop`         | Opens an intent on Base, `Base.hop({ source, send, receive, refundee }).then(body)`; see [routes](routes.md#a-hop)                                                                                    |
+| `Base.Portal`      | Base's eco-routes Portal contract, `Base.EcoRoutes.Portal`                                                                                                                                            |
 | `Base.chain`       | The chain record; see [routes](routes.md#chain-entry-points)                                                                                                                                          |
 | `Base.<Symbol>`    | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |
 | `Base.<Namespace>` | A protocol or family namespace, typed by the generated `contracts.ChainContracts`                                                                                                                     |
