@@ -66,6 +66,15 @@ describe("local()", { skip: anvilMissing() }, () => {
     assert.equal(result.returned, 8453n);
   });
 
+  it("returns a string as the string main returned", async () => {
+    for (const text of ["123", "007"]) {
+      const result = await chain.run({
+        source: `function main(): string {\n  return "${text}";\n}\n`,
+      });
+      assert.equal(result.returned, text);
+    }
+  });
+
   it("runs a program's imports as they are now, not as they were first compiled", async () => {
     const dir = mkdtempSync(join(tmpdir(), "sauce-testing-imports-"));
     const answer = (value: number) =>
