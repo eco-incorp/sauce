@@ -1,0 +1,81 @@
+{
+  "abi": [
+    {
+      "name": "maxGasLimit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "gasCostConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "nativeUsdFeed",
+          "type": "address"
+        },
+        {
+          "name": "nativeStaleThreshold",
+          "type": "uint64"
+        },
+        {
+          "name": "tokenUsdFeed",
+          "type": "address"
+        },
+        {
+          "name": "tokenStaleThreshold",
+          "type": "uint64"
+        },
+        {
+          "name": "scalingFactor",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "CallbackFailed",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "returnData",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "NoCallbackContract",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidPriceFeedData",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "StalePriceFeedData",
+      "inputs": []
+    }
+  ]
+}

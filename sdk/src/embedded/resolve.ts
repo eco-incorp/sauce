@@ -28,6 +28,7 @@ const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/router": "router",
   "@sauce/hop": "hop",
   "@sauce/async": "async",
+  "@sauce/zk": "zk",
 };
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */

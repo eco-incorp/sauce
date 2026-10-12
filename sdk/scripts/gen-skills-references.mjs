@@ -602,7 +602,9 @@ const CHOOSING = {
   oracle: [
     "Chainlink feeds are read on chain (`latestRoundData`): check `updatedAt` against a staleness",
     "bound and scale by the feed's decimals. Pyth is pulled: the price is updated in the same",
-    "transaction (`updatePriceFeeds`, paying its fee as value) before it is read.",
+    "transaction (`updatePriceFeeds`, paying its fee as value) before it is read. Space and Time",
+    "answers a SQL query over indexed chain data later, proven, by calling the requester back; a",
+    "program asks it with `@sauce/zk` (`sauce-zk`).",
   ],
   payments: [
     "Sablier locks tokens into a schedule a recipient withdraws from; Superfluid streams Super Tokens",
@@ -613,7 +615,10 @@ const CHOOSING = {
     "Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),",
     "ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,",
     "ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer",
-    "(`sauce-intents`).",
+    "(`sauce-intents`). Boundless is RISC Zero's proof market, on Base: it proves a guest program",
+    "ran and calls the requester back with its journal; a program waits on it with `@sauce/zk`",
+    "(`sauce-zk`). Succinct's SP1 verifier gateways check a proof that an SP1 program ran in the",
+    "same call, on Ethereum and Base, for a program that brings its proof with it.",
   ],
 };
 
@@ -723,6 +728,7 @@ const DOCS_FOR_SKILL = {
     "guides/solana-distributed-swap.md",
   ],
   "sauce-intents": ["intents", "guides/intents.md"],
+  "sauce-zk": ["proofs", "guides/async.md#proofs-saucezk"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],
   "sauce-actions": ["actions", "guides/actions.md"],

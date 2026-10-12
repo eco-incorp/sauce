@@ -1348,6 +1348,72 @@ too). Settling reads a continuation's revert (`catch (e)` that reads `e`, encode
 <len>`), so every settling case needs an engine built from the compiler's tree; the released v12-evm
 1.2.0 refuses it loudly, which the suite's one release case holds.
 
+**`@sauce/zk` is two coprocessors** (`src/std/zk/zk.evm.js`, skill `sauce-zk`), chosen after a
+survey of live ZK callbacks on Ethereum and Base: Axiom V2 is sunset (support ended 2024-12-21,
+nothing fulfilled since), Brevis has no Ethereum or Base deployment, Lagrange is dormant, Herodotus
+and Succinct have no callback.
+
+- **Space and Time** (`Zk.sql`, Ethereum and Base): asks `SpaceAndTime.QueryRouter` under the
+  version `keccak256("latest")` (a version the router has no entry for is read as a verifier
+  ADDRESS, so never name one), pays SXT through `@sauce/token`, and parks the promise under
+  `promiseKey(keccak256("sauce.zk.sql"), queryId)`; the handler (`sql.handler.js`,
+  `queryCallback(bytes32,bytes,bytes)`) takes calls from the `CallbackExecutor` only and `fulfil`s
+  by the query's id, so a stranger's query naming the Pot settles nothing. The query's timeout is
+  the promise's deadline, and `Zk.cancel(e)` cancels it for a `Timeout` from two words the Pot
+  keeps beside the promise (ERC-7201 `sauce.storage.Zk`).
+- **Boundless** (`Zk.risc0`, Base only): the program builds the market's `ProofRequest` (client and
+  callback the Pot, id `1 << 192 | pot << 32 | index`), hashes it as the market does (EIP-712 under
+  `eip712DomainSeparator()`) and approves the hash with `@sauce/async`'s `approveHash`, which the
+  Pot's one ERC-1271 handler (`@sauce/async/erc1271.handler.js`, declared READ-ONLY in the
+  package's manifest) answers for in about 38k of the market's 100k-gas STATICCALL; so only the
+  Pot's own requests can spend its market balance. An approval stays once the request settles: it
+  names one request of one market, locked once. The guest's
+  stdin is the request id then the input, its journal must begin with `sha256(stdin)` (a
+  `PrefixMatch` predicate), and the promise key is `promiseKey(keccak256("sauce.zk.risc0"),
+keccak256(abi.encode(imageId, digest)))`, which `handleProof` recomputes from the callback alone.
+  A request may instead name its `journal` (what Boundless's own guests commit, stated in advance):
+  then the stdin is the input alone, the predicate a `DigestMatch` on `sha256(journal)`, the key
+  `promiseKey(keccak256("sauce.zk.risc0.journal"), keccak256(abi.encode(imageId, sha256(journal))))`
+  — a tag of its own, so the two kinds of key never meet — and one such request per guest and
+  journal may be pending. `handleProof` looks for the named key first (Boundless's default, and the
+  cheaper callback: about 146k against the prefix kind's 165k), then the prefix one; a promise
+  found under neither is logged ignored under the prefix key when the journal has a word.
+  `Zk.reclaim(e)` slashes and withdraws after the deadline. The two have separate cancel methods so
+  a program names only the contracts of the coprocessor it asks: a library module cannot name a
+  namespace the chain lacks (it is "not a declared variable" there, where a program folds it to
+  zero), and a module-constant instance cannot record what a program asked.
+
+Each request lists the handlers its callback reaches, installed lazily (`@sauce/async`'s
+`Handler`): `Zk.sql` the executor's `queryCallback`, `Zk.risc0` the market's `handleProof` and
+`Erc1271.handler()`, with the core's `expire` for their deadlines. `compile.test.ts` holds each
+Handler's program to the package's handler file byte for byte, so a Pot pre-warmed with `sauce run
+@sauce/zk` holds the very code a request checks for; the suites start from a bare Pot.
+
+The suites (`test/std/zk/sql.e2e.test.ts`, `risc0.e2e.test.ts`) run each protocol's own contracts:
+Space and Time's deployed by replaying their creation transactions at the deployer's nonces
+(`fixtures/SpaceAndTime.json`), Boundless's market as its captured proxy, implementation, legacy
+implementation and ZKC (`fixtures/Boundless.json`); only the proof is mocked (Space and Time's
+verifier, Boundless's router) and Ethereum's two Chainlink feeds. They also run the skill's ports of
+the protocols' own examples (`hello-world`, `even-number`, `counter`, each headed `// Ported from:`):
+`hello-world` is given the answer Space and Time's tutorial query got on Ethereum and must log the
+tutorial contract's own event byte for byte (`helloWorld` in `SpaceAndTime.json`). The manual quotes
+the ports and counts their lines; `compile.test.ts` holds both to the files.
+
+**A proof that comes with the call is the registry's `succinct`**, not `@sauce/zk`: Succinct's SP1
+verifier gateways (`Succinct.VerifierGatewayGroth16`/`VerifierGatewayPlonk`, Ethereum and Base)
+check it synchronously, and the program acts on the public values in the same cook — the
+`fibonacci` port of `succinctlabs/sp1-project-template`. `sp1.e2e.test.ts` runs with nothing
+mocked, on the released Router (it installs no handler: `describeOnEngine`), against the gateway's
+and two verifiers' runtimes and the gateway's route words captured from both chains
+(`fixtures/Succinct.json`). Its main case is a live proof (`live`: one SP1ICS07Tendermint had the
+gateway verify on Ethereum, read from the transaction's trace) verified through the live route
+with no state changed. The template's own Groth16 fixture is SP1 v6.0.0, whose route Succinct froze
+on both chains (Base block 52,444,424), so the suite holds both: refused `RouteIsFrozen` as the
+chain holds the route, verified (fib(20)) with only the frozen flag cleared. Skills say "the
+template's current fixture targets a frozen verifier route", naming no version.
+The ABI leaves out `RouteNotFound(bytes4)`: the code pushes its selector shifted right one bit
+(`PUSH4 0x79043bbf`, `SHL 225`), which the evidence capture does not read.
+
 ## Agent skills
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`

@@ -216,6 +216,8 @@ address.
 | [Silo](../../sauce-protocols/references/registry/silo.md) | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` | `Silo.SiloRepository` |
 | [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
 | [Sommelier](../../sauce-protocols/references/registry/sommelier.md) | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366d8f2` | `Sommelier.CellarRouter` |
+| [Space and Time](../../sauce-protocols/references/registry/space-and-time.md) | callbackExecutor | `0xaCf075862425A0c839844369ac20e334B3710e47` | `SpaceAndTime.CallbackExecutor` |
+| [Space and Time](../../sauce-protocols/references/registry/space-and-time.md) | queryRouter | `0x220a7036a815a1Bd4A7998fb2BCE608581fA2DbB` | `SpaceAndTime.QueryRouter` |
 | [Spark](../../sauce-protocols/references/registry/spark.md) | pool | `0xC13e21B648A5Ee794902342038FF3aDAB66BE987` | `Spark.Pool` |
 | [Spark](../../sauce-protocols/references/registry/spark.md) | poolAddressesProvider | `0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE` | `Spark.PoolAddressesProvider` |
 | [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
@@ -224,6 +226,8 @@ address.
 | [Stargate](../../sauce-protocols/references/registry/stargate.md) | poolNative | `0x77b2043768d28E9C9aB44E1aBfC95944bcE57931` | `Stargate.PoolNative` |
 | [Stargate](../../sauce-protocols/references/registry/stargate.md) | poolUSDC | `0xc026395860Db2d07ee33e05fE50ed7bD583189C7` | `Stargate.PoolUSDC` |
 | [Stargate](../../sauce-protocols/references/registry/stargate.md) | poolUSDT | `0x933597a323Eb81cAe705C5bC29985172fd5A3973` | `Stargate.PoolUSDT` |
+| [Succinct SP1](../../sauce-protocols/references/registry/succinct.md) | verifierGatewayGroth16 | `0x397A5f7f3dBd538f23DE225B51f532c34448dA9B` | `Succinct.VerifierGatewayGroth16` |
+| [Succinct SP1](../../sauce-protocols/references/registry/succinct.md) | verifierGatewayPlonk | `0x3B6041173B80E77f038f3F2C0f9744f04837185e` | `Succinct.VerifierGatewayPlonk` |
 | [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
 | [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | factory | `0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac` | `SushiswapV2.Factory` |

@@ -171,3 +171,215 @@ once per Pot, by CREATE2 at an address its bytes decide, and shared by every req
 to it. Settling clears the word. A carried `.then` stores nothing. A combinator parks a word of its
 own and one per child, and keeps each child's value until it is decided: a value of a word or less
 in a storage slot, a longer one as code, which costs a CREATE2 but less for each further word.
+
+## Proofs: `@sauce/zk`
+
+`@sauce/zk` asks a ZK coprocessor a question now and hands its proven answer to `.then`. It speaks
+two: Space and Time, on Ethereum and Base, answers a SQL query over its indexed copies of chains,
+proven with Proof of SQL, which its QueryRouter verifies before its CallbackExecutor calls the Pot
+back; Boundless, on Base, proves a RISC Zero guest program ran on an input, which its market
+verifies before it calls the Pot back with the guest's journal.
+
+```js
+import { Zk } from "@sauce/zk";
+
+function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Address, amount: Uint256) {
+  Zk.sql({ query: plan, payment })
+    .then((result) => {
+      require(Zk.cell(result, 0, 0) >= minimum, "below the minimum");
+      evm.call(recipient, amount, hex``);
+    })
+    .catch((e) => {
+      Zk.cancel(e);
+    });
+}
+```
+
+- **The query** is a proof plan, the bytes Space and Time's RPC method
+  `commitments_v1_evmProofPlan` gives for the SQL, passed to `main`. `Zk.sql` asks it under the
+  `"latest"` version, the QueryRouter's own verifier. Its other fields are `parameters`,
+  `metadata`, `timeout` (3600 seconds), `gasLimit` (1,000,000) and `maxGasPrice`.
+- **The payment** is in SXT, the token `SpaceAndTime.QueryRouter.PAYMENT_TOKEN()` names, at least
+  the router's `baseCost()`; the Pot holds it, and approves the router for it. The fulfiller is
+  paid the base cost and, on Ethereum, the callback's gas; the rest comes back to the Pot.
+- **The result** is Proof of SQL's table. `Zk.cell(result, column, row)` reads a value of a
+  fixed-width column as an unsigned number (a negative BIGINT as its two's complement in 8 bytes),
+  `Zk.text(result, column, row)` the bytes of a VARCHAR or VARBINARY value, and `Zk.rows(result)`
+  counts the rows.
+- **The timeout.** Only Space and Time's fulfiller answers queries, and it may not answer one. A
+  query's promise expires at its timeout: anyone may then call the Pot's `expire(key)`, its
+  `.catch` runs, and `Zk.cancel(e)` there cancels the query and takes its payment back. If the
+  router refuses the cancellation, the Pot keeps the query's record, and a later program may call
+  `Zk.cancel` again with the same reason.
+- **The checks.** The handler takes calls only from the chain's CallbackExecutor, and settles only
+  the promise under a query id the Pot asked: a query someone else asked naming the Pot settles
+  nothing. The first query installs the handler on the Pot, and with it the public `expire`;
+  `sauce run @sauce/zk --chain base --wallet <name>` installs them beforehand, an optional pre-warm.
+
+Reading a result costs gas (a four-column result read once took about 250,000 of the callback's
+gas), and the Pot keeps a query's id and payment in two words until its promise settles.
+
+`Zk.risc0({ imageId, imageUrl, input, offer })` asks Boundless instead:
+
+- **The request** is the market's own `ProofRequest`, the Pot its client and its callback. The
+  offer is the market's: `maxPrice` (wei, which the Pot deposits), `rampUpPeriod`, `lockTimeout`,
+  `timeout` and `lockCollateral` (the ZKC a prover locks), and `minPrice`. Any prover may lock it.
+- **The guest** reads the request's id, 32 bytes, then `input`, from stdin, and must commit the
+  sha256 of its whole stdin as the first 32 bytes of its journal. The body is handed the rest.
+- **A journal known in advance.** A guest that proves a claim about its input, as Boundless's own
+  examples do, commits an output the program can state: given as `journal`, the guest runs as
+  published, reading `input` alone, and the request asks for exactly that journal (a digest match,
+  as Boundless's own tooling asks). The body is handed the whole journal. The Pot keeps one such
+  request pending per guest and journal.
+- **The Pot signs its own requests.** A prover's lock asks the client `isValidSignature` (ERC-1271)
+  with 100,000 gas. The program hashes each request as the market does and approves the hash
+  (`Erc1271.approve`, above), and the Pot's one ERC-1271 handler answers yes for it, in about 38,000
+  gas, so nobody else's request can spend the Pot's balance at the market.
+- **The checks.** The callback carries no request id: the handler takes calls only from the market,
+  and settles the promise the proof's image id and its journal name (the journal's sha256 for a
+  request that named it, its first word for any other), so a proof of the same guest over another
+  input, or of another journal, settles nothing.
+- **The deadline.** At `timeout` the promise expires; `Zk.reclaim(e)` in its `.catch` slashes the
+  request if a prover locked it and failed (unless someone has already), and withdraws its price
+  once it is back in the Pot's balance at the market. If the market refuses either, the Pot keeps
+  the request's record, and a later program may call `Zk.reclaim` again with the same reason.
+
+### The protocols' own examples, ported
+
+Each coprocessor publishes an example consumer: a contract that asks, or an app that asks for it,
+and a callback or a call that uses the proven answer. Ported, each is one program that asks and
+acts on the answer in its `.then`, with no contract to deploy. The SDK's suites run each against
+the protocol's own contracts.
+
+| Example                                                                                                                                                                | The original, in lines of code                                     | Sauce |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----- |
+| Space and Time's tutorial: `spaceandtimefdn/sxt-chain-examples`, `contracts/src/HelloWorld/HelloWorld.sol` and its constants, `contracts/src/libraries/ProofOfSQL.sol` | 52 of Solidity                                                     | 14    |
+| Boundless's template: `boundless-xyz/boundless-foundry-template`, `contracts/src/EvenNumber.sol`, `IEvenNumber.sol` and the app, `apps/src/main.rs`                    | 25 of Solidity, and the app that asks and calls `set`, 106 of Rust | 23    |
+| Boundless's callback example: `boundless-xyz/boundless`, `examples/counter-with-callback`: `Counter.sol`, `ICounter.sol` and the app                                   | 30 of Solidity, and the app that asks, 89 of Rust                  | 25    |
+| Succinct's SP1 template: `succinctlabs/sp1-project-template`, `contracts/src/Fibonacci.sol`                                                                            | 24 of Solidity                                                     | 7     |
+
+Lines of code leave out blank lines, comments and the apps' tests. Each original's own contracts
+are counted; the protocols' interfaces and libraries they import (`IQueryRouter`, Proof of SQL's
+table decoder, `BoundlessMarketCallback`, `ISP1Verifier`) are the protocols', as `@sauce/zk` is the SDK's, and are
+counted on neither side.
+
+Space and Time's tutorial asks a query of a table its users created and logs each name in the
+answer. The Pot pays the SXT from its balance and takes back what the fulfiller is not paid;
+`payment` is an argument because the routers' base costs differ (100 SXT on Base, what the tutorial
+pays, and 1,000 on Ethereum); the query names the router's latest verifier, where the tutorial pins
+an earlier one's address; and the callback may use 300,000 gas, where the tutorial gives 100,000.
+Given the answer the tutorial's own query got on Ethereum, the Pot logs the event the tutorial's
+contract logged, byte for byte:
+
+```js
+import { Zk } from "@sauce/zk";
+
+// The query's proof plan, as Space and Time's RPC method `commitments_v1_evmProofPlan` gives it.
+const QUERY_PLAN = hex`0000000000000001000000000000003d5455544f5249414c5f414243384437303943383032363239363533343446353234304144313233463543424535313132332e48454c4c4f5f574f524c440000000000000002000000000000000000000000000000044e414d4500000007000000000000000000000000000000094c4f4e47495455444500000005000000000000000100000000000000044e414d45000000000000000000000000000000020000000000000000000000010000000100000005000000000000003c0000000000000001000000000000000000000000`;
+
+function main(payment: Uint256): void {
+  Zk.sql({ query: QUERY_PLAN, payment, gasLimit: 300000, maxGasPrice: 10 * 10 ** 9 })
+    .then((result) => {
+      const names = Zk.rows(result);
+      for (let i = 0; i < names; i += 1) {
+        log(abi.encode(Zk.text(result, 0, i)), crypto.keccak256("QueryFulfilled(string)"));
+      }
+    })
+    .catch((e) => {
+      Zk.cancel(e);
+    });
+}
+```
+
+Boundless's template proves a number even with its guest, `is-even`, which reads the number and
+commits it, and its contract keeps the number once its app calls `set` with the proof. The Pot asks
+for exactly that journal and keeps the number when the market calls back, so there is no `set` to
+send and no seal to verify again; the number is kept in the Pot's storage:
+
+```js
+import { Zk } from "@sauce/zk";
+
+function main(number: Uint256, imageId: Uint256, imageUrl: bytes, maxPrice: Uint256): void {
+  Zk.risc0({
+    imageId,
+    imageUrl,
+    input: abi.encode(number),
+    journal: abi.encode(number),
+    offer: {
+      maxPrice,
+      rampUpPeriod: 60,
+      lockTimeout: 900,
+      timeout: 1800,
+      lockCollateral: 15000000000000000000,
+    },
+  })
+    .then((journal) => {
+      const [even] = abi.decode(journal, ["Uint256"]);
+      evm.sstore(crypto.keccak256("EvenNumber.number"), even);
+    })
+    .catch((e) => {
+      Zk.reclaim(e);
+    });
+}
+```
+
+Boundless's callback example asks its `echo` guest to echo the time, with the counter as the
+request's callback, and counts each proof the market calls back with, keeping a table of proofs seen
+so none counts twice. The Pot counts each once because its promise settles once:
+
+```js
+import { Zk } from "@sauce/zk";
+
+function main(imageId: Uint256, imageUrl: bytes, maxPrice: Uint256): void {
+  const message = abi.encode(ctx.timestamp());
+  Zk.risc0({
+    imageId,
+    imageUrl,
+    input: message,
+    journal: message,
+    offer: {
+      maxPrice,
+      rampUpPeriod: 60,
+      lockTimeout: 900,
+      timeout: 1800,
+      lockCollateral: 15000000000000000000,
+    },
+    gasLimit: 300000,
+  })
+    .then((journal) => {
+      const count = crypto.keccak256("Counter.count");
+      evm.sstore(count, evm.sload(count) + 1);
+    })
+    .catch((e) => {
+      Zk.reclaim(e);
+    });
+}
+```
+
+Succinct's SP1 template is the other kind: its proof is made off chain beforehand and arrives with
+the call, and its contract checks it there through Succinct's SP1 verifier gateway, then returns the
+proven Fibonacci numbers. No request, callback or promise, and no `@sauce/zk`: the program calls the
+gateway, `Succinct.VerifierGatewayGroth16` on Ethereum and Base, which reverts unless the proof
+verifies, and returns what the proof shows. The verification key is a constant, where the template's
+contract takes it in its constructor:
+
+```js
+const FIBONACCI_PROGRAM_VKEY = 0x004a55ed3c7a07d0233a027278a8b7ff8681ffbd5d1ec4795c18966f6e693090;
+
+function main(publicValues: bytes, proof: bytes): { n: Uint256; a: Uint256; b: Uint256 } {
+  require(Succinct.VerifierGatewayGroth16);
+  Succinct.VerifierGatewayGroth16.verifyProof(FIBONACCI_PROGRAM_VKEY, publicValues, proof);
+  const [n, a, b] = abi.decode(publicValues, ["Uint256", "Uint256", "Uint256"]);
+  return { n, a, b };
+}
+```
+
+A proof's first four bytes name the SP1 version that made it, and the gateway refuses a version
+Succinct has frozen (`RouteIsFrozen`). The template as published produces proofs the live gateway
+refuses until it moves to a live version: its fixture is a proof of SP1 v6.0.0, whose routes
+Succinct has frozen on both chains, so through the gateway as the chain holds it the template's own
+proof is refused. With that one route as it stood before the freeze, the version's verifier checks
+the proof and the program returns 20, 6765 and 10946. The path that works today is a live version's
+proof: one that Cosmos IBC's SP1 light client had the gateway verify on Ethereum verifies inside a
+program of the same shape, trusting that app's key, through the live route as the chain holds it,
+and on Base's gateway too. A Groth16 verification costs about 226,000 gas.

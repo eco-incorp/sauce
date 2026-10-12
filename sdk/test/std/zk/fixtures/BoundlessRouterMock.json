@@ -1,0 +1,5 @@
+{
+  "source": "sdk/test/std/zk/fixtures/BoundlessRouterMock.sol",
+  "solc": "0.8.36+commit.8a079791 --optimize",
+  "runtime": "0x6080604052348015600e575f5ffd5b00fea2646970667358221220d1e841872068cba6e6dda2405ccc33434f34b8ca39a7412e4acb486c9c07fba164736f6c63430008240033"
+}

@@ -126,6 +126,7 @@ import { protocolInfo as kyberswapAggregator } from "./kyberswap-aggregator/info
 // Oracles
 import { protocolInfo as chainlink } from "./chainlink/info.js";
 import { protocolInfo as pyth } from "./pyth/info.js";
+import { protocolInfo as spaceAndTime } from "./space-and-time/info.js";
 
 // CDPs & Stablecoins
 import { protocolInfo as maker } from "./maker/info.js";
@@ -147,6 +148,8 @@ import { protocolInfo as seaport } from "./seaport/info.js";
 import { protocolInfo as gelato } from "./gelato/info.js";
 import { protocolInfo as erc3156Info } from "./erc3156/info.js";
 import { protocolInfo as instadappInfo } from "./instadapp/info.js";
+import { protocolInfo as boundless } from "./boundless/info.js";
+import { protocolInfo as succinct } from "./succinct/info.js";
 
 // Standards
 import { protocolInfo as erc20Info } from "./erc20/info.js";
@@ -286,6 +289,7 @@ export const protocols: Record<string, ProtocolInfo> = {
   // Oracles
   chainlink: chainlink,
   pyth: pyth,
+  "space-and-time": spaceAndTime,
 
   // CDPs & Stablecoins
   maker: maker,
@@ -307,6 +311,8 @@ export const protocols: Record<string, ProtocolInfo> = {
   gelato: gelato,
   erc3156: erc3156Info,
   instadapp: instadappInfo,
+  boundless: boundless,
+  succinct: succinct,
 
   // Standards
   erc20: erc20Info,
@@ -357,12 +363,15 @@ export * as compoundV3 from "./compound-v3/index.js";
 export * as oneInch from "./oneinch/index.js";
 export * as chainlink from "./chainlink/index.js";
 export * as pyth from "./pyth/index.js";
+export * as spaceAndTime from "./space-and-time/index.js";
 export * as permit2 from "./permit2/index.js";
 export * as safe from "./safe/index.js";
 export * as lido from "./lido/index.js";
 export * as eigenlayer from "./eigenlayer/index.js";
 export * as erc3156 from "./erc3156/index.js";
 export * as instadapp from "./instadapp/index.js";
+export * as boundless from "./boundless/index.js";
+export * as succinct from "./succinct/index.js";
 export * as perpetualProtocol from "./perpetual-protocol/index.js";
 export * as muxProtocol from "./mux-protocol/index.js";
 export * as aevo from "./aevo/index.js";

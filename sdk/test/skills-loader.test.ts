@@ -8,7 +8,7 @@
  */
 import { getProtocolIndex, getProtocolSkill, listSkillSlugs } from "../src/skills/loader.js";
 
-const SHIPPED_SLUG_COUNT = 134;
+const SHIPPED_SLUG_COUNT = 137;
 const NOT_FOUND = "Check listSkillSlugs() for valid slugs.";
 
 describe("getProtocolSkill: slug allowlist", () => {
