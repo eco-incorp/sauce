@@ -43,7 +43,6 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
-import { v12EngineAddress } from "../src/deployments/v12-addresses.js";
 import { destinationExecutionFee } from "../src/evm/execution-fee.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import {
