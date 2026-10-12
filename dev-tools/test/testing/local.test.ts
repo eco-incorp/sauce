@@ -164,6 +164,23 @@ describe("local()", { skip: anvilMissing() }, () => {
     }
   });
 
+  it("refuses to fund a token whose balance it cannot write, and writes nothing", async () => {
+    const holder = chain.account(1).address;
+    // A token whose balanceOf answers 5 to anyone: computed, held in no storage slot.
+    const computed = "0x00000000000000000000000000000000000000e3";
+    await chain.test.setCode({ address: computed, bytecode: "0x600560005260206000f3" });
+    await assert.rejects(
+      chain.fund(holder, { [computed]: 1n }),
+      /cannot fund .* with 0x0+e3: no storage slot of .* holds the balance/i,
+    );
+    assert.equal(await chain.balanceOf(holder, computed), 5n);
+
+    // A B20 token: a precompile of the Base node, whose account holds the one byte 0xef.
+    const b20 = "0x00000000000000000000000000000000000000e4";
+    await chain.test.setCode({ address: b20, bytecode: "0xef" });
+    await assert.rejects(chain.fund(holder, { [b20]: 1n }), /cannot fund .* is a B20 token/i);
+  });
+
   it("funds the native currency, snapshots and reverts, and moves time", async () => {
     const pot = chain.account(0).pot;
     await chain.snapshot();
