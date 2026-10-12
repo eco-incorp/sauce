@@ -126,6 +126,8 @@ import { protocolInfo as kyberswapAggregator } from "./kyberswap-aggregator/info
 // Oracles
 import { protocolInfo as chainlink } from "./chainlink/info.js";
 import { protocolInfo as pyth } from "./pyth/info.js";
+import { protocolInfo as chainlinkVrf } from "./chainlink-vrf/info.js";
+import { protocolInfo as pythEntropy } from "./pyth-entropy/info.js";
 
 // CDPs & Stablecoins
 import { protocolInfo as maker } from "./maker/info.js";
@@ -286,6 +288,8 @@ export const protocols: Record<string, ProtocolInfo> = {
   // Oracles
   chainlink: chainlink,
   pyth: pyth,
+  "chainlink-vrf": chainlinkVrf,
+  "pyth-entropy": pythEntropy,
 
   // CDPs & Stablecoins
   maker: maker,

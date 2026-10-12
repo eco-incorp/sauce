@@ -1,0 +1,166 @@
+{
+  "abi": [
+    {
+      "name": "s_config",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "minimumRequestConfirmations",
+          "type": "uint16"
+        },
+        {
+          "name": "maxGasLimit",
+          "type": "uint32"
+        },
+        {
+          "name": "reentrancyLock",
+          "type": "bool"
+        },
+        {
+          "name": "stalenessSeconds",
+          "type": "uint32"
+        },
+        {
+          "name": "gasAfterPaymentCalculation",
+          "type": "uint32"
+        },
+        {
+          "name": "fulfillmentFlatFeeNativePPM",
+          "type": "uint32"
+        },
+        {
+          "name": "fulfillmentFlatFeeLinkDiscountPPM",
+          "type": "uint32"
+        },
+        {
+          "name": "nativePremiumPercentage",
+          "type": "uint8"
+        },
+        {
+          "name": "linkPremiumPercentage",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "MAX_NUM_WORDS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "MAX_REQUEST_CONFIRMATIONS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "RandomWordsRequested",
+      "inputs": [
+        {
+          "name": "keyHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "requestId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "preSeed",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "subId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "minimumRequestConfirmations",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "callbackGasLimit",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "numWords",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "extraArgs",
+          "type": "bytes",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RandomWordsFulfilled",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "outputSeed",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "subId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "payment",
+          "type": "uint96",
+          "indexed": false
+        },
+        {
+          "name": "nativePayment",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "success",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "onlyPremium",
+          "type": "bool",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    }
+  ]
+}
