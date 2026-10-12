@@ -43,7 +43,7 @@ file links its own.
 | [Arc](arc.md) | `arc` | 5042 | EVM | preview | yes | 26 | 4 | 23 |
 | [ZetaChain](zetachain.md) | `zetachain` | 7000 | EVM | preview | no | — | 0 | 0 |
 | [Klaytn](klaytn.md) | `klaytn` | 8217 | EVM | preview | no | — | 0 | 0 |
-| [Base](base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 47 |
+| [Base](base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 48 |
 | [Evmos](evmos.md) | `evmos` | 9001 | EVM | preview | no | — | 0 | 0 |
 | [Plasma](plasma.md) | `plasma` | 9745 | EVM | preview | yes | — | 1 | 0 |
 | [Mode](mode.md) | `mode` | 34443 | EVM | preview | no | — | 0 | 2 |

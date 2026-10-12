@@ -40,7 +40,9 @@ import type { ChainName } from "./mainnet.js";
 import { balanceOf, setBalance } from "./swap-venues.js";
 
 const EXAMPLES = join(REPO_ROOT, "skills/sauce-examples/examples");
-const example = (name: string): string => join(EXAMPLES, `${name}.sauce.ts`);
+/** A cookbook example by name, or another skill's by its path from the repository's root. */
+const example = (name: string): string =>
+  name.startsWith("skills/") ? join(REPO_ROOT, name) : join(EXAMPLES, `${name}.sauce.ts`);
 
 /** The address a program compiled for `chain` names `name` by: the SDK's own define for it. */
 function named(chain: ChainName, name: string): Address {
@@ -492,6 +494,29 @@ describe(
           assert.ok(price > 1_000_000_000n && price < 10_000_000_000n, `price ${price}`);
         }
         assert.ok(gap(low, high) < 300n);
+      });
+    });
+
+    describe("data-feed (sauce-oracle): Chainlink's DataConsumerV3, ported, through sauce simulate", () => {
+      it("returns the ETH / USD feed's latest answer, as read directly", async () => {
+        const round = await ethereum.env.publicClient.readContract({
+          address: named("ethereum", "Chainlink_EthUsdFeed"),
+          abi: abi.feed,
+          functionName: "latestRoundData",
+        });
+
+        const read = await simulate(
+          ethereum,
+          "skills/sauce-oracle/examples/data-feed.sauce.ts",
+          [],
+        );
+        assert.equal(read.ok, true, read.reason);
+        assert.equal(read.returned, String(round[1]));
+        // A real ETH price, with the feed's 8 decimals.
+        assert.ok(
+          round[1] > 100_000_000_000n && round[1] < 1_000_000_000_000n,
+          `answer ${round[1]}`,
+        );
       });
     });
 

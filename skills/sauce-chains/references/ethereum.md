@@ -102,6 +102,7 @@ address.
 | [Celer Network](../../sauce-protocols/references/registry/celer.md) | bridge | `0x5427FEFA711Eff984124bFBB1AB6fbf5E3DA1820` | `Celer.Bridge` |
 | [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | ethUsdFeed | `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419` | `Chainlink.EthUsdFeed` |
 | [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | feedRegistry | `0x47Fb2585D2C56Fe188D0E6ec628a38b74fCeeeDf` | `Chainlink.FeedRegistry` |
+| [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | keystoneForwarder | `0x0b93082D9b3C7C97fAcd250082899BAcf3af3885` | `Chainlink.KeystoneForwarder` |
 | [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | vrfV2Coordinator | `0x271682DEB8C4E0901D1a1550aD2e64D568E69909` | `Chainlink.VrfV2Coordinator` |
 | [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0x80226fc0Ee2b096224EeAc085Bb9a8cba1146f7D` | `ChainlinkCcip.Router` |
 | [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |

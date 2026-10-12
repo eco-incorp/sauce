@@ -377,6 +377,20 @@ writing a package of the family.
   family, which its own section here or its `sauce-protocols` document covers.
 - **Asked as:** "Draw a random winner with Chainlink VRF and pay them when the number arrives."
 
+### `sauce-oracle`
+
+An answer from outside the chain: a program asks a Chainlink CRE workflow with `@sauce/oracle`
+(`Oracle.cre({ owner, args })`), and its `.then` runs on the Pot when the workflow's report
+arrives through Chainlink's forwarder. Covers the request log a workflow listens for, the report it
+writes, the workflow owner as who may answer, failures and deadlines reaching `.catch`, installing
+it on a Pot, and the gas a delivery needs.
+
+- **Holds** an example that pays USDC only if a workflow reports a price under a limit.
+- **Load it** when a program needs an API's answer, a computation or a fact the chain does not
+  have. Promises themselves, `.then`, `.catch`, deadlines and installing handlers, are
+  `sauce-async`'s.
+- **Asked as:** "Pay the invoice in USDC only if the ETH price my API reports is under 4,000."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

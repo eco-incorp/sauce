@@ -1,0 +1,60 @@
+{
+  "source": "sdk/test/std/oracle/fixtures/Erc165Probe.sol",
+  "solc": "0.8.36+commit.8a079791 --optimize",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes4",
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "name": "query",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "supported",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "gasUsed",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes4",
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "name": "supportsInterface",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "creationCode": "0x6080604052348015600e575f5ffd5b506102218061001c5f395ff3fe608060405234801561000f575f5ffd5b5060043610610034575f3560e01c8063cfdeaabc14610038578063d905700714610067575b5f5ffd5b61004b61004636600461017e565b61008a565b6040805192151583526020830191909152015b60405180910390f35b61007a61007536600461017e565b610124565b604051901515815260200161005e565b604080516001600160e01b031983166024808301919091528251808303909101815260449091019091526020810180516001600160e01b03166301ffc9a760e01b1790525f908190818080805a905060205f8651602088018c617530fa93503d92505f5191505a6100fb90826101cc565b955083801561010b575060208310155b801561011657505f82115b965050505050509250929050565b5f80610137846301ffc9a760e01b61008a565b5090505f61014d856001600160e01b031961008a565b5090505f61015b868661008a565b509050828015610169575081155b80156101725750805b93505050505b92915050565b5f5f6040838503121561018f575f5ffd5b82356001600160a01b03811681146101a5575f5ffd5b915060208301356001600160e01b0319811681146101c1575f5ffd5b809150509250929050565b8181038181111561017857634e487b7160e01b5f52601160045260245ffdfea26469706673582212205b593d990dd78204824b6709f8f817dbe6d4feffb4ea96aa7d3151841ac9e84d64736f6c63430008240033"
+}
