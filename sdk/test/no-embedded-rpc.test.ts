@@ -285,8 +285,9 @@ describe("the SDK ships no RPC endpoints", () => {
     // managers `sauce update` runs; runtime.ts: `npm ci` into a runtime folder. The three that reach
     // the npm registry, through npm and its user's configuration. update-check.ts: the update
     // check's refresh, a Node.js process of its own that reads it through `npm-registry.ts`.
-    // The testing kit (`/testing`, Node only): node.ts starts anvil, the chain a test runs on, and
-    // state.ts the recorder, a Node.js process of its own in front of the RPC the test names.
+    // The testing kit (`/testing`, Node only): node.ts starts anvil, the chain a test runs on (and
+    // asks netstat, ss or lsof what holds a port it refuses), and state.ts the recorder, a Node.js
+    // process of its own in front of the RPC the test names.
     const spawning = [...shipped]
       .filter(([, text]) => CHILD_PROCESS.test(text))
       .map(([file]) => file)

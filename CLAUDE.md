@@ -1368,12 +1368,15 @@ reverts, so the cook is sent anyway), and `returned` or the revert comes from
 `debug_traceTransaction` of that transaction, never from a rehearsal on the block before;
 `simulate` is the rehearsal. A Sauce `require`'s revert data is the message's own bytes, not
 `Error(string)`; `program.ts#reasonOf` reads both, and a called contract's `Error`/`Panic` comes
-back through the cook unchanged. `node.ts` (anvil) and `state.ts` (the recorder) are the only
-shipped modules beside the command's that start a process, which `no-embedded-rpc.test.ts` lists;
+back through the cook unchanged. `node.ts` starts anvil as `sdk/test/anvil-process.ts` does (a
+copy: the published kit cannot import a test, nor `sdk/src` hold `node:child_process`): a port that
+already answers is refused, naming its holder, and a node is handed back only once its own anvil
+answers. `node.ts` (anvil) and `state.ts` (the recorder) are the only shipped modules beside the
+command's that start a process, which `no-embedded-rpc.test.ts` lists;
 `optional-dependencies.test.ts` walks `/testing`'s graph with the other exports. The kit's suites
-(`test/testing/`, node:test) are `program.test.ts` (no chain), `local.test.ts`, `record.test.ts`
-(records from an anvil on the machine, then replays with it stopped) and Base replayed from
-`test/testing/state/base.json.gz`; record that again as the actions suites do
+(`test/testing/`, node:test) are `node.test.ts`, `program.test.ts` (no chain), `local.test.ts`,
+`record.test.ts` (records from an anvil on the machine, then replays with it stopped) and Base
+replayed from `test/testing/state/base.json.gz`; record that again as the actions suites do
 (`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`).
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
