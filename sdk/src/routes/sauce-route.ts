@@ -290,7 +290,8 @@ function chainModules(
         ...new Set([...chainAmbient(destination), ...(options.ambient ?? []), own, specifier]),
       ],
       defines: [
-        ...(toRsDefines({ ...engineDefine(destination, defines), ...defines }) ?? []),
+        ...(toRsDefines({ ...engineDefine(destination, defines), ...foreignDefines(defines) }) ??
+          []),
         [CHAIN_DEFINE, String(destination.id)],
       ],
     };
@@ -312,8 +313,23 @@ function chainModules(
  */
 export const ASYNC_ENGINE_DEFINE = "SAUCE_ASYNC_ENGINE";
 /** `@sauce/async`'s constant that the program's sender set, to 1, once it read every handler the
- *  program installs in place on the Pot: the program then carries none of them. */
+ *  program installs on its own Pot in place there: the program then carries none of them. No scope
+ *  `program()` compiles sees it (`foreignDefines`), so a body or a continuation carries its own. */
 export const ASYNC_INSTALLED_DEFINE = "SAUCE_ASYNC_INSTALLED";
+
+/**
+ * The caller's defines as a scope `program()` compiles sees them: all but `SAUCE_ASYNC_INSTALLED`.
+ * A sender reads the handlers in place on the program's own Pot only, and a body runs on another
+ * chain's shared Pot (a continuation or a handler wherever its promise lands), where nothing says
+ * its handlers are installed: the same code at the same address proves nothing there. So every
+ * such scope carries the handlers it installs.
+ */
+function foreignDefines(defines: SauceCompileOptions["defines"]): SauceCompileOptions["defines"] {
+  if (defines === undefined || !(ASYNC_INSTALLED_DEFINE in defines)) return defines;
+  const { [ASYNC_INSTALLED_DEFINE]: _installed, ...rest } = defines;
+
+  return rest;
+}
 
 function engineDefine(
   chain: CanonicalChain,

@@ -649,7 +649,10 @@ export async function sentCook(
   input: CookInput,
   files: CliFiles,
 ): Promise<{ readonly cook: Cook; readonly input: CookInput; readonly notes: string[] }> {
-  const handlers = cook.program.handlers;
+  // The program's own handlers: those it installs on this Pot itself, outside any body or
+  // continuation. Only they are read here, and only the program is compiled knowing them in place;
+  // a body on another chain, or anything a promise runs later, carries its own (`foreignDefines`).
+  const handlers = cook.program.handlers.filter((handler) => handler.path.length === 0);
   if (handlers.length === 0) return { cook, input, notes: [] };
   const selectors = handlers.map((h) => toHex(h.selector, { size: 4 })).join(", ");
   if (!(await handlersInPlace(client, cook.pot, handlers))) {
