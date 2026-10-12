@@ -8,8 +8,10 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { gunzipSync } from "node:zlib";
+import { encodeFunctionData, type Address } from "viem";
 
 import { fork, local } from "../../src/testing/index.js";
+import { rpc } from "../../src/testing/node.js";
 import { anvilMissing, program } from "./support.js";
 
 describe("fork() records, then replays", { skip: anvilMissing() }, () => {
@@ -104,6 +106,58 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
     } finally {
       await upstream.stop();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("clears a live Kitchen's fee with zeroFee, as its owner, and stops being the owner", async () => {
+    const upstream = await local();
+    try {
+      // The chain runs the release with a fee, and a Kitchen owned by an address no node signs for.
+      const owner: Address = "0x00000000000000000000000000000000000000f5";
+      const kitchen = (functionName: string, args: readonly unknown[] = []) => ({
+        to: upstream.kitchen,
+        data: encodeFunctionData({
+          abi: upstream.stack.kitchenAbi,
+          functionName,
+          args: args as never,
+        }),
+      });
+      await upstream.impersonate(upstream.account(0).address, (send) =>
+        send(kitchen("transferOwnership", [owner])),
+      );
+      await upstream.impersonate(owner, async (send) => {
+        await send(kitchen("acceptOwnership"));
+        await send(kitchen("setExecutionFee", [7n]));
+      });
+      assert.equal(await upstream.executionFee(), 7n);
+      const block = Number(await upstream.client.getBlockNumber());
+
+      const kept = await fork("base", { block, rpcUrl: upstream.rpcUrl });
+      try {
+        assert.equal(kept.stack.origin, "live");
+        assert.equal(await kept.executionFee(), 7n);
+      } finally {
+        await kept.stop();
+      }
+
+      const cleared = await fork("base", { block, rpcUrl: upstream.rpcUrl, zeroFee: true });
+      try {
+        assert.equal(cleared.stack.origin, "live");
+        assert.equal(await cleared.executionFee(), 0n);
+        // A cook pays nothing beyond its own value.
+        assert.equal(
+          (await cleared.run(program("multiply"), { args: [6n, 7n, 100n] })).returned,
+          42n,
+        );
+        // The owner is no longer impersonated: the node refuses to send for it.
+        await assert.rejects(
+          rpc(cleared.rpcUrl, "eth_sendTransaction", [{ from: owner, ...kitchen("owner") }]),
+        );
+      } finally {
+        await cleared.stop();
+      }
+    } finally {
+      await upstream.stop();
     }
   });
 
