@@ -37,12 +37,12 @@ export interface AnvilProcess {
   stop(): Promise<void>;
 }
 
-/** Starts `anvil` with `args` (a port is added) and waits until it answers. */
+/** Starts `anvil` with `args` on `options.port` (a free one by default) and waits until it answers. */
 export async function startAnvil(
   args: readonly string[],
-  options: { binary?: string } = {},
+  options: { binary?: string; port?: number } = {},
 ): Promise<AnvilProcess> {
-  const port = await freePort();
+  const port = options.port ?? (await freePort());
   const url = `http://127.0.0.1:${port}`;
   const binary = options.binary ?? "anvil";
   const child = spawn(binary, ["--port", String(port), "--silent", ...args], {

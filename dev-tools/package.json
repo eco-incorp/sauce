@@ -26,7 +26,7 @@
     "start:fork": "./scripts/start-fork.sh",
     "stop": "./scripts/stop-local.sh",
     "sync-price": "npx tsx scripts/sync-price.ts",
-    "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts && npx tsx test/svm-local.test.ts && tsx --test --test-concurrency=1 test/testing/program.test.ts test/testing/local.test.ts test/testing/base.test.ts test/testing/record.test.ts",
+    "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts && npx tsx test/svm-local.test.ts && tsx --test --test-concurrency=1 test/testing/node.test.ts test/testing/program.test.ts test/testing/local.test.ts test/testing/base.test.ts test/testing/record.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.build.json --noEmit",
     "build": "tsc -p tsconfig.build.json && node -e \"require('fs').copyFileSync('src/testing/recorder.mjs', 'dist/testing/recorder.mjs')\""
   },
