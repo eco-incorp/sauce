@@ -10,6 +10,7 @@ import { after, before, describe, it } from "node:test";
 import { concat, encodeAbiParameters, numberToHex, size, toHex, type Hex } from "viem";
 
 import { CookReverted, local, type TestChain } from "../../src/testing/index.js";
+import { rpc } from "../../src/testing/node.js";
 import { anvilMissing, program } from "./support.js";
 
 describe("local()", { skip: anvilMissing() }, () => {
@@ -179,6 +180,39 @@ describe("local()", { skip: anvilMissing() }, () => {
     const b20 = "0x00000000000000000000000000000000000000e4";
     await chain.test.setCode({ address: b20, bytecode: "0xef" });
     await assert.rejects(chain.fund(holder, { [b20]: 1n }), /cannot fund .* is a B20 token/i);
+  });
+
+  it("impersonates an address only while its body runs, topping up one with too little", async () => {
+    const stranger = "0x00000000000000000000000000000000000000f2";
+    const recipient = "0x00000000000000000000000000000000000000f3";
+    // Not a dev account: the node sends for it only while it is impersonated.
+    const unsigned = () =>
+      rpc(chain.rpcUrl, "eth_sendTransaction", [{ from: stranger, to: recipient, value: "0x1" }]);
+    await assert.rejects(unsigned());
+
+    const hash = await chain.impersonate(stranger, async (send) => {
+      // It held nothing: given 1 ETH for its gas.
+      assert.equal(await chain.balanceOf(stranger, "ETH"), 10n ** 18n);
+      return send({ to: recipient, value: 1n });
+    });
+    const receipt = await chain.client.getTransactionReceipt({ hash });
+    assert.equal(receipt.from.toLowerCase(), stranger);
+    assert.equal(await chain.balanceOf(recipient, "ETH"), 1n);
+    await assert.rejects(unsigned());
+
+    // One that holds enough keeps what it holds; a send that reverts throws, and still ends it.
+    await chain.fund(stranger, { ETH: "5" });
+    const holding = await chain.balanceOf(stranger, "ETH");
+    const refuses = "0x00000000000000000000000000000000000000f4";
+    await chain.test.setCode({ address: refuses, bytecode: "0x60006000fd" });
+    await assert.rejects(
+      chain.impersonate(stranger, async (send) => {
+        assert.equal(await chain.balanceOf(stranger, "ETH"), holding);
+        await send({ to: refuses });
+      }),
+      /reverted/,
+    );
+    await assert.rejects(unsigned());
   });
 
   it("funds the native currency, snapshots and reverts, and moves time", async () => {
