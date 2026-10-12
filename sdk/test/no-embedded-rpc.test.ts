@@ -279,12 +279,14 @@ describe("the SDK ships no RPC endpoints", () => {
     expect(found.filter((finding) => !deliberate.includes(finding))).toEqual([]);
   });
 
-  it("shipped code runs another process only where npm, a package manager, a password or the update check needs one", () => {
+  it("shipped code runs another process only where npm, a package manager, a password, the update check or a test chain needs one", () => {
     const shipped = scanned(SHIPPED_ROOTS);
     // run.ts: --password-command, and `sauce init --install`'s npm install; update.ts: the package
     // managers `sauce update` runs; runtime.ts: `npm ci` into a runtime folder. The three that reach
     // the npm registry, through npm and its user's configuration. update-check.ts: the update
     // check's refresh, a Node.js process of its own that reads it through `npm-registry.ts`.
+    // The testing kit (`/testing`, Node only): node.ts starts anvil, the chain a test runs on, and
+    // state.ts the recorder, a Node.js process of its own in front of the RPC the test names.
     const spawning = [...shipped]
       .filter(([, text]) => CHILD_PROCESS.test(text))
       .map(([file]) => file)
@@ -302,6 +304,8 @@ describe("the SDK ships no RPC endpoints", () => {
       expect([spelling, CHILD_PROCESS.test(spelling)]).toEqual([spelling, true]);
     }
     expect(spawning).toEqual([
+      "dev-tools/src/testing/node.ts",
+      "dev-tools/src/testing/state.ts",
       "sdk/src/cli/run.ts",
       "sdk/src/cli/runtime.ts",
       "sdk/src/cli/update-check.ts",
