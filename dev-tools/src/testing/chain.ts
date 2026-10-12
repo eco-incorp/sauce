@@ -106,7 +106,6 @@ export class TestChain {
   readonly test: TestClient;
   private readonly viemChain: Chain;
   private readonly snapshots: Hex[] = [];
-  private readonly compiled = new Map<string, CompiledProgram>();
   private readonly accounts: TestAccount[];
 
   constructor(
@@ -325,16 +324,10 @@ export class TestChain {
     }
   }
 
-  /** `program` compiled for this chain (cached by its source). */
+  /** `program` compiled for this chain, its imports read as they are now. Nothing is kept between
+   *  calls: a program is the whole module graph it imports, not its own text. */
   compile(program: ProgramInput): CompiledProgram {
-    const key =
-      typeof program === "object" && !(program instanceof URL) ? program.source : String(program);
-    const fresh = compileProgram(program, this.chain);
-    const cached = this.compiled.get(key);
-    if (cached !== undefined && cached.source === fresh.source) return cached;
-    this.compiled.set(key, fresh);
-
-    return fresh;
+    return compileProgram(program, this.chain);
   }
 
   private async cookCall(program: CompiledProgram, options: CookOptions) {
