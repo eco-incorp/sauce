@@ -3,10 +3,15 @@
  * standing in for a chain's endpoint, and the file it writes replays with no RPC at all.
  */
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { encodeFunctionData, type Address } from "viem";
 
@@ -177,6 +182,55 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
       assert.equal(existsSync(state), false);
     } finally {
       await upstream.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the recorder", () => {
+  it("gives up on an endpoint that keeps refusing within its deadline", async () => {
+    // An endpoint that answers every request as an RPC under load does: 503.
+    const busy = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.writeHead(503);
+        response.end("busy");
+      });
+    });
+    busy.listen(0, "127.0.0.1");
+    await once(busy, "listening");
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-recorder-"));
+    const out = join(dir, "recorded.json");
+    const recorder = spawn(
+      process.execPath,
+      [resolve(dirname(fileURLToPath(import.meta.url)), "../../src/testing/recorder.mjs")],
+      { stdio: ["pipe", "pipe", "inherit"] },
+    );
+    try {
+      const upstream = `http://127.0.0.1:${(busy.address() as AddressInfo).port}`;
+      recorder.stdin!.end(JSON.stringify({ upstream, block: "0x1", out, deadline: 2_000 }));
+      const [port] = (await once(recorder.stdout!, "data")) as [Buffer];
+      const started = Date.now();
+      const response = await fetch(`http://127.0.0.1:${Number(port.toString().trim())}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
+        // Without a deadline it retries for over a minute.
+        signal: AbortSignal.timeout(15_000),
+      });
+      const took = Date.now() - started;
+      assert.ok(took < 2_000 + 1_500, `answered after ${took} ms`);
+      assert.equal(response.status, 502);
+
+      const exited = once(recorder, "exit");
+      recorder.kill("SIGTERM");
+      await exited;
+      const { errors } = JSON.parse(readFileSync(out, "utf8")) as { errors: string[] };
+      assert.deepEqual(errors, ["the endpoint did not answer within 2 s"]);
+    } finally {
+      if (recorder.exitCode === null && recorder.signalCode === null) recorder.kill("SIGKILL");
+      busy.closeAllConnections();
+      busy.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });
