@@ -4021,6 +4021,7 @@ function mainHelp(): string {
     "sauce: compile SauceScript, and run it on a chain.",
     "",
     "Usage: sauce <command> [options]",
+    "       sauce --version (-v)",
     "",
     "Commands:",
     ...Object.entries(COMMANDS).map(
@@ -4179,6 +4180,9 @@ function rememberSecrets(given: readonly string[]): void {
  *  in its first tool result instead (`mcp.ts`), its stdout being the protocol's over stdio. */
 const NO_NOTICE = new Set(["update", "mcp"]);
 
+/** What asks for the package's version in place of a command: the spellings other CLIs teach. */
+const VERSION_WORDS = new Set(["--version", "-v", "-V", "version"]);
+
 /** The update check's notice, on stderr after what the command printed (`update-check.ts`). */
 function printNotice(io: CliIo, check: UpdateCheck | undefined): void {
   const latest = check?.latest();
@@ -4209,7 +4213,7 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
 
     return 0;
   }
-  if (name === "--version") {
+  if (VERSION_WORDS.has(name)) {
     const { name: pkg, version } = packageInfo();
     io.stdout(`${pkg} ${version}\n`);
     printNotice(io, lead === 0 && !rest.includes("--no-update-check") ? io.updateCheck : undefined);
