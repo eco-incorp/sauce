@@ -1517,6 +1517,9 @@ for (const file of [
   // The MCP server's tool and input names, which a skill may name as `sauce mcp` serves them.
   ...walk(join(SDK_DIR, "mcp", "dist"), (p) => p.endsWith(".js")),
   ...walk(join(SDK_DIR, "sdk", "dist", "std"), (p) => p.endsWith(".js")),
+  // The standard library the SDK serves from memory (`@sauce/async`, `@sauce/random`, …), which
+  // ships embedded rather than as files.
+  join(SDK_DIR, "sdk", "dist", "embedded", "sources.generated.js"),
   ...walk(join(SDK_DIR, "sdk", "dist", "artifacts"), (p) => p.endsWith(".json")),
   ...walk(join(SDK_DIR, "sdk", "dist", "protocols"), (p) => /\.(json|js)$/.test(p)),
   ...walk(join(SDK_DIR, "docs", "examples"), (p) => p.endsWith(".ts")),
