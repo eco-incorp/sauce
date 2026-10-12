@@ -10,7 +10,7 @@ import { getAddress, toFunctionSelector } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { UsageError } from "../src/cli/args.js";
-import { baseUnits, parseFund, wrapProgram } from "../src/cli/funding.js";
+import { baseUnits, parseFund, thenForm, wrapProgram } from "../src/cli/funding.js";
 import { assumedBalances } from "../src/cli/inputs.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { Permit2ABI } from "../src/protocols/permit2/abis.js";
@@ -158,6 +158,73 @@ describe("sauce run --fund, refused before anything is sent", () => {
     );
   });
 
+  // Every `await` the compiler refuses reaches it as written: the program compiles as the user
+  // wrote it before any funding wraps it, and `thenForm` leaves such a program untouched.
+  const hop =
+    "Ethereum.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to })";
+  it.skip.each([
+    [
+      "in an `if` with a statement after it",
+      [`  if (amount > 1) {`, `    await ${hop};`, "  }"],
+      "a statement after an `if` whose branches `await`",
+      "5:3",
+    ],
+    [
+      "in a loop",
+      ["  for (let i = 0; i < 2; i += 1) {", `    await ${hop};`, "  }"],
+      "an `await` inside a loop",
+      "3:5",
+    ],
+    ["used as a value", [`  const x = await ${hop};`], "an `await` used as a value", "2:13"],
+    [
+      "followed by a value `return`",
+      [`  await ${hop};`, "  USDC.transfer(to, amount);", "  return amount;"],
+      "a value `return` after an `await`",
+      "4:3",
+    ],
+    [
+      "in a `try` with a statement after it",
+      [
+        "  try {",
+        `    await ${hop};`,
+        "  } catch (e) {",
+        "    USDC.transfer(to, 1);",
+        "  }",
+        "  USDC.transfer(to, 2);",
+      ],
+      "a statement after a `try` that awaits",
+      "7:3",
+    ],
+  ])(
+    "--fund on a program with an `await` %s: the compiler's refusal, at the file's line: await dropped from the compiler (v12 #554)",
+    async (_name, lines, words, at) => {
+      const file = join(work, "awaits.sauce.ts");
+      writeFileSync(
+        file,
+        [
+          "function main(to: Address, amount: Uint256): Uint256 {",
+          ...lines,
+          "  return 0;",
+          "}",
+          "",
+        ].join("\n"),
+      );
+      let stderr = "";
+      const code = await runCli(
+        [
+          ...["run", file, "--chain", "base", "--rpc-url", "http://127.0.0.1:9"],
+          ...["--private-key", OWNER_KEY, "--fund", "USDC:1", "--intent-execution-fee", "0"],
+          ...["--args", "0x6666666666666666666666666666666666666666", "5"],
+        ],
+        { ...nodeIo(), stdout: () => undefined, stderr: (text) => void (stderr += text) },
+      );
+      expect(code).toBe(1);
+      expect(stderr).toContain(words);
+      expect(stderr).toContain(`--> ${file}:${at}`);
+      expect(stderr).not.toContain("main.js");
+    },
+  );
+
   it("--fund on Solana", async () => {
     const refused = await run("--chain", "solana", "--fund", "USDC:1");
     expect(refused.code).toBe(2);
@@ -236,6 +303,88 @@ describe("the funding wrapper", () => {
   const compiles = (text: string): void => {
     expect(compileSauceProgram(base, text, { defines: {} }).bytecode.length).toBeGreaterThan(0);
   };
+
+  it.skip("wraps a program that awaits an intent in its `.then` form: the sweep runs where it opens: await dropped from the compiler (v12 #554)", () => {
+    const opened =
+      "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: 0x66, fee: 0 })";
+    const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
+    for (const source of [
+      `await ${opened};\nUSDC.transfer(0x66, 1);\n`,
+      `async function main(to: Address) {\n  await ${opened};\n  USDC.transfer(to, 1);\n}\n`,
+    ]) {
+      const wrapped = wrapProgram(source, IMPORTS, [PULL], ["// sweep"]);
+      expect(wrapped).not.toMatch(/\bawait\b/);
+      // The sweep follows the statement that opens the intent, not the body.
+      expect(wrapped.indexOf("// sweep")).toBeGreaterThan(wrapped.indexOf("}).then"));
+      expect(compileSauceProgram(base, wrapped, { defines: {}, intents }).bodies).toHaveLength(1);
+    }
+  });
+
+  it.skip("leaves a program untouched where the compiler refuses one of its `await`s: await dropped from the compiler (v12 #554)", () => {
+    const hop =
+      "Arbitrum.hop({ send: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: to, fee: 0 })";
+    const main = (...body: string[]) =>
+      [
+        "function main(to: Address, amount: Uint256): Uint256 {",
+        ...body,
+        "  return 0;",
+        "}",
+        "",
+      ].join("\n");
+    for (const source of [
+      main("  if (amount > 1) {", `    await ${hop};`, "  }"),
+      main("  for (let i = 0; i < 2; i += 1) {", `    await ${hop};`, "  }"),
+      main("  {", `    await ${hop};`, "  }"),
+      main(`  const x = await ${hop};`),
+      main(`  await ${hop};`, "  USDC.transfer(to, amount);", "  return amount;"),
+      main("  try {", `    await ${hop};`, "  } catch (e) {}", "  USDC.transfer(to, 2);"),
+      main("  try {", "    USDC.transfer(to, 1);", "  } catch (e) {", `    await ${hop};`, "  }"),
+      `function helper(to: Address) {\n  await ${hop};\n}\n${main("  helper(to);")}`,
+      // A statement after an `if` whose branch awaits would run wherever the branch continued.
+      `function main(to: Address) {\n  if (to != 0) {\n    await ${hop};\n  }\n  USDC.transfer(to, 2);\n}\n`,
+    ]) {
+      expect(thenForm(source)).toBe(source);
+    }
+  });
+
+  it.skip("moves nothing: the user's statements keep their lines: await dropped from the compiler (v12 #554)", () => {
+    const source = [
+      "function main(to: Address, amount: Uint256) {",
+      "  await Arbitrum.hop({ send: { token: USDC, amount }, refundee: to, fee: 0 });",
+      "  USDC.transfer(to, amount); // on Arbitrum",
+      "  await Optimism.hop({ send: { token: USDC, amount }, refundee: to, fee: 0 });",
+      "  USDC.transfer(to, 1);",
+      "}",
+      "",
+    ].join("\n");
+    const written = thenForm(source).split("\n");
+    expect(written).toHaveLength(source.split("\n").length);
+    expect(written[2]).toContain("USDC.transfer(to, amount); // on Arbitrum");
+    expect(written[4]).toContain("USDC.transfer(to, 1);");
+    // The `await`s are blanked where they stood, not reprinted.
+    expect(written[1]!.indexOf("Arbitrum.hop(")).toBe(
+      source.split("\n")[1]!.indexOf("Arbitrum.hop("),
+    );
+  });
+
+  it.skip("an `await` is its `.then` form, byte for byte, in a `try`, nested, and in an `if`'s branches: await dropped from the compiler (v12 #554)", () => {
+    const intents = { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } as const;
+    const hop = (chain: string) =>
+      `await ${chain}.hop({ send: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to, fee: 0 });`;
+    for (const source of [
+      `function main(to: Address, amount: Uint256) {\n  ${hop("Arbitrum")}\n  USDC.transfer(to, amount);\n  ${hop("Optimism")}\n  USDC.transfer(to, 1);\n}\n`,
+      `function main(to: Address, amount: Uint256) {\n  try {\n    ${hop("Arbitrum")}\n    USDC.transfer(to, amount);\n    ${hop("Optimism")}\n    USDC.transfer(to, 1);\n  } catch (e) {\n    USDC.transfer(to, e.length);\n  }\n}\n`,
+      // In the branches of an `if` that ends the body: each branch's rest is its own `.then`.
+      `function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, 3);\n  if (amount > 1) {\n    ${hop("Arbitrum")}\n    USDC.transfer(to, amount);\n  } else if (amount == 1) {\n    ${hop("Optimism")}\n    USDC.transfer(to, 1);\n  } else {\n    USDC.transfer(to, 2);\n  }\n}\n`,
+      `function main(to: Address, amount: Uint256) {\n  try {\n    if (amount > 1) ${hop("Arbitrum")}\n  } catch (e) {\n    USDC.transfer(to, e.length);\n  }\n}\n`,
+    ]) {
+      const written = thenForm(source);
+      expect(written).not.toMatch(/\bawait\b/);
+      expect(compileSauceProgram(base, written, { defines: {}, intents }).bytecode).toEqual(
+        compileSauceProgram(base, source, { defines: {}, intents }).bytecode,
+      );
+    }
+  });
 
   it("wraps a script: the pulls run before its statements and the sweeps after them", () => {
     const wrapped = wrapProgram("USDC.transfer(0x2n, 5n);\n", IMPORTS, [PULL], ["// sweep"]);

@@ -129,7 +129,7 @@ try {
       "--no-fund",
       join(work, filename),
       // Node typings, because the shipped examples are Node programs: `docs/examples`'s
-      // `router-swap.ts` reads its SauceScript sibling off disk, which is the property that
+      // `cross-chain-intent.ts` reads its SauceScript sibling off disk, which is the property that
       // keeps the README and the compiled file from drifting. A real consumer typechecking a Node
       // example has these -- the package declares Node >= 24.
       //
@@ -424,25 +424,33 @@ try {
   });
   // Check emitted declarations from a real install, not src/. Bare source globals and builtins
   // must survive declaration emit and the root package's side-effect import.
-  // USDC and Uniswap are SauceScript globals the compiler resolves in a program — declared types
-  // with no runtime value, so importing them would be wrong. A typed closure checks against them.
-  // This fixture is the packaged surface a consumer actually gets.
+  // Base and Ethereum are named exports; USDC and Uniswap are SauceScript globals the compiler
+  // resolves inside the intent's body — declared types with no runtime value, so importing them
+  // would be wrong. This fixture is the packaged surface a consumer actually gets.
   const consumer = `
-    import { routes } from '${name}';
+    import { Base, Ethereum } from '${name}';
     import { compileProgram, parseProgram, type ActionProgram } from '${name}/actions';
     const owner = '0x3333333333333333333333333333333333333333' as const;
-    const typed = routes.compileSauceProgram('base', routes.sauceBodyToSource(() => {
+    const built = Base.hop({
+      source: Ethereum,
+      send: { token: Ethereum.USDC.address, amount: 1n },
+      refundee: owner,
+      fee: 0n,
+    }).then(() => {
       USDC.approve(Uniswap.UniversalRouter, 1000000n);
       // The language's builtins are declared for a typed closure too (builtins.generated.ts).
       require(ctx.timestamp() > 0n, "stale");
       log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
-    }));
-    if (typed.bytecode.length === 0) throw new Error('Empty program');
+    });
+    if (built.program.bytecode.length === 0) throw new Error('Empty intent program');
+    const cook: { to: string; data: string; value: bigint } = built.cook({ owner }, 0n);
     // The actions declarations reference the SDK's by relative path; this checks they resolve.
     const program: ActionProgram = parseProgram({ version: 1, chainId: 8453, actions: [
       { type: 'approve', amount: '1', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', spender: owner },
     ] });
-    if (compileProgram(program).bytecode.length === 0) throw new Error('Empty action program');
+    if (compileProgram(program).bytecode.length === 0 || cook.data.length === 0) {
+      throw new Error('Empty action program');
+    }
   `;
   writeFileSync(join(work, "consumer.ts"), consumer);
   // Every export the actions pages name, typechecked from the installed package: the runtime ones as
@@ -915,7 +923,7 @@ try {
   );
 
   // An editor on that project, asked through its own tsserver from the installed TypeScript: the
-  // programs in programs/ — an agent's two, as it wrote them, and every one the skills ship —
+  // programs in programs/ — an agent's three, as it wrote them, and every one the skills ship —
   // show no error, a real mistake does, the skills' programs where the init installed them show
   // none either, and the project's other TypeScript is untouched.
   const { checkEditor } = await import(
@@ -924,6 +932,7 @@ try {
   const demo = join(root, "sdk/test/fixtures/sauce-script/demo");
   const editorPrograms = [
     join(demo, "usdc-to-weth.sauce.ts"),
+    join(demo, "intent/usdc-to-weth-on-base.sauce.ts"),
     join(demo, "solana/pay-usdc-keep-minimum.sauce.ts"),
     ...shippedSkills
       .filter((file) => file.endsWith(".sauce.ts"))
@@ -1184,7 +1193,7 @@ try {
     "sauce_tx",
     "sauce_pot",
     "sauce_simulate",
-    "sauce_intent_fill",
+    "sauce_intent_publish",
     "sauce_skills",
     "sauce_skill",
   ]) {

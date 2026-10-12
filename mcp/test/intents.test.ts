@@ -1,7 +1,8 @@
 /**
  * The intent tools in process, with no chain: how a call names its intent (a record, its JSON
  * text, or the transaction that published it), what is refused before anything is read, and what
- * each tool says when it has no endpoint for a chain it needs.
+ * each tool says when it has no endpoint for a chain it needs. `intents.e2e.test.ts` runs them
+ * against two chains.
  */
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
@@ -10,12 +11,28 @@ import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { intentRecord } from "../../sdk/dist/cli/lifecycle.js";
 import { ecoRoutesPortal, ecoRoutesProver } from "../../sdk/dist/protocols/eco-routes/lookup.js";
 import { assembleIntent } from "../../sdk/dist/routes/intent.js";
-import { registryTokenAddress } from "../../sdk/dist/routes/token-registry.js";
-import { connect, failed, type Connected } from "./harness.js";
+import { connect, failed, ok, type Connected } from "./harness.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const TX = `0x${"ab".repeat(32)}`;
+
+/** Base USDC to `recipient` for Ethereum USDC, its refundee one of main's arguments. */
+const PROGRAM = {
+  source: [
+    "function main(recipient: Address, refundTo: Address) {",
+    "  Base.hop({ send: { token: USDC, amount: 7 }, refundee: refundTo }).then(() => {",
+    "    USDC.transfer(recipient, 5);",
+    "  });",
+    "}",
+    "",
+  ].join("\n"),
+  chain: "ethereum",
+  args: [RECIPIENT, OWNER],
+  intentDeadline: 2_000_000_000,
+  intentExecutionFee: 0,
+  intentSalt: `0x${"5a".repeat(32)}`,
+};
 
 type IntentJson = {
   schema: string;
@@ -26,47 +43,76 @@ type IntentJson = {
 };
 
 let mcp: Connected;
+/** A record as sauce_intent_publish's dry run and sauce_intent_import return one. */
 let record: IntentJson;
 
-/** Base USDC to `recipient` for Ethereum USDC, built by hand: its record, the input every intent
- *  tool takes. */
-function recordOf(): IntentJson {
-  const [from, to] = [requireChain("ethereum"), requireChain("base")];
-  const usdc = (chain: typeof from) =>
-    `0x${registryTokenAddress(chain, "USDC")!.toString(16).padStart(40, "0")}` as `0x${string}`;
+before(async () => {
+  mcp = await connect();
   const intent = assembleIntent(
-    from,
-    to,
+    requireChain("ethereum"),
+    requireChain("base"),
     {
+      salt: `0x${"5a".repeat(32)}`,
       deadline: 2_000_000_000n,
-      portal: ecoRoutesPortal(to.slug),
-      tokens: [{ token: usdc(to), amount: 5n }],
-      calls: [
-        {
-          target: usdc(to),
-          data: `0xa9059cbb${RECIPIENT.slice(2).padStart(64, "0")}${5n.toString(16).padStart(64, "0")}`,
-          value: 0n,
-        },
-      ],
+      portal: ecoRoutesPortal("base"),
+      tokens: [],
+      calls: [],
     },
     {
       deadline: 2_000_000_000n,
       creator: OWNER,
-      prover: ecoRoutesProver(from.slug, to.slug),
-      tokens: [{ token: usdc(from), amount: 7n }],
+      prover: ecoRoutesProver("ethereum", "base"),
+      // Ethereum's USDC.
+      tokens: [{ token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", amount: 7n }],
     },
   );
-
-  return JSON.parse(
-    JSON.stringify(intentRecord(intent, { sourcePortal: ecoRoutesPortal(from.slug) })),
-  ) as IntentJson;
-}
-
-before(async () => {
-  mcp = await connect();
-  record = recordOf();
+  record = intentRecord(intent, {
+    sourcePortal: ecoRoutesPortal("ethereum"),
+  }) as unknown as IntentJson;
 });
 after(() => mcp.close());
+
+describe("sauce_intent_publish", () => {
+  it("returns the unsigned cook on the owner's Pot, which publishes the intent", async () => {
+    const cook = ok(
+      await mcp.call("sauce_intent_publish", { ...PROGRAM, owner: OWNER, value: "0" }),
+    ) as { chainId: number; to: string; data: string; value: string };
+    assert.equal(cook.chainId, 1);
+    assert.match(cook.data, /^0x[0-9a-f]+$/);
+    assert.equal(cook.value, "0");
+    // The cook sauce_tx builds for the same program and Pot.
+    const tx = ok(await mcp.call("sauce_tx", { ...PROGRAM, owner: OWNER, value: "0" }));
+    assert.deepEqual([cook.to, cook.data, cook.value], [tx.to, tx.data, tx.value]);
+  });
+
+  it("refuses what it cannot do unsigned, and the refundee's old input", async () => {
+    assert.match(
+      failed(
+        await mcp.call("sauce_intent_publish", { ...PROGRAM, owner: OWNER, fund: ["USDC:1"] }),
+      ),
+      /fund pulls tokens into the Pot with what the owner signs first/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_intent_publish", { ...PROGRAM, owner: OWNER, intentRefundee: OWNER }),
+      ),
+      /`intentRefundee` is gone: an intent names its refundee in the program/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_intent_publish", {
+          source: "Base.hop({ send: { token: USDC, amount: 7 } }).then(() => {});\n",
+          chain: "ethereum",
+          intentDeadline: 2_000_000_000,
+          intentExecutionFee: 0,
+          owner: OWNER,
+          value: "0",
+        }),
+      ),
+      /a hop needs a `refundee`/,
+    );
+  });
+});
 
 describe("naming an intent", () => {
   it("takes a record or a transaction, one of them", async () => {
@@ -145,8 +191,9 @@ describe("with no endpoint", () => {
       ],
       [
         "sauce_intent_fill",
-        { intent: record, dryRun: true },
-        /Rehearsing a fill needs an RPC endpoint for base \(chain id 8453\)/,
+        { ...PROGRAM, dryRun: true },
+        // A program's intents are read from a rehearsal of publishing them, on the source.
+        /Reading the intents the program opens needs an RPC endpoint for ethereum \(chain id 1\)/,
       ],
     ];
     for (const [tool, args, message] of expected) {
@@ -159,12 +206,10 @@ describe("sauce_intent_fill", () => {
   it("names its intents one way, and builds for a solver unless it rehearses", async () => {
     assert.match(
       failed(await mcp.call("sauce_intent_fill", { from: OWNER })),
-      /name the intents one way: intent .*, or txHash/,
+      /name the intents one way: source .*, intent .*, or txHash/,
     );
     assert.match(
-      failed(
-        await mcp.call("sauce_intent_fill", { intent: record, txHash: TX, chain: "ethereum" }),
-      ),
+      failed(await mcp.call("sauce_intent_fill", { ...PROGRAM, intent: record, from: OWNER })),
       /name the intents one way/,
     );
     assert.match(

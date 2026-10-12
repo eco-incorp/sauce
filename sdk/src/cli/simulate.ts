@@ -46,6 +46,7 @@ import {
   type Effects,
   type Held,
 } from "./effects.js";
+import { intentLines, intentsJson, loggedIntents } from "./logged-intents.js";
 import { baseUnits, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
 import { rehearse, type Rehearsal } from "./rehearse.js";
 import { decodeReturned, returnedLine } from "./returned.js";
@@ -306,6 +307,10 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
           return before;
         });
 
+  // The intents the cook published, read back from the Portal's logs.
+  const intents =
+    rehearsal.ok && rehearsal.logs !== undefined ? loggedIntents(input.chain, rehearsal.logs) : [];
+
   const how = routeLines(
     rehearsal,
     input.chain.slug,
@@ -399,6 +404,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
           ],
           returns: rehearsal.returns,
           ...(returnType === undefined ? {} : { returnType, returned: returned ?? null }),
+          ...(intents.length === 0 ? {} : { intents: intentsJson(intents) }),
           ...(effects === undefined ? {} : effectsJson(effects)),
         }
       : {
@@ -454,6 +460,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
       ...(effects === undefined || potHeld === undefined
         ? []
         : leftInPotLines(effects, potHeld, "the owner's wallet")),
+      ...intentLines(intents),
       ...how,
       ...assumedLines,
       ...(effects === undefined ? [] : effectLines(effects)),

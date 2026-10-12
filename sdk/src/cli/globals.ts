@@ -262,7 +262,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
   if (all) {
     text.push(
       "",
-      "Chains: qualify an accessor as <Chain>.<Namespace>",
+      "Chains: open an intent with <Chain>(() => { … }), or qualify an accessor as <Chain>.<Namespace>",
       `  ${globals.chains.map((other) => other.key).join(", ")}`,
       "",
       svm

@@ -28,12 +28,17 @@ import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodeAbiParameters, getAddress, type Address, type Hex } from "viem";
+import { decodeFunctionData, encodeAbiParameters, getAddress, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { v12EngineAddress, v12KitchenAddress } from "../src/deployments/index.js";
 import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import { denormalizeToEvm, hashIntent } from "../src/routes/encode.js";
+import { intentVaultAddressCall, isIntentFundedCall } from "../src/routes/portal.js";
+import { intentOf, type IntentRecord } from "../src/cli/lifecycle.js";
 import { SETTLE_VECTORS, SETTLE_WIRE, settlePayload } from "../src/verify/index.js";
 import { v12Pot } from "../src/evm/engine.js";
 import {
@@ -48,6 +53,7 @@ import {
   OTHER_KEY,
   OWNER,
   OWNER_KEY,
+  placePortal,
   potOwner,
   registered,
   sauce,
@@ -59,6 +65,9 @@ import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
 
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
+/** The salt the SDK compiles an intent written the old way with when none is given; the
+ *  command picks a random one per run unless told. */
+const ZERO_SALT = `0x${"00".repeat(32)}` as const;
 if (!HAS_CAST && process.env.CI) {
   throw new Error("`cast` is not on PATH in CI: Foundry is installed there, so this is a failure.");
 }
@@ -843,12 +852,290 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
   }, 60_000);
 });
 
-describeEvm("what is deployed: the released contracts and a Pot", () => {
+describeEvm("an intent file: published by a cook on the signer's Pot", () => {
+  let ethereum: LocalChain;
+  let work: string;
+  let usdc: Address;
+  let portal: Address;
+  const REWARD = 2_000_000n;
+  const DEADLINE = "2000000000";
+  /** A top-level file: no `main`, one intent, every amount a define, refunded to `REFUND_TO`. */
+  const INTENT = [
+    "// @chain ethereum",
+    "Base.hop({ send: [{ token: USDC, amount: REWARD }], receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })",
+    "  .then(() => {",
+    "    USDC.transfer(RECIPIENT, AMOUNT);",
+    "  });",
+    "",
+  ].join("\n");
+  /** The defines and intent flags the file is built with: each command builds the same intent. */
+  const definesFor = (reward: bigint): string[] => [
+    ...["--define", `RECIPIENT=${RECIPIENT}`, "--define", `AMOUNT=${AMOUNT}`],
+    ...["--define", `REWARD=${reward}`, "--define", `REFUND_TO=${OWNER.address}`],
+    ...["--intent-deadline", DEADLINE, "--intent-salt", ZERO_SALT],
+    ...["--intent-execution-fee", String(FEE)],
+  ];
+  const DEFINES = definesFor(REWARD);
+  let intentFile: string;
+  /** The owner's own Pot, which publishes. */
+  const pot = v12PredictPot(OWNER.address, SAUCE_INTENT_POT_SALT) as Address;
+
+  const read = async <T>(call: { to: Hex; data: Hex; decode: (result: Hex) => T }): Promise<T> =>
+    call.decode((await ethereum.publicClient.call({ to: call.to, data: call.data })).data!);
+  /** The intents a command reported publishing, rebuilt from their records. */
+  const publishedBy = (out: Record<string, unknown>) =>
+    (out.intents as Array<{ intentHash: Hex; destination: string; record: IntentRecord }>).map(
+      (entry) => ({ ...entry, intent: intentOf(entry.record) }),
+    );
+
+  beforeAll(async () => {
+    work = mkdtempSync(join(tmpdir(), "sauce-cli-publish-"));
+    intentFile = join(work, "bridge.sauce.ts");
+    writeFileSync(intentFile, INTENT);
+    ethereum = await startChain("ethereum");
+    // The real eco-routes Portal, at the address the SDK records for Ethereum.
+    ({ portal } = await placePortal(ethereum));
+    usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
+  }, 120_000);
+
+  afterAll(async () => {
+    rmSync(work, { recursive: true, force: true });
+    await ethereum?.stop();
+  });
+
+  /** `Portal.getRewardStatus`: 0 published (or never), 1 Funded — only `publishAndFund` sets it. */
+  const statusOf = (intentHash: Hex): Promise<number> =>
+    ethereum.publicClient.readContract({
+      address: portal,
+      abi: PortalABI,
+      functionName: "getRewardStatus",
+      args: [intentHash],
+    }) as Promise<number>;
+
+  it("prints the cook on the owner's Pot, with no key and no endpoint", async () => {
+    const run = await sauce(
+      ...["intent", "publish", intentFile, ...DEFINES, "--from", OWNER.address],
+      ...["--offline", "--value", "0", "--format", "json"],
+    );
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as { to: Address; data: Hex };
+    expect(out.to).toBe(pot);
+    expect(decodeFunctionData({ abi: v12Pot.abi, data: out.data }).functionName).toBe("cook");
+    expect(run.stderr).toContain(`Send from ${OWNER.address}: cook() is onlyOwner.`);
+  }, 60_000);
+
+  it("rehearses the cook, reading the intent from the Portal's log, and sends nothing", async () => {
+    const empty = getAddress("0x5a0ce0000000000000000000000000000000beef");
+    const dryRun = (...flags: string[]) =>
+      sauce(
+        ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
+        ...["--from", empty, "--dry-run", ...flags],
+      );
+    // The Pot holds nothing to pay into the vault: the cook reverts.
+    const short = await dryRun();
+    expect(short.code).toBe(1);
+    expect(short.stdout).toMatch(/^The cook reverts: /);
+    // Assumed for the rehearsal, or credited by --fund with no key: published either way.
+    for (const flags of [
+      ["--assume-balance", "USDC:2"],
+      ["--fund", "USDC:2"],
+    ]) {
+      const run = await dryRun(...flags, "--json");
+      expect(run.code).toBe(0);
+      const out = JSON.parse(run.stdout) as Record<string, unknown>;
+      expect(out.ok).toBe(true);
+      const [published] = publishedBy(out);
+      expect(published).toMatchObject({ destination: "base" });
+      expect(hashIntent(published!.intent).intentHash).toBe(published!.intentHash);
+      expect(getAddress(denormalizeToEvm(published!.intent.reward.creator))).toBe(OWNER.address);
+      expect(run.stdout).not.toContain(ethereum.rpcUrl);
+    }
+    expect((await dryRun("--assume-balance", "USDC:2")).stdout).toMatch(
+      /^published intent 0x[0-9a-f]{64} to base$/m,
+    );
+    expect(await ethereum.balanceOf(usdc, empty)).toBe(0n);
+    // A balance is assumed only for a rehearsal.
+    const sent = await sauce(
+      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
+      ...["--private-key", OWNER_KEY, "--assume-balance", "USDC:2"],
+    );
+    expect(sent.code).toBe(2);
+    expect(sent.stderr).toContain("--assume-balance goes with --dry-run");
+  }, 60_000);
+
+  it("publishes: the cook pulls the reward in and pays the vault, which the Portal counts funded", async () => {
+    await ethereum.mint(usdc, OWNER.address, REWARD);
+    const run = await sauce(
+      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
+      ...["--private-key", OWNER_KEY, "--fund", "USDC:2", "--fund-mode", "transfer"],
+      ...["--auto-approve", "--json"],
+    );
+    expect(run.code).toBe(0);
+    const out = jsonOf(run);
+    const [published] = publishedBy(out);
+    const { intent, intentHash } = published!;
+    expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
+    const vault = await read(intentVaultAddressCall(intent, { portal }));
+    expect(await ethereum.balanceOf(usdc, vault)).toBe(REWARD);
+    expect(await ethereum.balanceOf(usdc, OWNER.address)).toBe(0n);
+    expect(await ethereum.balanceOf(usdc, pot)).toBe(0n);
+    // Paid into the vault, then published: no Funded status, which only publishAndFund records.
+    expect(await statusOf(intentHash)).toBe(0);
+    // The route delivers in the DESTINATION's USDC — Base's, not Ethereum's: the body's names
+    // resolve on its own chain.
+    expect(intent.route.tokens.map((token) => denormalizeToEvm(token.token).toLowerCase())).toEqual(
+      [registered(requireChain("base"), "USDC").toLowerCase()],
+    );
+
+    // `sauce inspect` takes the cook back apart: the Pot's, publishing an intent.
+    const cook = (out.cook as { hash: Hex }).hash;
+    expect(
+      jsonOf(await sauce("inspect", cook, "--rpc-url", ethereum.rpcUrl, "--json")),
+    ).toMatchObject({
+      status: "success",
+      from: OWNER.address,
+      to: pot,
+      call: "Pot.cook",
+      program: { intents: [{ measured: true, fundVia: "transfer" }] },
+    });
+  }, 60_000);
+
+  it("publishes through publishAndFund with --intent-fund-via publishAndFund", async () => {
+    // Another reward, so another intent: the one above is already published.
+    const other = 3_000_000n;
+    await ethereum.mint(usdc, pot, other);
+    const run = await sauce(
+      ...["intent", "publish", intentFile, ...definesFor(other)],
+      ...["--intent-fund-via", "publishAndFund"],
+      ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--json"],
+    );
+    expect(run.code).toBe(0);
+    const [published] = publishedBy(jsonOf(run));
+    expect(await read(isIntentFundedCall(published!.intent, { portal }))).toBe(true);
+    // The Portal pulled it from the Pot into the vault, and recorded it Funded.
+    expect(await statusOf(published!.intentHash)).toBe(1);
+    expect(await ethereum.balanceOf(usdc, pot)).toBe(0n);
+  }, 60_000);
+
+  describe("rewards that are not a plain ERC-20", () => {
+    /** A one-intent file rewarding `reward`, with the token, if any, as the define TOKEN. */
+    const rewardFile = (name: string, reward: string): string => {
+      const path = join(work, `${name}.sauce.ts`);
+      writeFileSync(
+        path,
+        [
+          "// @chain ethereum",
+          `Base.hop({ send: ${reward}, receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })`,
+          "  .then(() => {",
+          "    USDC.transfer(RECIPIENT, AMOUNT);",
+          "  });",
+          "",
+        ].join("\n"),
+      );
+
+      return path;
+    };
+    const publishFile = (file: string, ...flags: string[]) =>
+      sauce(
+        ...["intent", "publish", file, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
+        ...["--private-key", OWNER_KEY, "--json", ...flags],
+      );
+
+    it("a USDT-style token, whose transfer returns nothing, funds its vault", async () => {
+      const usdt = await ethereum.plant(USDT_CREATION);
+      await ethereum.mint(usdt, pot, REWARD);
+      const run = await publishFile(
+        rewardFile("usdt", "{ token: TOKEN, amount: REWARD }"),
+        ...["--define", `TOKEN=${usdt}`],
+      );
+      expect(run.code).toBe(0);
+      const [published] = publishedBy(jsonOf(run));
+      expect(await read(isIntentFundedCall(published!.intent, { portal }))).toBe(true);
+      const vault = await read(intentVaultAddressCall(published!.intent, { portal }));
+      expect(await ethereum.balanceOf(usdt, vault)).toBe(REWARD);
+    }, 60_000);
+
+    it("a native reward, pulled in as the cook's value, is sent to the vault", async () => {
+      const NATIVE = 12_345_000_000n;
+      const run = await publishFile(
+        rewardFile("native", `{ native: ${NATIVE} }`),
+        ...["--fund", `ETH:${NATIVE}n`],
+      );
+      expect(run.code).toBe(0);
+      const [published] = publishedBy(jsonOf(run));
+      expect(await read(isIntentFundedCall(published!.intent, { portal }))).toBe(true);
+      const vault = await read(intentVaultAddressCall(published!.intent, { portal }));
+      expect(await ethereum.publicClient.getBalance({ address: vault })).toBe(NATIVE);
+    }, 60_000);
+
+    it("a token whose transfer returns false reverts the cook: nothing is published", async () => {
+      // @sauce/token's transfer is SafeERC20's: a `false` is a revert, and the intent is never
+      // published with an empty vault.
+      const liar = await ethereum.plant(fixture("FalseReturnERC20"));
+      const run = await publishFile(
+        rewardFile("liar", "{ token: TOKEN, amount: REWARD }"),
+        ...["--define", `TOKEN=${liar}`],
+      );
+      expect(run.code).not.toBe(0);
+      expect(run.stdout).not.toMatch(/published intent/);
+    }, 60_000);
+  });
+
+  it("publishes an amount the program measures as it runs: the cook measures it", async () => {
+    const measured = join(work, "measured.sauce.ts");
+    writeFileSync(
+      measured,
+      [
+        "// @chain ethereum",
+        "const amount = USDC.balanceOf(ctx.self());",
+        "Base.hop({ send: [{ token: USDC, amount }], receive: { token: USDC, amount: AMOUNT }, refundee: REFUND_TO })",
+        "  .then(() => {",
+        "    USDC.transfer(RECIPIENT, AMOUNT);",
+        "  });",
+        "",
+      ].join("\n"),
+    );
+    const held = 4_000_000n;
+    await ethereum.mint(usdc, pot, held);
+    const run = await sauce(
+      ...["intent", "publish", measured, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
+      ...["--private-key", OWNER_KEY, "--json"],
+    );
+    expect(run.code).toBe(0);
+    const [published] = publishedBy(jsonOf(run));
+    expect(published!.intent.reward.tokens.map((token) => token.amount)).toEqual([held]);
+    expect(await ethereum.balanceOf(usdc, pot)).toBe(0n);
+  }, 60_000);
+});
+
+describeEvm("what is deployed: the released contracts, a Pot, and an intent's destination", () => {
   let base: LocalChain;
   let bare: ChildProcess;
   let work: string;
   let config: string;
   let BARE: string;
+  const REWARD = 2_000_000n;
+  // An intent from Ethereum whose body is a program on Base: its cook pays Base's Kitchen fee, on
+  // the Pot every intent through Base's Portal shares.
+  const INTENT = [
+    "// @chain ethereum",
+    `Base.hop({ send: [{ token: USDC, amount: REWARD }], refundee: ${OWNER.address} }).then(() => {`,
+    "  require(AMOUNT > 0n);",
+    "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",
+    "});",
+    "",
+  ].join("\n");
+  const DEFINES = [
+    ...["--define", `RECIPIENT=${RECIPIENT}`, "--define", `AMOUNT=${AMOUNT}`],
+    ...["--define", `REWARD=${REWARD}`, "--intent-deadline", "2000000000"],
+    ...["--intent-salt", ZERO_SALT],
+  ];
+  const sharedPot = () =>
+    v12PredictPot(
+      getAddress(ecoRoutesExecutorOf(ecoRoutesPortal("base"))),
+      SAUCE_INTENT_POT_SALT,
+    ) as Address;
+
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-deployed-"));
     base = await startChain("base");
@@ -918,4 +1205,82 @@ describeEvm("what is deployed: the released contracts and a Pot", () => {
       /has no code on ethereum: no Pot can be deployed there, so nothing was sent/,
     );
   }, 60_000);
+
+  it("reads the destination Kitchen's fee for --intent-execution-fee auto", async () => {
+    const file = join(work, "intent.sauce.ts");
+    writeFileSync(file, INTENT);
+    const auto = await sauce(
+      ...["compile", file, ...DEFINES, "--intent-execution-fee", "auto"],
+      ...["--config", config, "--json"],
+    );
+    expect(auto.code).toBe(0);
+    expect(auto.stderr).toContain(
+      `--intent-execution-fee auto: the Kitchen on base charges ${FEE} wei`,
+    );
+    const given = await sauce(...["compile", file, ...DEFINES, "--intent-execution-fee", `${FEE}`]);
+    expect(JSON.parse(auto.stdout).bytecode).toBe(given.stdout.trim());
+    // With no endpoint for Base, there is nothing to read the fee from.
+    const blind = await sauce("compile", file, ...DEFINES, "--intent-execution-fee", "auto");
+    expect(blind.code).toBe(2);
+    expect(blind.stderr).toMatch(
+      /reads the Kitchen's fee on base.*rpcUrls entry for chain id 8453/,
+    );
+  }, 60_000);
+
+  it("warns, compiling or publishing, while the destination's shared Pot is not deployed", async () => {
+    const file = join(work, "intent.sauce.ts");
+    writeFileSync(file, INTENT);
+    const pot = sharedPot();
+    const executor = getAddress(ecoRoutesExecutorOf(ecoRoutesPortal("base")));
+    const compile = async () =>
+      sauce(
+        ...[
+          "compile",
+          file,
+          ...DEFINES,
+          "--intent-execution-fee",
+          `${FEE}`,
+          "--config",
+          config,
+          "--json",
+        ],
+      );
+    const missing = await compile();
+    expect(missing.code).toBe(0);
+    expect(JSON.parse(missing.stdout).intentPots).toEqual([
+      { destination: "base", pot, executor, deployed: false },
+    ]);
+    expect(missing.stderr).toContain(
+      `warning: the intent to base cooks on Pot ${pot}, which is not deployed there, so no solver can fill it yet`,
+    );
+    expect(missing.stderr).toContain(`sauce pot --deploy --chain base --owner ${executor}`);
+    // Publishing says so before it sends anything; with no endpoint for Base, that it cannot check.
+    const unsigned = await sauce(
+      ...[
+        "intent",
+        "publish",
+        file,
+        ...DEFINES,
+        "--intent-execution-fee",
+        `${FEE}`,
+        ...["--from", OWNER.address, "--value", "0"],
+        "--format",
+        "json",
+      ],
+    );
+    expect(unsigned.stderr).toContain(`the intent to base cooks on Pot ${pot}`);
+    expect(unsigned.stderr).toContain("pass --config with an rpcUrls entry for chain id 8453");
+
+    // Deployed as the warning says — by any account, for the Executor — the warning goes away.
+    const deployed = await sauce(
+      ...["pot", "--deploy", "--chain", "base", "--owner", executor, "--rpc-url", base.rpcUrl],
+      ...["--private-key", OTHER_KEY],
+    );
+    expect(jsonOf(deployed)).toMatchObject({ pot, owner: executor, deployed: true });
+    const there = await compile();
+    expect(JSON.parse(there.stdout).intentPots).toEqual([
+      { destination: "base", pot, executor, deployed: true },
+    ]);
+    expect(there.stderr).not.toContain("warning:");
+  }, 90_000);
 });

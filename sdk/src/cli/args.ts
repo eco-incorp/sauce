@@ -11,6 +11,7 @@ import { bytesToBigInt, getAddress, isAddress, type Address, type Hex } from "vi
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { potSalt, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
+import { INTENT_FUND_VIA, type IntentFundVia } from "../routes/portal.js";
 import type { CookVia } from "../svm/client.js";
 
 /** A mistyped invocation: an unknown or missing flag, or a value that is not what the flag takes. */
@@ -81,6 +82,16 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
   }
 }
 
+/** Flags the command once took, and what does their work now. */
+const RETIRED_FLAGS: Readonly<Record<string, string>> = {
+  "intent-creator":
+    "an intent names its refundee in the file: `hop({ send, refundee: refundTo })`, with " +
+    "`refundTo` one of main's arguments or an address",
+  "intent-refundee":
+    "an intent names its refundee in the file: `hop({ send, refundee: refundTo })`, with " +
+    "`refundTo` one of main's arguments or an address",
+};
+
 /** `parseArgs`'s messages advise on `--` escaping; say what was wrong with the flag instead. */
 function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly string[]): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -99,6 +110,9 @@ function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly str
     );
   }
   if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && flag !== undefined) {
+    const retired = RETIRED_FLAGS[flag.replace(/^-+/, "").replace(/=.*$/, "")];
+    if (retired !== undefined) return `\`${flag.replace(/=.*$/, "")}\` is gone: ${retired}`;
+
     return `unknown option ${flag}`;
   }
   if (code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE" && flag !== undefined) {
@@ -241,6 +255,15 @@ export function parseLamports(flag: string, raw: string): bigint {
  * A Pot's salt: `--salt <label>`, hashed by the SDK's `potSalt`, or `--salt-hex <bytes32>`, exactly
  * 32 bytes — never both. Neither is the zero salt, the one Pot an owner has by default.
  */
+/** `--intent-salt`: an intent route's salt, exactly 32 bytes of hex. */
+export function parseIntentSalt(hex: string): Hex {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new UsageError(`--intent-salt: '${hex}' is not exactly 32 bytes of 0x-prefixed hex`);
+  }
+
+  return hex.toLowerCase() as Hex;
+}
+
 export function parseSalt(label: string | undefined, hex: string | undefined): SaltChoice {
   if (label !== undefined && hex !== undefined) {
     throw new UsageError(
@@ -271,6 +294,18 @@ export function parseSalt(label: string | undefined, hex: string | undefined): S
 export interface SaltChoice {
   readonly salt: Hex;
   readonly flag?: string;
+}
+
+/** How an intent's reward is funded — `routes/portal.ts#IntentFundVia`, spelled the same here. */
+export function parseFundVia(raw: string, from = "--intent-fund-via"): IntentFundVia {
+  if (!(INTENT_FUND_VIA as readonly string[]).includes(raw)) {
+    throw new UsageError(
+      `${from}: '${raw}' is not ${INTENT_FUND_VIA.join(" or ")} — transfer pays the reward into ` +
+        "the intent's vault and then publishes; publishAndFund approves the Portal, which pulls it",
+    );
+  }
+
+  return raw as IntentFundVia;
 }
 
 /** Absolute Unix seconds. */

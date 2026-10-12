@@ -23,15 +23,18 @@ import {
 import { requireChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
-import { v12PredictPot } from "../src/deployments/pot.js";
+import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Pot } from "../src/evm/engine.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 import { NAMESPACE_KEYS, resolveNamespace } from "../src/routes/accessor-index.js";
 import { chainDefines } from "../src/routes/ambient.js";
-import { encodeRoute } from "../src/routes/encode.js";
+import { encodeRoute, hashIntent } from "../src/routes/encode.js";
 import { decodeEntryArguments, encodeEntryArguments } from "../src/routes/entry.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
+import { predictIntentVault, publishTx } from "../src/routes/portal.js";
+import { assembleIntent } from "../src/routes/intent.js";
 import { contractAddressOn } from "../src/routes/chain-module.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { sourceGlobals } from "../src/routes/source-globals.js";
@@ -48,6 +51,10 @@ const OWNER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const CREATOR: Address = "0x3333333333333333333333333333333333333333";
 const ENGINE = getAddress(v12EngineAddress());
+const INTENT_FLAGS = [
+  ...["--intent-deadline", "2000000000", "--intent-execution-fee", "0"],
+  ...["--intent-salt", `0x${"00".repeat(32)}`],
+];
 
 interface Run {
   readonly code: number;
@@ -365,6 +372,25 @@ const SPLIT = [
   "}",
   "",
 ].join("\n");
+const FIXED = [
+  "// @chain ethereum",
+  "Base.hop({ send: [{ token: USDC, amount: 2000 }], refundee: 0x3333333333333333333333333333333333333333 })",
+  "  .then(() => {",
+  "    USDC.transfer(RECIPIENT, 1000);",
+  "  });",
+  "",
+].join("\n");
+const MEASURED = [
+  "// @chain ethereum",
+  "function main(recipient: Address) {",
+  "  const amount = USDC.balanceOf(ctx.self());",
+  "  Base.hop({ send: [{ token: USDC, amount: amount }], refundee: 0x3333333333333333333333333333333333333333 })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount);",
+  "    });",
+  "}",
+  "",
+].join("\n");
 const TOKEN: Address = "0x1111111111111111111111111111111111111111";
 
 /** What a transaction-printing command printed on stdout; its advice goes to stderr. */
@@ -420,6 +446,115 @@ describe("sauce inspect", () => {
     expect((other.program as { source: unknown }).source).toEqual({
       file: another,
       matches: false,
+    });
+  });
+
+  it("lists a file's intents from the compile: each destination and the body it cooks there", async () => {
+    const fixed = file("fixed.sauce.ts", FIXED);
+    const defines = ["--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS];
+    const [body] = compileSauceProgram("ethereum", FIXED, {
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+      intents: { deadline: 2_000_000_000n, salt: `0x${"00".repeat(32)}`, executionFee: 0n },
+    }).bodies;
+    const fromFile = json(await sauce("inspect", fixed, ...defines, "--json"));
+    expect(fromFile.intents).toEqual([
+      {
+        destination: { id: "8453", chain: "base" },
+        body: { size: body!.bytecode.length, keccak256: keccak256(body!.bytecode) },
+        captures: [],
+      },
+    ]);
+    const text = await sauce("inspect", fixed, ...defines);
+    expect(text.stdout).toContain(
+      "intent to base: its body, cooked on the destination's shared Pot",
+    );
+    expect(text.stdout).toContain("`sauce simulate` reads them from the Portal's log");
+    // From the cook's bytes alone: an intent it publishes, funded as it says, and no more.
+    const data = await cookOf(fixed, ...defines);
+    const fromBytes = json(await sauce("inspect", data, "--chain", "ethereum", "--json"));
+    expect((fromBytes.program as { intents: unknown[] }).intents).toEqual([
+      { measured: true, fundVia: "transfer" },
+    ]);
+    // Opted out, the program approves and calls publishAndFund, and says so.
+    const optedOut = await cookOf(fixed, ...defines, "--intent-fund-via", "publishAndFund");
+    expect(
+      (
+        json(await sauce("inspect", optedOut, "--chain", "ethereum", "--json")).program as {
+          intents: unknown[];
+        }
+      ).intents,
+    ).toEqual([{ measured: true, fundVia: "publishAndFund" }]);
+  });
+
+  it("names what a body takes from the program as it runs, and refuses arguments for a file", async () => {
+    const measured = file("measured.sauce.ts", MEASURED);
+    const fromFile = await sauce("inspect", measured, ...INTENT_FLAGS);
+    expect(fromFile.code).toBe(0);
+    expect(fromFile.stdout).toMatch(
+      /given by the program as it runs: (recipient, amount|amount, recipient)/,
+    );
+    const data = await cookOf(measured, ...INTENT_FLAGS, "--args", RECIPIENT);
+    expect((await sauce("inspect", data, "--chain", "ethereum")).stdout).toContain(
+      "funded: the program pays the reward into the intent's vault, then calls Portal.publish",
+    );
+    // Given the source, the cook's arguments are decoded and its intents are the compile's.
+    const sourced = await sauce("inspect", data, "--source", measured, ...INTENT_FLAGS);
+    expect(sourced.stdout).toMatch(/recipient: Address = 0x6666/);
+    expect(sourced.stdout).toContain("intent to base: its body");
+    const argued = await sauce("inspect", measured, ...INTENT_FLAGS, "--args", RECIPIENT);
+    expect(argued.code).toBe(2);
+    expect(argued.stderr).toMatch(/--args: a file's main reads its arguments as it runs/);
+  });
+
+  it("reads a Kitchen.deployPot, the cook that publishes, and a Portal publish", async () => {
+    const pot = printed(
+      await sauce("pot", "--chain", "base", "--owner", OWNER, "--salt", "treasury"),
+    );
+    expect(json(await sauce("inspect", pot.data as string, "--json"))).toEqual({
+      call: "Kitchen.deployPot",
+      owner: OWNER,
+      salt: potSalt("treasury"),
+      pot: v12PredictPot(OWNER, potSalt("treasury")),
+    });
+    // `sauce intent publish --format` prints the cook on the owner's Pot, which publishes.
+    const fixed = file("fixed.sauce.ts", FIXED);
+    const cook = printed(
+      await sauce(
+        ...["intent", "publish", fixed, "--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS],
+        ...["--format", "json", "--from", OWNER, "--offline", "--value", "0"],
+      ),
+    );
+    expect(cook.to).toBe(v12PredictPot(OWNER, `0x${"00".repeat(32)}`));
+    expect(json(await sauce("inspect", cook.data as string, "--json"))).toMatchObject({
+      call: "Pot.cook",
+      program: { intents: [{ measured: true, fundVia: "transfer" }] },
+    });
+    // A Portal publish built elsewhere is read whole: its route, reward, hash and vault.
+    const intent = assembleIntent(
+      requireChain("ethereum"),
+      requireChain("base"),
+      {
+        salt: `0x${"00".repeat(32)}`,
+        deadline: 2_000_000_000n,
+        portal: ecoRoutesPortal("base"),
+        tokens: [],
+        calls: [],
+      },
+      {
+        deadline: 2_000_000_000n,
+        creator: CREATOR,
+        prover: "0x8888888888888888888888888888888888888888",
+        tokens: [{ token: TOKEN, amount: 2000n }],
+      },
+    );
+    const { intentHash } = hashIntent(intent);
+    const vault = predictIntentVault(intent, { portal: ecoRoutesPortal("ethereum") });
+    const publish = publishTx(intent, { portal: ecoRoutesPortal("ethereum") }).data;
+    const text = await sauce("inspect", publish, "--chain", "ethereum");
+    expect(text.stdout).toContain(`vault: ${vault}, funded once it holds the reward`);
+    expect(json(await sauce("inspect", publish, "--chain", "ethereum", "--json"))).toMatchObject({
+      call: "Portal.publish",
+      intent: { intentHash, vault, destination: { chain: "base" } },
     });
   });
 

@@ -20,7 +20,7 @@ import {
   parseTarget,
   UsageError,
 } from "./args.js";
-import type { Approver, CookInput, PotInput } from "./commands.js";
+import { type Approver, type CookInput, type PotInput } from "./commands.js";
 import {
   FUND_MODES,
   parseFund,
