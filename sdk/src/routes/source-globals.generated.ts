@@ -336,6 +336,22 @@ export interface BenqiQiTokenMethods {
   "repayBorrow"(arg0: bigint): bigint;
 }
 
+export interface BoundlessMarketMethods {
+  "submitRequest"(arg0: { "id": bigint; "requirements": { "callback": { "addr": bigint; "gasLimit": bigint }; "predicate": { "predicateType": bigint; "data": (string | SauceBytes) }; "selector": bigint }; "imageUrl": (string | SauceBytes); "input": { "inputType": bigint; "data": (string | SauceBytes) }; "offer": { "minPrice": bigint; "maxPrice": bigint; "rampUpStart": bigint; "rampUpPeriod": bigint; "lockTimeout": bigint; "timeout": bigint; "lockCollateral": bigint } }, arg1: (string | SauceBytes)): void;
+  "lockRequest"(arg0: { "id": bigint; "requirements": { "callback": { "addr": bigint; "gasLimit": bigint }; "predicate": { "predicateType": bigint; "data": (string | SauceBytes) }; "selector": bigint }; "imageUrl": (string | SauceBytes); "input": { "inputType": bigint; "data": (string | SauceBytes) }; "offer": { "minPrice": bigint; "maxPrice": bigint; "rampUpStart": bigint; "rampUpPeriod": bigint; "lockTimeout": bigint; "timeout": bigint; "lockCollateral": bigint } }, arg1: (string | SauceBytes)): void;
+  "fulfill"(arg0: (readonly ({ "requests": (readonly ({ "id": bigint; "predicate": { "predicateType": bigint; "data": (string | SauceBytes) }; "callback": { "addr": bigint; "gasLimit": bigint }; "selector": bigint; "imageUrlHash": bigint; "inputDigest": bigint; "offerDigest": bigint })[] | SauceArray<{ "id": bigint; "predicate": { "predicateType": bigint; "data": (string | SauceBytes) }; "callback": { "addr": bigint; "gasLimit": bigint }; "selector": bigint; "imageUrlHash": bigint; "inputDigest": bigint; "offerDigest": bigint }>); "fills": (readonly ({ "claimDigest": bigint; "fulfillmentDataType": bigint; "fulfillmentData": (string | SauceBytes); "seal": (string | SauceBytes) })[] | SauceArray<{ "claimDigest": bigint; "fulfillmentDataType": bigint; "fulfillmentData": (string | SauceBytes); "seal": (string | SauceBytes) }>); "assessorSeal": (string | SauceBytes); "prover": bigint })[] | SauceArray<{ "requests": (readonly ({ "id": bigint; "predicate": { "predicateType": bigint; "data": (string | SauceBytes) }; "callback": { "addr": bigint; "gasLimit": bigint }; "selector": bigint; "imageUrlHash": bigint; "inputDigest": bigint; "offerDigest": bigint })[] | SauceArray<{ "id": bigint; "predicate": { "predicateType": bigint; "data": (string | SauceBytes) }; "callback": { "addr": bigint; "gasLimit": bigint }; "selector": bigint; "imageUrlHash": bigint; "inputDigest": bigint; "offerDigest": bigint }>); "fills": (readonly ({ "claimDigest": bigint; "fulfillmentDataType": bigint; "fulfillmentData": (string | SauceBytes); "seal": (string | SauceBytes) })[] | SauceArray<{ "claimDigest": bigint; "fulfillmentDataType": bigint; "fulfillmentData": (string | SauceBytes); "seal": (string | SauceBytes) }>); "assessorSeal": (string | SauceBytes); "prover": bigint }>)): SauceArray<SauceBytes>;
+  "deposit"(): void;
+  "depositTo"(arg0: bigint): void;
+  "withdraw"(arg0: bigint): void;
+  "balanceOf"(arg0: bigint): bigint;
+  "slash"(arg0: bigint): void;
+  "requestIsLocked"(arg0: bigint): boolean;
+  "requestIsFulfilled"(arg0: bigint): boolean;
+  "requestDeadline"(arg0: bigint): bigint;
+  "eip712DomainSeparator"(): bigint;
+  "COLLATERAL_TOKEN_CONTRACT"(): bigint;
+}
+
 export interface CamelotV2RouterMethods {
   "swapExactTokensForTokensSupportingFeeOnTransferTokens"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: bigint, arg4: bigint, arg5: bigint): void;
   "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
@@ -1244,6 +1260,24 @@ export interface SommelierCellarMethods {
   "convertToAssets"(arg0: bigint): bigint;
 }
 
+export interface SpaceAndTimeQueryRouterMethods {
+  "requestQuery"(arg0: { "version": bigint; "innerQuery": (string | SauceBytes); "parameters": (string | SauceBytes); "metadata": (string | SauceBytes) }, arg1: { "maxGasPrice": bigint; "gasLimit": bigint; "callbackContract": bigint; "selector": bigint; "callbackData": (string | SauceBytes) }, arg2: { "paymentAmount": bigint; "refundTo": bigint; "timeout": bigint }): bigint;
+  "cancelQuery"(arg0: bigint, arg1: { "paymentAmount": bigint; "refundTo": bigint; "timeout": bigint }): void;
+  "fulfillQuery"(arg0: { "version": bigint; "innerQuery": (string | SauceBytes); "parameters": (string | SauceBytes); "metadata": (string | SauceBytes) }, arg1: { "maxGasPrice": bigint; "gasLimit": bigint; "callbackContract": bigint; "selector": bigint; "callbackData": (string | SauceBytes) }, arg2: { "paymentAmount": bigint; "refundTo": bigint; "timeout": bigint }, arg3: bigint, arg4: (string | SauceBytes)): void;
+  "verifyQuery"(arg0: { "version": bigint; "innerQuery": (string | SauceBytes); "parameters": (string | SauceBytes); "metadata": (string | SauceBytes) }, arg1: (string | SauceBytes)): SauceBytes;
+  "baseCost"(): bigint;
+  "PAYMENT_TOKEN"(): bigint;
+  "EXECUTOR"(): bigint;
+  "versions"(arg0: bigint): bigint;
+  "pendingPayments"(arg0: bigint): bigint;
+  "openFulfillment"(): boolean;
+}
+
+export interface SpaceAndTimeCallbackExecutorMethods {
+  "maxGasLimit"(): bigint;
+  "gasCostConfig"(): [bigint, bigint, bigint, bigint, bigint] & { "nativeUsdFeed": bigint; "nativeStaleThreshold": bigint; "tokenUsdFeed": bigint; "tokenStaleThreshold": bigint; "scalingFactor": bigint };
+}
+
 export interface SparkPoolMethods {
   "supply"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
   "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
@@ -1275,6 +1309,16 @@ export interface StaderStakePoolManagerMethods {
 export interface StargatePoolMethods {
   "send"(arg0: { "dstEid": bigint; "to": bigint; "amountLD": bigint; "minAmountLD": bigint; "extraOptions": (string | SauceBytes); "composeMsg": (string | SauceBytes); "oftCmd": (string | SauceBytes) }, arg1: { "nativeFee": bigint; "lzTokenFee": bigint }, arg2: bigint): [{ "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } }, { "amountSentLD": bigint; "amountReceivedLD": bigint }] & { "msgReceipt": { "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } }; "oftReceipt": { "amountSentLD": bigint; "amountReceivedLD": bigint } };
   "quoteOFT"(arg0: { "dstEid": bigint; "to": bigint; "amountLD": bigint; "minAmountLD": bigint; "extraOptions": (string | SauceBytes); "composeMsg": (string | SauceBytes); "oftCmd": (string | SauceBytes) }): [{ "minAmountLD": bigint; "maxAmountLD": bigint }, SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>, { "amountSentLD": bigint; "amountReceivedLD": bigint }] & { "oftLimit": { "minAmountLD": bigint; "maxAmountLD": bigint }; "oftFeeDetails": SauceArray<{ "feeAmountLD": bigint; "description": SauceBytes }>; "oftReceipt": { "amountSentLD": bigint; "amountReceivedLD": bigint } };
+}
+
+export interface SuccinctSP1VerifierGatewayMethods {
+  "addRoute"(arg0: bigint): void;
+  "freezeRoute"(arg0: bigint): void;
+  "owner"(): bigint;
+  "renounceOwnership"(): void;
+  "routes"(arg0: bigint): [bigint, boolean] & { "verifier": bigint; "frozen": boolean };
+  "transferOwnership"(arg0: bigint): void;
+  "verifyProof"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes)): void;
 }
 
 export interface SuperfluidCFAForwarderMethods {
@@ -1740,6 +1784,10 @@ export interface BenqiSource extends BenqiComptrollerMethods {
   readonly QiToken: SauceInterface<BenqiQiTokenMethods>;
 }
 
+export interface BoundlessSource extends BoundlessMarketMethods {
+  readonly Market?: SauceContract<BoundlessMarketMethods>;
+}
+
 export interface CamelotSource {
   readonly V2Router?: SauceContract<CamelotV2RouterMethods>;
   readonly V3SwapRouter?: SauceContract<CamelotV3SwapRouterMethods>;
@@ -2198,6 +2246,11 @@ export interface SommelierSource {
   readonly CellarRouter?: bigint;
 }
 
+export interface SpaceAndTimeSource {
+  readonly QueryRouter?: SauceContract<SpaceAndTimeQueryRouterMethods>;
+  readonly CallbackExecutor?: SauceContract<SpaceAndTimeCallbackExecutorMethods>;
+}
+
 export interface SparkSource extends SparkPoolMethods {
   readonly Pool?: SauceContract<SparkPoolMethods>;
   readonly PoolAddressesProvider?: bigint;
@@ -2220,6 +2273,11 @@ export interface StargateSource {
   readonly PoolNative?: SauceContract<StargatePoolMethods>;
   readonly PoolUSDC?: SauceContract<StargatePoolMethods>;
   readonly PoolUSDT?: SauceContract<StargatePoolMethods>;
+}
+
+export interface SuccinctSource {
+  readonly VerifierGatewayGroth16?: SauceContract<SuccinctSP1VerifierGatewayMethods>;
+  readonly VerifierGatewayPlonk?: SauceContract<SuccinctSP1VerifierGatewayMethods>;
 }
 
 export interface SuperfluidSource extends SuperfluidCFAForwarderMethods {
@@ -2487,6 +2545,7 @@ declare global {
   const Baseswap: BaseswapSource;
   const Beefy: BeefySource;
   const Benqi: BenqiSource;
+  const Boundless: BoundlessSource;
   const Camelot: CamelotSource;
   const Cbeth: CbethSource;
   const Cctp: CctpSource;
@@ -2577,11 +2636,13 @@ declare global {
   const Silo: SiloSource;
   const Socket: SocketSource;
   const Sommelier: SommelierSource;
+  const SpaceAndTime: SpaceAndTimeSource;
   const Spark: SparkSource;
   const Spookyswap: SpookyswapSource;
   const Squid: SquidSource;
   const Stader: StaderSource;
   const Stargate: StargateSource;
+  const Succinct: SuccinctSource;
   const Superfluid: SuperfluidSource;
   const SushiswapV2: SushiswapV2Source;
   const Swell: SwellSource;

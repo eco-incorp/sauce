@@ -554,6 +554,13 @@ const COPY_FRAMING = [
 // Skills a change of their own rewrites, with the reason; an exemption no longer needed fails.
 const COPY_FRAMING_EXEMPT = {};
 const copyFramingUsed = new Set();
+// Skills that name a prover for another reason than eco-routes', with the reason; the Portal stays
+// sauce-intents' in every one. An exemption no longer needed fails.
+const PROVER_WORD_EXEMPT = {
+  "sauce-zk":
+    "a ZK coprocessor's prover (Boundless's, which locks and proves a request), the field's own term, not an eco-routes prover",
+};
+const proverWordUsed = new Set();
 // Docs inside the installed package are not the skills': a skill carries every fact it needs in its
 // SKILL.md and references/, which install with it. Only the TypeScript skill points into the package.
 const PACKAGE_DOCS =
@@ -687,12 +694,15 @@ function wording(skill, file) {
     }
     if (/multicall|magic header/i.test(line) && !/\b(never|not|don't|do not|isn't)\b/i.test(line))
       fail(where(i), "describes Sauce as a multicall or with a magic header");
-    if (
-      skill.dir !== INTENTS_SKILL &&
-      !isGenerated(file) &&
-      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line)
-    )
-      fail(where(i), `names the Portal or a prover outside ${INTENTS_SKILL}`);
+    if (skill.dir !== INTENTS_SKILL && !isGenerated(file)) {
+      const portal = /\b(?:Portal|portal)s?\b/.test(line);
+      const prover = /\b[Pp]rovers?\b/.test(line);
+      if (prover && !portal && Object.hasOwn(PROVER_WORD_EXEMPT, skill.dir)) {
+        proverWordUsed.add(skill.dir);
+      } else if (portal || prover) {
+        fail(where(i), `names the Portal or a prover outside ${INTENTS_SKILL}`);
+      }
+    }
     for (const m of line.matchAll(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g)) {
       counts.addresses++;
       if (!KNOWN_ADDRESSES.has(m[0].toLowerCase()))
@@ -723,6 +733,13 @@ for (const skill of skills) {
     }))
       failures.push(problem);
   }
+}
+for (const [dir, why] of Object.entries(PROVER_WORD_EXEMPT)) {
+  if (skills.some((skill) => skill.dir === dir) && !proverWordUsed.has(dir))
+    fail(
+      `check-skills.mjs PROVER_WORD_EXEMPT`,
+      `exempts ${dir} (${why}), which no longer needs it: remove the exemption`,
+    );
 }
 for (const [dir, why] of Object.entries(COPY_FRAMING_EXEMPT)) {
   if (skills.some((skill) => skill.dir === dir) && !copyFramingUsed.has(dir))

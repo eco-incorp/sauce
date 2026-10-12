@@ -301,13 +301,15 @@ buys, exercises or settles a position it holds.
 | [Premia](protocols/premia.md) | — | `Premia`: arbitrum | arbitrum |
 | [Thales](protocols/thales.md) | — | `Thales`: optimism | optimism |
 
-## Oracles (4)
+## Oracles (5)
 
 ### Choosing between them
 
 Chainlink feeds are read on chain (`latestRoundData`): check `updatedAt` against a staleness
 bound and scale by the feed's decimals. Pyth is pulled: the price is updated in the same
-transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
+transaction (`updatePriceFeeds`, paying its fee as value) before it is read. Space and Time
+answers a SQL query over indexed chain data later, proven, by calling the requester back; a
+program asks it with `@sauce/zk` ([proofs](../guides/async.md#proofs-saucezk)).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
@@ -315,6 +317,7 @@ transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
 | [Chainlink VRF](protocols/chainlink-vrf.md) | — | `ChainlinkVrf`: ethereum, base | ethereum, base |
 | [Pyth Network](protocols/pyth.md) | — | `Pyth`: ethereum | ethereum |
 | [Pyth Entropy](protocols/pyth-entropy.md) | — | `PythEntropy`: base | base |
+| [Space and Time](protocols/space-and-time.md) | — | `SpaceAndTime`: ethereum, base | ethereum, base |
 
 ## Payments and streaming (2)
 
@@ -338,17 +341,21 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](protocols/seaport.md) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (9)
+## Infrastructure and standards (11)
 
 ### Choosing between them
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
 ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
-([intents](../guides/intents.md)).
+([intents](../guides/intents.md)). Boundless is RISC Zero's proof market, on Base: it proves a guest program
+ran and calls the requester back with its journal; a program waits on it with `@sauce/zk`
+([proofs](../guides/async.md#proofs-saucezk)). Succinct's SP1 verifier gateways check a proof that an SP1 program ran in the
+same call, on Ethereum and Base, for a program that brings its proof with it.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
+| [Boundless](protocols/boundless.md) | — | `Boundless`: base | base |
 | [Eco Routes](protocols/eco-routes.md) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](protocols/ens.md) | — | `Ens`: ethereum | ethereum |
 | [ERC20](protocols/erc20.md) | — | — | none recorded |
@@ -358,6 +365,7 @@ ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intent
 | [Instadapp](protocols/instadapp.md) | — | `Instadapp`: ethereum | ethereum |
 | [Permit2](protocols/permit2.md) | — | `Permit2`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
 | [Safe](protocols/safe.md) | — | `Safe`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
+| [Succinct SP1](protocols/succinct.md) | — | `Succinct`: ethereum, base | ethereum, base |
 
 ## Family aliases
 

@@ -54,7 +54,13 @@
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
-    ]
+    ],
+    "sauce-zk/examples/counter.sauce.ts": ["sdk/test/std/zk/risc0.e2e.test.ts"],
+    "sauce-zk/examples/even-number.sauce.ts": ["sdk/test/std/zk/risc0.e2e.test.ts"],
+    "sauce-zk/examples/fibonacci.sauce.ts": ["sdk/test/std/zk/sp1.e2e.test.ts"],
+    "sauce-zk/examples/hello-world.sauce.ts": ["sdk/test/std/zk/sql.e2e.test.ts"],
+    "sauce-zk/examples/proven-guest.sauce.ts": ["sdk/test/std/zk/risc0.e2e.test.ts"],
+    "sauce-zk/examples/proven-payout.sauce.ts": ["sdk/test/std/zk/sql.e2e.test.ts"]
   },
   "compileOnly": {
     "sauce-globals/examples/globals.sauce.ts": "compiled, and its token-write lowering pinned, by globals.mts; no suite executes it",

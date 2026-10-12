@@ -302,13 +302,15 @@ buys, exercises or settles a position it holds.
 | [Premia](premia.md) ([registry](registry/premia.md)) | — | `Premia`: arbitrum | arbitrum |
 | [Thales](thales.md) ([registry](registry/thales.md)) | — | `Thales`: optimism | optimism |
 
-## Oracles (4)
+## Oracles (5)
 
 ### Choosing between them
 
 Chainlink feeds are read on chain (`latestRoundData`): check `updatedAt` against a staleness
 bound and scale by the feed's decimals. Pyth is pulled: the price is updated in the same
-transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
+transaction (`updatePriceFeeds`, paying its fee as value) before it is read. Space and Time
+answers a SQL query over indexed chain data later, proven, by calling the requester back; a
+program asks it with `@sauce/zk` (`sauce-zk`).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
@@ -316,6 +318,7 @@ transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
 | [Chainlink VRF](chainlink-vrf.md) ([registry](registry/chainlink-vrf.md)) | — | `ChainlinkVrf`: ethereum, base | ethereum, base |
 | [Pyth Network](pyth.md) ([registry](registry/pyth.md)) | — | `Pyth`: ethereum | ethereum |
 | [Pyth Entropy](pyth-entropy.md) ([registry](registry/pyth-entropy.md)) | — | `PythEntropy`: base | base |
+| [Space and Time](space-and-time.md) ([registry](registry/space-and-time.md)) | — | `SpaceAndTime`: ethereum, base | ethereum, base |
 
 ## Payments and streaming (2)
 
@@ -339,17 +342,21 @@ Seaport fills orders that makers signed off chain.
 | --- | --- | --- | --- |
 | [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
-## Infrastructure and standards (9)
+## Infrastructure and standards (11)
 
 ### Choosing between them
 
 Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
 ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
 ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
-(`sauce-intents`).
+(`sauce-intents`). Boundless is RISC Zero's proof market, on Base: it proves a guest program
+ran and calls the requester back with its journal; a program waits on it with `@sauce/zk`
+(`sauce-zk`). Succinct's SP1 verifier gateways check a proof that an SP1 program ran in the
+same call, on Ethereum and Base, for a program that brings its proof with it.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
+| [Boundless](boundless.md) ([registry](registry/boundless.md)) | — | `Boundless`: base | base |
 | Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](ens.md) ([registry](registry/ens.md)) | — | `Ens`: ethereum | ethereum |
 | [ERC20](erc20.md) ([registry](registry/erc20.md)) | — | — | none recorded |
@@ -359,3 +366,4 @@ ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intent
 | [Instadapp](instadapp.md) ([registry](registry/instadapp.md)) | — | `Instadapp`: ethereum | ethereum |
 | [Permit2](permit2.md) ([registry](registry/permit2.md)) | — | `Permit2`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
 | [Safe](safe.md) ([registry](registry/safe.md)) | — | `Safe`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
+| [Succinct SP1](succinct.md) ([registry](registry/succinct.md)) | — | `Succinct`: ethereum, base | ethereum, base |

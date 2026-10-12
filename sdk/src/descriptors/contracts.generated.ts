@@ -40,6 +40,8 @@ import * as beefyAbis from "../protocols/beefy/abis.js";
 import { deployments as beefyDeployments } from "../protocols/beefy/addresses.js";
 import * as benqiAbis from "../protocols/benqi/abis.js";
 import { deployments as benqiDeployments } from "../protocols/benqi/addresses.js";
+import * as boundlessAbis from "../protocols/boundless/abis.js";
+import { deployments as boundlessDeployments } from "../protocols/boundless/addresses.js";
 import * as camelotAbis from "../protocols/camelot/abis.js";
 import { deployments as camelotDeployments } from "../protocols/camelot/addresses.js";
 import * as cbethAbis from "../protocols/cbeth/abis.js";
@@ -220,6 +222,8 @@ import * as socketAbis from "../protocols/socket/abis.js";
 import { deployments as socketDeployments } from "../protocols/socket/addresses.js";
 import * as sommelierAbis from "../protocols/sommelier/abis.js";
 import { deployments as sommelierDeployments } from "../protocols/sommelier/addresses.js";
+import * as spaceAndTimeAbis from "../protocols/space-and-time/abis.js";
+import { deployments as spaceAndTimeDeployments } from "../protocols/space-and-time/addresses.js";
 import * as sparkAbis from "../protocols/spark/abis.js";
 import { deployments as sparkDeployments } from "../protocols/spark/addresses.js";
 import * as spookyswapAbis from "../protocols/spookyswap/abis.js";
@@ -230,6 +234,8 @@ import * as staderAbis from "../protocols/stader/abis.js";
 import { deployments as staderDeployments } from "../protocols/stader/addresses.js";
 import * as stargateAbis from "../protocols/stargate/abis.js";
 import { deployments as stargateDeployments } from "../protocols/stargate/addresses.js";
+import * as succinctAbis from "../protocols/succinct/abis.js";
+import { deployments as succinctDeployments } from "../protocols/succinct/addresses.js";
 import * as superfluidAbis from "../protocols/superfluid/abis.js";
 import { deployments as superfluidDeployments } from "../protocols/superfluid/addresses.js";
 import * as sushiswapV2Abis from "../protocols/sushiswap-v2/abis.js";
@@ -299,6 +305,7 @@ export const PROTOCOL_SOURCES = {
   "baseswap": { abis: baseswapAbis, deployments: baseswapDeployments },
   "beefy": { abis: beefyAbis, deployments: beefyDeployments },
   "benqi": { abis: benqiAbis, deployments: benqiDeployments },
+  "boundless": { abis: boundlessAbis, deployments: boundlessDeployments },
   "camelot": { abis: camelotAbis, deployments: camelotDeployments },
   "cbeth": { abis: cbethAbis, deployments: cbethDeployments },
   "cctp": { abis: cctpAbis, deployments: cctpDeployments },
@@ -389,11 +396,13 @@ export const PROTOCOL_SOURCES = {
   "silo": { abis: siloAbis, deployments: siloDeployments },
   "socket": { abis: socketAbis, deployments: socketDeployments },
   "sommelier": { abis: sommelierAbis, deployments: sommelierDeployments },
+  "space-and-time": { abis: spaceAndTimeAbis, deployments: spaceAndTimeDeployments },
   "spark": { abis: sparkAbis, deployments: sparkDeployments },
   "spookyswap": { abis: spookyswapAbis, deployments: spookyswapDeployments },
   "squid": { abis: squidAbis, deployments: squidDeployments },
   "stader": { abis: staderAbis, deployments: staderDeployments },
   "stargate": { abis: stargateAbis, deployments: stargateDeployments },
+  "succinct": { abis: succinctAbis, deployments: succinctDeployments },
   "superfluid": { abis: superfluidAbis, deployments: superfluidDeployments },
   "sushiswap-v2": { abis: sushiswapV2Abis, deployments: sushiswapV2Deployments },
   "swell": { abis: swellAbis, deployments: swellDeployments },
@@ -420,7 +429,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 320 contracts across 137 protocols. */
+/** One entry per contract: 325 contracts across 140 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -483,6 +492,7 @@ export const CONTRACT_LINKS = [
   { protocol: "beefy", contract: "BIFI", kind: "address-only", roleKey: "BIFI", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "benqi", contract: "Comptroller", kind: "singleton", roleKey: "comptroller", abiExport: "BenqiComptrollerABI" },
   { protocol: "benqi", contract: "QiToken", kind: "interface", abiExport: "QiTokenABI" },
+  { protocol: "boundless", contract: "Market", kind: "singleton", roleKey: "market", abiExport: "BoundlessMarketABI" },
   { protocol: "camelot", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "CamelotV2RouterABI" },
   { protocol: "camelot", contract: "V3SwapRouter", kind: "singleton", roleKey: "v3SwapRouter", abiExport: "CamelotV3SwapRouterABI" },
   { protocol: "camelot", contract: "V2Factory", kind: "singleton", roleKey: "v2Factory", abiExport: "CamelotV2FactoryABI" },
@@ -671,6 +681,8 @@ export const CONTRACT_LINKS = [
   { protocol: "socket", contract: "SocketGateway", kind: "singleton", roleKey: "socketGateway", abiExport: "SocketGatewayABI" },
   { protocol: "sommelier", contract: "Cellar", kind: "interface", abiExport: "CellarABI" },
   { protocol: "sommelier", contract: "CellarRouter", kind: "address-only", roleKey: "cellarRouter", caveats: ["the registry has no ABI for this contract: its address only"] },
+  { protocol: "space-and-time", contract: "QueryRouter", kind: "singleton", roleKey: "queryRouter", abiExport: "QueryRouterABI" },
+  { protocol: "space-and-time", contract: "CallbackExecutor", kind: "singleton", roleKey: "callbackExecutor", abiExport: "CallbackExecutorABI" },
   { protocol: "spark", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "SparkPoolABI" },
   { protocol: "spark", contract: "PoolAddressesProvider", kind: "address-only", roleKey: "poolAddressesProvider", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "spookyswap", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "SpookySwapRouterABI", caveats: ["swapExactTokensForTokens(uint256,uint256,address[],address,uint256) is checked against the deployed bytecode only: the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)","addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256) is checked against the deployed bytecode only: the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)","removeLiquidity(address,address,uint256,uint256,uint256,address,uint256) is checked against the deployed bytecode only: the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)"] },
@@ -680,6 +692,8 @@ export const CONTRACT_LINKS = [
   { protocol: "stargate", contract: "PoolNative", kind: "singleton", roleKey: "poolNative", abiExport: "StargatePoolABI" },
   { protocol: "stargate", contract: "PoolUSDC", kind: "singleton", roleKey: "poolUSDC", abiExport: "StargatePoolABI" },
   { protocol: "stargate", contract: "PoolUSDT", kind: "singleton", roleKey: "poolUSDT", abiExport: "StargatePoolABI" },
+  { protocol: "succinct", contract: "VerifierGatewayGroth16", kind: "singleton", roleKey: "verifierGatewayGroth16", abiExport: "SP1VerifierGatewayABI" },
+  { protocol: "succinct", contract: "VerifierGatewayPlonk", kind: "singleton", roleKey: "verifierGatewayPlonk", abiExport: "SP1VerifierGatewayABI" },
   { protocol: "superfluid", contract: "CFAForwarder", kind: "singleton", roleKey: "cfaForwarder", abiExport: "CFAForwarderABI" },
   { protocol: "superfluid", contract: "Host", kind: "address-only", roleKey: "host", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "sushiswap-v2", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "SushiSwapV2FactoryABI" },
@@ -857,6 +871,10 @@ export interface BeefyContracts {
 export interface BenqiContracts {
   readonly Comptroller: Contract<typeof benqiAbis.BenqiComptrollerABI>;
   readonly QiToken: InterfaceContract<typeof benqiAbis.QiTokenABI>;
+}
+
+export interface BoundlessContracts {
+  readonly Market: Contract<typeof boundlessAbis.BoundlessMarketABI>;
 }
 
 export interface CamelotContracts {
@@ -1317,6 +1335,11 @@ export interface SommelierContracts {
   readonly CellarRouter: AddressOnlyContract;
 }
 
+export interface SpaceAndTimeContracts {
+  readonly QueryRouter: Contract<typeof spaceAndTimeAbis.QueryRouterABI>;
+  readonly CallbackExecutor: Contract<typeof spaceAndTimeAbis.CallbackExecutorABI>;
+}
+
 export interface SparkContracts {
   readonly Pool: Contract<typeof sparkAbis.SparkPoolABI>;
   readonly PoolAddressesProvider: AddressOnlyContract;
@@ -1339,6 +1362,11 @@ export interface StargateContracts {
   readonly PoolNative: Contract<typeof stargateAbis.StargatePoolABI>;
   readonly PoolUSDC: Contract<typeof stargateAbis.StargatePoolABI>;
   readonly PoolUSDT: Contract<typeof stargateAbis.StargatePoolABI>;
+}
+
+export interface SuccinctContracts {
+  readonly VerifierGatewayGroth16: Contract<typeof succinctAbis.SP1VerifierGatewayABI>;
+  readonly VerifierGatewayPlonk: Contract<typeof succinctAbis.SP1VerifierGatewayABI>;
 }
 
 export interface SuperfluidContracts {
@@ -1609,6 +1637,7 @@ export interface ChainContracts {
   readonly Baseswap: BaseswapContracts;
   readonly Beefy: BeefyContracts;
   readonly Benqi: BenqiContracts;
+  readonly Boundless: BoundlessContracts;
   readonly Camelot: CamelotContracts;
   readonly Cbeth: CbethContracts;
   readonly Cctp: CctpContracts;
@@ -1699,11 +1728,13 @@ export interface ChainContracts {
   readonly Silo: SiloContracts;
   readonly Socket: SocketContracts;
   readonly Sommelier: SommelierContracts;
+  readonly SpaceAndTime: SpaceAndTimeContracts;
   readonly Spark: SparkContracts;
   readonly Spookyswap: SpookyswapContracts;
   readonly Squid: SquidContracts;
   readonly Stader: StaderContracts;
   readonly Stargate: StargateContracts;
+  readonly Succinct: SuccinctContracts;
   readonly Superfluid: SuperfluidContracts;
   readonly SushiswapV2: SushiswapV2Contracts;
   readonly Swell: SwellContracts;

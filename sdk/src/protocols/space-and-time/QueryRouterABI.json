@@ -1,0 +1,494 @@
+{
+  "abi": [
+    {
+      "name": "requestQuery",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "query",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "version",
+              "type": "bytes32"
+            },
+            {
+              "name": "innerQuery",
+              "type": "bytes"
+            },
+            {
+              "name": "parameters",
+              "type": "bytes"
+            },
+            {
+              "name": "metadata",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "callback",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "maxGasPrice",
+              "type": "uint256"
+            },
+            {
+              "name": "gasLimit",
+              "type": "uint64"
+            },
+            {
+              "name": "callbackContract",
+              "type": "address"
+            },
+            {
+              "name": "selector",
+              "type": "bytes4"
+            },
+            {
+              "name": "callbackData",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "payment",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "paymentAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "refundTo",
+              "type": "address"
+            },
+            {
+              "name": "timeout",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "queryId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "cancelQuery",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "bytes32"
+        },
+        {
+          "name": "payment",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "paymentAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "refundTo",
+              "type": "address"
+            },
+            {
+              "name": "timeout",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "fulfillQuery",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "query",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "version",
+              "type": "bytes32"
+            },
+            {
+              "name": "innerQuery",
+              "type": "bytes"
+            },
+            {
+              "name": "parameters",
+              "type": "bytes"
+            },
+            {
+              "name": "metadata",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "callback",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "maxGasPrice",
+              "type": "uint256"
+            },
+            {
+              "name": "gasLimit",
+              "type": "uint64"
+            },
+            {
+              "name": "callbackContract",
+              "type": "address"
+            },
+            {
+              "name": "selector",
+              "type": "bytes4"
+            },
+            {
+              "name": "callbackData",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "payment",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "paymentAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "refundTo",
+              "type": "address"
+            },
+            {
+              "name": "timeout",
+              "type": "uint64"
+            }
+          ]
+        },
+        {
+          "name": "queryNonce",
+          "type": "uint64"
+        },
+        {
+          "name": "proof",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "verifyQuery",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "query",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "version",
+              "type": "bytes32"
+            },
+            {
+              "name": "innerQuery",
+              "type": "bytes"
+            },
+            {
+              "name": "parameters",
+              "type": "bytes"
+            },
+            {
+              "name": "metadata",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "proof",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "baseCost",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "PAYMENT_TOKEN",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "EXECUTOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "versions",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "versionHash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verifier",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingPayments",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "paymentHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "openFulfillment",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "QueryRequested",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "queryNonce",
+          "type": "uint64",
+          "indexed": true
+        },
+        {
+          "name": "requester",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "query",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "version",
+              "type": "bytes32"
+            },
+            {
+              "name": "innerQuery",
+              "type": "bytes"
+            },
+            {
+              "name": "parameters",
+              "type": "bytes"
+            },
+            {
+              "name": "metadata",
+              "type": "bytes"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "callback",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "maxGasPrice",
+              "type": "uint256"
+            },
+            {
+              "name": "gasLimit",
+              "type": "uint64"
+            },
+            {
+              "name": "callbackContract",
+              "type": "address"
+            },
+            {
+              "name": "selector",
+              "type": "bytes4"
+            },
+            {
+              "name": "callbackData",
+              "type": "bytes"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "payment",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "paymentAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "refundTo",
+              "type": "address"
+            },
+            {
+              "name": "timeout",
+              "type": "uint64"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "QueryFulfilled",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "fulfiller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "result",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "QueryCancelled",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "refundRecipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "refundAmount",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "PayoutOccurred",
+      "inputs": [
+        {
+          "name": "queryId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "fulfiller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "refundRecipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "fulfillerAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "QueryNotFound",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "QueryTimeoutNotReached",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "UnsupportedQueryVersion",
+      "inputs": []
+    }
+  ]
+}
