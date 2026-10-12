@@ -14,6 +14,8 @@ export { compileSauceProgram } from "../../../sdk/dist/routes/sauce-route.js";
 export {
   encodeEntryArguments,
   mainReturnType,
+  parseEntryType,
+  type EntryType,
   type EntryValue,
 } from "../../../sdk/dist/routes/entry.js";
 export { decodeReturned, type Returned } from "../../../sdk/dist/routes/returned.js";

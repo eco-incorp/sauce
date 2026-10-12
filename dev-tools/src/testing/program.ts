@@ -14,7 +14,9 @@ import {
   decodeReturned,
   encodeEntryArguments,
   mainReturnType,
+  parseEntryType,
   type CanonicalChain,
+  type EntryType,
   type EntryValue,
   type Returned,
 } from "./sdk.js";
@@ -53,18 +55,24 @@ function load(input: ProgramInput): { source: string; path: string | undefined }
   return { source: readFileSync(path, "utf8"), path };
 }
 
-/** `Returned` (decimal strings) as test values (bigints). */
-function valueOf(returned: Returned): Value {
-  if (typeof returned === "string") return /^\d+$/.test(returned) ? BigInt(returned) : returned;
-  if (typeof returned === "boolean") return returned;
-  if (Array.isArray(returned)) return returned.map(valueOf);
+/** `returned`, read as `type`, as a test value: each integer the type declares as a bigint (it
+ *  comes as decimal text), everything else as it is — a string stays a string, digits or not. */
+function valueOf(type: EntryType, returned: Returned): Value {
+  switch (type.kind) {
+    case "uint":
+      return BigInt(returned as string);
+    case "array":
+      return (returned as readonly Returned[]).map((element) => valueOf(type.of, element));
+    case "tuple": {
+      const record = returned as { readonly [field: string]: Returned };
 
-  return Object.fromEntries(
-    Object.entries(returned as Record<string, Returned>).map(([key, field]) => [
-      key,
-      valueOf(field),
-    ]),
-  );
+      return Object.fromEntries(
+        type.fields.map((field) => [field.name, valueOf(field.type, record[field.name]!)]),
+      );
+    }
+    default:
+      return returned;
+  }
 }
 
 export function compileProgram(input: ProgramInput, chain: CanonicalChain): CompiledProgram {
@@ -105,7 +113,7 @@ export function compileProgram(input: ProgramInput, chain: CanonicalChain): Comp
       if (returnType === undefined) return undefined;
       const returned = decodeReturned(returnType, data, chain);
 
-      return returned === undefined ? undefined : valueOf(returned);
+      return returned === undefined ? undefined : valueOf(parseEntryType(returnType), returned);
     },
   };
 }
