@@ -642,6 +642,9 @@ describe(
       const USDC_BALANCE = { slot: 9n };
       /** COMP, and Compound's CometRewards on Ethereum, as Compound's docs list them. */
       const COMP: Address = "0xc00e94Cb662C3520282E6f5717214004A7f26888";
+      /** WBTC, a collateral of the market with 8 decimals, beside WETH's 18 and USDC's 6. */
+      const WBTC: Address = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
+      const WBTC_BALANCE = { slot: 0n };
       const REWARDS: Address = "0x1B0e765F6224C21223AeA2af16c1C46E38885a40";
       const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
 
@@ -743,15 +746,36 @@ describe(
         );
         assert.equal(market.borrowable, 0n);
 
-        // supply: 10 WETH of collateral, what the Pot can borrow its value at the factor.
+        // What a collateral balance lets the Pot borrow, in USD with 8 decimals, from the Comet's
+        // own reads: the balance at its asset's price over its asset's scale, at its factor.
+        const borrowingValue = async (asset: Address, balance: bigint): Promise<bigint> => {
+          const info = await read<{
+            priceFeed: Address;
+            scale: bigint;
+            borrowCollateralFactor: bigint;
+          }>("getAssetInfoByAddress", [asset]);
+          const price = await read<bigint>("getPrice", [info.priceFeed]);
+
+          return (((balance * price) / info.scale) * info.borrowCollateralFactor) / 10n ** 18n;
+        };
+
+        // supply: 10 WETH (18 decimals), then 0.5 WBTC (8), the Pot's limit their two values.
         const tenWeth = 10n * 10n ** 18n;
         await setBalance(env, WETH, WETH_BALANCE, env.pot, tenWeth);
         const supplied = asNumbers((await cook(FILE, args(1, WETH, tenWeth))) as Market);
         assert.equal(supplied.moved, tenWeth);
         assert.equal((await read<[bigint, bigint]>("userCollateral", [env.pot, WETH]))[0], tenWeth);
+        assert.equal(supplied.borrowable, await borrowingValue(WETH, tenWeth));
+        const halfWbtc = 5n * 10n ** 7n;
+        await setBalance(env, WBTC, WBTC_BALANCE, env.pot, halfWbtc);
+        const both = asNumbers((await cook(FILE, args(1, WBTC, halfWbtc))) as Market);
+        assert.equal(
+          (await read<[bigint, bigint]>("userCollateral", [env.pot, WBTC]))[0],
+          halfWbtc,
+        );
         const collateralUsd =
-          (((tenWeth * market.price) / 10n ** 8n) * market.borrowCollateralFactor) / 10n ** 18n;
-        assert.equal(supplied.borrowable, collateralUsd);
+          (await borrowingValue(WETH, tenWeth)) + (await borrowingValue(WBTC, halfWbtc));
+        assert.equal(both.borrowable, collateralUsd);
 
         // withdraw past nothing supplied: a 1,000 USDC borrow, the Pot's limit less the debt.
         const loan = 1000n * 10n ** 6n;
@@ -763,7 +787,8 @@ describe(
         const basePrice = await read<bigint>("getPrice", [
           await read<Address>("baseTokenPriceFeed"),
         ]);
-        const debtUsd = (owed * basePrice) / 10n ** 8n;
+        // The debt in USDC (6 decimals), at USDC's price over the base's own scale.
+        const debtUsd = (owed * basePrice) / (await read<bigint>("baseScale"));
         // The borrow, read at the present index as a negative principal: within a unit of rounding.
         assert.ok(
           after.borrowable <= collateralUsd - debtUsd + 1n &&
