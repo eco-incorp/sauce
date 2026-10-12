@@ -41,7 +41,8 @@ export interface HopStage {
 
 const SEND_ITEM = "SauceIntentTokenAmount | SauceIntentNative";
 const DELIVERY_ITEM = "SauceIntentTokenAmount";
-/** A hook: a closure whose body is one external call, read as data, never run here. */
+/** A hook: a closure whose body is one external call, read as data, never run here. A function
+ *  type in a union is parenthesized: `() => A | B` would read as a function returning `A | B`. */
 const HOOK = "() => unknown";
 
 export const HOP_FIELDS = {
@@ -98,7 +99,7 @@ export const HOP_FIELDS = {
       "given for that destination.",
   },
   before: {
-    ts: `${HOOK} | readonly (${HOOK})[]`,
+    ts: `(${HOOK}) | readonly (${HOOK})[]`,
     doc:
       "Calls the destination Portal's Executor makes before the delivered tokens move into the " +
       "Pot: a closure, or a list of closures, each one external call (a contract's method, or " +
@@ -107,7 +108,7 @@ export const HOP_FIELDS = {
       "the fill. EVM destinations only.",
   },
   after: {
-    ts: `${HOOK} | readonly (${HOOK})[]`,
+    ts: `(${HOOK}) | readonly (${HOOK})[]`,
     doc:
       "Calls the destination Portal's Executor makes after the body has run, as `before`'s are: " +
       "a closure, or a list of closures, each one external call, made exactly as written. What the body holds in its Pot " +

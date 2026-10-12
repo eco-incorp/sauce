@@ -106,13 +106,13 @@ export interface SauceHopConfig {
    * them, no delivery and no approve reset. A hook that reverts reverts the fill. EVM destinations
    * only.
    */
-  readonly before?: () => unknown | readonly (() => unknown)[];
+  readonly before?: (() => unknown) | readonly (() => unknown)[];
   /**
    * Calls the destination Portal's Executor makes after the body has run, as `before`'s are: a
    * closure, or a list of closures, each one external call, made exactly as written. What the body
    * holds in its Pot is not the Executor's to spend.
    */
-  readonly after?: () => unknown | readonly (() => unknown)[];
+  readonly after?: (() => unknown) | readonly (() => unknown)[];
 }
 
 /** A hop waiting for its body: give the body to `.then(...)`. */
