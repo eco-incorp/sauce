@@ -262,6 +262,55 @@ describe("kyberSwap and ecoSwap compile through the host", () => {
     expect(site!.request.pot).toBe(destinationPot("base"));
     expect(program.bodies.map((body) => body.destination.slug)).toEqual(["base"]);
   });
+
+  /** A hop to `chain` delivering 1 USDC, whose body is `body`. */
+  const hop = (chain: string, body: string) => `${chain}.hop({
+    send: { token: USDC, amount: 1010000 },
+    receive: { token: USDC, amount: 1000000 },
+    refundee: owner,
+    fee: 0,
+  }).then(() => {
+    ${body}
+  });`;
+  const swap = "const out = kyberSwap(USDC, WETH, 990000, 1);\n    WETH.transfer(owner, out);";
+
+  it("a body back on the root's chain swaps for that chain's shared Pot, not the root's", () => {
+    // Base, then Ethereum, then Base again: the last body runs on Base's shared Pot.
+    const source = `function main(owner: Address) {\n  ${hop("Ethereum", hop("Base", swap))}\n}`;
+    const program = compileSauceProgram("base", source, { swap: { pot: POT, placeholders: true } });
+    expect(program.swaps).toHaveLength(1);
+    const [site] = program.swaps;
+    expect(site!.request.chainId).toBe(8453);
+    expect(site!.inBody).toBe(true);
+    expect(site!.request.pot).toBe(destinationPot("base"));
+    expect(site!.request.pot).not.toBe(POT);
+  });
+
+  it("a body on the root's own chain swaps for the destination's shared Pot", () => {
+    const source = `function main(owner: Address) {\n  ${hop("Base", swap)}\n}`;
+    const program = compileSauceProgram("base", source, { swap: { pot: POT, placeholders: true } });
+    expect(program.swaps).toEqual([
+      expect.objectContaining({
+        inBody: true,
+        request: expect.objectContaining({ chainId: 8453, pot: destinationPot("base") }),
+      }),
+    ]);
+  });
+
+  it("the root's swap and a body's on one chain are two requests, each answered for its own Pot", () => {
+    // The same call twice on Base: in the root, for the root's Pot, and in a Base body, for the
+    // shared one. Were the two scopes one, the compiler would ask the host once and both calls
+    // would read the root's route.
+    const source = `function main(owner: Address) {
+  ${swap}
+  ${hop("Base", swap)}
+}`;
+    const program = compileSauceProgram("base", source, { swap: { pot: POT, placeholders: true } });
+    expect(program.swaps.map((site) => [site.inBody, site.request.pot])).toEqual([
+      [false, POT],
+      [true, destinationPot("base")],
+    ]);
+  });
 });
 
 describe("what kyberSwap and ecoSwap refuse", () => {
