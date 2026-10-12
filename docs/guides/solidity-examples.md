@@ -34,7 +34,7 @@ not ship with.
 | [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 75 (31) |
 | [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 162 (116) |
 | [Aave V3: credit delegation](#aave-v3-credit-delegation) | [aave/code-examples-protocol, `MyV2CreditDelegation.sol`](https://github.com/aave/code-examples-protocol/blob/c343d266d04f210e1de9a7f008fdbc8ad63e5c22/V2/Credit%20Delegation/MyV2CreditDelegation.sol) | 83 (33) | 81 (42) |
-| [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 197 (140) |
+| [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 203 (141) |
 | [Morpho Blue: the snippets](#morpho-blue-the-snippets) | [morpho-org/morpho-blue-snippets, `MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol) | 380 (219) | 256 (197) |
 | [Pendle: the router samples](#pendle-the-router-samples) | [pendle-finance/pendle-examples-public, `RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol) | 265 (204) | 226 (172) |
 | [Uniswap V4: the swap guide](#uniswap-v4-the-swap-guide) | [Uniswap/docs, `swapping.mdx`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/protocols/v4/guides/swapping/swapping.mdx) | 79 (61) | 80 (42) |
@@ -517,7 +517,7 @@ function main(step: Uint256, asset: Address, amount: Uint256, account: Address):
 
 ## Compound III: MyContract
 
-Ported from compound-developers/compound-3-developer-faq, [`contracts/MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol): 337 lines of Solidity, 225 of them code. In Sauce, `compound-v3-my-contract.sauce.ts`: 197 lines, 140 of them code.
+Ported from compound-developers/compound-3-developer-faq, [`contracts/MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol): 337 lines of Solidity, 225 of them code. In Sauce, `compound-v3-my-contract.sauce.ts`: 203 lines, 141 of them code.
 
 ```ts
 // Compound's own example, ported: `MyContract` of the Compound III developer FAQ supplies to a
@@ -534,10 +534,13 @@ Ported from compound-developers/compound-3-developer-faq, [`contracts/MyContract
 // `comet` is a `main` input, and the Pot is the account. Its `presentValue` cast a negative
 // principal to unsigned before scaling it, which reads a borrower's debt as a vast supply: here the
 // principal's sign is taken first, as Comet's own does, and the debt kept apart from the collateral
-// until the end, since SauceScript's arithmetic is unsigned. Its `getAllAssetInfos` logged every asset's
-// settings for a developer to read; a simulation returns what a program reads instead, so it is
-// left out. The Comet and CometRewards functions are in Comet.json beside this file, since the
-// registry's ABI declares only the Comet's supply and withdraw paths and balances.
+// until the end, since SauceScript's arithmetic is unsigned. It divided each amount at its price by
+// the price's scale, 1e8, which leaves WETH in 18 decimals beside USDC in 6: each is divided by its
+// own token's scale here (`baseScale`, an asset's `scale`), so they sum in USD with 8 decimals.
+// Its `getAllAssetInfos` logged every asset's settings for a developer to read; a simulation
+// returns what a program reads instead, so it is left out. The Comet and CometRewards functions
+// are in Comet.json beside this file, since the registry's ABI declares only the Comet's supply
+// and withdraw paths and balances.
 //
 //   sauce run compound-v3-my-contract.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <step> <comet> <asset> <amount> <rewards> <rewardFeed>
@@ -634,6 +637,7 @@ function getBorrowableAmount(comet: Address, account: Address): Uint256 {
   const user = market.userBasic(account);
   const totals = market.totalsBasic();
   const scale = market.baseIndexScale();
+  const baseScale = market.baseScale();
   const basePrice = market.getPrice(market.baseTokenPriceFeed());
   // The base principal at the present index: a supply grows by the supply index, a borrow by the
   // borrow index. SauceScript's arithmetic is unsigned, so the two are kept apart until the end.
@@ -644,16 +648,18 @@ function getBorrowableAmount(comet: Address, account: Address): Uint256 {
   } else {
     borrowed = (-user.principal * totals.baseBorrowIndex) / scale;
   }
-  let liquidity = (supplied * basePrice) / 10 ** 8;
+  // Every amount in USD with 8 decimals, as the Comet prices it: an amount of a token at its price
+  // (8 decimals) over that token's own scale.
+  let liquidity = (supplied * basePrice) / baseScale;
   for (let i = 0; i < market.numAssets(); i += 1) {
     if (((user.assetsIn >> i) & 1) == 1) {
       const asset = market.getAssetInfo(i);
       const balance = market.userCollateral(account, asset.asset).balance;
-      const amount = (balance * market.getPrice(asset.priceFeed)) / 10 ** 8;
+      const amount = (balance * market.getPrice(asset.priceFeed)) / asset.scale;
       liquidity += (amount * asset.borrowCollateralFactor) / 10 ** 18;
     }
   }
-  const debt = (borrowed * basePrice) / 10 ** 8;
+  const debt = (borrowed * basePrice) / baseScale;
   return liquidity >= debt ? liquidity - debt : -(debt - liquidity);
 }
 
