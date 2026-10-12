@@ -5,7 +5,7 @@
  * ```js
  * export const chainId = __sauce_chain;
  * export const USDC = __sauce_chain == 1 ? new TokenOf("USDC", 0xa0b8…, 6) : __sauce_chain == 8453 ? … : undefined;
- * class NsUniswapV3 { constructor(id) { this.Factory = id == 1 ? ABI_3.at(0x1f98…) : … : undefined; this.Pool = (address) => ABI_4.at(address); } }
+ * class NsUniswapV3 { constructor(id) { this.Factory = id == 1 ? ABI_3.at(0x1f98…) : … : undefined; this.Pool = ABI_4; } }
  * export const UniswapV3 = new NsUniswapV3(__sauce_chain);
  * export const Arbitrum = new OnChain(42161); // its chain id, its contracts (`Arbitrum.UniswapV3.Factory`)
  * ```
@@ -32,8 +32,9 @@
  *  - every token symbol: a `Token` on the EVM, whose methods are `@sauce/token`'s SafeERC20
  *    functions, and a mint's key on Solana;
  *  - every protocol namespace (`UniswapV3`, a family's `Uniswap`), its contracts bound at their
- *    addresses on the chain, an interface as a function of an address (`UniswapV3.Pool(pool)`), and
- *    a protocol's one callable contract standing for the protocol (`Lido.submit(…)`);
+ *    addresses on the chain, an interface as its contract import, which a program binds by calling
+ *    it with an address (`UniswapV3.Pool(pool)`, the compiler's `.at(pool)`) or with `.at`, and a
+ *    protocol's one callable contract standing for the protocol (`Lido.submit(…)`);
  *  - every chain's name: its chain id where it is compared (`chainId == Ethereum`), its `hop(…)`,
  *    which opens an intent whose body runs there (through the compile's level module,
  *    {@link levelModuleSource}), and its contracts (`Base.UniswapV3.Factory`, and its eco-routes
@@ -287,9 +288,10 @@ class Writer {
     return `${this.imports.abiOf(descriptor)}.at(${word(address)})`;
   }
 
-  /** An interface as a function of an address. */
+  /** An interface as its contract import: called with an address, the compiler binds it there, as
+   *  `.at` does. */
   interfaceValue(descriptor: ContractDescriptor): string {
-    return `(address) => ${this.imports.abiOf(descriptor)}.at(address)`;
+    return this.imports.abiOf(descriptor);
   }
 
   /** `<value> on each EVM chain that has one`, as `byChain` cases. */

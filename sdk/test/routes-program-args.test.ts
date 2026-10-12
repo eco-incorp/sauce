@@ -75,13 +75,33 @@ describe("a program compiled for main's arguments", () => {
     expect(bound.manifest).toEqual(runs.manifest);
   });
 
-  it("refuses a value that is not one word, naming its place", () => {
-    const source = "function main(a: Uint256): Uint256 { return a; }";
-    expect(() => compileSauceProgram("base", source, { args: [[1n]] })).toThrow(EntryArgumentError);
-    expect(() => compileSauceProgram("base", source, { args: [{ a: 1n }] })).toThrow(
-      /args\[0\]: a program is compiled for words/,
+  it("binds a bytes, an array and a record as the literal a program would write", () => {
+    const bound = compileSauceProgram(
+      "base",
+      "interface Order { qty: Uint256; price: Uint256; }\nfunction main(data: bytes, xs: Uint256[], order: Order): Uint256 { return data.length + xs[1] + order.qty * order.price; }",
+      { args: [new Uint8Array([0x12, 0x34]), [1n, 2n, 3n], { qty: 3n, price: 5n }] },
     );
-    expect(() => compileSauceProgram("base", source, { args: [-1] })).toThrow(/args\[0\]/);
+    const literal = compileSauceProgram(
+      "base",
+      "function main(): Uint256 { const data = hex`1234`; const xs = [1, 2, 3]; const order = { qty: 3, price: 5 }; return data.length + xs[1] + order.qty * order.price; }",
+    );
+    expect(bound.entryParams).toEqual([]);
+    expect(Array.from(bound.bytecode)).toEqual(Array.from(literal.bytecode));
+  });
+
+  it("refuses what no parameter reads, naming its place, and the compiler a wrong shape", () => {
+    const source = "function main(a: Uint256): Uint256 { return a; }";
+    expect(() => compileSauceProgram("base", source, { args: [-1] })).toThrow(EntryArgumentError);
+    expect(() => compileSauceProgram("base", source, { args: [[1, -2]] })).toThrow(
+      /args\[0\]\[1\]: -2 is not an argument/,
+    );
+    let code: unknown;
+    try {
+      compileSauceProgram("base", source, { args: [[1n]] });
+    } catch (error) {
+      code = (error as { diagnostics?: { code?: string }[] }).diagnostics?.map((d) => d.code);
+    }
+    expect(code).toEqual(["ArgShape"]);
   });
 
   it("is held by the compiler to main's parameters: their count, and each word's type", () => {

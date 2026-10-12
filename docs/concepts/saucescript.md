@@ -87,15 +87,18 @@ limits. What most often surprises a TypeScript author:
   `~x + 1` reverts when `x` is zero. A route callback written in TypeScript uses `bigint` literals
   (`3000n`), which TypeScript types; the compiler reads both spellings as the same integer.
 - `bool` is kept apart from numbers, and `bytes`/`string` are byte strings: `"text"` is its UTF-8
-  bytes and `` hex`a9059cbb` `` raw bytes. Every untagged template literal is rejected, with or
-  without `${}`.
+  bytes and `` hex`a9059cbb` `` raw bytes. An untagged template literal is a string the compiler
+  builds while compiling, so every `${…}` in it must be a value it knows.
 - Annotations are checked, and an unannotated parameter is a number, so a helper that takes or
   returns an array, a record or bytes says so. `Account` roles (`Account<Writable, Signer>`) exist
   on SVM only; on EVM an `Account` is an address and a role is a compile error.
-- Destructuring binds the fields of something that produces a record — a multi-output contract
-  call, `abi.decode`, `crypto.findPDA` — and not of an array.
-- Functions are top-level declarations; `switch`, `try`/`catch`, classes, closures other than the
-  EVM `.catch(() => { ... })` handler, spread and optional chaining are rejected.
+- Destructuring binds a record's fields by position — a multi-output contract call, `abi.decode`,
+  `crypto.findPDA` — an object's or a record's by name, and an array the compiler knows; an array
+  known only at run time is indexed instead.
+- Functions are top-level declarations, and a parameter may have a default. Classes (one may extend
+  another), arrow functions and object literals are values the compiler holds while it compiles,
+  which is how a library writes its builders. `try`/`catch` works on EVM; `switch` and optional
+  chaining are rejected.
 - A module-level `const` is a compile-time value. A module-level `let` is re-initialised on every
   invocation — scratch space, not chain state. Reach for the target's storage builtins when
   something has to persist.

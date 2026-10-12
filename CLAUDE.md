@@ -412,8 +412,9 @@ and appended separately. With `compactArgs: true`, pass the returned schema and 
 to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
 `decodeCompactArguments`. Pair the artifact with an engine by exact version (`releases.json`,
 above); an ISA label does not query the deployed runtime and does not distinguish engine releases. There is no `argsLayout` and no `staged` compile option; `args` compiles `main` for its
-arguments (one word each, in `entryParams`' order, which then comes back empty), which
-`compileSauceProgram`'s `args` passes through (`routes/entry.ts#entryWords`). The SDK owns its SVM
+arguments (in `entryParams`' order, which then comes back empty: each the literal a program would
+write for its parameter, a word, `bytes`, a string, an array or a record), which
+`compileSauceProgram`'s `args` passes through (`routes/entry.ts#entryArguments`). The SDK owns its SVM
 layout types (`sdk/src/svm/layout.ts`).
 
 SVM settlement execution verification defaults to `wireFormat: "gated-v1"`: raw engine CPI
@@ -494,8 +495,8 @@ module's SafeERC20 functions with the token first —
 byte for byte the program that imports and calls them — and whose `valueOf()` is its address (on
 Solana a symbol is the mint's key); every protocol namespace, a static object holding contract
 bindings at this chain's addresses by the names the registry gives them (`protocol-names.ts`: a
-family alias, a protocol's one contract), an interface a function of an address
-(`UniswapV3.Pool(pool)`, exactly `.at(pool)`); and every chain's name — its id where compared
+family alias, a protocol's one contract), an interface its contract import, which the compiler
+binds when called with an address (`UniswapV3.Pool(pool)`, exactly `.at(pool)`); and every chain's name — its id where compared
 (`chainId == Ethereum` folds), its `Portal`, its contracts (`Base.UniswapV3.Factory`). The compiler
 evaluates a module constant only when a program reads it, so Ethereum's two thousand names cost a
 program its parsing and nothing else.

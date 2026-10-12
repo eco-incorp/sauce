@@ -131,9 +131,12 @@ export const rejections = [
     src: "function main(): Uint256 { const xs = [1n, true]; return 0n; }",
   },
   {
-    row: "template strings",
+    row: "a template string with a run-time `${…}`",
+    quotes: [
+      "a template literal's `${…}` needs a value known while compiling, and this one is known only when the program runs",
+    ],
     targets: ["evm", "svm"],
-    src: "function main(): bytes { return `text`; }",
+    src: "function main(x: Uint256): bytes { return `a${x}`; }",
   },
 
   // Operators
@@ -187,12 +190,12 @@ export const rejections = [
     src: "function main(a: Account, b: Account): bool { return a < b; }",
   },
   {
-    row: "`>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+`",
+    row: "`>>>`, `in`, `delete`, `void`, unary `+`",
     targets: ["evm"],
     src: "function main(a: Uint256, b: Uint256): Uint256 { return a >>> b; }",
   },
   {
-    row: "`>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+`",
+    row: "`>>>`, `in`, `delete`, `void`, unary `+`",
     targets: ["evm"],
     src: "function main(a: Uint256): Uint256 { return +a; }",
   },
@@ -245,22 +248,27 @@ export const rejections = [
   },
   {
     quotes: [
-      "a destructuring binding needs an initializer that produces a tuple — this one does not, so bind it to one name instead",
+      "an array pattern takes an array whose length is known while compiling, and this one's is known only at run time: read its elements by index",
     ],
     targets: ["evm"],
-    src: "function main(): Uint256 { const [a, b] = [1n, 2n]; return a; }",
+    src: "function main(xs: Uint256[]): Uint256 { const [a, b] = xs; return a + b; }",
   },
   {
-    row: "object destructuring `const { a } = t`",
+    row: "destructuring at module scope, or in an assignment",
     targets: ["evm"],
-    src: "function main(): Uint256 { const t = { a: 1n }; const { a } = t; return a; }",
+    src: "const [a, b] = [1n, 2n]; function main(): Uint256 { return 0n; }",
+  },
+  {
+    row: "destructuring at module scope, or in an assignment",
+    targets: ["evm"],
+    src: "function main(): Uint256 { let a = 1n; let b = 2n; [a, b] = [b, a]; return a; }",
   },
   {
     quotes: [
       "returning a bytes value from a function other than `main` needs a return-type annotation — …",
     ],
     targets: ["evm"],
-    src: "function f() { return hex`01`; } function main(): bytes { return f(); }",
+    src: "function f(x: bytes) { return x.slice(0, 4); } function main(b: bytes): bytes { return f(b); }",
   },
   {
     quotes: ["`f` does not return on every path"],
@@ -352,19 +360,64 @@ export const rejections = [
     src: "const FEES = [100n, 500n]; function main(i: Uint256): Uint256 { return FEES[i]; }",
   },
   {
-    row: "default parameters, rest parameters, destructuring parameters",
-    targets: ["evm"],
-    src: "function f(a: Uint256 = 1n): Uint256 { return a; } function main(): Uint256 { return f(2n); }",
-  },
-  {
-    row: "default parameters, rest parameters, destructuring parameters",
+    row: "rest parameters of a function compiled for run time",
     targets: ["evm"],
     src: "function f(...a: Uint256[]): Uint256 { return 0n; } function main(): Uint256 { return f(2n); }",
   },
   {
-    row: "spread `[...xs]`, `f(...xs)`",
+    quotes: [
+      "the default for `a` reads `b`, which has no value yet: a default reads only the parameters before its own",
+    ],
     targets: ["evm"],
-    src: "function main(): Uint256 { const a = [1n]; const b = [...a]; return b[0]; }",
+    src: "function f(a = b, b = 1n) { return a + b; } function main(): Uint256 { return f(); }",
+  },
+  {
+    quotes: [
+      "`main`'s parameters are its program's arguments, which its caller always passes: a default for `amount` would never apply",
+    ],
+    targets: ["evm"],
+    src: "function main(amount: Uint256 = 1n): Uint256 { return amount; }",
+  },
+  {
+    quotes: [
+      "`this` is read in `B`'s constructor before `super(…)` runs: a derived class works on the instance its base's constructor makes",
+    ],
+    targets: ["evm"],
+    src: "class A { constructor() { this.a = 1n; } } class B extends A { constructor() { this.b = 2n; super(); } } function main(): Uint256 { return new B().a; }",
+  },
+  {
+    quotes: [
+      "`+` with a string needs a value known while compiling, and this one is known only when the program runs",
+    ],
+    targets: ["evm"],
+    src: 'function main(n: Uint256): bytes { return "n=" + n; }',
+  },
+  {
+    quotes: [
+      "a closure compiled as a program of its own takes plain parameters, which its program's caller passes: no default, pattern or rest parameter",
+    ],
+    targets: ["evm"],
+    src: "function main(): Uint256 { const p = program((n = 1n) => { evm.sstore(1n, n); }, 8453n); return 0n; }",
+  },
+  {
+    row: "spread of a run-time array, `f(...xs)`",
+    quotes: [
+      "a spread of an array needs a value known while compiling, and this one is known only when the program runs",
+    ],
+    targets: ["evm"],
+    src: "function main(a: Uint256[]): Uint256 { const b = [...a]; return b[0]; }",
+  },
+  {
+    row: "spread of a run-time array, `f(...xs)`",
+    targets: ["evm"],
+    src: "function f(a: Uint256, b: Uint256): Uint256 { return a + b; } function main(): Uint256 { const xs = [1n, 2n]; return f(...xs); }",
+  },
+  {
+    quotes: [
+      "`.map` needs a value known while compiling, and this one is known only when the program runs",
+    ],
+    targets: ["evm"],
+    src: "function main(xs: Uint256[]): Uint256 { const ys = xs.map((x) => x * 2n); return ys[0]; }",
   },
   {
     row: "function expressions, nested `function` declarations",
@@ -734,7 +787,9 @@ export const rejections = [
     src: "function main(): Uint256 { let xs = [1n, 2n]; const ys = xs.slice(0n, 1n); return 0n; }",
   },
   {
-    quotes: ["`.slice` takes exactly 2 arguments (start, end), got N"],
+    quotes: [
+      "`.slice` at run time takes exactly 2 positions (start, end), but this call passes N; one position, as JavaScript takes it, is answered only for a string the compiler knows, in code it runs, such as a class's method",
+    ],
     targets: ["evm"],
     src: "function main(b: bytes): bytes { return b.slice(1n); }",
   },
@@ -782,6 +837,20 @@ export const rejections = [
     targets: ["evm"],
     contracts,
     src: "function main(t: Uint256, to: Uint256): bool { return ERC20.at(t).transfer(to, 5n); }",
+  },
+  {
+    quotes: [
+      "`ERC20(…)` binds the contract to the address it is called with, so it takes exactly 1 argument, but this call passes N",
+    ],
+    targets: ["evm"],
+    contracts,
+    src: "function main(t: Uint256, w: Uint256): Uint256 { return ERC20(t, w).balanceOf(w); }",
+  },
+  {
+    quotes: ["a binding of `ERC20` is not a function, so it cannot be called"],
+    targets: ["evm"],
+    contracts,
+    src: "function main(t: Uint256, w: Uint256): Uint256 { const b = ERC20.at(t); return b(w).balanceOf(w); }",
   },
   {
     quotes: ["`ERC20` has no method named `totalSupply`"],
