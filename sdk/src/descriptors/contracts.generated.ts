@@ -52,6 +52,8 @@ import * as chainlinkAbis from "../protocols/chainlink/abis.js";
 import { deployments as chainlinkDeployments } from "../protocols/chainlink/addresses.js";
 import * as chainlinkCcipAbis from "../protocols/chainlink-ccip/abis.js";
 import { deployments as chainlinkCcipDeployments } from "../protocols/chainlink-ccip/addresses.js";
+import * as chainlinkVrfAbis from "../protocols/chainlink-vrf/abis.js";
+import { deployments as chainlinkVrfDeployments } from "../protocols/chainlink-vrf/addresses.js";
 import * as circleGatewayAbis from "../protocols/circle-gateway/abis.js";
 import { deployments as circleGatewayDeployments } from "../protocols/circle-gateway/addresses.js";
 import * as compoundV2Abis from "../protocols/compound-v2/abis.js";
@@ -188,6 +190,8 @@ import * as pufferAbis from "../protocols/puffer/abis.js";
 import { deployments as pufferDeployments } from "../protocols/puffer/addresses.js";
 import * as pythAbis from "../protocols/pyth/abis.js";
 import { deployments as pythDeployments } from "../protocols/pyth/addresses.js";
+import * as pythEntropyAbis from "../protocols/pyth-entropy/abis.js";
+import { deployments as pythEntropyDeployments } from "../protocols/pyth-entropy/addresses.js";
 import * as quickswapAbis from "../protocols/quickswap/abis.js";
 import { deployments as quickswapDeployments } from "../protocols/quickswap/addresses.js";
 import * as radiantAbis from "../protocols/radiant/abis.js";
@@ -301,6 +305,7 @@ export const PROTOCOL_SOURCES = {
   "celer": { abis: celerAbis, deployments: celerDeployments },
   "chainlink": { abis: chainlinkAbis, deployments: chainlinkDeployments },
   "chainlink-ccip": { abis: chainlinkCcipAbis, deployments: chainlinkCcipDeployments },
+  "chainlink-vrf": { abis: chainlinkVrfAbis, deployments: chainlinkVrfDeployments },
   "circle-gateway": { abis: circleGatewayAbis, deployments: circleGatewayDeployments },
   "compound-v2": { abis: compoundV2Abis, deployments: compoundV2Deployments },
   "compound-v3": { abis: compoundV3Abis, deployments: compoundV3Deployments },
@@ -369,6 +374,7 @@ export const PROTOCOL_SOURCES = {
   "premia": { abis: premiaAbis, deployments: premiaDeployments },
   "puffer": { abis: pufferAbis, deployments: pufferDeployments },
   "pyth": { abis: pythAbis, deployments: pythDeployments },
+  "pyth-entropy": { abis: pythEntropyAbis, deployments: pythEntropyDeployments },
   "quickswap": { abis: quickswapAbis, deployments: quickswapDeployments },
   "radiant": { abis: radiantAbis, deployments: radiantDeployments },
   "ramses": { abis: ramsesAbis, deployments: ramsesDeployments },
@@ -414,7 +420,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 317 contracts across 135 protocols. */
+/** One entry per contract: 320 contracts across 137 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -491,6 +497,8 @@ export const CONTRACT_LINKS = [
   { protocol: "chainlink", contract: "KeystoneForwarder", kind: "singleton", roleKey: "keystoneForwarder", abiExport: "KeystoneForwarderABI" },
   { protocol: "chainlink", contract: "VrfV2Coordinator", kind: "address-only", roleKey: "vrfV2Coordinator", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "chainlink-ccip", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "CCIPRouterABI" },
+  { protocol: "chainlink-vrf", contract: "Wrapper", kind: "singleton", roleKey: "wrapper", abiExport: "VRFV2PlusWrapperABI" },
+  { protocol: "chainlink-vrf", contract: "Coordinator", kind: "singleton", roleKey: "coordinator", abiExport: "VRFCoordinatorV2_5ABI" },
   { protocol: "circle-gateway", contract: "GatewayWallet", kind: "singleton", roleKey: "gatewayWallet", abiExport: "GatewayWalletABI" },
   { protocol: "circle-gateway", contract: "GatewayMinter", kind: "singleton", roleKey: "gatewayMinter", abiExport: "GatewayMinterABI" },
   { protocol: "compound-v2", contract: "CUSDC", kind: "singleton", roleKey: "cUSDC", abiExport: "CErc20ABI" },
@@ -631,6 +639,7 @@ export const CONTRACT_LINKS = [
   { protocol: "puffer", contract: "PufferVault", kind: "singleton", roleKey: "pufferVault", abiExport: "PufferVaultABI" },
   { protocol: "puffer", contract: "PufETH", kind: "address-only", roleKey: "pufETH", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "pyth", contract: "Oracle", kind: "singleton", roleKey: "oracle", abiExport: "PythOracleABI", caveats: ["updatePriceFeeds(bytes[]) is checked against the deployed bytecode only: the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode","getUpdateFee(bytes[]) is checked against the deployed bytecode only: the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode","getPrice(bytes32) is checked against the deployed bytecode only: the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode; the PythStructs.Price output types come from the Pyth SDK and are not verifiable"] },
+  { protocol: "pyth-entropy", contract: "Entropy", kind: "singleton", roleKey: "entropy", abiExport: "EntropyABI", caveats: ["requestV2() is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","requestV2(uint32) is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","requestV2(address,uint32) is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","requestV2(address,bytes32,uint32) is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","getDefaultProvider() is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","getFeeV2() is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","getFeeV2(uint32) is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","getFeeV2(address,uint32) is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","event Requested(address,address,uint64,bytes32,uint32,bytes) is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the topic is proven by its bytecode and a captured log, and the declaration is EntropyEventsV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)","event Revealed(address,address,uint64,bytes32,bytes32,bytes32,bool,bytes,uint32,bytes) is checked against the deployed bytecode only: the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the topic is proven by its bytecode and a captured log, and the declaration is EntropyEventsV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)"] },
   { protocol: "quickswap", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "QuickSwapV2RouterABI" },
   { protocol: "quickswap", contract: "V3SwapRouter", kind: "singleton", roleKey: "v3SwapRouter", abiExport: "QuickSwapV3SwapRouterABI" },
   { protocol: "quickswap", contract: "V2Factory", kind: "singleton", roleKey: "v2Factory", abiExport: "QuickSwapV2FactoryABI" },
@@ -880,6 +889,11 @@ export interface ChainlinkContracts {
 
 export interface ChainlinkCcipContracts {
   readonly Router: Contract<typeof chainlinkCcipAbis.CCIPRouterABI>;
+}
+
+export interface ChainlinkVrfContracts {
+  readonly Wrapper: Contract<typeof chainlinkVrfAbis.VRFV2PlusWrapperABI>;
+  readonly Coordinator: Contract<typeof chainlinkVrfAbis.VRFCoordinatorV2_5ABI>;
 }
 
 export interface CircleGatewayContracts {
@@ -1224,6 +1238,10 @@ export interface PufferContracts {
 
 export interface PythContracts {
   readonly Oracle: Contract<typeof pythAbis.PythOracleABI>;
+}
+
+export interface PythEntropyContracts {
+  readonly Entropy: Contract<typeof pythEntropyAbis.EntropyABI>;
 }
 
 export interface QuickswapContracts {
@@ -1597,6 +1615,7 @@ export interface ChainContracts {
   readonly Celer: CelerContracts;
   readonly Chainlink: ChainlinkContracts;
   readonly ChainlinkCcip: ChainlinkCcipContracts;
+  readonly ChainlinkVrf: ChainlinkVrfContracts;
   readonly CircleGateway: CircleGatewayContracts;
   readonly CompoundV2: CompoundV2Contracts;
   readonly CompoundV3: CompoundV3Contracts;
@@ -1665,6 +1684,7 @@ export interface ChainContracts {
   readonly Premia: PremiaContracts;
   readonly Puffer: PufferContracts;
   readonly Pyth: PythContracts;
+  readonly PythEntropy: PythEntropyContracts;
   readonly Quickswap: QuickswapContracts;
   readonly Radiant: RadiantContracts;
   readonly Ramses: RamsesContracts;

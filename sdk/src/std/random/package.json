@@ -1,0 +1,23 @@
+{
+  "name": "@sauce/random",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript's verifiable randomness, delivered to a `.then`: `Random.vrf({ words })` requests Chainlink VRF v2.5 random words, paid in the native coin through the chain's VRFV2PlusWrapper, and `Random.entropy()` a Pyth Entropy v2 random number; the body runs on the same Private Pot when the provider calls back. The handlers answer `rawFulfillRandomWords` and `_entropyCallback`. Built on `@sauce/async`. `main` names the NEUTRAL BASE the compiler suffixes per target (random.evm.js); there is no SVM arm, because the handlers a callback lands on are a Private Pot's Router's.",
+  "main": "random.js",
+  "handlers": [
+    {
+      "selector": "rawFulfillRandomWords(uint256,uint256[])",
+      "program": "vrf.handler.js",
+      "requires": [
+        "ChainlinkVrf.Wrapper"
+      ]
+    },
+    {
+      "selector": "_entropyCallback(uint64,address,bytes32)",
+      "program": "entropy.handler.js",
+      "requires": [
+        "PythEntropy.Entropy"
+      ]
+    }
+  ]
+}

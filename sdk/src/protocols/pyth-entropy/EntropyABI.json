@@ -1,0 +1,235 @@
+{
+  "abi": [
+    {
+      "name": "requestV2",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "assignedSequenceNumber",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "requestV2",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "gasLimit",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "assignedSequenceNumber",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "requestV2",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "provider",
+          "type": "address"
+        },
+        {
+          "name": "gasLimit",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "assignedSequenceNumber",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "requestV2",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "provider",
+          "type": "address"
+        },
+        {
+          "name": "userRandomNumber",
+          "type": "bytes32"
+        },
+        {
+          "name": "gasLimit",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "assignedSequenceNumber",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "getDefaultProvider",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "provider",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getFeeV2",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "feeAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getFeeV2",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "gasLimit",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "feeAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getFeeV2",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "provider",
+          "type": "address"
+        },
+        {
+          "name": "gasLimit",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "feeAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "Requested",
+      "inputs": [
+        {
+          "name": "provider",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sequenceNumber",
+          "type": "uint64",
+          "indexed": true
+        },
+        {
+          "name": "userContribution",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "gasLimit",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "extraArgs",
+          "type": "bytes",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "Revealed",
+      "inputs": [
+        {
+          "name": "provider",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sequenceNumber",
+          "type": "uint64",
+          "indexed": true
+        },
+        {
+          "name": "randomNumber",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "userContribution",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "providerContribution",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "callbackFailed",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "callbackReturnValue",
+          "type": "bytes",
+          "indexed": false
+        },
+        {
+          "name": "callbackGasUsed",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "extraArgs",
+          "type": "bytes",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    }
+  ]
+}

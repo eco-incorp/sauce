@@ -105,6 +105,8 @@ address.
 | [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | keystoneForwarder | `0x0b93082D9b3C7C97fAcd250082899BAcf3af3885` | `Chainlink.KeystoneForwarder` |
 | [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | vrfV2Coordinator | `0x271682DEB8C4E0901D1a1550aD2e64D568E69909` | `Chainlink.VrfV2Coordinator` |
 | [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0x80226fc0Ee2b096224EeAc085Bb9a8cba1146f7D` | `ChainlinkCcip.Router` |
+| [Chainlink VRF](../../sauce-protocols/references/registry/chainlink-vrf.md) | coordinator | `0xD7f86b4b8Cae7D942340FF628F82735b7a20893a` | `ChainlinkVrf.Coordinator` |
+| [Chainlink VRF](../../sauce-protocols/references/registry/chainlink-vrf.md) | wrapper | `0x02aae1A04f9828517b3007f83f6181900CaD910c` | `ChainlinkVrf.Wrapper` |
 | [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
 | [Compound V2](../../sauce-protocols/references/registry/compound-v2.md) | cETH | `0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5` | `CompoundV2.CETH` |

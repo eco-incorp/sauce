@@ -298,6 +298,14 @@
         "roles": ["router"]
       }
     },
+    "chainlink-vrf": {
+      "VRFV2PlusWrapperABI": {
+        "roles": ["wrapper"]
+      },
+      "VRFCoordinatorV2_5ABI": {
+        "roles": ["coordinator"]
+      }
+    },
     "circle-gateway": {
       "GatewayWalletABI": {
         "roles": ["gatewayWallet"],
@@ -992,6 +1000,23 @@
           "updatePriceFeeds(bytes[])": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode",
           "getUpdateFee(bytes[])": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode",
           "getPrice(bytes32)": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode; the PythStructs.Price output types come from the Pyth SDK and are not verifiable"
+        }
+      }
+    },
+    "pyth-entropy": {
+      "EntropyABI": {
+        "roles": ["entropy"],
+        "unverified": {
+          "requestV2()": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "requestV2(uint32)": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "requestV2(address,uint32)": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "requestV2(address,bytes32,uint32)": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "getDefaultProvider()": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "getFeeV2()": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "getFeeV2(uint32)": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "getFeeV2(address,uint32)": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode, and the declaration is IEntropyV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "event Requested(address,address,uint64,bytes32,uint32,bytes)": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the topic is proven by its bytecode and a captured log, and the declaration is EntropyEventsV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)",
+          "event Revealed(address,address,uint64,bytes32,bytes32,bytes32,bool,bytes,uint32,bytes)": "the Entropy implementation behind Base's ERC1967Proxy (0x4ced698548f7d068f2f6e92d66f404a8a10db83b) has no verified source on Sourcify, Blockscout or Routescan; the topic is proven by its bytecode and a captured log, and the declaration is EntropyEventsV2's (pyth-crosschain target_chains/ethereum/entropy_sdk/solidity)"
         }
       }
     },

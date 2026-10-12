@@ -248,7 +248,7 @@ function main(): Uint256 {
 reports, counts the update, and emits `RequestReserveUpdate`. In Sauce the program asks the
 workflow, and the report runs the same steps:
 
-```js
+````js
 import { Oracle } from "@sauce/oracle";
 
 function main(owner: Address) {
@@ -261,11 +261,90 @@ function main(owner: Address) {
     evm.sstore(counter, evm.sload(counter) + 1);
     const update = crypto.keccak256("RequestReserveUpdate((uint256,uint256))");
     log(abi.encode(totalMinted, totalReserve), update);
+## Randomness: `@sauce/random`
+
+`@sauce/random` asks for verifiable randomness and hands it to the body: `Random.vrf` from
+Chainlink VRF, on Ethereum and Base, and `Random.entropy` from Pyth Entropy, on Base. A coin flip
+for a prize:
+
+```js
+import { Random } from "@sauce/random";
+
+function main(heads: Address, tails: Address, prize: Uint256) {
+  Random.vrf({ words: 1 }).then((words) => {
+    USDC.transfer(words[0] % 2 == 0 ? heads : tails, prize);
   });
 }
-```
+````
 
 The contract takes `onReport` from anyone; the Pot runs the body only for a report Chainlink's
 forwarder delivers from the workflow owner it asked. `ProtocolWithBreaker` is the same shape with
 a branch: a report of `(uint8 action, string reason)` pauses the protocol and counts a trip, or
 resumes it, each with the contract's event.
+
+| Request                                               | The body receives                     | Defaults                                             |
+| ----------------------------------------------------- | ------------------------------------- | ---------------------------------------------------- |
+| `Random.vrf({ words, confirmations, gas, deadline })` | `words` random numbers, a `Uint256[]` | 1 word, 3 confirmations, `gas` sized, no deadline    |
+| `Random.entropy({ provider, gas, deadline })`         | one random 32-byte number             | Entropy's default provider, `gas` sized, no deadline |
+
+- **The Pot pays twice.** The request pays the provider's price in the native coin from the Pot's
+  balance when the program runs: VRF's wrapper price at the transaction's gas price, or Entropy's
+  fee. Exactly the price is paid, since both providers keep any excess. The callback's cook pays
+  the Kitchen's fee, so a request is refused unless the Pot keeps that fee after paying the price.
+- **`gas` is the callback's gas limit,** fixed and paid for with the request. Left out, the package
+  sizes it from what the callback runs as compiled: reaching the body, then an allowance for each
+  byte of the body, and of a combinator's body when the request is raced or joined. That covers
+  writes, hashing and a few token transfers; a body that loops, or calls out more than its size
+  suggests, needs `gas` given. VRF gives the callback exactly that much, and a callback that runs
+  out is spent, never retried.
+- **A callback never fails for the body.** A body that reverts is undone and its `.catch` runs, or
+  the Pot logs it unhandled; the handler first logs what arrived,
+  `RandomDelivered(bytes32 key, bytes value)`. A second delivery, or an answer after the request
+  expired, runs nothing. A call from anyone but the provider is refused.
+- **A request may never be answered.** Give it a deadline (`deadline`, or `.within(seconds)`), after
+  which anyone may call the Pot's `expire`, or race it against `Async.timeout`.
+- **Keys** are the provider's own ids: VRF's request id under its wrapper, and Entropy's sequence
+  number under its provider and the Entropy contract, since sequence numbers count per provider.
+
+### The official examples, in Sauce
+
+Chainlink's and Pyth's own example consumers port to Sauce with their behaviour kept: the
+contract's state in the Pot's storage, its events from the Pot, its callback as `.then`. A Pot
+already has what a contract needs only to exist (a constructor, an owner check, a `receive`, the
+check on who calls back), so each port is a fraction of the original:
+
+| Official example (Solidity)              | In Sauce                                                                   | Lines (code)        |
+| ---------------------------------------- | -------------------------------------------------------------------------- | ------------------- |
+| Chainlink `DirectFundingConsumer.sol`    | two VRF words, paid by direct funding; the request's status kept           | 119 (66) → 42 (18)  |
+| Chainlink `SubscriptionConsumer.sol`     | the same, paid by direct funding in place of a subscription                | 109 (57) → 41 (19)  |
+| Chainlink `VRFD20.sol`                   | a d20 rolled once per roller, and `house(player)` as a read                | 173 (80) → 86 (46)  |
+| Pyth `CoinFlip.sol`                      | a fair coin, `FlipRequest` and `FlipResult` logged                         | 128 (64) → 33 (11)  |
+| Pyth `NFTGrowth.sol` (and its `NFT.sol`) | a token levelled up, unchanged or killed; its ten-minute unlock a deadline | 183 (141) → 61 (34) |
+
+The sources are `smartcontractkit/documentation`'s `public/samples/VRF/v2-5/` and
+`pyth-network/pyth-examples`' `entropy/`; code lines leave out comments, blank lines, and the pragma and import lines. Each port numbers its requests in the Pot's own storage, so a record is keyed by that
+number rather than by the provider's id, which keys the promise. Pyth's CoinFlip, whole:
+
+```js
+import { Random } from "@sauce/random";
+
+function main(): Uint256 {
+  const flips = crypto.keccak256("CoinFlip.flips");
+  const sequenceNumber = evm.sload(flips) + 1;
+  evm.sstore(flips, sequenceNumber);
+  Random.entropy().then((randomNumber) => {
+    const isHeads = randomNumber % 2 == 0;
+    log(abi.encode(sequenceNumber, isHeads), crypto.keccak256("FlipResult(uint64,bool)"));
+  });
+  log(abi.encode(sequenceNumber), crypto.keccak256("FlipRequest(uint64)"));
+  return sequenceNumber;
+}
+```
+
+A request installs the handler its callback reaches in its own transaction, unless the Pot already
+answers with it, so there is nothing to install first. Installing them ahead of time only makes the
+first request cheaper; on a chain with one provider only its handler installs:
+
+```sh
+sauce run @sauce/random --chain base --wallet <name>
+```

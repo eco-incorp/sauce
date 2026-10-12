@@ -391,6 +391,20 @@ it on a Pot, and the gas a delivery needs.
   `sauce-async`'s.
 - **Asked as:** "Pay the invoice in USDC only if the ETH price my API reports is under 4,000."
 
+### `sauce-random`
+
+Verifiable randomness from `@sauce/random`: `Random.vrf`, Chainlink VRF random words on Ethereum
+and Base, and `Random.entropy`, a Pyth Entropy number on Base, each a promise whose `.then` runs
+with the randomness; what the Pot pays and keeps for the callback, the callback's gas, and a
+callback that fails, comes twice or never comes.
+
+- **Holds** a VRF coin flip paying USDC, an Entropy draw among three entrants raced against an
+  hour, and Chainlink's and Pyth's official example consumers ported (DirectFundingConsumer,
+  SubscriptionConsumer, VRFD20, CoinFlip, NFTGrowth), each against its Solidity line count.
+- **Load it** when a program needs a random number, with `sauce-async` for promises beyond one
+  request.
+- **Asked as:** "Flip a coin with Chainlink VRF and pay the prize to whoever wins."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

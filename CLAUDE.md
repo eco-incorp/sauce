@@ -74,7 +74,7 @@ regenerates `sdk/runtime/`.
 
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
+| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 137-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents; `sauce actions` lowers them                                  |
 | `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's building tools (and, over stdio, wallets), the agent skills   |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
@@ -1347,6 +1347,29 @@ yet released (`routerUnderTest()` reads `SAUCE_V12_ROUTER_CREATION_HEX`; it skip
 too). Settling reads a continuation's revert (`catch (e)` that reads `e`, encoded `CATCH 0x00 0xB8
 <len>`), so every settling case needs an engine built from the compiler's tree; the released v12-evm
 1.2.0 refuses it loudly, which the suite's one release case holds.
+
+**Randomness is `@sauce/random`** (`src/std/random/`, skill `sauce-random`), a package of that
+family over two registry protocols: `chainlink-vrf` (VRF v2.5's VRFV2PlusWrapper and coordinator,
+Ethereum and Base) and `pyth-entropy` (Entropy v2, Base only: it is not on Ethereum mainnet).
+`Random.vrf` pays the wrapper's `calculateRequestPriceNative` in native with ExtraArgsV1's
+`nativePayment` (the wrapper, not the coordinator, calls the Pot back, with EXACTLY the callback
+gas, and a callback that runs out is spent); `Random.entropy` pays `getFeeV2` (the callback gets AT
+MOST its gas, and a failed one stays open). A request is refused unless the Pot keeps the Kitchen's
+fee after paying, since the callback is a cook. Promise keys: `promiseKey(wrapper, requestId)` and
+`promiseKey(entropy, keccak256(abi.encode(provider, sequence)))`, since Entropy's sequence numbers
+count per provider. Each request lists its protocol's `Handler`, which the core installs in the
+request's own transaction when the Pot lacks it: the program its handler file (`vrf.handler.js`,
+`entropy.handler.js`) compiles to, byte for byte, which `compile.test.ts` holds, so a Pot
+pre-warmed with `sauce run @sauce/random` is not installed again. The handlers log
+`RandomDelivered(bytes32 key, bytes value)` and `fulfil`, so
+a duplicate or late delivery is the core's no-op and a reverting body never fails the provider's
+call. The callback gas defaults to `SAUCE_RANDOM_LANDING_GAS` plus `SAUCE_RANDOM_GAS_PER_BYTE` per
+byte of what settling runs (the continuation, and a combinator's `settles`), held within 3x of the
+measured need in `test/std/random/evm.e2e.test.ts`, whose providers are mocks
+(`test/evm/fixtures/Mock{VRFV2PlusWrapper,Entropy}.sol`, compiled with `--combined-json
+abi,bin,bin-runtime`) installed with `setCode` at the real Base addresses, so the package's own
+handlers authenticate them. A `.then` body captures numbers, addresses and bools, never a run-time
+array.
 
 ## Agent skills
 

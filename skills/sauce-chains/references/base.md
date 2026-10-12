@@ -85,6 +85,8 @@ address.
 | [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
 | [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | keystoneForwarder | `0xF8344CFd5c43616a4366C34E3EEE75af79a74482` | `Chainlink.KeystoneForwarder` |
 | [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0x881e3A65B4d4a04dD529061dd0071cf975F58bCD` | `ChainlinkCcip.Router` |
+| [Chainlink VRF](../../sauce-protocols/references/registry/chainlink-vrf.md) | coordinator | `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` | `ChainlinkVrf.Coordinator` |
+| [Chainlink VRF](../../sauce-protocols/references/registry/chainlink-vrf.md) | wrapper | `0xb0407dbe851f8318bd31404A49e658143C982F23` | `ChainlinkVrf.Wrapper` |
 | [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
 | [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cUSDCv3 | `0xb125E6687d4313864e53df431d5425969c15Eb2F` | `CompoundV3.CUSDCv3` |
@@ -113,6 +115,7 @@ address.
 | [ParaSwap](../../sauce-protocols/references/registry/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
 | [ParaSwap](../../sauce-protocols/references/registry/paraswap.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Permit2](../../sauce-protocols/references/registry/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
+| [Pyth Entropy](../../sauce-protocols/references/registry/pyth-entropy.md) | entropy | `0x6E7D74FA7d5c90FEF9F0512987605a6d546181Bb` | `PythEntropy.Entropy` |
 | [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
 | [Seamless](../../sauce-protocols/references/registry/seamless.md) | pool | `0x8F44Fd754285aa6A2b8B9B97739B79746e0475a7` | `Seamless.Pool` |
 | [Seamless](../../sauce-protocols/references/registry/seamless.md) | poolAddressesProvider | `0x0E02EB705be564c2bF0067928A8f8DD89a82B26E` | `Seamless.PoolAddressesProvider` |
