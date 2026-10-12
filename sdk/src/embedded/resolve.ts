@@ -27,6 +27,7 @@ const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/token": "token",
   "@sauce/router": "router",
   "@sauce/hop": "hop",
+  "@sauce/remote": "remote",
   "@sauce/async": "async",
   "@sauce/oracle": "oracle",
   "@sauce/random": "random",

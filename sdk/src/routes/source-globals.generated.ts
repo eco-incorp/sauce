@@ -120,6 +120,44 @@ export interface SauceHopOpened {
   catch(handler: (e: SauceBytes) => void): void;
 }
 
+/** What a chain's `remote` takes beside its body. Each left out has its default. */
+export interface SauceRemoteOptions {
+  /**
+   * The bridge the message goes over, which both chains must have. Left out, the first of
+   * Hyperlane, LayerZero, Metalayer and Polymer both chains have.
+   */
+  readonly via?: "hyperlane" | "layerzero" | "metalayer" | "polymer";
+  /** The gas the destination Pot's handler is given, which a relayed bridge prices. 500,000 when left out. */
+  readonly gas?: bigint | number;
+  /** The same for the way back, after a `.then` or a `.catch`. 500,000 when left out. */
+  readonly replyGas?: bigint | number;
+}
+
+/**
+ * A remote message: its body runs on the chain, as the same Pot. Nothing comes back unless it
+ * has a `.then` or a `.catch`: `.then(() => { … })` runs code back here once the body ran
+ * there.
+ */
+export interface SauceRemote {
+  /**
+   * What runs back here with what the body returned, the bytes its program answered. It is never
+   * invoked here: it is compiled for this chain and travels there and back with the message.
+   */
+  then(continuation: (result: SauceBytes) => void): SauceRemoteThen;
+  /** What runs back here, with what the body reverted with (at most its first 256 bytes). */
+  catch(handler: (e: SauceBytes) => void): void;
+}
+
+/** A remote message with its `.then`. */
+export interface SauceRemoteThen {
+  /**
+   * What runs back here when the body reverts there, with what it reverted with (at most its first
+   * 256 bytes), and in place of the `.then` when that reverts. Without it, a body that reverts
+   * reverts the delivery, which the bridge can retry.
+   */
+  catch(handler: (e: SauceBytes) => void): void;
+}
+
 /**
  * A chain in compiled source: `hop` opens an intent whose body runs there,
  * `Ethereum.hop({ send: { token, amount }, refundee }).then(() => { … })`, and `Portal` is
@@ -131,6 +169,11 @@ export interface SauceHopOpened {
 export interface SauceIntentChain {
   /** Opens an intent whose body runs on this chain. */
   hop(config: SauceHopConfig): SauceHop;
+  /**
+   * Sends `body` to the same Private Pot on this chain over a bridge, to run there:
+   * `Base.remote(() => { … }).then((result) => { … })`.
+   */
+  remote(body: () => unknown, options?: SauceRemoteOptions): SauceRemote;
   /** This chain's eco-routes Portal, the contract: for a low-level call, never to open an intent. */
   readonly Portal: SauceContract<EcoRoutesPortalMethods>;
 }
@@ -808,6 +851,9 @@ export interface HyperlaneMailboxMethods {
   "quoteDispatch"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): bigint;
   "process"(arg0: (string | SauceBytes), arg1: (string | SauceBytes)): void;
   "delivered"(arg0: bigint): boolean;
+  "dispatch"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes), arg3: (string | SauceBytes)): bigint;
+  "quoteDispatch"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes), arg3: (string | SauceBytes)): bigint;
+  "localDomain"(): bigint;
 }
 
 export interface InstadappFlashAggregatorMethods {
@@ -863,6 +909,7 @@ export interface LayerbankCoreMethods {
 export interface LayerzeroEndpointV2Methods {
   "send"(arg0: { "dstEid": bigint; "receiver": bigint; "message": (string | SauceBytes); "options": (string | SauceBytes); "payInLzToken": boolean }, arg1: bigint): { "guid": bigint; "nonce": bigint; "fee": { "nativeFee": bigint; "lzTokenFee": bigint } };
   "quote"(arg0: { "dstEid": bigint; "receiver": bigint; "message": (string | SauceBytes); "options": (string | SauceBytes); "payInLzToken": boolean }, arg1: bigint): { "nativeFee": bigint; "lzTokenFee": bigint };
+  "eid"(): bigint;
 }
 
 export interface LevelFinanceLiquidityPoolMethods {
@@ -953,6 +1000,11 @@ export interface MaverickV2PoolMethods {
   "tickSpacing"(): bigint;
   "tokenA"(): bigint;
   "tokenB"(): bigint;
+}
+
+export interface MetalayerRouterMethods {
+  "dispatch"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "domain": bigint; "target": bigint; "callData": (string | SauceBytes) })[] | SauceArray<{ "domain": bigint; "target": bigint; "callData": (string | SauceBytes) }>), arg3: (string | SauceBytes), arg4: bigint, arg5: bigint): void;
+  "quoteDispatch"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes), arg3: (string | SauceBytes)): bigint;
 }
 
 export interface MoonwellMTokenMethods {
@@ -1095,6 +1147,11 @@ export interface PolygonBridgePolygonRootChainManagerMethods {
   "depositEtherFor"(arg0: bigint): void;
   "depositFor"(arg0: bigint, arg1: bigint, arg2: (string | SauceBytes)): void;
   "exit"(arg0: (string | SauceBytes)): void;
+}
+
+export interface PolymerCrossL2ProverV2Methods {
+  "validateEvent"(arg0: (string | SauceBytes)): [bigint, bigint, SauceBytes, SauceBytes] & { "chainId": bigint; "emittingContract": bigint; "topics": SauceBytes; "unindexedData": SauceBytes };
+  "inspectLogIdentifier"(arg0: (string | SauceBytes)): [bigint, bigint, bigint, bigint] & { "srcChain": bigint; "blockNumber": bigint; "receiptIndex": bigint; "logIndex": bigint };
 }
 
 export interface PremiaDiamondMethods {
@@ -2078,6 +2135,10 @@ export interface MaverickSource {
   readonly V2Pool: SauceInterface<MaverickV2PoolMethods>;
 }
 
+export interface MetalayerSource extends MetalayerRouterMethods {
+  readonly Router?: SauceContract<MetalayerRouterMethods>;
+}
+
 export interface MoonwellSource extends MoonwellComptrollerMethods {
   readonly MToken: SauceInterface<MoonwellMTokenMethods>;
   readonly Comptroller?: SauceContract<MoonwellComptrollerMethods>;
@@ -2153,6 +2214,10 @@ export interface PolygonBridgeSource extends PolygonBridgePolygonRootChainManage
   readonly Erc20Predicate?: bigint;
   readonly EtherPredicate?: bigint;
   readonly ChildChainManager?: bigint;
+}
+
+export interface PolymerSource extends PolymerCrossL2ProverV2Methods {
+  readonly CrossL2ProverV2?: SauceContract<PolymerCrossL2ProverV2Methods>;
 }
 
 export interface PremiaSource {
@@ -2603,6 +2668,7 @@ declare global {
   const Maker: MakerSource;
   const MantleMeth: MantleMethSource;
   const Maverick: MaverickSource;
+  const Metalayer: MetalayerSource;
   const Moonwell: MoonwellSource;
   const MorphoBlue: MorphoBlueSource;
   const MuxProtocol: MuxProtocolSource;
@@ -2618,6 +2684,7 @@ declare global {
   const Permit2: Permit2Source;
   const PerpetualProtocol: PerpetualProtocolSource;
   const PolygonBridge: PolygonBridgeSource;
+  const Polymer: PolymerSource;
   const Premia: PremiaSource;
   const Puffer: PufferSource;
   const Pyth: PythSource;

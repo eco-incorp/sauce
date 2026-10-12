@@ -318,3 +318,12 @@ export function requireSupported(action: string, chains: readonly CanonicalChain
 export function intentDestinations(bodies: readonly CompiledBody[]): CanonicalChain[] {
   return bodies.filter((body) => body.path.length === 0).map((body) => body.destination);
 }
+
+/**
+ * The chain each promise continuation a program compiles runs on: a request's `.then`, on the
+ * program's own chain, and a remote message's program (`@sauce/remote`), on the chain it is sent
+ * to, which a cook that sends it is refused by too, as one opening an intent there is.
+ */
+export function continuationChains(continuations: readonly CompiledBody[]): CanonicalChain[] {
+  return continuations.filter((body) => body.path.length === 0).map((body) => body.destination);
+}

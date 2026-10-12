@@ -110,6 +110,7 @@ export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
 export {
   checkPlan,
   planChain,
+  planGroups,
   plannedTransactions,
   sendPlan,
 } from "../../sdk/dist/cli/wallet-send.js";

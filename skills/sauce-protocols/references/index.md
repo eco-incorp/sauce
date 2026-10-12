@@ -173,13 +173,15 @@ program on another chain, not only move a token, open a Sauce intent (`sauce-int
 | [Synapse Protocol](synapse.md) ([registry](registry/synapse.md)) | — | `Synapse`: ethereum, optimism, polygon, base, arbitrum, avalanche | ethereum, optimism, polygon, base, arbitrum, avalanche |
 | [zkSync Native Bridge](zksync-bridge.md) ([registry](registry/zksync-bridge.md)) | — | `ZksyncBridge`: ethereum, zksync | ethereum, zksync |
 
-## Cross-chain messaging (6)
+## Cross-chain messaging (8)
 
 ### Choosing between them
 
-Messaging protocols (LayerZero, Wormhole, Axelar, Chainlink CCIP, Hyperlane) carry arbitrary
-messages, each with its own set of verifiers and a fee paid at send time in the native coin (an
-`evm.call` with value). Circle Gateway keeps one USDC balance spendable across chains.
+Messaging protocols (LayerZero, Wormhole, Axelar, Chainlink CCIP, Hyperlane, Metalayer) carry
+arbitrary messages, each with its own set of verifiers and a fee paid at send time in the native
+coin (an `evm.call` with value). Polymer proves a log emitted on another chain instead: the source
+only emits it and pays nothing, and whoever submits the proof pays its gas. Circle Gateway keeps
+one USDC balance spendable across chains.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
@@ -188,6 +190,8 @@ messages, each with its own set of verifiers and a fee paid at send time in the 
 | [Circle Gateway](circle-gateway.md) ([registry](registry/circle-gateway.md)) | — | `CircleGateway`: ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
 | [Hyperlane](hyperlane.md) ([registry](registry/hyperlane.md)) | — | `Hyperlane`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | [LayerZero](layerzero.md) ([registry](registry/layerzero.md)) | — | `Layerzero`: ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll | ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
+| [Metalayer](metalayer.md) ([registry](registry/metalayer.md)) | — | `Metalayer`: ethereum, bsc, base, arbitrum | ethereum, bsc, base, arbitrum |
+| [Polymer](polymer.md) ([registry](registry/polymer.md)) | — | `Polymer`: ethereum, optimism, unichain, polygon, monad, arc, base, plasma, arbitrum | ethereum, optimism, unichain, polygon, monad, arc, base, plasma, arbitrum |
 | [Wormhole](wormhole.md) ([registry](registry/wormhole.md)) | — | `Wormhole`: ethereum, optimism, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, polygon, arc, base, arbitrum, avalanche |
 
 ## Liquid staking (7)

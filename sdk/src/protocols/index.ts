@@ -63,6 +63,8 @@ import { protocolInfo as wormhole } from "./wormhole/info.js";
 import { protocolInfo as axelar } from "./axelar/info.js";
 import { protocolInfo as chainlinkCcip } from "./chainlink-ccip/info.js";
 import { protocolInfo as hyperlane } from "./hyperlane/info.js";
+import { protocolInfo as metalayer } from "./metalayer/info.js";
+import { protocolInfo as polymer } from "./polymer/info.js";
 import { protocolInfo as circleGateway } from "./circle-gateway/info.js";
 import { protocolInfo as debridge } from "./debridge/info.js";
 import { protocolInfo as lifi } from "./lifi/info.js";
@@ -228,6 +230,8 @@ export const protocols: Record<string, ProtocolInfo> = {
   axelar: axelar,
   "chainlink-ccip": chainlinkCcip,
   hyperlane: hyperlane,
+  metalayer: metalayer,
+  polymer: polymer,
   "circle-gateway": circleGateway,
   debridge: debridge,
   lifi: lifi,

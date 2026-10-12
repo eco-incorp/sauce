@@ -1462,13 +1462,44 @@ async's) runs every path and refusal, the skill's examples and its hop block, Pe
 as signer, and measures beside `fixtures/SignedReference.sol`, the same check in Solidity. A hop
 body reads no run-time `bytes` of the program around it (a compiler limit), so the skill writes
 the signed call into the file as a constant.
+**Remote messages are `@sauce/remote`** (`src/std/remote/remote.evm.js`, EVM only, on
+`@sauce/async`): `Base.remote(body, { via, gas, replyGas })`, a method every chain's module gives
+every other EVM chain's name (`chain-module.ts`, with both chains' `Link`s from
+`routes/remote-link.ts`: each bridge's contract and its id for the chain, from the registry's
+`hyperlane`, `layerzero`, `metalayer`, `polymer` and their
+`HYPERLANE_DOMAIN`/`LAYERZERO_EID`/`METALAYER_DOMAIN` tables). A message is sent to `ctx.self()` on
+the other chain (a Private Pot has one address on every chain its owner mints it on): `abi.encode(0,
+program, input)` to run, or `abi.encode(1, key, stored, program, value, ok)`, an answer the handler
+settles with `@sauce/async`'s `settleCarried`. A one-way message is `program(body)`. A round trip is
+a `Request` with `carries: true`: its continuation, compiled for this chain, travels as the input of
+a program that runs the body there and sends the answer back (nothing stored for a plain `.then`; a
+deadline or a combinator keeps the promise in the table). The far side runs the body in the FLAG
+form (`evm.delegate(…).catch((e) => { ok = 0; value = e; })`, its output kept in transient storage,
+the answer sent after), so its revert always comes back as the rejection; only a one-way message
+runs its body uncaught, so its revert reverts the delivery and the bridge retries. Every program
+`@sauce/remote` compiles uses the scope `{ continuation: chainId }`, so it is reported in
+`continuations`, not `bodies` (intents), and the CLI's preview-chain gate reads both
+(`support.ts#continuationChains`). A `Remote` is a combinator's child (`_join`, `_decoder`). Each
+leg is quoted on chain when sent and paid from the sending Pot. Its handlers (`hyperlane.handler.js`
+etc., one per bridge callback, each with the core's `requires`; LayerZero's
+`allowInitializePath`/`nextNonce` read-only) check the caller is the bridge's registry contract and
+the origin sender is the Pot; Polymer's `deliver(bytes proof)` keys each proven log by its place in
+ERC-7201 `sauce.storage.Remote`. A string a method binds to a `const` is a RUN-TIME value, so the
+bridge name is passed as an argument, never held in a `const`. `test/std/remote/evm.e2e.test.ts`
+runs every bridge on three anvils (Ethereum, Base, Optimism) against each bridge's OWN code planted
+at its registry address with its storage (`bridges.ts`, fixtures in `test/evm/fixtures/remote/`):
+Hyperlane's Mailbox, LayerZero's EndpointV2 with its SimpleMessageLib, Metalayer's router behind its
+proxy, and Polymer's deployed CrossL2ProverV2 runtime with its sequencer rewritten to a test key. It
+is gated like `@sauce/async`'s suite, and its round trips settle through a catch that reads the
+revert, so they need an engine built from the compiler's tree.
 
 ## Agent skills
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
 `sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`,
-`sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
+`sauce-remote`, `sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the
+`sauce-examples` index.
 Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents — or a
 contract ABI, a JSON array, that a program beside it imports — and `.mts` runners) and, for six of
 them, `references/`.

@@ -838,6 +838,11 @@
         }
       }
     },
+    "metalayer": {
+      "MetalayerRouterABI": {
+        "roles": ["router"]
+      }
+    },
     "moonwell": {
       "MTokenABI": {
         "instances": [
@@ -981,6 +986,11 @@
     "polygon-bridge": {
       "PolygonRootChainManagerABI": {
         "roles": ["rootChainManager"]
+      }
+    },
+    "polymer": {
+      "CrossL2ProverV2ABI": {
+        "roles": ["crossL2ProverV2"]
       }
     },
     "premia": {

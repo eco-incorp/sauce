@@ -454,6 +454,12 @@ export interface CompiledBody {
   /** What it reads of the program around it, by name: each a word appended to its bytecode as the
    *  program opening the intent runs. None: the body is fixed now. */
   readonly captures: readonly string[];
+  /** The `scope` its `program(closure, scope)` call gave, as the compiler reports it: a library says
+   *  there what the program is to it (`@sauce/remote`'s message, its bridge). */
+  readonly scope: ProgramScope;
+  /** Its closure's declared return type, as its entry signature reports it: absent when none is
+   *  declared. */
+  readonly returns?: string;
 }
 
 /** A Pot's handler the program installs (`@sauce/async`'s `Handler`), as compiled for its chain:
@@ -634,6 +640,10 @@ function compileForChain(
               destination: on,
               bytecode: report.bytecode,
               captures: report.captures,
+              scope: report.scope,
+              ...(report.entrySignature?.returns === undefined
+                ? {}
+                : { returns: report.entrySignature.returns }),
             },
           ];
     });
@@ -655,6 +665,7 @@ function compileForChain(
         destination: on,
         bytecode: report.bytecode,
         captures: report.captures,
+        scope,
         selector,
         readOnly: scopeFlag(scope.readOnly),
       },

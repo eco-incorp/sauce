@@ -177,6 +177,7 @@ address.
 | [Mantle mETH](../../sauce-protocols/references/registry/mantle-meth.md) | staking | `0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f` | `MantleMeth.Staking` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Router | `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` | `Maverick.V2Router` |
+| [Metalayer](../../sauce-protocols/references/registry/metalayer.md) | router | `0x09cE71C24EE2098e351C0cF2dC6431B414d247f3` | `Metalayer.Router` |
 | [Morpho Blue](../../sauce-protocols/references/registry/morpho-blue.md) | bundler3 | `0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245` | `MorphoBlue.Bundler3` |
 | [Morpho Blue](../../sauce-protocols/references/registry/morpho-blue.md) | morpho | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` | `MorphoBlue.Morpho` |
 | [Olympus DAO](../../sauce-protocols/references/registry/olympus.md) | ohm | `0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5` | `Olympus.Ohm` |
@@ -199,6 +200,7 @@ address.
 | [Polygon Native Bridge](../../sauce-protocols/references/registry/polygon-bridge.md) | erc20Predicate | `0x40ec5B33f54e0E8A33A975908C5BA1c14e5BbbDf` | `PolygonBridge.Erc20Predicate` |
 | [Polygon Native Bridge](../../sauce-protocols/references/registry/polygon-bridge.md) | etherPredicate | `0x8484Ef722627bf18ca5Ae6BcF031c23E6e922B30` | `PolygonBridge.EtherPredicate` |
 | [Polygon Native Bridge](../../sauce-protocols/references/registry/polygon-bridge.md) | rootChainManager | `0xA0c68C638235ee32657e8f720a23ceC1bFc77C77` | `PolygonBridge.RootChainManager` |
+| [Polymer](../../sauce-protocols/references/registry/polymer.md) | crossL2ProverV2 | `0x95ccEAE71605c5d97A0AC0EA13013b058729d075` | `Polymer.CrossL2ProverV2` |
 | [Puffer Finance](../../sauce-protocols/references/registry/puffer.md) | pufETH | `0xD9A442856C234a39a81a089C06451EBAa4306a72` | `Puffer.PufETH` |
 | [Puffer Finance](../../sauce-protocols/references/registry/puffer.md) | pufferVault | `0xD9A442856C234a39a81a089C06451EBAa4306a72` | `Puffer.PufETH` |
 | [Pyth Network](../../sauce-protocols/references/registry/pyth.md) | oracle | `0x4305FB66699C3B2702D4d05CF36551390A4c69C6` | `Pyth.Oracle` |

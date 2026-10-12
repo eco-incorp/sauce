@@ -437,6 +437,20 @@ Permit2 takes it as a signer.
   handlers in general are `sauce-async`.
 - **Asked as:** "Let a relayer run my payout on Base, so I don't need ETH there."
 
+### `sauce-remote`
+
+Code run on your own Pot on another chain: `Base.remote(() => { … })` sends a program to the same
+Pot there over a bridge (Hyperlane, LayerZero, Metalayer or Polymer); a round trip is a promise,
+`.then` back with its answer and `.catch` with its revert, and `Promise.all` or `race` take
+messages to several chains; which bridge, what each leg costs and which Pot pays, the handlers both
+Pots install, and pairing a message with an intent that brings the money.
+
+- **Holds** compiled programs: a body sent one way, a round trip with its answer, a bridge named,
+  and a message that waits for an intent's money.
+- **Load it** when a program should read or change its own Pot's state on another chain, or get an
+  answer back from one. Moving money to another chain for a solver to deliver is `sauce-intents`.
+- **Asked as:** "From Ethereum, supply my Pot's USDC on Base to Aave, and tell me what is left."
+
 ### `sauce-solana`
 
 Programs for Solana: every account an `Account` parameter with its roles, the account manifest,

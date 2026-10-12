@@ -156,6 +156,8 @@ import * as mantleMethAbis from "../protocols/mantle-meth/abis.js";
 import { deployments as mantleMethDeployments } from "../protocols/mantle-meth/addresses.js";
 import * as maverickAbis from "../protocols/maverick/abis.js";
 import { deployments as maverickDeployments } from "../protocols/maverick/addresses.js";
+import * as metalayerAbis from "../protocols/metalayer/abis.js";
+import { deployments as metalayerDeployments } from "../protocols/metalayer/addresses.js";
 import * as moonwellAbis from "../protocols/moonwell/abis.js";
 import { deployments as moonwellDeployments } from "../protocols/moonwell/addresses.js";
 import * as morphoBlueAbis from "../protocols/morpho-blue/abis.js";
@@ -186,6 +188,8 @@ import * as perpetualProtocolAbis from "../protocols/perpetual-protocol/abis.js"
 import { deployments as perpetualProtocolDeployments } from "../protocols/perpetual-protocol/addresses.js";
 import * as polygonBridgeAbis from "../protocols/polygon-bridge/abis.js";
 import { deployments as polygonBridgeDeployments } from "../protocols/polygon-bridge/addresses.js";
+import * as polymerAbis from "../protocols/polymer/abis.js";
+import { deployments as polymerDeployments } from "../protocols/polymer/addresses.js";
 import * as premiaAbis from "../protocols/premia/abis.js";
 import { deployments as premiaDeployments } from "../protocols/premia/addresses.js";
 import * as pufferAbis from "../protocols/puffer/abis.js";
@@ -363,6 +367,7 @@ export const PROTOCOL_SOURCES = {
   "maker": { abis: makerAbis, deployments: makerDeployments },
   "mantle-meth": { abis: mantleMethAbis, deployments: mantleMethDeployments },
   "maverick": { abis: maverickAbis, deployments: maverickDeployments },
+  "metalayer": { abis: metalayerAbis, deployments: metalayerDeployments },
   "moonwell": { abis: moonwellAbis, deployments: moonwellDeployments },
   "morpho-blue": { abis: morphoBlueAbis, deployments: morphoBlueDeployments },
   "mux-protocol": { abis: muxProtocolAbis, deployments: muxProtocolDeployments },
@@ -378,6 +383,7 @@ export const PROTOCOL_SOURCES = {
   "permit2": { abis: permit2Abis, deployments: permit2Deployments },
   "perpetual-protocol": { abis: perpetualProtocolAbis, deployments: perpetualProtocolDeployments },
   "polygon-bridge": { abis: polygonBridgeAbis, deployments: polygonBridgeDeployments },
+  "polymer": { abis: polymerAbis, deployments: polymerDeployments },
   "premia": { abis: premiaAbis, deployments: premiaDeployments },
   "puffer": { abis: pufferAbis, deployments: pufferDeployments },
   "pyth": { abis: pythAbis, deployments: pythDeployments },
@@ -429,7 +435,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 325 contracts across 140 protocols. */
+/** One entry per contract: 327 contracts across 142 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -612,6 +618,7 @@ export const CONTRACT_LINKS = [
   { protocol: "maverick", contract: "V2Factory", kind: "singleton", roleKey: "v2Factory", abiExport: "MaverickV2FactoryABI", caveats: ["lookup(address,address,uint256,uint256) is checked against the deployed bytecode only: the MaverickV2Factory has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by the factory bytecode, and the address[] output is not verifiable"] },
   { protocol: "maverick", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "MaverickV2RouterABI" },
   { protocol: "maverick", contract: "V2Pool", kind: "interface", abiExport: "MaverickV2PoolABI" },
+  { protocol: "metalayer", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "MetalayerRouterABI" },
   { protocol: "moonwell", contract: "MToken", kind: "interface", abiExport: "MTokenABI" },
   { protocol: "moonwell", contract: "Comptroller", kind: "singleton", roleKey: "comptroller", abiExport: "MoonwellComptrollerABI" },
   { protocol: "morpho-blue", contract: "Morpho", kind: "singleton", roleKey: "morpho", abiExport: "MorphoABI" },
@@ -644,6 +651,7 @@ export const CONTRACT_LINKS = [
   { protocol: "polygon-bridge", contract: "Erc20Predicate", kind: "address-only", roleKey: "erc20Predicate", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "polygon-bridge", contract: "EtherPredicate", kind: "address-only", roleKey: "etherPredicate", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "polygon-bridge", contract: "ChildChainManager", kind: "address-only", roleKey: "childChainManager", caveats: ["the registry has no ABI for this contract: its address only"] },
+  { protocol: "polymer", contract: "CrossL2ProverV2", kind: "singleton", roleKey: "crossL2ProverV2", abiExport: "CrossL2ProverV2ABI" },
   { protocol: "premia", contract: "Diamond", kind: "interface", abiExport: "DiamondABI" },
   { protocol: "premia", contract: "PoolFactory", kind: "address-only", roleKey: "poolFactory", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "puffer", contract: "PufferVault", kind: "singleton", roleKey: "pufferVault", abiExport: "PufferVaultABI" },
@@ -1167,6 +1175,10 @@ export interface MaverickContracts {
   readonly V2Pool: InterfaceContract<typeof maverickAbis.MaverickV2PoolABI>;
 }
 
+export interface MetalayerContracts {
+  readonly Router: Contract<typeof metalayerAbis.MetalayerRouterABI>;
+}
+
 export interface MoonwellContracts {
   readonly MToken: InterfaceContract<typeof moonwellAbis.MTokenABI>;
   readonly Comptroller: Contract<typeof moonwellAbis.MoonwellComptrollerABI>;
@@ -1242,6 +1254,10 @@ export interface PolygonBridgeContracts {
   readonly Erc20Predicate: AddressOnlyContract;
   readonly EtherPredicate: AddressOnlyContract;
   readonly ChildChainManager: AddressOnlyContract;
+}
+
+export interface PolymerContracts {
+  readonly CrossL2ProverV2: Contract<typeof polymerAbis.CrossL2ProverV2ABI>;
 }
 
 export interface PremiaContracts {
@@ -1695,6 +1711,7 @@ export interface ChainContracts {
   readonly Maker: MakerContracts;
   readonly MantleMeth: MantleMethContracts;
   readonly Maverick: MaverickContracts;
+  readonly Metalayer: MetalayerContracts;
   readonly Moonwell: MoonwellContracts;
   readonly MorphoBlue: MorphoBlueContracts;
   readonly MuxProtocol: MuxProtocolContracts;
@@ -1710,6 +1727,7 @@ export interface ChainContracts {
   readonly Permit2: Permit2Contracts;
   readonly PerpetualProtocol: PerpetualProtocolContracts;
   readonly PolygonBridge: PolygonBridgeContracts;
+  readonly Polymer: PolymerContracts;
   readonly Premia: PremiaContracts;
   readonly Puffer: PufferContracts;
   readonly Pyth: PythContracts;

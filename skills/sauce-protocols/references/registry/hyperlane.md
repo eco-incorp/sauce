@@ -46,3 +46,6 @@ function main() {
 - `quoteDispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) view returns (uint256)`
 - `process(bytes _metadata, bytes _message) payable`
 - `delivered(bytes32 _id) view returns (bool)`
+- `dispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody, bytes hookMetadata) payable returns (bytes32)`
+- `quoteDispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody, bytes defaultHookMetadata) view returns (uint256 fee)`
+- `localDomain() view returns (uint32)`

@@ -36,6 +36,10 @@ function main() {
   const held = USDT0.balanceOf(ctx.self());
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDT0).balanceOf(ctx.self()) == held);
+  // `Polymer.CrossL2ProverV2` is Plasma's crossL2ProverV2: `0x95ccEAE71605c5d97A0AC0EA13013b058729d075`.
+  require(Polymer.CrossL2ProverV2 != 0);
+  // The same contract, qualified by the chain's name, from a program on any chain.
+  require(Plasma.Polymer.CrossL2ProverV2 == Polymer.CrossL2ProverV2);
 }
 ```
 
@@ -47,4 +51,10 @@ function main() {
 
 ## Protocols
 
-The registry records no protocol deployment on this chain.
+Every protocol the registry records here, each contract with how a program names it: its
+namespace contract, or its ABI imported from `./protocols/<slug>/<Export>.json` and bound to the
+address.
+
+| Protocol | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [Polymer](../../sauce-protocols/references/registry/polymer.md) | crossL2ProverV2 | `0x95ccEAE71605c5d97A0AC0EA13013b058729d075` | `Polymer.CrossL2ProverV2` |

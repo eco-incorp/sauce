@@ -82,3 +82,22 @@ export const deployments: ChainDeployment[] = [
     },
   },
 ];
+
+/**
+ * LayerZero V2 ENDPOINT ids (the `dstEid` of `send`, and the `srcEid` a receiver's `lzReceive` is
+ * given) — not chain ids — keyed by canonical chain slug. Each is the endpoint's own `eid()`, read
+ * on-chain 2026-10-08.
+ */
+export const LAYERZERO_EID: Readonly<Record<string, number>> = {
+  arc: 30417,
+  ethereum: 30101,
+  arbitrum: 30110,
+  optimism: 30111,
+  base: 30184,
+  polygon: 30109,
+  bsc: 30102,
+  avalanche: 30106,
+  zksync: 30165,
+  linea: 30183,
+  scroll: 30214,
+};

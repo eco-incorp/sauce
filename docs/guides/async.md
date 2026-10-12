@@ -694,3 +694,253 @@ The difference from Solidity has three parts:
 - the call that runs the signed program inside the same cook.
 
 A native `execute` is possible as a Router function. It would not touch the Pot contract.
+
+## Messages across chains: `@sauce/remote`
+
+A Private Pot has the same address on every chain its owner mints it on. `@sauce/remote` sends a
+program to that same Pot on another chain, over a bridge, and the Pot there runs it when the bridge
+delivers it, with the storage and balances it holds there. With a `.then`, the answer comes back,
+and the message is a promise like any other:
+
+```js
+// Compiled for Ethereum.
+function main(bump: Uint256) {
+  Base.remote(() => {
+    return USDC.balanceOf(self); // on Base, as this same Pot: Base's USDC
+  })
+    .then((result) => {
+      // Back on Ethereum: the bytes the body returned, one word here.
+      const [balance] = abi.decode(result, ["Uint256"]);
+      evm.sstore(2, balance + bump);
+    })
+    .catch((e) => {
+      // Back on Ethereum: the body reverted on Base, everything it did undone there.
+      evm.sstore(3, crypto.keccak256(e));
+    });
+}
+```
+
+`<Chain>.remote(body, options)` is a method of every chain's name. The body is compiled for that
+chain, with its names, and reads the program around it as it was when the message was sent.
+
+- **One way.** With no `.then` or `.catch`, nothing comes back. A body that reverts reverts the
+  delivery, and the bridge can deliver the message again later, when it may succeed.
+- **A round trip.** The body runs there in a frame of its own. What it returns is sent back over
+  the same bridge and fulfils the promise here; what it reverted with is sent back instead and
+  rejects it, everything it did there undone. With no `.catch`, the rejection runs nothing and is
+  logged as unhandled: a body that should wait and be delivered again belongs in a one-way
+  message.
+- **Combinators and deadlines.** A remote message is a promise among others:
+  `Promise.all([Base.remote(…), Optimism.remote(…)])` runs its body once both chains answered, each
+  answer in the order listed, and `Promise.race` takes the first, the later answer delivered and
+  ignored. `.within(seconds)` gives it a deadline after which anyone may `expire` it, and an answer
+  that comes later is ignored.
+- **The bridge.** A message takes the first of Hyperlane, LayerZero, Metalayer and Polymer that both
+  chains have, or the one `via` names: `Base.remote(body, { via: "layerzero", gas: 400000 })`. `gas`
+  is what the destination's handler is given, `replyGas` the same for the way back. Hyperlane,
+  LayerZero and Metalayer relay a paid message on their own. Polymer relays nothing: the sending Pot
+  emits a log, and someone fetches its proof from Polymer's prove API and calls the destination
+  Pot's `deliver(bytes proof)`. Each bridge's deployments are in
+  [Protocols](../reference/protocols.md).
+- **What it costs, and where.** Each leg is paid on the chain it leaves, from that chain's Pot: the
+  bridge's fee, which the program reads from the bridge as it sends, and on the receiving side the
+  Kitchen's fee for each message the handler runs. Fund both Pots before you send.
+
+A bridge delivers a message by calling the Pot with its own callback, which the Pot answers with
+the bridge's receiver: a handler. The Pot a round trip is cooked on installs the receiver its answer
+reaches as the program runs, unless it is there already. The Pot on the other chain must already
+answer when the message lands: deployed there, its receiver installed by its owner (only the owner
+can), and holding the Kitchen's fee for the message and, for a round trip, the bridge's fee for the
+answer. `sauce run` and `sauce tx` read that Pot before the cook and offer what is missing as part
+of the cook's setup, in the same single question as deploying the Pot the cook runs on: deploy the
+Pot there, install the message's bridge's receiver, and fund it with exactly the Kitchen's fee for
+each message plus each answer's fee, quoted from the bridge ("fund your Pot on Base with … ETH (1
+delivery × the Kitchen fee + the answer's Hyperlane fee, quoted for up to … bytes)"); `--yes`
+approves them, and what is left over stays in the Pot. `sauce tx` and `sauce_tx` list them ahead of
+the cook, each with its `chainId`. `sauce run @sauce/remote --chain base --wallet <name>` installs
+every receiver a chain has ahead of time:
+
+| Bridge    | The Pot answers                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------- |
+| Hyperlane | `handle(uint32,bytes32,bytes)`, from the chain's Mailbox                                             |
+| Metalayer | `handle(uint32,bytes32,bytes,(uint32,address,bytes)[],bytes[])`, from the chain's MetalayerRouter    |
+| LayerZero | `lzReceive(...)`, from the chain's EndpointV2, and, read-only, `allowInitializePath` and `nextNonce` |
+| Polymer   | `deliver(bytes proof)`, from anyone                                                                  |
+
+Each handler checks that its caller is the bridge's contract on that chain and that the message's
+sender on its origin chain is this same Pot before it runs anything. A Polymer proof is checked by
+Polymer's prover on that chain, must be of a log this Pot emitted for this chain, and runs once.
+
+A message sent to a Pot that is not ready, with no Pot on that chain yet or no handler for its
+bridge, waits: its delivery fails and nothing runs. Hyperlane, LayerZero and Metalayer deliver it
+again once the Pot answers, and a Polymer proof can be submitted any time later. It is not lost,
+and it runs once.
+
+An intent moves money to another chain; a remote message does the stateful part on the Pot that
+owns it. They arrive in no set order, so a one-way message's body checks what it needs and reverts
+until it is there:
+
+```js
+function main(amount: Uint256, owner: Address) {
+  const pot = ctx.self(); // this Pot's address, the same on Base
+  Base.hop({
+    send: { token: USDC, amount: amount + amount / 100 },
+    receive: { token: USDC, amount },
+    refundee: owner,
+  }).then(() => {
+    USDC.transfer(pot, amount); // on Base, from the intent's Pot to this one
+  });
+  Base.remote(() => {
+    require(USDC.balanceOf(self) >= amount, "not arrived yet");
+    USDC.approve(AaveV3.Pool, amount);
+    AaveV3.Pool.supply(USDC, amount, self, 0);
+  });
+}
+```
+
+### The bridges' own examples, in Sauce
+
+Each bridge publishes an example app: a contract deployed on two chains, each set up to trust the
+other. Each is ported here to one Sauce program, which deploys nothing: it runs on the owner's Pot
+on the chain it is cooked on, Ethereum below, and its body on the same Pot on Base.
+
+| Bridge    | Official example                                                                                                                                                                                                                                                                                                                               | Solidity | Sauce |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----- |
+| Hyperlane | [HelloWorld.sol](https://github.com/hyperlane-xyz/hyperlane-monorepo/blob/18c32ed2b608bfb02183b5028e2406c5153a3754/typescript/helloworld/contracts/HelloWorld.sol)                                                                                                                                                                             | 62       | 25    |
+| LayerZero | [MyOApp.sol](https://github.com/LayerZero-Labs/devtools/blob/508363b50abf8215363a9d3aaddaf2ca5021c9ec/examples/oapp/contracts/MyOApp.sol)                                                                                                                                                                                                      | 38       | 14    |
+| Metalayer | BlockHeightReader.sol and BlockHeightProvider.sol, in the `@metalayer/contracts` npm package                                                                                                                                                                                                                                                   | 67       | 9     |
+| Polymer   | [StateSyncV2.sol](https://github.com/dpbmaverick98/polymer-state-sync/blob/e277c1ec466acfc028d2e99f1adf028a44f4a06c/contracts/StateSyncV2.sol), the State Sync example [Polymer's quickstart](https://github.com/polymerdao/developer-hub/blob/dc3ca3aec2a93b4a0cc933acaad07cd3a8105078/docs/build/get%20started/quickstart.mdx) walks through | 145      | 44    |
+
+The counts are code lines, comments and blank lines left out, and the Solidity is the example's file
+alone, not the base contract it inherits (Hyperlane's Router, LayerZero's OApp). The originals'
+variables become slots of the Pot's storage, each named for its variable; their events are logged
+with the same signatures and topics; and the Pot pays each bridge's fee from what it holds, where
+the originals take it with the call.
+
+**Hyperlane's Hello World** counts each message sent and received, per chain, and logs both ends.
+Run it with `sauce run hello-world.sauce.ts --chain ethereum --wallet <name> --args 'Hello, Base'`:
+
+```js
+function main(message: string) {
+  const origin = chainId;
+  const sent = crypto.keccak256("helloworld.sent");
+  const sentTo = crypto.keccak256(abi.encode(Base, crypto.keccak256("helloworld.sentTo")));
+  evm.sstore(sent, evm.sload(sent) + 1);
+  evm.sstore(sentTo, evm.sload(sentTo) + 1);
+  Base.remote(
+    () => {
+      const received = crypto.keccak256("helloworld.received");
+      const receivedFrom = crypto.keccak256(
+        abi.encode(origin, crypto.keccak256("helloworld.receivedFrom")),
+      );
+      evm.sstore(received, evm.sload(received) + 1);
+      evm.sstore(receivedFrom, evm.sload(receivedFrom) + 1);
+      log(
+        abi.encode(ctx.self(), message),
+        crypto.keccak256("ReceivedHelloWorld(uint32,uint32,bytes32,string)"),
+        origin,
+        chainId,
+      );
+    },
+    { via: "hyperlane" },
+  );
+  log(abi.encode(message), crypto.keccak256("SentHelloWorld(uint32,uint32,string)"), origin, Base);
+}
+```
+
+**LayerZero's OApp example** sends a string, and the chain it reaches keeps the last one it
+received: here its length at `keccak256("myoapp.lastMessage")` and its bytes a word to a slot from
+that slot's hash on. Run it with
+`sauce run my-oapp.sauce.ts --chain ethereum --wallet <name> --args 'Hello from Ethereum'`:
+
+```js
+function main(text: string) {
+  Base.remote(
+    () => {
+      const lastMessage = crypto.keccak256("myoapp.lastMessage");
+      const words = crypto.keccak256(lastMessage.toBytesBe(32));
+      // As the original encodes it: an offset, the length, then the bytes padded to whole words.
+      const encoded = abi.encode(text);
+      evm.sstore(lastMessage, text.length);
+      for (let i = 0; i < text.length; i += 32) {
+        evm.sstore(words + i / 32, encoded.slice(64 + i, 96 + i).toBe());
+      }
+    },
+    { via: "layerzero" },
+  );
+}
+```
+
+**Metalayer's block-height reader** learns another chain's block height and logs it. The original
+reads through Metalayer's read operations, which Metalayer's relayer performs; a remote message
+sends none, so the body reads Base's block number itself, and the answer comes back as a second
+message. Run it with `sauce run block-height.sauce.ts --chain ethereum --wallet <name>`:
+
+```js
+function main() {
+  Base.remote(() => ctx.blockNumber(), { via: "metalayer" }).then((result) => {
+    const [blockHeight] = abi.decode(result, ["Uint256"]);
+    log(
+      abi.encode(Base, ctx.self(), blockHeight),
+      crypto.keccak256("BlockHeightReceived(uint32,address,uint256)"),
+    );
+  });
+}
+```
+
+**Polymer's State Sync** keeps a key-value store the same on several chains: each write takes a
+version one past the key's last, and a chain takes a value only when its version is newer than the
+one it holds. The body runs on Base once anyone submits Polymer's proof of the message, and each
+further chain is one more `remote`. The original's per-key owners and its replay check fall away:
+only the owner's programs write to the Pot, and a proof delivers once. Run it with
+`sauce run state-sync.sauce.ts --chain ethereum --wallet <name> --args greeting 0x68656c6c6f`:
+
+```js
+function keep(slot: Uint256, data: bytes): void {
+  const words = crypto.keccak256(slot.toBytesBe(32));
+  // An offset, the length, then the bytes padded to whole words.
+  const encoded = abi.encode(data);
+  evm.sstore(slot, data.length);
+  for (let i = 0; i < data.length; i += 32) {
+    evm.sstore(words + i / 32, encoded.slice(64 + i, 96 + i).toBe());
+  }
+}
+
+function update(hashedKey: Uint256, value: bytes, version: Uint256): void {
+  const versionOf = crypto.keccak256(
+    abi.encode(hashedKey, crypto.keccak256("statesync.keyVersions")),
+  );
+  require(version > evm.sload(versionOf), "Version must be newer than current version");
+  evm.sstore(versionOf, version);
+  keep(crypto.keccak256(abi.encode(hashedKey, crypto.keccak256("statesync.store"))), value);
+}
+
+function main(key: string, value: bytes) {
+  const hashedKey = crypto.keccak256(ctx.self().toBytesBe(20).concat(key));
+  const versionOf = crypto.keccak256(
+    abi.encode(hashedKey, crypto.keccak256("statesync.keyVersions")),
+  );
+  const nonces = crypto.keccak256("statesync.nonces");
+  const nonce = evm.sload(nonces);
+  const version = evm.sload(versionOf) + 1;
+  evm.sstore(nonces, nonce + 1);
+  update(hashedKey, value, version);
+  log(
+    abi.encode(key, value, nonce, version),
+    crypto.keccak256("ValueSet(address,string,bytes,uint256,bytes32,uint256)"),
+    ctx.self(),
+    hashedKey,
+  );
+  Base.remote(
+    () => {
+      update(hashedKey, value, version);
+      log(
+        abi.encode(value, version),
+        crypto.keccak256("ValueUpdated(bytes32,bytes,uint256)"),
+        hashedKey,
+      );
+    },
+    { via: "polymer" },
+  );
+}
+```

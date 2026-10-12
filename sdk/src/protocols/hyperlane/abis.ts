@@ -38,4 +38,35 @@ export const HyperlaneMailboxABI = [
     inputs: [{ name: "_id", type: "bytes32" }],
     outputs: [{ name: "", type: "bool" }],
   },
+  {
+    name: "dispatch",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "destinationDomain", type: "uint32" },
+      { name: "recipientAddress", type: "bytes32" },
+      { name: "messageBody", type: "bytes" },
+      { name: "hookMetadata", type: "bytes" },
+    ],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    name: "quoteDispatch",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "destinationDomain", type: "uint32" },
+      { name: "recipientAddress", type: "bytes32" },
+      { name: "messageBody", type: "bytes" },
+      { name: "defaultHookMetadata", type: "bytes" },
+    ],
+    outputs: [{ name: "fee", type: "uint256" }],
+  },
+  {
+    name: "localDomain",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+  },
 ] as const;

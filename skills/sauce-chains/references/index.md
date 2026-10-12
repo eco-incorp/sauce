@@ -17,15 +17,15 @@ file links its own.
 
 | Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | supported | yes | 0 | 1734 | 99 |
-| [Optimism](optimism.md) | `optimism` | 10 | EVM | preview | yes | 2 | 4 | 40 |
+| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | supported | yes | 0 | 1734 | 101 |
+| [Optimism](optimism.md) | `optimism` | 10 | EVM | preview | yes | 2 | 4 | 41 |
 | [Cronos](cronos.md) | `cronos` | 25 | EVM | preview | no | — | 0 | 0 |
-| [BNB Chain](bsc.md) | `bsc` | 56 | EVM | preview | no | — | 0 | 29 |
+| [BNB Chain](bsc.md) | `bsc` | 56 | EVM | preview | no | — | 0 | 30 |
 | [Gnosis](gnosis.md) | `gnosis` | 100 | EVM | preview | no | — | 0 | 4 |
 | [Fuse](fuse.md) | `fuse` | 122 | EVM | preview | no | — | 0 | 0 |
-| [Unichain](unichain.md) | `unichain` | 130 | EVM | preview | yes | 10 | 1 | 3 |
-| [Polygon](polygon.md) | `polygon` | 137 | EVM | preview | yes | 7 | 4 | 40 |
-| [Monad](monad.md) | `monad` | 143 | EVM | preview | yes | 15 | 3 | 8 |
+| [Unichain](unichain.md) | `unichain` | 130 | EVM | preview | yes | 10 | 1 | 4 |
+| [Polygon](polygon.md) | `polygon` | 137 | EVM | preview | yes | 7 | 4 | 41 |
+| [Monad](monad.md) | `monad` | 143 | EVM | preview | yes | 15 | 3 | 9 |
 | [Sonic](sonic.md) | `sonic` | 146 | EVM | preview | no | 13 | 0 | 2 |
 | [Manta Pacific](manta.md) | `manta` | 169 | EVM | preview | no | — | 0 | 0 |
 | [opBNB](opbnb.md) | `opbnb` | 204 | EVM | preview | no | — | 0 | 1 |
@@ -40,14 +40,14 @@ file links its own.
 | [Ronin](ronin.md) | `ronin` | 2020 | EVM | preview | yes | — | 0 | 0 |
 | [Kava](kava.md) | `kava` | 2222 | EVM | preview | no | — | 0 | 0 |
 | [Mantle](mantle.md) | `mantle` | 5000 | EVM | preview | no | — | 1 | 0 |
-| [Arc](arc.md) | `arc` | 5042 | EVM | preview | yes | 26 | 4 | 23 |
+| [Arc](arc.md) | `arc` | 5042 | EVM | preview | yes | 26 | 4 | 24 |
 | [ZetaChain](zetachain.md) | `zetachain` | 7000 | EVM | preview | no | — | 0 | 0 |
 | [Klaytn](klaytn.md) | `klaytn` | 8217 | EVM | preview | no | — | 0 | 0 |
-| [Base](base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 53 |
+| [Base](base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 55 |
 | [Evmos](evmos.md) | `evmos` | 9001 | EVM | preview | no | — | 0 | 0 |
-| [Plasma](plasma.md) | `plasma` | 9745 | EVM | preview | yes | — | 1 | 0 |
+| [Plasma](plasma.md) | `plasma` | 9745 | EVM | preview | yes | — | 1 | 1 |
 | [Mode](mode.md) | `mode` | 34443 | EVM | preview | no | — | 0 | 2 |
-| [Arbitrum One](arbitrum.md) | `arbitrum` | 42161 | EVM | preview | yes | 3 | 3 | 59 |
+| [Arbitrum One](arbitrum.md) | `arbitrum` | 42161 | EVM | preview | yes | 3 | 3 | 61 |
 | [Celo](celo.md) | `celo` | 42220 | EVM | preview | no | — | 0 | 2 |
 | [Avalanche C-Chain](avalanche.md) | `avalanche` | 43114 | EVM | preview | no | 1 | 0 | 33 |
 | [Ink](ink.md) | `ink` | 57073 | EVM | preview | no | — | 1 | 1 |
