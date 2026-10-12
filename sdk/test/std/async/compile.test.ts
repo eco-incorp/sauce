@@ -253,6 +253,46 @@ function main(): void {
     }
   });
 
+  it("compiled knowing its own Pot's handlers in place, a body on another chain still carries its own", () => {
+    // The sender reads the handlers in place on the program's own Pot only: a body runs on another
+    // chain's shared Pot, where nothing says its handlers are installed, so it carries them.
+    const source = `import { Promise } from "@sauce/async";
+
+function main(refundTo: Address): void {
+  const here = Promise.withResolvers(60);
+  here.promise.then((v) => {
+    evm.sstore(1, v.length);
+  });
+  Ethereum.hop({
+    send: { token: USDC, amount: 1000000 },
+    receive: { token: USDC, amount: 1000000 },
+    refundee: refundTo,
+    fee: 1000,
+  }).then(() => {
+    const there = Promise.withResolvers(60);
+    there.promise.then((v) => {
+      evm.sstore(2, v.length);
+    });
+    evm.sstore(3, 77);
+  });
+}`;
+    const carried = compile(source);
+    const lean = compileSauceProgram("base", source, { defines: { [ASYNC_INSTALLED_DEFINE]: 1n } });
+    // Reported by where each runs: the program's own `expire`, and the body's on Ethereum.
+    expect(lean.handlers.map((h) => [h.destination.slug, h.path.length > 0])).toEqual(
+      expect.arrayContaining([
+        ["base", false],
+        ["ethereum", true],
+      ]),
+    );
+    const theirs = lean.handlers.find((h) => h.path.length > 0)!;
+    expect(lean.bodies).toHaveLength(1);
+    expect(hex(lean.bodies[0]!.bytecode)).toContain(hex(theirs.bytecode));
+    expect(hex(lean.bodies[0]!.bytecode)).toBe(hex(carried.bodies[0]!.bytecode));
+    // The program's own is dropped all the same.
+    expect(lean.bytecode.length).toBeLessThan(carried.bytecode.length);
+  });
+
   it("carries a handler's code to install it, and none once its sender read it installed", () => {
     const source = `import { Promise } from "@sauce/async";
 
