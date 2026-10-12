@@ -7,6 +7,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { toHex } from "viem";
 
 import { CookReverted, local, type TestChain } from "../../src/testing/index.js";
 import { anvilMissing, program } from "./support.js";
@@ -48,6 +49,35 @@ describe("local()", { skip: anvilMissing() }, () => {
     await assert.rejects(
       chain.simulate(program("multiply"), { args: [20n, 20n, 100n] }),
       (error: unknown) => error instanceof CookReverted && error.reason === "product above limit",
+    );
+  });
+
+  it("returns what the mined transaction returned", async () => {
+    const result = await chain.run({
+      source:
+        "function main(): Uint256 {\n  evm.sstore(1234, ctx.blockNumber());\n  return ctx.blockNumber();\n}\n",
+    });
+    const { blockNumber } = await chain.client.getTransactionReceipt({ hash: result.hash! });
+    const stored = await chain.client.getStorageAt({
+      address: chain.account(0).pot,
+      slot: toHex(1234, { size: 32 }),
+    });
+    assert.equal(BigInt(stored!), blockNumber);
+    assert.equal(result.returned, blockNumber);
+  });
+
+  it("sends a cook whatever a rehearsal in the block before says, and reports the mined one", async () => {
+    const source =
+      'function main(n: Uint256): Uint256 {\n  require(ctx.blockNumber() == n, "not this block");\n  return n;\n}\n';
+    // Valid only in the block it is mined in: a rehearsal on the latest block refuses it.
+    const next = (await chain.client.getBlockNumber()) + 1n;
+    assert.equal((await chain.run({ source }, { args: [next] })).returned, next);
+
+    // Valid only in the latest block: the mined transaction reverts, with its own reason.
+    const latest = await chain.client.getBlockNumber();
+    await assert.rejects(
+      chain.run({ source }, { args: [latest] }),
+      (error: unknown) => error instanceof CookReverted && error.reason === "not this block",
     );
   });
 
