@@ -200,8 +200,6 @@ async function record(
   upstream: string,
 ): Promise<ForkNode> {
   const { chainId, block, blockInterval } = options;
-  // A private HOME: anvil then keeps no RPC cache in the user's own, and every read goes through
-  // the recorder rather than a cache a previous run left.
   const work = mkdtempSync(join(tmpdir(), "sauce-record-"));
   const recorder = await startRecorder(upstream, block, work);
   let node: AnvilProcess;
@@ -214,12 +212,11 @@ async function record(
         String(block),
         "--chain-id",
         String(chainId),
+        // No RPC cache, read or written: every read goes through the recorder, never a cache a
+        // previous run left.
         "--no-storage-caching",
       ],
-      {
-        env: { ...process.env, HOME: work },
-        ...(options.anvil === undefined ? {} : { binary: options.anvil }),
-      },
+      options.anvil === undefined ? {} : { binary: options.anvil },
     );
   } catch (error) {
     await recorder.close().catch(() => undefined);

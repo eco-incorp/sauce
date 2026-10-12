@@ -37,20 +37,16 @@ export interface AnvilProcess {
   stop(): Promise<void>;
 }
 
-/**
- * Starts `anvil` with `args` (a port is added) and waits until it answers. `env` replaces the
- * process environment anvil gets, when given.
- */
+/** Starts `anvil` with `args` (a port is added) and waits until it answers. */
 export async function startAnvil(
   args: readonly string[],
-  options: { binary?: string; env?: NodeJS.ProcessEnv } = {},
+  options: { binary?: string } = {},
 ): Promise<AnvilProcess> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const binary = options.binary ?? "anvil";
   const child = spawn(binary, ["--port", String(port), "--silent", ...args], {
     stdio: ["ignore", "ignore", "pipe"],
-    ...(options.env === undefined ? {} : { env: options.env }),
   });
   let stderr = "";
   child.stderr!.on("data", (chunk: Buffer) => {
