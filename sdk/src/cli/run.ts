@@ -145,6 +145,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 import { passwordSource, type CapturedCommand, type PasswordSource } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { keystoreAddress, loadSigner, scrub, secret } from "./signer.js";
+import { signCommand } from "./sign.js";
 import {
   PASSWORD,
   unlockWallet,
@@ -3317,6 +3318,101 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           endpointOf: (chain) => sharedEndpoint(args, io, chain),
         },
         io,
+      );
+    },
+  },
+  sign: {
+    usage:
+      "sauce sign <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [--within <seconds> | --deadline <unix seconds>] [--wallet <name>] [options]",
+    summary: "Sign a program for a Pot with @sauce/signed: anyone may then run it there",
+    flags: {
+      ...PROGRAM,
+      owner: COOK.owner!,
+      pot: COOK.pot!,
+      ...SALT,
+      "args-json": COOK["args-json"]!,
+      within: {
+        type: "string",
+        value: "<seconds>",
+        help: "How long the signature runs, from now (default 3600)",
+      },
+      deadline: {
+        type: "string",
+        value: "<unix seconds>",
+        help: "Or the last second it runs, exactly",
+      },
+      "signed-salt": {
+        type: "string",
+        value: "<bytes32>",
+        help: "The salt it is signed under, which runs once (default: random)",
+      },
+      ...SIGNER,
+      yes: { ...YES, help: "Approve, without asking, setting the Pot up first (deploy, handlers)" },
+      ...ENDPOINT,
+      ...FORMAT,
+      ...HELP,
+      ...ARGS,
+    },
+    details: [
+      "Compiles the file with main's arguments, as tx does, and prints what the Pot's owner signs",
+      "to let anyone run it on the Pot, once: { chainId, pot, program, salt, deadline, typedData,",
+      "signature, execute }. `program` is the bytecode with the arguments appended, all of it",
+      "signed; `typedData` is the EIP-712 data (eth_signTypedData_v4) of @sauce/signed's",
+      "Execute { program, salt, deadline } under the Pot's domain. With a signer (the Pot's",
+      "owner), `signature` and `execute`: the Pot's execute(program, salt, deadline, signature)",
+      "as { to: the Pot, data, value: 0 }, for any account to send. Without one, the typed data",
+      "alone, for the owner to sign elsewhere.",
+      "",
+      "A stranger's execute reaches only a Pot set up for it, which only its owner can do. So the",
+      "command reads the Pot (--offline reads nothing) and sets up what it lacks first: deploys it",
+      "if it has no code, then cooks Signed.setup(), which installs @sauce/signed's handlers. It asks",
+      "once (--yes approves); with no signer the steps are listed as `setup`, for the owner to send",
+      "first. sauce run @sauce/signed --chain <chain> does the same ahead of time.",
+      "",
+      "The Pot pays the Kitchen's fee for each execute from its balance. The salt runs once; the",
+      "owner cancels an unused one with a program calling @sauce/signed's Signed.cancel(salt).",
+      "Anyone may send the call as soon as it is signed, so the program checks what it needs.",
+      ...SUPPORTED_ONLY("Signs"),
+      "",
+      "Examples:",
+      "  sauce sign pay.sauce.ts --chain base --wallet <name> --within 600 --args 0x… 1000000",
+      "  sauce sign pay.sauce.ts --chain base --pot 0x… --deadline 1767225600 --args 0x… 1000000",
+    ].join("\n"),
+    trailing: "args",
+    run: async (args, io, trailing) => {
+      const program = await programOperand(args, io);
+      if (program.chain.kind === "svm") {
+        throw new UsageError(
+          "a signed program runs on a Private Pot's Router, an EVM contract: solana has none",
+        );
+      }
+      const signer = await evmSigner(args, io);
+      const input = cookInput(args, io, trailing, signer?.address, program);
+      const within = stringFlag(args, "within");
+      const deadline = stringFlag(args, "deadline");
+      if (within !== undefined && deadline !== undefined) {
+        throw new UsageError("give --within or --deadline, not both");
+      }
+      if (within !== undefined && !/^\d+$/.test(within)) {
+        throw new UsageError(`--within: '${within}' is not a number of seconds (e.g. 600)`);
+      }
+      const signedSalt = stringFlag(args, "signed-salt");
+      const rpcUrl = endpoint(args, io, input.chain);
+
+      return signCommand(
+        {
+          ...input,
+          deadline:
+            deadline !== undefined
+              ? parseUnixSeconds("deadline", deadline)
+              : BigInt(Math.floor(Date.now() / 1000)) +
+                (within === undefined ? 3600n : BigInt(within)),
+          ...(signedSalt === undefined ? {} : { signedSalt: signedSalt as `0x${string}` }),
+          ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          approver: approverOf(args, io),
+        },
+        io,
+        signer,
       );
     },
   },

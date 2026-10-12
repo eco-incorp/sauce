@@ -560,3 +560,137 @@ the proof and the program returns 20, 6765 and 10946. The path that works today 
 proof: one that Cosmos IBC's SP1 light client had the gateway verify on Ethereum verifies inside a
 program of the same shape, trusting that app's key, through the live route as the chain holds it,
 and on Base's gateway too. A Groth16 verification costs about 226,000 gas.
+
+## Owner-signed programs: `@sauce/signed`
+
+A Private Pot runs a program when its owner cooks it. With `@sauce/signed` installed, it also runs
+a program its owner **signed**, for whoever submits it: a relayer that pays the gas, a counterparty
+that pays in and runs the owner's side in the same transaction, or a hop's body that delivers to
+the owner's Pot on another chain. The Pot runs it with everything it holds, once, only if:
+
+- the owner signed it for this Pot, on this chain;
+- it is exactly the bytes signed, its arguments included;
+- its salt is not used yet;
+- its deadline has not passed.
+
+A Pot is set up once, by its owner, because only the owner can make the Pot answer a selector.
+The first time you sign for a Pot, `sauce sign` sets it up before it signs: it deploys the Pot if
+it has no code and installs the handlers, asking once (`--yes` approves). Any owner cook that uses
+`Signed` sets it up too as it runs: `Signed.setup()`, and `Signed.cancel(salt)` and
+`Signed.invalidate(word, mask)`, which call it. Or do it ahead of time:
+
+```sh
+sauce run @sauce/signed --chain base --wallet <name>
+```
+
+The Pot then answers three calls:
+
+| Call                                                                                                                 | Mode                      | Does                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `execute(bytes program, bytes32 salt, uint256 deadline, bytes signature)`                                            | cook, paid by the Pot     | Runs `program` when the owner signed it, and returns what it returns                       |
+| `executeAcross(bytes program, bytes32 salt, uint256 deadline, bytes32[] executions, uint256 index, bytes signature)` | cook, paid by the Pot     | The same, from one signature over a program per chain                                      |
+| `isValidSignature(bytes32 hash, bytes signature)`                                                                    | view, static, with no fee | EIP-1271 for the Pot, the core's handler: the owner's signature of `hash` bound to the Pot |
+
+### Signing from TypeScript
+
+The owner signs EIP-712 typed data, so any wallet can. `routes` builds it and the call:
+
+```ts
+import { routes } from "@eco-incorp/sauce";
+import { createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+
+const owner = createWalletClient({ account: privateKeyToAccount(key), transport: http(rpcUrl) });
+const compiled = routes.compileSauceProgram("base", source);
+const execution = {
+  pot, // the owner's Private Pot on Base
+  chainId: 8453,
+  program: routes.signedProgram(compiled, [recipient, 25_000_000n]), // bytecode ++ arguments
+  salt: routes.signedSalt(), // 32 random bytes; each runs once
+  deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+};
+const signature = await owner.signTypedData(routes.executeTypedData(execution));
+// Anyone sends it: { to: pot, data, value: 0 }.
+const data = routes.encodeExecute({ ...execution, signature });
+```
+
+The domain is `{ name: "Sauce Pot", version: "1", chainId, verifyingContract: pot }` and the
+message `Execute { bytes program, bytes32 salt, uint256 deadline }`. The signature is the owner's
+65-byte signature with `s` in the lower half of the curve's order, which every wallet makes. An
+owner with code answers EIP-1271 instead, with a signature of any length.
+
+### Signing from the command line
+
+`sauce sign` compiles a program with `main`'s arguments as `sauce tx` does. It prints the typed
+data, and with the owner's key the signature and the `execute` call for anyone to send:
+
+```sh
+sauce sign pay.sauce.ts --chain base --wallet <name> --within 3600 --args 0x… 25000000
+```
+
+- **With no signer**, it prints the typed data alone, after the `setup` transactions a Pot not set
+  up yet needs first, for the owner to send.
+- **The deadline** is `--within <seconds>` from now, or `--deadline <unix seconds>`.
+- **The salt** is random unless `--signed-salt` gives one.
+
+### The program the owner signs
+
+Anyone may submit a signed program as soon as it exists, so it checks what it needs to be true when
+it runs:
+
+```js
+function main(recipient: Address, amount: Uint256): void {
+  require(USDC.balanceOf(ctx.self()) >= amount, "not delivered yet");
+  USDC.transfer(recipient, amount);
+}
+```
+
+Submitted early, it reverts. A revert undoes the use of its salt too, so the same signature runs
+once the USDC is there.
+
+- **From another program:** `submit(pot, program, salt, deadline, signature)` from `@sauce/signed`
+  makes the call. A program that pays into the owner's Pot and then submits does both or neither.
+- **From a hop:** the body on the destination's Shared Pot transfers what it received to the owner's
+  Pot and calls its `execute`, all in the fill. A hop's body reads only what is fixed when the
+  intent is published, so the signed call is written into the file as a constant:
+  `evm.call(pot, 0, SIGNED)`.
+
+### Cancelling, and one signature for several chains
+
+- **Cancelling:** the owner cancels an unused salt with a program it cooks, `Signed.cancel(salt)`.
+  `Signed.invalidate(word, mask)` cancels up to 256 salts that share a word. Salts are Permit2's unordered
+  nonces: one bit per salt, 256 to a word, in the ERC-7201 namespace `sauce.storage.Signed`.
+  `routes.signedSaltSlot(salt)` says where a salt is recorded, and `routes.cancelSaltsSource(salts)`
+  writes the cancelling program.
+- **Several chains:** `executeAcross` takes one signature over `Executions { Execution[] }`, each
+  `{ chainId, program, salt, deadline }`, under a domain with no chain id. A Private Pot has the
+  same address on every chain. `routes.executeAcrossTypedData` and `routes.encodeExecuteAcross`
+  build both sides.
+
+### Permit2 and EIP-1271
+
+`@sauce/signed` installs the core's ERC-1271 handler ([The Pot as a signer](#the-pot-as-a-signer)).
+Its owner signs `PotMessage { bytes32 hash }` under the Pot's domain (`routes.potMessageTypedData`),
+never `hash` itself. Permit2 then takes the Pot as a signer. A permit the owner signs for its own
+account is never spent from the Pot, nor one bound to another of its Pots.
+
+### What it costs
+
+Whole transactions on a local chain, the program returning a number:
+
+| Path                                                   | Gas      |
+| ------------------------------------------------------ | -------- |
+| The owner cooks the program itself                     | ~48,000  |
+| `execute`, a salt whose word is new to the Pot         | ~138,000 |
+| `execute`, a salt whose word is already written        | ~121,000 |
+| The same check written in Solidity, then the same cook | ~75,000  |
+| `isValidSignature` on the Pot                          | ~81,000  |
+| Installing the package, once per Pot                   | ~780,000 |
+
+The difference from Solidity has three parts:
+
+- the Router's dispatch, which every handler pays;
+- the engine running the check;
+- the call that runs the signed program inside the same cook.
+
+A native `execute` is possible as a Router function. It would not touch the Pot contract.

@@ -130,6 +130,22 @@ export {
   potMessageDigest,
   potMessageTypedData,
 } from "./erc1271.js";
+export {
+  SIGNED_DOMAIN,
+  SIGNED_NAMESPACE,
+  SIGNED_PACKAGE,
+  cancelSaltsSource,
+  encodeExecute,
+  encodeExecuteAcross,
+  executeAcrossTypedData,
+  executeTypedData,
+  executionHash,
+  signedAbi,
+  signedProgram,
+  signedSalt,
+  signedSaltSlot,
+} from "./signed.js";
+export type { SignedAcross, SignedCall, SignedExecution } from "./signed.js";
 
 export {
   ECO_ROUTES_VAULT_PROXY_CREATION_CODE,

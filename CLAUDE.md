@@ -1435,6 +1435,33 @@ chain holds the route, verified (fib(20)) with only the frozen flag cleared. Ski
 template's current fixture targets a frozen verifier route", naming no version.
 The ABI leaves out `RouteNotFound(bytes4)`: the code pushes its selector shifted right one bit
 (`PUSH4 0x79043bbf`, `SHL 225`), which the evidence capture does not read.
+**Owner-signed programs are `@sauce/signed`** (`src/std/signed/`, EVM only, `"promises": false`:
+it parks no promise, so its install carries no `expire`). Three handlers on #571's fallback, the
+third the core's:
+`execute(bytes program, bytes32 salt, uint256 deadline, bytes signature)` and `executeAcross`
+(cooks) run a program the Pot's `owner()` signed (EIP-712, domain `Sauce Pot`/`1`/chain/Pot,
+`program` = bytecode ++ entry arguments), checked by `crypto.ecdsaVerify` after refusing a high `s`
+and a `v` other than 27/28, which ecrecover does not, else EIP-1271 on an owner with code; a salt is
+a bit in a Permit2-style bitmap (ERC-7201 `sauce.storage.Signed`), set BEFORE
+`evm.delegate(inFlightEngine, program)` runs it in the same cook. The view `isValidSignature` is
+`@sauce/async`'s one ERC-1271 handler (`"program": "@sauce/async/erc1271.handler.js"`), which
+answers over `PotMessage(bytes32 hash)` under the same domain, never the raw hash: a permit the
+owner signs for itself must not spend the Pot's tokens. `compile.test.ts` holds the core's
+constants to this package's and the declared handler to the core's bytes. The run paths
+(`execute`, `executeAcross`) are FLAT for the engine's frame cost, so the salt and signature code
+is repeated in each; keep them identical. No request of the owner's precedes a
+stranger's `execute`, so the Pot is set up by an owner cook: `Signed.setup()` (and `Signed.cancel`/
+`Signed.invalidate`, which call it) ensures the three as core `Handler`s, byte for byte the handler
+files (`compile.test.ts` pins them); `sauce run @sauce/signed` stays the pre-warm. `routes/signed.ts`
+is the typed data and calls (`executeTypedData`, `encodeExecute`, …), `cli/sign.ts` is
+`sauce sign`, which reads the Pot and sends the setup it lacks first (`approvals.ts`: the Pot's
+deployment, then a cook of `Signed.setup()`), and `sauce_sign` its MCP twin, which plans that
+setup and signs nothing.
+`test/std/signed/compile.test.ts` derives every hand-written constant; `evm.e2e.test.ts` (gated as
+async's) runs every path and refusal, the skill's examples and its hop block, Permit2 with the Pot
+as signer, and measures beside `fixtures/SignedReference.sol`, the same check in Solidity. A hop
+body reads no run-time `bytes` of the program around it (a compiler limit), so the skill writes
+the signed call into the file as a constant.
 
 ## Agent skills
 

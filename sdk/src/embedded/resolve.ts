@@ -31,6 +31,7 @@ const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/oracle": "oracle",
   "@sauce/random": "random",
   "@sauce/zk": "zk",
+  "@sauce/signed": "signed",
 };
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */

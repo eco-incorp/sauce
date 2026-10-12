@@ -47,6 +47,7 @@ export {
   type ProgramInput,
 } from "../../sdk/dist/cli/commands.js";
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
+export { signCommand } from "../../sdk/dist/cli/sign.js";
 export { randomSalt } from "../../sdk/dist/routes/intent-defaults.js";
 export {
   assumedBalances,
