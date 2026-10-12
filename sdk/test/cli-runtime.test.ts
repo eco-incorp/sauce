@@ -1,0 +1,407 @@
+/**
+ * The runtime packages a command finds for itself (`cli/optional.ts`) and the installer of their
+ * folder (`cli/runtime.ts`), with the folder under a temporary root and npm stood in for: what each
+ * finds where, how each refuses, and that an install is whole or nothing. `check-packed-package.mjs`
+ * runs the real `npm ci` on the shipped lockfile, from the installed tarball.
+ */
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import {
+  assertPrivate,
+  installedAt,
+  LITESVM_EXTRA,
+  MCP_EXTRA,
+  ownCopy,
+  pinned,
+  provide,
+  RUNTIME_SOURCE,
+  runtimeDir,
+  sourceOf,
+  useRuntime,
+  type Extra,
+  type RuntimeInstaller,
+} from "../src/cli/optional.js";
+import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
+import { installRuntime, npmCommand, npmReason, NPM_CI, prune } from "../src/cli/runtime.js";
+import { IntentStore } from "../src/cli/store.js";
+
+let work: string;
+let root: string;
+
+beforeEach(() => {
+  // Its real path: macOS's temporary directory is under a symlink, which messages resolve.
+  work = realpathSync(mkdtempSync(join(tmpdir(), "sauce-runtime-")));
+  root = join(work, "runtime");
+  useRuntime({ root, installer: undefined, offline: false });
+});
+
+afterEach(() => {
+  useRuntime({ root: undefined, installer: undefined, offline: false });
+  rmSync(work, { recursive: true, force: true });
+});
+
+/** A package at `version` under `dir`'s node_modules. */
+function place(dir: string, name: string, version: string): void {
+  mkdirSync(join(dir, "node_modules", name), { recursive: true });
+  writeFileSync(join(dir, "node_modules", name, "package.json"), JSON.stringify({ name, version }));
+}
+
+/** What an install leaves in `dir`: owner-only, the shipped lockfile, and every runtime package
+ *  at its pin. */
+function installed(dir: string): void {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  copyFileSync(join(RUNTIME_SOURCE, "package-lock.json"), join(dir, "package-lock.json"));
+  for (const [name, version] of Object.entries(pinned())) place(dir, name, version);
+}
+
+/** An extra whose own copies are looked for under `importer`. */
+const extra = (importer: string): Extra => ({
+  command: "sauce test",
+  what: "the test",
+  packages: ["zod"],
+  importer,
+});
+
+async function sauce(...argv: string[]) {
+  let stdout = "";
+  let stderr = "";
+  const io: CliIo = {
+    ...nodeIo(),
+    stdout: (text) => void (stdout += text),
+    stderr: (text) => void (stderr += text),
+  };
+
+  return { code: await runCli(argv, io), stdout, stderr };
+}
+
+describe("where a command's runtime packages come from", () => {
+  it("finds the user's own copy as Node.js does, up the directories, never node_modules/node_modules", () => {
+    place(join(work, "project"), "zod", "4.6.5");
+    const deep = join(work, "project", "node_modules", "@eco-incorp", "sauce", "mcp", "dist");
+    mkdirSync(deep, { recursive: true });
+    expect(ownCopy("zod", deep)).toEqual({
+      path: join(work, "project", "node_modules", "zod"),
+      version: "4.6.5",
+    });
+    expect(ownCopy("litesvm", deep)).toBeUndefined();
+  });
+
+  it("takes the user's own copies at the pins, else the runtime folder, else none", () => {
+    const importer = join(work, "app");
+    place(importer, "zod", pinned().zod!);
+    expect(sourceOf(extra(importer))).toBe("own");
+    // A copy at another version is not the one pinned: it is passed over.
+    place(importer, "zod", "3.25.0");
+    expect(sourceOf(extra(importer))).toBe("missing");
+    installed(runtimeDir());
+    expect(sourceOf(extra(importer))).toBe("runtime");
+    // A folder of another lockfile is not this version's install.
+    writeFileSync(join(runtimeDir(), "package-lock.json"), "{}\n");
+    expect(installedAt(runtimeDir())).toBe(false);
+  });
+
+  it("in this repository, every command's own copies are the pinned ones", () => {
+    expect(sourceOf(MCP_EXTRA)).toBe("own");
+    expect(sourceOf(LITESVM_EXTRA)).toBe("own");
+  });
+
+  it("refuses on one line where it may not install, and says the command that does", async () => {
+    const importer = join(work, "app");
+    mkdirSync(importer);
+    const needs = `the test needs zod ${pinned().zod}, not installed for this sauce yet`;
+    await expect(provide(extra(importer), { offline: true })).rejects.toThrow(
+      `${needs}, and --offline installs nothing: run \`sauce runtime install\``,
+    );
+    // An in-process run was given no installer: it never runs npm.
+    await expect(provide(extra(importer))).rejects.toThrow(
+      `${needs}: run \`sauce runtime install\``,
+    );
+    const failing: RuntimeInstaller = {
+      install: async () => {
+        throw new Error("npm is not on PATH");
+      },
+    };
+    useRuntime({ installer: failing });
+    const logged: string[] = [];
+    await expect(provide(extra(importer), { log: (text) => logged.push(text) })).rejects.toThrow(
+      `${needs}, and installing them into ${runtimeDir()} failed: npm is not on PATH. Nothing ` +
+        "was left half-installed: `sauce runtime install` tries again",
+    );
+    expect(logged).toEqual([
+      `sauce: ${needs}. Installing them into ${runtimeDir()}, once for this version…\n`,
+    ]);
+  });
+
+  it("installs nothing offline: neither the call's --offline nor the process's", async () => {
+    const importer = join(work, "app");
+    mkdirSync(importer);
+    let installs = 0;
+    useRuntime({
+      installer: {
+        install: async () => {
+          installs++;
+          throw new Error("npm is not on PATH");
+        },
+      },
+    });
+    await expect(provide(extra(importer))).rejects.toThrow("npm is not on PATH");
+    expect(installs).toBe(1);
+    await expect(provide(extra(importer), { offline: true })).rejects.toThrow(
+      "--offline installs nothing",
+    );
+    // `sauce mcp --offline` makes the process offline: a Solana rehearsal one of its tools runs
+    // later, which asks without an offline of its own, installs nothing either.
+    const run = await sauce("mcp", "--offline", "--agent", "claude");
+    expect(run.code).toBe(2);
+    await expect(provide(extra(importer))).rejects.toThrow("--offline installs nothing");
+    expect(installs).toBe(1);
+  });
+
+  it("loads nothing from a folder, or one above it, that another user owns or can write", () => {
+    if (process.platform === "win32") return;
+    installed(runtimeDir());
+    const uid = process.getuid!();
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
+    expect(() => assertPrivate(runtimeDir(), uid + 1)).toThrow(
+      `${runtimeDir()} belongs to another user (uid ${uid}): sauce loads code only from folders ` +
+        `that are yours alone. Remove ${runtimeDir()} to have it installed again`,
+    );
+    // The version folder is the user's alone: one merely open to others (755, writable by none of
+    // them) is refused too, since a folder inside it someone loosened would be reachable.
+    chmodSync(runtimeDir(), 0o755);
+    mkdirSync(join(runtimeDir(), "node_modules", "loosened"), { recursive: true });
+    chmodSync(join(runtimeDir(), "node_modules", "loosened"), 0o777);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${runtimeDir()} is open to its group and others (mode 755): sauce loads code only from a ` +
+        `runtime folder that is yours alone. Run chmod 700 ${runtimeDir()}`,
+    );
+    chmodSync(runtimeDir(), 0o770);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${runtimeDir()} is open to its group (mode 770)`,
+    );
+    chmodSync(runtimeDir(), 0o700);
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
+    // A folder above it need only be written by no one else.
+    chmodSync(root, 0o755);
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
+    chmodSync(root, 0o777);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${root} can be written by its group and others (mode 777)`,
+    );
+    chmodSync(root, 0o700);
+    // Through a symlink: the folder it resolves to is the one checked, the root's and the version
+    // folder's alike.
+    const elsewhere = join(work, "elsewhere");
+    mkdirSync(elsewhere, { mode: 0o700 });
+    installed(join(elsewhere, "1.0.0"));
+    chmodSync(join(elsewhere, "1.0.0"), 0o700);
+    const linked = join(work, "linked");
+    symlinkSync(elsewhere, linked);
+    useRuntime({ root: linked });
+    expect(() => assertPrivate(runtimeDir(), uid)).not.toThrow();
+    chmodSync(elsewhere, 0o757);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${linked} (${elsewhere}) can be written by others (mode 757)`,
+    );
+    chmodSync(elsewhere, 0o700);
+    chmodSync(join(elsewhere, "1.0.0"), 0o705);
+    expect(() => assertPrivate(runtimeDir(), uid)).toThrow(
+      `${join(linked, "1.0.0")} (${join(elsewhere, "1.0.0")}) is open to others (mode 705)`,
+    );
+  });
+
+  it("a ~/.sauce the intent store creates stays the user's alone, whatever the umask", () => {
+    if (process.platform === "win32") return;
+    const sauce = join(work, ".sauce");
+    useRuntime({ root: join(sauce, "runtime") });
+    const umask = process.umask(0o002);
+    try {
+      new IntentStore(join(sauce, "intents")).append(`0x${"11".repeat(32)}`, {
+        event: "published",
+        chain: "base",
+        chainId: 8453,
+        time: new Date(0).toISOString(),
+      });
+    } finally {
+      process.umask(umask);
+    }
+    expect(statSync(sauce).mode & 0o777).toBe(0o700);
+    expect(() => assertPrivate(runtimeDir())).not.toThrow();
+  });
+
+  it("refuses a folder another can write before it installs into it or loads from it", async () => {
+    if (process.platform === "win32") return;
+    const importer = join(work, "app");
+    mkdirSync(importer);
+    mkdirSync(root, { mode: 0o700 });
+    chmodSync(root, 0o777);
+    let installs = 0;
+    useRuntime({ installer: { install: async () => void installs++ } });
+    await expect(provide(extra(importer))).rejects.toThrow(
+      /can be written by its group and others/,
+    );
+    expect(installs).toBe(0);
+  });
+
+  it("returns at once where the user's own copies are the pinned ones", async () => {
+    const importer = join(work, "app");
+    place(importer, "zod", pinned().zod!);
+    const never: RuntimeInstaller = {
+      install: () => Promise.reject(new Error("installed")),
+    };
+    useRuntime({ installer: never });
+    await expect(provide(extra(importer), { offline: true })).resolves.toBeUndefined();
+  });
+});
+
+describe("sauce runtime", () => {
+  it("status says where each command's packages come from", async () => {
+    const run = await sauce("runtime", "--json");
+    expect(run.code).toBe(0);
+    const status = JSON.parse(run.stdout);
+    expect(status).toMatchObject({
+      dir: runtimeDir(),
+      installed: false,
+      uses: { "sauce mcp": "own", "Solana rehearsals": "own" },
+    });
+    expect(Object.keys(status.packages).sort()).toEqual(Object.keys(pinned()).sort());
+    const text = (await sauce("runtime", "status")).stdout;
+    expect(text).toContain(`Runtime packages, in ${runtimeDir()} (not installed):`);
+    expect(text).toMatch(/sauce mcp +@modelcontextprotocol\/sdk \S+ and zod \S+: your own copies/);
+  });
+
+  it("install installs the folder once, with the installer the process was given", async () => {
+    const refused = await sauce("runtime", "install");
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toBe(
+      "sauce runtime: sauce runtime install runs this machine's npm: run it as a command\n",
+    );
+    let installs = 0;
+    useRuntime({
+      installer: {
+        install: async (dir) => {
+          installs++;
+          installed(dir);
+        },
+      },
+    });
+    const first = await sauce("runtime", "install", "--json");
+    expect(first.code).toBe(0);
+    expect(JSON.parse(first.stdout)).toEqual({ dir: runtimeDir(), installed: true, changed: true });
+    expect(first.stderr).toMatch(/^Installing @modelcontextprotocol\/sdk \S+, litesvm \S+ and zod/);
+    expect(JSON.parse((await sauce("runtime", "install", "--json")).stdout).changed).toBe(false);
+    expect(installs).toBe(1);
+    expect((await sauce("runtime", "prune")).code).toBe(2);
+  });
+});
+
+describe("the runtime folder's installer", () => {
+  const dir = () => join(root, "1.0.0");
+  /** npm ci, stood in for: writes what npm would into the directory it runs in, or fails. */
+  const npm =
+    (status = 0, stderr = "") =>
+    async (args: readonly string[], cwd: string) => {
+      expect(args).toEqual(NPM_CI);
+      // In the directory it runs in, never an ancestor workspace root's; and no --prefix, which
+      // would leave the machine's own npm config unread.
+      expect(args).toContain("--workspaces=false");
+      expect(args.some((arg) => arg.startsWith("--prefix"))).toBe(false);
+      if (status === 0) installed(cwd);
+
+      return { status, stderr };
+    };
+
+  it("installs into a temporary directory renamed into place, owner-only, leaving nothing else", async () => {
+    await installRuntime(dir(), npm());
+    expect(installedAt(dir())).toBe(true);
+    expect(readdirSync(root)).toEqual(["1.0.0"]);
+    if (process.platform !== "win32") {
+      expect(statSync(root).mode & 0o777).toBe(0o700);
+      expect(statSync(dir()).mode & 0o777).toBe(0o700);
+    }
+  });
+
+  it("leaves nothing where npm fails, and throws npm's reason", async () => {
+    await expect(
+      installRuntime(
+        dir(),
+        npm(1, "npm error code ETARGET\nnpm error notarget No matching version"),
+      ),
+    ).rejects.toThrow("npm ci exited with status 1 (ETARGET: notarget No matching version)");
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it("keeps a folder another process installed first, and replaces one that is not this install", async () => {
+    installed(dir());
+    writeFileSync(join(dir(), "theirs"), "");
+    await installRuntime(dir(), npm());
+    expect(existsSync(join(dir(), "theirs"))).toBe(true);
+    writeFileSync(join(dir(), "package-lock.json"), "{}\n");
+    await installRuntime(dir(), npm());
+    expect(installedAt(dir())).toBe(true);
+    expect(existsSync(join(dir(), "theirs"))).toBe(false);
+    expect(readdirSync(root)).toEqual(["1.0.0"]);
+  });
+
+  it("removes only older versions' folders, but the newest of them, and stale temporaries", () => {
+    for (const name of ["0.9.0", "0.99.12", "1.0.0", "1.1.0", ".1.0.0.old", ".1.0.0.running"]) {
+      mkdirSync(join(root, name), { recursive: true });
+    }
+    const longAgo = new Date(Date.now() - 2 * 3_600_000);
+    utimesSync(join(root, ".1.0.0.old"), longAgo, longAgo);
+    prune(root, "1.0.0");
+    // 1.1.0 is a newer sauce's, which may be serving from it: never this one's to remove.
+    expect(readdirSync(root).sort()).toEqual([".1.0.0.running", "0.99.12", "1.0.0", "1.1.0"]);
+    // The newer one, pruning, takes this one's as the newest older, and the rest older goes.
+    prune(root, "1.1.0");
+    expect(readdirSync(root).sort()).toEqual([".1.0.0.running", "1.0.0", "1.1.0"]);
+  });
+
+  it("says why npm failed in one line", () => {
+    expect(npmReason(null, "", "ENOENT")).toBe("npm is not on PATH");
+    expect(npmReason(null, "", "EACCES")).toBe("npm could not be started (EACCES)");
+    expect(
+      npmReason(
+        1,
+        "npm error code ENOTFOUND\nnpm error syscall getaddrinfo\n" +
+          "npm error network request to https://example.test/zod failed\n",
+      ),
+    ).toBe(
+      "npm ci exited with status 1 (ENOTFOUND: network request to https://example.test/zod failed)",
+    );
+    // npm 11 answers an unreachable registry with no more than this: its log has the error.
+    const log = join(work, "debug.log");
+    expect(
+      npmReason(
+        1,
+        "npm error Exit handler never called!\nnpm error This is an error with npm itself. " +
+          "Please report this error at:\nnpm error   <https://github.com/npm/cli/issues>\n" +
+          `npm error A complete log of this run can be found in: ${log}\n`,
+        undefined,
+        () => "12 http fetch GET http://127.0.0.1:9/zod attempt 1 failed with ECONNREFUSED\n",
+      ),
+    ).toBe(
+      `npm ci exited with status 1 (it could not reach its registry (ECONNREFUSED); its log: ${log})`,
+    );
+  });
+
+  it("runs npm with no shell: on Windows its own script, with this Node.js", () => {
+    expect(npmCommand("linux", "/usr/bin/node")).toEqual({ file: "npm", args: [] });
+    expect(npmCommand("win32", "C:\\node\\node.exe").args[0]).toMatch(/npm-cli\.js$/);
+  });
+});

@@ -259,6 +259,21 @@ not a catch. The accounts are the caller's, so a pool that is not the pair, a sl
 not the pool's owner, and a pool of another venue or of none revert; only the System program itself
 as the pool is a missing slot.
 
+A limit already in the pool's own terms takes a second form, `try<Venue>AtLimit` and its plain
+`<venue>AtLimit`, for those nine and `tryInvariantAtLimit` and `tryOpenbookV2AtLimit`, and
+Manifest's book, `tryManifest`, which has no limit: `(slot, trader, amountIn, limit, minOut,
+recipient)`, `limit` the sqrt price the pool's swap takes (Phoenix's order price in ticks, OpenBook's
+`priceLots, orders`; `0` none, where the venue takes that). No fee is read for it, so an adaptive-fee
+whirlpool trades there, and `minOut` rides in the venue's own least-out field where it has one. A
+third, `<venue>Cpi(program, accounts, source, amountIn, …)`, is the instruction alone on the accounts
+in the venue's own order: it checks the program, reads only the paying account, and returns what it
+paid. A fourth, `<venue>Data(amountIn, …)`, is that instruction's data alone, for a program that sends
+it with `svm.call` on accounts it writes in itself: the cheapest form, a few thousand compute units
+over a hand-built instruction. `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder` and
+`routerSvmAccounts` give each instruction's accounts in order. At a limit a slot may carry accounts
+past its nine: a Raydium-layout pool's bitmap extension, Invariant's program authority, OpenBook's
+oracles. At a price a slot is its nine.
+
 ```sauce chain=solana
 import { orcaWhirlpool } from "@sauce/router";
 
@@ -290,11 +305,81 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 1.7 KB of program, and
+A program carries only the venues it calls: one venue's function is about 1.6 KB of program, and
 `trySwap` all nine, about 4.4 KB, so a program that knows its venue calls that venue's function and
 keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
 program is staged (`sauce-solana`). For one order over several pools under one price, use
 `sauce-solana-distributed-swap`.
+
+## Exact input on Solana
+
+Every other Solana venue `@sauce/router` serves swaps exactly `amountIn`, with no price limit: the
+venue takes the whole input or the transaction fails. Each has four functions:
+
+```text
+raydiumCpSwapData(amountIn, minOut): bytes
+raydiumCpSwapCpi(program, accounts, source, amountIn, minOut): Uint256
+raydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
+tryRaydiumCpSwap(slot, trader, amountIn, minOut, recipient): Uint256
+```
+
+The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `tokenSwapV1`,
+`orcaV1`, `penguin`, `stepn`, `saros`, `fluxbeam`, `dexlab`, `meteoraDammV2`, `meteoraDammV1`,
+`aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
+`mercurial`, `perena`, `metadaoFutarchy`, `solfiV1`, `solfiV2`, `hadron`, `taurusfi`, `riptide`,
+`denali`, `gavel`, `tesserav`, `flint`, `deriverse`, `goonfiV2`, `meteoraDbc`, `trends`, `heaven`,
+`virtuals`, `xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma` and
+`heliumTreasury`.
+
+`solfiV1` through `goonfiV2` are market makers pricing off their own oracle, quote or book, and
+refuse a swap on a quote gone stale, which a `try` form can't see. `meteoraDbc` through `virtuals`
+are bonding curves; Virtuals only sells its token. SolFi v1's pools all hold an empty vault, its
+liquidity moved to SolFi v2. `xorca` through `heliumTreasury` stake, deposit, unstake or redeem at
+the venue's own rate; xORCA only stakes, the liquid-unstake vault only unstakes, Huma only deposits
+and Helium's treasury only redeems. One Intro, BisonFi, the Sanctum stake pools, pump.fun's bonding
+curve, Boop, Moonit, Quantum, Obsidian, AlphaQ, WOOFi and Metric have no function at all: a Pot
+cannot swap at the first nine (the stake pools and the three curves settle in native SOL) nor at the
+next three (they admit only routers on their own list), and WOOFi's and Metric's swaps cannot be
+proven. `routerSvmAccountOrder` and `routerSvmDataTemplate` still give their instruction, for a
+program that can send it. pump.fun's is unverified against its current programs, which were
+upgraded after the capture it is held to: check it against the deployed program before sending it.
+
+- **`<venue>Data`** is the venue's instruction data alone, for a program that sends it itself:
+  `svm.call(program, [accounts…], raydiumCpSwapData(amountIn, minOut))`. It is the cheapest form.
+  `minOut` is the venue's own least out, written as given. Where the data says the direction it is
+  the last argument (`aToB`, `paysBase` or `xToY`); Perena's take the two tokens' indices too.
+- **`<venue>Cpi`** sends that data on `accounts`, the venue's own account list in its order, and
+  returns what `source` paid.
+- **The account order is the SDK's**: `routerSvmAccountOrder(venue, { aToB })` and
+  `routerSvmAccounts(venue, { aToB }, refs)` from `@eco-incorp/sauce/svm` name and build it, and
+  `ROUTER_SVM_VENUES` gives each venue's program and functions by the recipes' venue names. A
+  program compiled for one trade builds its accounts from them and never writes a venue's order
+  itself.
+- **`slot`** is the venue's own accounts, its program first and the pool second, then the rest in
+  the order the venue's comment in the library gives. A pool's accounts for each token, such as
+  its vaults, come in the pool's own order, and the function reads which one is paid from
+  `payMint`.
+- **`trader`** and **`recipient`** are the limit functions' own. The plain form returns what the
+  recipient received, held to `minOut` and at least 1.
+- **`try<Venue>`** returns `0` having moved nothing for a missing slot (the System program as its
+  pool), no input, and what the venue refuses that it can see first (swaps switched off, an empty
+  side, dust).
+
+Measured on the released engine, a venue's `Data` form costs about 3,300 compute units more than
+its data written by hand, its `Cpi` form about 7,500 more, and the slot forms about 1,400 more for
+each account they read out of `slot` or `trader`.
+
+A function cannot list more than sixteen accounts, nor a number that varies. `scaleAmm`, `pumpswap`,
+`bonkswap`, `guacswap`, `meteoraDlmm`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo`, `scaleVmm`,
+`jupiterLendEarn`, `hylo`, `carrot`, `mswap`, `perpsJlp`, `sanctumInfinity` and `archer`, and
+Jupiter Perpetuals' JLP mint, swap with more, so they have only their `Cpi` and `Data` forms:
+`scaleAmmCpi`, `pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `meteoraDlmmCpi`, `sarosDlmmCpi`,
+`raydiumLaunchlabCpi`, `runnerRodeoCpi`, `scaleVmmCpi`, `jupiterLendEarnCpi`, `hyloCpi`,
+`carrotCpi`, `mswapCpi`, `perpsJlpCpi`, `perpsJlpMintCpi`, `sanctumInfinityCpi`, `archerCpi`,
+`scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `meteoraDlmmData`, `sarosDlmmData`,
+`raydiumLaunchlabData`, `runnerRodeoData`, `scaleVmmData`, `jupiterLendEarnData`, `hyloData`,
+`carrotData`, `mswapData`, `perpsJlpData`, `perpsJlpMintData`, `sanctumInfinityData` and
+`archerData`.
 
 ## Example
 

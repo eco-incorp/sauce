@@ -74,7 +74,7 @@ export interface LifecycleContext {
   readonly account?: PrivateKeyAccount;
   /** `--keypair`: the Solana signer, for a step on Solana (it pays that transaction's fee). */
   readonly svmSigner?: KeyPairSigner;
-  /** Who approves what the command spends beyond gas: `--auto-approve`, or the person asked. */
+  /** Who approves what the command spends beyond gas: `--yes`, or the person asked. */
   readonly approver: Approver;
   /** `--api`: the Eco API gateway, an optional second source of status (and its key). */
   readonly api?: { readonly url: string; readonly key?: string };
@@ -241,7 +241,7 @@ async function approveSpend(
   ];
   const action = `${what.toLowerCase()}: spend ${spend.map(valueText).join(" and ")}`;
   const answer = await context.approver.approve(action, `${lines.join("\n")}\nSend them? [y/N] `);
-  if (answer === undefined) throw unapproved([action]);
+  if (answer === undefined) throw unapproved([action], context.approver.why);
   if (!answer) throw new CliError("not sent: you declined");
 
   return context.approver.auto ? lines : [];
@@ -259,7 +259,7 @@ function valueText(tx: AnyTxJson): string {
 }
 
 /**
- * The transactions to send once `approved` was approved: the same ones with `--auto-approve`, or
+ * The transactions to send once `approved` was approved: the same ones with `--yes`, or
  * where nothing beyond gas was asked about; otherwise built again from the chain as it is now,
  * because a question can stand for minutes and the prover's fee can move. Refuses, sending
  * nothing, when the new plan is not ready or spends more native value than was approved.

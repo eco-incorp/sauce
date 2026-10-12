@@ -33,7 +33,6 @@ import {
   registered,
   sauce,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
 
@@ -115,7 +114,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-simulate-e2e-"));
-    local = await startChain("ethereum", 9200 + WORKER);
+    local = await startChain("ethereum");
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
     usdt = await local.plant(USDT_CREATION, registered(local.chain, "USDT"));
     proxy = await withoutSimulateV1(local.rpcUrl);
@@ -291,7 +290,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     expect(run.stdout).toMatch(
       new RegExp(
         `^ {2}1\\. Kitchen\\.deployPot\\(${OWNER}, 0x${"00".repeat(32)}\\), gas used \\d+: ` +
-          `Pot ${pot} is not deployed on ethereum yet\\.`,
+          `Pot ${pot} is not deployed on ethereum yet, so the rehearsal deploys it first`,
         "m",
       ),
     );

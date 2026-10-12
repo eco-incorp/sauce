@@ -21,6 +21,57 @@ A **pnpm monorepo** of four workspace packages (`pnpm-workspace.yaml`: `dev-tool
 bundling is the key mental model: code lives in four packages for development, consumers import
 everything from one name.
 
+**What the root manifest depends on is held to what the code imports.** Its `dependencies` are
+exactly what a library import loads. The packages only one command of the `sauce` bin loads are
+OPTIONAL PEER dependencies: `@modelcontextprotocol/sdk` and `zod` (`sauce mcp`, i.e. `mcp/dist`) and
+`litesvm` (a Solana rehearsal, `cli/svm-fork.ts`). No install of the package brings them, with no
+flag. They are declared at any version (`*`). npm refuses (ERESOLVE) to install a package whose
+optional peer range a project's own copy misses, and zod is common, so never narrow those ranges.
+The pins are the root's devDependencies. The command takes, in this order
+(`cli/optional.ts#provide`): the user's own copies where the package's modules resolve them, when
+each is exactly the pin; else `~/.sauce/runtime/<version>`; else it installs that folder first. The
+install is `npm ci
+--ignore-scripts` on the lockfile the package ships, `sdk/runtime/package{,-lock}.json`
+(`cli/runtime.ts`), run in a 0700 mkdtemp beside the folder with `--workspaces=false` (npm adopts
+an ancestor workspace root otherwise; never `--prefix`, which moves npm's global config away) and
+renamed into place, after which older
+versions' folders are pruned but the newest of them. A newer version's folder is never pruned: a
+project's older pinned copy runs beside a newer global one. `optional.ts#assertPrivate` refuses to
+install into or load from a folder, or one above it up to `~/.sauce` (symlinks resolved), that
+another user owns or anyone else can write, and a version folder that is not 0700, because the
+process may hold a wallet password. The packages then load from the
+folder through a `module.registerHooks` resolve hook, limited to the package's own modules' imports.
+Only `main.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
+test, the skills checker) never runs npm and refuses with `sauce runtime install` instead. In this
+repository the workspaces' own copies are the pins, so nothing installs. `sauce runtime
+[status|install]` reports and installs; `sauce mcp setup` installs up front; and `sauce update` has
+the new binary run `sauce runtime install` where the replaced version had a folder. `sauce mcp
+--offline` makes the whole process install nothing (`useRuntime({ offline: true })`), a tool's
+later Solana rehearsal included.
+
+`sdk/scripts/gen-runtime-lock.mjs` (`pnpm --filter './sdk' gen-runtime-lock`, which reaches the
+registry) writes `sdk/runtime/` from those pins. `optional-dependencies.test.ts` fails while
+the lock is stale or incomplete, and also walks every export's module graph: every package it loads
+is a dependency, and none reaches the command. Every pin is three places that test holds equal: the
+root's devDependencies, the workspace that imports the package, and `sdk/runtime/`.
+
+TypeScript is a devDependency only: the editor plugin gets the editor's TypeScript, and `sauce init`
+writes our devDependency's range into the new project's devDependencies.
+`check-packed-package.mjs` proves all of this on the tarball, every `sauce` it runs with a
+temporary HOME:
+
+- a plain install is slim, and every export loads;
+- the first `sauce mcp` and the first rehearsal install the folder, including the platform's LiteSVM
+  binary;
+- a second start works with npm off PATH;
+- a mismatched user MCP SDK is passed over;
+- `--offline`, no npm and an unreachable registry each refuse on one line, leaving nothing;
+- `mcp setup` installs the folder.
+
+Never add a runtime dependency that no export loads. A new CLI-only package becomes an optional
+peer, joins an `Extra` in `optional.ts` and goes through `provide`, and `gen-runtime-lock` then
+regenerates `sdk/runtime/`.
+
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
@@ -60,6 +111,11 @@ pnpm format:check   # prettier --check, what CI runs
 pnpm docs:check     # manual links and shape, README snippet, executable examples, executed.json; build first
 pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
+
+`sdk/scripts/sizes/` holds the tools a compiler bump is held with, run by hand against a built tree
+(its README): every example and recipe's bytecode size against a baseline (`sizes.mjs`, `diff.mjs`),
+a hash of every output and refusal for proving a change alters none (`bytes.mjs`, `refusals.mjs`),
+and compile time (`times.mjs`, `ab.mjs`, `profile.mjs`, and recordings any build replays).
 
 `lint` and `format:check` gate every PR (`.github/workflows/lint.yml`) and both run over the
 WHOLE tree, so there is no backlog to work around — a new file has to be clean. Prettier and
@@ -201,6 +257,18 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   tests to etch at another address. **A tree where the
   sync has not run is not green**: with no `sdk/{src,dist}/artifacts/`, the tests that import
   `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
+  **Every anvil in `sdk/test`, `mcp/test` and `actions/tests` starts through
+  `sdk/test/anvil-process.ts#spawnAnvil`** (the actions harness and its mainnet replay included)
+  on a port the OS hands out: `startChain(slug)` and `startPoolsChain()` take no port, and a suite
+  that builds its clients at module load takes `freePortSync()`. `anvil-process.test.ts` fails a
+  direct `spawn("anvil", …)` in any of the three, and any fixed port in `sdk/test`, `mcp/test` or `actions/tests` (a
+  number, a `--port` literal, a range by `JEST_WORKER_ID`). Two suites once took overlapping
+  `N + JEST_WORKER_ID` ranges and met on 9701: one attached to the other's orphaned anvil and
+  asserted against its stale chain. `spawnAnvil` also REFUSES a port that already answers, naming
+  its holder (netstat, ss, else lsof), answers only once its own anvil does, and starts a detached
+  watchdog that SIGKILLs the anvil once the jest worker is gone. A suite's own exit or signal
+  handler cannot: jest hands a suite a copy of `process` whose listeners the real process never
+  calls.
 - **Mainnet state (`actions/tests/state/*.genesis.json.gz`)** — no test forks a live chain. The
   actions mainnet suites replay a chain at its pinned block (`CHAINS` in `actions/tests/mainnet.ts`:
   Ethereum at `PINNED_BLOCK` 26,070,000, Base at 51,966,000, Avalanche C-Chain at 96,424,000, OP
@@ -588,30 +656,135 @@ twins), which also holds the export list to the documented API and refuses a mod
 a program-wide define would replace it. Keep its functions FLAT: an internal helper call costs a
 frame (measured ~1–4k gas each on the engine), so each exported function is self-contained.
 
-The SVM arm (`router.svm.js`) is the Solana distributed swap's per-pool code, extracted: a `try` and
-a plain function per Solana venue whose swap stops at a price limit (`tryRaydiumClmm`,
+The SVM arm (`router.svm.js`) is the Solana distributed swap's per-pool code, extracted, and a
+limit-order swap at each Solana venue whose swap stops at a price limit, in four forms. AT A PRICE: a
+`try` and a plain function per venue of the distributed swap (`tryRaydiumClmm`,
 `tryPancakeswapClmm`, `tryByreal`, `tryStabbleClmm`, `tryOrcaWhirlpool`, `tryCropper`,
 `tryDefituna`, `tryCrema`, `tryPhoenix`, and `raydiumClmm` … `phoenix`), plus `trySwap`/`swap`,
-which read the venue from `pool.owner`. One order: `(slot: Account[], trader: Account[], amountIn,
+which read the venue from `pool.owner`, all `(slot: Account[], trader: Account[], amountIn,
 maxPrice, minOut, recipient: Account)` — arrays because a non-`main` function keeps ~16 values —
 `maxPrice` fee-inclusive in the skill's units, each function working out the pool's own sqrt limit
-(or Phoenix ticks). A `try` form can only CHECK before the swap (a failed CPI aborts the whole
-transaction): `0` having moved nothing for a missing slot, no input, swaps off, paused/closed, a fee
-that is not one rate, empty, past the limit, dust (an input that buys under one unit at the pool's
-price after its fee, estimated in `clmmOrder`), under one lot, a Phoenix limit past 64 bits, and a
-Phoenix IOC that filled nothing
-(told by the paying account's balance, `settled`); a swap that paid returns at least 1, held to
-`minOut`. A wrong pair, a slot whose program is not the pool's owner, and a pool of another venue
-or of none revert (caller mistakes, never 0); only the System program itself as the pool is a
-missing slot. Each EXPORTED venue function checks its own program id, so a direct call never signs
-a CPI into a program the slot names; only `trySwap`'s internal path relies on its one owner read.
-Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions (each
-venue's `swap<Venue>` body, `clmmOrder`, `settled`): a program carries only the venues it calls
-(`trySwap` ~4.4 KB, one venue's function ~1.3–1.6 KB), and the distributed swap (all nine through
-`trySwap`) is smaller than the inline helper it replaced (6,454 → 6,319 bytes, with the dust estimate). `compile.test.ts` pins its exports, argument order, each venue's program id
-(from the SDK's base58 ids) and instruction discriminator counted per function, and its revert
-reasons; `svm.e2e.test.ts` executes every function on the venues' own programs in LiteSVM against
-`fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from the same state.
+(or Phoenix ticks). AT THE POOL'S OWN LIMIT: `try<Venue>AtLimit`/`<venue>AtLimit` for those nine and
+Invariant and OpenBook v2 (`(…, priceLots, orders, minOut, recipient)`), and Manifest's
+`tryManifest`/`manifest` (no limit: its swap has none; Invariant's program does NOT stop at its limit
+— a swap reaching it with input left fails `0x1778` and aborts the transaction, measured at 1,000
+USDC on the fixture's window — so there the input must fit), taking the pool-native limit a caller computed
+(Q64.64 sqrt; Invariant's 1e24 root; Phoenix ticks; OpenBook price lots; 0 = none where the venue
+takes it): no fee read and no root, so adaptive-fee Orca and Byreal's own-fee pools trade here, and
+`minOut` rides in the venue's own floor field where its instruction has one (the others' recipient is
+measured). THE INSTRUCTION ALONE: `<venue>Cpi(program, accounts, source, amountIn, …[, aToB | xToY |
+paysBase])` takes the CPI's accounts in the venue's own order, checks the program only, reads only
+`source` before and after, and returns what it paid (`debit` if more than `amountIn`). ITS DATA:
+`<venue>Data(amountIn, …)` (Orca: `orcaWhirlpoolData` for the classic `swap`, `orcaWhirlpoolV2Data`;
+Phoenix/OpenBook take the market's lot sizes) returns the instruction's bytes, checking only that a
+field can carry its value (`minOut past 64 bits`, a sqrt price limit's `limit past 128 bits` — cut to its 16 bytes 2^128 would be 0, which the CL venues read as NO limit, reproduced on the real Raydium program by review — Phoenix's `limit past 64 bits`, OpenBook's `limit
+past its field`); the at-limit forms build their data with it. The at-price forms (`swap<Venue>`,
+all `trySwap` reaches) write it INLINE and UNCHECKED from `clmmOrder`'s 32 order bytes: their floor
+is 0 and their limit is under 2^128 by construction, and the range checks, Raydium's 17-account
+bitmap list and Orca's classic `swap` cost the distributed swap ~1.7 KB when they rode on that path
+(8,006 bytes where #102's was 6,319; `compile.test.ts` holds `trySwap` to carrying none of the
+range checks' reasons and one `swap` per venue code). `…Cpi` writes the same bytes INLINE (measured: calling `…Data` from `…Cpi` cost it ~2k CU — +8.7k vs +6.7k on DefiTuna
+— so b1aeaf48's routing was reverted for `…Cpi` in a later commit; Phoenix's alone stays on
+`phoenixData`, which measured 1.6k cheaper than its inline copy). Every form is held byte for byte
+to the recipes' templates by the at-limit e2e, so the two copies cannot drift unseen. `…Data` is the
+CU-minimal form (eco-incorp/sauce-recipes' served swaps: `svm.call(program, [accounts…],
+<venue>Data(…))`): +3.2–4.0k CU over the recipes' hand-built CPI on the CLMMs, `…Cpi` +6.8–9.9k,
+`try…AtLimit` ~+81–97k (measured in `svm-at-limit.e2e.test.ts`). The gap between `…Data` and `…Cpi`
+is MOSTLY THE ACCOUNT ARRAY (measured, DefiTuna's 14 accounts): a literal list written into
+`svm.call` costs ~100 CU, the same list passed to a function ~4.4k (~300 an account, built as an
+array first), which an `Account[]` parameter always forces — and `main` cannot take an `Account[]`.
+A 3-argument data function costs ~1.1k over the same code inline, a `bool` direction ~700 more.
+Reading an account out of an array costs ~2k CU, a hex literal ~1.6k, `toBytesLe` ~3–5k — so each
+venue's data is ONE packed word written with one `toBytesLe`, each field its low bytes. `@eco-incorp/sauce/svm`'s
+`routerSvmAccountOrder(venue, { aToB, v2?, adaptive?, bitmapExtension?, tickArrays? })` (Orca's `swap_v2` oracle ALWAYS writable — a read-only one is ConstraintMut 2000 on the real program; the classic `swap`'s only for `adaptive`) names each
+instruction account in order with its writable/signer flags, `routerSvmAccounts(…, refs)` builds the
+list from a value per name, and `ROUTER_SVM_VENUES` gives each venue's program and `…Data`/`…Cpi`
+names (`sdk/src/svm/router-accounts.ts`; `test/svm/router-accounts.test.ts` holds it account for
+account and flag for flag to the recipes' templates). `routerSvmDataTemplate(venue, options)`
+(`sdk/src/svm/router-data.ts`) writes the data around the amount in TypeScript —
+`prefix ‖ u64le(amountIn / divisor) ‖ suffix`, the recipes' own template shape, zero on-chain
+encoding cost — and throws at codegen for a field past its slot, because the compiler does NOT
+fold `…Data`'s range checks for a literal argument (measured: the guard and its reason string stay
+in the bytecode and cost ~600 CU each, even for a literal, even for an always-failing 2^128 limit;
+`test/svm/router-data.test.ts` holds its bytes to every template). A slot's accounts past its nine (`more`, at a limit only — at a price a slot is
+its nine): Raydium-layout pools' tick-array bitmap
+extension (17 accounts, more values than a function holds, so that list is FILLED IN PLACE from a
+literal of one repeated value — a literal of 17 distinct values does not compile in a non-`main`
+function), Invariant's program authority, OpenBook's oracles; Crema and Invariant pass their slot's
+leading tick arrays only (a System program ends them), each count its own `svm.call` site (an
+account array has a fixed element count). At a limit Orca's builder sends the classic `swap` when both mints
+are SPL Token's, `swap_v2` otherwise; at a price always `swap_v2` (so its oracle must be writable
+there). A `try` form can only CHECK before the swap (a failed CPI aborts the
+whole transaction): `0` having moved nothing for a missing slot, no input, swaps off,
+paused/closed, empty, past the limit, dust (an input that buys under one unit at the pool's price
+after its fee, `dust`; at a limit judged at the base fee), under one lot, an order that filled
+nothing (told by the paying account's balance, `settled`), and at a price a fee that is not one rate
+and a Phoenix limit past 64 bits; a swap that paid returns at least 1, held to `minOut`. A wrong
+pair, a slot whose program is not the pool's owner, a pool of another venue or of none, and a limit
+an order cannot carry revert (caller mistakes, never 0); only the System program itself as the pool
+is a missing slot. Each EXPORTED venue function checks its own program id, so a direct call never
+signs a CPI into a program the caller names; only `trySwap`'s internal path relies on its one owner
+read. Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions
+(each venue's `…Data`, `cpi<Venue>` laying out a slot, `swap<Venue>`, `clmmOrder` — which reads
+the pool at its venue's offsets, ~250 bytes smaller and ~5k CU a pool dearer than reading at
+each call site — `clmmCan`, `settled`): a program carries only the venues it calls (`trySwap` ~4.4
+KB, one venue's function ~0.9–1.7 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the
+distributed swap, 6,291 bytes with four slots and 6,362 with five, cooks four trading pools in
+941,176 CU, where #102's 6,319 bytes cooked in 955,936). `compile.test.ts` pins its exports, each family's argument order, each venue's
+program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
+revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
+in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from
+the same state; `svm-at-limit.e2e.test.ts` executes the other three forms, holding each venue's CPI —
+read back from the transaction's inner instructions — byte for byte to
+`fixtures/recipes-swap-templates.json`, the swaps eco-incorp/sauce-recipes builds for the fixture's
+pools (`scripts/recipes-swap-templates.mjs --recipes <checkout>` regenerates it, run with that
+checkout's `tsx`), and prints a CU table. The venue fixture gained Invariant, Manifest, OpenBook v2,
+an adaptive-fee Orca pool and the Raydium-layout pools' bitmap extensions through
+`dump-svm-venues.mjs --add`, which dumps only what the fixture lacks and moves nothing it holds (each
+pool it adds records its own `slot`); `restoreVenues` gives a kept wrapped-SOL token account that
+recorded no lamports its amount on top of rent, as the token program expects.
+
+The SVM arm's EXACT INPUT section (the end of `router.svm.js`) is the rest of the Solana venues, in
+four forms each, as the limit venues' instruction forms are: `<venue>Data(amountIn, …, minOut,
+<direction>)` (the instruction's data alone; the caller sends it), `<venue>Cpi(program, accounts,
+source, amountIn, …, minOut, <direction>)` (the data inline, sent on the caller's list, returning
+what `source` paid), and `<venue>`/`try<Venue>(slot, trader, amountIn, minOut, recipient)`, which
+read the direction from the slot and build their data with `<venue>Data`. In `…Data`/`…Cpi`
+`minOut` is written as given and the direction (`aToB`/`paysBase`/`xToY`) is a literal argument
+where the data says it; the slot forms write `minOut` at least 1. Every exact-in venue is in
+`sdk/src/svm/router-accounts.ts` (`ROUTER_SVM_VENUES` by the recipes' venue names,
+`routerSvmAccountOrder`/`routerSvmAccounts`), tested account by account against the recipes'
+instructions (`test/svm/router-accounts-exact-in.test.ts`), and in `router-data.ts`'s `EXACT_IN`
+table (`routerSvmDataTemplate`: `prefix ‖ u64le(amountIn) ‖ suffix`, divisor 1, its options the
+account order's `aToB`, `minOut` and the venue's own fields), held byte for byte to every vector
+(`test/svm/router-data-exact-in.test.ts`). Two compiler facts shape it, both
+measured on compiler 2.5.0 and the released engine: a function other than `main` cannot build an
+account-array literal of more than 16 elements ("keeps too many values in use at once"; `new
+Array(n)` holds only numbers, a function cannot return accounts, and account arrays cannot be
+concatenated), so a venue whose swap takes more accounts has only its `Cpi` and `Data` forms; and
+each account read out of an array argument and passed to `svm.call` costs ~1.4k compute units more
+than one of `main`'s own parameters. `svm-exact-in.e2e.test.ts` runs every form, and the recipes'
+template by hand, on the venue's own mainnet program (`test/fixtures/svm-exact-in-programs/`,
+gzipped `solana program dump`s with their sha256 in `manifest.json`) and pool accounts, both
+directions, and holds each instruction to the one sauce-recipes builds
+(`fixtures/exact-in-vectors.json`, generated there by `resolveSvmSpecSlot` and the ladder's
+`buildSwapV2`, each account with the recipes' role) and each trade to the recipes' real-program
+pins; it logs each form's compute units. A Pot cannot create a PumpSwap buy's volume accumulator
+(the System program moves no lamports out of an account with data), so the suite creates it first
+with another payer. A venue that reads the time is booted at its vector's own: a case's `atSlot`/
+`atEpoch` set the Clock and the EpochSchedule (Voltr's withdrawal and the liquid-unstake vault fail
+or overflow at the default clock), and the boot keeps each fixture account's recorded `lamports`
+(the liquid-unstake vault prices off its SOL vault's). Sanctum Infinity's stake-pool calculators
+read their stake pool program's ProgramData, which loading the program replaces with LiteSVM's own:
+its case's `fabricate` writes the captured header back with the program's ELF behind it. A venue
+`@sauce/router` has no function for (One Intro, BisonFi, the Sanctum stake pools and the three
+native-SOL curves, and Quantum, Obsidian and AlphaQ, which admit only routers on their list: a Pot
+cannot swap there; WOOFi, Metric: no provable swap) has `data`/`cpi` null in `ROUTER_SVM_VENUES`,
+and where its
+instruction lands, the suite's `WALLET_ONLY` cases send it from a wallet, built from
+`routerSvmAccounts` and `routerSvmDataTemplate` alone. WOOFi's `swap` returns success and moves
+nothing when `from_amount <= min_swap_amount` (a u128 at its pool's offset 155): a WOOFi fixture
+with those bytes patched swaps nothing and still succeeds, which is not a swap.
 
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
@@ -809,9 +982,11 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
 names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
-else the built-in public endpoints (none with `--offline`) — and `sauce update`, its one other
-network access, the npm registry, read only when that command runs (no background or automatic
-update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`) — and signs only with
+else the built-in public endpoints (none with `--offline`) — and the npm registry, its one other
+network access, named and read in `npm-registry.ts` alone, by `sauce update` when it runs and by
+the update check, and npm itself, with the user's npm configuration, where the command runs it
+(`init --install`, `sauce update`'s package managers, and `runtime.ts`'s `npm ci`; with the update
+check's refresh, the four modules that may spawn) — and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
 from everything it prints. **The public endpoints are the one exception to "the package ships no
 RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
@@ -824,7 +999,38 @@ guard's forwarder) that falls back through the list on a network error, a timeou
 5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
 executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
 it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
-`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI. `run --fund` (`funding.ts`)
+`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI.
+**The update check** (`update-check.ts`, the user's call, replacing "no automatic update check")
+prints one line on stderr after a command when its cache, `~/.sauce/update-check.json` (the last
+check's time, the latest version seen, the version that checked), names a newer release (a
+prerelease only to a prerelease). The command reads the cache synchronously and never waits on the
+registry: a cache a day old is refreshed by `update-refresh.ts`, a script `startDetached` runs in a
+detached, unref'd Node process with stdio ignored. It records the attempt first, so a failing
+registry is asked again a day later, and writes the cache 0600 in a 0700 `~/.sauce`, renamed into
+place. An in-process request could not do this: it either holds a short command open (the DNS
+lookup included) or dies with it unanswered. It is off with `--offline`, `--no-update-check` (on
+every command's `HELP` flags, and accepted before the command name for an alias) or the `--config`
+file's `"updateCheck": false`, and is silent on any failure. `sauce mcp` prints nothing; it adds one
+note to the first tool result of the process (`mcp/src/update-note.ts`, wrapping `registerTool`,
+shared by HTTP's per-request servers). Only `main.ts` creates the check, so an in-process `runCli`
+(every test, the skills checker) reads no registry, and the bin-spawning checks
+(`transports.test.ts`, the packed check) pass `--no-update-check`. `no-embedded-rpc.test.ts` holds
+the registry's name to `npm-registry.ts`, and its importers and the check's to the command's own
+modules. **No one deploys a Pot as a step of their own**: what a cook needs sent first is a
+`SetupStep` (`approvals.ts`: an action, a reason, a gas estimate, its plan entry and its send), and
+`approveAll` asks ONE question for every step (`[deploy/cancel]`; `-y`/`--yes`, the new name of
+`--auto-approve`, approves each and says so; no terminal or `--json` refuses, naming each). `sauce
+run` puts the Pot's deployment (`commands.ts#potDeployStep`) first, sent through `sendAndWait`;
+`sauce tx` and `sauce_tx` list the same steps unsigned as `{ chainId, pot, transactions }` ahead
+of the cook, with no top-level `to`/`data` so a wallet sends the whole plan; `RunInput.setup` and
+`TxInput.setup` take a command's further steps (another chain's setup) into the same question and
+plan rather than a second prompt; each gets a `SetupReach` — the cook's chain, and `on(chain)` for
+any other through the command's own endpoint finder (`endpointOf`: `--config`, the public ones;
+MCP's reach) and signer, its `send` going through `sendAndWait` — so a step opens no transport
+and touches no key of its own. On Solana `create_pot` rides in the cook's own transaction when
+the two fit in one, and falls back to a step otherwise. A wallet policy's `to` counts the
+released Kitchen's `deployPot` of the wallet's own Pot, with no value, as a transaction to that
+Pot (`policy.ts#ownPotDeployed`). `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
@@ -846,7 +1052,8 @@ tool arguments into it.
 of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
 owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
-MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
+MCP SDK, an optional peer dependency, as zod is: `optional.ts#provide` finds or installs them first);
+`entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
 Its tools are the `sauce` command's building half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
 `sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
 `sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,

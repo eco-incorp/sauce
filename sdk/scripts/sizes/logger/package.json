@@ -1,0 +1,8 @@
+{
+  "name": "sauce-compiler",
+  "private": true,
+  "exports": {
+    ".": "./index.mjs",
+    "./ready": "./ready.mjs"
+  }
+}

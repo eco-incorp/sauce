@@ -61,7 +61,7 @@ import {
   type LocalChain,
   type Run,
 } from "./cli-anvil.js";
-import { FACTORY, freePort, LIQUIDITY, POOL } from "./pools-anvil.js";
+import { FACTORY, LIQUIDITY, POOL } from "./pools-anvil.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXAMPLES = join(HERE, "../../skills/sauce-cli/examples");
@@ -190,8 +190,20 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
     await base.testClient.revert({ id: snapshot });
     snapshot = await base.testClient.snapshot();
   };
-  const call = (to: Address, abi: Abi, functionName: string, args: readonly unknown[]) =>
-    base.send(base.deployer, to, encodeFunctionData({ abi, functionName, args }));
+  // A gas limit of its own rather than an estimate: an estimate is made against the pending block,
+  // and a liquidity mint mined a moment later may need more than it, as `pools-anvil.ts` found —
+  // the setup then reverted now and then.
+  const call = async (to: Address, abi: Abi, functionName: string, args: readonly unknown[]) => {
+    const hash = await base.deployer.sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      to,
+      data: encodeFunctionData({ abi, functionName, args }),
+      gas: 15_000_000n,
+    });
+    const { status } = await base.publicClient.waitForTransactionReceipt({ hash });
+    if (status !== "success") throw new Error(`${functionName} on ${to} reverted`);
+  };
   const sqrtAt = (usdcPerWeth: string): bigint => sqrtPriceX96FromPrice(usdcPerWeth, PAIR);
   const tickOf = (sqrtPriceX96: bigint): number =>
     Math.floor(Math.log(Number(sqrtPriceX96) / 2 ** 96) / Math.log(Math.sqrt(1.0001)));
@@ -201,7 +213,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-examples-"));
-    base = await startChain("base", await freePort());
+    base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     weth = await base.plant(fixture("MockERC20"), registered(base.chain, "WETH"));
     for (const token of [usdc, weth]) await base.mint(token, DEPLOYER.address, 10n ** 30n);
@@ -451,7 +463,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(unapproved.code).toBe(0);
       expect(unapproved.stderr).toContain(
         "USDC: Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may not move your tokens yet: " +
-          "sauce run asks to approve it first (--auto-approve approves it), and the rehearsal runs " +
+          "sauce run asks to approve it first (--yes approves it), and the rehearsal runs " +
           "that approval before the cook",
       );
       expect(

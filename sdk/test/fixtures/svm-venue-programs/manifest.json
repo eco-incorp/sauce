@@ -85,6 +85,33 @@
       "size": 5000000,
       "sha256": "e3d76e5f479989823847fd77b4f96a9c8ce4255dafefcacf920a99643e15420f",
       "file": "phoenix.so.gz"
+    },
+    {
+      "name": "invariant",
+      "programId": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "programData": "EPTvrXK2JVARReFjtLuKfvpHMqEGiV9dLjfRxEFPPVX6",
+      "lastDeploySlot": "343244916",
+      "size": 1738288,
+      "sha256": "b27d59fdf2910d11f8c7a877f62cc54dbb2a836fdf7be738622b6bfc3659359e",
+      "file": "invariant.so.gz"
+    },
+    {
+      "name": "manifest",
+      "programId": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+      "programData": "G92J4ZFggKZ9LbsQ2zBpajRvRto7ed7uRuJJqWsX4BhJ",
+      "lastDeploySlot": "447525709",
+      "size": 486624,
+      "sha256": "9ebd5d9da1748dda72c3c4f6c36c7490d8f50f5ce67bf203ab1609f6c0d6db3b",
+      "file": "manifest.so.gz"
+    },
+    {
+      "name": "openbook-v2",
+      "programId": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "programData": "DktN5HJ9uHKVRZ7FXGap4PEGVnEdc2VNBCXTt1AqJQYB",
+      "lastDeploySlot": "250859864",
+      "size": 2059776,
+      "sha256": "9f724b3d9c207307c3bcb4ed308900af33a325f081126ea1b740fbb74a9f3642",
+      "file": "openbook-v2.so.gz"
     }
   ],
   "pools": [
@@ -106,7 +133,11 @@
         "6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf",
         "BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt",
         "7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX"
-      ]
+      ],
+      "more": [
+        "4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ"
+      ],
+      "moreSlot": 454345245
     },
     {
       "name": "pancakeswap-clmm-sol-usdc",
@@ -126,7 +157,11 @@
         "3UYmuPPsByqS5CC7AKsEpB4W1WuZcr8UEEFgUBGgLjH3",
         "2xmhJyp2uNmttg5VfMbiWfMSdWtrN4N9vLX4MTPuMZ4J",
         "syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy"
-      ]
+      ],
+      "more": [
+        "8zTGeWM6oKDzqumVqbZHXjHN8LrKBZcZ5FTeH5dx8N9a"
+      ],
+      "moreSlot": 454345245
     },
     {
       "name": "byreal-sol-usdc",
@@ -266,7 +301,11 @@
         "FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33",
         "21YCFMkgAqeb6NaPhQM74KbB2cMtS1XKTFzd9RN12yYy",
         "GBp3rLVnESTqAJpqW2dnk4351TNeAmW3xw6vqh2CdTtp"
-      ]
+      ],
+      "more": [
+        "GwQi9iyTDXyHTfwL8yfApgEEKgtAKxpME4h8oigT5Nzs"
+      ],
+      "moreSlot": 454345245
     },
     {
       "name": "stabble-clmm-usdc-usdt",
@@ -286,7 +325,11 @@
         "41f7eBK1GzfSCQbkxdhomYJdjXfysx8zw56vpGKYLAek",
         "GWFGgnF2qdRDzmM2eFbveYyZVFRxzhZDyJjJtwmF2QFF",
         "GKWvvwxtYaMBgpseoq6Fg2QmmbPCHRFDJBBvxZJzAPo1"
-      ]
+      ],
+      "more": [
+        "FNw27iQ9JRkmc1wSMNhG5xxtRQF11EMBFnoEWW3kbKcZ"
+      ],
+      "moreSlot": 454345245
     },
     {
       "name": "meteora-dlmm-sol-usdc",
@@ -307,6 +350,99 @@
         "11111111111111111111111111111111",
         "11111111111111111111111111111111"
       ]
+    },
+    {
+      "name": "invariant-usdc-usdt",
+      "venue": "invariant",
+      "program": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "pool": "5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7",
+      "config": "8NsPwRFYqob3FzYvHYTjFK6WVFJADFN8Hn7yNQKcVNW1",
+      "vaultA": "4go7nr5sVMTDztb5a7sF92HoeasDnpadspuHR9ACsfw6",
+      "vaultB": "9J1h43E5XFdMpYsWsqK8q8SFyXPAt8dHm52enfjWhSJt",
+      "extra": "DhLTuE6JXGWRAUxKSfFTuV8EZNaX4hm496Qbfo51YkPR",
+      "payA": [
+        "57cKqXzYQ7M8K3p3pjcVfbcTUoudHH2XE3JkRCvBXds4",
+        "9efZE8Ns8kvmAT64dJDYv5HYrtsDfNmv9crQjLeiWDEv",
+        "2hqUHwW2jdyURq1Zy7JHVRdME6jeGD1nSYeB6XPAouro"
+      ],
+      "payB": [
+        "FPQKVT5iRxczsq3Cz72mw4bppn4CHKDyDZXvQaoAYjro",
+        "9zvfSzdCoz8CMNt6MAjoRB9TJRhW4rNZkAK73wffjdyR",
+        "BQnqfFuKjd2cnLnur1QqNNdyrzwfBaGCWHkbZBSoSscD"
+      ],
+      "more": [
+        "J4uBbeoWpZE8fH58PM1Fp9n9K6f1aThyeVCyRdJbaXqt"
+      ],
+      "slot": 454345245,
+      "unixTimestamp": 1791409056
+    },
+    {
+      "name": "manifest-sol-usdc",
+      "venue": "manifest",
+      "program": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+      "pool": "ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ",
+      "config": "11111111111111111111111111111111",
+      "vaultA": "AKjfJDv4ywdpCDrj7AURuNkGA3696GTVFgrMwk4TjkKs",
+      "vaultB": "FN9K6rTdWtRDUPmLTN2FnGvLZpHVNRN2MeRghKknSGDs",
+      "extra": "11111111111111111111111111111111",
+      "payA": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ],
+      "payB": [
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "11111111111111111111111111111111"
+      ]
+    },
+    {
+      "name": "openbook-v2-bonk-usdc",
+      "venue": "openbook-v2",
+      "program": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "pool": "D3gZwng2MgZGjktYcKpbR8Bz8653i4qCgzHCf5E4TcZb",
+      "config": "7WQX98AWmbn6keR2vVHdZ3dfwzaLuUyAnr2DZ4rGhh3o",
+      "vaultA": "4PMzFKwkiT3snbaE7S9j4K52osuAN3LbptF2XMQYMort",
+      "vaultB": "HE3w6Tw6Z8ZqpfscqmDeA9U7Xoo6zRgNWGKaFwjRfBJZ",
+      "extra": "DPH9w3DvTGEWbpV3p7bbrDvfx7Gp5M5ahueUE9dUwjoG",
+      "payA": [
+        "6LWqnjYgqVuaYrv9rJCm3N9UzHQUbVBHBDWqU37xszmY",
+        "FDVjEDZiCxvch6vkFhw5g6oX9PUPqUeQd5gNq3b4LV3A",
+        "11111111111111111111111111111111"
+      ],
+      "payB": [
+        "6LWqnjYgqVuaYrv9rJCm3N9UzHQUbVBHBDWqU37xszmY",
+        "FDVjEDZiCxvch6vkFhw5g6oX9PUPqUeQd5gNq3b4LV3A",
+        "11111111111111111111111111111111"
+      ],
+      "more": [
+        "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+        "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb"
+      ],
+      "slot": 454345245,
+      "unixTimestamp": 1791409056
+    },
+    {
+      "name": "orca-whirlpool-adaptive",
+      "venue": "orca-whirlpool",
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "pool": "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
+      "config": "11111111111111111111111111111111",
+      "vaultA": "CnqneGkrhcf8prtRQSpBx4eZrkDx9t5WbENSqoqtLRAg",
+      "vaultB": "9HYQnRTZo6eyAxfJGj9ZoXmP1bD2E374b9tci9d8zb1E",
+      "extra": "8ez9MMRpkHkC8Q3qdUipoqEKxWt3dWr4ZwLKxLGXRVf3",
+      "payA": [
+        "BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW",
+        "ejH9ED8r3cp8La8goHG1kB9FjQdWhTABwfN6mB28K7S",
+        "G2USjAxqLHjon3kvUoHp28DJyLuGhCTz8KjsTvSfB2vB"
+      ],
+      "payB": [
+        "BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW",
+        "ENNENGWX3aF3DaBvS3XKqMmYZ1BSGh5rRNKLeHJp4rew",
+        "AS2dGdgTgVUhrdQtdbcuvgGwx89BLh6z8UcfxhnXVqpN"
+      ],
+      "slot": 454346652,
+      "unixTimestamp": 1791409440
     }
   ],
   "accounts": [
@@ -341,6 +477,14 @@
       "size": 165,
       "sha256": "d5165cda5fca44702b8c4880aca8cd2fd09e1397f5530b664df7458dfd3432c6",
       "file": "orca-whirlpool/vault-b.json"
+    },
+    {
+      "address": "2hqUHwW2jdyURq1Zy7JHVRdME6jeGD1nSYeB6XPAouro",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "1934880",
+      "size": 150,
+      "sha256": "4c4975d7d9a8a03b7fc1744a5b8f0197ff8b401645456e9c10dbd430ff70abee",
+      "file": "invariant/2hqUHwW2jdyURq1Zy7JHVRdME6jeGD1nSYeB6XPAouro.json"
     },
     {
       "address": "2noodfNtCXZiw1sjYCXDKML4QcAjh6HMW8SgAZ5W4opq",
@@ -455,6 +599,21 @@
       "file": "phoenix/4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg.json.gz"
     },
     {
+      "address": "4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ",
+      "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+      "size": 1832,
+      "sha256": "1b6f9a2aadf92d805b10e42d5bd5268150c344695d5478427f1812637478a9c0",
+      "file": "raydium-clmm/4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ.json"
+    },
+    {
+      "address": "4PMzFKwkiT3snbaE7S9j4K52osuAN3LbptF2XMQYMort",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039380",
+      "size": 165,
+      "sha256": "2191c24a0f367505bed602450ff68b5ade918fdc6ff8793289e53ef0bdc4b07f",
+      "file": "openbook-v2/4PMzFKwkiT3snbaE7S9j4K52osuAN3LbptF2XMQYMort.json"
+    },
+    {
       "address": "4SoQ8UkWfeDH47T56PA53CZCeW4KytYCiU65CwBWoJUt",
       "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       "lamports": "1462357",
@@ -471,12 +630,28 @@
       "file": "raydium-clmm/4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A.json"
     },
     {
+      "address": "4go7nr5sVMTDztb5a7sF92HoeasDnpadspuHR9ACsfw6",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039283",
+      "size": 165,
+      "sha256": "2971a38aa1f9dca6adbac91e787d588140efa9d11748d61d8e6da0e232ba61da",
+      "file": "invariant/4go7nr5sVMTDztb5a7sF92HoeasDnpadspuHR9ACsfw6.json"
+    },
+    {
       "address": "55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ",
       "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
       "lamports": "11935486",
       "size": 653,
       "sha256": "3d1875fe030d0db79d7cd99665456db03016d678cd32efd3fbc296abc07de3ea",
       "file": "cropper/55TucCMtiDs2k4bXcNssMRNCX7LxYPb42cauJAhpXdoQ.json"
+    },
+    {
+      "address": "57cKqXzYQ7M8K3p3pjcVfbcTUoudHH2XE3JkRCvBXds4",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "1934880",
+      "size": 150,
+      "sha256": "3976de3b683898b28842256cda2d4b87683f2ff1c2355d65dbbb233359102649",
+      "file": "invariant/57cKqXzYQ7M8K3p3pjcVfbcTUoudHH2XE3JkRCvBXds4.json"
     },
     {
       "address": "5EB33uqp5Lc6JKvdFwE3p7G5sYMwG26uCcKfjqconxdc",
@@ -493,6 +668,14 @@
       "size": 8556,
       "sha256": "39d44843ea473afd8d6aba70848ad2112cea7e896cb5e0acaf19a6c99c1a3ecf",
       "file": "crema/5SroGZpjj5TCi9H5k2UfGpsxMXYos189V7uBkDFW2aQV.json"
+    },
+    {
+      "address": "5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "3674880",
+      "size": 400,
+      "sha256": "7c87f7840a5a0179d5012e52e8f151647ef8a66f9f8a50fba2dc4708f6c661fb",
+      "file": "invariant/5dX3tkVDmbHBWMCQMerAHTmd9wsRvmtKLoQt6qv9fHy7.json"
     },
     {
       "address": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
@@ -518,6 +701,14 @@
       "file": "cropper/5zLmSAxN5dNQUeeFgnk55f3xViyDCrbbDL5yr79AM9NH.json"
     },
     {
+      "address": "6LWqnjYgqVuaYrv9rJCm3N9UzHQUbVBHBDWqU37xszmY",
+      "owner": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "lamports": "633916904",
+      "size": 90952,
+      "sha256": "17caf184eec71151b62f01562a3bffe0f2ac6fa9c6fc2e5467ea4415d1258ecc",
+      "file": "openbook-v2/6LWqnjYgqVuaYrv9rJCm3N9UzHQUbVBHBDWqU37xszmY.json"
+    },
+    {
       "address": "6hA1LN1fzCiXqymDiQXeBFn5da1b7STP1L7JmDc6hR3M",
       "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
       "lamports": "70407360",
@@ -540,6 +731,14 @@
       "size": 10240,
       "sha256": "e5321d7ee1affbacfe7cce359ab17d0cf41e6dbf16bdb97b80d72d600df6273f",
       "file": "raydium-clmm/6nBrPvVJHKjCqHuBPckNrEGo5VThvmBQEEnXGrWUawcf.json"
+    },
+    {
+      "address": "6t6KEtuQdyAEAYz1ieUEB7f2DxPVgikE3AUK5wGYgSUk",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "1461600",
+      "size": 82,
+      "sha256": "7025912fc2d8b3d93bdccf3244a433fd5dc358e5d16508732141479256c73d8e",
+      "file": "orca-whirlpool/6t6KEtuQdyAEAYz1ieUEB7f2DxPVgikE3AUK5wGYgSUk.json"
     },
     {
       "address": "76x9964TvFSUVdHAEezmT6JWi2Nn9sGnRof1JXgTJtcx",
@@ -574,6 +773,14 @@
       "file": "raydium-clmm/7VLiqX99wA5SKT2bZNJoUn9Sdiz1mw7HoWEfDpDeBDCX.json"
     },
     {
+      "address": "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "5435765",
+      "size": 653,
+      "sha256": "5c42e36e6530765d7ff90c11c48677618935cf11918e02e99859bb98844198db",
+      "file": "orca-whirlpool/7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s.json"
+    },
+    {
       "address": "7VuKeevbvbQQcxz6N4SNLmuq6PYy4AcGQRDssoqo4t65",
       "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
       "lamports": "3835694",
@@ -606,6 +813,22 @@
       "file": "orca-whirlpool/8NPFeBD52yqJWnsmBNma9qXXGEjXa6WatYcLMXjzSeyK.json"
     },
     {
+      "address": "8NsPwRFYqob3FzYvHYTjFK6WVFJADFN8Hn7yNQKcVNW1",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "1405920",
+      "size": 74,
+      "sha256": "f4f10f620328de6be15ef3bb1c529e618c00ebf614df2919126bb86d413ca12d",
+      "file": "invariant/8NsPwRFYqob3FzYvHYTjFK6WVFJADFN8Hn7yNQKcVNW1.json"
+    },
+    {
+      "address": "8ez9MMRpkHkC8Q3qdUipoqEKxWt3dWr4ZwLKxLGXRVf3",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "2658720",
+      "size": 254,
+      "sha256": "e121ada5e2de3b8aa66b795e26e3398f438fa1ab3da4467050ee80753c1a37a8",
+      "file": "orca-whirlpool/8ez9MMRpkHkC8Q3qdUipoqEKxWt3dWr4ZwLKxLGXRVf3.json"
+    },
+    {
       "address": "8fV1MQYaRiW9qDWinzYfNa3FLs8PXSdPxoytiwrcyJPD",
       "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
       "lamports": "70407460",
@@ -622,6 +845,14 @@
       "file": "phoenix/8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG.json"
     },
     {
+      "address": "8zTGeWM6oKDzqumVqbZHXjHN8LrKBZcZ5FTeH5dx8N9a",
+      "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+      "lamports": "13911604",
+      "size": 1832,
+      "sha256": "b3680d61b1775340966ec1a90f85e87ce2f7deda2b895226ed762d867ac20e84",
+      "file": "pancakeswap-clmm/8zTGeWM6oKDzqumVqbZHXjHN8LrKBZcZ5FTeH5dx8N9a.json"
+    },
+    {
       "address": "9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq",
       "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
       "lamports": "11686550",
@@ -630,12 +861,51 @@
       "file": "byreal/9GTj99g9tbz9U6UYDsX6YeRTgUnkYG6GTnHv3qLa5aXq.json"
     },
     {
+      "address": "9HYQnRTZo6eyAxfJGj9ZoXmP1bD2E374b9tci9d8zb1E",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "a7dea197cb38275093939252f113e60860900403191b0236b5e34126be30f8c4",
+      "file": "orca-whirlpool/9HYQnRTZo6eyAxfJGj9ZoXmP1bD2E374b9tci9d8zb1E.json"
+    },
+    {
+      "address": "9J1h43E5XFdMpYsWsqK8q8SFyXPAt8dHm52enfjWhSJt",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039283",
+      "size": 165,
+      "sha256": "c06d4a6893f12491a6235dff4629b7d161f3e039854475cd4966136b14a75079",
+      "file": "invariant/9J1h43E5XFdMpYsWsqK8q8SFyXPAt8dHm52enfjWhSJt.json"
+    },
+    {
       "address": "9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x",
       "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
       "lamports": "11637124",
       "size": 1544,
       "sha256": "685e0a4beec345a89a77a81c70184636b9fbdc37e827fa291f90268d6ecf90ac",
       "file": "stabble-clmm/9Mw8ESnvHZFoKnEGnjvLzjWivugW7ipYvVAhBu2hSA6x.json"
+    },
+    {
+      "address": "9efZE8Ns8kvmAT64dJDYv5HYrtsDfNmv9crQjLeiWDEv",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "1934880",
+      "size": 150,
+      "sha256": "65f2df531d72f67ae4f1ad7a6aba487db993bab8185d77573fff0bbd4586bc1a",
+      "file": "invariant/9efZE8Ns8kvmAT64dJDYv5HYrtsDfNmv9crQjLeiWDEv.json"
+    },
+    {
+      "address": "9zvfSzdCoz8CMNt6MAjoRB9TJRhW4rNZkAK73wffjdyR",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "1934880",
+      "size": 150,
+      "sha256": "46ddab652351909edef277484690070df4a6e3b318abbc157545c387b0bedecc",
+      "file": "invariant/9zvfSzdCoz8CMNt6MAjoRB9TJRhW4rNZkAK73wffjdyR.json"
+    },
+    {
+      "address": "AKjfJDv4ywdpCDrj7AURuNkGA3696GTVFgrMwk4TjkKs",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "size": 165,
+      "sha256": "5672d2dd6407e0cda775a95130754783d375e325e7d6c52b13b08896b6aa84ba",
+      "file": "manifest/base_vault.json"
     },
     {
       "address": "ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC",
@@ -654,12 +924,28 @@
       "file": "raydium-clmm/BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt.json"
     },
     {
+      "address": "BQnqfFuKjd2cnLnur1QqNNdyrzwfBaGCWHkbZBSoSscD",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "1934880",
+      "size": 150,
+      "sha256": "81b3f2b6b9d2a504afa603309ed08c9f3e921f00388cb5cddd3f8565d22b50e6",
+      "file": "invariant/BQnqfFuKjd2cnLnur1QqNNdyrzwfBaGCWHkbZBSoSscD.json"
+    },
+    {
       "address": "BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh",
       "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
       "lamports": "7110896",
       "size": 468,
       "sha256": "73c5882aa5a1fdf38546c7e6aa7e06c580c3b430ef61975f1d2dd6a3434949f8",
       "file": "defituna/BSathQ1iMicgEYUUT7zaTmHfnG16LwBNifdXEaxg5mLh.json"
+    },
+    {
+      "address": "BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "1920960",
+      "size": 148,
+      "sha256": "ae842091e9dd7c89f4172ed4736cd85dcb5a735c32b47d3ec4c7fdd542f216ec",
+      "file": "orca-whirlpool/BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW.json"
     },
     {
       "address": "BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3",
@@ -702,6 +988,14 @@
       "file": "defituna/CjQWTPK84zwBq1PjVXmhmtKqhD9BfnMP7dcUFuN8Ljyd.json"
     },
     {
+      "address": "CnqneGkrhcf8prtRQSpBx4eZrkDx9t5WbENSqoqtLRAg",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "14fc6e6f845948f7d6b9e103457f73a9df355f90c90a99607b19fafc00badb08",
+      "file": "orca-whirlpool/CnqneGkrhcf8prtRQSpBx4eZrkDx9t5WbENSqoqtLRAg.json"
+    },
+    {
       "address": "CrW1pYD31zQHz49j5Ynmezm2hVDnM6KqWeDLZ4Q43yfF",
       "owner": "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
       "lamports": "70407360",
@@ -742,12 +1036,28 @@
       "file": "orca-whirlpool/D3461zSTVPNdBFPRk2b6zpqQ93g2LW5Kw2potgMdxNJP.json"
     },
     {
+      "address": "D3gZwng2MgZGjktYcKpbR8Bz8653i4qCgzHCf5E4TcZb",
+      "owner": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "lamports": "6793060",
+      "size": 848,
+      "sha256": "6437b753188e51393cb78b10a82764f3bc91d40dd0c9741c9579a739735725fc",
+      "file": "openbook-v2/D3gZwng2MgZGjktYcKpbR8Bz8653i4qCgzHCf5E4TcZb.json"
+    },
+    {
       "address": "DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ",
       "owner": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
       "lamports": "33231123",
       "size": 1544,
       "sha256": "5d035dfb88066a6cb78f33d6c88a8e7cc46d1188ddb52a25496e42fb66ac71a7",
       "file": "pancakeswap-clmm/DJNtGuBGEQiUCWE8F981M2C3ZghZt2XLD8f2sQdZ6rsZ.json"
+    },
+    {
+      "address": "DPH9w3DvTGEWbpV3p7bbrDvfx7Gp5M5ahueUE9dUwjoG",
+      "owner": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "lamports": "636255467",
+      "size": 91288,
+      "sha256": "314b601009ce0fc933b9bba883d0ade199740a4971414d46de070360d2b30dd0",
+      "file": "openbook-v2/DPH9w3DvTGEWbpV3p7bbrDvfx7Gp5M5ahueUE9dUwjoG.json"
     },
     {
       "address": "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm",
@@ -764,6 +1074,37 @@
       "size": 5424,
       "sha256": "96c381e66b05f400bafbec40123086180c6b8c8f9e932f3dcf689fa6a2231dcd",
       "file": "byreal/DauY8vZHBRNdqrWw9xy2yiAyPfUdf5GRvoJSCnyr4Ygw.json"
+    },
+    {
+      "address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "1092249446731",
+      "size": 82,
+      "sha256": "70bd44fafea3622c592c24dd0861ed982afdc58bba359b06061547905956729f",
+      "file": "openbook-v2/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263.json"
+    },
+    {
+      "address": "DhLTuE6JXGWRAUxKSfFTuV8EZNaX4hm496Qbfo51YkPR",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "78139940",
+      "size": 11099,
+      "sha256": "6c17a3dc8007eaf5eb01d77c31cf6cdba5601f57c436367411d6ddef1dc1585b",
+      "file": "invariant/DhLTuE6JXGWRAUxKSfFTuV8EZNaX4hm496Qbfo51YkPR.json"
+    },
+    {
+      "address": "ENNENGWX3aF3DaBvS3XKqMmYZ1BSGh5rRNKLeHJp4rew",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "1920960",
+      "size": 148,
+      "sha256": "890adf33fb2d3a6fae2593a2a903c620c6ad65dd635e81fc9664f0372365cfa4",
+      "file": "orca-whirlpool/ENNENGWX3aF3DaBvS3XKqMmYZ1BSGh5rRNKLeHJp4rew.json"
+    },
+    {
+      "address": "ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ",
+      "owner": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
+      "size": 238896,
+      "sha256": "9956e7cc6c9072818ef43d7065e12ec5afec1228e05acea5b3b59877e4271731",
+      "file": "manifest/market.json"
     },
     {
       "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -814,12 +1155,43 @@
       "file": "byreal/FBfbFcUThYcXBPLseG2F6mPoLL38ooHY8HV9RNAmNTHY.json"
     },
     {
+      "address": "FDVjEDZiCxvch6vkFhw5g6oX9PUPqUeQd5gNq3b4LV3A",
+      "owner": "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
+      "lamports": "633916904",
+      "size": 90952,
+      "sha256": "21532a85fa493a66cd62c6161817d52dcf5014451b94e8bab73cade488770aea",
+      "file": "openbook-v2/FDVjEDZiCxvch6vkFhw5g6oX9PUPqUeQd5gNq3b4LV3A.json"
+    },
+    {
       "address": "FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33",
       "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
       "lamports": "72551040",
       "size": 10296,
       "sha256": "c05ab9110f390942e5a4221a8d82d211fe104f4250eb088d62b06f61cb747775",
       "file": "byreal/FKXn6aVZuikWG374bFr1yRPe1nhruAMWACc769HGXa33.json"
+    },
+    {
+      "address": "FN9K6rTdWtRDUPmLTN2FnGvLZpHVNRN2MeRghKknSGDs",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "size": 165,
+      "sha256": "0a6b1c7052dd66c21232e07251b706ab2f4e6577c057a3bbe2dc6afc1055db31",
+      "file": "manifest/quote_vault.json"
+    },
+    {
+      "address": "FNw27iQ9JRkmc1wSMNhG5xxtRQF11EMBFnoEWW3kbKcZ",
+      "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "lamports": "13641600",
+      "size": 1832,
+      "sha256": "f84893cbd8a6e80da256cfa3f13429454b329822a26e63d0af336d6804a52761",
+      "file": "stabble-clmm/FNw27iQ9JRkmc1wSMNhG5xxtRQF11EMBFnoEWW3kbKcZ.json"
+    },
+    {
+      "address": "FPQKVT5iRxczsq3Cz72mw4bppn4CHKDyDZXvQaoAYjro",
+      "owner": "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",
+      "lamports": "1934880",
+      "size": 150,
+      "sha256": "b410639b61703a29e020e3863ad1f38e8260279fa84376f309ac4432e77351be",
+      "file": "invariant/FPQKVT5iRxczsq3Cz72mw4bppn4CHKDyDZXvQaoAYjro.json"
     },
     {
       "address": "FdtvWk8j5u1a64YK2Uxk9eXxKZJTwLHDGx8aJPbJyw2Q",
@@ -894,12 +1266,28 @@
       "file": "crema/GiS27Q28iRbiXQDGqwMBzb3J3KxFtDw4EEqUwuJ1shmU.json"
     },
     {
+      "address": "GwQi9iyTDXyHTfwL8yfApgEEKgtAKxpME4h8oigT5Nzs",
+      "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+      "lamports": "13641600",
+      "size": 1832,
+      "sha256": "e6a28921331b837ea87a4961262ed85694e6680f40a1378a44aa144d8967857d",
+      "file": "byreal/GwQi9iyTDXyHTfwL8yfApgEEKgtAKxpME4h8oigT5Nzs.json"
+    },
+    {
       "address": "GxmHBFUh2KWST8AqV2uiG5dVFt6kyS8e1qUg3sbmiVRw",
       "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       "lamports": "2039281",
       "size": 165,
       "sha256": "1702a25d48e7938365c8bdcf5539095b799d549286a7f8efbf6f614e1d788708",
       "file": "byreal/GxmHBFUh2KWST8AqV2uiG5dVFt6kyS8e1qUg3sbmiVRw.json"
+    },
+    {
+      "address": "HE3w6Tw6Z8ZqpfscqmDeA9U7Xoo6zRgNWGKaFwjRfBJZ",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039380",
+      "size": 165,
+      "sha256": "350a81e71dc16ee91929ed53db29b7fb1031a323f2e0d0360708489706562978",
+      "file": "openbook-v2/HE3w6Tw6Z8ZqpfscqmDeA9U7Xoo6zRgNWGKaFwjRfBJZ.json"
     },
     {
       "address": "HZzqEWHEvSiqYt6PxxLs7zXETmqGuryqfmvggjAkqisp",
@@ -918,12 +1306,28 @@
       "file": "cropper/J1pkijn97BrmSD7xY6Nhij6bDeQuaJ2bvpAKMki3nVFG.json"
     },
     {
+      "address": "J4uBbeoWpZE8fH58PM1Fp9n9K6f1aThyeVCyRdJbaXqt",
+      "owner": "11111111111111111111111111111111",
+      "lamports": "32153238",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "file": "invariant/J4uBbeoWpZE8fH58PM1Fp9n9K6f1aThyeVCyRdJbaXqt.json"
+    },
+    {
       "address": "So11111111111111111111111111111111111111112",
       "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       "lamports": "1849510085976",
       "size": 82,
       "sha256": "b0f919425a529f4971ef8dabd535aec34947d5c8c4885df80dae91635b98c5f3",
       "file": "raydium-clmm/So11111111111111111111111111111111111111112.json"
+    },
+    {
+      "address": "USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "6601790979",
+      "size": 82,
+      "sha256": "d6b92c2ef2382c5ce25e8ac90e9ba390ff1264ebdc66a79a3f338776b0c3b319",
+      "file": "orca-whirlpool/USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB.json"
     },
     {
       "address": "YzanZTYF2VqhpurmgFWkzippjhT8LLUAFcXTKBeP5Au",
@@ -948,6 +1352,14 @@
       "size": 10240,
       "sha256": "81697356ae8f94535deaf1b3915ddf5d647fa03b40f438c7d1e5518900c91be3",
       "file": "pancakeswap-clmm/bjnDeH75Tk7UqoyZHMRx5svjR1ndzSxLuxnzoX3wYSr.json"
+    },
+    {
+      "address": "ejH9ED8r3cp8La8goHG1kB9FjQdWhTABwfN6mB28K7S",
+      "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "lamports": "1920960",
+      "size": 148,
+      "sha256": "baa3711cd387cbb9deff94f82e6220b3ba14329270d15b7da56cb5a77509d16b",
+      "file": "orca-whirlpool/ejH9ED8r3cp8La8goHG1kB9FjQdWhTABwfN6mB28K7S.json"
     },
     {
       "address": "syEzpmVAJVk5LCPUfNjtsF9peEsMBsmYyo1FHU7aVgy",

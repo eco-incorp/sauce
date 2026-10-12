@@ -26,6 +26,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce init`     | Scaffold a project that uses this package                                         |
 | `sauce skills`   | Install, update or check this package's agent skills in a project                 |
 | `sauce update`   | Update this `sauce` command to the latest release, the way it was installed       |
+| `sauce runtime`  | Install or check the packages `sauce mcp` and Solana rehearsals load              |
 
 Every command takes `--help`. A mistyped invocation exits 2. A program that does not compile, a
 cook that reverts, a rejected settle, an outdated skills install and a transaction on a
@@ -46,8 +47,8 @@ installed: a global install by npm, pnpm, yarn or bun is installed again by that
 installed in the current directory are then updated by the new `sauce`. A project's own copy is
 the project's to update, so `sauce update` prints the command its package manager takes and changes
 nothing; a copy in npx's cache prints the `npx -y` command. `sauce update --check` says which
-version is installed and which is the latest, and installs nothing. It reads the npm registry, and
-only then: `sauce` never checks for updates by itself.
+version is installed and which is the latest, and installs nothing. Every other command says when
+a newer release is out ([The update notice](#the-update-notice)).
 
 Two other ways run the same command:
 
@@ -75,6 +76,52 @@ resolves only a project's own. It also writes an `AGENTS.md` with the project's 
 local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
 ([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](skills.md)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
+
+### The update notice
+
+After a command, one line on stderr says when a newer release of the package is published:
+
+```text
+sauce 0.99.12 → 0.99.13 is available: run `sauce update`
+```
+
+It never slows a command down. The line comes from a cache, `~/.sauce/update-check.json`
+(owner-only, beside the runtime folders), which `sauce` refreshes from the npm registry at most
+once a day, in a process of its own that no command waits for, so the first command after a
+release may say nothing yet. The registry is the only host it reads. The line goes to stderr only,
+so `--json` output and anything piped from stdout stay as they are. It names a newer release only:
+a prerelease only to a prerelease.
+
+Nothing is shown, and nothing read, with `--offline`. To turn it off:
+
+- pass `--no-update-check`. Every command takes it, and so does `sauce` before the command, so a
+  shell alias can carry it: `alias sauce='sauce --no-update-check'`;
+- or add `"updateCheck": false` to the `--config` file a command is given
+  (`{ "rpcUrls": { … }, "updateCheck": false }`).
+
+`sauce mcp` prints no notice: it puts one note in its first tool result instead
+([MCP server](mcp.md#a-newer-version)).
+
+### Runtime packages
+
+Two commands load packages that no install of `@eco-incorp/sauce` brings, being its optional peer
+dependencies: `sauce mcp` (the MCP SDK and zod) and a Solana rehearsal in a local copy (LiteSVM).
+Each takes your own copies where they are exactly the versions the package pins. Otherwise its
+first use installs them for itself, once per version, into `~/.sauce/runtime/<version>`: `npm ci`
+on the lockfile the package ships, so every package is the one pinned, checked by its integrity
+hash, and LiteSVM's native binary is your platform's. The command says so on stderr. The folder is
+owner-only and installed whole or not at all, and the command refuses to load from it if another
+user owns it, if it is not owner-only any more, or if anyone else can write a folder above it. Older versions' folders are
+removed, except the newest of them; a newer version's is never touched.
+
+- `sauce runtime` says where each command's packages come from. `sauce runtime install` installs
+  the folder now.
+- `sauce mcp setup` installs it too, so an agent's first start of the server does not wait.
+  `sauce update` has the new version install its own folder where the version it replaces had one.
+- `sauce mcp --offline` installs nothing. Without npm, or without its registry, the command
+  refuses and says why.
+
+npm reaches the registry your npm configuration names, a mirror or a proxy included.
 
 ## Endpoints and signers
 
@@ -184,8 +231,9 @@ sauce globals --chain base
 # 2. Check that the program compiles.
 sauce compile pay.sauce.ts --chain base
 
-# 3. Deploy your Pot (once). Its address is known before it exists.
-sauce pot --deploy --chain base --keystore ~/.keys/me.json
+# 3. Your Pot's address, known before it exists. There is nothing to deploy by hand: `sauce run`
+#    deploys the Pot when it first needs it.
+sauce pot --chain base --keystore ~/.keys/me.json
 
 # 4. Fund the Pot with what the program spends: send its address the tokens, from any wallet —
 #    or let `sauce run --fund` pull them in with the cook (see "Funding a run" below).
@@ -195,7 +243,7 @@ sauce pot --deploy --chain base --keystore ~/.keys/me.json
 sauce simulate pay.sauce.ts --chain base --owner 0xYou \
   --assume-balance USDC:1 --args 0x… 1000000
 
-# 6. Run it.
+# 6. Run it. The first time, it asks to deploy your Pot (or pass --yes).
 sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
   --args 0x… 1000000
 ```
@@ -233,20 +281,27 @@ The value defaults to the Kitchen's execution fee, read from the chain; pass `--
 the program also spends native currency (a `--value` below the fee is refused, since the cook would
 revert).
 
-If the Pot is not deployed yet, `run` asks first:
+A command deploys your Pot when it first needs it (asks, or `--yes`). If the Pot is not deployed
+yet, `run` asks first, with what the deployment costs:
 
 ```text
-Pot 0x8a… (owner 0xYou, salt 0x00…00) is not deployed on base. Deploy it now? [y/N]
+Your Pot 0x8a… on base isn't deployed yet. Deploy it now (one transaction, about 274,512 gas, ~0.000082 ETH), then run? [deploy/cancel]
 ```
 
-`y` deploys it in a transaction of its own and then cooks; anything else sends nothing.
+`deploy` (or `y`) deploys it in a transaction of its own, waits until the chain shows it, and then
+cooks; anything else sends nothing. The Pot's deployment and the cook stay two transactions, and
+the deployment goes through the same signer, wallet policy and checks as the cook.
+`sauce pot --deploy` still deploys a Pot by hand.
 
-Every transaction a run sends before its cook is asked about like this: deploying a missing Pot (on
-Solana, creating it), approving Permit2 for a token `--fund` pulls, and approving the Pot for an
-amount under `--fund-mode allowance`. `--auto-approve` approves each of them without asking and
-says so for each, as `auto-approved: deploy Pot 0x…` or `auto-approved: approve Permit2 for USDC`.
-With no terminal to ask on (CI, a pipe), the run sends nothing: it names every action it would need
-approved and stops, until it is given `--auto-approve`.
+Every transaction a run sends before its cook is asked about like this: deploying a missing Pot,
+approving Permit2 for a token `--fund` pulls, and approving the Pot for an amount under
+`--fund-mode allowance`. `-y` (`--yes`, or its older name `--auto-approve`) approves each of them
+without asking and says so for each, as `auto-approved: deploy Pot 0x…` or
+`auto-approved: approve Permit2 for USDC`. With no terminal to ask on (CI, a pipe), or with
+`--json`, whose output is for a program and which asks nothing, the run sends nothing: it names
+every action it would need approved and stops, until it is given `--yes`. On Solana a missing Pot
+is created in the cook's own transaction, ahead of the cook and with nothing asked, when the two fit
+in one; where they do not (a staged program), it is asked about like the rest.
 
 ### A program from stdin
 
@@ -270,7 +325,7 @@ A program from stdin has no directory of its own, so its relative imports
 Stdin carried the program, so it cannot answer questions too. They go to the terminal the command
 runs in (`/dev/tty`) when there is one, so a program piped in at a terminal is still asked about.
 With no terminal at all — or on Windows, which has no `/dev/tty` — a run sends nothing until
-`--auto-approve` approves what it needs, and a keystore needs `--password-file`. Neither ever waits
+`--yes` approves what it needs, and a keystore needs `--password-file`. Neither ever waits
 on a stdin that is spent.
 
 ### Rehearsing: `sauce simulate`
@@ -322,7 +377,7 @@ Left in the Pot, not in the owner's wallet:
   1 USDC (it held 2 USDC before)
   Only another cook moves it out. To end in a wallet, the program must send it there, or name the wallet as the recipient of the call that produces it.
 Rehearsed with eth_simulateV1 on the state of block 36120411; nothing was signed or sent:
-  1. Kitchen.deployPot(0xYou, 0x00…00), gas used 160415: Pot 0x8a… is not deployed on base yet. Any account may send this; the Pot is the owner's either way.
+  1. Kitchen.deployPot(0xYou, 0x00…00), gas used 160415: Pot 0x8a… is not deployed on base yet, so the rehearsal deploys it first, as sauce run does (asking, or with --yes) and sauce tx plans. Any account may send it; the Pot is the owner's either way.
   2. the cook, from the owner 0xYou, gas used 128999
 Assumed for this rehearsal only, by state override:
   the Pot holds 2 USDC: --assume-balance (its balance word 0x1d39…: Solidity mapping at slot 9)
@@ -424,7 +479,7 @@ Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may move 0 of your USDC (ba
 
 `y` sends the approval (reset to zero first when a smaller one stands, as USDT requires) and then
 the cook; anything else sends nothing. With no terminal to ask on, the run names it and sends
-nothing, unless you pass `--auto-approve`. `--fund-mode allowance` asks the same about approving
+nothing, unless you pass `--yes`. `--fund-mode allowance` asks the same about approving
 the Pot, and warns when it leaves an
 allowance standing. `permit` refuses a token whose `DOMAIN_SEPARATOR()` does not match its name,
 version and address, before sending anything.
@@ -468,7 +523,9 @@ sauce pot --chain base --owner 0xYou --salt treasury
 ```
 
 prints the Pot's address — CREATE2 from the Kitchen over the owner and salt — and the unsigned
-`Kitchen.deployPot(owner, salt)` transaction as JSON. With `--deploy` and a signer it sends it,
+`Kitchen.deployPot(owner, salt)` transaction as JSON. You need not deploy a Pot yourself: a command
+deploys your Pot when it first needs it (asks, or `--yes`), and `sauce tx` puts its deployment
+first. `sauce pot` is the way to do it by hand. With `--deploy` and a signer it sends it,
 unless the Pot is already there, and waits until the endpoint shows the Pot's code before saying it
 is deployed: a load-balanced endpoint can answer from a node that has not seen the block yet. Any
 account may deploy a Pot; it is its owner's either way. So `pot --deploy` takes `--owner` for
@@ -507,10 +564,33 @@ prints the cook unsigned, for any wallet to sign from the owner:
 ```
 
 The value is `--value`, or else the Kitchen's fee, read from the chain, which also checks the Pot.
-What must be true for it to land — the Pot deployed and funded, sent from its owner — goes to
-stderr.
+When the chain shows the Pot has no code yet, it prints the plan instead: the Pot's deployment
+first, marked `deploysPot`, then the cook, to send in that order (any account may send the first;
+only the owner the second):
 
-`--format cast` prints the same transaction as a `cast send` line instead, for
+```json
+{
+  "chainId": 8453,
+  "pot": "0x8a…",
+  "transactions": [
+    {
+      "what": "Kitchen.deployPot(0xYou, 0x00…00): deploys the Pot, which has no code yet",
+      "deploysPot": "0x8a…",
+      "to": "0x…",
+      "data": "0x…",
+      "value": "0"
+    },
+    { "what": "cook on Pot 0x8a…", "to": "0x8a…", "data": "0x…", "value": "1000" }
+  ]
+}
+```
+
+What must be true for it to land — the Pot funded, sent from its owner — goes to stderr. A Pot
+named with `--pot` and no code is not planned (its owner and salt are not known): the note names
+`sauce pot --deploy`. On Solana a Pot not created yet is created by the cook's own transaction,
+ahead of the cook (`createsPot`), when the two fit in one.
+
+`--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the
 endpoint and the signer as `<RPC_URL>` and `<PRIVATE_KEY>` placeholders: the command never fills in
 either. `sauce pot --format cast` does the same for the deployment.
@@ -856,7 +936,7 @@ the fill to be proven.
 It writes the intent as a `.sauce.ts` file (`--out`, else
 `intent-<source>-to-<destination>-<time>.sauce.ts`), headed by the command that publishes it again,
 shows it, rehearses publishing it and filling it on the destination, and with a signer publishes it
-once you approve (or with `--auto-approve`), storing it.
+once you approve (or with `--yes`), storing it.
 
 ### Rehearsing the fill: `sauce intent fill`
 
@@ -954,8 +1034,8 @@ It is rehearsed first exactly as above, but with nothing assumed: on the signer'
 a solver short of a token, or of the value, sees the rehearsal revert and nothing is sent. Then it
 says what the fill spends — each token the route delivers (which the Portal pulls from you into
 its Executor) and the value, split into the Kitchen's fee, what the route spends and the proof's
-fee — and asks you to approve; `--auto-approve` approves without asking, and with no terminal and no
-`--auto-approve` it stops there. The transactions go out in order, each rehearsed again just before, and it
+fee — and asks you to approve; `--yes` approves without asking, and with no terminal (or with
+`--json`) and no `--yes` it stops there. The transactions go out in order, each rehearsed again just before, and it
 prints each one's hash, block and gas, the gas cost, what the fulfill moved, the Portal's
 `IntentFulfilled` record and, when the fill proved itself, the Hyperlane message id the proof
 travels as (the Hyperlane explorer finds it by that id). The intent and the fill go into the store.
@@ -1320,7 +1400,7 @@ where missing, the program staged into a code buffer as `run` stages it, then th
 accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
 spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
 `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note:
-`run` creates it before the cook (asking first, or with `--auto-approve`). An `--owner` that is
+`run` creates it before the cook (asking first, or with `--yes`). An `--owner` that is
 not a wallet (a program's account, or one holding data) is refused, as it cannot pay. `tx` refuses a cook too large for one transaction, with the bytes to
 shrink the payload (the program and its arguments) by. Each account a transaction lists costs 32
 bytes, and one taken through an address lookup table one byte: `--lookup-table <address>` takes a
@@ -1427,7 +1507,10 @@ amount is a string in whole tokens (`"1.5"`), or in base units ending in `n`, as
 ```
 
 - `chains` names the only chains it sends on, and `to` the only addresses a transaction goes to
-  (on Solana, the programs its instructions call).
+  (on Solana, the programs its instructions call). Deploying the wallet's own Pot (the released
+  Kitchen's `deployPot` of that wallet, with no value) counts as a transaction to the Pot, not to
+  the Kitchen: a policy that lets the wallet cook on its Pot lets a command deploy that Pot first,
+  and one that does not refuses the deployment, naming the Pot to add.
 - `native` is the chain's native coin leaving the wallet or the Pot the transaction cooks on. On
   Solana the fee and any rent are included.
 - `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what

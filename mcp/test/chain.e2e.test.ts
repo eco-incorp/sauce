@@ -11,7 +11,6 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { createServer } from "node:net";
 import { after, before, describe, it } from "node:test";
 
 import { formatUnits, getAddress, toFunctionSelector, type Address, type Hex } from "viem";
@@ -95,16 +94,6 @@ const COOKED = [
   "",
 ].join("\n");
 
-/** A port nothing is listening on, so this suite never collides with another's anvil. */
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-
-  return port;
-}
-
 describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, () => {
   let local: LocalChain;
   /** The intent's destination, which only a call's own rpcUrl reaches. */
@@ -115,12 +104,12 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   let usdc: Address;
 
   before(async () => {
-    local = await startChain("ethereum", await freePort());
+    local = await startChain("ethereum");
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
     // The real eco-routes Portal, where the SDK records it and deployed there in effect (so its
     // vaults are the ones the SDK derives), for the publish rehearsal.
     await placePortal(local);
-    base = await startChain("base", await freePort());
+    base = await startChain("base");
     baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     basePortal = (await placePortal(base)).portal;
     mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
@@ -139,17 +128,28 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   const pot = getAddress(v12PredictPot(NOBODY, `0x${"00".repeat(32)}`) as Address);
   const pay = { source: PAY, chain: "ethereum", args: [RECIPIENT, "1500000"] };
 
-  it("reads the Kitchen's fee for the cook, and that the Pot is not deployed", async () => {
+  it("reads the Kitchen's fee for the cook, and plans the Pot's deploy first", async () => {
     const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: NOBODY }));
-    assert.equal(tx.to, pot);
-    assert.equal(tx.value, FEE.toString());
+    // The Pot has no code: its deployment first, then the cook on it.
+    assert.equal(tx.pot, pot);
+    assert.equal(tx.to, undefined);
+    const [deploy, cook] = tx.transactions as Array<Record<string, string>>;
+    assert.equal(deploy!.deploysPot, pot);
+    assert.equal(getAddress(deploy!.to!), getAddress(v12KitchenAddress()));
+    assert.equal(deploy!.value, "0");
+    assert.equal(cook!.to, pot);
+    assert.equal(cook!.value, FEE.toString());
     assert.equal(tx.from, NOBODY, "who signs it");
     assert.deepEqual(tx.kitchenFee, {
       wei: FEE.toString(),
       native: formatUnits(FEE, 18),
       readFrom: "ethereum",
     });
-    assert.ok((tx.notes as string[]).some((note) => /It is NOT deployed/.test(note)));
+    assert.ok(
+      (tx.notes as string[]).some((note) =>
+        /isn't deployed yet: the first transaction deploys it/.test(note),
+      ),
+    );
     assert.ok(!(tx.notes as string[]).some((note) => /--|sauce pot/.test(note)), "no flags");
     const predicted = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: NOBODY }));
     assert.equal(predicted.pot, pot);
@@ -527,7 +527,9 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         const tx = ok(
           await caller.call("sauce_tx", { ...pay, owner: NOBODY, rpcUrl: local.rpcUrl }),
         );
-        assert.equal(tx.value, FEE.toString(), "the fee read through the call's endpoint");
+        // NOBODY's Pot has no code, so the cook is the plan's second transaction.
+        const [, cook] = tx.transactions as Array<{ value: string }>;
+        assert.equal(cook!.value, FEE.toString(), "the fee read through the call's endpoint");
         assert.ok(!caller.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
       } finally {
         await caller.close();

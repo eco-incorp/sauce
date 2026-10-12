@@ -18,6 +18,11 @@ npm install @eco-incorp/sauce
 Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compiler.md#in-a-browser) and the
 same code compiles the same bytes.
 
+That install is the library alone. The MCP SDK, zod and LiteSVM, which only `sauce mcp` and Solana
+rehearsals load, are optional peer dependencies it never brings: those commands install them for
+themselves, once per version, into `~/.sauce/runtime/`
+([Runtime packages](docs/guides/cli.md#runtime-packages)).
+
 For the [`sauce` command](docs/guides/cli.md), install the package once globally:
 
 ```sh
@@ -29,7 +34,7 @@ sauce --version
 other ways to run it.
 
 A coding agent uses Sauce through its MCP server, `sauce mcp`, which the agent starts on your
-machine. Add it once:
+machine. Install its packages once with `sauce runtime install`, then add it:
 
 ```sh
 claude mcp add sauce -- sauce mcp    # Claude Code
@@ -55,7 +60,8 @@ Three words name where a program runs, and every guide uses them:
 - **Kitchen**: the contract that creates Pots and sets the flat fee every cook pays, in the chain's
   native coin.
 
-`sauce pot --deploy` creates your Pot, you fund it like any address, and `sauce run` sends a cook.
+You fund your Pot like any address, and `sauce run` sends a cook, deploying the Pot first when it
+first needs it (it asks, or `--yes`).
 [Kitchen, Pot and cook](docs/concepts/kitchen-pot-cook.md) explains each, who may do what with a
 Pot, and the shared Pot an intent's body runs on.
 

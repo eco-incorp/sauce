@@ -16,7 +16,6 @@
  * the same tree as the Router): Uniswap V3's `swap` selector, a settable callback selector, and a
  * knob that inflates what it asks to be paid.
  */
-import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
@@ -45,6 +44,7 @@ import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
 import { potFromReleasedBytecode } from "./pot-address.js";
 import type { GatedEngine } from "./gated-engine.js";
+import { freePortSync, spawnAnvil } from "../anvil-process.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -72,7 +72,8 @@ const STRANGER = privateKeyToAccount(
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
 );
 
-const PORT = 8800 + (Number(process.env.JEST_WORKER_ID ?? "1") % 100);
+/** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
+const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const GAS_LIMIT = 10_000_000n;
 
@@ -85,18 +86,6 @@ const erc20 = parseAbi([
   "function mint(address to, uint256 amount)",
   "function balanceOf(address account) view returns (uint256)",
 ]);
-
-const waitForRpc = async (deadline: number): Promise<void> => {
-  for (;;) {
-    try {
-      await publicClient.getChainId();
-      return;
-    } catch {
-      if (Date.now() >= deadline) throw new Error(`anvil did not come up on ${RPC_URL}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-};
 
 /** Sends from `from`, resolving to the receipt's status rather than throwing on a revert. */
 const sendAs = async (
@@ -150,8 +139,7 @@ let sauce: GatedEngine;
 
 describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
   beforeAll(async () => {
-    anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
-    await waitForRpc(Date.now() + 20_000);
+    anvil = await spawnAnvil(PORT);
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
     sauce = await startGatedEngine(
       { publicClient, testClient, walletClient },

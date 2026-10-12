@@ -26,7 +26,7 @@
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX, like every other executing EVM suite here.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -71,6 +71,7 @@ import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
 import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
 import { BODY_TO_ARBITRUM, CASCADE_BODY } from "./fixtures/routes/bodies.js";
+import { freePortSync, spawnAnvil } from "./anvil-process.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -213,21 +214,7 @@ class Chain {
   }
 
   async start(runtimeCreationCode: Hex): Promise<void> {
-    this.process = spawn(
-      "anvil",
-      ["--port", String(this.port), "--chain-id", String(this.id), "--silent"],
-      { stdio: "ignore" },
-    );
-    const deadline = Date.now() + 20_000;
-    for (;;) {
-      try {
-        await this.publicClient.getChainId();
-        break;
-      } catch {
-        if (Date.now() > deadline) throw new Error(`anvil for ${this.slug} did not come up`);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
+    this.process = await spawnAnvil(this.port, ["--chain-id", String(this.id)]);
 
     const clients = {
       publicClient: this.publicClient,
@@ -412,11 +399,11 @@ const evmRoute = (intent: Intent): EvmRoute => {
 
 const lower = (address: string) => address.toLowerCase();
 
-const worker = Number(process.env.JEST_WORKER_ID ?? "1") % 100;
-const base = new Chain("base", 8800 + worker);
-const arbitrum = new Chain("arbitrum", 8900 + worker);
-const optimism = new Chain("optimism", 9000 + worker);
-const ethereum = new Chain("ethereum", 9600 + worker);
+// Ports from the OS, so no other suite or checkout meets these on one (`anvil-process.ts`).
+const base = new Chain("base", freePortSync());
+const arbitrum = new Chain("arbitrum", freePortSync());
+const optimism = new Chain("optimism", freePortSync());
+const ethereum = new Chain("ethereum", freePortSync());
 const CHAINS = [base, arbitrum, optimism, ethereum];
 
 /**

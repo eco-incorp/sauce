@@ -109,6 +109,7 @@ import {
   revertedFirst,
   unapproved,
 } from "./commands.js";
+import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { guardOf } from "./policy.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
@@ -1649,7 +1650,7 @@ async function stagedRehearsal(
     );
     notes.push(
       `--account ${name}: ${token.label}, ${token.address}, does not exist on solana; the copy made ` +
-        "it empty, and `sauce run` creates it before the cook (asking first, or with --auto-approve)",
+        "it empty, and `sauce run` creates it before the cook (asking first, or with --yes)",
     );
   }
   const holder = direct ? owner : prepared.pot;
@@ -1837,11 +1838,14 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   const size = await fits(prepared);
   if (!size.fits) throw tooLarge(prepared, size.size, "one unsigned transaction");
   const deployed = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
+  // A missing Pot is created by the same transaction, ahead of the cook, where the two fit in one.
+  const createPot = deployed ? [] : [createPotInstruction(input, prepared.pot)];
+  const createInCook = createPot.length > 0 && (await fits(prepared, createPot)).fits;
   const transaction = await prepared.client.cookTransaction(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    tablesOption(prepared.lookupTables),
+    { ...(createInCook ? { prepends: createPot } : {}), ...tablesOption(prepared.lookupTables) },
   );
   const json = {
     chain: "solana",
@@ -1850,6 +1854,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     ...(direct ? {} : { pot: prepared.pot }),
     fee: prepared.fee.toString(),
     maxExecutionFee: prepared.fee.toString(),
+    ...(direct ? {} : { createsPot: createInCook }),
     transaction: getBase64EncodedWireTransaction(transaction),
   };
 
@@ -1863,7 +1868,11 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
         : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
           (deployed
             ? "It is created. Fund its accounts with what the program spends."
-            : `It is NOT created yet: ${createHint(input)}.`),
+            : createInCook
+              ? "It isn't created yet: this transaction creates it (the Kitchen's create_pot, " +
+                "the owner paying its rent) ahead of the cook."
+              : `It isn't created yet, and its creation does not fit in the cook's transaction: ` +
+                `create it first (${createHint(input)}).`),
       `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
         `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
         "expires in about a minute.",
@@ -2086,26 +2095,22 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
   ...(sent.reason === undefined ? {} : { reason: sent.reason, logs: sent.logs }),
 });
 
-/** Creates the Pot when it is missing and the user agrees; what was sent, if anything. */
-async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<SvmSent | undefined> {
-  if (await exists(rpc, input.rpcUrl, pot, "the Pot")) return undefined;
-  const missing = `Pot ${pot} is not deployed on solana`;
-  const action = `create Pot ${pot}`;
-  // With no one to ask, creating it is the one approval a Solana run needs: named before it sends.
-  if (!input.approver.auto && !input.approver.canAsk) throw unapproved([action]);
-  const agreed = await input.approver.approve(
-    action,
-    `Pot ${pot} (owner ${input.owner}, salt ${input.salt}) is not deployed on solana. ` +
-      "Deploy it now? [y/N] ",
-  );
-  if (agreed !== true) {
-    throw new CliError(
-      agreed === undefined
-        ? `${missing}. Create it first (${createHint(input)}), or pass --auto-approve to create ` +
-            "it before the cook"
-        : `${missing}, so nothing was sent. Create it with: ${createHint(input)}`,
-    );
-  }
+/**
+ * Creates the Pot, missing, in a transaction of its own once the user agrees — where its creation
+ * does not fit in the cook's own transaction (`svmRunCommand`); what was sent.
+ */
+async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<SvmSent> {
+  // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
+  // before anything is sent.
+  await approveAll(input.approver, [
+    {
+      action: `create Pot ${pot}`,
+      reason: `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the cook's transaction`,
+      offer: "Deploy it now",
+      estimate: "its rent paid by you",
+      byHand: `create it yourself with ${createHint(input)}`,
+    },
+  ]);
   const created = await sendInstructions(
     rpc,
     input.rpcUrl,
@@ -2139,7 +2144,7 @@ async function ensureTokenAccounts(
   if (missing.length === 0) return undefined;
   const made = missing.map((token) => `${token.label}, ${token.address}`);
   const actions = made.map((one) => `create ${one}`);
-  if (!input.approver.auto && !input.approver.canAsk) throw unapproved(actions);
+  if (!input.approver.auto && !input.approver.canAsk) throw unapproved(actions, input.approver.why);
   const agreed = await input.approver.approve(
     actions.join("; "),
     `${made.join("; ")}: not on solana yet, and the cook names ${missing.length === 1 ? "it" : "them"}. ` +
@@ -2149,7 +2154,7 @@ async function ensureTokenAccounts(
     throw new CliError(
       `${made.join("; ")} ${missing.length === 1 ? "does" : "do"} not exist on solana, so nothing ` +
         "was sent: create each (its associated token account, idempotently), or pass " +
-        "--auto-approve to create them before the cook",
+        "--yes (-y) to create them before the cook",
     );
   }
   const instructions = await Promise.all(
@@ -2182,8 +2187,15 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   requireSupported("sending the cook", [input.chain]);
   const prepared = await prepare(input, files, input.signer);
   const direct = prepared.via === "engine";
-  // Directly to the engine the program runs as no Pot: there is none to create.
-  const created = direct ? undefined : await ensurePot(input, prepared.rpc, prepared.pot);
+  // Directly to the engine the program runs as no Pot: there is none to create. A missing Pot is
+  // created in the cook's own transaction, ahead of it, where the two fit in one: one signature,
+  // nothing to ask, and no Pot is left behind if the cook fails. Else it is created first, asked.
+  const potThere = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
+  const createPot = potThere ? [] : [createPotInstruction(input, prepared.pot)];
+  const createInCook = createPot.length > 0 && (await fits(prepared, createPot)).fits;
+  const created =
+    potThere || createInCook ? undefined : await ensurePot(input, prepared.rpc, prepared.pot);
+  const prepends = createInCook ? createPot : [];
   const accountsMade = await ensureTokenAccounts(input, prepared);
   const size = await fits(prepared);
   // The cook's rehearsal failing: `computeUnitLimit: "auto"` simulates first, and its failure
@@ -2217,7 +2229,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         prepared.bytecode,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto", ...tablesOption(prepared.lookupTables) },
+        { computeUnitLimit: "auto", prepends, ...tablesOption(prepared.lookupTables) },
       );
     } catch (error) {
       return wouldFail(error);
@@ -2295,6 +2307,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   return {
     text: [
       ...(created === undefined ? [] : sentLines(`created Pot ${prepared.pot} in`, created)),
+      ...(createInCook
+        ? [
+            cook.ok
+              ? `created Pot ${prepared.pot} in the cook's own transaction, ahead of the cook`
+              : `Pot ${prepared.pot} was to be created in the cook's transaction, which failed: it is not`,
+          ]
+        : []),
       ...(accountsMade === undefined
         ? []
         : sentLines(`created ${accountsMade.made.join("; ")} in`, accountsMade.sent)),
@@ -2328,6 +2347,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       fee: prepared.fee.toString(),
       maxExecutionFee: prepared.fee.toString(),
       ...(created === undefined ? {} : { createPot: sentJson(created) }),
+      ...(createInCook
+        ? { createPot: { inCook: true, ...(cook.ok ? {} : { undone: true }) } }
+        : {}),
       ...(accountsMade === undefined
         ? {}
         : { createTokenAccounts: { ...sentJson(accountsMade.sent), accounts: accountsMade.made } }),

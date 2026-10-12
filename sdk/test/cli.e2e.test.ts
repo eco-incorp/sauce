@@ -23,7 +23,7 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md), and a hard
  * failure without it — or without `cast` — in CI.
  */
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -74,9 +74,9 @@ import {
   sauce,
   sauceWith,
   startChain,
-  WORKER,
   type LocalChain,
 } from "./cli-anvil.js";
+import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
 
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
@@ -115,7 +115,7 @@ describeEvm("sauce, sent to a chain", () => {
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-e2e-"));
-    ethereum = await startChain("ethereum", 8700 + WORKER);
+    ethereum = await startChain("ethereum");
     // The registry's tokens, as code at their registered addresses: a standard OpenZeppelin ERC-20
     // as USDC, and a USDT-shaped one whose writes return nothing as USDT.
     usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
@@ -137,7 +137,7 @@ describeEvm("sauce, sent to a chain", () => {
   ];
 
   describe("the unsigned transactions, sent by a wallet", () => {
-    it("`sauce tx` says the Pot is not deployed yet, and how to deploy it", async () => {
+    it("`sauce tx` plans the Pot's deploy first when the Pot is not deployed yet", async () => {
       const run = await sauce(
         "tx",
         PAY,
@@ -148,9 +148,15 @@ describeEvm("sauce, sent to a chain", () => {
         ethereum.rpcUrl,
       );
       expect(run.code).toBe(0);
-      expect(jsonOf(run).value).toBe(FEE.toString());
+      const plan = jsonOf(run) as { pot: Address; transactions: Array<Record<string, string>> };
+      const predicted = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
+      expect(plan.pot).toBe(predicted);
+      expect(plan.transactions.map((tx) => [tx.deploysPot ?? null, tx.value])).toEqual([
+        [predicted, "0"],
+        [null, FEE.toString()],
+      ]);
       expect(run.stderr).toContain(
-        `It is NOT deployed. Deploy it first (sauce pot --deploy --owner ${OWNER.address} --chain ethereum --keystore <keystore>), then fund it.`,
+        `Your Pot ${predicted} on ethereum isn't deployed yet: the first transaction deploys it`,
       );
       expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
     }, 60_000);
@@ -570,6 +576,11 @@ describeEvm("sauce, sent to a chain", () => {
 
     it("asks before deploying a missing Pot, and does only what the answer says", async () => {
       const salted = (label: string) => v12PredictPot(RAW_OWNER, potSalt(label)) as Address;
+      const question = (label: string) =>
+        new RegExp(
+          `^Your Pot ${salted(label)} on ethereum isn't deployed yet\\. Deploy it now \\(one ` +
+            "transaction, about [\\d,]+ gas, ~[\\d.]+ ETH\\), then run\\? \\[deploy/cancel\\] $",
+        );
       for (const token of [usdc, usdt]) await ethereum.mint(token, salted("yes"), FUNDED);
       const questions: string[] = [];
       const answering = (answer: boolean | undefined) => async (question: string) => {
@@ -593,17 +604,15 @@ describeEvm("sauce, sent to a chain", () => {
 
       const yes = await run("yes", true);
       expect(yes.code).toBe(0);
-      expect(questions[0]).toBe(
-        `Pot ${salted("yes")} (owner ${RAW_OWNER}, salt ${potSalt("yes")}) is not deployed on ethereum. Deploy it now? [y/N] `,
-      );
+      expect(questions[0]).toMatch(question("yes"));
       expect(await potOwner(ethereum, salted("yes"))).toBe(RAW_OWNER);
 
       const no = await run("no", false);
       expect(no.code).toBe(1);
-      expect(no.stderr).toMatch(
-        new RegExp(
-          `Pot ${salted("no")} is not deployed on ethereum, so nothing was sent. Deploy it with: sauce pot --deploy --owner ${RAW_OWNER} --chain ethereum --salt no`,
-        ),
+      expect(no.stderr).toContain(
+        `Your Pot ${salted("no")} on ethereum isn't deployed yet, so nothing was sent: run again ` +
+          "and answer deploy, or pass --yes (-y), or deploy it yourself with sauce pot --deploy " +
+          `--owner ${RAW_OWNER} --chain ethereum --salt no`,
       );
       expect(await ethereum.publicClient.getCode({ address: salted("no") })).toBeUndefined();
 
@@ -622,7 +631,7 @@ describeEvm("sauce, sent to a chain", () => {
       expect(unasked.code).toBe(1);
       expect(unasked.stderr).toContain(
         "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
-          `  deploy Pot ${salted("unasked")}\nPass --auto-approve`,
+          `  deploy Pot ${salted("unasked")}\nPass --yes (-y)`,
       );
       expect(await ethereum.publicClient.getCode({ address: salted("unasked") })).toBeUndefined();
     }, 60_000);
@@ -681,8 +690,8 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
   const RECIPIENTS: Address[] = [RECIPIENT, SECOND_RECIPIENT];
 
   beforeAll(async () => {
-    chains.base = await startChain("base", 8800 + WORKER);
-    chains.ethereum = await startChain("ethereum", 8900 + WORKER);
+    chains.base = await startChain("base");
+    chains.ethereum = await startChain("ethereum");
   }, 120_000);
 
   afterAll(async () => {
@@ -907,7 +916,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-publish-"));
     intentFile = join(work, "bridge.sauce.ts");
     writeFileSync(intentFile, INTENT);
-    ethereum = await startChain("ethereum", 8600 + WORKER);
+    ethereum = await startChain("ethereum");
     // The real eco-routes Portal, at the address the SDK records for Ethereum — with the vault
     // implementation and Executor a Portal deployed there would have, so its vaults are the ones
     // the SDK derives for that address, as every deployed Portal's are.
@@ -1346,7 +1355,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   let bare: ChildProcess;
   let work: string;
   let config: string;
-  const BARE = `http://127.0.0.1:${9400 + WORKER}`;
+  let BARE: string;
   const REWARD = 2_000_000n;
   // An intent from Ethereum whose body is a program on Base: its cook pays Base's Kitchen fee, on
   // the Pot every intent through Base's Portal shares.
@@ -1371,24 +1380,11 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-deployed-"));
-    base = await startChain("base", 9300 + WORKER);
+    base = await startChain("base");
     // A chain with nothing of Sauce's on it.
-    bare = spawn("anvil", ["--port", String(9400 + WORKER), "--chain-id", "1", "--silent"], {
-      stdio: "ignore",
-    });
-    for (const deadline = Date.now() + 20_000; ;) {
-      const up = await fetch(BARE, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
-      }).then(
-        () => true,
-        () => false,
-      );
-      if (up) break;
-      if (Date.now() > deadline) throw new Error("the bare anvil did not come up");
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    const port = await freePort();
+    bare = await spawnAnvil(port, ["--chain-id", "1"]);
+    BARE = `http://127.0.0.1:${port}`;
     config = join(work, "sauce.config.json");
     writeFileSync(config, JSON.stringify({ rpcUrls: { "8453": base.rpcUrl } }));
   }, 120_000);

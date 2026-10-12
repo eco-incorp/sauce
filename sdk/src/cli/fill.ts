@@ -124,7 +124,7 @@ export interface FillInput {
   /** `--send`: the signer, which is the solver, and who approves what it spends. */
   readonly send?: {
     readonly account: PrivateKeyAccount;
-    /** Who approves what the fill spends: `--auto-approve`, or the person asked. */
+    /** Who approves what the fill spends: `--yes`, or the person asked. */
     readonly approver: Approver;
     readonly store?: IntentStore;
   };
@@ -914,7 +914,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
     .replace(/^It spends /, "spend ")
     .replace(/\.$/, "")}`;
   const answer = await send.approver.approve(action, `${spend.join("\n")}\nSend them? [y/N] `);
-  if (answer === undefined) throw unapproved([action]);
+  if (answer === undefined) throw unapproved([action], send.approver.why);
   if (!answer) throw new CliError("not sent: you declined");
   const done: SentFill[] = [];
   for (const fill of send.approver.auto ? fills : await replanned(input, fills)) {
