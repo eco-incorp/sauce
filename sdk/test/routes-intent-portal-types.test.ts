@@ -3,7 +3,8 @@
  * typed closure, three levels deep, with an item or a list of them; and on the host, where it builds
  * the intent. A field missing, misspelled or of the wrong shape, and a step out of place, is a type
  * error, as is a host intent awaited; a hop that stops before its body is a statement TypeScript
- * accepts, and is refused when it compiles.
+ * accepts, and is refused when it compiles. A hop's hooks, `before` and `after`, take one closure
+ * or a list of them, in a closure and as the generated `SauceHopConfig` declares them.
  *
  * The chain is the imported chain export in both: its `hop` (`host-intent.ts#ChainHop`) takes a
  * token as an address or as a SauceScript value, so a closure's
@@ -103,7 +104,41 @@ export async function awaited() {
 }
 `;
 
-const PROBES = { NESTED, HOST, WRONG } as const;
+/** A hop's hooks: one closure, or a list, for `before` and `after` alike — in a typed closure, and
+ *  read off the generated declaration itself, as a consumer of `SauceHopConfig` reads it. */
+const HOOKS = `
+import { Arbitrum, Base, Ethereum } from ${ROOT};
+import type { SauceHopConfig } from ${JSON.stringify(resolve(SDK, "src/routes/source-globals.generated.ts"))};
+
+export const before: SauceHopConfig["before"] = [() => 1, () => 2];
+export const after: SauceHopConfig["after"] = [() => 1];
+export const one: SauceHopConfig["before"] = () => 1;
+
+Base.hop({
+  source: Ethereum,
+  send: [{ token: Ethereum.USDC.address, amount: 1_010_000n }],
+  refundee: "0x4444444444444444444444444444444444444444",
+  fee: 1_000n,
+}).then(() => {
+  Arbitrum.hop({
+    send: { token: USDC, amount: 1n },
+    refundee: 0x4444444444444444444444444444444444444444n,
+    before: [
+      () => Erc20.ERC20(USDT).approve(0x5555555555555555555555555555555555555555n, 0n),
+      () => Erc20.ERC20(USDT).approve(0x5555555555555555555555555555555555555555n, 5n),
+    ],
+    after: [() => evm.call(0x7777777777777777777777777777777777777777n, 7n, hex\`\`)],
+  }).then(() => {});
+  Arbitrum.hop({
+    send: { token: USDC, amount: 1n },
+    refundee: 0x4444444444444444444444444444444444444444n,
+    before: () => Erc20.ERC20(USDC).approve(0x5555555555555555555555555555555555555555n, 5n),
+    after: () => evm.call(0x7777777777777777777777777777777777777777n, 7n, hex\`\`),
+  }).then(() => {});
+});
+`;
+
+const PROBES = { NESTED, HOST, WRONG, HOOKS } as const;
 type Probe = keyof typeof PROBES;
 
 const dir = mkdtempSync(join(tmpdir(), "sauce-intent-portal-types-"));
@@ -147,6 +182,10 @@ describe("Chain.hop({ send, receive, refundee }).then(...)", () => {
 
   it("builds the intent on the host, with every field, and its cook", () => {
     expect(messages("HOST")).toEqual([]);
+  });
+
+  it("takes a hook as one closure or a list, for before and after, as the declaration says", () => {
+    expect(messages("HOOKS")).toEqual([]);
   });
 
   it("refuses a field missing, misspelled or misshapen, a step out of place, and an awaited intent", () => {
