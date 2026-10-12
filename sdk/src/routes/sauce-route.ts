@@ -63,7 +63,13 @@ import {
 import { resolveIntentPot } from "./intent-pot.js";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { fetchSwapRoutes, type SwapApis } from "./swap-apis.js";
-import { swapHost, swapScopeError, type SwapBindOptions, type SwapSite } from "./swap-host.js";
+import {
+  SWAP_BODY_DEFINE,
+  swapHost,
+  swapScopeError,
+  type SwapBindOptions,
+  type SwapSite,
+} from "./swap-host.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
@@ -266,6 +272,11 @@ function chainModules(
       `compileSauceRoute: \`${CHAIN_DEFINE}\` is the SDK's own define, set to the chain's id`,
     );
   }
+  if (defines !== undefined && SWAP_BODY_DEFINE in defines) {
+    throw new Error(
+      `compileSauceRoute: \`${SWAP_BODY_DEFINE}\` is the SDK's own define, set to whether a program is an intent's body`,
+    );
+  }
   requireFundVia(options.intents ?? {});
   const salt = options.intents?.salt ?? randomSalt();
   const moduleOptions: ChainModuleOptions = { tokens, values, accessors: options.accessors };
@@ -315,14 +326,18 @@ function chainModules(
       ambient: [
         ...new Set([...chainAmbient(destination), ...(options.ambient ?? []), own, specifier]),
       ],
-      defines: [...(toRsDefines(defines) ?? []), [CHAIN_DEFINE, String(destination.id)]],
+      defines: [
+        ...(toRsDefines(defines) ?? []),
+        [CHAIN_DEFINE, String(destination.id)],
+        [SWAP_BODY_DEFINE, "1"],
+      ],
     };
   };
 
   return {
     modules,
     ambient: [...new Set([...(options.ambient ?? []), own, level])],
-    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id) },
+    defines: { ...defines, [CHAIN_DEFINE]: BigInt(chain.id), [SWAP_BODY_DEFINE]: 0n },
     programOptions,
     bodies,
     swaps,

@@ -474,7 +474,15 @@ const keyOf = (value: bigint): string =>
 const addressOf = (value: bigint): Hex =>
   getAddress(`0x${value.toString(16).padStart(40, "0")}`) as Hex;
 
-/** A scope `@sauce/swap` names a route by: `{ swap, chainId, tokenIn, tokenOut, amountIn? }`. */
+/**
+ * The define each program is compiled with: 1 in an intent body's program, which cooks on the
+ * destination's shared Pot, and 0 in the program the compile was given, which runs on `swap.pot`.
+ * `@sauce/swap` names it in every scope, so a body on the root's own chain (Base, then Base again)
+ * is told apart from the root, and the two never share a request or a route.
+ */
+export const SWAP_BODY_DEFINE = "__sauce_body";
+
+/** A scope `@sauce/swap` names a route by: `{ swap, chainId, body, tokenIn, tokenOut, amountIn? }`. */
 const isSwapScope = (scope: ProgramScope): scope is { readonly [field: string]: ProgramScope } =>
   typeof scope === "object" &&
   !Array.isArray(scope) &&
@@ -528,7 +536,14 @@ export function swapHost(level: SwapLevel): {
     const tokenOut = token(scope.tokenOut, "tokenOut");
     if (tokenIn === tokenOut) fail(`${name}: tokenIn and tokenOut are the same token`);
     const amountIn = scope.amountIn === undefined ? undefined : word(scope.amountIn, "amountIn");
-    const inBody = chain.id !== level.chain.id;
+    // Where the program runs, as its compile was told: never inferred from the chain, which a body
+    // returning to the root's chain shares with the root.
+    if (scope.body !== 0n && scope.body !== 1n) {
+      fail(
+        `${name}: no \`${SWAP_BODY_DEFINE}\` in its scope: the SDK compiles it, not a bare compile`,
+      );
+    }
+    const inBody = scope.body === 1n;
     const given = inBody ? level.bodyPot(chain) : level.options.pot;
     const pot =
       given === undefined

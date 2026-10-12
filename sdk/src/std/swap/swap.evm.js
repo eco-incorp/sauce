@@ -3,7 +3,9 @@
 // A program writes `kyberSwap(tokenIn, tokenOut, amountIn, minOut)` or `ecoSwap(...)`, with no
 // import: the SDK hands every compile this module as an ambient one. Each is an arrow function the
 // compiler runs at its call. It names its route by a scope — the provider, the chain the call runs
-// on, the tokens and, for KyberSwap, the amount, all of which the compiler must know — and reads it
+// on, whether it runs in an intent's body (`__sauce_body`, which the SDK sets per program: a body
+// cooks on the destination's shared Pot), the tokens and, for KyberSwap, the amount, all of which
+// the compiler must know — and reads it
 // with `globalIn(scope, name)` from the module the SDK writes for that scope while the program
 // compiles (`routes/swap-host.ts`): KyberSwap's router calldata, or an eco-swap program. What the
 // call leaves for run time is the swap itself, emitted where the call stands.
@@ -24,7 +26,14 @@ import { allowance, approve, balanceOf, TokenOf } from "@sauce/token";
 export const kyberSwap = (tokenIn, tokenOut, amountIn, minOut) => {
   const from = tokenIn instanceof TokenOf ? tokenIn.address : tokenIn;
   const to = tokenOut instanceof TokenOf ? tokenOut.address : tokenOut;
-  const route = { swap: "kyber", chainId, tokenIn: from, tokenOut: to, amountIn };
+  const route = {
+    swap: "kyber",
+    chainId,
+    body: __sauce_body,
+    tokenIn: from,
+    tokenOut: to,
+    amountIn,
+  };
   const router = globalIn(route, "__sauce_swap_router");
   const head = globalIn(route, "__sauce_swap_head");
   const tail = globalIn(route, "__sauce_swap_tail");
@@ -50,7 +59,7 @@ export const ecoSwap = (tokenIn, tokenOut, amountIn, minOut) => {
   const from = tokenIn instanceof TokenOf ? tokenIn.address : tokenIn;
   const to = tokenOut instanceof TokenOf ? tokenOut.address : tokenOut;
   const program = globalIn(
-    { swap: "eco", chainId, tokenIn: from, tokenOut: to },
+    { swap: "eco", chainId, body: __sauce_body, tokenIn: from, tokenOut: to },
     "__sauce_swap_program",
   );
   const self = ctx.self();

@@ -22,7 +22,7 @@ import { balanceOf } from "@sauce/token";
 // short fill before the program does. The route fixes the amount it swaps. A `minOut` past a u64 is
 // cut to its low 8 bytes there, and refused here: the output, a u64, never reaches it.
 export const jupiterSwap = (tokenIn, tokenOut, amountIn, minOut) => {
-  const route = { swap: "jupiter", chainId, tokenIn, tokenOut, amountIn };
+  const route = { swap: "jupiter", chainId, body: __sauce_body, tokenIn, tokenOut, amountIn };
   const callee = globalIn(route, "__sauce_swap_callee");
   const output = globalIn(route, "__sauce_swap_output");
   const head = globalIn(route, "__sauce_swap_head");
@@ -40,7 +40,7 @@ export const jupiterSwap = (tokenIn, tokenOut, amountIn, minOut) => {
 // where eco-swap's contract says. It is a route for any amount, so the amount may be one the
 // program computes.
 export const ecoSwap = (tokenIn, tokenOut, amountIn, minOut) => {
-  const route = { swap: "eco", chainId, tokenIn, tokenOut };
+  const route = { swap: "eco", chainId, body: __sauce_body, tokenIn, tokenOut };
   const callee = globalIn(route, "__sauce_swap_callee");
   const output = globalIn(route, "__sauce_swap_output");
   const head = globalIn(route, "__sauce_swap_head");
