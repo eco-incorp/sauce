@@ -272,19 +272,32 @@ export class TestChain {
       const token = this.token(name);
       const units =
         typeof amount === "bigint" ? amount : parseUnits(amount, await this.decimals(token));
-      const target = (await this.balanceOf(holder, name)) + units;
       if (token.address === "native") {
+        const target = (await this.balanceOf(holder, name)) + units;
         await this.test.setBalance({ address: holder, value: target });
         continue;
       }
+      const refused = (error: unknown): unknown =>
+        error instanceof BalanceSlotError
+          ? new Error(`cannot fund ${holder} with ${name}: ${error.message}`, { cause: error })
+          : error;
+      let current: bigint;
+      try {
+        current = await this.balanceOf(holder, name);
+      } catch (error) {
+        // A token that cannot even answer balanceOf (a B20 precompile anvil cannot run, a contract
+        // that is not an ERC-20): the slot finder says which, before anything else.
+        throw await balanceOverride(this.client, token.address, holder, units).then(
+          () => error,
+          refused,
+        );
+      }
+      const target = current + units;
       let override: Awaited<ReturnType<typeof balanceOverride>>["override"];
       try {
         ({ override } = await balanceOverride(this.client, token.address, holder, target));
       } catch (error) {
-        if (error instanceof BalanceSlotError) {
-          throw new Error(`cannot fund ${holder} with ${name}: ${error.message}`, { cause: error });
-        }
-        throw error;
+        throw refused(error);
       }
       for (const { slot, value } of override.stateDiff ?? []) {
         await rpc(this.rpcUrl, "anvil_setStorageAt", [token.address, slot, value]);
