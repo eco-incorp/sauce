@@ -58,7 +58,7 @@ import type { Sent, TxRequest } from "../../../src/cli/chain.js";
 import { potSalt, v12PredictPot } from "../../../src/deployments/pot.js";
 import { runCommand, txCommand, type RunInput } from "../../../src/cli/commands.js";
 import { nodeIo } from "../../../src/cli/run.js";
-import { handlersInPlace } from "../../../src/cli/handlers.js";
+import { handlerSlot, handlersInPlace } from "../../../src/cli/handlers.js";
 import { DEPLOYER, FEE, RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../cli-anvil.js";
 import { gateAnchors, POT_SALT, routerUnderTest } from "../../evm/gated-engine.js";
 import {
@@ -852,6 +852,55 @@ describeRemote("@sauce/remote between two chains, over each bridge", () => {
     },
     120_000,
   );
+
+  it("a body on Base that needs a handler its Pot lacks gets it there, though the Pot here has it", async () => {
+    // `expire(bytes32)`, which a promise with a deadline needs: installed on Ethereum's Pot, and
+    // missing from Base's, which answers only its bridges' receivers.
+    const expire = 0xc6441798n;
+    await base.testClient.setStorageAt({
+      address: pot,
+      index: handlerSlot(expire),
+      value: toHex(0n, { size: 32 }),
+    });
+    const text = `import { Promise } from "@sauce/async";
+
+function main() {
+  Base.remote(() => {
+    const d = Promise.withResolvers(60);
+    d.promise.then((v) => {
+      evm.sstore(${slot("scoped.then")}, v.length);
+    });
+    d.resolve(abi.encode(2));
+    evm.sstore(${slot("scoped.direct")}, 77);
+  });
+}
+`;
+    // As `sauce run` sends it: the handlers the Pot here has are left out of the cook.
+    const done = await runCommand(
+      {
+        file: "scoped.sauce.ts",
+        text,
+        chain: ethereum.chain,
+        defines: {},
+        compactArgs: false,
+        intents: {},
+        target: { owner: DEPLOYER.address, salt: POT_SALT },
+        args: { from: "--args", values: [] },
+        value: FEE,
+        rpcUrl: ethereum.rpcUrl,
+        endpointOf: (chain) => (chain.id === base.chain.id ? base.rpcUrl : undefined),
+        account: DEPLOYER,
+        approver: { auto: true, canAsk: true, approve: async () => true },
+      },
+      nodeIo(),
+    );
+    const out = await ethereum.publicClient.getTransactionReceipt({
+      hash: (done.json.cook as { hash: Hex }).hash,
+    });
+    await relayHyperlane(out, ethereumBridges, base, baseBridges);
+    // Delivered, and the body ran on Base: its marker, written after the promise was set up.
+    expect(await read(base, "scoped.direct")).toBe(77n);
+  }, 120_000);
 
   // Skipped: await dropped from the compiler (v12 #554). Kept so it can come back if await does.
   it.skip("runs what follows an await back on Ethereum, once the body ran on Base (await dropped from the compiler (v12 #554))", async () => {
