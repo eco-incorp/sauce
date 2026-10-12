@@ -43,6 +43,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { v12EngineAddress } from "../src/deployments/v12-addresses.js";
 import { destinationExecutionFee } from "../src/evm/execution-fee.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import {
@@ -899,6 +900,40 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     }>;
     expect(one!.status.state).toBe("funded");
     expect(one!.status.can.fill.ok).toBe(true);
+  }, 240_000);
+
+  it("publishes nothing, and funds nothing, when the fill it rehearses reverts on the destination", async () => {
+    // The destination's engine refuses every program, so the body's cook, and with it the fill,
+    // reverts there however the solver delivers; the source, where the reward is funded and the
+    // intent published, is untouched.
+    const engine = v12EngineAddress() as Address;
+    const engineCode = await base.publicClient.getCode({ address: engine });
+    await base.testClient.setCode({ address: engine, bytecode: "0x5f5ffd" });
+    try {
+      const store = mkdtempSync(join(work, "store-"));
+      const out = join(work, "unfillable.sauce.ts");
+      const nonce = await ethereum.publicClient.getTransactionCount({ address: OWNER.address });
+      const run = await sauce(
+        ...["intent", "publish", "--source", "ethereum", "--destination", "base"],
+        ...["--token", "USDC", "--amount", "1.35", "--recipient", RECIPIENT],
+        ...["--reward-token", "USDC", "--reward", "1.4", "--prover", "HyperProver"],
+        ...["--fill-deadline", "+1h", "--reward-deadline", "+2h", "--out", out],
+        ...["--config", config, "--private-key", OWNER_KEY, "--yes", "--store", store, "--json"],
+      );
+      expect(run.stderr).toContain("Publishing, rehearsed on ethereum:");
+      expect(run.stderr).toContain("Filling, rehearsed on base (as a solver will):");
+      expect(run.stderr).toMatch(/revert/);
+      expect(run.stderr).toContain(`${out} is written, and not published`);
+      expect(run.code).toBe(1);
+      expect(run.stderr).not.toContain("auto-approved:");
+      // Nothing went out from the signer: no funding, no approval, no publish.
+      expect(await ethereum.publicClient.getTransactionCount({ address: OWNER.address })).toBe(
+        nonce,
+      );
+      expect(existsSync(out)).toBe(true);
+    } finally {
+      await base.testClient.setCode({ address: engine, bytecode: engineCode! });
+    }
   }, 240_000);
 
   it("imports an intent from the cook that published it", async () => {
