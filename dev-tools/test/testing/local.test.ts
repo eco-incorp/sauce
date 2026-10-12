@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { toHex } from "viem";
+import { concat, encodeAbiParameters, numberToHex, size, toHex, type Hex } from "viem";
 
 import { CookReverted, local, type TestChain } from "../../src/testing/index.js";
 import { anvilMissing, program } from "./support.js";
@@ -50,6 +50,38 @@ describe("local()", { skip: anvilMissing() }, () => {
       chain.simulate(program("multiply"), { args: [20n, 20n, 100n] }),
       (error: unknown) => error instanceof CookReverted && error.reason === "product above limit",
     );
+  });
+
+  it("throws CookReverted with a called contract's Error(string) or Panic(uint256)", async () => {
+    // Runtime code that reverts with `payload`: copy it to memory, revert with it.
+    const reverting = (payload: Hex): Hex => {
+      const length = numberToHex(size(payload), { size: 1 }).slice(2);
+      return `0x60${length}600c60003960${length}6000fd${payload.slice(2)}`;
+    };
+    const source =
+      "function main(target: Address): Uint256 {\n  evm.call(target, 0, hex`00`);\n  return 1;\n}\n";
+    const cases: ReadonlyArray<readonly [Hex, Hex, string]> = [
+      [
+        "0x00000000000000000000000000000000000000e1",
+        concat(["0x08c379a0", encodeAbiParameters([{ type: "string" }], ["STF"])]),
+        "STF",
+      ],
+      [
+        "0x00000000000000000000000000000000000000e2",
+        concat(["0x4e487b71", encodeAbiParameters([{ type: "uint256" }], [0x11n])]),
+        "panic 0x11",
+      ],
+    ];
+    for (const [target, payload, reason] of cases) {
+      await chain.test.setCode({ address: target, bytecode: reverting(payload) });
+      for (const cook of [chain.run, chain.simulate]) {
+        await assert.rejects(
+          cook.call(chain, { source }, { args: [target] }),
+          (error: unknown) =>
+            error instanceof CookReverted && error.reason === reason && error.data === payload,
+        );
+      }
+    }
   });
 
   it("returns what the mined transaction returned", async () => {
