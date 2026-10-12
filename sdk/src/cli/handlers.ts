@@ -85,9 +85,10 @@ export function handlerRecord(pot: Address, handler: InstalledHandler): bigint {
 }
 
 /**
- * Whether every handler a program installs (`program.handlers`) is in place on `pot`, read from the
- * Router's records there: then the program is compiled to carry none of them
- * (`SAUCE_ASYNC_INSTALLED`), and it refuses to run should one be gone by then.
+ * Whether every one of `handlers` is in place on `pot`, read from the Router's records there. The
+ * CLI asks it of a program's own handlers (`program.handlers` installed outside any body or
+ * continuation): then the program is compiled to carry none of them (`SAUCE_ASYNC_INSTALLED`), and
+ * it refuses to run should one be gone by then.
  */
 export async function handlersInPlace(
   client: Pick<PublicClient, "getStorageAt">,

@@ -192,6 +192,7 @@ const kitchenAbi = parseAbi([
   "function predictPot(address owner, bytes32 salt, bool routerFixed) view returns (address)",
 ]);
 
+const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
 const slotOf = (key: bigint): Hex =>
   keccak256(encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [key, NAMESPACE]));
@@ -1545,6 +1546,56 @@ function main(bump: Uint256): void {
       const rehearsed = await sauce("simulate", file, ...on);
       expect(rehearsed.code).toBe(0);
       expect(rehearsed.stderr + rehearsed.stdout).toContain("compiled to carry none of them");
+    },
+  );
+
+  itAlways(
+    "sauce tx reads only the program's own handlers in place: a body on another chain carries its own",
+    async () => {
+      // The Pot answers `expire` already: a promise with a deadline installed it.
+      const pot = await freshPot(0x1a33n);
+      const deadline = `import { Promise } from "@sauce/async";
+
+function main(): void {
+  const d = Promise.withResolvers(60);
+  d.promise.then((v) => {
+    evm.sstore(1, v.length);
+  });
+}`;
+      expect((await cook(compiled(deadline), pot)).ok).toBe(true);
+      // A program whose only handler is its Ethereum body's, for Ethereum's shared Pot, which
+      // nothing says has it: the same code at the same address proves nothing there.
+      const source = `import { Promise } from "@sauce/async";
+
+function main(refundTo: Address): void {
+  Ethereum.hop({
+    send: { token: USDC, amount: 1000000 },
+    receive: { token: USDC, amount: 1000000 },
+    refundee: refundTo,
+    fee: 1000,
+  }).then(() => {
+    const there = Promise.withResolvers(60);
+    there.promise.then((v) => {
+      evm.sstore(2, v.length);
+    });
+    evm.sstore(3, 77);
+  });
+}`;
+      const file = join(mkdtempSync(join(tmpdir(), "sauce-scope-")), "hop.sauce.ts");
+      writeFileSync(file, source);
+      const program = compileSauceProgram(CHAIN, source);
+      const theirs = program.handlers.find((h) => h.destination.slug === "ethereum")!;
+      expect(theirs.path.length).toBeGreaterThan(0);
+      expect(await handlersInPlace(publicClient, pot, [theirs])).toBe(true);
+      const sent = await sauce(
+        "tx",
+        file,
+        ...["--chain", CHAIN, "--pot", pot, "--rpc-url", RPC_URL, "--args", OWNER.address],
+        ...["--intent-execution-fee", "1000"],
+      );
+      expect(sent.stderr).not.toContain("compiled to carry none of them");
+      const data = jsonOf(sent).data as Hex;
+      expect(data.toLowerCase()).toContain(hex(theirs.bytecode));
     },
   );
 
