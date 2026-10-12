@@ -347,6 +347,9 @@ export class TestChain {
 
   private async cookCall(program: CompiledProgram, options: CookOptions) {
     const owner = this.accountOf(options.from);
+    // Read every time and in this order, never cached: a snapshot's revert can undo a deployment
+    // and `setExecutionFee` (zeroFee, or a test) changes the fee, and the deployment may send a
+    // transaction, so the fee is read from the state the cook then runs on.
     await this.deployPot(owner);
     const fee = await this.executionFee();
     const call = buildSauceEvmCall({
