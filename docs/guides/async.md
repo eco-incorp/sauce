@@ -208,7 +208,9 @@ function main(plan: bytes, payment: Uint256, minimum: Uint256, recipient: Addres
   counts the rows.
 - **The timeout.** Only Space and Time's fulfiller answers queries, and it may not answer one. A
   query's promise expires at its timeout: anyone may then call the Pot's `expire(key)`, its
-  `.catch` runs, and `Zk.cancel(e)` there cancels the query and takes its payment back.
+  `.catch` runs, and `Zk.cancel(e)` there cancels the query and takes its payment back. If the
+  router refuses the cancellation, the Pot keeps the query's record, and a later program may call
+  `Zk.cancel` again with the same reason.
 - **The checks.** The handler takes calls only from the chain's CallbackExecutor, and settles only
   the promise under a query id the Pot asked: a query someone else asked naming the Pot settles
   nothing. The first query installs the handler on the Pot, and with it the public `expire`;
@@ -238,7 +240,9 @@ gas), and the Pot keeps a query's id and payment in two words until its promise 
   request that named it, its first word for any other), so a proof of the same guest over another
   input, or of another journal, settles nothing.
 - **The deadline.** At `timeout` the promise expires; `Zk.reclaim(e)` in its `.catch` slashes the
-  request if a prover locked it and failed, and withdraws its price.
+  request if a prover locked it and failed (unless someone has already), and withdraws its price
+  once it is back in the Pot's balance at the market. If the market refuses either, the Pot keeps
+  the request's record, and a later program may call `Zk.reclaim` again with the same reason.
 
 ### The protocols' own examples, ported
 

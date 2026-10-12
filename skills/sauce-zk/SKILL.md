@@ -101,6 +101,10 @@ pending, its payment held. So every query has a timeout, and its promise expires
 - `Zk.cancel(e)` in that `.catch` cancels the query and takes its whole payment back to the Pot. For
   any other rejection (the body's own revert, after the query was answered and paid) it does
   nothing. It answers whether it cancelled.
+- A query the router no longer holds a payment for (paid to the fulfiller, or cancelled at the
+  router by someone else, whose cancellation refunds the Pot all the same) is forgotten. If the
+  router refuses the cancellation, the Pot keeps what it needs, and a later program may call
+  `Zk.cancel` again with the same reason, `Timeout(key)`: the payment is never stranded.
 
 A query answered after its promise expired is still paid for, and its body does not run: the
 promise settled once.
@@ -192,6 +196,12 @@ slashes the request if a prover locked it and failed (the market refunds the pri
 the prover's collateral), then withdraws the price from the Pot's balance at the market. A request no
 prover locked cost nothing; its deposit is withdrawn the same way. It answers whether it took the
 price back, and does nothing for any other rejection.
+
+A request someone else slashed first is not slashed again: its price is already back in the Pot's
+balance, and is withdrawn. The balance is shared with the Pot's other requests, so the price is
+withdrawn only once it is back in it. If the market refuses the slash or the withdrawal, the Pot
+keeps what it needs, and a later program may call `Zk.reclaim` again with the same reason,
+`Timeout(key)`.
 
 ## A proof that comes with the call: Succinct SP1
 

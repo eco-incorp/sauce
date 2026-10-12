@@ -157,6 +157,20 @@ const QUERY_WITHIN_A_MINUTE = QUERY.replace(
 );
 
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
+/** Where the Pot keeps a query's id beside its promise, and its payment in the word after:
+ *  `keccak256(abi.encode(key, namespace))` in ERC-7201 `sauce.storage.Zk`. */
+const NAMESPACE = 0xb17760d84f08c2c9fa647a884d9c84e17f084859463e6c6008dee8454f921500n;
+const recordOf = (key: Hex): Hex =>
+  keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [key, NAMESPACE]));
+/** A router that still holds every payment (`pendingPayments` answers 1) and refuses every other
+ *  call: how a router refusing a cancellation for now looks to the Pot. */
+const REFUSING_ROUTER = "0x60003560e01c63e7bcaed91460145760006000fd5b600160005260206000f3" as Hex;
+/** A program that calls `Zk.cancel` again, later, with the reason the promise was rejected with. */
+const CANCEL_AGAIN = `import { Zk } from "@sauce/zk";
+
+function main(key: Uint256): void {
+  evm.sstore(${keccak256(toHex("zk.sql.caught"))}, Zk.cancel(hex\`e6cc9dd0\`.concat(abi.encode(key))) ? 2 : 1);
+}`;
 const promiseKeyOf = (queryId: Hex): Hex =>
   keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [SQL_TAG, queryId]));
 
@@ -519,6 +533,62 @@ describeOnRouter.each([
       ).toBe(word(0n));
       // The fulfiller is too late: the query is gone.
       expect((await fulfil(asked, LONGITUDE)).ok).toBe(false);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "keeps the query's record when the router refuses the cancellation: Zk.cancel again takes the payment back",
+    async () => {
+      const asked = await ask(QUERY_WITHIN_A_MINUTE, 0n, 0n);
+      const key = promiseKeyOf(asked.queryId);
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      // The router refuses for now: the .catch's Zk.cancel answers false and the record stays.
+      const code = (await chain.publicClient.getCode({ address: router }))!;
+      await chain.testClient.setCode({ address: router, bytecode: REFUSING_ROUTER });
+      const expired = await chain.send(chain.stranger, chain.stack.pot, concat([EXPIRE, key]), FEE);
+      await chain.testClient.setCode({ address: router, bytecode: code });
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(1n);
+      expect(await chain.slot(recordOf(key))).toBe(BigInt(asked.queryId));
+      // Later, with the router answering again, the owner calls Zk.cancel with the same reason.
+      const potBefore = await sxt(chain.stack.pot);
+      expect((await chain.cook(chain.compiled(CANCEL_AGAIN, [BigInt(key)]))).ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(2n);
+      expect((await sxt(chain.stack.pot)) - potBefore).toBe(PAYMENT);
+      expect(await chain.slot(recordOf(key))).toBe(0n);
+      // Once: the record is gone, so a third call takes nothing.
+      expect((await chain.cook(chain.compiled(CANCEL_AGAIN, [BigInt(key)]))).ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(1n);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "forgets a query someone else cancelled: nothing pending, the refund the Pot's already",
+    async () => {
+      const asked = await ask(QUERY_WITHIN_A_MINUTE, 0n, 0n);
+      const key = promiseKeyOf(asked.queryId);
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      // Anyone may cancel a query past its timeout at the router, which refunds the Pot.
+      const potBefore = await sxt(chain.stack.pot);
+      const cancelled = await chain.send(
+        chain.stranger,
+        router,
+        encodeFunctionData({
+          abi: QueryRouterABI,
+          functionName: "cancelQuery",
+          args: [asked.queryId, asked.payment],
+        }),
+      );
+      expect(cancelled.ok).toBe(true);
+      expect((await sxt(chain.stack.pot)) - potBefore).toBe(PAYMENT);
+      const expired = await chain.send(chain.stranger, chain.stack.pot, concat([EXPIRE, key]), FEE);
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(1n);
+      expect(await chain.slot(recordOf(key))).toBe(0n);
     },
     TEST_TIMEOUT,
   );

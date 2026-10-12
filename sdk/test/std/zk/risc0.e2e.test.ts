@@ -190,6 +190,28 @@ const COUNTER = readFileSync(
 
 const word = (value: bigint): Hex => toHex(value, { size: 32 });
 
+/** Where the Pot keeps a request's index and price under its promise's key, until it settles:
+ *  `keccak256(abi.encode(key, namespace))` in ERC-7201 `sauce.storage.ZkRisc0`. */
+const RISC0_NAMESPACE = 0x569afbd4b1cedd4b9d4b5b614f8f04991e23581bad9d682bc2052921d7763600n;
+const recordOf = (key: Hex): Hex =>
+  keccak256(
+    encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [key, RISC0_NAMESPACE]),
+  );
+/** A program that calls `Zk.reclaim` again, later, with the reason the promise was rejected with. */
+const RECLAIM_AGAIN = `import { Zk } from "@sauce/zk";
+
+function main(key: Uint256): void {
+  evm.sstore(${CAUGHT}, Zk.reclaim(hex\`e6cc9dd0\`.concat(abi.encode(key))) ? 2 : 1);
+}`;
+/** The Pot withdrawing its whole balance at the market, and depositing `amount` back. */
+const DRAIN = `function main(): void {
+  const [held] = abi.decode(evm.static(${MARKET}, hex\`70a08231\`.concat(abi.encode(ctx.self()))), ["Uint256"]);
+  evm.call(${MARKET}, 0, hex\`2e1a7d4d\`.concat(abi.encode(held)));
+}`;
+const DEPOSIT = `function main(amount: Uint256): void {
+  evm.call(${MARKET}, amount, hex\`d0e30db0\`);
+}`;
+
 /** The promise of a request that named its journal: the image and the journal's sha256. */
 const namedKeyOf = (imageId: Hex, journal: Hex): Hex =>
   keccak256(
@@ -1011,6 +1033,68 @@ describeOnRouter("@sauce/zk's Boundless request on base", () => {
         MAX_PRICE,
       );
       expect(unanswered.requirements.predicate.predicateType).toBe(0);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "keeps the request's record when the market refuses the withdrawal: Zk.reclaim again takes the price back",
+    async () => {
+      const request = await ask(0n, 30n, 60n);
+      const key = promiseKeyOf(request);
+      // The Pot's balance at the market spent elsewhere first: withdrawing the price will fail.
+      expect((await chain.cook(chain.compiled(DRAIN))).ok).toBe(true);
+      expect(await marketBalance(chain.stack.pot)).toBe(0n);
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      const expired = await chain.send(chain.stranger, chain.stack.pot, concat([EXPIRE, key]), FEE);
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(1n);
+      expect(await chain.slot(recordOf(key))).not.toBe(0n);
+      // The balance back, the owner calls Zk.reclaim with the same reason: the price comes back.
+      expect((await chain.cook(chain.compiled(DEPOSIT, [MAX_PRICE]))).ok).toBe(true);
+      const potBefore = await chain.publicClient.getBalance({ address: chain.stack.pot });
+      expect((await chain.cook(chain.compiled(RECLAIM_AGAIN, [BigInt(key)]))).ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(2n);
+      expect((await chain.publicClient.getBalance({ address: chain.stack.pot })) - potBefore).toBe(
+        MAX_PRICE,
+      );
+      expect(await chain.slot(recordOf(key))).toBe(0n);
+      // Once: the record is gone, so a third call takes nothing.
+      expect((await chain.cook(chain.compiled(RECLAIM_AGAIN, [BigInt(key)]))).ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(1n);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "withdraws the price of a request someone else slashed, slashing nothing again",
+    async () => {
+      const request = await ask(0n, 30n, 60n);
+      expect((await lock(request)).ok).toBe(true);
+      await chain.testClient.increaseTime({ seconds: 61 });
+      await chain.testClient.mine({ blocks: 1 });
+      // Anyone may slash a locked request past its deadline, which refunds the price to the Pot's
+      // balance at the market.
+      const slashed = await chain.send(
+        chain.stranger,
+        MARKET,
+        encodeFunctionData({ abi: BoundlessMarketABI, functionName: "slash", args: [request.id] }),
+      );
+      expect(slashed.ok).toBe(true);
+      const potBefore = await chain.publicClient.getBalance({ address: chain.stack.pot });
+      const expired = await chain.send(
+        chain.stranger,
+        chain.stack.pot,
+        concat([EXPIRE, promiseKeyOf(request)]),
+        FEE,
+      );
+      expect(expired.ok).toBe(true);
+      expect(await chain.slot(CAUGHT)).toBe(2n);
+      expect((await chain.publicClient.getBalance({ address: chain.stack.pot })) - potBefore).toBe(
+        MAX_PRICE,
+      );
+      expect(await chain.slot(recordOf(promiseKeyOf(request)))).toBe(0n);
     },
     TEST_TIMEOUT,
   );

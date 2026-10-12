@@ -86,12 +86,14 @@
 //
 // The calls are written out, selector and arguments, as the contracts declare them. The QueryRouter's:
 // `requestQuery((bytes32,bytes,bytes,bytes),(uint256,uint64,address,bytes4,bytes),
-// (uint256,address,uint64))` (0x9165fb7f), `PAYMENT_TOKEN()` (0x877c86fb) and
-// `cancelQuery(bytes32,(uint256,address,uint64))` (0x4e8d0f8d). BoundlessMarket's:
+// (uint256,address,uint64))` (0x9165fb7f), `PAYMENT_TOKEN()` (0x877c86fb),
+// `cancelQuery(bytes32,(uint256,address,uint64))` (0x4e8d0f8d) and `pendingPayments(bytes32)`
+// (0xe7bcaed9). BoundlessMarket's:
 // `submitRequest((uint256,((address,uint96),(uint8,bytes),bytes4),string,(uint8,bytes),(uint256,
 // uint256,uint64,uint32,uint32,uint32,uint256)),bytes)` (0xdf2e6706), `eip712DomainSeparator()`
 // (0x5b07fdd8), `requestIsLocked(uint256)` (0xcb74db11), `requestIsFulfilled(uint256)` (0x81bf6c24),
-// `slash(uint256)` (0x45bc4d10) and `withdraw(uint256)` (0x2e1a7d4d). The SDK's tests derive each
+// `requestIsSlashed(uint256)` (0x60dfd4a9), `slash(uint256)` (0x45bc4d10) and `withdraw(uint256)`
+// (0x2e1a7d4d). The SDK's tests derive each
 // from its signature and run them against the contracts as deployed.
 import {
   Erc1271,
@@ -404,7 +406,10 @@ function timedOut(reason: bytes): Uint256 {
 }
 
 // `Zk.cancel` for a Space and Time query: cancel it at `router`, its payment back to the Pot. False
-// when the promise has no query.
+// when the promise has no query; when the router holds no payment for it, paid to the fulfiller or
+// cancelled already (a cancellation refunds the Pot, whoever sends it); and when the router refuses
+// the cancellation, which leaves the query's record in place, so that `Zk.cancel` with the same
+// reason may be called again later.
 export function cancelQuery(key: Uint256, router: Address): bool {
   if (key == 0) {
     return false;
@@ -416,6 +421,12 @@ export function cancelQuery(key: Uint256, router: Address): bool {
   }
   const payment = evm.sload(slot + 1);
   forget(key);
+  const [pending] = abi.decode(evm.static(router, hex`e7bcaed9`.concat(abi.encode(queryId))), [
+    "Uint256",
+  ]);
+  if (pending == 0) {
+    return false;
+  }
   let cancelled = true;
   evm
     .call(
@@ -432,6 +443,10 @@ export function cancelQuery(key: Uint256, router: Address): bool {
     .catch((e) => {
       cancelled = false;
     });
+  if (!cancelled) {
+    evm.sstore(slot, queryId);
+    evm.sstore(slot + 1, payment);
+  }
   return cancelled;
 }
 
@@ -599,7 +614,11 @@ export function handleProof(market: Address, caller: Address, data: bytes): void
 }
 
 // `Zk.reclaim` for a Boundless request: slash it at `market` if a prover locked it and did not fulfil
-// it, then withdraw its price from the Pot's balance there. False when the promise has no request.
+// it (unless someone has already), which refunds its price to the Pot's balance there, then withdraw
+// the price. False when the promise has no request, when it was fulfilled (its price paid), and when
+// the market refuses the slash or the withdrawal, which leaves the request's record in place, so that
+// `Zk.reclaim` with the same reason may be called again later. The balance is shared with the Pot's
+// other requests: the price is withdrawn only once it is back in it.
 export function reclaimProof(key: Uint256, market: Address): bool {
   if (key == 0) {
     return false;
@@ -619,12 +638,27 @@ export function reclaimProof(key: Uint256, market: Address): bool {
   }
   const [locked] = abi.decode(evm.static(market, hex`cb74db11`.concat(abi.encode(id))), ["bool"]);
   if (locked) {
-    evm.call(market, 0, hex`45bc4d10`.concat(abi.encode(id))).catch((e) => {});
+    const [slashed] = abi.decode(evm.static(market, hex`60dfd4a9`.concat(abi.encode(id))), [
+      "bool",
+    ]);
+    if (!slashed) {
+      let refunded = true;
+      evm.call(market, 0, hex`45bc4d10`.concat(abi.encode(id))).catch((e) => {
+        refunded = false;
+      });
+      if (!refunded) {
+        evm.sstore(slot, record);
+        return false;
+      }
+    }
   }
   let withdrawn = true;
   evm.call(market, 0, hex`2e1a7d4d`.concat(abi.encode(record >> 32))).catch((e) => {
     withdrawn = false;
   });
+  if (!withdrawn) {
+    evm.sstore(slot, record);
+  }
   return withdrawn;
 }
 

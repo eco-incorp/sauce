@@ -69,6 +69,7 @@ describe("what the library writes out by hand", () => {
     "requestQuery((bytes32,bytes,bytes,bytes),(uint256,uint64,address,bytes4,bytes),(uint256,address,uint64))",
     "PAYMENT_TOKEN()",
     "cancelQuery(bytes32,(uint256,address,uint64))",
+    "pendingPayments(bytes32)",
   ])("%s's selector is derived from its signature, and in a query's bytecode", (signature) => {
     const selector = toFunctionSelector(signature).slice(2);
     expect(SOURCE).toContain(`hex\`${selector}\``);
@@ -116,6 +117,7 @@ describe("what the library writes out by hand", () => {
     "eip712DomainSeparator()",
     "requestIsLocked(uint256)",
     "requestIsFulfilled(uint256)",
+    "requestIsSlashed(uint256)",
     "slash(uint256)",
     "withdraw(uint256)",
   ])(
