@@ -77,7 +77,8 @@ async function pinClock(url: string, interval: number): Promise<void> {
 /** Anvil's dev accounts, made plain accounts (see the module's header). */
 async function plainDevAccounts(url: string): Promise<string[]> {
   const accounts = (await rpc(url, "eth_accounts")) as string[];
-  for (const account of accounts) await rpc(url, "anvil_setCode", [account, "0x"]);
+  // Independent writes, one per account: sent together.
+  await Promise.all(accounts.map((account) => rpc(url, "anvil_setCode", [account, "0x"])));
 
   return accounts;
 }
