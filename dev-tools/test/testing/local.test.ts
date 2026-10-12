@@ -3,6 +3,9 @@
  * wherever anvil does; skips without it locally, and fails under CI, where it must run.
  */
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { CookReverted, local, type TestChain } from "../../src/testing/index.js";
@@ -61,6 +64,33 @@ describe("local()", { skip: anvilMissing() }, () => {
       source: "function main(): Uint256 {\n  return chainId;\n}\n",
     });
     assert.equal(result.returned, 8453n);
+  });
+
+  it("runs a program's imports as they are now, not as they were first compiled", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-imports-"));
+    const answer = (value: number) =>
+      `export function answer(): Uint256 {\n  return ${value};\n}\n`;
+    const source =
+      'import { answer } from "./helper.js";\nfunction main(): Uint256 {\n  return answer();\n}\n';
+    try {
+      const file = join(dir, "main.sauce.ts");
+      writeFileSync(file, source);
+      writeFileSync(join(dir, "helper.js"), answer(1));
+      assert.equal((await chain.run(file)).returned, 1n);
+      // The program's own text is unchanged; what it imports is not.
+      writeFileSync(join(dir, "helper.js"), answer(2));
+      assert.equal((await chain.run(file)).returned, 2n);
+
+      // The same text beside another helper is another program.
+      for (const value of [3, 4]) {
+        mkdirSync(join(dir, String(value)));
+        writeFileSync(join(dir, String(value), "helper.js"), answer(value));
+        const path = join(dir, String(value), "main.sauce.ts");
+        assert.equal((await chain.simulate({ source, path })).returned, BigInt(value));
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("funds the native currency, snapshots and reverts, and moves time", async () => {
