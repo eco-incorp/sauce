@@ -62,7 +62,7 @@ A refusal links both, prefilled for the chain it refused.
 | [Arc](chains/arc.md) | `arc` | 5042 | EVM | preview | yes | 26 | 4 | 23 |
 | [ZetaChain](chains/zetachain.md) | `zetachain` | 7000 | EVM | preview | no | — | 0 | 0 |
 | [Klaytn](chains/klaytn.md) | `klaytn` | 8217 | EVM | preview | no | — | 0 | 0 |
-| [Base](chains/base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 47 |
+| [Base](chains/base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 48 |
 | [Evmos](chains/evmos.md) | `evmos` | 9001 | EVM | preview | no | — | 0 | 0 |
 | [Plasma](chains/plasma.md) | `plasma` | 9745 | EVM | preview | yes | — | 1 | 0 |
 | [Mode](chains/mode.md) | `mode` | 34443 | EVM | preview | no | — | 0 | 2 |

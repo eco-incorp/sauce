@@ -398,6 +398,15 @@ export interface ChainlinkFeedRegistryMethods {
   "getFeed"(arg0: bigint, arg1: bigint): bigint;
 }
 
+export interface ChainlinkKeystoneForwarderMethods {
+  "typeAndVersion"(): SauceBytes;
+  "isForwarder"(arg0: bigint): boolean;
+  "getTransmissionId"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "getTransmissionInfo"(arg0: bigint, arg1: bigint, arg2: bigint): { "transmissionId": bigint; "state": bigint; "transmitter": bigint; "invalidReceiver": boolean; "success": boolean; "gasLimit": bigint };
+  "getTransmitter"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
+  "report"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes), arg3: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): void;
+}
+
 export interface ChainlinkCcipCCIPRouterMethods {
   "ccipSend"(arg0: bigint, arg1: { "receiver": (string | SauceBytes); "data": (string | SauceBytes); "tokenAmounts": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "feeToken": bigint; "extraArgs": (string | SauceBytes) }): bigint;
   "getFee"(arg0: bigint, arg1: { "receiver": (string | SauceBytes); "data": (string | SauceBytes); "tokenAmounts": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "feeToken": bigint; "extraArgs": (string | SauceBytes) }): bigint;
@@ -1730,6 +1739,7 @@ export interface CelerSource extends CelerBridgeMethods {
 export interface ChainlinkSource {
   readonly EthUsdFeed?: SauceContract<ChainlinkAggregatorV3Methods>;
   readonly FeedRegistry?: SauceContract<ChainlinkFeedRegistryMethods>;
+  readonly KeystoneForwarder?: SauceContract<ChainlinkKeystoneForwarderMethods>;
   readonly VrfV2Coordinator?: bigint;
 }
 

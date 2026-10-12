@@ -288,6 +288,9 @@
       },
       "FeedRegistryABI": {
         "roles": ["feedRegistry"]
+      },
+      "KeystoneForwarderABI": {
+        "roles": ["keystoneForwarder"]
       }
     },
     "chainlink-ccip": {

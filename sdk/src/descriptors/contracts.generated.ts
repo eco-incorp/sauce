@@ -414,7 +414,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 316 contracts across 135 protocols. */
+/** One entry per contract: 317 contracts across 135 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -488,6 +488,7 @@ export const CONTRACT_LINKS = [
   { protocol: "celer", contract: "Bridge", kind: "singleton", roleKey: "bridge", abiExport: "CelerBridgeABI" },
   { protocol: "chainlink", contract: "EthUsdFeed", kind: "singleton", roleKey: "ethUsdFeed", abiExport: "AggregatorV3ABI" },
   { protocol: "chainlink", contract: "FeedRegistry", kind: "singleton", roleKey: "feedRegistry", abiExport: "FeedRegistryABI" },
+  { protocol: "chainlink", contract: "KeystoneForwarder", kind: "singleton", roleKey: "keystoneForwarder", abiExport: "KeystoneForwarderABI" },
   { protocol: "chainlink", contract: "VrfV2Coordinator", kind: "address-only", roleKey: "vrfV2Coordinator", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "chainlink-ccip", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "CCIPRouterABI" },
   { protocol: "circle-gateway", contract: "GatewayWallet", kind: "singleton", roleKey: "gatewayWallet", abiExport: "GatewayWalletABI" },
@@ -873,6 +874,7 @@ export interface CelerContracts {
 export interface ChainlinkContracts {
   readonly EthUsdFeed: Contract<typeof chainlinkAbis.AggregatorV3ABI>;
   readonly FeedRegistry: Contract<typeof chainlinkAbis.FeedRegistryABI>;
+  readonly KeystoneForwarder: Contract<typeof chainlinkAbis.KeystoneForwarderABI>;
   readonly VrfV2Coordinator: AddressOnlyContract;
 }
 
