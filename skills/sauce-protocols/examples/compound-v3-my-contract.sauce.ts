@@ -12,10 +12,13 @@
 // `comet` is a `main` input, and the Pot is the account. Its `presentValue` cast a negative
 // principal to unsigned before scaling it, which reads a borrower's debt as a vast supply: here the
 // principal's sign is taken first, as Comet's own does, and the debt kept apart from the collateral
-// until the end, where one is taken from the other as an `Int256`. Its `getAllAssetInfos` logged every asset's
-// settings for a developer to read; a simulation returns what a program reads instead, so it is
-// left out. The Comet and CometRewards functions are in Comet.json beside this file, since the
-// registry's ABI declares only the Comet's supply and withdraw paths and balances.
+// until the end, where one is taken from the other as an `Int256`. It divided each amount at its
+// price by the price's scale, 1e8, which leaves WETH in 18 decimals beside USDC in 6: each is
+// divided by its own token's scale here (`baseScale`, an asset's `scale`), so they sum in USD with
+// 8 decimals. Its `getAllAssetInfos` logged every asset's settings for a developer to read; a
+// simulation returns what a program reads instead, so it is left out. The Comet and CometRewards
+// functions are in Comet.json beside this file, since the registry's ABI declares only the Comet's
+// supply and withdraw paths and balances.
 //
 //   sauce run compound-v3-my-contract.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <step> <comet> <asset> <amount> <rewards> <rewardFeed>
@@ -112,6 +115,7 @@ function getBorrowableAmount(comet: Address, account: Address): Int256 {
   const user = market.userBasic(account);
   const totals = market.totalsBasic();
   const scale = market.baseIndexScale();
+  const baseScale = market.baseScale();
   const basePrice = market.getPrice(market.baseTokenPriceFeed());
   // The base principal (an `Int256`) at the present index: a supply grows by the supply index, a
   // borrow by the borrow index. The two are kept apart, unsigned, until the end.
@@ -122,16 +126,18 @@ function getBorrowableAmount(comet: Address, account: Address): Int256 {
   } else {
     borrowed = (Uint256(-user.principal) * totals.baseBorrowIndex) / scale;
   }
-  let liquidity = (supplied * basePrice) / 10 ** 8;
+  // Every amount in USD with 8 decimals, as the Comet prices it: an amount of a token at its price
+  // (8 decimals) over that token's own scale.
+  let liquidity = (supplied * basePrice) / baseScale;
   for (let i = 0; i < market.numAssets(); i += 1) {
     if (((user.assetsIn >> i) & 1) == 1) {
       const asset = market.getAssetInfo(i);
       const balance = market.userCollateral(account, asset.asset).balance;
-      const amount = (balance * market.getPrice(asset.priceFeed)) / 10 ** 8;
+      const amount = (balance * market.getPrice(asset.priceFeed)) / asset.scale;
       liquidity += (amount * asset.borrowCollateralFactor) / 10 ** 18;
     }
   }
-  const debt = (borrowed * basePrice) / 10 ** 8;
+  const debt = (borrowed * basePrice) / baseScale;
   return Int256(liquidity) - Int256(debt);
 }
 

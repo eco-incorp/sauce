@@ -2336,6 +2336,7 @@ function introduced(page, path, intro, next) {
     protocols: link("Protocols", "reference/protocols.md"),
     [DISTRIBUTED_SWAP_GUIDE]: link("`@sauce/router`", "api/router.md"),
     [SOLANA_DISTRIBUTED_SWAP_GUIDE]: link("Solana", "guides/solana.md"),
+    [SOLIDITY_EXAMPLES_GUIDE]: link("Protocols and tokens", "guides/protocols-and-tokens.md"),
   }[path.startsWith("../guides/") ? path : posix.dirname(path)];
   const crumb = [
     path.startsWith("../guides/") ? "**How-to guide**" : "**Reference**",
@@ -2425,6 +2426,10 @@ function docsNext(data) {
       ["`@sauce/router` on Solana", "api/router-solana.md", "every Solana venue's swap function"],
       ["How Sauce runs on Solana", "concepts/solana-model.md", "accounts, staging and compute"],
     ],
+    [SOLIDITY_EXAMPLES_GUIDE]: [
+      ["Protocols and tokens", "guides/protocols-and-tokens.md", "calling protocols by name"],
+      ["Run a program", "guides/cli-run.md", "simulate a ported example, then run it"],
+    ],
   };
   for (const chain of data.chains) {
     next[site.chain(chain.slug)] = [
@@ -2501,6 +2506,10 @@ function docsIntros(data) {
       "The same order on Solana: buy a lot of a token, never paying more than a set price for any " +
       "of it, spread over the pools of several Solana exchanges. Each pool sells what it can below " +
       "your price, and what you have not spent moves on to the next, in one transaction.",
+    [SOLIDITY_EXAMPLES_GUIDE]:
+      "Protocols publish their examples as Solidity contracts you deploy, fund and call. Each one " +
+      "here is ported to Sauce: one program that does the same from your Pot, in one transaction, " +
+      "with nothing deployed, shown beside the file it was ported from.",
   };
   for (const chain of data.chains) {
     intros[site.chain(chain.slug)] =

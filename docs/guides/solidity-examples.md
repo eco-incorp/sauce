@@ -2,6 +2,12 @@
 
 # From Solidity examples to Sauce
 
+**How-to guide** · [Documentation](../README.md) · [Protocols and tokens](protocols-and-tokens.md)
+
+> Protocols publish their examples as Solidity contracts you deploy, fund and call. Each one here is
+> ported to Sauce: one program that does the same from your Pot, in one transaction, with nothing
+> deployed, shown beside the file it was ported from.
+
 The protocols publish their own examples in Solidity: a contract you deploy, fund and then call.
 Each example below is one of them ported to Sauce: one program, compiled for a chain and sent as
 one transaction from your Pot, with nothing deployed. The protocol's contracts are named, never
@@ -32,13 +38,13 @@ not ship with.
 | --- | --- | ---: | ---: |
 | [Uniswap V3: the swap examples](#uniswap-v3-the-swap-examples) | [Uniswap/docs, `SwapExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/SwapExamples.sol) | 163 (80) | 128 (84) |
 | [Uniswap V3: a flash, as a flash swap](#uniswap-v3-a-flash-as-a-flash-swap) | [Uniswap/v3-periphery, `PairFlash.sol`](https://github.com/Uniswap/v3-periphery/blob/0411d43779d01f4e82cfc31aea00fd6011b3756d/contracts/examples/PairFlash.sol) | 149 (109) | 75 (31) |
-| [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 162 (116) |
+| [Uniswap V3: the liquidity examples](#uniswap-v3-the-liquidity-examples) | [Uniswap/docs, `LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol) | 243 (157) | 167 (121) |
 | [Aave V3: credit delegation](#aave-v3-credit-delegation) | [aave/code-examples-protocol, `MyV2CreditDelegation.sol`](https://github.com/aave/code-examples-protocol/blob/c343d266d04f210e1de9a7f008fdbc8ad63e5c22/V2/Credit%20Delegation/MyV2CreditDelegation.sol) | 83 (33) | 81 (42) |
-| [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 197 (140) |
+| [Compound III: MyContract](#compound-iii-mycontract) | [compound-developers/compound-3-developer-faq, `MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol) | 337 (225) | 203 (141) |
 | [Morpho Blue: the snippets](#morpho-blue-the-snippets) | [morpho-org/morpho-blue-snippets, `MorphoBlueSnippets.sol`](https://github.com/morpho-org/morpho-blue-snippets/blob/43568fd8626a2f44dc49e5ac7040ec6dc7ee67c3/src/morpho-blue/MorphoBlueSnippets.sol) | 380 (219) | 256 (197) |
-| [Pendle: the router samples](#pendle-the-router-samples) | [pendle-finance/pendle-examples-public, `RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol) | 265 (204) | 226 (172) |
+| [Pendle: the router samples](#pendle-the-router-samples) | [pendle-finance/pendle-examples-public, `RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol) | 265 (204) | 287 (226) |
 | [Uniswap V4: the swap guide](#uniswap-v4-the-swap-guide) | [Uniswap/docs, `swapping.mdx`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/protocols/v4/guides/swapping/swapping.mdx) | 79 (61) | 80 (42) |
-| [Balancer V2: batch swaps](#balancer-v2-batch-swaps) | [balancer/docs, `batch-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md) | 30 (30) | 101 (56) |
+| [Balancer V2: batch swaps](#balancer-v2-batch-swaps) | [balancer/docs, `batch-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md) | 30 (30) | 103 (56) |
 | [Balancer V2: a flash swap](#balancer-v2-a-flash-swap) | [balancer/docs, `flash-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/flash-swaps.md) | 30 (30) | 65 (30) |
 
 ## Uniswap V3: the swap examples
@@ -242,7 +248,7 @@ function main(
   const repay = program(() => {
     const received = Token(tokenOut).balanceOf(self) - outBefore;
     uniswapV3(repayPool, tokenOut, tokenIn, received, 0, amountIn, self);
-  }, chainId);
+  });
   // The swap the Router runs around it, as the calldata of its own `swapV3`.
   const swapV3 = (crypto.keccak256("swapV3(address,address,bool,uint256,uint160,address)") >> 224)
     .toBytesBe(4)
@@ -260,7 +266,7 @@ function main(
 
 ## Uniswap V3: the liquidity examples
 
-Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol): 243 lines of Solidity, 157 of them code. In Sauce, `uniswap-v3-liquidity-examples.sauce.ts`: 162 lines, 116 of them code.
+Ported from Uniswap/docs, [`content/examples/smart-contracts/LiquidityExamples.sol`](https://github.com/Uniswap/docs/blob/338d70983ac49911aecac02dd57b0a969c1ca61e/content/examples/smart-contracts/LiquidityExamples.sol): 243 lines of Solidity, 157 of them code. In Sauce, `uniswap-v3-liquidity-examples.sauce.ts`: 167 lines, 121 of them code.
 
 ```ts
 // Uniswap's liquidity examples, ported: the `LiquidityExamples` contract of Uniswap's V3 guides
@@ -315,10 +321,9 @@ interface Moved {
 
 function mintNewPosition(amount0ToMint: Uint256, amount1ToMint: Uint256): Moved {
   require(UniswapV3.NonfungiblePositionManager && Maker.Dai);
-  const manager = UniswapV3.NonfungiblePositionManager;
-  approve(Maker.Dai, manager, amount0ToMint);
-  USDC.approve(manager, amount1ToMint);
-  const [tokenId, liquidity, amount0, amount1] = manager.mint({
+  approve(Maker.Dai, UniswapV3.NonfungiblePositionManager, amount0ToMint);
+  USDC.approve(UniswapV3.NonfungiblePositionManager, amount1ToMint);
+  const [tokenId, liquidity, amount0, amount1] = UniswapV3.NonfungiblePositionManager.mint({
     token0: Maker.Dai,
     token1: USDC,
     fee: POOL_FEE,
@@ -333,10 +338,10 @@ function mintNewPosition(amount0ToMint: Uint256, amount1ToMint: Uint256): Moved 
   });
   // What the position did not take stays in the Pot; the allowance for it does not stand.
   if (amount0 < amount0ToMint) {
-    approve(Maker.Dai, manager, 0);
+    approve(Maker.Dai, UniswapV3.NonfungiblePositionManager, 0);
   }
   if (amount1 < amount1ToMint) {
-    USDC.approve(manager, 0);
+    USDC.approve(UniswapV3.NonfungiblePositionManager, 0);
   }
   return { tokenId, liquidity, amount0, amount1 };
 }
@@ -354,10 +359,9 @@ function collectAllFees(tokenId: Uint256, owner: Address): Moved {
 
 function decreaseLiquidityInHalf(tokenId: Uint256, owner: Address): Moved {
   require(UniswapV3.NonfungiblePositionManager);
-  const manager = UniswapV3.NonfungiblePositionManager;
-  const position = UniswapV3Positions.at(manager).positions(tokenId);
+  const position = UniswapV3Positions.at(UniswapV3.NonfungiblePositionManager).positions(tokenId);
   const halfLiquidity = position.liquidity / 2;
-  const [amount0, amount1] = manager.decreaseLiquidity({
+  const [amount0, amount1] = UniswapV3.NonfungiblePositionManager.decreaseLiquidity({
     tokenId,
     liquidity: halfLiquidity,
     amount0Min: 0,
@@ -365,7 +369,12 @@ function decreaseLiquidityInHalf(tokenId: Uint256, owner: Address): Moved {
     deadline: ctx.timestamp(),
   });
   // Taking liquidity out credits the position; collecting pays the credit to `owner`.
-  manager.collect({ tokenId, recipient: owner, amount0Max: amount0, amount1Max: amount1 });
+  UniswapV3.NonfungiblePositionManager.collect({
+    tokenId,
+    recipient: owner,
+    amount0Max: amount0,
+    amount1Max: amount1,
+  });
   return { tokenId, liquidity: halfLiquidity, amount0, amount1 };
 }
 
@@ -375,11 +384,10 @@ function increaseLiquidityCurrentRange(
   amountAdd1: Uint256,
 ): Moved {
   require(UniswapV3.NonfungiblePositionManager);
-  const manager = UniswapV3.NonfungiblePositionManager;
-  const position = UniswapV3Positions.at(manager).positions(tokenId);
-  approve(position.token0, manager, amountAdd0);
-  approve(position.token1, manager, amountAdd1);
-  const [liquidity, amount0, amount1] = manager.increaseLiquidity({
+  const position = UniswapV3Positions.at(UniswapV3.NonfungiblePositionManager).positions(tokenId);
+  approve(position.token0, UniswapV3.NonfungiblePositionManager, amountAdd0);
+  approve(position.token1, UniswapV3.NonfungiblePositionManager, amountAdd1);
+  const [liquidity, amount0, amount1] = UniswapV3.NonfungiblePositionManager.increaseLiquidity({
     tokenId,
     amount0Desired: amountAdd0,
     amount1Desired: amountAdd1,
@@ -388,18 +396,21 @@ function increaseLiquidityCurrentRange(
     deadline: ctx.timestamp(),
   });
   if (amount0 < amountAdd0) {
-    approve(position.token0, manager, 0);
+    approve(position.token0, UniswapV3.NonfungiblePositionManager, 0);
   }
   if (amount1 < amountAdd1) {
-    approve(position.token1, manager, 0);
+    approve(position.token1, UniswapV3.NonfungiblePositionManager, 0);
   }
   return { tokenId, liquidity, amount0, amount1 };
 }
 
 function retrieveNFT(tokenId: Uint256, owner: Address): Moved {
   require(UniswapV3.NonfungiblePositionManager);
-  const manager = UniswapV3.NonfungiblePositionManager;
-  UniswapV3Positions.at(manager).safeTransferFrom(ctx.self(), owner, tokenId);
+  UniswapV3Positions.at(UniswapV3.NonfungiblePositionManager).safeTransferFrom(
+    ctx.self(),
+    owner,
+    tokenId,
+  );
   return { tokenId, liquidity: 0, amount0: 0, amount1: 0 };
 }
 
@@ -517,7 +528,7 @@ function main(step: Uint256, asset: Address, amount: Uint256, account: Address):
 
 ## Compound III: MyContract
 
-Ported from compound-developers/compound-3-developer-faq, [`contracts/MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol): 337 lines of Solidity, 225 of them code. In Sauce, `compound-v3-my-contract.sauce.ts`: 197 lines, 140 of them code.
+Ported from compound-developers/compound-3-developer-faq, [`contracts/MyContract.sol`](https://github.com/compound-developers/compound-3-developer-faq/blob/d43332f99208bbc454929fe5cdef2aecbbccf979/contracts/MyContract.sol): 337 lines of Solidity, 225 of them code. In Sauce, `compound-v3-my-contract.sauce.ts`: 203 lines, 141 of them code.
 
 ```ts
 // Compound's own example, ported: `MyContract` of the Compound III developer FAQ supplies to a
@@ -534,10 +545,13 @@ Ported from compound-developers/compound-3-developer-faq, [`contracts/MyContract
 // `comet` is a `main` input, and the Pot is the account. Its `presentValue` cast a negative
 // principal to unsigned before scaling it, which reads a borrower's debt as a vast supply: here the
 // principal's sign is taken first, as Comet's own does, and the debt kept apart from the collateral
-// until the end, since SauceScript's arithmetic is unsigned. Its `getAllAssetInfos` logged every asset's
-// settings for a developer to read; a simulation returns what a program reads instead, so it is
-// left out. The Comet and CometRewards functions are in Comet.json beside this file, since the
-// registry's ABI declares only the Comet's supply and withdraw paths and balances.
+// until the end, where one is taken from the other as an `Int256`. It divided each amount at its
+// price by the price's scale, 1e8, which leaves WETH in 18 decimals beside USDC in 6: each is
+// divided by its own token's scale here (`baseScale`, an asset's `scale`), so they sum in USD with
+// 8 decimals. Its `getAllAssetInfos` logged every asset's settings for a developer to read; a
+// simulation returns what a program reads instead, so it is left out. The Comet and CometRewards
+// functions are in Comet.json beside this file, since the registry's ABI declares only the Comet's
+// supply and withdraw paths and balances.
 //
 //   sauce run compound-v3-my-contract.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <step> <comet> <asset> <amount> <rewards> <rewardFeed>
@@ -572,8 +586,8 @@ interface Market {
   borrowApr: Uint256;
   rewardAprForSupplyBase: Uint256;
   rewardAprForBorrowBase: Uint256;
-  // What the Pot can still borrow, in USD with 8 decimals: a signed number, negative past its limit.
-  borrowable: Uint256;
+  // What the Pot can still borrow, in USD with 8 decimals: negative past its limit.
+  borrowable: Int256;
   borrowCollateralFactor: Uint256;
   liquidateCollateralFactor: Uint256;
   price: Uint256;
@@ -629,32 +643,35 @@ function getRewardApr(comet: Address, rewardTokenPriceFeed: Address, borrow: boo
   return ((rewardTokenPriceInUsd * rewardPerDay) / (total * usdcPriceInUsd)) * DAYS_PER_YEAR;
 }
 
-function getBorrowableAmount(comet: Address, account: Address): Uint256 {
+function getBorrowableAmount(comet: Address, account: Address): Int256 {
   const market = Comet.at(comet);
   const user = market.userBasic(account);
   const totals = market.totalsBasic();
   const scale = market.baseIndexScale();
+  const baseScale = market.baseScale();
   const basePrice = market.getPrice(market.baseTokenPriceFeed());
-  // The base principal at the present index: a supply grows by the supply index, a borrow by the
-  // borrow index. SauceScript's arithmetic is unsigned, so the two are kept apart until the end.
+  // The base principal (an `Int256`) at the present index: a supply grows by the supply index, a
+  // borrow by the borrow index. The two are kept apart, unsigned, until the end.
   let supplied = 0;
   let borrowed = 0;
-  if (Math.sGte(user.principal, 0)) {
-    supplied = (user.principal * totals.baseSupplyIndex) / scale;
+  if (user.principal >= 0) {
+    supplied = (Uint256(user.principal) * totals.baseSupplyIndex) / scale;
   } else {
-    borrowed = (-user.principal * totals.baseBorrowIndex) / scale;
+    borrowed = (Uint256(-user.principal) * totals.baseBorrowIndex) / scale;
   }
-  let liquidity = (supplied * basePrice) / 10 ** 8;
+  // Every amount in USD with 8 decimals, as the Comet prices it: an amount of a token at its price
+  // (8 decimals) over that token's own scale.
+  let liquidity = (supplied * basePrice) / baseScale;
   for (let i = 0; i < market.numAssets(); i += 1) {
     if (((user.assetsIn >> i) & 1) == 1) {
       const asset = market.getAssetInfo(i);
       const balance = market.userCollateral(account, asset.asset).balance;
-      const amount = (balance * market.getPrice(asset.priceFeed)) / 10 ** 8;
+      const amount = (balance * market.getPrice(asset.priceFeed)) / asset.scale;
       liquidity += (amount * asset.borrowCollateralFactor) / 10 ** 18;
     }
   }
-  const debt = (borrowed * basePrice) / 10 ** 8;
-  return liquidity >= debt ? liquidity - debt : -(debt - liquidity);
+  const debt = (borrowed * basePrice) / baseScale;
+  return Int256(liquidity) - Int256(debt);
 }
 
 function getTvl(comet: Address): Uint256 {
@@ -984,7 +1001,7 @@ function main(step: Uint256, id: Uint256, amount: Uint256, receiver: Address): S
 
 ## Pendle: the router samples
 
-Ported from pendle-finance/pendle-examples-public, [`test/RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol): 265 lines of Solidity, 204 of them code. In Sauce, `pendle-router-sample.sauce.ts`: 226 lines, 172 of them code.
+Ported from pendle-finance/pendle-examples-public, [`test/RouterSample.sol`](https://github.com/pendle-finance/pendle-examples-public/blob/642b1ab2784b3015691d6c26a2684cd5f7585b0d/test/RouterSample.sol): 265 lines of Solidity, 204 of them code. In Sauce, `pendle-router-sample.sauce.ts`: 287 lines, 226 of them code.
 
 ```ts
 // Pendle's router samples, ported: `RouterSample` is Pendle's tour of its router, as tests that
@@ -1031,25 +1048,86 @@ interface Legs {
 
 // StructGen's helpers: the router searches the trade's size on chain within `defaultApprox`'s
 // bounds, and no aggregator swap and no limit order is used. Each returns a record the compiler
-// builds where it is used.
-function defaultApprox() {
+// builds where it is used, of the type the router's ABI declares.
+interface ApproxParams {
+  guessMin: Uint256;
+  guessMax: Uint256;
+  guessOffchain: Uint256;
+  maxIteration: Uint256;
+  eps: Uint256;
+}
+
+interface SwapData {
+  swapType: Uint256;
+  extRouter: Address;
+  extCalldata: bytes;
+  needScale: bool;
+}
+
+interface TokenInput {
+  tokenIn: Address;
+  netTokenIn: Uint256;
+  tokenMintSy: Address;
+  pendleSwap: Address;
+  swapData: SwapData;
+}
+
+interface TokenOutput {
+  tokenOut: Address;
+  minTokenOut: Uint256;
+  tokenRedeemSy: Address;
+  pendleSwap: Address;
+  swapData: SwapData;
+}
+
+interface Order {
+  salt: Uint256;
+  expiry: Uint256;
+  nonce: Uint256;
+  orderType: Uint256;
+  token: Address;
+  YT: Address;
+  maker: Address;
+  receiver: Address;
+  makingAmount: Uint256;
+  lnImpliedRate: Uint256;
+  failSafeRate: Uint256;
+  permit: bytes;
+}
+
+interface FillOrderParams {
+  order: Order;
+  signature: bytes;
+  makingAmount: Uint256;
+}
+
+interface LimitOrderData {
+  limitRouter: Address;
+  epsSkipMarket: Uint256;
+  normalFills: FillOrderParams[];
+  flashFills: FillOrderParams[];
+  optData: bytes;
+}
+
+function defaultApprox(): ApproxParams {
   return { guessMin: 0, guessMax: ~0, guessOffchain: 0, maxIteration: 256, eps: 10 ** 14 };
 }
 
-function noSwap() {
+function noSwap(): SwapData {
   return { swapType: 0, extRouter: 0, extCalldata: hex``, needScale: false };
 }
 
-function createTokenInputStruct(tokenIn: Address, netTokenIn: Uint256) {
+function createTokenInputStruct(tokenIn: Address, netTokenIn: Uint256): TokenInput {
   return { tokenIn, netTokenIn, tokenMintSy: tokenIn, pendleSwap: 0, swapData: noSwap() };
 }
 
-function createTokenOutputStruct(tokenOut: Address, minTokenOut: Uint256) {
+function createTokenOutputStruct(tokenOut: Address, minTokenOut: Uint256): TokenOutput {
   return { tokenOut, minTokenOut, tokenRedeemSy: tokenOut, pendleSwap: 0, swapData: noSwap() };
 }
 
-function emptyLimit() {
-  return { limitRouter: 0, epsSkipMarket: 0, normalFills: [], flashFills: [], optData: hex`` };
+function emptyLimit(): LimitOrderData {
+  const none: FillOrderParams[] = [];
+  return { limitRouter: 0, epsSkipMarket: 0, normalFills: none, flashFills: none, optData: hex`` };
 }
 
 function buyAndSellPt(market: Address, token: Address, amount: Uint256, minBack: Uint256): Legs {
@@ -1304,7 +1382,7 @@ function main(key: PoolKey, amountIn: Uint256, minAmountOut: Uint256): Uint256 {
 
 ## Balancer V2: batch swaps
 
-Ported from balancer/docs, [`docs/reference/swaps/batch-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md): 30 lines of Solidity, 30 of them code. In Sauce, `balancer-v2-batch-swap.sauce.ts`: 101 lines, 56 of them code.
+Ported from balancer/docs, [`docs/reference/swaps/batch-swaps.md`](https://github.com/balancer/docs/blob/bc51cd265e21152ff22e59c7ffac50d3529db25c/docs/reference/swaps/batch-swaps.md): 30 lines of Solidity, 30 of them code. In Sauce, `balancer-v2-batch-swap.sauce.ts`: 103 lines, 56 of them code.
 
 ```ts
 // Balancer's batch swap examples, ported: Balancer's batch swap guide routes token A to token C
@@ -1392,8 +1470,9 @@ function main(
     recipient,
     toInternalBalance: false,
   };
-  // A limit is what the Vault may take of each asset: positive in, negative out.
-  const limits = [maxIn, 0, givenOut ? -amount : -limit];
+  // A limit is what the Vault may take of each asset: positive in, negative out. Signed, as the
+  // Vault's `int256[]` is.
+  const limits: Int256[] = [Int256(maxIn), 0, givenOut ? -Int256(amount) : -Int256(limit)];
   const deltas = BalancerV2.Vault.batchSwap(
     givenOut ? GIVEN_OUT : GIVEN_IN,
     swaps,
@@ -1406,7 +1485,8 @@ function main(
   if (deltas[0] < maxIn) {
     approve(a, BalancerV2.Vault, 0);
   }
-  return { paid: deltas[0], received: -deltas[2] };
+  // The Vault's deltas are signed: what it took of `a`, and minus what it paid of `c`.
+  return { paid: Uint256(deltas[0]), received: Uint256(-deltas[2]) };
 }
 ```
 
@@ -1481,3 +1561,9 @@ function main(
   return -deltas[0];
 }
 ```
+
+## Next
+
+- [Protocols and tokens](protocols-and-tokens.md): calling protocols by name.
+- [Run a program](cli-run.md): simulate a ported example, then run it.
+- [Glossary](../concepts/glossary.md): the words these pages use, in plain terms.
