@@ -9,6 +9,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, it } from "node:test";
 
+import { local } from "../../src/testing/index.js";
 import { freePort, rpc, startAnvil, type AnvilProcess } from "../../src/testing/node.js";
 import { anvilMissing } from "./support.js";
 
@@ -81,5 +82,17 @@ describe("startAnvil", { skip: anvilMissing() }, () => {
       startAnvil(["--chain-id", "not-a-number"]),
       /anvil exited with code \d+: .+/,
     );
+  });
+});
+
+describe("an anvil that is not there", () => {
+  it("is named, with where to get Foundry's, rather than a bare ENOENT", async () => {
+    const missing = "/nonexistent/sauce-testing/anvil";
+    const named = new RegExp(
+      `${missing} was not found: the testing kit runs chains on Foundry's anvil`,
+    );
+    await assert.rejects(startAnvil([], { binary: missing }), named);
+    // As `local()` and `fork()` take it.
+    await assert.rejects(local({ anvil: missing }), named);
   });
 });
