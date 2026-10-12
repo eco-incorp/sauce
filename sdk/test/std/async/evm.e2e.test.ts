@@ -1481,6 +1481,43 @@ function main(hash: Uint256, signature: bytes): Uint256 {
     },
   );
 
+  itSettling(
+    "an already-settled promise's .catch runs for its body's revert: the body undone, the program going on",
+    async () => {
+      const body = keccak256(toHex("async.settled.body"));
+      const after = keccak256(toHex("async.settled.after"));
+      const source = (cond: string) => `import { Promise } from "@sauce/async";
+
+function main(bump: Uint256): void {
+  Promise.resolve(41)
+    .then((value) => {
+      evm.sstore(${body}, value + bump);
+      require(${cond}, "settled-body-failed");
+    })
+    .catch((e) => {
+      evm.sstore(${CAUGHT_SLOT}, crypto.keccak256(e));
+    });
+  evm.sstore(${after}, 7);
+}`;
+      await setSlot(CAUGHT_SLOT, 0n);
+      // The body reverts: what it wrote is undone, the .catch is handed its revert, and the
+      // program goes on after the promise.
+      const failed = await cook(compiled(source("ctx.blockNumber() == 0"), [1n]));
+      expect(failed.ok).toBe(true);
+      expect(await slot(body)).toBe(word(0n));
+      expect(await slot(CAUGHT_SLOT)).toBe(keccak256(toHex("settled-body-failed")));
+      expect(await slot(after)).toBe(word(7n));
+      // The body succeeds: it keeps what it wrote, with what it captured, and the .catch does not run.
+      await setSlot(CAUGHT_SLOT, 0n);
+      await setSlot(after, 0n);
+      const kept = await cook(compiled(source("ctx.blockNumber() > 0"), [1n]));
+      expect(kept.ok).toBe(true);
+      expect(await slot(body)).toBe(word(42n));
+      expect(await slot(CAUGHT_SLOT)).toBe(word(0n));
+      expect(await slot(after)).toBe(word(7n));
+    },
+  );
+
   itAlways(
     "sauce tx and sauce simulate send a program whose handlers are in place compiled to carry none",
     async () => {

@@ -1097,7 +1097,8 @@ export class Request {
 
 // A promise already settled: `Promise.resolve(value)` fulfilled with a word,
 // `Promise.reject(reason)` rejected with bytes. Composes with the combinators; on its own, its
-// body runs where it is written.
+// body runs where it is written, and with a `.catch` in a frame of its own, so that the handler runs
+// for the body's revert, as it does for a settled continuation's.
 class Settled {
   _body;
   _handler;
@@ -1118,9 +1119,40 @@ class Settled {
   }
   [Symbol.dispose]() {
     if (this._state == SAUCE_ASYNC_FULFILLED) {
-      if (this._body !== undefined) {
-        const body = this._body;
+      if (this._body === undefined) {
+        return;
+      }
+      const body = this._body;
+      if (this._handler === undefined) {
         body(this._value);
+        return;
+      }
+      // With a `.catch`, the body runs as a settled continuation's does: in a frame of its own
+      // (`evm.delegate` into the engine in flight), so its revert undoes what it did, and the
+      // handler is handed the revert's data. The program goes on after it either way.
+      const handler = this._handler;
+      const continuation = program(
+        (input: bytes, mode: Uint256) => {
+          const [value] = abi.decode(input, ["Uint256"]);
+          body(value);
+        },
+        { continuation: chainId },
+      );
+      let failed = 0;
+      let reason = hex``;
+      evm
+        .delegate(
+          inFlightEngine(),
+          continuation.code
+            .concat(continuation.args)
+            .concat(abi.encode(abi.encode(this._value), SAUCE_ASYNC_FULFILLED)),
+        )
+        .catch((e) => {
+          failed = 1;
+          reason = e;
+        });
+      if (failed == 1) {
+        handler(reason);
       }
       return;
     }

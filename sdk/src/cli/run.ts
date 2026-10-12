@@ -1531,6 +1531,18 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     io.stderr(
       `Filling, rehearsed on ${created.destination.slug} (as a solver will):\n${fill.text}\n\n`,
     );
+    // A fill that reverts there would lock the reward in an intent no solver can fill: nothing is
+    // approved, funded or published, whatever --yes says.
+    if (fill.exitCode !== undefined && fill.exitCode !== 0) {
+      return {
+        ...fill,
+        exitCode: 1,
+        notes: [
+          `${created.file} is written, and not published: its fill reverts on ` +
+            `${created.destination.slug}, so no solver could fill it`,
+        ],
+      };
+    }
   }
   if (account === undefined) {
     return {
