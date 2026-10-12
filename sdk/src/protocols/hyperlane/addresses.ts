@@ -60,3 +60,20 @@ export const deployments: ChainDeployment[] = [
     },
   },
 ];
+
+/**
+ * Hyperlane DOMAIN ids (the `destinationDomain` of `dispatch`, and the `origin` a recipient's
+ * `handle` is given), keyed by canonical chain slug. Each is the mailbox's own `localDomain()`, read
+ * on-chain 2026-10-08, and on every chain here it equals the chain id; a chain added here whose
+ * domain differs is written as its mailbox answers.
+ */
+export const HYPERLANE_DOMAIN: Readonly<Record<string, number>> = {
+  arc: 5042,
+  ethereum: 1,
+  arbitrum: 42161,
+  optimism: 10,
+  base: 8453,
+  polygon: 137,
+  avalanche: 43114,
+  bsc: 56,
+};

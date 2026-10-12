@@ -597,6 +597,14 @@ any account may send the first, only the owner the second. `sauce_wallet_send` s
 whole, rehearsing both together and holding them to the wallet's policy before it sends either. On
 Solana the same transaction creates the Pot ahead of the cook (`createsPot`).
 
+A program that sends a remote message to another chain (`@sauce/remote`) needs the owner's Pot
+there ready first. `sauce_tx` reads it and lists what is missing ahead of the cook, each entry with
+that chain's `chainId`: the Pot's deployment, the bridge's receiver installed by an owner's cook,
+and the Kitchen's fee for each message and each answer's quoted fee sent to the Pot (`quoted` says
+how much of it is quoted). `sauce_wallet_send` sends a plan on several chains chain by chain, in its
+order, each chain's part rehearsed and held to the policy on that chain, and stops at the first that
+fails.
+
 The other transactions:
 
 - `sauce_pot`'s deployment, by hand, can be sent from any account.
@@ -655,7 +663,8 @@ The wallet tools, besides every other tool:
   If any would revert, it refuses and sends nothing. It holds them to the wallet's
   [policy](cli.md#a-wallets-policy) and refuses, naming the limit, what the policy does not allow.
   Then it sends each in order, through the same path `sauce run` uses, and stops at the first that
-  does not succeed. It returns each one's `hash` (on Solana, its signature) and `status`, with
+  does not succeed. A plan on several chains is sent the same way chain by chain, in its order;
+  each entry it returns names its `chain`. It returns each one's `hash` (on Solana, its signature) and `status`, with
   `explorer` and `trace` beside it: the chain's explorer page and the transaction's trace on
   BlockSec's Phalcon explorer (calls, balance changes and fund flow), links for the user to open.
   For a cook on an EVM chain it adds what its receipt shows: `moves`, in order and by role,

@@ -1,0 +1,34 @@
+{
+  "$comment": "Hyperlane's Mailbox quoteDispatch with hook metadata, as the registry declares it (protocols/hyperlane/HyperlaneMailboxABI.json, evidenced on every chain the registry lists): the fee a dispatch with that metadata must send. @hyperlane-xyz/core contracts/Mailbox.sol.",
+  "abi": [
+    {
+      "name": "quoteDispatch",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "recipientAddress",
+          "type": "bytes32"
+        },
+        {
+          "name": "messageBody",
+          "type": "bytes"
+        },
+        {
+          "name": "defaultHookMetadata",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "fee",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

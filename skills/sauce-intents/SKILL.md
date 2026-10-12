@@ -38,6 +38,9 @@ the shared Pot it runs on holds, which is not this intent's to spend.
 Nothing about the fill is guaranteed: a solver decides whether the reward is worth it, and the
 package prices nothing. Say an intent is _offered_, never that it _will execute_.
 
+To run code on your **own** Pot on another chain, with its storage and balances, rather than on the
+shared Pot an intent's body runs on, send a remote message over a bridge instead (`sauce-remote`).
+
 ## Supported chains
 
 For the initial release, intents are published, and every step of their life sent, only between

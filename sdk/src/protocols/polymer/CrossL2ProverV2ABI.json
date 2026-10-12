@@ -1,0 +1,62 @@
+{
+  "abi": [
+    {
+      "type": "function",
+      "name": "validateEvent",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "proof",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chainId",
+          "type": "uint32"
+        },
+        {
+          "name": "emittingContract",
+          "type": "address"
+        },
+        {
+          "name": "topics",
+          "type": "bytes"
+        },
+        {
+          "name": "unindexedData",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "inspectLogIdentifier",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "proof",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "srcChain",
+          "type": "uint32"
+        },
+        {
+          "name": "blockNumber",
+          "type": "uint64"
+        },
+        {
+          "name": "receiptIndex",
+          "type": "uint32"
+        },
+        {
+          "name": "logIndex",
+          "type": "uint32"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "name": "@sauce/remote",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript remote messages: a program on one chain runs code on the same Private Pot on another, over Hyperlane, Metalayer, LayerZero V2 or Polymer, and with a `.then` gets what it returned back. The class composes both legs while compiling, on @sauce/async's Request; the handlers a Pot installs per bridge (`handlers`, one per selector, each only on a chain with its bridge's contract) check the bridge's contract and that the sender is the same Pot. `main` names the NEUTRAL BASE the compiler suffixes per target (remote.evm.js); there is no SVM arm, because the bridges and the handler a Pot's Router runs are EVM contracts.",
+  "main": "remote.js",
+  "handlers": [
+    {
+      "selector": "handle(uint32,bytes32,bytes)",
+      "program": "hyperlane.handler.js",
+      "requires": [
+        "Hyperlane.Mailbox"
+      ]
+    },
+    {
+      "selector": "handle(uint32,bytes32,bytes,(uint32,address,bytes)[],bytes[])",
+      "program": "metalayer.handler.js",
+      "requires": [
+        "Metalayer.Router"
+      ]
+    },
+    {
+      "selector": "lzReceive((uint32,bytes32,uint64),bytes32,bytes,address,bytes)",
+      "program": "layerzero.handler.js",
+      "requires": [
+        "Layerzero.EndpointV2"
+      ]
+    },
+    {
+      "selector": "allowInitializePath((uint32,bytes32,uint64))",
+      "program": "layerzero-path.handler.js",
+      "readOnly": true,
+      "requires": [
+        "Layerzero.EndpointV2"
+      ]
+    },
+    {
+      "selector": "nextNonce(uint32,bytes32)",
+      "program": "layerzero-nonce.handler.js",
+      "readOnly": true,
+      "requires": [
+        "Layerzero.EndpointV2"
+      ]
+    },
+    {
+      "selector": "deliver(bytes)",
+      "program": "polymer.handler.js",
+      "requires": [
+        "Polymer.CrossL2ProverV2"
+      ]
+    }
+  ]
+}

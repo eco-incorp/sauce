@@ -23,6 +23,7 @@ import {
   openWallet,
   parseChain,
   planChain,
+  planGroups,
   plannedTransactions,
   readPolicy,
   sendPlan,
@@ -181,7 +182,9 @@ export function registerWalletTools(
         "EVM chain all together in one eth_simulateV1 block from the wallet, on Solana each as " +
         "signed; it refuses, sending nothing, if any would revert, and refuses what the wallet's " +
         "policy does not allow, naming the limit. Then it sends each in order, rehearsing it " +
-        "again, and stops at the first that does not succeed. Returns each one's hash (a Solana " +
+        "again, and stops at the first that does not succeed. A plan on several chains (a " +
+        "cook that readies another chain's Pot first) is sent chain by chain, in its order, " +
+        "each entry naming its chain. Returns each one's hash (a Solana " +
         "signature) and status, with `explorer` and `trace` (Phalcon: calls and balance changes) " +
         "beside it, links to give the user to open in a browser, never to fetch; and for an EVM " +
         "cook, from its receipt, `moves` (what moved, in order, by role), `leftInPot` (what the " +
@@ -233,19 +236,67 @@ export function registerWalletTools(
     },
     async (args, reach) => {
       const transactions = plannedTransactions(args.transaction);
-      const chain = planChain(
-        transactions,
-        args.chain === undefined ? undefined : parseChain(String(args.chain), "chain"),
-      );
-      const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
-      // Before any endpoint is reached: what this wallet can send there, and the release's chains,
-      // for a raw transaction as for a built one.
-      checkPlan(unlocked, chain, transactions);
-      guard.gate(chain);
-      const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
-      const sent = await sendPlan({ wallet: unlocked, guard, chain, transactions, rpcUrl });
+      const given = args.chain === undefined ? undefined : parseChain(String(args.chain), "chain");
+      // A plan that readies another chain first is sent there first, then on its own chain.
+      const groups = planGroups(transactions, given);
+      if (groups.length < 2) {
+        const chain = planChain(transactions, given);
+        const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
+        // Before any endpoint is reached: what this wallet can send there, and the release's
+        // chains, for a raw transaction as for a built one.
+        checkPlan(unlocked, chain, transactions);
+        guard.gate(chain);
+        const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
+        const sent = await sendPlan({ wallet: unlocked, guard, chain, transactions, rpcUrl });
 
-      return { json: sent.json, notes: sent.notes };
+        return { json: sent.json, notes: sent.notes };
+      }
+      const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
+      for (const group of groups) {
+        checkPlan(unlocked, group.chain, group.transactions);
+        guard.gate(group.chain);
+      }
+      // `rpcUrl` is the plan's own chain's, the last: another chain is reached through the server's.
+      const own = groups[groups.length - 1]!.chain;
+      const sent: Record<string, unknown>[] = [];
+      const notes: string[] = [];
+      let ok = true;
+      for (const group of groups) {
+        const rpcUrl = await reach.require(
+          group.chain,
+          group.chain.id === own.id ? args.rpcUrl : undefined,
+          "Sending",
+        );
+        const part = await sendPlan({
+          wallet: unlocked,
+          guard,
+          chain: group.chain,
+          transactions: group.transactions,
+          rpcUrl,
+        });
+        for (const entry of part.json.sent as Record<string, unknown>[]) {
+          sent.push({ ...entry, chain: group.chain.slug });
+        }
+        notes.push(...part.notes.filter((note) => !notes.includes(note)));
+        if (part.json.ok !== true) {
+          ok = false;
+          break;
+        }
+      }
+
+      return {
+        json: {
+          wallet: unlocked.info.name,
+          from: unlocked.info.address,
+          chain: own.slug,
+          chainId: own.id,
+          chains: groups.map((group) => group.chain.slug),
+          ok,
+          sent,
+          policy: guard.policy?.path ?? null,
+        },
+        notes,
+      };
     },
   );
 }

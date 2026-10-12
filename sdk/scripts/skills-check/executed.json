@@ -36,6 +36,11 @@
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
+    "sauce-remote/examples/block-height.sauce.ts": ["sdk/test/std/remote/evm.e2e.test.ts"],
+    "sauce-remote/examples/hello-world.sauce.ts": ["sdk/test/std/remote/evm.e2e.test.ts"],
+    "sauce-remote/examples/my-oapp.sauce.ts": ["sdk/test/std/remote/evm.e2e.test.ts"],
+    "sauce-remote/examples/pay-on-base.sauce.ts": ["sdk/test/std/remote/evm.e2e.test.ts"],
+    "sauce-remote/examples/state-sync.sauce.ts": ["sdk/test/std/remote/evm.e2e.test.ts"],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts"
     ],
