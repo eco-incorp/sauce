@@ -1351,19 +1351,30 @@ beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY
 needs anvil on `PATH`, and reads no environment: the RPC, block and state file are arguments.
 `fork(chain, { block, state, rpcUrl, mode })` replays a recorded state file, records one, or forks
 live (`state.ts`): record and replay are `actions/tests/mainnet.ts`' mechanism generalized — a
-recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv), a
-private HOME and `--no-storage-caching` for anvil, dev accounts' code cleared, the genesis written
+recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv),
+`--no-storage-caching` for anvil (no RPC cache, read or written), dev accounts' code cleared, the
+genesis written
 with the pinned block's own header in a gzipped `{ sauce: {...}, genesis }` file that must not
 mention the RPC. `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
 release or deploys it at the release addresses through `sdk/src/evm/release-stack.ts#deployReleaseStack`
 — the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too; it reads no file, so
 each caller passes the artifacts (the kit from `sdk/dist/artifacts`). `chain.ts`'s `TestChain` funds through `sdk/src/evm/balance-slot.ts` (the slot
 finder `--assume-balance` uses, moved out of `cli/` so the kit never imports the command), compiles
-through `compileSauceProgram`, decodes returns with `routes/returned.ts` and effects with
-`evm/effects.ts` (both moved out of `cli/` for the same reason). A Sauce `require`'s revert data is
-the message's own bytes, not `Error(string)`; `program.ts#reasonOf` reads both. The kit's suites
-(`test/testing/`, node:test) run `local()` and Base replayed from `test/testing/state/base.json.gz`;
-record it again as the actions suites do (`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`).
+through `compileSauceProgram` afresh on every call (a program is its whole import graph, so
+nothing is kept), decodes returns with `routes/returned.ts` by `main`'s declared type (a string stays
+a string) and effects with `evm/effects.ts` (both moved out of `cli/` for the same reason). `run`
+reports the transaction it mined: only the gas is estimated first (the block's limit when that
+reverts, so the cook is sent anyway), and `returned` or the revert comes from
+`debug_traceTransaction` of that transaction, never from a rehearsal on the block before;
+`simulate` is the rehearsal. A Sauce `require`'s revert data is the message's own bytes, not
+`Error(string)`; `program.ts#reasonOf` reads both, and a called contract's `Error`/`Panic` comes
+back through the cook unchanged. `node.ts` (anvil) and `state.ts` (the recorder) are the only
+shipped modules beside the command's that start a process, which `no-embedded-rpc.test.ts` lists;
+`optional-dependencies.test.ts` walks `/testing`'s graph with the other exports. The kit's suites
+(`test/testing/`, node:test) are `program.test.ts` (no chain), `local.test.ts`, `record.test.ts`
+(records from an anvil on the machine, then replays with it stopped) and Base replayed from
+`test/testing/state/base.json.gz`; record that again as the actions suites do
+(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`).
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
 
