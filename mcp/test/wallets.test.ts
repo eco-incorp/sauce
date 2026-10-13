@@ -13,6 +13,7 @@ import { after, before, describe, it } from "node:test";
 import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
+import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES, WALLET_UNSIGNED } from "../src/tools.js";
 import { WALLET_TOOL_NAMES } from "../src/wallets.js";
@@ -30,7 +31,7 @@ describe("a server without wallets", () => {
   it("has no wallet tool, and says nothing here signs", async () => {
     const { tools } = await mcp.client.listTools();
     assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
-    assert.match(mcp.client.getInstructions() ?? "", /NOTHING HERE SIGNS OR SENDS/);
+    assert.match(mcp.client.getInstructions() ?? "", /NOTHING HERE SIGNS\./);
     assert.ok(tools.every((tool) => !(tool.description ?? "").includes("sauce_wallet_send")));
   });
 });
@@ -80,7 +81,13 @@ describe("a server with wallets", () => {
     const { tools } = await mcp.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
-      [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...WALLET_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+      [
+        ...TOOL_NAMES,
+        ...INTENT_TOOL_NAMES,
+        ...SEND_TOOL_NAMES,
+        ...WALLET_TOOL_NAMES,
+        ...SKILL_TOOL_NAMES,
+      ],
     );
     for (const tool of tools) {
       for (const field of Object.keys(tool.inputSchema.properties ?? {})) {

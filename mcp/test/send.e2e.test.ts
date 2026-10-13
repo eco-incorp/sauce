@@ -1,0 +1,225 @@
+/**
+ * The whole path through the tools alone, with a signer the server never sees: sauce_tx builds,
+ * the test signs (a throwaway key standing in for a KMS or a hardware wallet), sauce_send
+ * broadcasts and reports.
+ *
+ * Ethereum, an anvil running the released gated stack (`sdk/test/cli-anvil.ts`): the plan for an
+ * owner with no Pot yet — Kitchen.deployPot, then the cook — signed with consecutive nonces and
+ * sent in one call. Solana, the released Kitchen and engine in LiteSVM behind
+ * `sdk/test/svm/rpc-shim.ts`, which checks every signature it is sent: the one-transaction cook,
+ * its Pot created in it, signed by the owner's keypair.
+ *
+ * GATED on SAUCE_V12_RUNTIME_CREATION_HEX and on the engine artifacts respectively, like every
+ * execution suite.
+ */
+import assert from "node:assert/strict";
+import { after, before, describe, it } from "node:test";
+
+import {
+  address,
+  generateKeyPairSigner,
+  getAddressCodec,
+  getBase64Encoder,
+  getBase64EncodedWireTransaction,
+  getTransactionDecoder,
+  lamports,
+  signTransaction,
+  type Address as SvmAddress,
+  type KeyPairSigner,
+} from "@solana/kit";
+import { bytesToHex, hexToBigInt, type Address, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
+import { derivePotPda } from "../../sdk/dist/svm/index.js";
+import {
+  fixture,
+  registered,
+  RUNTIME_HEX_PATH,
+  startChain,
+  type LocalChain,
+} from "../../sdk/test/cli-anvil.js";
+import {
+  ENGINE_SO,
+  randomAddress,
+  setMint,
+  setTokenAccount,
+  startEngine,
+  svmArtifactsPresent,
+  TOKEN_PROGRAM,
+  tokenAmount,
+  type EngineHarness,
+} from "../../sdk/test/svm/engine-harness.js";
+import { solanaShim, type SolanaShim } from "../../sdk/test/svm/rpc-shim.js";
+import { connect, endpointsFor, ok, type Connected } from "./harness.js";
+
+const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
+const AMOUNT = 1_000_000n;
+const PAY = [
+  "function main(recipient: Address, amount: Uint256) {",
+  "  USDC.transfer(recipient, amount);",
+  "}",
+  "",
+].join("\n");
+
+interface Unsigned {
+  readonly to: Address;
+  readonly data: Hex;
+  readonly value: string;
+}
+
+describe(
+  "sauce_tx, signed elsewhere, sent by sauce_send: Ethereum",
+  {
+    skip: RUNTIME_HEX_PATH === undefined,
+  },
+  () => {
+    let local: LocalChain;
+    let usdc: Address;
+    let mcp: Connected;
+    const signer = privateKeyToAccount(generatePrivateKey());
+
+    before(async () => {
+      local = await startChain("ethereum");
+      usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
+      await local.deployer.sendTransaction({
+        account: local.deployer.account!,
+        chain: null,
+        to: signer.address,
+        value: 10n ** 18n,
+      });
+      mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
+    });
+    after(async () => {
+      await mcp?.close();
+      await local?.stop();
+    });
+
+    it("deploys the Pot and cooks on it, from the plan sauce_tx built", async () => {
+      const plan = ok(
+        await mcp.call("sauce_tx", {
+          source: PAY,
+          chain: "ethereum",
+          owner: signer.address,
+          args: [RECIPIENT, AMOUNT.toString()],
+        }),
+      ) as { pot: Address; transactions: Unsigned[] };
+      assert.equal(plan.transactions.length, 2);
+      await local.mint(usdc, plan.pot, AMOUNT);
+      const nonce = await local.publicClient.getTransactionCount({ address: signer.address });
+      const fees = await local.publicClient.estimateFeesPerGas();
+      const signed = await Promise.all(
+        plan.transactions.map((tx, index) =>
+          signer.signTransaction({
+            chainId: 1,
+            type: "eip1559",
+            to: tx.to,
+            data: tx.data,
+            value: BigInt(tx.value),
+            nonce: nonce + index,
+            gas: 1_000_000n,
+            maxFeePerGas: fees.maxFeePerGas * 2n,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+          }),
+        ),
+      );
+
+      const sent = ok(await mcp.call("sauce_send", { transactions: signed })) as {
+        ok: boolean;
+        chain: string;
+        sent: Array<Record<string, unknown>>;
+      };
+
+      assert.equal(sent.ok, true);
+      assert.equal(sent.chain, "ethereum");
+      assert.deepEqual(
+        sent.sent.map((each) => each.status),
+        ["success", "success"],
+      );
+      assert.match(String(sent.sent[0]!.what), /deployPot/);
+      assert.equal(sent.sent[1]!.what, `cook on Pot ${plan.pot}`);
+      assert.ok(Array.isArray(sent.sent[1]!.moves));
+      assert.equal(await local.balanceOf(usdc, RECIPIENT), AMOUNT);
+      assert.ok(mcp.received.every((text) => !text.includes(local.rpcUrl)));
+    });
+  },
+);
+
+const SOLANA_URL = "http://127.0.0.1:65532/";
+const SWEEP = [
+  "function main(tokenProgram: Account, source: Account<Writable>, dest: Account<Writable>, authority: Account<Signer>, amount: Uint256): Uint256 {",
+  "  transfer(MINT, tokenProgram, source, dest, authority, amount);",
+  "  return amount;",
+  "}",
+  "",
+].join("\n");
+
+describe(
+  "sauce_tx, signed elsewhere, sent by sauce_send: Solana",
+  {
+    skip: !svmArtifactsPresent,
+  },
+  () => {
+    let harness: EngineHarness;
+    let shim: SolanaShim;
+    let mcp: Connected;
+    let owner: KeyPairSigner;
+    let source: SvmAddress;
+    let dest: SvmAddress;
+    const mint = randomAddress();
+
+    before(async () => {
+      harness = await startEngine(
+        1_700_000_000n,
+        ENGINE_SO as string,
+        address(v12SvmEngineProgramId()),
+      );
+      owner = await generateKeyPairSigner();
+      harness.svm.airdrop(owner.address, lamports(5_000_000_000n));
+      setMint(harness, mint, 6);
+      const pot = (
+        await derivePotPda(address(v12SvmKitchenProgramId()), owner.address, new Uint8Array(32))
+      ).address;
+      source = setTokenAccount(harness, randomAddress(), mint, pot, 1_000n);
+      dest = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+      shim = solanaShim(harness.svm, SOLANA_URL);
+      shim.install();
+      mcp = await connect();
+    });
+    after(async () => {
+      shim?.restore();
+      await mcp?.close();
+    });
+
+    it("lands the cook sauce_tx built, signed by the owner, and reads back what it returned", async () => {
+      const built = ok(
+        await mcp.call("sauce_tx", {
+          source: SWEEP,
+          chain: "solana",
+          owner: owner.address,
+          defines: { MINT: bytesToHex(new Uint8Array(getAddressCodec().encode(mint))) },
+          accounts: { tokenProgram: TOKEN_PROGRAM, source, dest, authority: "pot" },
+          args: ["400"],
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { transaction: string; createsPot: boolean };
+      assert.equal(built.createsPot, true);
+      const signed = getBase64EncodedWireTransaction(
+        await signTransaction(
+          [owner.keyPair],
+          getTransactionDecoder().decode(getBase64Encoder().encode(built.transaction)),
+        ),
+      );
+
+      const sent = ok(
+        await mcp.call("sauce_send", { transactions: [signed], rpcUrl: SOLANA_URL }),
+      ) as { ok: boolean; sent: Array<Record<string, unknown>> };
+
+      assert.equal(sent.ok, true);
+      assert.equal(sent.sent[0]!.status, "success");
+      assert.equal(hexToBigInt(sent.sent[0]!.returns as Hex), 400n);
+      assert.equal(tokenAmount(harness, dest), 400n);
+      assert.deepEqual(Object.keys(shim.sent.at(-1)!.signatures), [owner.address]);
+    });
+  },
+);

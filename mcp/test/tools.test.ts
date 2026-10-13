@@ -22,6 +22,7 @@ import {
   settlePayload,
 } from "../../sdk/dist/verify/index.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
+import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { FLAG_INPUTS, flagInputLines, LISTED_FLAG_INPUTS } from "../src/terms.js";
@@ -76,18 +77,20 @@ after(async () => {
 });
 
 describe("the tool list", () => {
-  it("is every tool, each with an input and an output schema and read-only annotations", async () => {
+  it("is every tool, each with an input and an output schema, read-only but for sending", async () => {
     const { tools } = await mcp.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
-      [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+      [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SEND_TOOL_NAMES, ...SKILL_TOOL_NAMES],
     );
     for (const tool of tools) {
       assert.equal(tool.inputSchema.type, "object", `${tool.name} takes an object`);
       assert.equal(tool.outputSchema?.type, "object", `${tool.name} declares its output`);
       assert.ok((tool.description ?? "").length > 80, `${tool.name} says what it does`);
-      assert.equal(tool.annotations?.readOnlyHint, true, `${tool.name} is read-only`);
-      assert.equal(tool.annotations?.destructiveHint, false);
+      // The one tool that writes to a chain broadcasts what its caller signed.
+      const sends = (SEND_TOOL_NAMES as readonly string[]).includes(tool.name);
+      assert.equal(tool.annotations?.readOnlyHint, !sends, `${tool.name} is read-only`);
+      assert.equal(tool.annotations?.destructiveHint, sends);
       // No tool takes a key, under any name.
       const fields = Object.keys(tool.inputSchema.properties ?? {});
       for (const field of fields) {
@@ -98,7 +101,7 @@ describe("the tool list", () => {
 
   it("tells a client what the server is, that it never signs, and where the skills are", () => {
     const instructions = mcp.client.getInstructions() ?? "";
-    assert.match(instructions, /NOTHING HERE SIGNS OR SENDS/);
+    assert.match(instructions, /NOTHING HERE SIGNS\./);
     assert.match(instructions, /sauce:\/\/skills\/index/);
     assert.match(instructions, /has no endpoint of its own/);
     assert.match(instructions, /rpcUrl/);
