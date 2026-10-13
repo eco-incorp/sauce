@@ -116,6 +116,7 @@ import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } 
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
 import { publishCommand } from "./publish.js";
+import { reclaimCommand } from "./reclaim.js";
 import { sendCommand, signedChain } from "./send.js";
 import { simulateCommand } from "./simulate.js";
 import {
@@ -3138,6 +3139,104 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         chain,
         rpcUrl: requiredEndpoint(args, io, chain),
         ...(args.values.close === true ? { close: true } : {}),
+      });
+    },
+  },
+  reclaim: {
+    usage:
+      "sauce reclaim --chain solana (--owner <pubkey> | --keypair <path> | --wallet <name>) [--lookup-table <address>]… [--keep-tables] [--yes]",
+    summary: "List the code buffers and lookup tables a Solana owner left open, and close them",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain: solana" },
+      owner: {
+        type: "string",
+        value: "<pubkey>",
+        help: "Whose: with no key, the closing transactions come back unsigned",
+      },
+      "lookup-table": {
+        type: "string",
+        multiple: true,
+        value: "<address>",
+        help: "A lookup table to close (default: the owner's Sauce tables, scanned for)",
+      },
+      "keep-tables": {
+        type: "boolean",
+        help: "Close the code buffers only, and leave the lookup tables for later cooks",
+      },
+      wallet: SIGNER.wallet!,
+      ...WALLETS,
+      ...PASSWORD,
+      keypair: SIGNER.keypair!,
+      yes: YES,
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Lists what a Solana owner has open from its cooks, and the rent it holds: the Kitchen code",
+      "buffers a staged program ran from (a run closes its own, unless closing it failed; a plan",
+      "given up on, or never finished, leaves one), and the address lookup tables its accounts",
+      "went through (a run keeps each for the next cook naming the same accounts). The tables are",
+      "the owner's that hold the Kitchen's execution-fee config, which every Sauce cook's table",
+      "holds; a table the owner made otherwise is left alone, and --lookup-table names tables",
+      "outright, as some endpoints refuse to scan for them.",
+      "",
+      "A buffer closes in one transaction, its rent back at once. A table closes in two: it is",
+      "deactivated now, and closed once its deactivation slot has left the cluster's recent slot",
+      "hashes, 512 slots (about three and a half minutes) later: run the command again then. A",
+      "cook naming a deactivated table fails, so --keep-tables leaves them.",
+      "",
+      "With the owner's key (--keypair, or --wallet), it asks, then sends each transaction and",
+      "prints it; --yes sends without asking. With --owner alone it prints the transactions",
+      "unsigned, as JSON, for the owner to sign anywhere and send with sauce send.",
+      ...SUPPORTED_ONLY("Closes"),
+      "",
+      "Examples:",
+      "  sauce reclaim --chain solana --owner <pubkey>",
+      "  sauce reclaim --chain solana --keypair ~/.config/solana/id.json --yes",
+    ].join("\n"),
+    run: async (args, io) => {
+      const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
+      if (chain.kind !== "svm") {
+        throw new UsageError(
+          `sauce reclaim is Solana's: a cook on ${chain.slug} leaves no code buffer or lookup ` +
+            "table open",
+        );
+      }
+      const signer = hasSvmSigner(args, io) ? await keypairOf(args, io) : undefined;
+      const ownerFlag = stringFlag(args, "owner");
+      if (signer === undefined && ownerFlag === undefined) {
+        throw new UsageError("missing --owner <pubkey>, or the owner's --keypair or --wallet");
+      }
+      const owner = svmOwner(args, signer?.address);
+      // Before any endpoint is reached, when there is something to send.
+      if (signer !== undefined) requireSupported("closing what Sauce left open", [chain]);
+      const approver = approverOf(args, io);
+
+      return reclaimCommand({
+        owner,
+        rpcUrl: requiredEndpoint(args, io, chain),
+        lookupTables: repeatedFlag(args, "lookup-table").map((at) =>
+          parsePubkey("lookup-table", at),
+        ),
+        ...(args.values["keep-tables"] === true ? { keepTables: true } : {}),
+        ...(signer === undefined
+          ? {}
+          : {
+              signer,
+              approve: async (actions) => {
+                if (!approver.auto && !approver.canAsk) throw unapproved(actions, approver.why);
+                const agreed = await approver.approve(
+                  actions.join("; "),
+                  `${actions.join("; ")}: the rent comes back to ${owner}. Send? [y/N] `,
+                );
+                if (agreed !== true) {
+                  throw new CliError(
+                    "nothing was sent: run again and answer y, or pass --yes (-y)",
+                  );
+                }
+              },
+            }),
       });
     },
   },

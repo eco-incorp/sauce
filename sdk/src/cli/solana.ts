@@ -1995,11 +1995,11 @@ async function closePlanBuffer(
 
     return {
       sent,
-      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed in ${sent.signature}: ${sent.reason}); its rent stays there until it is closed`,
+      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed in ${sent.signature}: ${sent.reason}); its rent stays there until it is closed: sauce reclaim --chain solana closes it`,
     };
   } catch (error) {
     return {
-      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed: ${(error as Error).message.split("\n")[0]}); its rent stays there until it is closed`,
+      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed: ${(error as Error).message.split("\n")[0]}); its rent stays there until it is closed: sauce reclaim --chain solana closes it`,
     };
   }
 }
@@ -2179,7 +2179,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         : [
             `created lookup table ${table} holding the cook's ${plan.table!.addresses.length} ` +
               `accounts in ${tabled.length} transactions; a later cook naming them reuses it with ` +
-              `--lookup-table ${table}`,
+              `--lookup-table ${table}, and sauce reclaim closes it once none will`,
           ]),
       ...sentLines(direct ? "cook (direct to the engine)" : "cook", cook),
       ...(cook.ok ? [`execution fee: ${step.fee ?? prepared.fee} lamports`] : []),

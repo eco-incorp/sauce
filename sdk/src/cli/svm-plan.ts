@@ -1368,6 +1368,29 @@ export async function buildPlanTx(
   return transaction;
 }
 
+/** `txs` for a signer that is not this process: each built on one fresh blockhash, base64. */
+export async function signableTransactions(
+  txs: readonly PlanTx[],
+  ctx: StepContext,
+): Promise<{
+  readonly transactions: readonly SignableTx[];
+  readonly lastValidBlockHeight?: bigint;
+}> {
+  if (txs.length === 0) return { transactions: [] };
+  const { value: latest } = await ask(ctx.url, "the latest blockhash", () =>
+    ctx.rpc.getLatestBlockhash().send(),
+  );
+  const transactions = await Promise.all(
+    txs.map(async (tx) => ({
+      what: tx.what,
+      transaction: getBase64EncodedWireTransaction(await buildPlanTx(tx, ctx, latest)),
+      feePayer: ctx.signer.address,
+    })),
+  );
+
+  return { transactions, lastValidBlockHeight: latest.lastValidBlockHeight };
+}
+
 /**
  * A step's transactions for a signer that is not this process: each built on one fresh blockhash,
  * for the owner to sign, and the plan to carry on from — the cook, handed out, marked with the last
@@ -1381,24 +1404,14 @@ export async function signableStep(
   readonly lastValidBlockHeight?: bigint;
   readonly plan: SvmPlan;
 }> {
-  if (step.transactions.length === 0) return { transactions: [], plan: step.plan };
-  const { value: latest } = await ask(ctx.url, "the latest blockhash", () =>
-    ctx.rpc.getLatestBlockhash().send(),
-  );
-  const transactions = await Promise.all(
-    step.transactions.map(async (tx) => ({
-      what: tx.what,
-      transaction: getBase64EncodedWireTransaction(await buildPlanTx(tx, ctx, latest)),
-      feePayer: ctx.signer.address,
-    })),
-  );
+  const built = await signableTransactions(step.transactions, ctx);
   const cooks = step.transactions.some((tx) => tx.kind === "cook");
 
   return {
-    transactions,
-    lastValidBlockHeight: latest.lastValidBlockHeight,
-    plan: cooks
-      ? { ...step.plan, cook: { lastValidBlockHeight: latest.lastValidBlockHeight } }
-      : step.plan,
+    ...built,
+    plan:
+      cooks && built.lastValidBlockHeight !== undefined
+        ? { ...step.plan, cook: { lastValidBlockHeight: built.lastValidBlockHeight } }
+        : step.plan,
   };
 }

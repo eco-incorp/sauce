@@ -84,6 +84,7 @@ import {
   type ProgramInput,
   publishCommand,
   readPoolAt,
+  reclaimCommand,
   registeredBalances,
   requireSupported,
   resolvePriceTokens,
@@ -1082,6 +1083,7 @@ export const TOOL_NAMES = [
   "sauce_actions",
   "sauce_tx",
   "sauce_pot",
+  "sauce_reclaim",
   "sauce_simulate",
   "sauce_intent_publish",
   "sauce_inspect",
@@ -2065,6 +2067,69 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
         ],
       };
+    },
+  );
+
+  tool(
+    "sauce_reclaim",
+    {
+      title: "List and close a Solana owner's leftover code buffers and lookup tables",
+      description:
+        "Lists what a Solana owner has open from its cooks, and the rent it holds: the Kitchen " +
+        "code buffers a staged program ran from (a plan given up on, or never finished, leaves " +
+        "one) and the address lookup tables its accounts went through (the owner's tables " +
+        "holding the Kitchen's fee config, which every Sauce cook's table holds; lookupTables " +
+        "names tables outright, as some endpoints refuse the scan). Returns `buffers`, " +
+        "`lookupTables` (each `state`: active, deactivating with `closableFromSlot`, or " +
+        "closable), `lamports` in all, and `transactions`, base64 for the owner to sign, on one " +
+        "blockhash: each buffer's close (its rent back at once), each active table's " +
+        "deactivation, each closable table's close. A table closes in two steps a cluster keeps " +
+        "about 512 slots (three and a half minutes) apart: call again after the deactivation " +
+        "to get its close. keepTables leaves the tables, for later cooks naming the same " +
+        "accounts (a cook naming a deactivated table fails). Send the signed transactions with " +
+        `sauce_send. ${UNSIGNED} Solana only. ${SUPPORTED_ONLY}`,
+      input: {
+        chain: chainRef,
+        owner: z.string().min(32).max(64).describe("The owner: a base58 public key."),
+        lookupTables: z
+          .array(z.string().min(32).max(64))
+          .max(LIMITS.entries)
+          .optional()
+          .describe("Lookup tables to close, by address (default: the owner's, scanned for)."),
+        keepTables: z
+          .boolean()
+          .optional()
+          .describe("Close the code buffers only, and leave the lookup tables."),
+        rpcUrl: RPC_URL,
+      },
+      output: refusable({
+        owner: z.string(),
+        buffers: z.array(z.looseObject({ codeBuffer: z.string() })),
+        lookupTables: z.array(z.looseObject({ address: z.string(), state: z.string() })),
+        lamports: z.string(),
+        transactions: z.array(z.looseObject({ what: z.string(), transaction: z.string() })),
+      }),
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const chain = parseChain(String(args.chain), "chain");
+      if (chain.kind !== "svm") {
+        throw new UsageError(
+          `sauce_reclaim is Solana's: a cook on ${chain.slug} leaves no code buffer or lookup ` +
+            "table open",
+        );
+      }
+      requireSupported("closing what Sauce left open", [chain]);
+      const rpcUrl = await reach.require(chain, args.rpcUrl, "Reading the owner's accounts");
+
+      return fromCommand(
+        await reclaimCommand({
+          owner: parsePubkey("owner", args.owner),
+          rpcUrl,
+          lookupTables: (args.lookupTables ?? []).map((at) => parsePubkey("lookupTables", at)),
+          ...(args.keepTables === true ? { keepTables: true } : {}),
+        }),
+      );
     },
   );
 
