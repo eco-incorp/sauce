@@ -141,8 +141,9 @@ USDC; `--chain ethereum` gives the same file Ethereum's. What changes per call, 
 and `floor`, is a parameter of `main`, passed with the transaction (`--args`), so one compiled
 program serves every call. On Solana the same token methods compile too. A balance there belongs to
 a token account, so compiling adds the accounts each call moves through to `main`, and the command
-derives them from the owner, the Pot and main's arguments; every other account is an `Account`
-parameter attached with `--account` (`sauce-solana`).
+derives them from the owner, the Pot and main's arguments. Any other account is written where it
+is used (`Solana.pda(program, [seeds])`, `USDC.accountOf(holder)`), which compiling adds the same
+way, or taken as an `Account` parameter attached with `--account` (`sauce-solana`).
 
 On an EVM chain the executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and
 makes the calls. Token writes are SafeERC20 however they are spelled, so USDT works. On Solana the
@@ -367,13 +368,15 @@ and program bodies, cascades, on which chain each name resolves, and rehearsing 
 ### `sauce-solana`
 
 Programs for Solana: the token methods with the accounts they move through derived and checked,
-every other account an `Account` parameter with its roles, the account manifest, the Pot's key and
+any other account written where it is used or taken as an `Account` parameter, with its roles, the
+account manifest, the Pot's key and
 token accounts, `@sauce/token` for SPL Token and Token-2022 (and what each extension does to a
 program), CPIs and raw account reads, transaction size, and running through the Kitchen or directly
 on the engine.
 
 - **Holds** examples that pay USDC with `USDC.transfer(to, amount)` (one file for Base and
-  Solana), move a mint's tokens with the accounts written out, and move PYUSD with
+  Solana), wrap SOL into the Pot's WSOL through the System Program with every account written where
+  it is used, move a mint's tokens with the accounts written out, and move PYUSD with
   `transferChecked`.
 - **Load it** for any program compiled for Solana, beside the skill for the task: protocol
   namespaces do not exist there, and a token method's holders must be known before it runs.

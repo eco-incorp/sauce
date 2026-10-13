@@ -1,6 +1,6 @@
 ---
 name: sauce-solana
-description: Writing and running Sauce programs on Solana (the SVM target) — the token methods as on an EVM chain (USDC.transfer(to, amount), approve, transferFrom, USDC.balanceOf(ctx.self()), Token(mint)) with every account they move through derived and checked on chain, every other account an Account parameter with Writable/Signer roles, the account manifest, --account names, the @sauce/token arm for SPL Token and Token-2022 (reads, transferChecked, approveChecked, the legacy writes) and what Token-2022's extensions do to a program (fees, scaled UI amounts, pauses, frozen accounts, hooks), svm.call CPIs and svm.sload reads, a 32-byte key as an Address argument, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
+description: Writing and running Sauce programs on Solana (the SVM target) — the token methods as on an EVM chain (USDC.transfer(to, amount), approve, transferFrom, USDC.balanceOf(ctx.self()), Token(mint)) with every account derived and checked on chain, any other account written where it is used (Solana.pda(program, seeds), USDC.accountOf(holder), Solana.systemProgram, .writable()) or taken as an Account parameter with Writable/Signer roles, the account manifest, --account names, the @sauce/token arm for SPL Token and Token-2022 and what Token-2022's extensions do to a program (fees, scaled UI amounts, pauses, frozen accounts, hooks), svm.call CPIs and svm.sload reads, and how a program runs with sauce run --chain solana, on the owner's Pot or on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
 ---
 
 # Sauce on Solana
@@ -10,7 +10,9 @@ A Solana program must declare every account it touches before it runs. In SauceS
 **account manifest**, and each is attached when the program runs. A program for Solana is compiled
 with `--chain solana`, and its signatures are annotated. A registered token symbol (`USDC`, `USDT`,
 `WSOL`, `PYUSD`, the tokenized stocks) has the same methods as on an EVM chain, and compiling adds
-the accounts they move through to `main` for you. Protocol namespaces do not exist on Solana.
+the accounts they move through to `main` for you; any other account can be written where it is used
+(`Solana.pda(program, [seeds])`, `USDC.accountOf(holder)`), and compiling adds it the same way.
+Protocol namespaces do not exist on Solana.
 `sauce globals --chain solana` lists the mints (devnet's too) and which of them are Token-2022 mints.
 
 ## The token methods
@@ -87,6 +89,78 @@ The methods lower to the `@sauce/token` functions below, which a program can als
 the accounts written out: to move tokens between accounts the transaction names some other way, or
 to keep every account in view.
 
+## Accounts where they are used
+
+For what the token methods do not cover, such as a call into another program or a read of an
+account a program derives, write each account where it is used. Compiling adds it to `main` with its
+`derive`, as it does for the token methods, so the program still runs with `--args` alone. This one
+wraps the owner's SOL into the Pot's WSOL account. It calls the System Program's transfer, then SPL
+Token's SyncNative:
+
+```sauce chain=solana
+function main(lamports: Uint256): Uint256 {
+  const potWsol = WSOL.accountOf(Solana.self).writable();
+  let transfer = hex`02000000`;
+  svm.call(
+    Solana.systemProgram,
+    [Solana.owner.writable().signer(), potWsol],
+    transfer.concat(lamports.toBytesLe(8)),
+  );
+  svm.call(Solana.tokenProgram, [potWsol], hex`11`);
+  return WSOL.balanceOf(ctx.self());
+}
+```
+
+```sh
+sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 1000000
+```
+
+| Expression                      | The account                                 | `derive`                              |
+| ------------------------------- | ------------------------------------------- | ------------------------------------- |
+| `Solana.pda(program, [seeds])`  | the address `program` derives for the seeds | `pda:<program>:<seeds>`               |
+| `Solana.account(key)`           | the account at a key                        | the key, or `@<parameter>`            |
+| `Solana.self`                   | the Pot (the signer with `--via engine`)    | `self`                                |
+| `Solana.owner`                  | the Pot's owner, who signs the cook         | `owner`                               |
+| `Solana.systemProgram`          | the System Program                          | its id                                |
+| `Solana.tokenProgram`           | SPL Token                                   | its id                                |
+| `Solana.token2022Program`       | Token-2022                                  | its id                                |
+| `Solana.associatedTokenProgram` | the Associated Token Account program        | its id                                |
+| `Solana.memoProgram`            | the Memo program                            | its id                                |
+| `USDC.accountOf(holder)`        | the holder's associated USDC account        | `self:USDC`, `owner:USDC`, `@to:USDC` |
+| `USDC.mint`                     | USDC's mint                                 | `mint:USDC`                           |
+| `USDC.tokenProgram`             | the token program that owns the mint        | its id                                |
+
+- **Roles.** Each account is read-only. `.writable()` and `.signer()` give it the role a call
+  needs, and they chain: `Solana.owner.writable().signer()`. An account written more than once is
+  one slot, with every role any of its uses gives it.
+- **Known when the transaction is built.** The command derives each account as it builds the cook,
+  so a program, key or holder is one of:
+  - a parameter of `main` declared `Address`;
+  - a 32-byte key written out;
+  - `ctx.self()`, `Solana.self` or `Solana.owner`;
+  - a program account such as `Solana.tokenProgram`.
+
+  A seed can be any of those, and also:
+  - a token symbol or `USDC.mint` (the mint's key);
+  - a string of 32 bytes at most;
+  - `.toBytesLe(n)` of an integer parameter or literal, with `n` 1, 2, 4, 8 or 16;
+  - ``hex`…` ``.
+
+  A seed computed as the program runs is refused. Take that account as an `Account` parameter of
+  `main` instead (below).
+
+- **Each slot's name.** A slot is named for what it holds: `systemProgram`, `potWSOL`, `toUSDC`.
+  An address `Solana.pda` derives is named for the constant it initializes (`destPda` for
+  `const dest`), else for its first string seed (`statePda` for `"state"`). `sauce compile --json` lists every slot with its `derive`, and
+  `--account NAME=<value>` replaces one.
+- **Where they can stand.** In `main` itself, as with the token methods.
+- **The account is the one attached.** `sauce run`, `simulate` and `tx` attach what the expression
+  derives. A transaction built another way can attach any account in that slot. The token methods
+  check their accounts on chain; an account written this way is checked only by what the program
+  checks itself (its `.address`, `.owner`, its bytes) and by what the program it calls checks.
+
+[examples/wrap.sauce.ts](examples/wrap.sauce.ts) is the program above.
+
 ## The accounts written out
 
 `@sauce/token`'s functions take the mint first, then the accounts, with no import. A registered
@@ -125,6 +199,7 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - Each slot is passed by its name: `--account NAME=<address>`, `NAME=pot` for the Pot, which the
   Kitchen signs for, or `NAME=owner` for the signer. Other names a slot can be given:
   - `self`: the Pot, or the signer with `--via engine`;
+  - `system`: the System Program;
   - `@to`: main's argument `to`;
   - `<holder>:<token>`: the holder's associated token account for a mint. The holder is `pot`,
     `owner`, `self`, `@to` or a base58 key; the token is a symbol, a base58 mint, or `@mint` for

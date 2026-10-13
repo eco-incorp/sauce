@@ -301,6 +301,46 @@ describeSvm("the token methods on Solana: every account derived by the command",
     });
   }, 120_000);
 
+  it("runs the sauce-solana wrap example as its header says: the owner's SOL into the Pot's WSOL", async () => {
+    const file = join(HERE, "../../skills/sauce-solana/examples/wrap.sauce.ts");
+    const header = readFileSync(file, "utf8")
+      .split("\n")
+      .filter((one) => one.startsWith("//"))
+      .map((one) => one.replace(/^\/\/\s*/, ""));
+    const line = header.find((one) => one.startsWith("sauce run wrap.sauce.ts --chain solana"))!;
+    const argv = line
+      .split(/\s+/)
+      .slice(1)
+      .map((word) => ({ "<keypair>": owner.path })[word] ?? word);
+    expect(argv).not.toContain("--account");
+    argv[1] = file;
+    // The native mint, as the cluster holds it.
+    const wsol = address(rowOf("WSOL").mint);
+    if (!harness.svm.getAccount(wsol).exists) {
+      const data = new Uint8Array(82);
+      data[44] = 9;
+      plantMint(wsol, data, TOKEN_PROGRAM);
+    }
+    const potWsol = await ataOf(wsol, pot, TOKEN_PROGRAM);
+    expect(harness.svm.getAccount(potWsol).exists).toBe(false);
+    const lamportsBefore = harness.svm.getBalance(owner.signer.address)!;
+
+    // The Pot's WSOL account is created first, as the header says, with --yes.
+    const out = json(await sauce(...argv, "--yes", "--rpc-url", SOLANA_URL, "--json"));
+    expect(out).toMatchObject({ cook: { status: "success" } });
+    expect(tokenAmount(harness, potWsol)).toBe(1_000_000n);
+    // The owner paid the lamports wrapped, the account's rent and the fees.
+    expect(lamportsBefore - harness.svm.getBalance(owner.signer.address)!).toBeGreaterThan(
+      1_000_000n,
+    );
+
+    // Run again, the account there, the simulation returns the balance the cook leaves.
+    expect(json(await simulate(file, "--args", "500"))).toMatchObject({
+      ok: true,
+      returned: "1000500",
+    });
+  }, 120_000);
+
   it("`sauce compile --json` lists each added account with how it is derived", async () => {
     const file = program(
       "pay",
