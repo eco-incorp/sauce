@@ -691,4 +691,85 @@ describeSvm("the token methods on Solana: every account derived by the command",
     expect(tokenAmount(harness, toOther)).toBe(20_000n);
     expect(tokenAmount(harness, potOther)).toBe(30_000n);
   }, 120_000);
+
+  it("writes each account where it is used: a hand-built SPL Token transfer runs with --args alone", async () => {
+    const file = program(
+      "accounts-spl",
+      "function main(to: Address, amount: Uint256): Uint256 {\n" +
+        "  const dest = Solana.pda(Solana.associatedTokenProgram, [to, Solana.tokenProgram, USDC]).writable();\n" +
+        "  let data = hex`03`;\n" +
+        "  svm.call(USDC.tokenProgram, [\n" +
+        "    USDC.accountOf(ctx.self()).writable(),\n" +
+        "    dest,\n" +
+        "    Solana.self.signer(),\n" +
+        "  ], data.concat(amount.toBytesLe(8)));\n" +
+        "  return svm.sload(dest, 64, 8).toLe();\n" +
+        "}\n",
+    );
+    const to = randomAddress();
+    const toUsdc = await account(usdc, to, 0n, TOKEN_PROGRAM, 6);
+    const held = tokenAmount(harness, potUsdc);
+
+    // What the command derives: the recipient's account as the ATA program's address, the rest by name.
+    const compiled = json(
+      await sauce("compile", file, "--chain", "solana", "--json", "--args", to, "250"),
+    ) as { manifest: { accounts: { name: string; derive?: string }[] } };
+    expect(
+      Object.fromEntries(compiled.manifest.accounts.map((slot) => [slot.name, slot.derive])),
+    ).toEqual({
+      destPda: `pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:@to,${TOKEN_PROGRAM},mint:USDC`,
+      tokenProgram: TOKEN_PROGRAM,
+      potUSDC: "self:USDC",
+      pot: "self",
+    });
+
+    // The simulation reads back what arrived; the run moves it.
+    expect(json(await simulate(file, "--args", to, "250"))).toMatchObject({
+      ok: true,
+      returned: "250",
+    });
+    const out = json(await run(file, "--args", to, "250"));
+    expect(out).toMatchObject({ pot, cook: { status: "success" } });
+    expect(tokenAmount(harness, toUsdc)).toBe(250n);
+    expect(tokenAmount(harness, potUsdc)).toBe(held - 250n);
+  }, 120_000);
+
+  it("moves PYUSD by a hand-built transferChecked: its mint and Token-2022 named by the symbol", async () => {
+    const file = program(
+      "accounts-2022",
+      "function main(to: Address, amount: Uint256) {\n" +
+        "  let data = hex`0c`;\n" +
+        "  svm.call(PYUSD.tokenProgram, [\n" +
+        "    PYUSD.accountOf(ctx.self()).writable(),\n" +
+        "    PYUSD.mint,\n" +
+        "    PYUSD.accountOf(to).writable(),\n" +
+        "    Solana.self.signer(),\n" +
+        "  ], data.concat(amount.toBytesLe(8)).concat(hex`06`));\n" +
+        "}\n",
+    );
+    const potPyusd = await account(pyusd, pot, 1_000n, TOKEN_2022_PROGRAM, 6);
+    const held = tokenAmount(harness, potPyusd);
+    const to = randomAddress();
+    const toPyusd = await account(pyusd, to, 0n, TOKEN_2022_PROGRAM, 6);
+
+    expect(json(await run(file, "--args", to, "125"))).toMatchObject({
+      cook: { status: "success" },
+    });
+    expect(tokenAmount(harness, toPyusd)).toBe(125n);
+    expect(tokenAmount(harness, potPyusd)).toBe(held - 125n);
+  }, 120_000);
+
+  it("derives an address from its program and seeds as the cook is built: the Pot, from the Kitchen", async () => {
+    const file = program(
+      "accounts-pda",
+      "function main(kitchen: Address, salt: Uint256): Uint256 {\n" +
+        '  const found = Solana.pda(kitchen, ["pot", Solana.owner, salt.toBytesLe(16), salt.toBytesLe(16)]);\n' +
+        '  require(found.address == Solana.self.address, "not the Pot");\n' +
+        "  return found.dataLen;\n" +
+        "}\n",
+    );
+    const out = json(await simulate(file, "--args", KITCHEN, "0"));
+    expect(out).toMatchObject({ ok: true });
+    expect(Number(out.returned)).toBe(harness.svm.getAccount(pot).data.length);
+  }, 120_000);
 });

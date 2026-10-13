@@ -60,10 +60,21 @@ describe("accounts as expressions on Solana", () => {
         "  return vault.dataLen;\n}\n",
     );
     expect(program.derivedAccounts).toEqual({
-      vaultStatePda:
+      vaultPda:
         'pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:"vault-state",@owner,self,owner,self,' +
         `mint:USDC,mint:USDC,TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA,u64:@index,u16:7,${base58},0x0102`,
     });
+  });
+
+  it("names an address for the constant it initializes, else its first string seed", () => {
+    const program = compile(
+      "function main(to: Address, program: Address): Uint256 {\n" +
+        "  const dest = Solana.pda(Solana.associatedTokenProgram, [to, Solana.tokenProgram, USDC]).writable();\n" +
+        '  return dest.dataLen + Solana.pda(program, [to, "fee-vault"]).dataLen + Solana.pda(program, [to]).dataLen;\n' +
+        "}\n",
+    );
+    expect(Object.keys(program.derivedAccounts!)).toEqual(["destPda", "feeVaultPda", "pda3"]);
+    expect(program.source).toContain("const dest = destPda;");
   });
 
   it("is one parameter however often it is written, its role every role any use gives it", () => {

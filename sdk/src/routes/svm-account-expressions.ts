@@ -117,6 +117,30 @@ export function collectAccountExpressions(l: SvmLowering): void {
   let literalAccounts = 0;
   let pdas = 0;
 
+  /** The name of the variable an account expression initializes, its roles given or not. */
+  const boundName = (node: AstNode): string | undefined => {
+    let at = node;
+    for (;;) {
+      const member = parents.get(at);
+      const call = member === undefined ? undefined : parents.get(member);
+      if (
+        member?.type !== "MemberExpression" ||
+        member.object !== at ||
+        call?.type !== "CallExpression" ||
+        call.callee !== member ||
+        (member.property as AstNode).type !== "Identifier" ||
+        !ROLES.has(nameOf(member.property as AstNode))
+      ) {
+        break;
+      }
+      at = call;
+    }
+    const declarator = parents.get(at);
+    const id = declarator?.type === "VariableDeclarator" ? (declarator.id as AstNode) : undefined;
+
+    return declarator?.init === at && id?.type === "Identifier" ? nameOf(id) : undefined;
+  };
+
   /** A program address: a parameter of `main` declared `Address`, a key, or a program account. */
   const programOf = (node: AstNode, spelled: string): string => {
     if (node.type === "Identifier" && l.param(nameOf(node))?.kind === "address")
@@ -267,8 +291,10 @@ export function collectAccountExpressions(l: SvmLowering): void {
           if (seeds.length === 0 || seeds.length > 16) {
             throw new Error(`${spelled} on Solana: an address derives from 1 to 16 seeds`);
           }
+          // Named for the constant it initializes, else its first string seed.
           const first = seeds.find((seed) => seed.startsWith('"'));
-          const stem = first === undefined ? undefined : stemOf(first.slice(1, -1));
+          const stem =
+            boundName(n) ?? (first === undefined ? undefined : stemOf(first.slice(1, -1)));
           pdas++;
 
           return {
