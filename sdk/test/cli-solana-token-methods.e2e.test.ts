@@ -352,6 +352,16 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const to = randomAddress();
     const toUsdc = await ataOf(usdc, to, TOKEN_PROGRAM);
 
+    // A rehearsal names it as the account the program was given, which a run creates.
+    const rehearsed = JSON.parse((await simulate(file, "--args", to, "5")).stdout) as {
+      missingAccounts?: string[];
+    };
+    expect(rehearsed.missingAccounts).toEqual([
+      `the account toUSDC: ${toUsdc} does not exist on solana (main's argument to's USDC ` +
+        "account: nothing has created it yet; `sauce run` creates it before the cook, asking " +
+        "first, or with --yes)",
+    ]);
+
     const refused = await sauce(
       ...["run", file, "--chain", "solana", "--rpc-url", SOLANA_URL, "--keypair", owner.path],
       ...["--args", to, "5"],

@@ -904,7 +904,12 @@ async function accountLabels(
  * fails, and SVM guards fail with no message, so this says which. A token account the Pot or the
  * owner has not had created yet says how one comes to be.
  */
-async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]): Promise<string[]> {
+async function missingAccounts(
+  rpc: Rpc,
+  url: string,
+  given: Prepared["given"],
+  derived: ReadonlySet<string> = new Set(),
+): Promise<string[]> {
   const named = Object.entries(given.accounts).filter(
     ([, value]) => value !== "pot" && value !== "owner",
   );
@@ -915,9 +920,16 @@ async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]):
   return named.flatMap(([name, value], index) => {
     if (there[index]) return [];
     const token = given.named.get(name);
+    // An account the token methods added, which `sauce run` creates before the cook.
+    if (derived.has(name) && token?.kind === "account") {
+      return [
+        `the account ${name}: ${value} does not exist on solana (${token.label}: nothing has ` +
+          "created it yet; `sauce run` creates it before the cook, asking first, or with --yes)",
+      ];
+    }
 
     return [
-      `--account ${name}: ${value} does not exist on solana` +
+      `${slotLabel(name, derived)}: ${value} does not exist on solana` +
         (token === undefined
           ? ""
           : token.kind !== "account"
@@ -928,6 +940,10 @@ async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]):
     ];
   });
 }
+
+/** How a note names a slot: by the `--account` that gave it, or as an account the SDK derived. */
+const slotLabel = (name: string, derived: ReadonlySet<string>): string =>
+  derived.has(name) ? `the account ${name}` : `--account ${name}`;
 
 /** The `sauce pot` that creates `target`'s Pot. */
 const createHint = (target: SvmTarget): string =>
@@ -1124,6 +1140,8 @@ interface Prepared {
   readonly manifest: AccountManifest;
   /** `--account`'s values with every `pot:<token>` resolved to its account. */
   readonly given: Awaited<ReturnType<typeof resolveTokenAccounts>>;
+  /** The slots the token methods added that no `--account` gave: the command derived each. */
+  readonly derived: ReadonlySet<string>;
   /** `--lookup-table`'s tables, each with the addresses it holds now. */
   readonly lookupTables: AddressesByLookupTableAddress;
 }
@@ -1197,7 +1215,26 @@ async function prepare(
   });
   const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, input.lookupTables ?? []);
 
-  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest, given, lookupTables };
+  const derived = new Set(
+    Object.keys(program.derivedAccounts ?? {}).filter(
+      (name) => !Object.hasOwn(input.accounts, name),
+    ),
+  );
+
+  return {
+    rpc,
+    via,
+    pot,
+    fee,
+    program,
+    bytecode,
+    client,
+    accounts,
+    manifest,
+    given,
+    derived,
+    lookupTables,
+  };
 }
 
 /** A staged cook's options: directly to the engine it is pinned to the staged bytes' digest. */
@@ -1473,7 +1510,12 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
       : undefined;
   // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
   const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
-  const missing = await missingAccounts(prepared.rpc, input.rpcUrl, prepared.given);
+  const missing = await missingAccounts(
+    prepared.rpc,
+    input.rpcUrl,
+    prepared.given,
+    prepared.derived,
+  );
   // What main returned: the engine's return data, read as the type main declares.
   const returns = result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
   const returnType = mainReturnType(input.text);
@@ -1668,8 +1710,9 @@ async function stagedRehearsal(
       0n,
     );
     notes.push(
-      `--account ${name}: ${token.label}, ${token.address}, does not exist on solana; the copy made ` +
-        "it empty, and `sauce run` creates it before the cook (asking first, or with --yes)",
+      `${slotLabel(name, prepared.derived)}: ${token.label}, ${token.address}, does not exist on ` +
+        "solana; the copy made it empty, and `sauce run` creates it before the cook (asking " +
+        "first, or with --yes)",
     );
   }
   const holder = direct ? owner : prepared.pot;
