@@ -208,7 +208,7 @@ The library checks `minOut`; what is left is the input a price limit left unspen
    body on the shared intent Pot, which holds nothing of anyone's (`sauce-intents`).
 
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
-Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):
+Simulate it, then run it, with the input in the Pot (or pulled in with `--fund`):
 
 ```sh
 sauce simulate swap-leg.sauce.ts --chain base --owner <address> \

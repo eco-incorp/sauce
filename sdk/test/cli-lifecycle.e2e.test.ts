@@ -891,8 +891,8 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(run.code).toBe(0);
     // What it made and rehearsed, before anything was sent.
     expect(run.stderr).toContain(`Wrote ${out}:`);
-    expect(run.stderr).toContain("Publishing, rehearsed on ethereum:");
-    expect(run.stderr).toContain("Filling, rehearsed on base (as a solver will):");
+    expect(run.stderr).toContain("Publishing, simulated on ethereum:");
+    expect(run.stderr).toContain("Filling, simulated on base (as a solver will):");
     expect(run.stderr).toMatch(/the solver's costs on base: ~250000 gas/);
     expect(readFileSync(out, "utf8")).toContain(
       `USDC.transfer(${RECIPIENT.toLowerCase()}, 1250000);`,

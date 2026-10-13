@@ -710,13 +710,13 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       }),
     ) as { ok: boolean; notes: string[] };
     assert.equal(late.ok, false);
-    assert.match(late.notes[0]!, /has passed: .* the rehearsal shows the Portal refusing it/);
+    assert.match(late.notes[0]!, /has passed: .* the simulation shows the Portal refusing it/);
     assert.doesNotMatch(late.notes[0]!, /--intent-deadline/);
 
     // The server has no endpoint of its own for the destination.
     assert.match(
       failed(await mcp.call("sauce_intent_fill", { ...args, dryRun: true })),
-      /Rehearsing a fill needs an RPC endpoint for base .* Pass rpcUrl with the call/,
+      /Simulating a fill needs an RPC endpoint for base .* Pass rpcUrl with the call/,
     );
 
     // Built, for a solver to sign: its approval, then the fill. No prover this server drives is on

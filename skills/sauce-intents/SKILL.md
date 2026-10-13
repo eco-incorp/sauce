@@ -1,6 +1,6 @@
 ---
 name: sauce-intents
-description: Cross-chain intents written in Sauce — a file that opens the intent, Base(() => { ... }).reward({ ... }) in main, its inputs main's parameters passed with --args; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each) (the intent hash, the per-intent vault, IntentPublished and IntentFunded, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascade children, quoted intents); amounts measured on chain; token-only bodies versus program bodies; the delivery; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; rehearsing both sides; and the deadline and creator every intent needs. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers, Executors or Pots.
+description: Cross-chain intents written in Sauce — a file that opens the intent, Base(() => { ... }).reward({ ... }) in main, its inputs main's parameters passed with --args; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each) (the intent hash, the per-intent vault, IntentPublished and IntentFunded, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascade children, quoted intents); amounts measured on chain; token-only bodies versus program bodies; the delivery; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; simulating both sides; and the deadline and creator every intent needs. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers, Executors or Pots.
 ---
 
 # Cross-chain intents in Sauce
@@ -26,7 +26,7 @@ package prices nothing. Say an intent is _offered_, never that it _will execute_
 For the initial release, intents are published, and every step of their life sent, only between
 **Ethereum, Base and Solana**, the chains Sauce supports transactions on. Every other chain in the
 registry is a **preview chain**: an intent that involves one still compiles, `sauce inspect` lists
-it, and `sauce intent publish --dry-run` and `sauce intent fill` without `--send` rehearse it, but
+it, and `sauce intent publish --dry-run` and `sauce intent fill` without `--send` simulate it, but
 the `sauce` command and its MCP server build and send none of its transactions. They refuse before
 anything is built, signed or sent:
 
@@ -110,7 +110,7 @@ sauce intent import <tx-hash> --chain <source>
 - `publish` with no file asks, at a terminal, for the chains, the token and amount delivered and
   to whom, the reward (suggested: what is delivered plus a margin over the solver's destination
   costs), the deadlines, the prover and how the reward is funded (a transfer to the vault by
-  default), writes the intent as a `.sauce.ts` file, rehearses publishing and filling it, and
+  default), writes the intent as a `.sauce.ts` file, simulates publishing and filling it, and
   publishes it once approved. Each question has a flag (`--source`, `--destination`, `--token`,
   `--amount`, `--recipient`, `--reward-token`, `--reward`, `--prover`, `--fill-deadline`,
   `--reward-deadline`, `--intent-fund-via`), so it runs without a terminal.
@@ -118,7 +118,7 @@ sauce intent import <tx-hash> --chain <source>
   cancelProven, claimed, refunded), its deadlines, and whether each next step can be taken now,
   with why not and from when. An intent funded by a transfer into its vault counts as funded,
   though the Portal's status for it stays Initial.
-- `fill --send` fills it as a solver, from the signer: rehearsed first on the signer's real
+- `fill --send` fills it as a solver, from the signer: simulated first on the signer's real
   balances and not sent if it reverts, and what it spends (each delivered token, and the value)
   shown for approval (`--yes` approves). It sends the approvals (zero first where a smaller one
   stands), then `fulfillAndProve` with the prover's fee, or `fulfill` with `--no-prove`. It prints
@@ -146,7 +146,7 @@ sauce intent cancel <intent-hash> --keypair <keypair>
 
 - `--claimant` is required: the address on the source chain the reward pays. A Solana key is not
   one.
-- The rehearsal runs on the solver's accounts as they are, since Solana's simulation takes no
+- The simulation runs on the solver's accounts as they are, since Solana's simulation takes no
   overrides: the solver must hold the route's tokens.
 - `fill --send` sends the fill, then the proof through the HyperProver, with Hyperlane's gas paid in
   the same transaction. Each spend is approved.
@@ -215,10 +215,10 @@ sauce intent publish pay-on-ethereum.sauce.ts --chain base --from <address> --fo
   --intent-deadline <unix seconds> --intent-creator <address> --args <address> 1000000
 ```
 
-- `--dry-run` rehearses the transfers and `publish` together from the wallet, then reports what
+- `--dry-run` simulates the transfers and `publish` together from the wallet, then reports what
   `isIntentFunded` returns after them, and sends nothing; `--assume-balance USDC:1` (whole tokens)
-  gives the wallet the reward for the rehearsal only, so a wallet that does not hold it yet can
-  rehearse. Without `--dry-run`, `--keystore <keystore>` in place of `--from` signs and sends them.
+  gives the wallet the reward for the simulation only, so a wallet that does not hold it yet can
+  simulate. Without `--dry-run`, `--keystore <keystore>` in place of `--from` signs and sends them.
 - `--format json` (or `cast`) with `--from` and no signer prints the transactions, unsigned, for that
   wallet to send in order, transfers first, with each intent's `vault`. The vault is also read
   from the Portal and only what it does not hold yet is transferred (with `--offline`, the vault is
@@ -437,7 +437,7 @@ prover deployed on both sides.
   Executor, and the deployments file above the Pot. **The Pot must exist before any fill**: until it
   does, every fulfilment of a program body reverts (`CallToEOA`). No one has to deploy it as a step
   of their own: `sauce intent fill` says whether it is deployed on the destination, and puts its
-  deployment first, in the rehearsal and in what `--send` sends, when it is not (any signer may
+  deployment first, in the simulation and in what `--send` sends, when it is not (any signer may
   send it; the Pot is the Executor's either way). By hand, `sauce pot --chain <destination> --owner <Executor>`
   prints its address and deploy transaction, and with `--deploy --keystore <keystore>` sends it;
   an existing one is reported, not redeployed. Anything left in the Pot after the program, token or allowance, belongs
@@ -447,16 +447,16 @@ prover deployed on both sides.
   in the destination's native coin, as the value of `fulfill`, and pays the destination gas too.
   Nothing in the reward pays either back, so the margin (the reward minus what the solver delivers)
   must cover both; a body that reads and swaps on many pools costs a lot of gas, so measure it in a
-  rehearsal (below). Solvers apply checks of their own, such as the reward covering the route's
+  simulation (below). Solvers apply checks of their own, such as the reward covering the route's
   tokens plus their fee, and decide which routes they fill.
 - **Refunds of unsold input land on the destination**, where the body runs.
 
-## Rehearse both sides before a solver does
+## Simulate both sides before a solver does
 
-- **The source side**: `sauce intent publish --dry-run --assume-balance …` (above) rehearses the transfers
-  into the vault and `publish`; `sauce simulate` rehearses a file run from a Pot.
+- **The source side**: `sauce intent publish --dry-run --assume-balance …` (above) simulates the transfers
+  into the vault and `publish`; `sauce simulate` does the same for a file run from a Pot.
 - **The fill, on the destination**: the body runs there, when a solver fills the intent, and that is
-  where a swap misses its minimum or a refund fails. Rehearse it with `sauce intent fill`, the same file
+  where a swap misses its minimum or a refund fails. Simulate it with `sauce intent fill`, the same file
   and flags, before publishing; it signs nothing and sends nothing:
 
 ```sh
@@ -469,19 +469,19 @@ On each intent's destination it runs, in one simulated block, what a solver send
 Pot's deployment when the body cooks on it and nobody has deployed it yet, the solver's approval
 of the destination Portal for the delivered tokens, then `Portal.fulfillAndProve` with the
 Kitchen's fee and the prover's fee as its value (or `Portal.fulfill` with the Kitchen's fee alone,
-with `--no-prove` or a prover it does not drive). The solver is given the delivered tokens for the rehearsal only. It prints each
+with `--no-prove` or a prover it does not drive). The solver is given the delivered tokens for the simulation only. It prints each
 transfer, each address's net change (an address one of `main`'s arguments holds is named by it) and what
 the shared Pot and the Executor were left holding, which must be nothing; or why the fill
 reverts, down to the body's own `require` message. It warns when the shared Pot is not deployed,
 and when `--intent-execution-fee` is below the destination Kitchen's fee, naming the fee to pass.
 It reads the destination chain (`--rpc-url`, for an endpoint of your own, works when every intent
 goes to one chain, and is then that chain's). An intent that uses a value measured on chain
-cannot be rehearsed this way: its route exists only once the program runs. Fix what it reports
-and rehearse again before `sauce intent publish` or `sauce run`. With `--send` and a signer,
+cannot be simulated this way: its route exists only once the program runs. Fix what it reports
+and simulate again before `sauce intent publish` or `sauce run`. With `--send` and a signer,
 `sauce intent fill` then fills it for real (above).
 
 - **The body alone, as a program**: copy the body (what is inside the braces) into a file of its own,
-  in a `main` taking the parameters it reads, and rehearse it as a program for the destination, with
+  in a `main` taking the parameters it reads, and simulate it as a program for the destination, with
   the delivered tokens assumed in the Pot. It runs on your Pot instead of the shared one, but
   executes the same calls, shows what moves, and gives the gas:
 
@@ -525,4 +525,4 @@ intent from TypeScript around a program it compiles itself (`sauce-typescript`).
 - [examples/intents.mts](examples/intents.mts) compiles the intent files, with the deadline, the
   creator, Base's and Ethereum's fees and the recipient as developer inputs, and pins on which chain
   each name resolves, the fee requirement, the token-only case, the pool ABI's selectors, and the
-  rehearsal's transactions: the Pot's deploy and `fulfill` with the fee as its value.
+  simulation's transactions: the Pot's deploy and `fulfill` with the fee as its value.

@@ -463,7 +463,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(unapproved.code).toBe(0);
       expect(unapproved.stderr).toContain(
         "USDC: Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may not move your tokens yet: " +
-          "sauce run asks to approve it first (--yes approves it), and the rehearsal runs " +
+          "sauce run asks to approve it first (--yes approves it), and the simulation runs " +
           "that approval before the cook",
       );
       expect(

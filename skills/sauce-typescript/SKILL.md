@@ -166,7 +166,7 @@ a recorded address, not proof of live code on the chain.
   `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
-  its deploy; the intents runner builds a rehearsal with them. For the source side,
+  its deploy; the intents runner builds a simulation with them. For the source side,
   `built.sourceTxs()` (`routes.intentSourceTxs` for an intent built some other way) is the
   funding and publication in order: a transfer of each reward token to the vault, then `publish`
   (`{ fundVia: "publishAndFund" }` for the approvals and `publishAndFund`). Pass `{ vault }` read with

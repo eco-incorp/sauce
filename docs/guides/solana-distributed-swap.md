@@ -134,7 +134,7 @@ the package makes resolves with no option, the `sauce` command's included. Its c
 //   minTokens: Uint256    the least buyToken to receive, in its base units; less reverts the cook
 //   maxAvgPrice: Uint256  the most the average may cost, in maxPrice's units; 0 turns it off
 //
-//   SOL for all of 1,000 USDC or nothing, at most 120 USDC each, rehearsed with no key:
+//   SOL for all of 1,000 USDC or nothing, at most 120 USDC each, simulated with no key:
 //   sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
 //     --accounts <accounts.json> --assume-balance USDC:1000 \
 //     --args 1000000000 120000000000000000 8333333334 0
@@ -346,9 +346,9 @@ whole budget buys at least `budget × 1e18 ÷ maxPrice`:
 - **To buy as much as fills within `maxPrice`**: `minTokens` is the least worth the fees, or `0`,
   and the rest of the budget comes back.
 
-**`maxAvgPrice`, from a rehearsal.** Rehearse with `maxAvgPrice` 0, read the average from what
+**`maxAvgPrice`, from a simulation.** Simulate with `maxAvgPrice` 0, read the average from what
 `main` returns (`spent × 1e18 ÷ bought`, in `maxPrice`'s units), and set `maxAvgPrice` halfway from
-that average to `maxPrice`, rounded up. A rehearsal averaging 119.5 USDC per SOL with `maxPrice`
+that average to `maxPrice`, rounded up. A simulation averaging 119.5 USDC per SOL with `maxPrice`
 120 gives 119.75, **119750000000000000**.
 
 **Getting the price right.** The reference is the best price a buyer pays, fee included, among
@@ -380,9 +380,9 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
 
 ## Running it
 
-Four steps, each a `sauce` command: find the pools, rehearse with no key, then send. Every
+Four steps, each a `sauce` command: find the pools, simulate with no key, then send. Every
 amount is base units but the command's token amounts. `--assume-balance <token>:<amount>` gives
-the account the cook spends that token from (the Pot's) that balance, in the rehearsal only, the
+the account the cook spends that token from (the Pot's) that balance, in the simulation only, the
 amount in whole tokens: `--assume-balance USDC:1000` is 1,000 USDC, and `USDC:1000000000n`, with
 a trailing `n`, the same in base units.
 
@@ -404,7 +404,7 @@ a trailing `n`, the same in base units.
    ```
 
    A pool deep enough may take the whole order, and the slots after it then trade nothing: that is
-   the program spending within the limit, not a slot wasted. A rehearsal whose slots are all the
+   the program spending within the limit, not a slot wasted. A simulation whose slots are all the
    System program trades nothing and returns the whole budget, so check what `bought` says.
 
 2. **Write the accounts** as one JSON object, which `--accounts` takes (each is also
@@ -446,7 +446,7 @@ a trailing `n`, the same in base units.
    `pot:USDC` keeps what is left in the Pot (the program then moves nothing back); `recipient` as
    `pot:WSOL` keeps what is bought there.
 
-3. **Rehearse**, with no key and nothing sent. The cook is past one transaction, so `sauce simulate`
+3. **Simulate**, with no key and nothing sent. The cook is past one transaction, so `sauce simulate`
    runs it in a local copy of every account it names, read from the cluster, with the released
    engine and Kitchen: the program staged as `sauce run` stages it, the Pot created there if it is
    missing, and the owner given the lamports the staging and the fees take: `--owner` is any wallet's
@@ -461,9 +461,9 @@ a trailing `n`, the same in base units.
      --args 1000000000 120000000000000000 0 0
    ```
 
-   Rehearse once with `minTokens` and `maxAvgPrice` 0 to read what fills and its average, once with
+   Simulate once with `minTokens` and `maxAvgPrice` 0 to read what fills and its average, once with
    `minTokens` above what filled, once with `maxAvgPrice` below the average; then set them by the
-   rules above. A rehearsal that reverts exits 1, its first line `The cook reverts: <reason>`, so
+   rules above. A simulation that reverts exits 1, its first line `The cook reverts: <reason>`, so
    hold each guard's to its revert with `--expect-revert`, which exits 0 only when the cook reverts
    with that reason:
 
@@ -474,7 +474,7 @@ a trailing `n`, the same in base units.
    ```
 
    and `--expect-revert "average too high"` for the average. Over MCP, `sauce_simulate`'s
-   `scenarios`, each with its own `expectRevert`, rehearse all three in local copies of one read
+   `scenarios`, each with its own `expectRevert`, simulate all three in local copies of one read
    of the cluster, at one slot. A token account the cluster does not have yet, such as a new Pot's
    WSOL account, the copy makes empty and a note names; `sauce run` creates it before the cook.
 
@@ -484,7 +484,7 @@ a trailing `n`, the same in base units.
    with `--yes`; the owner pays their rent), stages the
    program in a code buffer, creates an address lookup table holding the cook's accounts (it prints
    its address; a later cook naming the same accounts reuses it with `--lookup-table <address>`),
-   rehearses the staged cook, sends it, and closes the buffer again:
+   simulates the staged cook, sends it, and closes the buffer again:
 
    ```sh
    sauce run solana-distributed-swap.sauce.ts --chain solana --keypair <keypair> \
@@ -495,16 +495,16 @@ a trailing `n`, the same in base units.
 the cook. A signer other than the `sauce` command sends the same sequence, which the package's
 TypeScript client builds ([the API reference](../api/README.md)).
 
-**Reading a rehearsal.** `sauce simulate` prints what `main` returned, by name, how it rehearsed,
-and what moved. **The order is rehearsed only when the rehearsal succeeds and `bought` is above
-0**: anything else (a failure, a revert, nothing bought) is a failed rehearsal to fix and rehearse
-again, never a result. Buying SOL with 2,000 USDC, one pool deep enough for all of it, the
+**Reading a simulation.** `sauce simulate` prints what `main` returned, by name, how it simulated,
+and what moved. **A simulation counts only when it succeeds and `bought` is above 0**: anything
+else (a failure, a revert, nothing bought) is a failed simulation to fix and run again, never a
+result. Buying SOL with 2,000 USDC, one pool deep enough for all of it, the
 addresses as placeholders:
 
 ```text
 The cook succeeds from <owner>: 354383 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
-Rehearsed in a local copy (LiteSVM) of the 44 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
+Simulated in a local copy (LiteSVM) of the 44 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
   the 6447-byte program staged into a code buffer in 10 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
@@ -530,7 +530,7 @@ Token balance changes:
 - `maxPrice` is the best fee-inclusive price plus the slippage you accept, in payToken base units
   per buyToken base unit, times 1e18: `10^(18 + payDecimals − buyDecimals)` times the price.
 - `minTokens` is `budget × 1e18 ÷ maxPrice`, rounded up, to spend everything; less to accept a
-  partial fill. `maxAvgPrice` is halfway from a rehearsal's average to `maxPrice`.
+  partial fill. `maxAvgPrice` is halfway from a simulation's average to `maxPrice`.
 
 `solana-distributed-swap.mts` compiles the program
 for Solana and pins this page to it: the code above, the venues, their program ids and functions in

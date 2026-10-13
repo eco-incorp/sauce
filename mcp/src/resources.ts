@@ -29,7 +29,7 @@ export const WRITE_IT_YOURSELF: readonly string[] = [
   "code is: there take its code as given and write the rest). Never ask",
   "the user which example or existing file to start from: ask only for facts the request leaves",
   "open (an amount, a price limit, a recipient, the chain), then decide, write the program and",
-  "rehearse it with sauce_simulate. Call typed bindings, namespaces and library functions",
+  "simulate it with sauce_simulate. Call typed bindings, namespaces and library functions",
   "directly: no helper around a single call, and no raw selector through evm.static and",
   "abi.decode where a binding or namespace exists; keep a helper only for real logic used more",
   "than once. Head every program with a comment: what it does; the sauce command that runs it,",
