@@ -116,8 +116,8 @@ export interface OwnedTable {
 export interface Reclaimable {
   readonly buffers: readonly OpenBuffer[];
   readonly tables: readonly OwnedTable[];
-  /** The tables were found by a scan; `false` where the endpoint refused it. */
-  readonly tablesScanned: boolean;
+  /** No table was named, and the endpoint refused the scan for the owner's: none could be found. */
+  readonly scanRefused: boolean;
   readonly slot: bigint;
 }
 
@@ -163,21 +163,9 @@ async function useOf(rpc: Rpc, accounts: readonly Address[], slot: bigint): Prom
   }
 }
 
-/**
- * What `owner` has open: its code buffers, and its lookup tables — those named, or, with none named,
- * the Sauce tables a scan of the lookup-table program finds (an endpoint may refuse that scan) —
- * each with whether it is in use: named lately, or held by a plan whose accounts are `kept`.
- */
-export async function reclaimable(
-  rpc: Rpc,
-  url: string,
-  owner: Address,
-  named: readonly Address[] = [],
-  kept: ReadonlySet<Address> = new Set(),
-): Promise<Reclaimable> {
-  const slot = await ask(url, "the slot", () => rpc.getSlot({ commitment: "confirmed" }).send());
-  // The slots a deactivated table may not close in: those its cluster still holds hashes of.
-  const recentSlots = await ask(url, "the recent slot hashes", () =>
+/** The slots the cluster's SlotHashes holds; `undefined` where it cannot be read. */
+async function recentSlotsOf(rpc: Rpc, url: string): Promise<Set<bigint> | undefined> {
+  return ask(url, "the recent slot hashes", () =>
     rpc.getAccountInfo(SLOT_HASHES, { encoding: "base64" }).send(),
   ).then(
     ({ value }) => {
@@ -195,6 +183,26 @@ export async function reclaimable(
     },
     () => undefined,
   );
+}
+
+/**
+ * What `owner` has open: its code buffers, and its lookup tables — those named, or, with none named,
+ * the Sauce tables a scan of the lookup-table program finds (an endpoint may refuse that scan) —
+ * each with whether it is in use: named lately, or held by a plan whose accounts are `kept`.
+ */
+export async function reclaimable(
+  rpc: Rpc,
+  url: string,
+  owner: Address,
+  named: readonly Address[] = [],
+  kept: ReadonlySet<Address> = new Set(),
+): Promise<Reclaimable> {
+  // The slot, and the slots a deactivated table may not close in: those its cluster still holds
+  // hashes of. Read together.
+  const [slot, recentSlots] = await Promise.all([
+    ask(url, "the slot", () => rpc.getSlot({ commitment: "confirmed" }).send()),
+    recentSlotsOf(rpc, url),
+  ]);
   const found = (await ask(url, "the owner's code buffers", () =>
     rpc
       .getProgramAccounts(kitchen(), {
@@ -245,7 +253,7 @@ export async function reclaimable(
   });
 
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen());
-  let tablesScanned = named.length === 0;
+  let scanRefused = false;
   let raw: readonly { pubkey: Address; data: Uint8Array; lamports: bigint }[];
   if (named.length > 0) {
     const { value } = await ask(url, "the lookup tables named", () =>
@@ -284,7 +292,7 @@ export async function reclaimable(
           lamports: BigInt(item.account.lamports),
         })),
       () => {
-        tablesScanned = false;
+        scanRefused = true;
 
         return [];
       },
@@ -337,7 +345,7 @@ export async function reclaimable(
     })),
   );
 
-  return { buffers, tables, tablesScanned, slot };
+  return { buffers, tables, scanRefused, slot };
 }
 
 /** The transactions that close what `found` holds, as a plan's step: the buffers not in use, and
@@ -484,7 +492,7 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
     ...(input.keepTables === true
       ? []
       : found.tables.flatMap((one) => leftOpen(`lookup table ${one.address}`, one.use))),
-    ...(found.tablesScanned
+    ...(!found.scanRefused
       ? []
       : [
           "the endpoint did not scan the lookup-table program, so no table was found: name one " +
