@@ -135,6 +135,18 @@ describe("the token methods on Solana", () => {
     });
   });
 
+  it("ctx.self() as a holder is the Pot, as on the EVM: one program for Base and Solana", () => {
+    const source =
+      "function main(to: Address, amount: Uint256) {\n" +
+      '  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");\n' +
+      "  USDC.transfer(to, amount);\n" +
+      "}\n";
+    const solana = compile(source);
+    expect(solana.source).toContain("__sauce_svm_balance(USDC, potUSDC, pot.address) >= amount");
+    expect(solana.derivedAccounts).toMatchObject({ potUSDC: "self:USDC", pot: "self" });
+    expect(compileSauceProgram("base", source).bytecode.length).toBeGreaterThan(0);
+  });
+
   it("approve checks the delegate account is the spender; transferFrom checks the sender's account too", () => {
     const approve = compile(
       "function main(spender: Address, amount: Uint256) {\n  USDC.approve(spender, amount);\n}\n",
@@ -238,11 +250,11 @@ describe("the token methods on Solana", () => {
       );
     });
 
-    it("ctx.self(), which on Solana is the engine, not the Pot", () => {
+    it("a holder computed as the program runs, in a read: its token account as an Account", () => {
       expect(() =>
-        compile("function main(): Uint256 {\n  return USDC.balanceOf(ctx.self());\n}\n"),
+        compile("function main(): Uint256 {\n  const who = 7;\n  return USDC.balanceOf(who);\n}\n"),
       ).toThrow(
-        "On Solana `ctx.self()` is the engine's program id, not the Pot: the Pot is `self`.",
+        "take the token account as a parameter of main (`account: Account`) and pass that.",
       );
     });
 

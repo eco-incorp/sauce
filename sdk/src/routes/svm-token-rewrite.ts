@@ -37,8 +37,9 @@
  * same way after `balanceOf` has validated the account (`__sauce_svm_balance`).
  *
  * WHAT MUST BE KNOWN. A holder and a mint are derived as the transaction is built, so each must be
- * known then: `self`, a parameter of `main` declared `Address` (its argument), or a 32-byte key
- * written out. One computed while the program runs is refused, naming the explicit form: an
+ * known then: `self` (or `ctx.self()`, which as a holder is the program's own account, the Pot, as
+ * on the EVM), a parameter of `main` declared `Address` (its argument), or a 32-byte key written
+ * out. One computed while the program runs is refused, naming the explicit form: an
  * `Account` parameter of `main` in its place is the token account itself, which the caller attaches
  * and the program does not check (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`).
  *
@@ -360,26 +361,29 @@ export function rewriteSvmTokenSyntax(
       const name = nameOf(node);
       if (name === "self" && !declared.has("self")) return { kind: "self" };
       const param = params.get(name);
-      if (param?.kind === "address")
+      if (param?.kind === "address") {
         return { kind: "key", name: `@${name}`, stem: name, value: name };
+      }
       if (param?.kind === "account") {
         return { kind: "account", param: name, writable: param.writable };
       }
     }
+    // As a token's holder, `ctx.self()` is the program's own account, the Pot, as on the EVM, so a
+    // program written for an EVM chain (`USDC.balanceOf(ctx.self())`) means the same here. On
+    // Solana `ctx.self()` alone is the engine's program id, which holds no token account.
+    if (isCtxSelf(node, declared)) return { kind: "self" };
     const key = keyLiteral(node, source);
     if (key !== undefined) {
       return { kind: "key", name: base58(key), stem: "account", value: key };
     }
     const text = source.slice(node.start, node.end);
-    const engine =
-      text.replace(/\s/g, "") === "ctx.self()"
-        ? " On Solana `ctx.self()` is the engine's program id, not the Pot: the Pot is `self`."
-        : "";
+    const account =
+      role === "recipient" || role === "sender" ? "dest: Account<Writable>" : "account: Account";
     throw new Error(
       `${spelled} on Solana: the ${role} must be known when the transaction is built, to attach ` +
-        `its token account — \`self\`, a parameter of main declared \`Address\`, or a 32-byte key ` +
-        `— and \`${text}\` is not.${engine} For an account known only as the program runs, take ` +
-        "the token account as a parameter of main (`dest: Account<Writable>`) and pass that.",
+        "its token account — `self`, a parameter of main declared `Address`, or a 32-byte key — " +
+        `and \`${text}\` is not. For an account known only as the program runs, take the token ` +
+        `account as a parameter of main (\`${account}\`) and pass that.`,
     );
   };
 
@@ -795,6 +799,20 @@ export function rewriteSvmTokenSyntax(
     rewrote: true,
     derived: slots.derived(),
   };
+}
+
+/** `ctx.self()`, with `ctx` the language's, not a name the program declares. */
+function isCtxSelf(node: AstNode, declared: ReadonlySet<string>): boolean {
+  const site = methodCall(node);
+
+  return (
+    site !== undefined &&
+    site.method === "self" &&
+    site.object.type === "Identifier" &&
+    nameOf(site.object) === "ctx" &&
+    !declared.has("ctx") &&
+    ((node as { arguments?: AstNode[] }).arguments ?? []).length === 0
+  );
 }
 
 /** Every identifier the program reads or declares, for the cheap "names no token" bail. */
