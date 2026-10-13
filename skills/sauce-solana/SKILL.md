@@ -50,8 +50,10 @@ saying where the account comes from.
 
   A holder computed as the program runs is refused: no transaction can attach its account. Instead,
   take that token account as an `Account` parameter and pass it where the holder goes
-  (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). The program pays exactly the
-  account given.
+  (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). **That account is paid as
+  attached**: the call names no holder, so nothing checks whose it is, and whoever builds the
+  transaction chooses it. Prefer an `Address` recipient, which the program checks; or check the
+  account yourself, `require(ownerOf(USDC, dest) == expected, "not theirs")`.
 
 - **Each account is checked on chain.** After each write, the program requires the token account it
   paid, or paid from, to belong to the holder the call named. A builder who attaches another account
@@ -61,11 +63,15 @@ saying where the account comes from.
   - `wrong spender account` (`approve`)
   - `wrong holder account` (a read)
 - **Each mint's own write.** An SPL Token mint (USDC, USDT, WSOL) moves by the plain
-  `transfer`/`approve`. A Token-2022 mint (PYUSD, the stocks) moves by
-  `transferChecked`/`approveChecked`, with the registry's decimals and the mint as one more account.
-  `Token(mint)`, for a mint given as an `Address` argument, takes the checked write, which either
-  program accepts, with the decimals read from the mint. A Token-2022 transfer fee is withheld from
-  what arrives, so measure the recipient's balance before and after.
+  `transfer`/`approve`: for such a mint it does what the checked write does, in about 220 bytes
+  less and one account fewer, and a Solana transaction has 1,232 bytes. A Token-2022 mint (PYUSD,
+  the stocks) moves by `transferChecked`/`approveChecked`, with the registry's decimals and the mint
+  as one more account. `Token(mint)`, for a mint given as an `Address` argument, takes the checked
+  write, which either program accepts, with the decimals read from the mint; its token program is
+  read from the cluster when the cook is built, and a mint whose program cannot be read is refused,
+  never assumed. Every write requires its token program to be SPL Token or Token-2022 before it
+  calls it (`not the token program`). A Token-2022 transfer fee is withheld from what arrives, so
+  measure the recipient's balance before and after.
 - **A recipient with no token account yet.** `sauce run` creates its associated token account
   before the cook, the owner paying the rent. It asks first, or does it with `--yes`.
 - **Where the methods can stand.** The added accounts are main's parameters, so the methods stand in
