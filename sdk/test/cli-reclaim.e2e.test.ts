@@ -14,6 +14,10 @@
  * says so, and a table named with --lookup-table is found all the same. A close the cluster
  * refuses leaves the others to go.
  *
+ * Each test is an owner of its own, so what one leaves open no other lists. A plan whose cook landed
+ * is kept by its cursor while its close is still to come, and once that lands its cursor is still
+ * taken, and no buffer of it is left.
+ *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
  */
@@ -193,14 +197,6 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
       address(v12SvmEngineProgramId()),
     );
     work = mkdtempSync(join(tmpdir(), "sauce-reclaim-"));
-    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const seed = privateKey.export({ format: "der", type: "pkcs8" }).subarray(-32);
-    const pub = publicKey.export({ format: "der", type: "spki" }).subarray(-32);
-    const bytes = new Uint8Array([...seed, ...pub]);
-    const path = join(work, "owner.json");
-    writeFileSync(path, JSON.stringify([...bytes]));
-    owner = { path, signer: await createKeyPairSignerFromBytes(bytes) };
-    harness.svm.airdrop(owner.signer.address, lamports(50_000_000_000n));
     wide = join(work, "wide.sauce.ts");
     writeFileSync(wide, WIDE);
     // The bank cannot list its accounts: a scan looks through every account a sent transaction names.
@@ -221,6 +217,18 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
   afterAll(() => {
     shim?.restore();
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
+  });
+  // Each test is an owner of its own: what one leaves open no other lists.
+  let owners = 0;
+  beforeEach(async () => {
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const seed = privateKey.export({ format: "der", type: "pkcs8" }).subarray(-32);
+    const pub = publicKey.export({ format: "der", type: "spki" }).subarray(-32);
+    const bytes = new Uint8Array([...seed, ...pub]);
+    const path = join(work, `owner-${(owners += 1)}.json`);
+    writeFileSync(path, JSON.stringify([...bytes]));
+    owner = { path, signer: await createKeyPairSignerFromBytes(bytes) };
+    harness.svm.airdrop(owner.signer.address, lamports(50_000_000_000n));
   });
 
   it("lists what a plan left open, and closes it with transactions signed elsewhere", async () => {
@@ -419,5 +427,44 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
     for (const buffer of out.buffers) {
       expect(harness.svm.getAccount(address(buffer.codeBuffer)).exists).toBe(true);
     }
+  }, 300_000);
+
+  it("keeps a plan whose cook landed by its cursor, and leaves no buffer of it once it closed", async () => {
+    const cook = await abandonedSetup("finished");
+    const cooked = jsonOf(
+      await sauce(
+        ...["send", ...(await sign(cook.transactions)), "--cursor", cook.cursor],
+        ...["--rpc-url", RPC_URL, "--json"],
+      ),
+    ) as { ok: boolean; next: Step };
+    expect(cooked.ok).toBe(true);
+    expect(cooked.next.step).toBe("close");
+    // The cook ran, and the plan's close is still to come: given to keep, its buffer stays open.
+    warpPast(await listing());
+    const kept = await listing("--keep", cooked.next.cursor);
+    expect(kept.buffers).toEqual([expect.objectContaining({ inUse: true, kept: true })]);
+    expect(kept.lookupTables).toEqual([expect.objectContaining({ inUse: true, kept: true })]);
+    expect(kept.transactions).toHaveLength(0);
+    // Its close, built again past the slots warped through, lands: the same cursor is still taken,
+    // and no buffer of the plan is left.
+    const close = (
+      jsonOf(
+        await sauce("send", "--cursor", cooked.next.cursor, "--rpc-url", RPC_URL, "--json"),
+      ) as { next: Step }
+    ).next;
+    expect(close.step).toBe("close");
+    const closed = jsonOf(
+      await sauce(
+        ...["send", ...(await sign(close.transactions)), "--cursor", close.cursor],
+        ...["--rpc-url", RPC_URL, "--json"],
+      ),
+    ) as { ok: boolean; next: Step };
+    expect(closed.ok).toBe(true);
+    expect(closed.next.step).toBe("done");
+    const after = await listing("--keep", cooked.next.cursor);
+    expect(after.buffers).toEqual([]);
+    // Its lookup table stays for a later cook naming the same accounts, kept with the plan.
+    expect(after.lookupTables).toEqual([expect.objectContaining({ kept: true })]);
+    expect(after.transactions).toHaveLength(0);
   }, 300_000);
 });
