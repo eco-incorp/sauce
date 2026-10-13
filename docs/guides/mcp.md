@@ -136,7 +136,7 @@ Your own endpoint is optional and faster ([Your own endpoints](#your-own-endpoin
 
 For the initial release the server builds transactions only on **Ethereum**, **Base** and
 **Solana**. Every other chain is a [preview chain](#supported-and-preview-chains): an agent can
-compile, simulate and rehearse any protocol on it, and the tools that would return a transaction
+compile and simulate any protocol on it, and the tools that would return a transaction
 there return `refused` instead, with how to request the chain.
 
 **The local stdio server signs only with wallets in its wallet directory, unlocked by the password
@@ -305,7 +305,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                                                                                                                                                      |
 | `sauce_simulate`       | `sauce simulate`       | `ok`, then `leftInPot` (what the Pot holds after the cook of what it moved, with a note when that is anything), the `path` taken, each transaction's gas (`transactions`), what `main` returns, `moves` by role, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                               |
 | `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded`                                                                                                                                          |
-| `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill rehearsed: the calls and gas, what moved, or the decoded `reason`                                                                                                                                                                                                              |
+| `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill simulated: the calls and gas, what moved, or the decoded `reason`                                                                                                                                                                                                              |
 | `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block, whether it was funded, and the transaction's `explorer` and `trace` links                                                                                                                                                                                                                                                                                              |
 | `sauce_intent_status`  | `sauce intent status`  | `state`, both sides as read, the deadlines, the prover, and `can`: whether fill, prove, claim, refund and cancel can happen now, why not, and from when                                                                                                                                                                                                                                                                                             |
 | `sauce_intent_prove`   | `sauce intent prove`   | The unsigned `Portal.prove` for one or more fills or cancellations, its bridge fee in its value                                                                                                                                                                                                                                                                                                                                                     |
@@ -317,7 +317,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                                                                                                                                                               |
 | `sauce_wallet_create`  | `sauce wallet new`     | Over stdio with `--wallets` only: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                                                                                                                                                             |
 | `sauce_wallet_list`    | `sauce wallet list`    | Over stdio with `--wallets` only: each wallet's name, kind, address and policy                                                                                                                                                                                                                                                                                                                                                                      |
-| `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list; a Solana plan sent step by step) rehearsed, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, and for a cook `moves`, `leftInPot` and `summary`; or the refusal                                                                                                                                              |
+| `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list; a Solana plan sent step by step) simulated, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, and for a cook `moves`, `leftInPot` and `summary`; or the refusal                                                                                                                                              |
 
 ### The command's flags as inputs
 
@@ -380,11 +380,11 @@ server's instructions also list:
 Over stdio, `sauce_compile`, `sauce_simulate` and `sauce_tx` take `path` instead of `source`: a
 program file on the same machine, relative to the directory the server runs in, read with its
 relative imports beside it. A server over HTTP reads no file and refuses `path`. Each of the three
-returns `sourceSha256`, the sha256 of the program's text, which ties a rehearsal to the file it
+returns `sourceSha256`, the sha256 of the program's text, which ties a simulation to the file it
 came from. `sauce_compile` with `omitBytecode` leaves the bytecode out; `sauce_simulate` with
-`scenarios` rehearses one program with several sets of `args` and `assumeBalance` at one
+`scenarios` simulates one program with several sets of `args` and `assumeBalance` at one
 block, and with `summary` returns only `ok` or the revert reason, what `main` returned,
-`leftInPot`, the balance changes, the transfers, each transaction's gas and the block. A rehearsal
+`leftInPot`, the balance changes, the transfers, each transaction's gas and the block. A simulation
 that leaves anything in the Pot adds a note saying so, for the agent to pass on to the user: what
 stays in the Pot is not in the owner's wallet
 ([Where a program's results end](../concepts/kitchen-pot-cook.md#where-a-programs-results-end)).
@@ -498,11 +498,11 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
 
 `sauce_simulate` also takes:
 
-- `assumeBalance`, such as `["USDC:2", "ETH:0.1"]`: balances the Pot holds for the rehearsal only.
-  On Solana, as for a cook too large for one transaction, the rehearsal then runs in a local copy
+- `assumeBalance`, such as `["USDC:2", "ETH:0.1"]`: balances the Pot holds for the simulation only.
+  On Solana, as for a cook too large for one transaction, the simulation then runs in a local copy
   of the accounts the cook names ([the sauce command](cli.md#solana)), its program staged as
   `sauce run` stages it;
-- `fund`, `fundMode` and `sweep`, which rehearse [`sauce run --fund`](cli.md#funding-a-run---fund).
+- `fund`, `fundMode` and `sweep`, which simulate [`sauce run --fund`](cli.md#funding-a-run---fund).
   The Pot is credited what the pulls would bring.
 
 A token amount is in whole tokens: `USDC:1.5` is 1.5 USDC, exact through the token's decimals, and
@@ -547,7 +547,7 @@ program itself, with the same inputs as `sauce_intent_publish`.
    for an intent published elsewhere.
 2. `sauce_intent_status`: where it stands, and `can`, what can happen next and from when.
 3. `sauce_intent_fill` with `from`, the solver: its transactions on the destination. With `dryRun`,
-   the same fill rehearsed, from any solver. A fill that proves itself (`fulfillAndProve`) needs no
+   the same fill simulated, from any solver. A fill that proves itself (`fulfillAndProve`) needs no
    step 4.
 4. `sauce_intent_prove`: the proof of fills or cancellations, sent from the destination; the
    bridge delivers it to the source's prover.
@@ -567,8 +567,8 @@ For an intent to Solana, the destination's steps — fill, prove and cancel — 
 transactions: `feePayer` and `transaction`, a base64 wire transaction with every signature in but
 the fee payer's. Pass the Solana key that pays and signs as `from`; a fill also needs `claimant`,
 the address on the EVM source the reward pays. Sign each with that key, last, and send it within
-about a minute, before its blockhash expires. `dryRun` rehearses an EVM destination's fill only;
-a Solana fill is rehearsed as it is built. Claim and refund stay on the EVM source.
+about a minute, before its blockhash expires. `dryRun` simulates an EVM destination's fill only;
+a Solana fill is simulated as it is built. Claim and refund stay on the EVM source.
 
 A step that cannot happen yet is a result, `ready: false` with `why`, not an error. Each tool reads
 the chains it needs through the server's endpoints, or through `rpcUrls`, each chain's endpoint by
@@ -620,7 +620,7 @@ entry of `transactions` (marked `deploysPot`), with a note, then the cook. Send 
 any account may send the first, only the owner the second. Sign the cook with a gas limit that has
 room, or once the deployment has landed: an estimate taken while the Pot has no code prices a call
 to an empty address, and `sauce_send` refuses the cook for it. `sauce_wallet_send` sends such a
-plan whole, rehearsing both together and holding them to the wallet's policy before it sends
+plan whole, simulating both together and holding them to the wallet's policy before it sends
 either. On Solana the same transaction creates the Pot ahead of the cook (`createsPot`).
 
 The other transactions:
@@ -721,7 +721,7 @@ The wallet tools, besides every other tool:
 - `sauce_wallet_list` names each wallet with its kind, address and policy.
 - `sauce_wallet_send` `{ wallet, transaction, chain?, rpcUrl? }` sends. `transaction` is the
   whole result of `sauce_tx`, `sauce_pot`, `sauce_actions` (with an owner), `sauce_intent_publish`
-  or any `sauce_intent_*` step, or a transaction, or a list of them. It rehearses them first: on an
+  or any `sauce_intent_*` step, or a transaction, or a list of them. It simulates them first: on an
   EVM chain all together in one `eth_simulateV1` block from the wallet, on Solana each as signed.
   If any would revert, it refuses and sends nothing. It holds them to the wallet's
   [policy](cli.md#a-wallets-policy) and refuses, naming the limit, what the policy does not allow.
@@ -733,7 +733,7 @@ The wallet tools, besides every other tool:
   `leftInPot`, and `summary`, the lines `sauce run` prints.
 
 So an agent goes: `sauce_wallet_create`, fund the address, build with the wallet's address as
-`owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), rehearse with
+`owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), simulate with
 `sauce_simulate`, and pass the building tool's result to `sauce_wallet_send`. Each tool that builds
 a transaction says, on a server with wallets, that `sauce_wallet_send` sends it. There is no export
 tool: `sauce wallet export` shows a key only at a terminal.
@@ -762,7 +762,7 @@ When a client connects, the server's instructions tell it five things: whether t
 transactions on and what to do with a refusal, and how `rpcUrl` works. Two prompts walk the main tasks through the
 tools, with the skill they start from embedded:
 
-- `sauce_write_program` (`task`, `chain`) writes, compiles, rehearses and builds a program.
+- `sauce_write_program` (`task`, `chain`) writes, compiles, simulates and builds a program.
 - `sauce_open_intent` (`task`, `source`, `destination`) opens a cross-chain intent and builds its
   publish transactions.
 

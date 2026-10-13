@@ -1058,7 +1058,7 @@ describe("sauce_tx", () => {
     const potless = failed(
       await mcp.call("sauce_tx", { source: PAY, chain: "base", value: 0, args: [RECIPIENT, 1] }),
     );
-    assert.match(potless, /give owner \(.*to rehearse, any address will do\) or pot/);
+    assert.match(potless, /give owner \(.*to simulate, any address will do\) or pot/);
   });
 });
 

@@ -25,7 +25,7 @@
 //   minTokens: Uint256    the least buyToken to receive, in its base units; less reverts the cook
 //   maxAvgPrice: Uint256  the most the average may cost, in maxPrice's units; 0 turns it off
 //
-//   SOL for all of 1,000 USDC or nothing, at most 120 USDC each, rehearsed with no key:
+//   SOL for all of 1,000 USDC or nothing, at most 120 USDC each, simulated with no key:
 //   sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
 //     --accounts <accounts.json> --assume-balance USDC:1000 \
 //     --args 1000000000 120000000000000000 8333333334 0

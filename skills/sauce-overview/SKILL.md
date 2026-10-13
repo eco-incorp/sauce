@@ -57,7 +57,7 @@ implementation a skill says to use whole: the Solana distributed swap (`sauce-so
 whose pool slots are the accounts `sauce pools` fills by name. Take its code as given, and
 write the header, the slots and the inputs for the task. Ask only for the facts the request
 leaves open (an amount, a price limit, a recipient, the chain, where the results end); decide the
-rest, write the program, and rehearse it with `sauce simulate`.
+rest, write the program, and simulate it with `sauce simulate`.
 
 ## Where the results end, and what the user sees first
 
@@ -76,8 +76,8 @@ wallet, or name the wallet as the call's beneficiary (`onBehalfOf`, `receiver`, 
 
 1. the final program, as it will be compiled;
 2. the arguments it will be called with, each with its meaning and units (`1000000` is 1 USDC);
-3. what the rehearsal (`sauce simulate`) says will happen: what leaves the wallet, what arrives
-   where, and what is left in the Pot. The rehearsal leads with what the cook leaves in the Pot,
+3. what the simulation (`sauce simulate`) says will happen: what leaves the wallet, what arrives
+   where, and what is left in the Pot. The simulation leads with what the cook leaves in the Pot,
    in the lines under `Left in the Pot`, or as `leftInPot` in its JSON, and prints none when it
    leaves nothing.
 
@@ -107,7 +107,7 @@ one.
 
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
 `base`, `solana`). Every other chain the SDK knows is a **preview chain**: a program compiles for
-it, and `sauce simulate` and the dry runs rehearse it there, but the `sauce` command and the MCP
+it, and `sauce simulate` and the dry runs still run it there, but the `sauce` command and the MCP
 server build and send no transaction on it. `sauce tx`, `sauce run`, `sauce pot --deploy`,
 `sauce intent publish` and the intent steps sent there are refused before anything is read or
 signed, and the refusal names the supported chains and the chain-support request for that chain.
@@ -205,7 +205,7 @@ to its tool.
    preview chain, compile and simulate; when a command refuses one, offer the user the
    chain-support request it names instead of looking for another way to send.
 7. **The user sees it before it is sent, and what it did after.** The program, its arguments and
-   the rehearsal's outcome (what leaves the wallet, what arrives where, what stays in the Pot),
+   the simulation's outcome (what leaves the wallet, what arrives where, what stays in the Pot),
    then their go-ahead; once sent, its explorer and trace links and what its receipt shows.
 
 ## The skill map
@@ -353,7 +353,7 @@ pools by their factory's key, so one document serves every chain that has its na
 Work continued on another chain: an intent file (`Base(() => { ... }).reward({ ... })` as
 top-level statements, its values as defines), its life (fund, publish, fill, prove, claim, refund
 or cancel, a `sauce intent` command each), every way to publish and fund one, token-only bodies
-and program bodies, cascades, on which chain each name resolves, and rehearsing both sides.
+and program bodies, cascades, on which chain each name resolves, and simulating both sides.
 
 - **Holds** a reference of the intent contract's functions, events and errors, and examples that
   forward USDC to Aave on another chain, run a distributed swap as the body, and fund an intent by
@@ -376,15 +376,15 @@ the Kitchen or directly on the engine.
 ### `sauce-cli`
 
 The `sauce` command, in the order a run takes it: look up names, compile, deploy the Pot, fund it,
-rehearse (`sauce simulate`), print the unsigned transaction (`sauce tx`) or sign and send it
+simulate (`sauce simulate`), print the unsigned transaction (`sauce tx`) or sign and send it
 (`sauce run`), send what another signer signed (`sauce send`), and read it back (`sauce inspect`); endpoints and signers, agent wallets and their
 policies, arguments to `main`, and the MCP tool for each command.
 
 - **Holds** a table of every command, the steps of a run with their flags and units, and example
   programs whose headers give the command lines that run them.
-- **Load it** to compile, rehearse, send or read back, or when a command refuses a preview chain.
+- **Load it** to compile, simulate, send or read back, or when a command refuses a preview chain.
   The other skills say what to write; this one how to run it.
-- **Asked as:** "Rehearse this program on Base, then send it from my keystore."
+- **Asked as:** "Simulate this program on Base, then send it from my keystore."
 
 ### `sauce-typescript`
 

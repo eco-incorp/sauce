@@ -313,7 +313,7 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
   const rehearsed = await rehearsePlan(client, account.address, requests);
   if (rehearsed === undefined && requests.length > 1) {
     throw new CliError(
-      `rehearsing ${requests.length} transactions together needs eth_simulateV1, and the ` +
+      `simulating ${requests.length} transactions together needs eth_simulateV1, and the ` +
         `${input.chain.slug} endpoint did not run it: nothing was sent. Use an endpoint that ` +
         "serves it, or send them one call each",
     );

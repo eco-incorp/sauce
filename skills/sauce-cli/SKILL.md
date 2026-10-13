@@ -1,6 +1,6 @@
 ---
 name: sauce-cli
-description: The sauce command line. Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Transactions are built and sent on Ethereum, Base and Solana, the chains the initial release supports; every other chain is a preview chain, where programs compile and simulate and a transaction is refused with the link to request the chain. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, create or use an agent's own wallet and its policy, or when a command refuses a preview chain.
+description: The sauce command line. Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, simulate the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Transactions are built and sent on Ethereum, Base and Solana, the chains the initial release supports; every other chain is a preview chain, where programs compile and simulate and a transaction is refused with the link to request the chain. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, create or use an agent's own wallet and its policy, or when a command refuses a preview chain.
 ---
 
 # The sauce command
@@ -8,7 +8,7 @@ description: The sauce command line. Compile a Sauce program file (or a JSON act
 A Sauce program is a file of SauceScript that a Sauce engine executes atomically inside one
 transaction. On an EVM chain it runs as a **Pot**: a small contract its owner controls, which holds
 the program's tokens and calls `cook(engine, program)`. The `sauce` command in `@eco-incorp/sauce`
-compiles the file, deploys the Pot, rehearses the cook, signs it and sends it. It needs no other
+compiles the file, deploys the Pot, simulates the cook, signs it and sends it. It needs no other
 tool and no configuration: it reads no environment variable but the one `--password-env` names,
 and reads a chain through a built-in public endpoint unless given one of its own.
 
@@ -30,8 +30,8 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 | `sauce compile`  | Compiles a file for a chain; prints its bytecode, or with `--json` what it takes  |
 | `sauce actions`  | Lowers a JSON actions document for a chain; prints its SauceScript and bytecode   |
 | `sauce pot`      | Prints the owner's Pot address and its deploy transaction; deploys it             |
-| `sauce simulate` | Rehearses the cook from the Pot's owner, with no key: gas, or why it reverts      |
-| `sauce run`      | Compiles, rehearses, signs, sends and waits for the cook on the signer's Pot      |
+| `sauce simulate` | Simulates the cook from the Pot's owner, with no key: gas, or why it reverts      |
+| `sauce run`      | Compiles, simulates, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
 | `sauce send`     | Broadcasts transactions signed elsewhere, waits for them, reports what they did   |
 | `sauce intent`   | Publishes, fills, proves, claims, refunds and cancels intents (`sauce-intents`)   |
@@ -142,7 +142,7 @@ send. Every field is optional, and amounts are strings in whole tokens (`"100"` 
 
 `chains` and `to` (a list of addresses) allow only those; deploying the wallet's own Pot counts
 as a transaction to that Pot, so a `to` naming the Pot lets a run deploy it first. `native` and each token count what
-leaves the wallet or the Pot a transaction cooks on, measured by rehearsing it; `perDay` is the
+leaves the wallet or the Pot a transaction cooks on, measured by simulating it; `perDay` is the
 last 24 hours on every chain. A send that breaks a limit is refused, naming it, and nothing is
 sent. With no policy, sends work, and each says no limits are set.
 
@@ -164,7 +164,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    the chain, deepest first: each one's fee, liquidity and `sqrtPriceX96`, what a token costs both
    ways with and without the fee, the distributed swap's `maxPrice` at that price, and how much
    moves the price 1%. A token it is given may be an address; its decimals are read from the
-   token. It reads at one block and prints it: rehearse with `sauce simulate --block <number>` on
+   token. It reads at one block and prints it: simulate with `sauce simulate --block <number>` on
    the prices you chose from. `sauce price --chain base 2700 USDC per WETH` turns a price into the
    pool's: its
    `sqrtPriceLimitX96` under "Buying WETH", `4116816085950893928074568`, is the buy's limit.
@@ -180,7 +180,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    `// @chain base` line among the `//` comment lines it starts with (and `// @target svm` alone
    picks Solana); `--chain` overrides it. Leave the line out of a file meant for more than one
    chain.
-3. **Rehearse**, before anything is deployed, funded or signed:
+3. **Simulate**, before anything is deployed, funded or signed:
 
    ```sh
    sauce simulate buy.sauce.ts --chain base --owner <address> --assume-balance USDC:100 \
@@ -189,20 +189,20 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    ```
 
    runs the cook from the owner with no key and nothing sent, and needs neither a deployed Pot nor
-   a funded one. A Pot not deployed yet is deployed in the same rehearsal first, as `sauce run`
+   a funded one. A Pot not deployed yet is deployed in the same simulation first, as `sauce run`
    deploys it: anyone may send a Pot's deployment, and the Pot is the owner's either way. `--assume-balance TOKEN:amount`
    (repeatable; `ETH:<amount>` for the native currency) gives the Pot that balance for the
-   rehearsal only; a token that keeps no stored balance (rebasing, shares) is refused. On a local
+   simulation only; a token that keeps no stored balance (rebasing, shares) is refused. On a local
    chain with Uniswap V3's own pools at 2,650 USDC per WETH, it printed, addresses written as their
    roles:
 
    ```text
    The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
    main returns { pool: Address; spent: Uint256; bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
-   Rehearsed with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
-     1. Kitchen.deployPot(<owner>, …), gas used 535944: Pot <Pot> is not deployed on base yet, so the rehearsal deploys it first, …
+   Simulated with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
+     1. Kitchen.deployPot(<owner>, …), gas used 535944: Pot <Pot> is not deployed on base yet, so the simulation deploys it first, …
      2. the cook, from the owner <owner>, gas used 273670
-   Assumed for this rehearsal only, by state override:
+   Assumed for this simulation only, by state override:
      the Pot holds 100 USDC: --assume-balance (…)
    …
    What moved, in order:
@@ -242,7 +242,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
      a name the registry gives it, a token by its symbol, `mint` and `burn`, with its short address
      the first time, and its short address alone when nothing names it. The native lines are the
      cook's value, paid on to the Kitchen. Then the approvals and each address's net change;
-     `--json` gives the moves as `moves`, each with `fromRole` and `toRole`. The rehearsal names
+     `--json` gives the moves as `moves`, each with `fromRole` and `toRole`. The simulation names
      its route: `eth_simulateV1`, or `eth_call` where the endpoint
      lacks it, which shows no transfers.
    - **A revert** prints its reason and exits 1. With `minOut` at `40000000000000000`, 0.04 WETH,
@@ -256,17 +256,17 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
      says what it checks (`"SPL"`, a price limit on the wrong side of the pool's price or at a
      bound).
 
-   - **`--block <number>`** rehearses on that block instead of the latest (every read is on one
+   - **`--block <number>`** simulates on that block instead of the latest (every read is on one
      block, and the output names it): what the cook would have done before the market moved, or on
      the block a sent cook failed in.
-   - **`--fund USDC:100`** in place of `--assume-balance` rehearses `sauce run --fund`: with no
+   - **`--fund USDC:100`** in place of `--assume-balance` simulates `sauce run --fund`: with no
      key, the Pot is credited what the pull would bring; with the owner's key (`--wallet`), the
-     pull itself is signed and rehearsed, and an approval the first run asks for runs before the
+     pull itself is signed and simulated, and an approval the first run asks for runs before the
      cook in the same block, listed as a transaction of its own to send first.
    - **`--json`** gives the same for a program to read: `returned` is the record, `transfers` each
      transfer.
 
-   Rehearse what must fail as well as what must succeed, and the edges the program handles. With
+   Simulate what must fail as well as what must succeed, and the edges the program handles. With
    `--assume-balance USDC:100000` and a `budget` of `100000000000`, 100,000 USDC, the pool reaches
    2,700 USDC per WETH first:
 
@@ -301,12 +301,12 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    reads like base units). For base units, end the amount in `n`, as a JavaScript bigint is
    written: `USDC:10000000n` is the same 10 USDC. A program and `--args` are the other way round:
    a plain integer in base units (`10000000` is 10 USDC). A token the chain does not register is
-   `<address>:<amount>`, in its own decimals. `simulate --fund` with the owner's key rehearses
+   `<address>:<amount>`, in its own decimals. `simulate --fund` with the owner's key includes
    it: the pulls signed, and before the cook, in the same block, each approval or transfer
    `sauce run` would send first, each listed as a transaction of its own with its gas.
 
 6. **Run**, from the Pot's owner, once the user has seen the program, the arguments and what the
-   rehearsal says will happen, and agreed:
+   simulation says will happen, and agreed:
 
    ```sh
    sauce run buy.sauce.ts --chain base --wallet <name> --password-env <NAME> \
@@ -314,7 +314,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
      37000000000000000 <recipient>
    ```
 
-   compiles, rehearses, signs, sends and waits (on a supported chain), then prints the hash,
+   compiles, simulates, signs, sends and waits (on a supported chain), then prints the hash,
    status and gas used, two links for a person to open, what the cook cost (gas, any L1 data fee,
    the value) and what moved, read from the receipt:
 
@@ -385,7 +385,7 @@ The transaction's value defaults to the Kitchen's execution fee, read from the c
 `sauce tx buy.sauce.ts --chain base --owner <address> --value <wei> --args <arguments>`, with
 the same arguments, prints the unsigned transaction as JSON, `{ chainId, to, data, value }`, for
 any wallet to sign from the owner. `--format cast` prints it as a `cast send` line instead. Like
-`run`, it is refused on a preview chain. It rehearses nothing: show the user the program, the
+`run`, it is refused on a preview chain. It simulates nothing: show the user the program, the
 arguments and `sauce simulate`'s outcome before handing it over, as before `run`.
 
 **Signed elsewhere**: whatever signs it — a hardware wallet, a KMS, another wallet's tool — hands
@@ -486,7 +486,7 @@ so once it is executable (`chmod +x buy.sauce.ts`) it runs as a command, through
   37000000000000000 <recipient>
 ```
 
-is `sauce simulate buy.sauce.ts` with those words after it: the rehearsal of step 3. It rehearses
+is `sauce simulate buy.sauce.ts` with those words after it: the simulation of step 3. It simulates
 only, so running the file never spends; sending it is `sauce run` on the same file. The compile
 ignores the line, and keeps the file's own line numbers in its errors.
 
@@ -516,15 +516,15 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   transfers and `publish` for any wallet to send, in that order. Both fund each reward by a transfer
   into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
   either to an approve and `publishAndFund`. `sauce intent publish … --dry-run --assume-balance
-USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
-  `sauce intent fill <file> --chain <chain> --args <arguments>` rehearses each intent where its
+USDC:<amount>` simulates it from a wallet that does not hold the reward yet.
+  `sauce intent fill <file> --chain <chain> --args <arguments>` simulates each intent where its
   body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
   `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
   in the shared Pot, and why it reverts.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
-  vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
+  vault), simulating them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
   `refund`, `cancel`, `status`, `import`). Publishing, from a wallet or a Pot, needs every chain the
-  intent involves supported; the rehearsals run on any chain.
+  intent involves supported; the simulations run on any chain.
 - **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
   `--keypair`, and the execution fee is read from the cluster and printed as `fee`, with no
   `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it. `--via kitchen`,
@@ -549,7 +549,7 @@ signer, and `sauce_send` broadcasts the signed transactions (`sauce send`), wait
 returns what it did. The one exception is a server started over stdio with `--wallets` and a
 password source (`--password-env <NAME>`, given from the client's config): it sends from its own
 wallets. `sauce_wallet_create` makes one
-(`sauce wallet new`), `sauce_wallet_list` names them, and `sauce_wallet_send` rehearses what another
+(`sauce wallet new`), `sauce_wallet_list` names them, and `sauce_wallet_send` simulates what another
 tool returned, holds it to the wallet's policy, signs and sends it: `sauce run` from a wallet. Each
 transaction it sent comes back with its hash, `explorer` and `trace` to give the user, and a cook
 with `moves`, `leftInPot` and `summary`, the lines `sauce run` prints.
@@ -563,9 +563,9 @@ Over HTTP, nothing signs.
   was refused and which limit.
 - Before writing a program that produces assets, ask the user whether they should end in their
   wallet or stay in the Pot: what stays in the Pot is theirs, but only another cook moves it out.
-- Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's
+- Simulate with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's
   body) before the first real send. Then show the user the program, its arguments and what the
-  rehearsal says will happen (what leaves the wallet, what arrives where, what is left in the
+  simulation says will happen (what leaves the wallet, what arrives where, what is left in the
   Pot), and send, or hand over `sauce tx`'s transaction to be signed and `sauce send`, only once
   they confirm.
 - Report every transaction sent with its explorer link and its trace link, for the user to open,

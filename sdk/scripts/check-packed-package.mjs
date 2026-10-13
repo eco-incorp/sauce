@@ -714,10 +714,10 @@ try {
       const { stdout, stderr } = await rehearse(work);
       assert.ok(
         stderr.includes(`Installing them into ${runtimeOf(rehearsalHome)}, once for this version`),
-        `the first rehearsal installs its runtime folder: ${stderr}`,
+        `the first simulation installs its runtime folder: ${stderr}`,
       );
       const rehearsal = JSON.parse(stdout);
-      assert.equal(rehearsal.ok, true, `the rehearsal succeeds: ${rehearsal.reason}`);
+      assert.equal(rehearsal.ok, true, `the simulation succeeds: ${rehearsal.reason}`);
       assert.equal(rehearsal.path, "local copy (LiteSVM)", "in the local copy");
       assert.equal(String(rehearsal.returned), "2", "and main's return comes back");
       assert.ok(
@@ -749,7 +749,7 @@ try {
     );
     console.log(
       "Clean package install: npx sauce simulate installs its runtime folder " +
-        `(${installedSize(folder).text}, ${binaries[0]} among it) and rehearses a Solana cook in ` +
+        `(${installedSize(folder).text}, ${binaries[0]} among it) and simulates a Solana cook in ` +
         "its local copy",
     );
   }
