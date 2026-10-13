@@ -13,6 +13,11 @@ pools reach the program, how each is read and swapped, and what fits in one tran
 
 ## The rules
 
+For one pool whose venue is known, a venue's namespace (`OrcaWhirlpool.swap(pool, …)`) is
+simpler: its accounts are derived from the pool as the cook is built (`sauce-swaps`). The
+distributed swap takes its slots as accounts, because its program learns each pool's venue as it
+runs.
+
 A correct distributed swap on Solana, whatever its tokens or venues:
 
 1. **Takes its pools as accounts, found before the cook.** A Solana transaction lists every account

@@ -479,8 +479,9 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
 - `args`: `main`'s arguments as JSON values, in order. Integers are in base units, as decimal
   strings.
 - `accounts`, on Solana: each account `main` takes, by name. Each is an address, `pot`, `owner` or
-  an account named by its token (`pot:USDC`, `@to:USDC`). The accounts the token methods add to
-  `main` (`USDC.transfer(to, amount)`) are derived from the cook, so a call names them only to
+  an account named by its token (`pot:USDC`, `@to:USDC`) or by a pool (`slot:@pool:USDC.vaultA`).
+  The accounts the token methods and the venue namespaces add to `main` (`USDC.transfer(to,
+amount)`, `OrcaWhirlpool.swap(pool, …)`) are derived from the cook, so a call names them only to
   replace one; `sauce_compile`'s manifest shows each one's `derive`.
 - `via`, on Solana: `kitchen` (the default), the Kitchen's cook on the owner's Pot, or `engine`,
   the engine's own paid cook with no Kitchen and no Pot: the owner signs as the authority the

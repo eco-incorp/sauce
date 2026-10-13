@@ -25,7 +25,7 @@
 // and selector, with its reason, by the checker that owns the example.
 //
 // INPUTS IN THE OPEN. A reader must see where every value a program reads comes from. A name the
-// program uses without declaring it must be the registry's (a token, a namespace, a chain, a chain
+// program uses without declaring it must be the registry's (a token, a namespace or a Solana venue's, a chain, a chain
 // define, an ambient module's function), the language's (a builtin, or the SDK's `available`,
 // `Token` and `self`), an import, or a local or parameter — nothing else. An input is a `main`
 // parameter, given with `--args`; a compile-time define is the SDK's own mechanism, never a user's
@@ -142,7 +142,11 @@ export function registryNames(sdk, protocols, builtins) {
   for (const chain of sdk.CANONICAL_CHAINS) {
     const sourceGlobals = sdk.routes.sourceGlobals(chain.slug);
     for (const token of sourceGlobals.tokens) globals.add(token.symbol);
-    for (const namespace of [...sourceGlobals.protocols, ...sourceGlobals.interfaces]) {
+    for (const namespace of [
+      ...sourceGlobals.protocols,
+      ...sourceGlobals.interfaces,
+      ...(sourceGlobals.venues ?? []),
+    ]) {
       globals.add(namespace.namespace);
     }
     for (const other of sourceGlobals.chains) globals.add(other.key);

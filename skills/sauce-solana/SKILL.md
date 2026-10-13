@@ -130,7 +130,10 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
     `owner`, `self`, `@to` or a base58 key; the token is a symbol, a base58 mint, or `@mint` for
     main's argument `mint`;
   - `mint:<token>`: the mint;
-  - `program:<token>`: the mint's token program.
+  - `program:<token>`: the mint's token program;
+  - `slot:<pool>:<token>.<part>`: one of a pool's nine accounts paying the token (`program`, `pool`,
+    `config`, `vaultA`, `vaultB`, `extra`, `ticks0` to `ticks2`), read from the pool on the cluster,
+    the pool a base58 key or `@pool`.
 
   `sauce compile --json` lists the slots in its `manifest` (each one the token methods added with
   its `derive`), and a missing one is named with the role it needs.
@@ -427,12 +430,14 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - For a local run, the package ships the engine and Kitchen programs, to load into a local
   validator or LiteSVM; `sauce-typescript` says where they are. Setting one up is outside this
   skill.
-- A swap at one of Solana's venues whose swap stops at a price limit (Raydium CLMM and the programs
-  on its code, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix) is a call into `@sauce/router`:
-  one function per venue, and `trySwap` for a pool at any of them, each taking the pool's nine
-  accounts and the trader's as `Account[]` arrays, a `maxPrice` with the fee included, and
-  returning what arrived (`sauce-swaps`). One order over several pools under one price is
-  `sauce-solana-distributed-swap`.
+- A swap at one pool of a venue whose swap stops at a price limit is the venue's namespace:
+  `OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)` (and `RaydiumClmm`,
+  `PancakeswapClmm`, `Byreal`, `StabbleClmm`, `Cropper`, `Defituna`, `Crema`, `Phoenix`), with the
+  pool as an `Address` argument. Its nine accounts are read from the pool when the cook is built
+  (`slot:@pool:USDC.vaultA`, …), and the Pot's are derived like the token methods' (`sauce-swaps`).
+  Behind each is one `@sauce/router` function per venue, and `trySwap` for a pool at any of them,
+  which take the accounts as `Account[]` arrays for a program that gives them itself. One order
+  over several pools under one price is `sauce-solana-distributed-swap`.
 - From TypeScript, the SVM client (`createSauceSvmClient`) builds the same cooks: `via: "engine"`
   for the direct one, and `executionFee()` quotes the fee to set `maxExecutionFee` from. Venue
   adapters build swaps on Solana venues such as Raydium (`sauce-typescript`). A venue swap they

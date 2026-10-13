@@ -35,6 +35,35 @@ What the lowering guarantees and requires:
 - **Every holder is known when the transaction is built.** A holder can be `ctx.self()` (or `self`): as a token's holder it is the Pot, as on an EVM chain. It can also be an `Address` parameter of `main`, or a 32-byte key. A holder computed as the program runs is refused, because no transaction can attach its account. Pass its token account as an `Account` parameter in the holder's place instead (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). That account is paid as attached: the call names no holder, so nothing checks whose it is, and whoever builds the transaction chooses it. Prefer an `Address` recipient, which the program checks, or check the account in the program (`require(ownerOf(USDC, dest) == expected, ...)`).
 - **Only in `main`, in a module.** The methods must stand in `main` itself: a helper has no account parameters, and a script has no `main` to add them to. `compileSauceRoute` refuses the added accounts, because a route's `execution.accounts` are built before the compile.
 
+## Venues by namespace
+
+A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain:
+
+```ts
+function main(
+  pool: Address,
+  to: Address,
+  amountIn: Uint256,
+  maxPrice: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const got = OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+  if (got > 0) WSOL.transfer(to, got);
+  return got;
+}
+```
+
+The namespaces are `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`, `OrcaWhirlpool`, `Cropper`, `Defituna`, `Crema` and `Phoenix`. Each has two methods, both taking `(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`: `swap` returns what arrived, and `trySwap` returns 0 where `swap` reverts. `maxPrice` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
+
+- **One venue's function.** Each call compiles to that venue's own `@sauce/router` function (`orcaWhirlpool`, `tryOrcaWhirlpool`), never `trySwap`, and keeps that function's checks: the venue's program, the pool's owner, the pair, `minOut`.
+- **The accounts are added to `main`.**
+  - The pool's nine (`slot:@pool:USDC.program` through `ticks2`) are read from the pool on the cluster as the cook is built. Its tick arrays follow the token paid, so the slot is that direction's (`svm.svmPoolSlot`, the same `sauce pools --chain solana` lists).
+  - The trader's are the Pot's.
+  - What is bought lands in the Pot's own account for `tokenOut`, which `sauce run` creates when it is missing.
+- **What must be known.** The pool and both tokens are each a parameter of `main` declared `Address`, a 32-byte key, or (a token) a registered symbol. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
+
+`sauce globals --chain solana` lists the namespaces under Venues. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools whose venues its program reads as it runs, and takes their accounts itself.
+
 ## Compile an SPL transfer
 
 The universal token builder emits account parameters and an SPL `TransferChecked` CPI. Its source needs no imports, so a single-module resolver is sufficient:

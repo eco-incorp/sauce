@@ -296,10 +296,12 @@ or an imported ABI), with `available(...)` for a chain that may lack it.
 Any swap inside a program, through `@sauce/router`: one function per venue (Uniswap V2, V3 and V4,
 Curve, Balancer V2, DODO V2, Trader Joe LB, WOOFi, Maverick V2), which venues are paid first and
 which call back through the Pot's Router, exact input, price limits and partial fills, the reverts,
-and the guard every leg needs.
+and the guard every leg needs. On Solana it covers each price-limit venue as a namespace
+(`OrcaWhirlpool.swap(pool, …)`, its accounts derived) and the function behind it.
 
-- **Holds** the functions' arguments, `sauce price` for turning a price into a limit, and an
-  example: one guarded Uniswap V3 leg that returns its unspent input.
+- **Holds** the functions' arguments, `sauce price` for turning a price into a limit, and two
+  examples: one guarded Uniswap V3 leg that returns its unspent input, and a swap at an Orca
+  whirlpool on Solana by its namespace, forwarded.
 - **Load it** for one swap, or a swap as one step of a program. One order over several pools
   under one price is `sauce-distributed-swap`; a swap as a step of a JSON document is
   `sauce-actions`.

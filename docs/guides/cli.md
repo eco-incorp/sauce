@@ -1355,7 +1355,10 @@ language, extended:
 - `self`: the Pot, or the signer with `--via engine`;
 - `@to`: `main`'s argument `to`;
 - `<holder>:<token>`: an associated token account. The holder is `pot`, `owner`, `self`, `@to` or a
-  base58 key, and the token is a symbol, a base58 mint, or `@mint` for `main`'s argument `mint`.
+  base58 key, and the token is a symbol, a base58 mint, or `@mint` for `main`'s argument `mint`;
+- `slot:<pool>:<token>.<part>`: one of the nine accounts a venue's swap takes for a pool paying the
+  token (`program`, `pool`, `config`, `vaultA`, `vaultB`, `extra`, `ticks0` to `ticks2`), read from
+  the pool on the cluster: what a venue's namespace (`OrcaWhirlpool.swap(pool, …)`) adds.
 
 `simulate`, `run` and `tx` derive each such slot from the owner, the Pot and `main`'s arguments,
 and an `--account` for one of them replaces its derivation. `run` creates a recipient's missing

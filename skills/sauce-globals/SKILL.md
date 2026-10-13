@@ -157,6 +157,11 @@ function main(recipient: Address, amount: Uint256): Uint256 {
 
 ## Protocols
 
+On Solana there are no protocol namespaces. The price-limit venues are namespaces there instead,
+each a swap at one pool: `OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)`, its
+accounts derived when the cook is built (`sauce-swaps`). `sauce globals --chain solana` lists
+them under Venues.
+
 - `Namespace.Contract` is the contract's address on the program's chain where a value is expected,
   and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500)`. A
   Uniswap fee is in millionths: `500` is the 0.05% tier, `3000` 0.3%.

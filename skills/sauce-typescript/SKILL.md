@@ -161,7 +161,9 @@ a recorded address, not proof of live code on the chain.
   the SDK added to `main`, by name, with its derivation as an `--account` value (`self:USDC`,
   `@to:USDC`). `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })`
   resolves one to the address the cook's `AccountResolution` takes (`pot` and `owner` keep their
-  signing roles), as `sauce run` does. Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
+  signing roles), as `sauce run` does; a venue namespace's `slot:@pool:USDC.<part>` needs `load`, an
+  owner-aware account loader, from which `svmPoolSlot(load, pool, payMint)` reads the pool's nine
+  accounts (the same `sauce pools` lists). Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
   pool configs, quote source and swap CPIs over an account loader you supply. For a local validator
   or LiteSVM, `svmEnginePath()`, `svmKitchenPath()` and `svmKitchenIdlPath()` from
   `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the packaged programs; the program
