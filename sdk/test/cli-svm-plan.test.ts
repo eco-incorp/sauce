@@ -8,7 +8,7 @@
  * than waited for; and what a wallet's send takes from a tool's result. Executing plans is
  * `cli-send.e2e.test.ts` and `mcp/test/send.e2e.test.ts`.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
 
 import {
@@ -32,6 +32,7 @@ import { UsageError } from "../src/cli/args.js";
 import {
   decodeCursor,
   encodeCursor,
+  newSvmPlan,
   nextStep,
   signableStep,
   unsignedSigner,
@@ -157,9 +158,14 @@ describe("a plan's cursor", () => {
     ],
     ["a list", () => cursorOf([]), /not a plan/],
     [
-      "one past the largest a plan decodes to",
-      () => cursorOf(raw({ returnType: "x".repeat(4 * MAX_CODE_LEN + 1) })),
+      "one inflating past the largest a plan decodes to",
+      () => cursorOf(raw({ labels: [[MINT, "x".repeat(2 * MAX_CODE_LEN)]] })),
       /it does not decode/,
+    ],
+    [
+      "one longer than the largest a plan encodes to",
+      () => `sauce-plan-1.${"A".repeat(4 * 1024 * 1024 + 1)}`,
+      /it is too long/,
     ],
     ["another via", () => cursorOf(raw({ via: "relay" })), /via is neither kitchen nor engine/],
     ["a short salt", () => cursorOf(raw({ salt: "0x11" })), /salt is not 32 bytes/],
@@ -275,6 +281,21 @@ describe("a plan's cursor", () => {
     ["a cooked with no signature", () => cursorOf(raw({ cooked: [true, "signed"] })), /cooked/],
     ["a return type that is no text", () => cursorOf(raw({ returnType: 7 })), /returnType/],
     [
+      "a return type past the longest",
+      () => cursorOf(raw({ returnType: `{ ${"a: Uint256, ".repeat(100)}}` })),
+      /returnType/,
+    ],
+    [
+      "a label past the longest",
+      () => cursorOf(raw({ labels: [[MINT, "x".repeat(201)]] })),
+      /a label/,
+    ],
+    [
+      "a label for no account",
+      () => cursorOf(raw({ labels: [["x".repeat(65), "the Pot"]] })),
+      /a label/,
+    ],
+    [
       "a fee that is no integer",
       () => cursorOf(raw({ maxExecutionFee: "-1" })),
       /maxExecutionFee is not an integer/,
@@ -283,6 +304,38 @@ describe("a plan's cursor", () => {
     const read = () => decodeCursor(cursor());
     expect(read).toThrow(UsageError);
     expect(read).toThrow(why);
+  });
+
+  it("carries the largest program a plan stages, whole", () => {
+    // Random bytes: as little as deflate can take off.
+    const largest = new Uint8Array(randomBytes(MAX_CODE_LEN));
+    const made = plan({
+      payload: largest,
+      staged: {
+        nonce: 1n,
+        sha256: new Uint8Array(createHash("sha256").update(largest).digest()),
+        length: MAX_CODE_LEN,
+      },
+    });
+    expect(decodeCursor(encodeCursor(made)).payload).toEqual(largest);
+  });
+
+  it("leaves out a return type too long to carry: what main returns is then shown as bytes", async () => {
+    const long = `{ ${"a: Uint256, ".repeat(100)}}`;
+    const made = await newSvmPlan({
+      owner: OWNER,
+      salt: `0x${"11".repeat(32)}`,
+      via: "kitchen",
+      payload: new Uint8Array([1, 2, 3]),
+      tail: [],
+      lookupTables: {},
+      potMissing: false,
+      tokenAccounts: [],
+      returnType: long,
+      labels: new Map(),
+    });
+    expect(made.returnType).toBeUndefined();
+    expect(decodeCursor(encodeCursor(made)).returnType).toBeUndefined();
   });
 
   it("takes staged over the payload it carries", () => {

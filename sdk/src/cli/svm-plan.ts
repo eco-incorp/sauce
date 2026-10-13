@@ -255,6 +255,14 @@ const LIST_MOST = 256;
 const NAMED_MOST = 64;
 /** The most a cursor may carry, decoded: a staged program at its largest, and its accounts. */
 const CURSOR_MAX = 2 * MAX_CODE_LEN;
+/** The longest cursor taken, as text: the largest plan, deflated, in base64, with room. */
+const CURSOR_TEXT_MOST = 4 * 1024 * 1024;
+/** The longest return type a plan carries: a record of a few dozen fields. A longer one is left
+ *  out, and what `main` returns is shown as its bytes. */
+const TYPE_MOST = 512;
+/** The longest name a plan carries for an account, and the longest account it names. */
+const LABEL_MOST = 200;
+const LABELLED_MOST = 64;
 /** A slot, a block height, a nonce, lamports: each a u64 on Solana. */
 const U64_MAX = 2n ** 64n - 1n;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -319,10 +327,11 @@ export function decodeCursor(text: string): SvmPlan {
       `cursor: ${why}; pass the cursor a step returned, whole (sauce tx or sauce send gives one)`,
     );
   if (!text.startsWith(CURSOR_PREFIX)) throw bad("not a plan's cursor");
+  if (text.length > CURSOR_TEXT_MOST) throw bad("it is too long");
   let raw: Record<string, unknown>;
   try {
     const inflated = inflateRawSync(unb64(text.slice(CURSOR_PREFIX.length)), {
-      maxOutputLength: CURSOR_MAX * 2,
+      maxOutputLength: CURSOR_MAX,
     });
     raw = JSON.parse(inflated.toString("utf8")) as Record<string, unknown>;
   } catch {
@@ -407,7 +416,14 @@ export function decodeCursor(text: string): SvmPlan {
   }
   const labels = list(raw.labels, "labels").map((entry) => {
     const [at, label] = list(entry, "a label");
-    if (typeof at !== "string" || typeof label !== "string") throw bad("a label");
+    if (
+      typeof at !== "string" ||
+      typeof label !== "string" ||
+      at.length > LABELLED_MOST ||
+      label.length > LABEL_MOST
+    ) {
+      throw bad("a label");
+    }
 
     return [at, label] as const;
   });
@@ -428,7 +444,12 @@ export function decodeCursor(text: string): SvmPlan {
     }
     cooked = { ok, signature };
   }
-  if (raw.returnType !== undefined && typeof raw.returnType !== "string") throw bad("returnType");
+  if (
+    raw.returnType !== undefined &&
+    (typeof raw.returnType !== "string" || raw.returnType.length > TYPE_MOST)
+  ) {
+    throw bad("returnType");
+  }
 
   return {
     owner: key(raw.owner, "owner"),
@@ -657,7 +678,9 @@ export async function newSvmPlan(input: NewPlanInput): Promise<SvmPlan> {
     pot: input.potMissing ? "setup" : "there",
     tokenAccounts: input.tokenAccounts,
     payload: input.payload,
-    ...(input.returnType === undefined ? {} : { returnType: input.returnType }),
+    ...(input.returnType === undefined || input.returnType.length > TYPE_MOST
+      ? {}
+      : { returnType: input.returnType }),
     labels: [...input.labels],
   };
   const signer = unsignedSigner(input.owner);
