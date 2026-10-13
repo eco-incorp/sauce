@@ -473,10 +473,13 @@ async function sendSvm(input: SendInput): Promise<SentEntry[]> {
     const pot = cookedPot(tx.transaction, tables);
     const what = pot === undefined ? `transaction ${index + 1}` : `cook on Pot ${pot}`;
     const signature = getSignatureFromTransaction(tx.transaction);
-    // One the cluster has already (sent before, by this or by the signer) is read back, not resent.
+    // One the cluster has already (sent before, by this or by the signer) is read back, not resent:
+    // looked for in the cluster's history, not only its recent status cache.
     const {
       value: [status],
-    } = await read("the transaction's status", () => rpc.getSignatureStatuses([signature]).send());
+    } = await read("the transaction's status", () =>
+      rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send(),
+    );
     if (status !== null && status !== undefined) {
       const result = await svmLanded(rpc, input.rpcUrl, signature);
       sent.push(svmEntry(input.chain, tx, what, result, pot, tables, undefined));
