@@ -15,6 +15,16 @@ export interface SauceTokenSource {
   balanceOf(owner: bigint): bigint;
 }
 
+/**
+ * A Solana venue's swap at one pool, in a program compiled for Solana: the pool and both tokens are
+ * known when the cook is built, which reads the pool's accounts from it; what arrives lands in the
+ * Pot's own account for the token bought. `swap` reverts where `trySwap` returns 0.
+ */
+export interface SauceSvmVenueSource {
+  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
+  trySwap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
+}
+
 /** A collection returned by Sauce, whose length is a Sauce scalar. */
 export interface SauceArray<T> {
   readonly length: bigint;
@@ -4396,6 +4406,15 @@ declare global {
   const WSOL: bigint & SauceTokenSource;
   const WULF_US: bigint & SauceTokenSource;
   const XAI: bigint & SauceTokenSource;
+  const RaydiumClmm: SauceSvmVenueSource;
+  const PancakeswapClmm: SauceSvmVenueSource;
+  const Byreal: SauceSvmVenueSource;
+  const StabbleClmm: SauceSvmVenueSource;
+  const OrcaWhirlpool: SauceSvmVenueSource;
+  const Cropper: SauceSvmVenueSource;
+  const Defituna: SauceSvmVenueSource;
+  const Crema: SauceSvmVenueSource;
+  const Phoenix: SauceSvmVenueSource;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;

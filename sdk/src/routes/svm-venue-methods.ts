@@ -31,30 +31,45 @@
 import { walk, type AstNode } from "./ast-walk.js";
 import { methodCall, type MethodCall } from "./token-rewrite.js";
 import { base58, capitalized, keyLiteral, nameOf, type SvmLowering } from "./svm-lowering.js";
-import { SVM_SLOT_PARTS } from "../svm/pool-slot.js";
+import { SVM_PRICE_LIMIT_VENUES, SVM_SLOT_PARTS } from "../svm/pool-slot.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 const ROUTER = "@sauce/router";
 const MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
-/** Each venue's namespace: its `@sauce/router` functions and its name for a person. */
-export const SVM_VENUE_NAMESPACES: Readonly<
-  Record<string, { readonly name: string; readonly swap: string; readonly trySwap: string }>
-> = {
-  RaydiumClmm: { name: "Raydium CLMM", swap: "raydiumClmm", trySwap: "tryRaydiumClmm" },
-  PancakeswapClmm: {
-    name: "PancakeSwap CLMM",
-    swap: "pancakeswapClmm",
-    trySwap: "tryPancakeswapClmm",
-  },
-  Byreal: { name: "Byreal", swap: "byreal", trySwap: "tryByreal" },
-  StabbleClmm: { name: "Stabble CLMM", swap: "stabbleClmm", trySwap: "tryStabbleClmm" },
-  OrcaWhirlpool: { name: "Orca Whirlpools", swap: "orcaWhirlpool", trySwap: "tryOrcaWhirlpool" },
-  Cropper: { name: "Cropper", swap: "cropper", trySwap: "tryCropper" },
-  Defituna: { name: "DefiTuna", swap: "defituna", trySwap: "tryDefituna" },
-  Crema: { name: "Crema", swap: "crema", trySwap: "tryCrema" },
-  Phoenix: { name: "Phoenix", swap: "phoenix", trySwap: "tryPhoenix" },
+/** A venue's namespace: its name for a person, its program, and its `@sauce/router` functions. */
+export interface SvmVenueNamespace {
+  readonly name: string;
+  readonly program: string;
+  readonly swap: string;
+  readonly trySwap: string;
+}
+
+const venue = (name: string, swap: string, trySwap: string): SvmVenueNamespace => ({
+  name,
+  program: SVM_PRICE_LIMIT_VENUES.find((one) => one.name === name)!.program,
+  swap,
+  trySwap,
+});
+
+/** Each venue's namespace, as a program writes it. */
+export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> = {
+  RaydiumClmm: venue("Raydium CLMM", "raydiumClmm", "tryRaydiumClmm"),
+  PancakeswapClmm: venue("PancakeSwap CLMM", "pancakeswapClmm", "tryPancakeswapClmm"),
+  Byreal: venue("Byreal", "byreal", "tryByreal"),
+  StabbleClmm: venue("Stabble CLMM", "stabbleClmm", "tryStabbleClmm"),
+  OrcaWhirlpool: venue("Orca Whirlpools", "orcaWhirlpool", "tryOrcaWhirlpool"),
+  Cropper: venue("Cropper", "cropper", "tryCropper"),
+  Defituna: venue("DefiTuna", "defituna", "tryDefituna"),
+  Crema: venue("Crema", "crema", "tryCrema"),
+  Phoenix: venue("Phoenix", "phoenix", "tryPhoenix"),
 };
+
+/** How a program calls a venue's swap, each method's signature. */
+export const SVM_VENUE_METHODS: readonly string[] = [
+  "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, maxPrice: Uint256, minOut: Uint256): Uint256",
+  "trySwap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, maxPrice: Uint256, minOut: Uint256): Uint256",
+];
 
 /** The methods each namespace offers, and the arguments they take. */
 const METHODS = ["swap", "trySwap"] as const;

@@ -242,7 +242,17 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     text.push("  Any other token: Token(0x…).transfer(…)");
   }
   if (showProtocols && svm) {
-    text.push("", "Protocols: none. Protocol namespaces are EVM contracts.");
+    const width = Math.max(0, ...globals.venues.map((venue) => venue.namespace.length));
+    text.push(
+      "",
+      `Venues (${globals.venues.length}): <Venue>.swap(pool, tokenIn, tokenOut, amountIn, ` +
+        "maxPrice, minOut), and trySwap(…), which returns 0 where swap reverts; the pool's " +
+        "accounts, and the Pot's, are derived when the cook is built",
+      ...globals.venues.map(
+        (venue) => `  ${venue.namespace.padEnd(width)}  ${venue.program}  (${venue.name})`,
+      ),
+      "Protocols: none. Protocol namespaces are EVM contracts.",
+    );
   } else if (showProtocols) {
     text.push(
       "",
@@ -287,7 +297,11 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
         : {}),
       // The interfaces asked for: every one beside the namespaces, or --protocol's own.
       ...(showProtocols
-        ? { protocols: globals.protocols, interfaces: globals.interfaces }
+        ? {
+            protocols: globals.protocols,
+            interfaces: globals.interfaces,
+            ...(svm ? { venues: globals.venues } : {}),
+          }
         : named !== undefined && named.interfaces.length > 0
           ? { interfaces: named.interfaces }
           : {}),
