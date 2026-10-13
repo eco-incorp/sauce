@@ -193,6 +193,13 @@ describe("svm account names", () => {
     );
   });
 
+  it("refuses the System Program as a token's holder, by name", async () => {
+    await expect(resolveSvmAccountName("system:USDC", ctx())).rejects.toThrow(
+      "system:USDC: system is the System Program, which holds no token account: name the " +
+        "holder, pot, owner, self, @<argument> or a base58 key",
+    );
+  });
+
   it("refuses what it cannot resolve, saying why", async () => {
     await expect(resolveSvmAccountName("pot:USDC", ctx({ via: "engine" }))).rejects.toThrow(
       "--via engine cooks with no Pot, so there is no Pot's token account to pass",

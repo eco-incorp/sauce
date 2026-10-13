@@ -63,6 +63,7 @@ import {
   isSvmAccountName,
   resolveSvmAccountName,
   SvmAccountNameError,
+  SYSTEM_HOLDER,
   type ResolvedSvmAccountName,
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
@@ -627,6 +628,8 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
       );
     }
     if (Object.hasOwn(accounts, name)) throw new UsageError(`--account: ${name} given twice`);
+    if (value.startsWith("system:"))
+      throw new UsageError(`--account ${name}=${SYSTEM_HOLDER(value)}`);
     if (!isSvmAccountName(value)) {
       throw new UsageError(
         `--account ${name}: '${value}' is not an address, pot, owner, system, or a token's account: ` +

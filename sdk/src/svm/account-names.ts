@@ -227,6 +227,11 @@ function parsePda(value: string): Parsed | undefined {
 /** The System program, which `system` names. */
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 
+/** Why `system:<token>` names nothing: `system` is no holder. */
+export const SYSTEM_HOLDER = (value: string): string =>
+  `${value}: system is the System Program, which holds no token account: name the holder, pot, ` +
+  "owner, self, @<argument> or a base58 key";
+
 function parse(value: string): Parsed | undefined {
   if (value === "system")
     return { kind: "holder", holder: { kind: "address", key: SYSTEM_PROGRAM } };
@@ -370,6 +375,8 @@ export async function resolveSvmAccountName(
   ctx: SvmAccountNameContext,
 ): Promise<ResolvedSvmAccountName> {
   const parsed = parse(value);
+  if (parsed === undefined && value.startsWith("system:"))
+    throw new SvmAccountNameError(SYSTEM_HOLDER(value));
   if (parsed === undefined) {
     throw new SvmAccountNameError(
       `'${value}' is not an address, pot, owner, self, @<argument>, or a token's account: ` +
