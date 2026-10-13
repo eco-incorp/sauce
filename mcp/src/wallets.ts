@@ -23,9 +23,11 @@ import {
   openWallet,
   parseChain,
   planChain,
+  plannedCursor,
   plannedTransactions,
   readPolicy,
   sendPlan,
+  sendSvmPlan,
   supportedChainNames,
   UsageError,
   walletName,
@@ -174,7 +176,8 @@ export function registerWalletTools(
       title: "Send transactions from a wallet",
       description:
         "Signs and sends, from one of this server's wallets, the transactions another tool built " +
-        "unsigned: pass that tool's whole result as `transaction` — sauce_tx, sauce_pot, " +
+        "unsigned: pass that tool's whole result as `transaction` — sauce_tx (a Solana plan " +
+        "too, sent step by step from its cursor, each step built fresh), sauce_pot, " +
         "sauce_actions (with owner), sauce_intent_publish, sauce_intent_fill, sauce_intent_prove, " +
         "sauce_intent_claim, sauce_intent_refund, sauce_intent_cancel — or one transaction ({ to, " +
         "data, value }, or a Solana { transaction }), or a list. First it rehearses them: on an " +
@@ -232,6 +235,20 @@ export function registerWalletTools(
       annotations: SENDS,
     },
     async (args, reach) => {
+      // A Solana plan (sauce_tx's, or sauce_send's `next`): every step, from its cursor.
+      const cursor = plannedCursor(args.transaction);
+      if (cursor !== undefined) {
+        const chain =
+          args.chain === undefined
+            ? parseChain("solana", "chain")
+            : parseChain(String(args.chain), "chain");
+        const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
+        guard.gate(chain);
+        const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
+        const sent = await sendSvmPlan({ wallet: unlocked, guard, chain, cursor, rpcUrl });
+
+        return { json: sent.json, notes: sent.notes };
+      }
       const transactions = plannedTransactions(args.transaction);
       const chain = planChain(
         transactions,

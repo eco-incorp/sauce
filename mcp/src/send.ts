@@ -19,6 +19,9 @@ import {
 } from "./sdk.js";
 import { chainRef, LIMITS, refusable, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
 
+/** The most a plan's cursor holds: a staged program at its largest, compressed, in base64. */
+const CURSOR_MAX = 4 * 1024 * 1024;
+
 /** The sending tools, in the order `tools/list` gives them (after the intent tools). */
 export const SEND_TOOL_NAMES = ["sauce_send"] as const;
 
@@ -52,20 +55,52 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "read back, not sent again. Returns `sent`: each one's hash (a Solana signature), " +
         "status, `explorer` and `trace` (links to give the user, never to fetch), fee or gas, " +
         "the decoded `reason` of a failure, and for a cook what moved (`moves` on EVM, " +
-        "`tokenChanges`/`lamportChanges` on Solana), `leftInPot`, and on Solana `returns` (main's value, " +
-        "hex). A Solana transaction lands within about a minute of being built, or never: one " +
-        "whose blockhash expired is refused, to build and sign again. Needs the chain's " +
+        "`tokenChanges` and `lamportChanges` on Solana), `leftInPot`, and on Solana `returns` " +
+        "(main's value, hex). A Solana transaction lands within about a minute of being built, " +
+        "or never: one whose blockhash expired is refused, to build and sign again. A Solana " +
+        "cook too large " +
+        "for one transaction comes from sauce_tx as a plan: its first step's `transactions` " +
+        "(the setup: the Pot and token accounts, the program staged in a code buffer, a lookup " +
+        "table), and a `cursor`. Send them signed with that cursor, and `next` is the step " +
+        "after (the cook, then the code buffer's close), built fresh, with its own cursor; " +
+        "repeat until `next.step` is done. Whatever did not land is built again, so a step " +
+        "that expired comes back with only what is left: send the cursor alone for it. Needs " +
+        "the chain's " +
         `endpoint (rpcUrl, or the server's). It sends only on ${supportedChainNames()}, the ` +
         "chains this release supports; on any other it is refused before any endpoint is " +
         "reached, with `refused` saying how to request the chain.",
       input: {
         transactions: z
           .array(z.string().min(2).max(LIMITS.hex))
-          .min(1)
           .max(LIMITS.entries)
+          .optional()
           .describe(
             "The signed transactions, in the order to send them: raw 0x… hex on an EVM chain, " +
               "base64 wire transactions on Solana.",
+          ),
+        cursor: z
+          .string()
+          .min(1)
+          .max(CURSOR_MAX)
+          .optional()
+          .describe(
+            "Solana: the plan's cursor sauce_tx (or the last sauce_send's `next`) returned. With " +
+              "it, `next` is the plan's next step, built fresh from what the cluster shows. Alone " +
+              "(no transactions), it builds that step without sending anything.",
+          ),
+        signatures: z
+          .array(z.string().min(32).max(100))
+          .max(LIMITS.entries)
+          .optional()
+          .describe(
+            "Solana: signatures of the plan's transactions you broadcast another way, to confirm " +
+              "and report — so the plan knows how its cook went.",
+          ),
+        close: z
+          .boolean()
+          .optional()
+          .describe(
+            "Solana, with cursor: give up on the cook, and close the code buffer the plan staged.",
           ),
         chain: chainRef
           .optional()
@@ -79,18 +114,29 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         chainId: z.number(),
         ok: z.boolean(),
         sent: z.array(z.looseObject({ hash: z.string(), status: z.string() })),
+        next: z.looseObject({ step: z.string() }),
       }),
       annotations: BROADCASTS,
     },
     async (args, reach) => {
+      const input = {
+        transactions: args.transactions ?? [],
+        signatures: args.signatures ?? [],
+        ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
+      };
       const chain = signedChain(
-        args.transactions,
+        input,
         args.chain === undefined ? undefined : parseChain(String(args.chain), "chain"),
       );
       // Before any endpoint is reached.
       requireSupported("sending", [chain]);
       const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
-      const output = await sendCommand({ chain, rpcUrl, transactions: args.transactions });
+      const output = await sendCommand({
+        ...input,
+        chain,
+        rpcUrl,
+        ...(args.close === true ? { close: true } : {}),
+      });
 
       return {
         json: output.json,

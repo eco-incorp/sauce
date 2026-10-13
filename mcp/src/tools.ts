@@ -920,8 +920,8 @@ export const fromCommand = (output: CommandOutput): ToolOutput => ({
   notes: output.notes,
 });
 
-/** Fields that hold a program's or a file's own text, never reworded. */
-const VERBATIM = new Set(["source", "text"]);
+/** Fields that hold a program's or a file's own text, or a plan's cursor, never reworded. */
+const VERBATIM = new Set(["source", "text", "cursor"]);
 
 /** `value` with every string passed through `scrub`, and put in the tools' words (`terms.ts`)
  *  unless it is a program's own text. */
@@ -1884,12 +1884,19 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "plus any native the program spends — give it, or an endpoint to read the fee from, " +
         "which also says whether the Pot is deployed. When the endpoint shows the Pot has no " +
         "code yet, it returns { chainId, pot, transactions } instead: first Kitchen.deployPot " +
-        "(marked deploysPot; any account may send it), then the cook — send them in order, or " +
-        "pass the whole result to a wallet that sends a plan. On Solana it returns { chain, " +
-        "via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction }: the Kitchen cook " +
-        "(or, via engine, the engine's own paid cook, with no Pot) as a base64 transaction for " +
-        "the owner to sign, which needs an endpoint (its blockhash and the fee); a Pot not " +
-        "created yet is created by the same transaction (createsPot). `notes` say what must be " +
+        "(marked deploysPot; any account may send it), then the cook — sign them in order " +
+        "(the cook with room in its gas limit, or once the deployment landed) and send them " +
+        "with sauce_send. On Solana, which needs an endpoint (the blockhash and the fee), it " +
+        "returns { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction, " +
+        "cursor }: the Kitchen cook (or, via engine, the engine's own paid cook, with no Pot) " +
+        "as a base64 transaction for the owner to sign; a Pot not created yet is created by " +
+        "the same transaction (createsPot). A cook that needs more than one transaction — a " +
+        "program too large for one, staged in a code buffer; accounts past one transaction's " +
+        "list, through a lookup table; a token account or a Pot to create first — comes as a " +
+        "plan: { step, plan, transactions: [{ what, transaction, feePayer }], cursor } for its " +
+        "first step, every transaction base64 for the owner to sign on one blockhash, sent in " +
+        "order by sauce_send with the cursor, which returns the next step. Nothing needs a " +
+        "fresh keypair: the owner signs and pays every transaction. `notes` say what must be " +
         "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: { ...PROGRAM, ...sourceInputs(local), ...COOK },
@@ -1899,11 +1906,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         data: z.string(),
         value: z.string(),
         pot: z.string(),
-        transactions: z.array(
-          z.looseObject({ what: z.string(), to: z.string(), data: z.string(), value: z.string() }),
-        ),
+        transactions: z.array(z.looseObject({ what: z.string() })),
         createsPot: z.boolean(),
         transaction: z.string(),
+        step: z.string(),
+        plan: z.array(z.looseObject({ step: z.string(), what: z.string(), state: z.string() })),
+        cursor: z.string(),
         sourceSha256: z.string(),
       }),
       annotations: READS_CHAIN,

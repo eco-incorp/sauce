@@ -107,8 +107,10 @@ export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
 export {
   checkPlan,
   planChain,
+  plannedCursor,
   plannedTransactions,
   sendPlan,
+  sendSvmPlan,
 } from "../../sdk/dist/cli/wallet-send.js";
 export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
 export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";
