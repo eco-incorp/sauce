@@ -49,6 +49,15 @@ return, a malformed return or an address with no code reverts the program. A wri
 nothing, so `const ok = USDT.transfer(...)` does not compile. Approve exactly what the next call
 spends: a standing allowance outlives the program.
 
+On Solana the methods are the same, and `Token(mint)` takes a mint given as an `Address` argument
+of `main`. A Solana balance belongs to a token account, so compiling adds the token accounts each
+call moves through to `main`. The cook derives them when it is built, and the program checks each
+one belongs to the holder named. So every holder is known by then: `ctx.self()` (the Pot), an
+`Address` argument of `main`, or a key written out (`sauce-solana`). A symbol also names its
+accounts there: `USDC.accountOf(holder)`, `USDC.mint` and `USDC.tokenProgram`. `Solana` names the
+rest a program writes where it uses them (`Solana.pda(program, [seeds])`, `Solana.systemProgram`,
+…), each added to `main` the same way; `sauce globals --chain solana` lists them under Accounts.
+
 The same library as functions, token first: `transfer(token, to, amount)`,
 `transferFrom(token, from, to, amount)`, `approve(token, spender, amount)`,
 `balanceOf(token, account)`, `allowance(token, owner, spender)`, `totalSupply(token)`,
@@ -118,12 +127,18 @@ function main(recipient: Address, amount: Uint256) {
 
 ### On Solana
 
-A stock on Solana is a Token-2022 mint, and its symbol is the mint's 32-byte key, a value for
-`@sauce/token`'s functions: `balanceOf(TSLAx, account)`. A program moves one with the checked
-writes, `transferChecked` and `approveChecked`, which take the mint's token program, the mint and
-its decimals beside the token accounts (`transfer` and `approve` take legacy SPL Token mints only).
-`sauce` names each of those accounts by the symbol: `program:TSLAx` the token program,
-`mint:TSLAx` the mint, `pot:TSLAx` the Pot's token account and `owner:TSLAx` the owner's.
+A stock on Solana is a Token-2022 mint with the same methods: `SPACEX.transfer(to, amount)`
+lowers to the checked write, `transferChecked`, with the mint's decimals, and the accounts it moves
+through are added to `main` and derived (`sauce-solana`). Its symbol alone is the mint's 32-byte
+key, a value for `@sauce/token`'s functions: `balanceOf(TSLAx, account)`. Written out, the checked
+writes take the mint's token program, the mint and its decimals beside the token accounts
+(`transfer` and `approve` take legacy SPL Token mints only). `sauce` names each of those accounts by
+the symbol:
+
+- `program:TSLAx`, the token program;
+- `mint:TSLAx`, the mint;
+- `pot:TSLAx`, the Pot's token account;
+- `owner:TSLAx`, the owner's.
 
 - Amounts are raw, in the mint's decimals. The issuer's multiplier, by which a wallet shows them,
   moves for splits and dividends, so a raw unit is not always one share.
@@ -136,21 +151,19 @@ its decimals beside the token accounts (`transfer` and `approve` take legacy SPL
   balance. A new token account is usable, not frozen.
 
 ```sauce chain=solana
-function main(
-  tokenProgram: Account,
-  source: Account<Writable>,
-  mint: Account,
-  destination: Account<Writable>,
-  pot: Account<Signer>,
-  amount: Uint256,
-): Uint256 {
-  const before = balanceOf(SPACEX, destination);
-  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9);
-  return balanceOf(SPACEX, destination) - before;
+function main(recipient: Address, amount: Uint256): Uint256 {
+  const before = SPACEX.balanceOf(recipient);
+  SPACEX.transfer(recipient, amount);
+  return SPACEX.balanceOf(recipient) - before;
 }
 ```
 
 ## Protocols
+
+On Solana there are no protocol namespaces. The price-limit venues are namespaces there instead,
+each a swap at one pool: `OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)`, its
+accounts derived when the cook is built (`sauce-swaps`). `sauce globals --chain solana` lists
+them under Venues.
 
 - `Namespace.Contract` is the contract's address on the program's chain where a value is expected,
   and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500)`. A

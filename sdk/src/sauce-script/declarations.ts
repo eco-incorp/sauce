@@ -3,7 +3,8 @@
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
  * - every chain as the function that opens an intent there, with its namespaces
- *   (`Base(() => { … })`, `Base.UniswapV3.Factory`);
+ *   (`Base(() => { … })`, `Base.UniswapV3.Factory`), and Solana with the accounts a program for it
+ *   writes where it uses them (`Solana.pda(…)`, `Solana.systemProgram`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
@@ -180,7 +181,7 @@ export function sauceScriptDeclarations(): string {
   const namespaces = new Set<string>();
   const defines = new Set<string>();
   const tokens = new Set<string>();
-  let chains: ReadonlyArray<{ readonly key: string }> = [];
+  let chains: ReadonlyArray<{ readonly key: string; readonly kind: string }> = [];
   for (const chain of CANONICAL_CHAINS) {
     const globals = sourceGlobals(chain);
     chains = globals.chains;
@@ -224,7 +225,11 @@ export function sauceScriptDeclarations(): string {
     ...[...namespaces].sort().map((ns) => `  readonly ${ns}: ${sources}.${ns}Source;`),
     "}",
     "",
-    ...chains.map((chain) => `declare const ${chain.key}: SauceChain;`),
+    ...chains.map((chain) =>
+      chain.kind === "svm"
+        ? `declare const ${chain.key}: SauceChain & ${sources}.SauceSolanaAccounts;`
+        : `declare const ${chain.key}: SauceChain;`,
+    ),
     "",
     "/** A protocol contract's address on the chain a program is compiled for: a define. */",
     ...[...defines]

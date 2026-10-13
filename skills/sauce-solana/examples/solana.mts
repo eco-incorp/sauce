@@ -5,13 +5,19 @@
 // Pot is the Kitchen's address for its seeds, the skill sends the reader to sauce-chains' deployments
 // file for the Kitchen and engine, and a cook's size is what the skill budgets. Then
 // token-2022.sauce.ts: its accounts, PYUSD's token program, the two programs the skill names, and
-// that moving a Token-2022 token and measuring what arrived is past one transaction. Offline:
-// nothing is sent.
+// that moving a Token-2022 token and measuring what arrived is past one transaction. Then
+// pay.sauce.ts: the accounts the token methods add to main and how each is derived, the checks
+// after each write, the same file on Base, and a derivation resolved to the account it names. Then
+// wrap.sauce.ts and the accounts written where they are used: each one's derivation and role, the
+// names the skill gives, one slot for an account written twice, the check each is held to and its
+// reason, and the refusal of a seed computed as the program runs.
+// Offline: nothing is sent.
 //
 //   node solana.mts
 import { readFileSync } from "node:fs";
 
 import { routes } from "@eco-incorp/sauce";
+import { requireChain } from "@eco-incorp/sauce/chains";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
 import {
   AccountRole,
@@ -33,6 +39,7 @@ import {
   getAddressEncoder,
   getProgramDerivedAddress,
   getTransactionSize,
+  resolveSvmAccountName,
 } from "@eco-incorp/sauce/svm";
 
 function check(condition: unknown, message: string): asserts condition {
@@ -168,8 +175,167 @@ check(
   "a Token-2022 transfer that measures what arrived is past one transaction",
 );
 
+// The token methods: pay.sauce.ts names no account. Compiling adds each one its call moves through
+// to main, after main's own parameters, with how it is derived, as the skill's table says.
+const pay = routes.compileSauceProgram(
+  "solana",
+  readFileSync(new URL("./pay.sauce.ts", import.meta.url), "utf8"),
+);
+check(
+  JSON.stringify(pay.derivedAccounts) ===
+    JSON.stringify({
+      potUSDC: "self:USDC",
+      pot: "self",
+      tokenProgram: TOKEN_PROGRAM_ID,
+      toUSDC: "@to:USDC",
+    }),
+  `pay.sauce.ts's added accounts and their derivations, not ${JSON.stringify(pay.derivedAccounts)}`,
+);
+for (const [slot, derive] of Object.entries(pay.derivedAccounts ?? {}))
+  check(
+    skill.includes(`\`${slot}\``) && skill.includes(`\`${derive}\``),
+    `the skill's table has ${slot}`,
+  );
+check(
+  pay.entryParams.map((param) => param.name).join() === "to,amount",
+  "the added accounts are no arguments: main's are to and amount",
+);
+// Each holder's account is checked after the write, with the reason the skill names.
+for (const reason of ["wrong recipient account", "wrong holder account"]) {
+  check(pay.source.includes(reason), `the lowering checks with "${reason}"`);
+  check(skill.includes(`\`${reason}\``), `the skill names "${reason}"`);
+}
+// The same file compiles for Base, where the methods are SafeERC20 and add no account.
+const onBase = routes.compileSauceProgram(
+  "base",
+  readFileSync(new URL("./pay.sauce.ts", import.meta.url), "utf8"),
+);
+check(
+  onBase.manifest === undefined && onBase.derivedAccounts === undefined,
+  "Base adds no account",
+);
+// The command derives each from the cook: `@to:USDC` is the associated USDC account of main's
+// argument `to`, `self:USDC` the Pot's, `self` the Pot itself.
+const recipient = (await generateKeyPairSigner()).address;
+const named = { chain: requireChain("solana"), owner: owner.address, pot: pot.address };
+const toUsdc = await resolveSvmAccountName("@to:USDC", { ...named, args: { to: recipient } });
+const [ata] = await getProgramDerivedAddress({
+  programAddress: address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+  seeds: [
+    getAddressEncoder().encode(recipient),
+    getAddressEncoder().encode(TOKEN_PROGRAM_ID),
+    getAddressEncoder().encode(USDC_MINT),
+  ],
+});
+check(toUsdc.value === ata, "@to:USDC is the recipient's associated USDC account");
+check((await resolveSvmAccountName("self", named)).value === "pot", "self is the Pot");
+// A Token-2022 mint takes the checked write and its mint as one more account.
+const stock = routes.compileSauceProgram(
+  "solana",
+  "function main(to: Address, amount: Uint256) {\n  PYUSD.transfer(to, amount);\n}\n",
+);
+check(stock.source.includes("transferChecked"), "a Token-2022 mint moves by transferChecked");
+check(stock.derivedAccounts?.mintPYUSD === "mint:PYUSD", "and takes its mint as an account");
+
+// Accounts where they are used: wrap.sauce.ts writes each account in its calls. Compiling adds each
+// to main with its derivation and the role its uses give it, as the skill's section says, and the
+// Pot, whose key the Pot's WSOL account is checked to be held by.
+const wrap = routes.compileSauceProgram(
+  "solana",
+  readFileSync(new URL("./wrap.sauce.ts", import.meta.url), "utf8"),
+);
+const wrapRoles = Object.fromEntries(
+  (wrap.manifest?.accounts ?? []).flatMap((a) => (a.kind === "slot" ? [[a.name, a.requires]] : [])),
+);
+check(
+  JSON.stringify(wrap.derivedAccounts) ===
+    JSON.stringify({
+      potWSOL: "self:WSOL",
+      pot: "self",
+      systemProgram: "11111111111111111111111111111111",
+      owner: "owner",
+      tokenProgram: TOKEN_PROGRAM_ID,
+    }) &&
+    JSON.stringify(wrapRoles) ===
+      JSON.stringify({
+        potWSOL: "writable",
+        pot: "readonly_signer",
+        systemProgram: "readonly",
+        owner: "writable_signer",
+        tokenProgram: "readonly",
+      }),
+  `wrap.sauce.ts's accounts, derivations and roles, not ${JSON.stringify(wrap.derivedAccounts)} ${JSON.stringify(wrapRoles)}`,
+);
+check(
+  wrap.entryParams.map((param) => param.name).join() === "lamports",
+  "wrap.sauce.ts's only argument is lamports",
+);
+// The skill's table: each expression's derivation, a pda named for its constant or first string
+// seed, and one slot however often an account is written.
+const table = routes.compileSauceProgram(
+  "solana",
+  "function main(program: Address, to: Address): Uint256 {\n" +
+    "  const dest = Solana.pda(program, [to]).writable();\n" +
+    '  return dest.dataLen + Solana.pda(program, ["state", to]).dataLen + Solana.account(program).dataLen +\n' +
+    "    Solana.self.dataLen + Solana.owner.dataLen + Solana.token2022Program.dataLen +\n" +
+    "    Solana.associatedTokenProgram.dataLen + Solana.memoProgram.dataLen + USDC.mint.dataLen +\n" +
+    "    USDC.tokenProgram.dataLen + USDC.accountOf(to).dataLen + USDC.accountOf(to).dataLen;\n}\n",
+);
+const derived = table.derivedAccounts ?? {};
+check(derived.destPda === "pda:@program:@to", "a pda is named for the constant it initializes");
+check(derived.statePda === 'pda:@program:"state",@to', "else for its first string seed");
+check(
+  derived.programAccount === "@program" && derived.pot === "self" && derived.owner === "owner",
+  "Solana.account(key), Solana.self and Solana.owner",
+);
+check(
+  derived.mintUSDC === "mint:USDC" && derived.toUSDC === "@to:USDC",
+  "USDC.mint and USDC.accountOf(to), written twice, one slot",
+);
+check(
+  Object.keys(derived).filter((name) => derived[name] === "@to:USDC").length === 1,
+  "one slot for an account written twice",
+);
+check(
+  skill.includes("| `pda:<program>:<seeds>`") && skill.includes("`destPda`"),
+  "the skill's table",
+);
+// Each account is checked on chain, with the reason the skill names: the checks open main.
+for (const reason of [
+  "wrong account",
+  "wrong program-derived address",
+  "wrong holder account",
+  "wrong mint",
+  "wrong program",
+]) {
+  check(table.source.includes(`"${reason}");`), `the lowering checks with "${reason}"`);
+  check(skill.includes(`\`${reason}\``), `the skill names "${reason}"`);
+}
+check(
+  table.source.includes("crypto.findPDA(program, [to.toBytesBe(32)])"),
+  "the engine derives a program-derived address again",
+);
+// A seed computed as the program runs is refused, naming the Account parameter.
+let refused = "";
+try {
+  routes.compileSauceProgram(
+    "solana",
+    'function main(program: Address): Uint256 {\n  const x = 5;\n  return Solana.pda(program, ["a", x]).dataLen;\n}\n',
+  );
+} catch (error) {
+  refused = (error as Error).message;
+}
+check(
+  refused.includes("must be known when the transaction is built") &&
+    refused.includes("`Account` parameter of main"),
+  `a seed computed as the program runs is refused: ${refused}`,
+);
+
 console.log(
   `SVM program ${program.bytecode.length} bytes, ${slots.length} account slots, ${args.length}-byte arguments`,
+);
+console.log(
+  `token-method program ${pay.bytecode.length} bytes, ${Object.keys(pay.derivedAccounts ?? {}).length} accounts derived`,
 );
 console.log(`Token-2022 program ${checked.bytecode.length} bytes`);
 console.log(`released engine ${v12SvmEngineProgramId()}, Kitchen ${v12SvmKitchenProgramId()}`);

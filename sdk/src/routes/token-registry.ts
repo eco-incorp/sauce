@@ -39,8 +39,8 @@
  * MINT: its base58 address and the 32-byte key a program holds it as. The symbol means the same
  * thing it does on an EVM chain: a compile-time value, the mint's key, which the `@sauce/token` SVM
  * arm takes first (`balanceOf(USDC, account)`) — the define a program used to be handed as
- * `--define MINT=0x…`. The token SYNTAX (`USDC.transfer(...)`, `self.USDC`) stays EVM-only: an SPL
- * write needs account slots the sugar has nowhere to put, so on Solana it is refused by name. A row
+ * `--define MINT=0x…`. The token SYNTAX (`USDC.transfer(...)`, `self.USDC`) lowers on Solana to
+ * that arm too, the account slots an SPL write needs added to `main` (`svm-token-rewrite.ts`). A row
  * records its mint's token program, legacy SPL Token or Token-2022 (PYUSD): the SVM arm reads both
  * and moves both with its checked writes, and the program is the `tokenProgram` account a write
  * takes and the one a token account's address derives under.
