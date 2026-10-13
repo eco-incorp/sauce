@@ -1,15 +1,17 @@
 /**
  * `sauce send`'s reading of what it is given, before any endpoint: the chain each signed
  * transaction names, and the refusals — transactions signed for different chains in one call, a
- * legacy transaction that names no chain, bytes that are no transaction, and a Solana transaction
- * whose signatures are not all there (none, fewer than its message's signers, or not its fee
- * payer's), each refused by name before anything is read.
+ * legacy transaction that names no chain, bytes that are no transaction, a blob transaction and a
+ * contract creation, and a Solana transaction whose signatures are not all there (none, fewer than
+ * its message's signers, or not its fee payer's), each refused by name before anything is read.
+ * And the wait for a transaction read back: mined, gone (missing twice in a row, not once), or still
+ * pending when the wait runs out.
  */
-import { serializeTransaction, type Hex } from "viem";
+import { serializeTransaction, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { sendCommand, signedChain } from "../src/cli/send.js";
+import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
 
 /** A throwaway signer: the signatures are real, the key is the test's alone. */
 const signer = privateKeyToAccount(`0x${"42".repeat(32)}`);
@@ -111,6 +113,95 @@ describe("a Solana transaction whose signatures are not all there", () => {
   it("refuses one its fee payer did not sign, by name", async () => {
     await expect(send(solanaWire([0, 7], 2, 2))).rejects.toThrow(
       /transaction 1 is not signed by its fee payer \S+: sign it with your wallet or signer first/,
+    );
+  });
+});
+
+describe("an EVM transaction sauce send does not broadcast", () => {
+  const send = (transaction: Hex) =>
+    sendCommand({
+      chain: requireChain("ethereum"),
+      rpcUrl: "http://127.0.0.1:9/",
+      transactions: [transaction],
+    });
+  const fees = { nonce: 0, maxFeePerGas: 1n, maxPriorityFeePerGas: 1n } as const;
+
+  it("refuses a blob transaction, before the endpoint", async () => {
+    const blob = await signer.signTransaction({
+      ...fees,
+      chainId: 1,
+      type: "eip4844",
+      to: RECIPIENT,
+      value: 0n,
+      gas: 21_000n,
+      maxFeePerBlobGas: 1n,
+      blobVersionedHashes: [`0x01${"00".repeat(31)}`],
+    });
+    await expect(send(blob)).rejects.toThrow(
+      /transaction 1 carries blobs, which sauce send does not broadcast/,
+    );
+  });
+
+  it("refuses a contract creation, before the endpoint", async () => {
+    const creation = await signer.signTransaction({
+      ...fees,
+      chainId: 1,
+      type: "eip1559",
+      data: "0x6000",
+      value: 0n,
+      gas: 100_000n,
+    });
+    await expect(send(creation)).rejects.toThrow(
+      /transaction 1 creates a contract; sauce send broadcasts calls/,
+    );
+  });
+});
+
+describe("the wait for a transaction read back", () => {
+  const HASH: Hex = `0x${"ab".repeat(32)}`;
+  /** A client whose chain answers each poll from `polls`: mined, pending, or not there. */
+  const client = (polls: Array<"mined" | "pending" | "missing">): PublicClient => {
+    let at = 0;
+    const next = () => polls[Math.min(at++, polls.length - 1)]!;
+    let now: "mined" | "pending" | "missing" = "pending";
+
+    return {
+      getTransactionReceipt: async () => {
+        now = next();
+        if (now !== "mined") throw new Error("no receipt");
+
+        return {};
+      },
+      getTransaction: async () => {
+        if (now === "missing") throw new Error("not found");
+
+        return {};
+      },
+    } as unknown as PublicClient;
+  };
+  const quick = { pollMs: 1 };
+
+  it("returns once it is mined", async () => {
+    await expect(
+      minedOrGone(client(["pending", "pending", "mined"]), HASH, "the cook", quick),
+    ).resolves.toBeUndefined();
+  });
+
+  it("says it is gone once it is missing twice in a row, and not when it comes back", async () => {
+    await expect(
+      minedOrGone(client(["pending", "missing", "missing"]), HASH, "the cook", quick),
+    ).rejects.toThrow(new RegExp(`the cook ${HASH} was seen, then not found: reorged or dropped`));
+    // Missing once, between two backends that disagree, is not gone.
+    await expect(
+      minedOrGone(client(["missing", "pending", "missing", "mined"]), HASH, "the cook", quick),
+    ).resolves.toBeUndefined();
+  });
+
+  it("says it is still pending when the wait runs out, and that it was not sent again", async () => {
+    await expect(
+      minedOrGone(client(["pending"]), HASH, "the cook", { pollMs: 1, mostMs: 20 }),
+    ).rejects.toThrow(
+      new RegExp(`the cook ${HASH} is still pending after 0.02 seconds; it was not sent again`),
     );
   });
 });
