@@ -243,12 +243,50 @@ describeSvm("the token methods on Solana: every account derived by the command",
     await account(stock, pot, 10_000_000_000n, TOKEN_2022_PROGRAM, prestock.decimals);
     shim = solanaShim(harness.svm, SOLANA_URL);
     shim.install();
+    // The owner's Pot, created once, so each test's cook runs on it whatever runs first.
+    const deployed = await sauce(
+      ...["pot", "--deploy", "--chain", "solana", "--keypair", owner.path],
+      ...["--rpc-url", SOLANA_URL],
+    );
+    if (deployed.code !== 0) throw new Error(`creating the Pot failed: ${deployed.stderr}`);
   }, 120_000);
 
   afterAll(() => {
     shim?.restore();
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
   });
+
+  it("runs the sauce-solana pay example as its header says: --args and nothing else", async () => {
+    const file = join(HERE, "../../skills/sauce-solana/examples/pay.sauce.ts");
+    // The example line of the program's header, as written, its placeholders filled in and the
+    // endpoint added.
+    const header = readFileSync(file, "utf8")
+      .split("\n")
+      .filter((one) => one.startsWith("//"))
+      .map((one) => one.replace(/^\/\/\s*/, ""));
+    const line = header.find((one) => one.startsWith("sauce run pay.sauce.ts --chain solana"))!;
+    const recipient = randomAddress();
+    const toUsdc = await account(usdc, recipient, 0n, TOKEN_PROGRAM, 6);
+    const argv = line
+      .split(/\s+/)
+      .slice(1)
+      .map((word) => ({ "<keypair>": owner.path, "<recipient>": recipient })[word] ?? word);
+    expect(argv.slice(0, 2)).toEqual(["run", "pay.sauce.ts"]);
+    expect(argv).not.toContain("--account");
+    argv[1] = file;
+    const held = tokenAmount(harness, potUsdc);
+    const out = json(await sauce(...argv, "--rpc-url", SOLANA_URL, "--json"));
+    expect(out).toMatchObject({ cook: { status: "success" } });
+    expect(tokenAmount(harness, toUsdc)).toBe(400n);
+    expect(tokenAmount(harness, potUsdc)).toBe(held - 400n);
+
+    // Past what the Pot holds, its own check refuses it.
+    const short = await simulate(file, "--args", recipient, String(held));
+    expect(JSON.parse(short.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "not enough USDC"',
+    });
+  }, 120_000);
 
   it("`sauce compile --json` lists each added account with how it is derived", async () => {
     const file = program(

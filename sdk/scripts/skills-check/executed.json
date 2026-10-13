@@ -34,6 +34,7 @@
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
+    "sauce-solana/examples/pay.sauce.ts": ["sdk/test/cli-solana-token-methods.e2e.test.ts"],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"

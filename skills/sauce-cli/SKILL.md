@@ -507,8 +507,13 @@ USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
   vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
   `refund`, `cancel`, `status`, `import`). Publishing, from a wallet or a Pot, needs every chain the
   intent involves supported; the rehearsals run on any chain.
-- **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
-  `--keypair`, and the execution fee is read from the cluster and printed as `fee`, with no
+- **On Solana** (`--chain solana`) a program declares every account it touches, and attaches each
+  with `--account NAME=<value>`. The token methods (`USDC.transfer(to, amount)`) are the exception:
+  compiling adds their accounts to `main`, and the command derives each from the owner, the Pot and
+  main's arguments, so they need no `--account` (one given replaces the derivation).
+  `sauce compile --json` shows each slot's `derive`. `sauce run` creates a recipient's missing token
+  account before the cook, asking first, or with `--yes`. A cook signs with `--keypair`, and the
+  execution fee is read from the cluster and printed as `fee`, with no
   `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it. `--via kitchen`,
   the default, cooks through the Kitchen on the owner's Pot; `--via engine` calls the engine
   directly, with no Pot: the signer pays the fee and is the authority the program acts with

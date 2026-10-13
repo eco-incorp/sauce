@@ -1,18 +1,90 @@
 ---
 name: sauce-solana
-description: Writing and running Sauce programs on Solana (the SVM target) — declaring every account as an Account parameter with Writable/Signer roles, the account manifest the compile returns, passing accounts by name with --account, the @sauce/token arm for SPL Token and Token-2022 (balanceOf and the other reads, transferChecked and approveChecked for either program, the legacy transfer and approve) and what Token-2022's extensions do to a program (transfer fees, scaled UI amounts, pauses, frozen accounts, transfer hooks), svm.call CPIs and svm.sload byte reads, account .owner and .dataLen checks, a 32-byte key as an Address argument, runtime arguments without Account slots, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or directly on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
+description: Writing and running Sauce programs on Solana (the SVM target) — the token methods as on an EVM chain (USDC.transfer(to, amount), approve, transferFrom, USDC.balanceOf(ctx.self()), Token(mint)) with every account they move through derived and checked on chain, every other account an Account parameter with Writable/Signer roles, the account manifest, --account names, the @sauce/token arm for SPL Token and Token-2022 (reads, transferChecked, approveChecked, the legacy writes) and what Token-2022's extensions do to a program (fees, scaled UI amounts, pauses, frozen accounts, hooks), svm.call CPIs and svm.sload reads, a 32-byte key as an Address argument, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
 ---
 
 # Sauce on Solana
 
 A Solana program must declare every account it touches before it runs. In SauceScript those are
 `Account` parameters of `main`; the compile returns them, in order and with their roles, as the
-**account manifest**, and each is attached by name when the program runs. A program for Solana is
-compiled with `--chain solana`. Its signatures are annotated. Protocol namespaces and the token
-methods (`USDC.transfer(...)`) do not exist there; the `@sauce/token` functions do, with no import,
-and a registered token symbol (`USDC`, `USDT`, `WSOL`, `PYUSD`) is its mint's 32-byte key, a value
-they take: `balanceOf(USDC, account)`. `sauce globals --chain solana` lists the mints, devnet's, and
-which are Token-2022 mints.
+**account manifest**, and each is attached when the program runs. A program for Solana is compiled
+with `--chain solana`, and its signatures are annotated. A registered token symbol (`USDC`, `USDT`,
+`WSOL`, `PYUSD`, the tokenized stocks) has the same methods as on an EVM chain, and compiling adds
+the accounts they move through to `main` for you. Protocol namespaces do not exist on Solana.
+`sauce globals --chain solana` lists the mints (devnet's too) and which of them are Token-2022 mints.
+
+## The token methods
+
+A program pays, approves and reads a token as it does on an EVM chain:
+
+```sauce chain=solana
+function main(to: Address, amount: Uint256) {
+  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  USDC.transfer(to, amount);
+}
+```
+
+```sh
+sauce run pay.sauce.ts --chain solana --keypair <keypair> --args <recipient> 400
+```
+
+The same file compiles for Base. On Solana, compiling it adds every account the calls move through
+to `main`, after main's own parameters. The manifest gives each one a `derive`: an `--account` value
+saying where the account comes from.
+
+| Slot           | `derive`                                      | The account                              |
+| -------------- | --------------------------------------------- | ---------------------------------------- |
+| `tokenProgram` | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | the token program that owns the mint     |
+| `pot`          | `self`                                        | the Pot, which signs for its accounts    |
+| `potUSDC`      | `self:USDC`                                   | the Pot's USDC account                   |
+| `toUSDC`       | `@to:USDC`                                    | the USDC account of main's argument `to` |
+
+- **Nothing to attach.** `sauce run`, `simulate` and `tx` derive every such slot from the owner,
+  the Pot and main's arguments, so the program runs with `--args` alone. `sauce compile --json`
+  lists each slot with its `derive`. `--account NAME=<value>` replaces one, in the same language
+  (below).
+- **Every holder is known when the transaction is built.** A holder can be:
+  - `ctx.self()` (or `self`): the Pot. `self.USDC` is its balance.
+  - a parameter of `main` declared `Address`: its argument;
+  - a 32-byte key written out.
+
+  A holder computed as the program runs is refused: no transaction can attach its account. Instead,
+  take that token account as an `Account` parameter and pass it where the holder goes
+  (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). The program pays exactly the
+  account given.
+
+- **Each account is checked on chain.** After each write, the program requires the token account it
+  paid, or paid from, to belong to the holder the call named. A builder who attaches another account
+  in its place (a solver filling the cook, say) is refused with one of these reasons:
+  - `wrong recipient account`
+  - `wrong sender account` (`transferFrom`)
+  - `wrong spender account` (`approve`)
+  - `wrong holder account` (a read)
+- **Each mint's own write.** An SPL Token mint (USDC, USDT, WSOL) moves by the plain
+  `transfer`/`approve`. A Token-2022 mint (PYUSD, the stocks) moves by
+  `transferChecked`/`approveChecked`, with the registry's decimals and the mint as one more account.
+  `Token(mint)`, for a mint given as an `Address` argument, takes the checked write, which either
+  program accepts, with the decimals read from the mint. A Token-2022 transfer fee is withheld from
+  what arrives, so measure the recipient's balance before and after.
+- **A recipient with no token account yet.** `sauce run` creates its associated token account
+  before the cook, the owner paying the rent. It asks first, or does it with `--yes`.
+- **Where the methods can stand.** The added accounts are main's parameters, so the methods stand in
+  `main` itself, not in a helper, in a file that has a `main`. `ctx.self()` alone is still the
+  engine's program id on Solana (below); only as a token's holder is it the Pot. Cooked directly
+  (`--via engine`), `self` is the signer, and its own token accounts pay.
+
+Compiling produces the bytecode and the manifest. Every derived account is filled in the
+transaction `sauce tx` prints, so any wallet can sign it.
+[examples/pay.sauce.ts](examples/pay.sauce.ts) is the program above.
+
+The methods lower to the `@sauce/token` functions below, which a program can also call itself with
+the accounts written out: to move tokens between accounts the transaction names some other way, or
+to keep every account in view.
+
+## The accounts written out
+
+`@sauce/token`'s functions take the mint first, then the accounts, with no import. A registered
+symbol on its own is its mint's 32-byte key: `balanceOf(USDC, account)`.
 
 ```sauce chain=solana
 function main(
@@ -45,8 +117,18 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   `writable_signer` per slot. Roles are the author's declaration; nothing infers them from what a
   CPI needs.
 - Each slot is passed by its name: `--account NAME=<address>`, `NAME=pot` for the Pot, which the
-  Kitchen signs for, or `NAME=owner` for the signer. `sauce compile --json` lists the slots in its
-  `manifest`, and a missing one is named with the role it needs.
+  Kitchen signs for, or `NAME=owner` for the signer. Other names a slot can be given:
+  - `self`: the Pot, or the signer with `--via engine`;
+  - `@to`: main's argument `to`;
+  - `<holder>:<token>`: the holder's associated token account for a mint. The holder is `pot`,
+    `owner`, `self`, `@to` or a base58 key; the token is a symbol, a base58 mint, or `@mint` for
+    main's argument `mint`;
+  - `mint:<token>`: the mint;
+  - `program:<token>`: the mint's token program.
+
+  `sauce compile --json` lists the slots in its `manifest` (each one the token methods added with
+  its `derive`), and a missing one is named with the role it needs.
+
 - An `Account` compares by identity (`tokenProgram.address == splToken`, with the SPL Token program
   `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` an `Address` argument, or its 32-byte hex
   `0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9` as a literal) and exposes
@@ -185,6 +267,8 @@ four accounts. What costs bytes:
   280 bytes and a second about 50, a `transferChecked` about 500, a first read (`balanceOf`) about
   260, and a read of another kind about 40 more (the reads share their checks). A program that moves
   a Token-2022 token and measures what arrived is past one transaction, and `sauce run` stages it;
+- a token method, which is that function and its holder check: `USDC.transfer(to, amount)` is about
+  360 bytes and four accounts, a Token-2022 mint's about 585 bytes and five;
 - each account, about 33 bytes;
 - arguments: `--compact-args` encodes them compactly (a `Uint256` takes 7 bytes instead of 32).
 
@@ -350,7 +434,9 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 
 ## Example
 
-[examples/solana.sauce.ts](examples/solana.sauce.ts) is the program above;
-[examples/token-2022.sauce.ts](examples/token-2022.sauce.ts) moves PYUSD with `transferChecked`;
-[examples/solana.mts](examples/solana.mts) compiles both, checks the manifest order and roles and the
-arguments, the mints' token programs, and confirms the client refuses to run without an `rpcUrl`.
+[examples/pay.sauce.ts](examples/pay.sauce.ts) pays USDC with the token methods, every account
+derived; [examples/solana.sauce.ts](examples/solana.sauce.ts) is the program with its accounts
+written out; [examples/token-2022.sauce.ts](examples/token-2022.sauce.ts) moves PYUSD with
+`transferChecked`; [examples/solana.mts](examples/solana.mts) compiles them, checks the accounts the
+token methods add and how each is derived, the manifest order and roles and the arguments, the mints'
+token programs, and confirms the client refuses to run without an `rpcUrl`.

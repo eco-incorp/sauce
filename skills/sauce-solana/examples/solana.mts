@@ -5,13 +5,16 @@
 // Pot is the Kitchen's address for its seeds, the skill sends the reader to sauce-chains' deployments
 // file for the Kitchen and engine, and a cook's size is what the skill budgets. Then
 // token-2022.sauce.ts: its accounts, PYUSD's token program, the two programs the skill names, and
-// that moving a Token-2022 token and measuring what arrived is past one transaction. Offline:
-// nothing is sent.
+// that moving a Token-2022 token and measuring what arrived is past one transaction. Then
+// pay.sauce.ts: the accounts the token methods add to main and how each is derived, the checks
+// after each write, the same file on Base, and a derivation resolved to the account it names.
+// Offline: nothing is sent.
 //
 //   node solana.mts
 import { readFileSync } from "node:fs";
 
 import { routes } from "@eco-incorp/sauce";
+import { requireChain } from "@eco-incorp/sauce/chains";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
 import {
   AccountRole,
@@ -33,6 +36,7 @@ import {
   getAddressEncoder,
   getProgramDerivedAddress,
   getTransactionSize,
+  resolveSvmAccountName,
 } from "@eco-incorp/sauce/svm";
 
 function check(condition: unknown, message: string): asserts condition {
@@ -168,8 +172,73 @@ check(
   "a Token-2022 transfer that measures what arrived is past one transaction",
 );
 
+// The token methods: pay.sauce.ts names no account. Compiling adds each one its call moves through
+// to main, after main's own parameters, with how it is derived, as the skill's table says.
+const pay = routes.compileSauceProgram(
+  "solana",
+  readFileSync(new URL("./pay.sauce.ts", import.meta.url), "utf8"),
+);
+check(
+  JSON.stringify(pay.derivedAccounts) ===
+    JSON.stringify({
+      potUSDC: "self:USDC",
+      pot: "self",
+      tokenProgram: TOKEN_PROGRAM_ID,
+      toUSDC: "@to:USDC",
+    }),
+  `pay.sauce.ts's added accounts and their derivations, not ${JSON.stringify(pay.derivedAccounts)}`,
+);
+for (const [slot, derive] of Object.entries(pay.derivedAccounts ?? {}))
+  check(
+    skill.includes(`\`${slot}\``) && skill.includes(`\`${derive}\``),
+    `the skill's table has ${slot}`,
+  );
+check(
+  pay.entryParams.map((param) => param.name).join() === "to,amount",
+  "the added accounts are no arguments: main's are to and amount",
+);
+// Each holder's account is checked after the write, with the reason the skill names.
+for (const reason of ["wrong recipient account", "wrong holder account"]) {
+  check(pay.source.includes(reason), `the lowering checks with "${reason}"`);
+  check(skill.includes(`\`${reason}\``), `the skill names "${reason}"`);
+}
+// The same file compiles for Base, where the methods are SafeERC20 and add no account.
+const onBase = routes.compileSauceProgram(
+  "base",
+  readFileSync(new URL("./pay.sauce.ts", import.meta.url), "utf8"),
+);
+check(
+  onBase.manifest === undefined && onBase.derivedAccounts === undefined,
+  "Base adds no account",
+);
+// The command derives each from the cook: `@to:USDC` is the associated USDC account of main's
+// argument `to`, `self:USDC` the Pot's, `self` the Pot itself.
+const recipient = (await generateKeyPairSigner()).address;
+const named = { chain: requireChain("solana"), owner: owner.address, pot: pot.address };
+const toUsdc = await resolveSvmAccountName("@to:USDC", { ...named, args: { to: recipient } });
+const [ata] = await getProgramDerivedAddress({
+  programAddress: address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+  seeds: [
+    getAddressEncoder().encode(recipient),
+    getAddressEncoder().encode(TOKEN_PROGRAM_ID),
+    getAddressEncoder().encode(USDC_MINT),
+  ],
+});
+check(toUsdc.value === ata, "@to:USDC is the recipient's associated USDC account");
+check((await resolveSvmAccountName("self", named)).value === "pot", "self is the Pot");
+// A Token-2022 mint takes the checked write and its mint as one more account.
+const stock = routes.compileSauceProgram(
+  "solana",
+  "function main(to: Address, amount: Uint256) {\n  PYUSD.transfer(to, amount);\n}\n",
+);
+check(stock.source.includes("transferChecked"), "a Token-2022 mint moves by transferChecked");
+check(stock.derivedAccounts?.mintPYUSD === "mint:PYUSD", "and takes its mint as an account");
+
 console.log(
   `SVM program ${program.bytecode.length} bytes, ${slots.length} account slots, ${args.length}-byte arguments`,
+);
+console.log(
+  `token-method program ${pay.bytecode.length} bytes, ${Object.keys(pay.derivedAccounts ?? {}).length} accounts derived`,
 );
 console.log(`Token-2022 program ${checked.bytecode.length} bytes`);
 console.log(`released engine ${v12SvmEngineProgramId()}, Kitchen ${v12SvmKitchenProgramId()}`);

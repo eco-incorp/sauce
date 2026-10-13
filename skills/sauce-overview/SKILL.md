@@ -139,13 +139,15 @@ function main(recipient: Address, floor: Uint256) {
 It names no chain. `sauce run <file> --chain base` compiles it for Base, where `USDC` is Base's
 USDC; `--chain ethereum` gives the same file Ethereum's. What changes per call, such as `recipient`
 and `floor`, is a parameter of `main`, passed with the transaction (`--args`), so one compiled
-program serves every call. That program is for an EVM chain: on Solana every account, a recipient
-included, is an `Account` parameter attached with `--account`, never an `Address` argument
-(`sauce-solana`).
+program serves every call. On Solana the same token methods compile too. A balance there belongs to
+a token account, so compiling adds the accounts each call moves through to `main`, and the command
+derives them from the owner, the Pot and main's arguments; every other account is an `Account`
+parameter attached with `--account` (`sauce-solana`).
 
 On an EVM chain the executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and
 makes the calls. Token writes are SafeERC20 however they are spelled, so USDT works. On Solana the
-Pot is an account the program is given, and `ctx.self()` there is the engine's program id.
+Pot is an account the program is given, and `ctx.self()` there is the engine's program id, except
+as a token's holder (`USDC.balanceOf(ctx.self())`), where it is the Pot as on an EVM chain.
 
 Two references hold what a program can name. The language (types, operators, statements, and the
 `ctx`, `crypto`, `Math`, `abi`, `evm` and `svm` builtins) is
@@ -362,14 +364,17 @@ and program bodies, cascades, on which chain each name resolves, and rehearsing 
 
 ### `sauce-solana`
 
-Programs for Solana: every account an `Account` parameter with its roles, the account manifest,
-the Pot's key and token accounts, `@sauce/token` for SPL Token and Token-2022 (and what each
-extension does to a program), CPIs and raw account reads, transaction size, and running through
-the Kitchen or directly on the engine.
+Programs for Solana: the token methods with the accounts they move through derived and checked,
+every other account an `Account` parameter with its roles, the account manifest, the Pot's key and
+token accounts, `@sauce/token` for SPL Token and Token-2022 (and what each extension does to a
+program), CPIs and raw account reads, transaction size, and running through the Kitchen or directly
+on the engine.
 
-- **Holds** examples that move a mint's tokens and move PYUSD with `transferChecked`.
-- **Load it** for any program compiled for Solana, beside the skill for the task: namespaces and
-  token methods do not exist there.
+- **Holds** examples that pay USDC with `USDC.transfer(to, amount)` (one file for Base and
+  Solana), move a mint's tokens with the accounts written out, and move PYUSD with
+  `transferChecked`.
+- **Load it** for any program compiled for Solana, beside the skill for the task: protocol
+  namespaces do not exist there, and a token method's holders must be known before it runs.
 - **Asked as:** "Send 10 TSLAx from my Pot to a wallet on Solana."
 
 ### `sauce-cli`
