@@ -443,7 +443,10 @@ export interface SvmSent {
   readonly returnData?: Uint8Array;
 }
 
-/** Polls until `signature` is confirmed (or a minute passes); its error, or null, and its slot. */
+/**
+ * Polls until `signature` is confirmed (or a minute passes); its error, or null, and its slot. The
+ * cluster's history is searched too, so one that landed long ago is found.
+ */
 async function confirmed(
   rpc: Rpc,
   url: string,
@@ -451,7 +454,7 @@ async function confirmed(
 ): Promise<{ err: unknown; slot: bigint }> {
   for (let tries = 0; tries < 120; tries++) {
     const { value } = await ask(url, "the transaction's status", () =>
-      rpc.getSignatureStatuses([signature as Signature]).send(),
+      rpc.getSignatureStatuses([signature as Signature], { searchTransactionHistory: true }).send(),
     );
     const status = value[0];
     if (status !== null && status !== undefined && status.confirmationStatus !== "processed") {

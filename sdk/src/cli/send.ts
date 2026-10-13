@@ -614,10 +614,13 @@ async function sendSvm(
     const known = readPlanTx(tx.transaction, tables);
     const what = known?.what ?? `transaction ${index + 1}`;
     const signature = getSignatureFromTransaction(tx.transaction);
-    // One the cluster has already (sent before, by this or by the signer) is read back, not resent.
+    // One the cluster has already (sent before, by this or by the signer) is read back, not resent:
+    // looked for in the cluster's history, not only its recent status cache.
     const {
       value: [status],
-    } = await read("the transaction's status", () => rpc.getSignatureStatuses([signature]).send());
+    } = await read("the transaction's status", () =>
+      rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send(),
+    );
     if (status !== null && status !== undefined) {
       const result = await svmLanded(rpc, input.rpcUrl, signature);
       sent.push(report(tx, index, tables, result, undefined));
