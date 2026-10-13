@@ -13,7 +13,7 @@
  * program's own account (`self`, `ctx.self()`); `holderOf` and `tokenOf` refuse anything else,
  * naming the explicit form.
  */
-import { getAddressDecoder } from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 
 import { countDeclarations, walk, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
@@ -137,6 +137,11 @@ export function base58(hex: string): string {
 /** A key as 64 hex digits, `0x`-prefixed, lowercase. */
 const keyHex = (key: bigint): string => `0x${key.toString(16).padStart(64, "0")}`;
 
+/** A base58 key as 64 hex digits, `0x`-prefixed, lowercase: the scalar a program compares. */
+export function hexKey(key: string): string {
+  return `0x${[...getAddressEncoder().encode(address(key))].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** `main`'s `Address` and `Account` parameters, by name, with whether an account is writable. */
 function mainParams(main: AstNode): ReadonlyMap<string, MainParam> {
   const params = new Map<string, MainParam>();
@@ -246,6 +251,8 @@ export class SvmLowering {
   /** Each module's imports, `name as local`, in the order they were first used. */
   private readonly imports = new Map<string, Map<string, string>>();
   private readonly helpers = new Map<string, string>();
+  /** Statements emitted once each, by key, at the top of `main`'s body. */
+  private readonly opening = new Map<string, string>();
   private readonly reserved = new Set<string>();
   private readonly index: RowIndex;
   private literalTokens = 0;
@@ -312,6 +319,14 @@ export class SvmLowering {
     this.reserve(name);
 
     return name;
+  }
+
+  /**
+   * A statement emitted once, by `key`, at the top of `main`'s body, before any of its own: where an
+   * account added to `main` is checked to be the one its derivation names.
+   */
+  prologue(key: string, statement: string): void {
+    if (!this.opening.has(key)) this.opening.set(key, statement);
   }
 
   /** A name the lowering brings in: refused, by name, where the program declares it too. */
@@ -525,6 +540,15 @@ export class SvmLowering {
     if (taken !== undefined) this.reserve(taken);
     for (const site of [...this.sites].sort((a, b) => a.node.start - b.node.start)) site.lower();
     const main = this.main!;
+    if (this.opening.size > 0) {
+      // Pushed after every site's splice, so one that starts where the body does is applied first.
+      const body = (main.body as AstNode).start + 1;
+      this.splices.push({
+        start: body,
+        end: body,
+        replacement: [...this.opening.values()].map((statement) => `\n  ${statement}`).join(""),
+      });
+    }
     const declaredParams = (main as { params?: AstNode[] }).params ?? [];
     const last = declaredParams[declaredParams.length - 1];
     const open = this.source.indexOf("(", (main.id as AstNode).end);

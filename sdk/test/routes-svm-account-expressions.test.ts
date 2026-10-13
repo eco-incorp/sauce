@@ -8,8 +8,11 @@
 import { getAddressCodec } from "@solana/kit";
 
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import { hexKey } from "../src/routes/svm-lowering.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../src/svm/token-program.js";
 
-const compile = (source: string) => compileSauceProgram("solana", source);
+const compile = (source: string, options: Parameters<typeof compileSauceProgram>[2] = {}) =>
+  compileSauceProgram("solana", source, options);
 const roles = (program: ReturnType<typeof compile>) =>
   Object.fromEntries(
     program.manifest!.accounts.map((slot) => {
@@ -36,16 +39,53 @@ describe("accounts as expressions on Solana", () => {
       programAccount: "@program",
       statePda: 'pda:@program:"state",@owner',
       potUSDC: "self:USDC",
+      pot: "self",
       systemProgram: "11111111111111111111111111111111",
     });
     expect(roles(program)).toEqual({
       programAccount: "readonly",
       statePda: "writable",
       potUSDC: "writable",
+      pot: "readonly_signer",
       systemProgram: "readonly",
     });
     // The arguments are main's own; the accounts are none of them.
     expect(program.entryParams.map((param) => param.name)).toEqual(["program", "owner", "amount"]);
+    // Each account is held to its derivation at the top of main, before the program's own code:
+    // a key to its key, an address to the engine's own derivation of it, a token account to its
+    // holder, a program to its id.
+    expect(program.source).toContain(
+      "{\n" +
+        '  require(programAccount.address == program, "wrong account");\n' +
+        '  const [__sauce_pda1, __sauce_bump1] = crypto.findPDA(program, ["state", owner.toBytesBe(32)]);\n' +
+        '  require(statePda.address == __sauce_pda1, "wrong program-derived address");\n' +
+        '  require(__sauce_ownerOf(USDC, potUSDC) == pot.address, "wrong holder account");\n' +
+        `  require(systemProgram.address == 0x${"00".repeat(32)}, "wrong program");\n` +
+        "  svm.call(",
+    );
+  });
+
+  it("holds a key written out to that key, and names it in order", () => {
+    const key = `0x${"aa".repeat(32)}`;
+    const program = compile(
+      `function main(): Uint256 {\n  return Solana.account(${key}).dataLen + Solana.account(0x${"bb".repeat(32)}).dataLen;\n}\n`,
+    );
+    expect(program.derivedAccounts).toEqual({
+      account1: getAddressCodec().decode(new Uint8Array(32).fill(0xaa)),
+      account2: getAddressCodec().decode(new Uint8Array(32).fill(0xbb)),
+    });
+    expect(program.source).toContain(`require(account1.address == ${key}, "wrong account");`);
+  });
+
+  it("holds the owner by its signature wherever an account is made of it", () => {
+    const program = compile(
+      "function main(): Uint256 {\n  return PYUSD.accountOf(Solana.owner).dataLen + PYUSD.mint.dataLen;\n}\n",
+    );
+    expect(roles(program)).toMatchObject({ owner: "readonly_signer", ownerPYUSD: "readonly" });
+    expect(program.source).toContain(
+      'require(__sauce_ownerOf(PYUSD, ownerPYUSD) == owner.address, "wrong holder account");',
+    );
+    expect(program.source).toContain('require(mintPYUSD.address == PYUSD, "wrong mint");');
   });
 
   it("makes every kind of seed, and names a program by its account", () => {
@@ -59,7 +99,7 @@ describe("accounts as expressions on Solana", () => {
         "  ]);\n" +
         "  return vault.dataLen;\n}\n",
     );
-    expect(program.derivedAccounts).toEqual({
+    expect(program.derivedAccounts).toMatchObject({
       vaultPda:
         'pda:ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:"vault-state",@owner,self,owner,self,' +
         `mint:USDC,mint:USDC,TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA,u64:@index,u16:7,${base58},0x0102`,
@@ -107,10 +147,13 @@ describe("accounts as expressions on Solana", () => {
         "  return PYUSD.tokenProgram.dataLen + PYUSD.accountOf(Solana.owner).dataLen +\n" +
         "    PYUSD.accountOf(Solana.self).dataLen;\n}\n",
     );
+    // Each holder's key, which the check compares with, is an account too: the owner and the Pot.
     expect(program.derivedAccounts).toEqual({
       token2022Program: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
       ownerPYUSD: "owner:PYUSD",
+      owner: "owner",
       potPYUSD: "self:PYUSD",
+      pot: "self",
     });
   });
 
@@ -156,6 +199,28 @@ describe("accounts as expressions on Solana", () => {
       ).toThrow("`a` is an account, not a holder's key");
     });
 
+    it("a hex seed that is not whole bytes, a quote or backslash in a string, an integer past its width", () => {
+      const pda = (seed: string) =>
+        compile(
+          `function main(program: Address): Uint256 {\n  return Solana.pda(program, [${seed}]).dataLen;\n}\n`,
+        );
+      expect(() => pda("hex`0`")).toThrow("the seed `hex`0`` must be known");
+      expect(() => pda("hex`zz`")).toThrow("the seed `hex`zz`` must be known");
+      expect(() => pda('"a\\"b"')).toThrow("must be known when the transaction is built");
+      expect(() => pda("(300).toBytesLe(1)")).toThrow("300 does not fit the seed's 1 bytes");
+    });
+
+    it("no seeds, or more than 16", () => {
+      const pda = (seeds: string) =>
+        compile(
+          `function main(program: Address): Uint256 {\n  return Solana.pda(program, [${seeds}]).dataLen;\n}\n`,
+        );
+      expect(() => pda("")).toThrow("an address derives from 1 to 16 seeds");
+      expect(() => pda(Array(17).fill('"a"').join(", "))).toThrow(
+        "an address derives from 1 to 16 seeds",
+      );
+    });
+
     it("an account written in a helper", () => {
       expect(() =>
         compile(
@@ -165,9 +230,28 @@ describe("accounts as expressions on Solana", () => {
     });
   });
 
+  it("reads the program of a mint the compile gives itself as the cook is built, and holds it to a token program", () => {
+    const mint = new Uint8Array(32).fill(0xcc);
+    const program = compile(
+      "function main(): Uint256 {\n  return PYUSD.tokenProgram.dataLen;\n}\n",
+      {
+        defines: { PYUSD: BigInt(`0x${"cc".repeat(32)}`) },
+      },
+    );
+    expect(program.derivedAccounts).toEqual({
+      programPYUSD: `program:${getAddressCodec().decode(mint)}`,
+    });
+    expect(program.source).toContain(
+      `require(programPYUSD.address == ${hexKey(TOKEN_PROGRAM_ID)} || programPYUSD.address == ${hexKey(TOKEN_2022_PROGRAM_ID)}, "wrong program");`,
+    );
+  });
+
   it("leaves a program that declares Solana itself, and the explicit Account parameters, as they are", () => {
     const explicit =
       "function main(state: Account<Writable>, program: Account): Uint256 {\n  return state.dataLen + program.dataLen;\n}\n";
     expect(compile(explicit).derivedAccounts).toBeUndefined();
+    expect(compile(explicit).source).toBe(explicit);
+    const own = "const Solana = 7;\nfunction main(): Uint256 {\n  return Solana;\n}\n";
+    expect(compile(own).source).toBe(own);
   });
 });

@@ -26,7 +26,14 @@
  */
 import { walk, TYPE_KEYS, type AstNode } from "./ast-walk.js";
 import { methodCall } from "./token-rewrite.js";
-import { base58, keyLiteral, nameOf, type Holder, type SvmLowering } from "./svm-lowering.js";
+import {
+  base58,
+  hexKey,
+  keyLiteral,
+  nameOf,
+  type Holder,
+  type SvmLowering,
+} from "./svm-lowering.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 const SOLANA = "Solana";
@@ -111,10 +118,23 @@ const ROLES = new Set(["writable", "signer"]);
 /** The account expressions' words, which the cheap "nothing to lower" scan looks for. */
 export const ACCOUNT_EXPRESSION_ROOT = SOLANA;
 
+/** An account expression's slot: how it is derived, its parameter's name, and its check. */
+interface Described {
+  readonly derivation: string;
+  readonly base: string;
+  /**
+   * The statement that holds the account attached to the derivation, given the parameter's name:
+   * emitted once at the top of `main`, so a transaction built another way cannot attach another.
+   */
+  readonly check?: (slot: string) => string;
+}
+
 interface Root {
   readonly node: AstNode;
-  readonly describe: () => { readonly derivation: string; readonly base: string };
+  readonly describe: () => Described;
 }
+
+const TOKEN_LIBRARY = "@sauce/token";
 
 /** Each node's parent, over the value nodes `walk` visits. */
 function parentsOf(program: AstNode): Map<AstNode, AstNode> {
@@ -189,14 +209,22 @@ export function collectAccountExpressions(l: SvmLowering): void {
     return declarator?.init === at && id?.type === "Identifier" ? nameOf(id) : undefined;
   };
 
-  /** A program address: a parameter of `main` declared `Address`, a key, or a program account. */
-  const programOf = (node: AstNode, spelled: string): string => {
+  /**
+   * A program address: a parameter of `main` declared `Address`, a key, or a program account; its
+   * derivation, and the scalar a program compares it with.
+   */
+  const programOf = (
+    node: AstNode,
+    spelled: string,
+  ): { readonly derivation: string; readonly value: string } => {
     if (node.type === "Identifier" && l.param(nameOf(node))?.kind === "address")
-      return `@${nameOf(node)}`;
+      return { derivation: `@${nameOf(node)}`, value: nameOf(node) };
     const key = keyLiteral(node, l.source);
-    if (key !== undefined) return base58(key);
+    if (key !== undefined) return { derivation: base58(key), value: key };
     const known = solanaMember(node);
-    if (known !== undefined && PROGRAMS.has(known)) return KNOWN[known]!.derivation;
+    if (known !== undefined && PROGRAMS.has(known)) {
+      return { derivation: KNOWN[known]!.derivation, value: hexKey(KNOWN[known]!.derivation) };
+    }
     throw new Error(
       `${spelled} on Solana: the program \`${text(node)}\` must be known when the transaction is ` +
         "built — a parameter of main declared `Address`, a 32-byte key, or a program account " +
@@ -204,8 +232,25 @@ export function collectAccountExpressions(l: SvmLowering): void {
     );
   };
 
-  /** One seed, as the account language writes it. */
-  const seedOf = (node: AstNode, spelled: string): string => {
+  /** The owner's account, a signer: the owner signs the cook, so no other account can stand in. */
+  const ownerKey = (): string => `${l.account("owner", "owner", { signer: true })}.address`;
+  /**
+   * An account's key as a value of its own, bound once at the top of `main`: a method is called on
+   * a name, not on a field.
+   */
+  const bound = (key: string, local: string): string => {
+    l.reserve(local);
+    l.prologue(local, `const ${local} = ${key};`);
+    return local;
+  };
+  /** A key's bytes, as a seed. */
+  const keyBytes = (hex: string): string => `hex\`${hex.slice(2)}\``;
+
+  /** One seed: as the account language writes it, and as the bytes a program derives with. */
+  const seedOf = (
+    node: AstNode,
+    spelled: string,
+  ): { readonly derivation: string; readonly bytes: string } => {
     const refuse = (): Error =>
       new Error(
         `${spelled} on Solana: the seed \`${text(node)}\` must be known when the transaction is ` +
@@ -214,24 +259,38 @@ export function collectAccountExpressions(l: SvmLowering): void {
           "hex`…`. For an account derived from what only the program knows, take it as an " +
           "`Account` parameter of main.",
       );
+    const pot = () => ({
+      derivation: "self",
+      bytes: `${bound(`${l.authority()}.address`, "__sauce_potKey")}.toBytesBe(32)`,
+    });
+    const mint = (symbol: string) => {
+      const token = l.symbolToken(symbol);
+      return {
+        derivation: `mint:${token.name}`,
+        bytes: keyBytes(`0x${l.tokens.get(symbol)!.toString(16).padStart(64, "0")}`),
+      };
+    };
+    const program = (id: string) => ({ derivation: id, bytes: keyBytes(hexKey(id)) });
     if (node.type === "Literal" && typeof (node as { value?: unknown }).value === "string") {
       const value = (node as unknown as { value: string }).value;
-      if (value.includes('"')) throw refuse();
+      if (value.includes('"') || value.includes("\\")) throw refuse();
       if (new TextEncoder().encode(value).length > 32) {
         throw new Error(`${spelled} on Solana: the seed "${value}" is over 32 bytes`);
       }
-      return `"${value}"`;
+      return { derivation: `"${value}"`, bytes: `"${value}"` };
     }
     if (node.type === "Identifier") {
       const name = nameOf(node);
-      if (name === "self" && !l.declared.has("self")) return "self";
-      if (l.param(name)?.kind === "address") return `@${name}`;
-      if (l.isSymbol(name)) return `mint:${l.symbolToken(name).name}`;
+      if (name === "self" && !l.declared.has("self")) return pot();
+      if (l.param(name)?.kind === "address") {
+        return { derivation: `@${name}`, bytes: `${name}.toBytesBe(32)` };
+      }
+      if (l.isSymbol(name)) return mint(name);
       throw refuse();
     }
     const site = methodCall(node);
     if (site !== undefined && site.method === "self" && site.object.type === "Identifier") {
-      if (nameOf(site.object) === "ctx" && !l.declared.has("ctx")) return "self";
+      if (nameOf(site.object) === "ctx" && !l.declared.has("ctx")) return pot();
     }
     if (site !== undefined && site.method === "toBytesLe") {
       const args = (site.call as { arguments?: AstNode[] }).arguments ?? [];
@@ -243,27 +302,49 @@ export function collectAccountExpressions(l: SvmLowering): void {
       }
       const of = site.object;
       if (of.type === "Identifier" && l.param(nameOf(of))?.type === "Uint256") {
-        return `u${width * 8}:@${nameOf(of)}`;
+        return {
+          derivation: `u${width * 8}:@${nameOf(of)}`,
+          bytes: `${nameOf(of)}.toBytesLe(${width})`,
+        };
       }
       if (of.type === "Literal" && /^(0x[0-9a-fA-F]+|\d+)n?$/.test(text(of))) {
-        return `u${width * 8}:${BigInt(text(of).replace(/n$/, ""))}`;
+        const value = BigInt(text(of).replace(/n$/, ""));
+        if (value >= 1n << BigInt(width * 8)) {
+          throw new Error(
+            `${spelled} on Solana: ${value} does not fit the seed's ${width} bytes, \`${text(node)}\``,
+          );
+        }
+        const le = [...Array(width).keys()]
+          .map((i) =>
+            Number((value >> BigInt(8 * i)) & 0xffn)
+              .toString(16)
+              .padStart(2, "0"),
+          )
+          .join("");
+        return { derivation: `u${width * 8}:${value}`, bytes: `hex\`${le}\`` };
       }
       throw refuse();
     }
     const member = solanaMember(node);
-    if (member === "owner" || member === "self") return member;
-    if (member !== undefined && PROGRAMS.has(member)) return KNOWN[member]!.derivation;
+    if (member === "self") return pot();
+    if (member === "owner") {
+      return {
+        derivation: "owner",
+        bytes: `${bound(ownerKey(), "__sauce_ownerKey")}.toBytesBe(32)`,
+      };
+    }
+    if (member !== undefined && PROGRAMS.has(member)) return program(KNOWN[member]!.derivation);
     // A token's mint, or the program a registered mint belongs to.
     if (node.type === "MemberExpression" && (node.object as AstNode).type === "Identifier") {
       const symbol = nameOf(node.object as AstNode);
       const property =
         (node.property as AstNode).type === "Identifier" ? nameOf(node.property as AstNode) : "";
-      if (l.isSymbol(symbol) && property === "mint") return `mint:${l.symbolToken(symbol).name}`;
-      const program = l.isSymbol(symbol) ? l.symbolToken(symbol).row?.tokenProgram : undefined;
-      if (property === "tokenProgram" && program !== undefined) return program;
+      if (l.isSymbol(symbol) && property === "mint") return mint(symbol);
+      const id = l.isSymbol(symbol) ? l.symbolToken(symbol).row?.tokenProgram : undefined;
+      if (property === "tokenProgram" && id !== undefined) return program(id);
     }
     const key = keyLiteral(node, l.source);
-    if (key !== undefined) return base58(key);
+    if (key !== undefined) return { derivation: base58(key), bytes: keyBytes(key) };
     if (node.type === "TaggedTemplateExpression") {
       const tag = node.tag as AstNode;
       const quasi = node.quasi as { expressions: AstNode[]; quasis: { value: { raw: string } }[] };
@@ -274,21 +355,30 @@ export function collectAccountExpressions(l: SvmLowering): void {
         quasi.expressions.length === 0 &&
         /^(?:[0-9a-fA-F]{2})*$/.test(raw)
       ) {
-        return `0x${raw}`;
+        return { derivation: `0x${raw}`, bytes: `hex\`${raw}\`` };
       }
     }
     throw refuse();
   };
 
-  /** A token's holder for `accountOf`: what the token methods take, or `Solana.owner`. */
-  const holderAccount = (
-    node: AstNode,
-    symbol: string,
-    spelled: string,
-  ): { readonly derivation: string; readonly base: string } => {
+  /**
+   * A token's holder for `accountOf`: what the token methods take, or `Solana.owner`. The account
+   * attached is held to the holder's: owned by a token program, of the token's mint, and the
+   * holder's, as the token methods hold each account they move through.
+   */
+  const holderAccount = (node: AstNode, symbol: string, spelled: string): Described => {
     const token = l.symbolToken(symbol);
+    const checked =
+      (holder: () => string) =>
+      (slot: string): string =>
+        `require(${l.use(TOKEN_LIBRARY, "ownerOf", "__sauce_ownerOf")}(${symbol}, ${slot}) == ` +
+        `${holder()}, "wrong holder account");`;
     if (solanaMember(node) === "owner") {
-      return { derivation: `owner:${token.name}`, base: `owner${token.stem}` };
+      return {
+        derivation: `owner:${token.name}`,
+        base: `owner${token.stem}`,
+        check: checked(ownerKey),
+      };
     }
     const holder: Holder =
       solanaMember(node) === "self" ? { kind: "self" } : l.holderOf(node, "holder", spelled);
@@ -298,11 +388,27 @@ export function collectAccountExpressions(l: SvmLowering): void {
           "holder's key, a parameter of main declared `Address`",
       );
     }
-    if (holder.kind === "self")
-      return { derivation: `self:${token.name}`, base: `pot${token.stem}` };
+    if (holder.kind === "self") {
+      return {
+        derivation: `self:${token.name}`,
+        base: `pot${token.stem}`,
+        check: checked(() => `${l.authority()}.address`),
+      };
+    }
 
-    return { derivation: `${holder.name}:${token.name}`, base: `${holder.stem}${token.stem}` };
+    return {
+      derivation: `${holder.name}:${token.name}`,
+      base: `${holder.stem}${token.stem}`,
+      check: checked(() => holder.value),
+    };
   };
+
+  /** A check that the account attached is at `key`, a scalar the program has. */
+  const atKey =
+    (key: string, reason: string) =>
+    (slot: string): string =>
+      `require(${slot}.address == ${key}, "${reason}");`;
+  let derived = 0;
 
   // Every account expression, before its role modifiers.
   const roots: Root[] = [];
@@ -319,12 +425,20 @@ export function collectAccountExpressions(l: SvmLowering): void {
               throw new Error(`${spelled} takes 1 argument (key), got ${args.length}.`);
             const key = args[0]!;
             if (key.type === "Identifier" && l.param(nameOf(key))?.kind === "address") {
-              return { derivation: `@${nameOf(key)}`, base: `${nameOf(key)}Account` };
+              return {
+                derivation: `@${nameOf(key)}`,
+                base: `${nameOf(key)}Account`,
+                check: atKey(nameOf(key), "wrong account"),
+              };
             }
             const literal = keyLiteral(key, l.source);
             if (literal !== undefined) {
               literalAccounts++;
-              return { derivation: base58(literal), base: `account${literalAccounts}` };
+              return {
+                derivation: base58(literal),
+                base: `account${literalAccounts}`,
+                check: atKey(literal, "wrong account"),
+              };
             }
             throw new Error(
               `${spelled} on Solana: the key \`${text(key)}\` must be known when the transaction is ` +
@@ -341,14 +455,29 @@ export function collectAccountExpressions(l: SvmLowering): void {
             throw new Error(`${spelled} on Solana: an address derives from 1 to 16 seeds`);
           }
           // Named for the constant it initializes, else its first string seed.
-          const first = seeds.find((seed) => seed.startsWith('"'));
+          const first = seeds.find((seed) => seed.derivation.startsWith('"'));
           const stem =
-            boundName(n) ?? (first === undefined ? undefined : stemOf(first.slice(1, -1)));
+            boundName(n) ??
+            (first === undefined ? undefined : stemOf(first.derivation.slice(1, -1)));
           pdas++;
+          const program = programOf(args[0]!, spelled);
 
           return {
-            derivation: `pda:${programOf(args[0]!, spelled)}:${seeds.join(",")}`,
+            derivation: `pda:${program.derivation}:${seeds.map((seed) => seed.derivation).join(",")}`,
             base: stem === undefined ? `pda${pdas}` : `${stem}Pda`,
+            // The engine derives it again, as the cook did: the program's own canonical address.
+            check: (slot) => {
+              derived++;
+              const found = `__sauce_pda${derived}`;
+              const bump = `__sauce_bump${derived}`;
+              l.reserve(found);
+              l.reserve(bump);
+              return (
+                `const [${found}, ${bump}] = crypto.findPDA(${program.value}, ` +
+                `[${seeds.map((seed) => seed.bytes).join(", ")}]);\n  ` +
+                `require(${slot}.address == ${found}, "wrong program-derived address");`
+              );
+            },
           };
         },
       });
@@ -360,7 +489,17 @@ export function collectAccountExpressions(l: SvmLowering): void {
       if (!Object.hasOwn(KNOWN, member)) return;
       const parent = parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;
-      roots.push({ node: n, describe: () => KNOWN[member]! });
+      roots.push({
+        node: n,
+        describe: () => {
+          const known = KNOWN[member]!;
+          // A program is held to its id. The Pot and the owner are what the cook attaches, and
+          // held by their signatures where `.signer()` asks for one.
+          return PROGRAMS.has(member)
+            ? { ...known, check: atKey(hexKey(known.derivation), "wrong program") }
+            : known;
+        },
+      });
       return;
     }
     if (site !== undefined && site.method === "accountOf" && site.object.type === "Identifier") {
@@ -385,19 +524,30 @@ export function collectAccountExpressions(l: SvmLowering): void {
       if (!l.isSymbol(nameOf(object)) || !TOKEN_MEMBERS.has(nameOf(property))) return;
       const parent = parents.get(n);
       if (parent?.type === "CallExpression" && parent.callee === n) return;
-      const token = l.symbolToken(nameOf(object));
+      const symbol = nameOf(object);
+      const token = l.symbolToken(symbol);
       roots.push({
         node: n,
-        describe: () =>
-          nameOf(property) === "mint"
-            ? {
-                derivation: `mint:${token.name}`,
-                base: token.param === undefined ? `mint${token.stem}` : `${token.param}Account`,
-              }
-            : {
-                derivation: tokenProgramDerivation(token.row?.tokenProgram, token.name),
-                base: tokenProgramBase(token),
-              },
+        describe: (): Described => {
+          if (nameOf(property) === "mint") {
+            return {
+              derivation: `mint:${token.name}`,
+              base: token.param === undefined ? `mint${token.stem}` : `${token.param}Account`,
+              check: atKey(symbol, "wrong mint"),
+            };
+          }
+          const derivation = tokenProgramDerivation(token.row?.tokenProgram, token.name);
+          return {
+            derivation,
+            base: tokenProgramBase(token),
+            // A mint the registry does not record is either program's, read as the cook is built.
+            check: derivation.startsWith("program:")
+              ? (slot) =>
+                  `require(${slot}.address == ${hexKey(TOKEN_PROGRAM_ID)} || ` +
+                  `${slot}.address == ${hexKey(TOKEN_2022_PROGRAM_ID)}, "wrong program");`
+              : atKey(hexKey(derivation), "wrong program"),
+          };
+        },
       });
     }
   });
@@ -435,12 +585,10 @@ export function collectAccountExpressions(l: SvmLowering): void {
     const spelled = `\`${text(root.node)}\``;
     l.site(top, () => {
       l.requireInMain(top, spelled, "an account");
-      const { derivation, base } = root.describe();
-      l.splices.push({
-        start: top.start,
-        end: top.end,
-        replacement: l.account(derivation, base, role),
-      });
+      const { derivation, base, check } = root.describe();
+      const slot = l.account(derivation, base, role);
+      if (check !== undefined) l.prologue(slot, check(slot));
+      l.splices.push({ start: top.start, end: top.end, replacement: slot });
     });
   }
 }
