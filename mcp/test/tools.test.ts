@@ -1063,6 +1063,22 @@ describe("sauce_tx", () => {
   });
 });
 
+describe("sauce_reclaim", () => {
+  it("refuses a chain that is not Solana, saying why, before any endpoint is asked", async () => {
+    const message = failed(
+      await mcp.call("sauce_reclaim", {
+        chain: "base",
+        owner: "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+        rpcUrl: "https://127.0.0.1:9/",
+      }),
+    );
+    assert.match(
+      message,
+      /sauce_reclaim is Solana's: a cook on base leaves no code buffer or lookup table open/,
+    );
+  });
+});
+
 describe("sauce_pot", () => {
   it("predicts an EVM Pot and builds its unsigned deployment; deployed is unknown here", async () => {
     const out = ok(await mcp.call("sauce_pot", { chain: "base", owner: OWNER, salt: "vault" }));
