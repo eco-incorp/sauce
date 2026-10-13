@@ -114,6 +114,29 @@ describe("local()", { skip: anvilMissing() }, () => {
     );
   });
 
+  it("gives a cook the gas it uses in the block it is mined in", async () => {
+    // Cheap in every block but the next one, where it writes a hundred fresh slots.
+    const source =
+      "function main(n: Uint256): Uint256 {\n  if (ctx.blockNumber() == n) {\n    let i = 0;\n    while (i < 100) {\n      evm.sstore(10000 + i, 1);\n      i = i + 1;\n    }\n  }\n  return n;\n}\n";
+    const next = (await chain.client.getBlockNumber()) + 1n;
+    const result = await chain.run({ source }, { args: [next] });
+    assert.equal(result.returned, next);
+    assert.ok(result.gasUsed > 100n * 20_000n);
+  });
+
+  it("throws CookReverted saying so when a cook runs out of gas", async () => {
+    // Writes `n` fresh slots: more than the block's 100M gas holds.
+    const source =
+      "function main(n: Uint256): Uint256 {\n  let i = 0;\n  while (i < n) {\n    evm.sstore(20000 + i, 1);\n    i = i + 1;\n  }\n  return i;\n}\n";
+    await assert.rejects(
+      chain.run({ source }, { args: [5_000n] }),
+      (error: unknown) =>
+        error instanceof CookReverted &&
+        /out of gas/i.test(error.reason ?? "") &&
+        error.data === undefined,
+    );
+  });
+
   it("cooks from another account's Pot, deploying it first", async () => {
     const other = chain.account(3);
     assert.equal(await chain.client.getCode({ address: other.pot }), undefined);
