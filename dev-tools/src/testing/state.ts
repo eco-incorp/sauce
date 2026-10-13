@@ -10,9 +10,17 @@
  *
  * Either way each later block is `blockInterval` seconds after the previous one, so nothing depends
  * on the wall clock. A state file is gzipped JSON: `{ sauce: { chainId, block, timestamp,
- * blockInterval }, genesis }`, where `genesis` is an anvil genesis without anvil's own dev accounts
- * (a replaying anvil creates them). Replay only knows what the recording run read: a test that
- * starts reading something new reads zeros there, so record again after changing what tests do.
+ * blockInterval, hardfork, nextBaseFee, nonces }, genesis }`, where `genesis` is an anvil genesis
+ * without anvil's own dev accounts (a replaying anvil creates them). Replay only knows what the
+ * recording run read: a test that starts reading something new reads zeros there, so record again
+ * after changing what tests do.
+ *
+ * A replay runs on the node the recording ran on. What a fork takes from the chain and anvil's
+ * `--init` does not, the recording writes down and the replay sets: the block gas limit and the
+ * hardfork (anvil infers it from the block it forks) as flags, and, once the node is up, the next
+ * block's base fee (a fork steps it from the pinned block's gas, `--init` carries the pinned block's
+ * forward) and the dev accounts' nonces (a fork keeps the chain's). What a replay cannot reproduce
+ * is a block hash, or a block's PREVRANDAO, which anvil derives from the one before it.
  *
  * Anvil's dev accounts are made plain accounts in every fork: their keys are public, and some carry
  * an EIP-7702 delegation on mainnets, which would make tokens check their signatures through it.
@@ -33,11 +41,21 @@ interface StateHeader {
   readonly block: number;
   readonly timestamp: number;
   readonly blockInterval: number;
+  /** The hardfork the fork ran, as anvil's `--hardfork` names it. */
+  readonly hardfork: string;
+  /** The base fee of the block after the pinned one, as the fork computed it; none before
+   *  EIP-1559. */
+  readonly nextBaseFee?: string;
+  /** Anvil's dev accounts' nonces at the pinned block, those that are not 0. */
+  readonly nonces: Readonly<Record<string, number>>;
 }
 
 interface StateFile {
-  readonly sauce: StateHeader & { readonly version: 1 };
-  readonly genesis: Record<string, unknown> & { alloc: Record<string, unknown> };
+  readonly sauce: StateHeader & { readonly version: 2 };
+  readonly genesis: Record<string, unknown> & {
+    readonly gasLimit: string;
+    alloc: Record<string, unknown>;
+  };
 }
 
 export interface ForkNode {
@@ -69,6 +87,14 @@ interface Header {
 const latest = (url: string) =>
   rpc(url, "eth_getBlockByNumber", ["latest", false]) as Promise<Header>;
 
+/** What anvil runs as: its hardfork, and the next block's base fee and gas limit. */
+interface NodeInfo {
+  readonly hardFork: string;
+  readonly environment: { readonly baseFee: string; readonly gasLimit: string };
+}
+
+const nodeInfo = (url: string) => rpc(url, "anvil_nodeInfo") as Promise<NodeInfo>;
+
 /** Every later block `interval` seconds after the one before it, from where the node is now. */
 async function pinClock(url: string, interval: number): Promise<void> {
   await rpc(url, "anvil_setBlockTimestampInterval", [interval]);
@@ -81,6 +107,19 @@ async function plainDevAccounts(url: string): Promise<string[]> {
   await Promise.all(accounts.map((account) => rpc(url, "anvil_setCode", [account, "0x"])));
 
   return accounts;
+}
+
+/** The nonces of `accounts` that are not 0, by lowercase address. */
+async function noncesOf(url: string, accounts: readonly string[]): Promise<Record<string, number>> {
+  const nonces = await Promise.all(
+    accounts.map(async (account) => {
+      const nonce = Number(await rpc(url, "eth_getTransactionCount", [account, "latest"]));
+
+      return [account.toLowerCase(), nonce] as const;
+    }),
+  );
+
+  return Object.fromEntries(nonces.filter(([, nonce]) => nonce > 0));
 }
 
 export async function startForkNode(options: ForkNodeOptions): Promise<ForkNode> {
@@ -118,7 +157,13 @@ async function replay(
 ): Promise<ForkNode> {
   const file = JSON.parse(gunzipSync(readFileSync(state)).toString("utf8")) as StateFile;
   const header = file.sauce;
-  if (header?.version !== 1) throw new Error(`${state} is not a recorded chain state`);
+  if ((header?.version as number) === 1) {
+    throw new Error(
+      `${state} was recorded by an earlier testing kit, which did not record the node a replay ` +
+        "must run on: record it again",
+    );
+  }
+  if (header?.version !== 2) throw new Error(`${state} is not a recorded chain state`);
   if (header.chainId !== chainId || header.block !== block) {
     throw new Error(
       `${state} holds chain ${header.chainId} at block ${header.block}, not chain ${chainId} at ` +
@@ -128,26 +173,58 @@ async function replay(
   const work = mkdtempSync(join(tmpdir(), "sauce-replay-"));
   const genesis = join(work, "genesis.json");
   writeFileSync(genesis, JSON.stringify(file.genesis));
+  const gasLimit = BigInt(file.genesis.gasLimit);
   let node: AnvilProcess;
   try {
     node = await startAnvil(
-      ["--init", genesis, "--chain-id", String(chainId)],
+      [
+        "--init",
+        genesis,
+        "--chain-id",
+        String(chainId),
+        // `--init` takes neither from the genesis.
+        "--gas-limit",
+        String(gasLimit),
+        "--hardfork",
+        header.hardfork,
+      ],
       anvil === undefined ? {} : { binary: anvil },
     );
   } catch (error) {
     rmSync(work, { recursive: true, force: true });
     throw error;
   }
-  const head = await latest(node.url);
-  if (Number(head.number) !== block || Number(head.timestamp) !== header.timestamp) {
+  try {
+    const [head, info] = await Promise.all([latest(node.url), nodeInfo(node.url)]);
+    const booted = {
+      block: Number(head.number),
+      timestamp: Number(head.timestamp),
+      gasLimit: BigInt(head.gasLimit),
+      hardfork: info.hardFork.toLowerCase(),
+    };
+    const expected = { block, timestamp: header.timestamp, gasLimit, hardfork: header.hardfork };
+    if (
+      Object.entries(expected).some(([key, value]) => booted[key as keyof typeof booted] !== value)
+    ) {
+      throw new Error(
+        `the replayed node runs at ${described(booted)}, not the recorded ${described(expected)}`,
+      );
+    }
+    // What `--init` cannot be given: set once the node is up, before anything is mined.
+    if (header.nextBaseFee !== undefined) {
+      await rpc(node.url, "anvil_setNextBlockBaseFeePerGas", [header.nextBaseFee]);
+    }
+    await Promise.all(
+      Object.entries(header.nonces).map(([account, nonce]) =>
+        rpc(node.url, "anvil_setNonce", [account, `0x${nonce.toString(16)}`]),
+      ),
+    );
+    await pinClock(node.url, header.blockInterval);
+  } catch (error) {
     await node.stop();
     rmSync(work, { recursive: true, force: true });
-    throw new Error(
-      `the replayed node is at block ${Number(head.number)} (${Number(head.timestamp)}), not the ` +
-        `recorded ${block} (${header.timestamp})`,
-    );
+    throw error;
   }
-  await pinClock(node.url, header.blockInterval);
 
   return {
     url: node.url,
@@ -158,6 +235,13 @@ async function replay(
     },
   };
 }
+
+const described = (node: {
+  block: number;
+  timestamp: number;
+  gasLimit: bigint;
+  hardfork: string;
+}) => `block ${node.block} (${node.timestamp}), gas limit ${node.gasLimit}, ${node.hardfork}`;
 
 interface RecordedAccount {
   balance?: string;
@@ -224,9 +308,22 @@ async function record(
     rmSync(work, { recursive: true, force: true });
     throw error;
   }
-  const head = await latest(node.url);
-  const devAccounts = await plainDevAccounts(node.url);
-  await pinClock(node.url, blockInterval);
+  let head: Header;
+  let info: NodeInfo;
+  let devAccounts: string[];
+  let nonces: Record<string, number>;
+  try {
+    // Read before anything is mined: `info` holds the next block's base fee.
+    [head, info] = await Promise.all([latest(node.url), nodeInfo(node.url)]);
+    devAccounts = await plainDevAccounts(node.url);
+    nonces = await noncesOf(node.url, devAccounts);
+    await pinClock(node.url, blockInterval);
+  } catch (error) {
+    await node.stop();
+    await recorder.close().catch(() => undefined);
+    rmSync(work, { recursive: true, force: true });
+    throw error;
+  }
 
   return {
     url: node.url,
@@ -237,11 +334,15 @@ async function record(
       rmSync(work, { recursive: true, force: true });
       const file: StateFile = {
         sauce: {
-          version: 1,
+          version: 2,
           chainId,
           block,
           timestamp: Number(head.timestamp),
           blockInterval,
+          hardfork: info.hardFork.toLowerCase(),
+          // A chain before EIP-1559 has no base fee to carry.
+          ...(head.baseFeePerGas === undefined ? {} : { nextBaseFee: info.environment.baseFee }),
+          nonces,
         },
         genesis: genesisFrom(recorded, devAccounts, chainId, head),
       };
