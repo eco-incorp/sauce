@@ -3,9 +3,11 @@
  * takes, and what the SDK writes for the accounts it adds to a program. Each name resolved against a
  * cook, with no cluster: a registered mint's program is the registry's.
  */
-import { address, getAddressCodec, type Address } from "@solana/kit";
+import { address, getAddressCodec, getProgramDerivedAddress, type Address } from "@solana/kit";
 
 import { requireChain } from "../../src/chains/canonical.js";
+import { v12SvmKitchenProgramId } from "../../src/deployments/index.js";
+import { derivePotPda } from "../../src/svm/kitchen.js";
 import { svmTokenRows } from "../../src/routes/token-registry.js";
 import {
   isSvmAccountName,
@@ -100,6 +102,60 @@ describe("svm account names", () => {
     });
   });
 
+  it("a program-derived address from its program and seeds", async () => {
+    const kitchen = address(v12SvmKitchenProgramId());
+    // The Pot itself is the Kitchen's address for "pot", its owner and the salt.
+    const salt = `0x${"00".repeat(32)}`;
+    const pot = (await derivePotPda(kitchen, OWNER, new Uint8Array(32))).address;
+    expect(await resolveSvmAccountName(`pda:${kitchen}:"pot",owner,${salt}`, ctx())).toEqual({
+      value: pot,
+      label: `the address ${kitchen} derives for "pot",owner,${salt}`,
+      kind: "address",
+    });
+    // Every kind of seed, against the derivation by hand.
+    const program = key(9);
+    const encode = (k: Address) => getAddressCodec().encode(k);
+    const u64 = new Uint8Array(8);
+    new DataView(u64.buffer).setBigUint64(0, 300n, true);
+    const [byHand] = await getProgramDerivedAddress({
+      programAddress: program,
+      seeds: [
+        new TextEncoder().encode("vault"),
+        new TextEncoder().encode("pot"),
+        encode(POT),
+        encode(TO),
+        encode(USDC),
+        new Uint8Array([7]),
+        u64,
+        new Uint8Array([0xde, 0xad]),
+      ],
+    });
+    expect(
+      (
+        await resolveSvmAccountName(
+          `pda:${program}:vault,"pot",self,@to,mint:USDC,u8:7,u64:@index,0xdead`,
+          ctx({ integers: { index: 300n } }),
+        )
+      ).value,
+    ).toBe(byHand);
+    // The program may be main's argument too.
+    expect((await resolveSvmAccountName("pda:@to:vault", ctx())).value).toBe(
+      (await getProgramDerivedAddress({ programAddress: TO, seeds: ["vault"] }))[0],
+    );
+  });
+
+  it("refuses a seed it cannot make", async () => {
+    await expect(resolveSvmAccountName(`pda:${TO}:u8:300`, ctx())).rejects.toThrow(
+      "seed u8:300 does not fit 1 byte",
+    );
+    await expect(resolveSvmAccountName(`pda:${TO}:u64:@n`, ctx())).rejects.toThrow(
+      "main's argument `n`, which was not given",
+    );
+    await expect(resolveSvmAccountName(`pda:${TO}:${"a".repeat(33)}`, ctx())).rejects.toThrow(
+      "is 33 bytes; a seed is at most 32",
+    );
+  });
+
   it("refuses what it cannot resolve, saying why", async () => {
     await expect(resolveSvmAccountName("pot:USDC", ctx({ via: "engine" }))).rejects.toThrow(
       "--via engine cooks with no Pot, so there is no Pot's token account to pass",
@@ -123,10 +179,22 @@ describe("svm account names", () => {
       "@to:@mint",
       `${TO}:USDC`,
       "mint:@m",
+      `pda:${TO}:vault,@to,u64:7`,
     ]) {
       expect(isSvmAccountName(name)).toBe(true);
     }
-    for (const name of ["", "pot:", "me", "@", "@1x", "pot:US-DC", "self:USDC:x"]) {
+    for (const name of [
+      "",
+      "pot:",
+      "me",
+      "@",
+      "@1x",
+      "pot:US-DC",
+      "self:USDC:x",
+      "pda:",
+      `pda:${TO}`,
+      "pda:x:y",
+    ]) {
       expect(isSvmAccountName(name)).toBe(false);
     }
   });
