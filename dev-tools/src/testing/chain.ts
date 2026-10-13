@@ -95,6 +95,31 @@ export interface CookResult {
   delta(holder: Address, token: string): bigint;
 }
 
+/** One call of a transaction, as the node's `callTracer` reports it. */
+interface Frame {
+  readonly output?: Hex;
+  readonly error?: string;
+  readonly revertReason?: string;
+  readonly calls?: readonly Frame[];
+}
+
+/** The `error` of a frame that reverted, rather than halted: its reason is its revert data. */
+const REVERTED = "execution reverted";
+
+/**
+ * Why `frame` failed: the reason in its revert data, or the node's decoding of it; else, when it
+ * reverted saying nothing, the failure of the call it made last, if that call failed — the one it
+ * passed on, as a Pot does the engine's — and else the frame's own halt ("out of gas").
+ */
+function failureOf(frame: Frame): string | undefined {
+  const own = reasonOf(frame.output) ?? frame.revertReason;
+  if (own !== undefined) return own;
+  const last = frame.calls?.at(-1);
+  const passed = last?.error === undefined ? undefined : failureOf(last);
+
+  return passed ?? (frame.error === REVERTED ? undefined : frame.error);
+}
+
 /** A token as a test names it: a registry symbol on the chain, the native symbol, or an address. */
 interface TokenRef {
   readonly address: Address | "native";
@@ -428,21 +453,26 @@ export class TestChain {
   async run(program: ProgramInput, options: CookOptions = {}): Promise<CookResult> {
     const compiled = this.compile(program);
     const { owner, to, data, value } = await this.cookCall(compiled, options);
-    // What an estimate on the latest block measures; when that reverts, the block's whole limit,
-    // so the transaction itself decides, in its own block.
+    // What the cook uses in the pending block, the one it is mined in; when that estimate
+    // reverts, the block's whole limit, so the transaction itself decides, in its own block.
     const gas = await this.client
-      .estimateGas({ account: owner.address, to, data, value })
+      .estimateGas({ account: owner.address, to, data, value, blockTag: "pending" })
       .catch(async () => (await this.client.getBlock()).gasLimit);
     const hash = await this.wallet(owner).sendTransaction({ to, data, value, gas });
     const receipt = await this.client.waitForTransactionReceipt({ hash });
-    const trace = (await rpc(this.rpcUrl, "debug_traceTransaction", [
-      hash,
-      { tracer: "callTracer", tracerConfig: { onlyTopCall: true } },
-    ])) as { output?: Hex };
-    const returnData = trace.output ?? "0x";
+    const trace = (onlyTopCall: boolean) =>
+      rpc(this.rpcUrl, "debug_traceTransaction", [
+        hash,
+        { tracer: "callTracer", tracerConfig: { onlyTopCall } },
+      ]) as Promise<Frame>;
     if (receipt.status !== "success") {
-      throw new CookReverted(reasonOf(returnData), returnData === "0x" ? undefined : returnData);
+      // Every call: a cook that reverts saying nothing passes on a call's failure.
+      const frame = await trace(false);
+      const revertData =
+        frame.output === undefined || frame.output === "0x" ? undefined : frame.output;
+      throw new CookReverted(failureOf(frame), revertData);
     }
+    const returnData = (await trace(true)).output ?? "0x";
 
     return this.result(compiled, owner, returnData, receipt.gasUsed, receipt.logs, hash);
   }
