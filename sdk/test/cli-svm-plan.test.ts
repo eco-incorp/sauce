@@ -4,8 +4,9 @@
  * cook handed out — the owner's transactions since its slot, read a batch at a time, the search
  * stopping where they reach before it, and refusing rather than guessing where it cannot finish
  * (too many, or one the endpoint lists and does not return), which close goes past; the setup's
- * account checks in one read; and a cook whose lookup table is not in use yet, said so at once
- * rather than waited for. Executing plans is `cli-send.e2e.test.ts` and `mcp/test/send.e2e.test.ts`.
+ * account checks in one read; a cook whose lookup table is not in use yet, said so at once rather
+ * than waited for; and what a wallet's send takes from a tool's result. Executing plans is
+ * `cli-send.e2e.test.ts` and `mcp/test/send.e2e.test.ts`.
  */
 import { createHash } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
@@ -35,6 +36,7 @@ import {
   type StepContext,
   type SvmPlan,
 } from "../src/cli/svm-plan.js";
+import { plannedCursor, plannedHandedOut } from "../src/cli/wallet-send.js";
 import { KITCHEN_DISCRIMINATORS, MAX_CODE_LEN } from "../src/svm/index.js";
 
 /** A distinct base58 key of `bytes` bytes, each `fill`. */
@@ -524,5 +526,42 @@ describe("a cook through a lookup table extended a moment ago", () => {
     expect(step.wait).toBeUndefined();
     expect(step.transactions).toHaveLength(1);
     expect(step.transactions[0]!.lookupTables).toEqual({ [TABLE]: [MINT] });
+  });
+});
+
+describe("what a wallet's send takes of a plan, from a tool's result", () => {
+  const cook = { what: "cook on Pot", transaction: "AQAB", feePayer: OWNER };
+  const setup = { what: "creating the Pot", transaction: "AQAC", feePayer: OWNER };
+
+  it("takes sauce_tx's one cook, or its step's transactions, and its cursor", () => {
+    const single = { transaction: "AQAB", cursor: "c1" };
+    expect(plannedCursor(single)).toBe("c1");
+    expect(plannedHandedOut(single)).toEqual([{ what: "the cook", transaction: "AQAB" }]);
+    const step = { step: "setup", transactions: [setup], cursor: "c2" };
+    expect(plannedCursor(JSON.stringify(step))).toBe("c2");
+    expect(plannedHandedOut(JSON.stringify(step))).toEqual([
+      { what: "creating the Pot", transaction: "AQAC" },
+    ]);
+  });
+
+  it("takes a send's next step, its transactions and its cursor", () => {
+    const sent = { ok: true, sent: [], next: { step: "cook", transactions: [cook], cursor: "c3" } };
+    expect(plannedCursor(sent)).toBe("c3");
+    expect(plannedHandedOut(sent)).toEqual([{ what: "cook on Pot", transaction: "AQAB" }]);
+    expect(plannedHandedOut(JSON.stringify(sent))).toEqual(plannedHandedOut(sent));
+    // A next step with nothing to sign hands nothing out.
+    expect(
+      plannedHandedOut({ next: { step: "cook", wait: "not ready yet", cursor: "c4" } }),
+    ).toEqual([]);
+  });
+
+  it("takes nothing from what carries no plan", () => {
+    for (const value of ["not json", "[]", null, 7, [cook], { next: null }, { cursor: 5 }]) {
+      expect(plannedCursor(value)).toBeUndefined();
+      expect(plannedHandedOut(value)).toEqual([]);
+    }
+    expect(plannedHandedOut({ transactions: [{ what: "no transaction" }, null, cook] })).toEqual([
+      { what: "cook on Pot", transaction: "AQAB" },
+    ]);
   });
 });

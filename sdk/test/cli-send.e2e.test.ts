@@ -609,6 +609,22 @@ describeSvm("sauce send: a staged Solana cook as a plan of steps, signed elsewhe
     expect(closed.next.plan.find((stage) => stage.step === "cook")!.state).toBe("given up");
   }, 300_000);
 
+  it("learns how a cook broadcast another way went from its signature, and moves on at once", async () => {
+    const first = await planFor("by-signature");
+    const setup = await send(first.cursor!, ...(await signAll(first)));
+    expect(setup.next.step).toBe("cook");
+    const [cook] = await signAll(setup.next);
+    const broadcast = jsonOf(
+      await sauce("send", cook!, "--rpc-url", RPC_URL, "--json"),
+    ) as unknown as { sent: Array<{ hash: string }> };
+    // Its signature tells the plan the cook ran: the close comes now, not once its blockhash has
+    // passed and the owner's transactions show it.
+    const confirmed = await send(setup.next.cursor!, "--signature", broadcast.sent[0]!.hash);
+    expect(confirmed.sent[0]).toMatchObject({ status: "success", returned: "7" });
+    expect(confirmed.next.step).toBe("close");
+    expect(confirmed.next.plan.find((stage) => stage.step === "cook")!.state).toBe("done");
+  }, 300_000);
+
   it("keeps a cook refused after its blockhash expired as handed out, and builds a fresh one only past it", async () => {
     const first = await planFor("expired-cook");
     const setup = await send(first.cursor!, ...(await signAll(first)));

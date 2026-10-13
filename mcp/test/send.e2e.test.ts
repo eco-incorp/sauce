@@ -491,5 +491,46 @@ describe(
       const handed = getTransactionDecoder().decode(getBase64Encoder().encode(planned.transaction));
       assert.deepEqual([...shim.sent.at(-1)!.messageBytes], [...handed.messageBytes]);
     });
+
+    it("sends a fresh cook from a wallet once the one sauce_tx handed out expired unsent", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-late", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(): Uint256 {\n  return 6;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { transaction: string; cursor: string };
+      // Held past its blockhash: sent as it was built, the cluster refuses it.
+      harness.svm.warpToSlot(harness.svm.getClock().slot + 200n);
+      const before = shim.sent.length;
+      const sent = ok(
+        await wallets.call("sauce_wallet_send", {
+          wallet: "sol-late",
+          transaction: planned,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as {
+        ok: boolean;
+        sent: Array<{ what: string; status: string; returned?: unknown }>;
+        notes: string[];
+      };
+      assert.equal(sent.ok, true, JSON.stringify(sent));
+      assert.ok(
+        sent.notes.some((note) => note.startsWith("the cook, as handed out, was not sent: ")),
+        JSON.stringify(sent.notes),
+      );
+      // The owner's transactions show it never landed: one fresh cook went out, and only one.
+      assert.equal(shim.sent.length, before + 1);
+      assert.equal(sent.sent.length, 1);
+      assert.equal(sent.sent[0]!.returned, "6");
+      const handed = getTransactionDecoder().decode(getBase64Encoder().encode(planned.transaction));
+      assert.notDeepEqual([...shim.sent.at(-1)!.messageBytes], [...handed.messageBytes]);
+    });
   },
 );
