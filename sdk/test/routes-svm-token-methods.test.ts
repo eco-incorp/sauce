@@ -236,6 +236,84 @@ describe("the token methods on Solana", () => {
     expect(lower(owned).rewrote).toBe(false);
   });
 
+  describe("Token-2022 and the edges of each method", () => {
+    const pyusd = svmTokenRows(SOLANA).find((row) => row.symbol === "PYUSD")!;
+
+    it("PYUSD.transferFrom and PYUSD.approve take the checked writes with the registry's decimals", () => {
+      const from = compile(
+        "function main(from: Address, to: Address, amount: Uint256) {\n  PYUSD.transferFrom(from, to, amount);\n}\n",
+      );
+      expect(from.source).toContain(
+        `__sauce_transferChecked(PYUSD, token2022Program, fromPYUSD, mintPYUSD, toPYUSD, pot, amount, ${pyusd.decimals});` +
+          ' require(svm.sload(fromPYUSD, 32, 32).toBe() == from, "wrong sender account");' +
+          ' require(svm.sload(toPYUSD, 32, 32).toBe() == to, "wrong recipient account");',
+      );
+      const approve = compile(
+        "function main(spender: Address, amount: Uint256) {\n  PYUSD.approve(spender, amount);\n}\n",
+      );
+      expect(approve.source).toContain(
+        `__sauce_approveChecked(PYUSD, token2022Program, potPYUSD, mintPYUSD, spenderAccount, pot, amount, ${pyusd.decimals});` +
+          ' require(spenderAccount == spender, "wrong spender account");',
+      );
+    });
+
+    it("self.PYUSD reads the Pot's Token-2022 account, with no mint account: a read needs none", () => {
+      const program = compile("function main(): Uint256 {\n  return self.PYUSD;\n}\n");
+      expect(program.source).toContain("return __sauce_svm_balance(PYUSD, potPYUSD, pot.address);");
+      expect(program.derivedAccounts).toEqual({ potPYUSD: "self:PYUSD", pot: "self" });
+    });
+
+    it("approve(self, …) makes the Pot its own delegate: the authority's slot, nothing to check", () => {
+      const program = compile(
+        "function main(amount: Uint256) {\n  USDC.approve(self, amount);\n}\n",
+      );
+      expect(program.source).toContain(
+        "__sauce_approve(USDC, tokenProgram, potUSDC, pot, pot, amount);\n",
+      );
+    });
+
+    it("Token(<key>) of a mint no row records: the checked write, its program and decimals read", () => {
+      const key = `0x${"5a".repeat(32)}`;
+      const base58 = getAddressCodec().decode(new Uint8Array(32).fill(0x5a));
+      const program = compile(
+        `function main(to: Address) {\n  Token(${key}).transfer(to, 1);\n}\n`,
+      );
+      expect(program.source).toContain(
+        `__sauce_transferChecked(${key}, programToken1, potToken1, mintToken1, toToken1, pot, 1, svm.sload(mintToken1, 44, 1).toLe());`,
+      );
+      expect(program.derivedAccounts).toEqual({
+        programToken1: `program:${base58}`,
+        pot: "self",
+        mintToken1: `mint:${base58}`,
+        potToken1: `self:${base58}`,
+        toToken1: `@to:${base58}`,
+      });
+    });
+
+    it("every added account takes a name of its own, however many the program has taken", () => {
+      const program = compile(
+        "function main(pot: Account, tokenProgram: Account, potUSDC: Account, pot2: Account, to: Address) {\n" +
+          "  USDC.transfer(to, 1);\n}\n",
+      );
+      expect(program.derivedAccounts).toEqual({
+        tokenProgram2: TOKEN_PROGRAM,
+        pot3: "self",
+        potUSDC2: "self:USDC",
+        toUSDC: "@to:USDC",
+      });
+    });
+
+    it("an explicit Account holder is paid as attached: no holder is named, so nothing is checked", () => {
+      const program = compile(
+        "function main(dest: Account<Writable>, amount: Uint256) {\n  PYUSD.transfer(dest, amount);\n}\n",
+      );
+      expect(program.source).toContain(
+        `__sauce_transferChecked(PYUSD, token2022Program, potPYUSD, mintPYUSD, dest, pot, amount, ${pyusd.decimals});\n`,
+      );
+      expect(program.source).not.toContain("wrong recipient account");
+    });
+  });
+
   describe("refusals, each naming what to write instead", () => {
     it("a holder computed as the program runs", () => {
       expect(() =>
