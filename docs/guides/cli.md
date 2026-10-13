@@ -674,7 +674,10 @@ way is confirmed with `--signature <signature>`. `--close` gives up on the cook 
 buffer, once a cook handed out can no longer land. A cook through a lookup table extended a moment
 ago comes back with nothing to sign and a `wait` naming the slot the table is in use from, the
 next one, about half a second on: `--cursor` alone, sent again, builds the cook (`sauce run` waits
-for it itself). A lookup table the plan created stays for the next cook naming the same accounts
+for it itself). A cook its simulation says would fail is not built, so none is handed out to land
+and fail: the step says why in `fails`, with the simulation's `logs` (`sauce tx` exits 1 then), and
+once what it needs is there (a funded Pot, an account it names), `--cursor` alone simulates it
+again and builds it. A lookup table the plan created stays for the next cook naming the same accounts
 (`--lookup-table <address>`).
 
 ### What a cook left open: `sauce reclaim`

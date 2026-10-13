@@ -57,6 +57,7 @@ import {
   decodeCursor,
   encodeCursor,
   isCook,
+  isPlanCook,
   nextStep,
   readPlanTx,
   signableStep,
@@ -242,6 +243,7 @@ interface NextStep {
   readonly expiresAtBlockHeight?: string;
   readonly wait?: string;
   readonly fails?: string;
+  readonly logs?: readonly string[];
   readonly cursor?: string;
   readonly notes?: readonly string[];
 }
@@ -274,8 +276,8 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
     ...(step.fails === undefined
       ? []
       : [
-          `simulated now, the cook would fail: ${step.fails.reason}. Fix what it needs and send the ` +
-            "cursor alone for a fresh one, or give up on it with close",
+          `simulated now, the cook would fail: ${step.fails.reason}, so none was built. Fix what it ` +
+            "needs and send the cursor alone to simulate it again, or give up on it with close",
         ]),
   ];
 
@@ -287,7 +289,7 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
       ? {}
       : { expiresAtBlockHeight: built.lastValidBlockHeight.toString() }),
     ...(step.wait === undefined ? {} : { wait: step.wait }),
-    ...(step.fails === undefined ? {} : { fails: step.fails.reason }),
+    ...(step.fails === undefined ? {} : { fails: step.fails.reason, logs: step.fails.logs }),
     cursor: encodeCursor(built.plan),
     ...(notes.length === 0 ? {} : { notes }),
   };
@@ -640,11 +642,16 @@ async function sendSvm(
   );
   const sent: SentEntry[] = [];
   let carried = plan;
-  // What the plan learns of its cook from a send: that it landed, succeeded or failed. One refused
-  // before it was sent teaches nothing — the signed bytes are the caller's, and could still land
-  // another way — so the plan keeps it as handed out, until its blockhash has expired.
-  const learn = (tx: Transaction, result: SvmSent): void => {
-    if (carried === undefined || !isCook(tx)) return;
+  // What the plan learns of its cook from a send: that it landed, succeeded or failed — from the
+  // plan's own cook only, not one on another Pot sent beside its cursor. One refused before it was
+  // sent teaches nothing — the signed bytes are the caller's, and could still land another way —
+  // so the plan keeps it as handed out, until its blockhash has expired.
+  const learn = async (
+    tx: Transaction,
+    tables: AddressesByLookupTableAddress,
+    result: SvmSent,
+  ): Promise<void> => {
+    if (carried === undefined || !(await isPlanCook(carried, tx, tables))) return;
     carried = { ...carried, cooked: { ok: result.ok, signature: result.signature } };
   };
   const report = (
@@ -692,7 +699,7 @@ async function sendSvm(
     };
     const tables = await tablesOf(read, rpc, transaction);
     sent.push(report(tx, index, tables, result, undefined));
-    learn(transaction, result);
+    await learn(transaction, tables, result);
     if (!result.ok) return { sent, ...(carried === undefined ? {} : { plan: carried }) };
   }
 
@@ -713,7 +720,7 @@ async function sendSvm(
     if (status !== null && status !== undefined) {
       const result = await svmLanded(rpc, input.rpcUrl, signature);
       sent.push(report(tx, index, tables, result, undefined));
-      learn(tx.transaction, result);
+      await learn(tx.transaction, tables, result);
       if (!result.ok) break;
       continue;
     }
@@ -767,7 +774,7 @@ async function sendSvm(
             () => undefined,
           );
     sent.push(report(tx, index, tables, result, moved));
-    learn(tx.transaction, result);
+    await learn(tx.transaction, tables, result);
     if (!result.ok) break;
   }
 

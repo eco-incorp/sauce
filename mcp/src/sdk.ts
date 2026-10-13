@@ -110,6 +110,7 @@ export {
   planChain,
   plannedCursor,
   plannedHandedOut,
+  planFor,
   plannedTransactions,
   sendPlan,
   sendSvmPlan,

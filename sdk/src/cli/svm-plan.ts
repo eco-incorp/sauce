@@ -205,7 +205,8 @@ export interface PlanStep {
   /** The cook's lookup tables are not all in use yet: the slot they are from. Asked again from
    *  then, the cook is built. */
   readonly readyAt?: bigint;
-  /** The cook's rehearsal failed: why, and its logs. It is built anyway, at the most compute. */
+  /** The cook's simulation failed: why, and its logs. Nothing is built, and no cook is handed out:
+   *  asked again once what it needs is there, the cook is simulated again. */
   readonly fails?: { readonly reason: string; readonly logs: readonly string[] };
   /** The execution fee the cook signs, in lamports. */
   readonly fee?: bigint;
@@ -254,6 +255,14 @@ const LIST_MOST = 256;
 const NAMED_MOST = 64;
 /** The most a cursor may carry, decoded: a staged program at its largest, and its accounts. */
 const CURSOR_MAX = 2 * MAX_CODE_LEN;
+/** The longest cursor taken, as text: the largest plan, deflated, in base64, with room. */
+const CURSOR_TEXT_MOST = 4 * 1024 * 1024;
+/** The longest return type a plan carries: a record of a few dozen fields. A longer one is left
+ *  out, and what `main` returns is shown as its bytes. */
+const TYPE_MOST = 512;
+/** The longest name a plan carries for an account, and the longest account it names. */
+const LABEL_MOST = 200;
+const LABELLED_MOST = 64;
 /** A slot, a block height, a nonce, lamports: each a u64 on Solana. */
 const U64_MAX = 2n ** 64n - 1n;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -318,10 +327,11 @@ export function decodeCursor(text: string): SvmPlan {
       `cursor: ${why}; pass the cursor a step returned, whole (sauce tx or sauce send gives one)`,
     );
   if (!text.startsWith(CURSOR_PREFIX)) throw bad("not a plan's cursor");
+  if (text.length > CURSOR_TEXT_MOST) throw bad("it is too long");
   let raw: Record<string, unknown>;
   try {
     const inflated = inflateRawSync(unb64(text.slice(CURSOR_PREFIX.length)), {
-      maxOutputLength: CURSOR_MAX * 2,
+      maxOutputLength: CURSOR_MAX,
     });
     raw = JSON.parse(inflated.toString("utf8")) as Record<string, unknown>;
   } catch {
@@ -406,7 +416,14 @@ export function decodeCursor(text: string): SvmPlan {
   }
   const labels = list(raw.labels, "labels").map((entry) => {
     const [at, label] = list(entry, "a label");
-    if (typeof at !== "string" || typeof label !== "string") throw bad("a label");
+    if (
+      typeof at !== "string" ||
+      typeof label !== "string" ||
+      at.length > LABELLED_MOST ||
+      label.length > LABEL_MOST
+    ) {
+      throw bad("a label");
+    }
 
     return [at, label] as const;
   });
@@ -427,7 +444,12 @@ export function decodeCursor(text: string): SvmPlan {
     }
     cooked = { ok, signature };
   }
-  if (raw.returnType !== undefined && typeof raw.returnType !== "string") throw bad("returnType");
+  if (
+    raw.returnType !== undefined &&
+    (typeof raw.returnType !== "string" || raw.returnType.length > TYPE_MOST)
+  ) {
+    throw bad("returnType");
+  }
 
   return {
     owner: key(raw.owner, "owner"),
@@ -483,6 +505,22 @@ export async function planBuffer(
 
 const potOf = async (plan: Pick<SvmPlan, "owner" | "salt">): Promise<Address> =>
   (await derivePotPda(kitchen(), plan.owner, hexToBytes(plan.salt))).address;
+
+/**
+ * Whether `transaction`, read back, is `plan`'s cook: a cook the owner pays for, on the plan's Pot
+ * where it cooks through the Kitchen. A Pot the message loads through a table not given in `tables`
+ * cannot be read, and is taken to be the plan's: one more cook, never.
+ */
+export async function isPlanCook(
+  plan: SvmPlan,
+  transaction: Transaction,
+  tables: AddressesByLookupTableAddress = {},
+): Promise<boolean> {
+  const read = readPlanTx(transaction, tables);
+  if (read?.cook !== true || Object.keys(transaction.signatures)[0] !== plan.owner) return false;
+
+  return plan.via === "engine" || read.pot === undefined || read.pot === (await potOf(plan));
+}
 
 /** The Kitchen's `create_pot` for the plan's Pot, the owner paying its rent. */
 async function createPotInstruction(plan: SvmPlan): Promise<Instruction> {
@@ -656,7 +694,9 @@ export async function newSvmPlan(input: NewPlanInput): Promise<SvmPlan> {
     pot: input.potMissing ? "setup" : "there",
     tokenAccounts: input.tokenAccounts,
     payload: input.payload,
-    ...(input.returnType === undefined ? {} : { returnType: input.returnType }),
+    ...(input.returnType === undefined || input.returnType.length > TYPE_MOST
+      ? {}
+      : { returnType: input.returnType }),
     labels: [...input.labels],
   };
   const signer = unsignedSigner(input.owner);
@@ -840,8 +880,11 @@ export async function nextStep(
   let untold: string | undefined;
   if (current.cook !== undefined && current.cooked === undefined) {
     const handed = current.cook;
-    const height = await ask(ctx.url, "the block height", () =>
-      ctx.rpc.getBlockHeight({ commitment: "confirmed" }).send(),
+    const height = u64Of(
+      await ask(ctx.url, "the block height", () =>
+        ctx.rpc.getBlockHeight({ commitment: "confirmed" }).send(),
+      ),
+      "the block height",
     );
     if (height <= handed.lastValidBlockHeight) {
       const name = options.close === true ? "close" : "cook";
@@ -1237,8 +1280,21 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
     value === undefined || value.err === null
       ? undefined
       : { reason: failureReason(value.err, logs, returned), logs };
+  // One its simulation says would fail is not built: a signer is never handed a cook that could
+  // land and fail, and the plan remembers none that could still land.
+  if (fails !== undefined) {
+    return {
+      name: "cook",
+      transactions: [],
+      plan,
+      overview: overview(plan, "cook"),
+      notes: [],
+      fee,
+      fails,
+    };
+  }
   const unitLimit =
-    fails === undefined && value?.unitsConsumed !== undefined && value.unitsConsumed !== null
+    value?.unitsConsumed !== undefined && value.unitsConsumed !== null
       ? recommendedComputeUnitLimit(BigInt(value.unitsConsumed))
       : ENGINE_GAS_LIMIT_CU;
 
@@ -1263,7 +1319,6 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
         ? ["the endpoint did not simulate the cook, so it is built at the most compute it may use"]
         : [],
     fee,
-    ...(fails === undefined ? {} : { fails }),
     ...(value === undefined ? { unrehearsed: true as const } : {}),
   };
 }
@@ -1313,13 +1368,36 @@ const HISTORY_PAGE = 100;
 /** How many of a page's transactions the search reads at once. */
 const HISTORY_BATCH = 10;
 
+/** What an endpoint answered, for a message: short, whatever it is. */
+const shown = (value: unknown): string => {
+  const text = typeof value === "bigint" ? `${value}` : (JSON.stringify(value) ?? String(value));
+
+  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+};
+
+/** An answer the search cannot go on from: the step is refused, never built on a guess. */
+const untellable = (why: string): CliError =>
+  new CliError(
+    `${why}: whether the cook handed out landed cannot be told, so nothing was built. Ask again, ` +
+      "through another endpoint if this one keeps answering so",
+  );
+
+/** A slot or a block height an endpoint answered, held to what one is: a whole number in a u64. */
+function u64Of(value: unknown, what: string): bigint {
+  if (typeof value === "bigint" && value >= 0n && value <= U64_MAX) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+  throw untellable(`the endpoint answered ${what} with ${shown(value)}, which is no u64`);
+}
+
 /**
  * Whether the cook handed out landed: a transaction of the owner's, since the slot the cook was
  * built at, on the cook's blockhash, that cooks. Landed — succeeded or failed — it cannot land
  * again. The owner's transactions are read a batch at a time, newest first, and none from before
- * that slot, which cannot be the cook. An endpoint that cannot say — a page it does not list, a
- * transaction it lists and does not return, more of them than the search reads — refuses the step
- * rather than risk a second cook.
+ * that slot, which cannot be the cook. Every answer is held to what it must be — each slot a u64,
+ * newest first across every page, each signature one, each transaction the one its signature names
+ * — and an endpoint that cannot say, or answers otherwise — a page it does not list, a transaction
+ * it lists and does not return, more of them than the search reads — refuses the step rather than
+ * risk a second cook.
  */
 async function cookLanded(
   ctx: StepContext,
@@ -1329,23 +1407,49 @@ async function cookLanded(
   let before: Signature | undefined;
   let read = 0;
   let unread: string | undefined;
+  let newest: bigint | undefined;
   for (;;) {
-    const page = await ask(ctx.url, "the owner's transactions since the cook was handed out", () =>
-      ctx.rpc
-        .getSignaturesForAddress(owner, {
-          limit: HISTORY_PAGE,
-          ...(before === undefined ? {} : { before }),
-        })
-        .send(),
+    const answered: unknown = await ask(
+      ctx.url,
+      "the owner's transactions since the cook was handed out",
+      () =>
+        ctx.rpc
+          .getSignaturesForAddress(owner, {
+            limit: HISTORY_PAGE,
+            ...(before === undefined ? {} : { before }),
+          })
+          .send(),
     );
-    const since = page.filter((entry) => BigInt(entry.slot) >= handed.slot);
+    if (!Array.isArray(answered)) {
+      throw untellable(`the endpoint answered ${owner}'s transactions with ${shown(answered)}`);
+    }
+    const page = answered.map((entry: { signature?: unknown; slot?: unknown } | null) => {
+      const signature = entry?.signature;
+      if (typeof signature !== "string" || !isSignature(signature)) {
+        throw untellable(
+          `the endpoint lists ${shown(signature)} among ${owner}'s transactions, where a ` +
+            "signature belongs",
+        );
+      }
+      const slot = u64Of(entry?.slot, `a slot of ${signature}`);
+      if (newest !== undefined && slot > newest) {
+        throw untellable(
+          `the endpoint lists ${owner}'s transactions out of order: ${signature} at slot ${slot} ` +
+            `after one at ${newest}`,
+        );
+      }
+      newest = slot;
+
+      return { signature: signature as Signature, slot };
+    });
+    const since = page.filter((entry) => entry.slot >= handed.slot);
     const reading = since.slice(0, HISTORY_MOST - read);
     for (let at = 0; at < reading.length; at += HISTORY_BATCH) {
       const found = await Promise.all(
         reading.slice(at, at + HISTORY_BATCH).map(async (entry) => {
           const response = await ask(ctx.url, `transaction ${entry.signature}`, () =>
             ctx.rpc
-              .getTransaction(entry.signature as Signature, {
+              .getTransaction(entry.signature, {
                 commitment: "confirmed",
                 encoding: "base64",
                 maxSupportedTransactionVersion: 0,
@@ -1357,12 +1461,31 @@ async function cookLanded(
 
             return undefined;
           }
-          const transaction = getTransactionDecoder().decode(
-            new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
-          );
-          const { lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
-            transaction.messageBytes,
-          ) as { lifetimeToken: string };
+          let transaction: Transaction;
+          let lifetimeToken: string;
+          try {
+            transaction = getTransactionDecoder().decode(
+              new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
+            );
+            ({ lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
+              transaction.messageBytes,
+            ) as { lifetimeToken: string });
+          } catch {
+            throw untellable(
+              `the endpoint returns transaction ${entry.signature} in bytes that do not decode`,
+            );
+          }
+          // A transaction is named by its fee payer's signature, its first.
+          const first = Object.values(transaction.signatures)[0];
+          if (
+            first === null ||
+            first === undefined ||
+            getBase58Decoder().decode(first) !== entry.signature
+          ) {
+            throw untellable(
+              `asked for transaction ${entry.signature}, the endpoint returns another transaction`,
+            );
+          }
 
           return lifetimeToken === handed.blockhash && isCook(transaction)
             ? { ok: (response.meta?.err ?? null) === null, signature: entry.signature }
@@ -1381,7 +1504,7 @@ async function cookLanded(
     }
     // The page reaches before the cook was handed out, or the owner's history ends.
     if (since.length < page.length || page.length < HISTORY_PAGE) break;
-    before = page.at(-1)!.signature as Signature;
+    before = page.at(-1)!.signature;
   }
   if (unread !== undefined) {
     throw new CliError(
@@ -1629,7 +1752,7 @@ export async function signableStep(
   readonly plan: SvmPlan;
 }> {
   const { lifetime, ...built } = await signableTransactions(step.transactions, ctx);
-  const cooks = step.transactions.some((tx) => tx.kind === "cook");
+  const cooks = step.fails === undefined && step.transactions.some((tx) => tx.kind === "cook");
 
   return {
     ...built,

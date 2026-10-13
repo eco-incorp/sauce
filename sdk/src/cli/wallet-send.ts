@@ -48,7 +48,7 @@ import {
   type SvmPlan,
 } from "./svm-plan.js";
 import { HOT_WALLET } from "./wallet-commands.js";
-import type { Unlocked } from "./wallets.js";
+import type { Unlocked, WalletInfo } from "./wallets.js";
 
 /** One transaction of a plan, as another step built it. */
 export type PlannedTx =
@@ -522,6 +522,24 @@ async function planOutflows(
   });
 }
 
+/**
+ * The plan a cursor carries, for the wallet `wallet` to send: refused, before anything else is read
+ * from it or the wallet is unlocked, unless the wallet is the plan's owner — the one key that signs
+ * and pays every transaction of the plan.
+ */
+export function planFor(cursor: string, wallet: WalletInfo): SvmPlan {
+  const plan = decodeCursor(cursor);
+  if (plan.owner !== wallet.address) {
+    throw new UsageError(
+      `the plan is ${plan.owner}'s: only that key signs its transactions, and wallet ` +
+        `${wallet.name} is ${wallet.address}. Send it from the wallet at ${plan.owner}, or have ` +
+        "that key sign each step and send it with sauce_send",
+    );
+  }
+
+  return plan;
+}
+
 /** How many times a plan's step waits, a second each, for the cluster to catch up. */
 const PLAN_WAITS = 10;
 
@@ -547,14 +565,8 @@ export async function sendSvmPlan(input: {
   if (wallet.kind !== "solana") {
     throw new UsageError(`wallet ${wallet.info.name} is an EVM wallet, and the plan is Solana's`);
   }
+  let plan = planFor(input.cursor, wallet.info);
   guard.gate(chain);
-  let plan = decodeCursor(input.cursor);
-  if (plan.owner !== wallet.signer.address) {
-    throw new UsageError(
-      `the plan is ${plan.owner}'s, and wallet ${wallet.info.name} is ${wallet.signer.address}: ` +
-        "build it with the wallet's address as its owner",
-    );
-  }
   const ctx = { rpc: createSolanaRpc(input.rpcUrl), url: input.rpcUrl, signer: wallet.signer };
   // The whole plan held to the wallet's policy before any of it is sent, as far as it can be
   // measured now; each transaction is measured again, and reserved in the ledger, as it is sent.

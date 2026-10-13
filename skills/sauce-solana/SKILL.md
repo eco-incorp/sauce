@@ -339,7 +339,10 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   the buffer, once a cook handed out can no longer land. A step with nothing to sign says why in
   `wait`; a cook through a lookup table extended a moment ago is one, the table in use from the
   next slot, about half a second on: the cursor alone, sent again, builds the cook (`sauce run`
-  waits for it itself).
+  waits for it itself). A cook its simulation says would fail is not built, so none is handed out
+  to land and fail: the step says why in `fails`, with the simulation's `logs` (`sauce tx` exits
+  1), and once what it needs is there (a funded Pot, an account it names) the cursor alone
+  simulates it again.
 - **Rent left open.** A code buffer a plan never closed, and the lookup tables cooks keep for the
   next cook naming the same accounts, hold the owner's rent.
   `sauce reclaim --chain solana --owner <pubkey>` lists them with that rent and prints the

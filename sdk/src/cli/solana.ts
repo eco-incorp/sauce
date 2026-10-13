@@ -1886,7 +1886,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     ...(built.lastValidBlockHeight === undefined
       ? {}
       : { expiresAtBlockHeight: built.lastValidBlockHeight.toString() }),
-    ...(step.fails === undefined ? {} : { fails: step.fails.reason }),
+    ...(step.fails === undefined ? {} : { fails: step.fails.reason, logs: step.fails.logs }),
     ...(step.wait === undefined ? {} : { wait: step.wait }),
     cursor,
   };
@@ -1913,25 +1913,26 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
           `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
           "expires in about a minute. `sauce send <signed> --cursor <cursor>` sends it and reads " +
           "back what main returned."
-        : step.wait !== undefined
-          ? `Nothing to sign yet: ${step.wait}. \`sauce send --cursor <cursor>\` builds the ` +
-            `${step.name} step then.`
-          : `This is the plan's ${step.name} step: ${built.transactions.length} transactions, base64 ` +
-            `and signed by no one, on one blockhash that expires in about a minute. ${input.owner} ` +
-            "signs each and pays for it; `sauce send <signed>… --cursor <cursor>` sends them in " +
-            "order and builds the next step fresh (" +
-            step.overview
-              .filter((stage) => stage.state === "later")
-              .map((stage) => stage.what)
-              .join(", then ") +
-            "). Whatever expires before it lands is built again, from what the cluster shows.",
-      ...(step.fails === undefined
-        ? []
-        : [
-            `Simulated now, the cook would fail: ${step.fails.reason}. It is built anyway, at the ` +
-              "most compute; sauce send refuses it until it would succeed.",
-          ]),
+        : step.fails !== undefined
+          ? `Simulated now, the cook would fail: ${step.fails.reason}, so no cook was built and ` +
+            "none is handed out. Fix what it needs (fund the Pot, create an account it names), " +
+            "then `sauce send --cursor <cursor>` simulates it again and builds it; `--close` gives " +
+            "up on it."
+          : step.wait !== undefined
+            ? `Nothing to sign yet: ${step.wait}. \`sauce send --cursor <cursor>\` builds the ` +
+              `${step.name} step then.`
+            : `This is the plan's ${step.name} step: ${built.transactions.length} transactions, base64 ` +
+              `and signed by no one, on one blockhash that expires in about a minute. ${input.owner} ` +
+              "signs each and pays for it; `sauce send <signed>… --cursor <cursor>` sends them in " +
+              "order and builds the next step fresh (" +
+              step.overview
+                .filter((stage) => stage.state === "later")
+                .map((stage) => stage.what)
+                .join(", then ") +
+              "). Whatever expires before it lands is built again, from what the cluster shows.",
     ],
+    // No cook to sign: what the command is for, it could not give.
+    ...(step.fails === undefined ? {} : { exitCode: 1 }),
   };
 }
 

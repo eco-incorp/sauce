@@ -8,7 +8,7 @@
  * than waited for; and what a wallet's send takes from a tool's result. Executing plans is
  * `cli-send.e2e.test.ts` and `mcp/test/send.e2e.test.ts`.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
 
 import {
@@ -23,6 +23,7 @@ import {
   setTransactionMessageLifetimeUsingBlockhash,
   type Address,
   type Blockhash,
+  type SignatureBytes,
 } from "@solana/kit";
 import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
 
@@ -31,7 +32,9 @@ import { UsageError } from "../src/cli/args.js";
 import {
   decodeCursor,
   encodeCursor,
+  newSvmPlan,
   nextStep,
+  signableStep,
   unsignedSigner,
   type StepContext,
   type SvmPlan,
@@ -155,9 +158,14 @@ describe("a plan's cursor", () => {
     ],
     ["a list", () => cursorOf([]), /not a plan/],
     [
-      "one past the largest a plan decodes to",
-      () => cursorOf(raw({ returnType: "x".repeat(4 * MAX_CODE_LEN + 1) })),
+      "one inflating past the largest a plan decodes to",
+      () => cursorOf(raw({ labels: [[MINT, "x".repeat(2 * MAX_CODE_LEN)]] })),
       /it does not decode/,
+    ],
+    [
+      "one longer than the largest a plan encodes to",
+      () => `sauce-plan-1.${"A".repeat(4 * 1024 * 1024 + 1)}`,
+      /it is too long/,
     ],
     ["another via", () => cursorOf(raw({ via: "relay" })), /via is neither kitchen nor engine/],
     ["a short salt", () => cursorOf(raw({ salt: "0x11" })), /salt is not 32 bytes/],
@@ -273,6 +281,21 @@ describe("a plan's cursor", () => {
     ["a cooked with no signature", () => cursorOf(raw({ cooked: [true, "signed"] })), /cooked/],
     ["a return type that is no text", () => cursorOf(raw({ returnType: 7 })), /returnType/],
     [
+      "a return type past the longest",
+      () => cursorOf(raw({ returnType: `{ ${"a: Uint256, ".repeat(100)}}` })),
+      /returnType/,
+    ],
+    [
+      "a label past the longest",
+      () => cursorOf(raw({ labels: [[MINT, "x".repeat(201)]] })),
+      /a label/,
+    ],
+    [
+      "a label for no account",
+      () => cursorOf(raw({ labels: [["x".repeat(65), "the Pot"]] })),
+      /a label/,
+    ],
+    [
       "a fee that is no integer",
       () => cursorOf(raw({ maxExecutionFee: "-1" })),
       /maxExecutionFee is not an integer/,
@@ -281,6 +304,38 @@ describe("a plan's cursor", () => {
     const read = () => decodeCursor(cursor());
     expect(read).toThrow(UsageError);
     expect(read).toThrow(why);
+  });
+
+  it("carries the largest program a plan stages, whole", () => {
+    // Random bytes: as little as deflate can take off.
+    const largest = new Uint8Array(randomBytes(MAX_CODE_LEN));
+    const made = plan({
+      payload: largest,
+      staged: {
+        nonce: 1n,
+        sha256: new Uint8Array(createHash("sha256").update(largest).digest()),
+        length: MAX_CODE_LEN,
+      },
+    });
+    expect(decodeCursor(encodeCursor(made)).payload).toEqual(largest);
+  });
+
+  it("leaves out a return type too long to carry: what main returns is then shown as bytes", async () => {
+    const long = `{ ${"a: Uint256, ".repeat(100)}}`;
+    const made = await newSvmPlan({
+      owner: OWNER,
+      salt: `0x${"11".repeat(32)}`,
+      via: "kitchen",
+      payload: new Uint8Array([1, 2, 3]),
+      tail: [],
+      lookupTables: {},
+      potMissing: false,
+      tokenAccounts: [],
+      returnType: long,
+      labels: new Map(),
+    });
+    expect(made.returnType).toBeUndefined();
+    expect(decodeCursor(encodeCursor(made)).returnType).toBeUndefined();
   });
 
   it("takes staged over the payload it carries", () => {
@@ -292,77 +347,105 @@ describe("a plan's cursor", () => {
   });
 });
 
-/** A transaction of the owner's on `blockhash`: a Kitchen cook, or a call that is not one. */
-function ownerTransaction(blockhash: string, cook: boolean): string {
+/** The 64 signature bytes of the owner's `index`-th newest transaction, distinct per index. */
+const signatureBytes = (index: number): Uint8Array => {
+  const bytes = new Uint8Array(64).fill(7);
+  bytes[0] = 1 + (index >> 8);
+  bytes[1] = index & 0xff;
+
+  return bytes;
+};
+const historySignature = (index: number): string =>
+  getBase58Decoder().decode(signatureBytes(index));
+
+/** The owner's `index`-th newest transaction on `blockhash`, signed with `signatureBytes(index)`:
+ *  a Kitchen cook, or a call that is not one. */
+function ownerTransaction(index: number, blockhash: string, cook: boolean): string {
   const data = cook
     ? new Uint8Array([...KITCHEN_DISCRIMINATORS.cook, ...new Uint8Array(40)])
     : new Uint8Array([2, 0, 0, 0]);
-
-  return getBase64EncodedWireTransaction(
-    compileTransaction(
-      pipe(
-        createTransactionMessage({ version: 0 }),
-        (message) => setTransactionMessageFeePayer(OWNER, message),
-        (message) =>
-          setTransactionMessageLifetimeUsingBlockhash(
-            { blockhash: blockhash as Blockhash, lastValidBlockHeight: 1n },
-            message,
-          ),
-        (message) =>
-          appendTransactionMessageInstruction(
-            {
-              programAddress: cook
-                ? address(v12SvmKitchenProgramId())
-                : address("11111111111111111111111111111111"),
-              data,
-            },
-            message,
-          ),
-      ),
+  const compiled = compileTransaction(
+    pipe(
+      createTransactionMessage({ version: 0 }),
+      (message) => setTransactionMessageFeePayer(OWNER, message),
+      (message) =>
+        setTransactionMessageLifetimeUsingBlockhash(
+          { blockhash: blockhash as Blockhash, lastValidBlockHeight: 1n },
+          message,
+        ),
+      (message) =>
+        appendTransactionMessageInstruction(
+          {
+            programAddress: cook
+              ? address(v12SvmKitchenProgramId())
+              : address("11111111111111111111111111111111"),
+            data,
+          },
+          message,
+        ),
     ),
   );
+
+  return getBase64EncodedWireTransaction({
+    ...compiled,
+    signatures: { [OWNER]: signatureBytes(index) as SignatureBytes },
+  });
 }
 
 describe("the search for a cook handed out, past its blockhash", () => {
   const HANDED = { blockhash: BLOCKHASH, lastValidBlockHeight: 100n, slot: 1_000n };
   const handedOut = plan({ cook: HANDED });
 
+  interface Lies {
+    /** What the endpoint says the block height is. */
+    readonly height?: unknown;
+    /** A page of the owner's signatures, as the endpoint answers it. */
+    readonly page?: (entries: Array<Record<string, unknown>>) => unknown[];
+    /** The transaction it returns for the `index`-th. */
+    readonly transaction?: (index: number, honest: string) => string;
+  }
+
   /** The owner's history: `slots[i]` is the slot of its i-th newest transaction, `cookAt` the
-   *  index of the cook among them; what each request asked is kept. */
-  function history(slots: readonly bigint[], cookAt?: number, missingAt?: number) {
+   *  index of the cook among them, `missingAt` one the endpoint lists and does not return; what
+   *  each request asked is kept, and `lies` are what it answers instead of the truth. */
+  function history(slots: readonly bigint[], cookAt?: number, missingAt?: number, lies: Lies = {}) {
     const fetched: number[] = [];
     const pages: Array<string | undefined> = [];
+    const indexOf = new Map(slots.map((_, index) => [historySignature(index), index]));
     let inFlight = 0;
     let mostInFlight = 0;
     const handlers: Record<string, Handler> = {
       ...COOK_READS,
-      getBlockHeight: () => 200n,
+      getBlockHeight: () => ("height" in lies ? lies.height : 200n),
       getSignaturesForAddress: (_owner: never, config: never) => {
         const { before, limit } = config as { before?: string; limit: number };
         pages.push(before);
-        const from = before === undefined ? 0 : Number(before.split(":")[1]) + 1;
-
-        return slots.slice(from, from + limit).map((slot, offset) => ({
-          signature: `${signature(from + offset)}:${from + offset}`,
+        const from = before === undefined ? 0 : indexOf.get(before)! + 1;
+        const entries = slots.slice(from, from + limit).map((slot, offset) => ({
+          signature: historySignature(from + offset),
           slot,
           err: null,
         }));
+
+        return lies.page === undefined ? entries : lies.page(entries);
       },
       getTransaction: async (wanted: never) => {
-        const index = Number(String(wanted).split(":")[1]);
+        const index = indexOf.get(String(wanted))!;
         fetched.push(index);
         inFlight += 1;
         mostInFlight = Math.max(mostInFlight, inFlight);
         await new Promise((resolve) => setTimeout(resolve, 1));
         inFlight -= 1;
         if (index === missingAt) return null;
+        const honest = ownerTransaction(
+          index,
+          index === cookAt ? BLOCKHASH : OTHER_BLOCKHASH,
+          index === cookAt,
+        );
 
         return {
           slot: slots[index],
-          transaction: [
-            ownerTransaction(index === cookAt ? BLOCKHASH : OTHER_BLOCKHASH, index === cookAt),
-            "base64",
-          ],
+          transaction: [lies.transaction?.(index, honest) ?? honest, "base64"],
           meta: { err: null },
         };
       },
@@ -375,7 +458,7 @@ describe("the search for a cook handed out, past its blockhash", () => {
     const owner = history([1_003n, 1_002n, 1_001n], 1);
     const step = await nextStep(handedOut, context(endpoint(owner.handlers)));
     expect(step.name).toBe("done");
-    expect(step.plan.cooked).toEqual({ ok: true, signature: `${signature(1)}:1` });
+    expect(step.plan.cooked).toEqual({ ok: true, signature: historySignature(1) });
   });
 
   it("reads no transaction from before the cook was handed out, nor a page past them", async () => {
@@ -423,7 +506,7 @@ describe("the search for a cook handed out, past its blockhash", () => {
     // The cook found beside it is an answer all the same.
     const found = history([1_003n, 1_002n, 1_001n, 999n], 2, 1);
     const step = await nextStep(handedOut, context(endpoint(found.handlers)));
-    expect(step.plan.cooked).toEqual({ ok: true, signature: `${signature(2)}:2` });
+    expect(step.plan.cooked).toEqual({ ok: true, signature: historySignature(2) });
   });
 
   it("refuses where the endpoint cannot list the owner's transactions, never naming it", async () => {
@@ -436,6 +519,53 @@ describe("the search for a cook handed out, past its blockhash", () => {
     const asked = nextStep(handedOut, context(failing));
     await expect(asked).rejects.toThrow(
       "reading the owner's transactions since the cook was handed out failed: fetch failed for <RPC_URL>",
+    );
+  });
+
+  const SLOTS = [1_003n, 1_002n, 1_001n, 999n];
+  const withSlot =
+    (at: number, slot: unknown) =>
+    (entries: Array<Record<string, unknown>>): unknown[] =>
+      entries.map((entry, index) => (index === at ? { ...entry, slot } : entry));
+  it.each<[string, Lies, RegExp]>([
+    ["a block height that is no number", { height: "lots" }, /the block height/],
+    ["a block height past a u64", { height: 2n ** 64n }, /the block height/],
+    ["a negative block height", { height: -1n }, /the block height/],
+    ["a slot that is no number", { page: withSlot(1, "1002") }, /a slot/],
+    ["a slot that is not whole", { page: withSlot(1, 1001.5) }, /a slot/],
+    ["a negative slot", { page: withSlot(1, -5n) }, /a slot/],
+    ["a slot past a u64", { page: withSlot(0, 2n ** 64n) }, /a slot/],
+    ["slots out of order", { page: withSlot(2, 1_004n) }, /out of order/],
+    [
+      "a signature that is none",
+      { page: (entries) => entries.map((entry) => ({ ...entry, signature: "signed" })) },
+      /a signature/,
+    ],
+    [
+      "another transaction than the one listed",
+      {
+        transaction: (index, honest) =>
+          index === 1 ? ownerTransaction(9, BLOCKHASH, true) : honest,
+      },
+      /returns another transaction/,
+    ],
+    [
+      "a transaction that does not decode",
+      { transaction: (index, honest) => (index === 1 ? "AAAA" : honest) },
+      /do not decode/,
+    ],
+  ])("refuses, building nothing, an endpoint that answers %s", async (_, lies, why) => {
+    const owner = history(SLOTS, undefined, undefined, lies);
+    const asked = nextStep(handedOut, context(endpoint(owner.handlers)));
+    await expect(asked).rejects.toThrow(why);
+    await expect(asked).rejects.toThrow(/cannot be told/);
+  });
+
+  it("refuses slots out of order from one page to the next", async () => {
+    const slots = [...Array.from({ length: 100 }, () => 1_500n), 1_600n, 999n];
+    const owner = history(slots);
+    await expect(nextStep(handedOut, context(endpoint(owner.handlers)))).rejects.toThrow(
+      /out of order/,
     );
   });
 });
@@ -563,5 +693,30 @@ describe("what a wallet's send takes of a plan, from a tool's result", () => {
     expect(plannedHandedOut({ transactions: [{ what: "no transaction" }, null, cook] })).toEqual([
       { what: "cook on Pot", transaction: "AQAB" },
     ]);
+  });
+});
+
+describe("a cook its simulation says would fail", () => {
+  it("is not built, so no cook is handed out to land, and says why", async () => {
+    const rpc = endpoint({
+      ...COOK_READS,
+      simulateTransaction: () => ({
+        context: { slot: 2_000n },
+        value: {
+          err: { InstructionError: [2, { Custom: 6001 }] },
+          logs: ["Program log: the Pot holds too little"],
+          unitsConsumed: 10_000n,
+          returnData: null,
+        },
+      }),
+    });
+    const step = await nextStep(plan(), context(rpc));
+    expect(step.name).toBe("cook");
+    expect(step.transactions).toEqual([]);
+    expect(step.fails?.logs).toEqual(["Program log: the Pot holds too little"]);
+    expect(step.fails?.reason).toMatch(/6001|0x1771/);
+    const built = await signableStep(step, context(rpc));
+    expect(built.transactions).toEqual([]);
+    expect(built.plan.cook).toBeUndefined();
   });
 });

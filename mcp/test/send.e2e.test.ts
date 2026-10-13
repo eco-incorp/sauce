@@ -36,6 +36,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
+import { decodeCursor, encodeCursor, isCook } from "../../sdk/dist/cli/svm-plan.js";
 import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
   fixture,
@@ -282,6 +283,31 @@ describe(
       assert.equal(hexToBigInt(sent.sent[0]!.returns as Hex), 400n);
       assert.equal(tokenAmount(harness, dest), 400n);
       assert.deepEqual(Object.keys(shim.sent.at(-1)!.signatures), [owner.address]);
+    });
+
+    it("builds no cook its simulation says would fail: an error saying why, nothing to sign", async () => {
+      const result = erred(
+        await mcp.call("sauce_tx", {
+          source: SWEEP,
+          chain: "solana",
+          owner: owner.address,
+          defines: { MINT: bytesToHex(new Uint8Array(getAddressCodec().encode(mint))) },
+          accounts: { tokenProgram: TOKEN_PROGRAM, source, dest, authority: "pot" },
+          args: ["5000"],
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as {
+        transaction?: string;
+        transactions: unknown[];
+        fails: string;
+        logs: string[];
+        cursor: string;
+      };
+      assert.equal(result.transaction, undefined);
+      assert.deepEqual(result.transactions, []);
+      assert.ok(result.fails.length > 0);
+      assert.ok(result.logs.length > 0);
+      assert.equal(decodeCursor(result.cursor).cook, undefined);
     });
   },
 );
@@ -594,6 +620,89 @@ describe(
       assert.equal(shim.sent.length, before + 1);
       const handed = getTransactionDecoder().decode(getBase64Encoder().encode(planned.transaction));
       assert.deepEqual([...shim.sent.at(-1)!.messageBytes], [...handed.messageBytes]);
+    });
+
+    it("keeps the cook a wallet sent and could not confirm, and learns it landed rather than send it again", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-lost", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(): Uint256 {\n  return 8;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { cursor: string };
+      // The plan with its cook not handed out yet: the wallet builds and sends it.
+      const { cook: _, ...unsent } = decodeCursor(planned.cursor);
+      // Once the cook goes out, the endpoint stops answering for its status.
+      const shimmed = globalThis.fetch;
+      let cookSent = false;
+      globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+        if (String(input) === SOLANA_URL && init?.body !== undefined) {
+          const { method, params } = JSON.parse(init.body) as { method: string; params: unknown[] };
+          if (method === "sendTransaction") {
+            cookSent ||= isCook(
+              getTransactionDecoder().decode(getBase64Encoder().encode(String(params[0]))),
+            );
+          } else if (method === "getSignatureStatuses" && cookSent) {
+            return Response.json({
+              jsonrpc: "2.0",
+              id: 1,
+              error: { code: -32603, message: "the node lost track" },
+            });
+          }
+        }
+
+        return shimmed(input as string, init as RequestInit);
+      }) as typeof fetch;
+      let lost: {
+        ok: boolean;
+        sent: Array<{ what: string; status: string }>;
+        cursor: string;
+        notes: string[];
+      };
+      try {
+        lost = ok(
+          await wallets.call("sauce_wallet_send", {
+            wallet: "sol-lost",
+            transaction: { cursor: encodeCursor(unsent) },
+            rpcUrl: SOLANA_URL,
+          }),
+        ) as typeof lost;
+      } finally {
+        globalThis.fetch = shimmed;
+      }
+      assert.equal(cookSent, true);
+      assert.equal(lost.ok, false);
+      assert.ok(
+        lost.notes.some((note) =>
+          note.startsWith("the cook went out, and how it went is not known"),
+        ),
+        JSON.stringify(lost.notes),
+      );
+      // The cursor survives, remembering the cook as handed out.
+      const kept = decodeCursor(lost.cursor);
+      assert.notEqual(kept.cook, undefined);
+      assert.equal(kept.cooked, undefined);
+
+      // Past its blockhash, the next call finds it in the owner's transactions: nothing is sent.
+      harness.svm.warpToSlot(harness.svm.getClock().slot + 200n);
+      const before = shim.sent.length;
+      const learned = ok(
+        await wallets.call("sauce_wallet_send", {
+          wallet: "sol-lost",
+          transaction: { cursor: lost.cursor },
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { ok: boolean; sent: unknown[]; cursor?: string };
+      assert.equal(learned.ok, true, JSON.stringify(learned));
+      assert.deepEqual(learned.sent, []);
+      assert.equal(learned.cursor, undefined);
+      assert.equal(shim.sent.length, before);
     });
 
     it("sends a fresh cook from a wallet once the one sauce_tx handed out expired unsent", async () => {
