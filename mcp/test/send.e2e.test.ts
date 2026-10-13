@@ -363,5 +363,36 @@ describe(
       assert.ok(sent.sent.every((one) => one.status === "success"));
       assert.ok(wallets.received.every((text) => !text.includes(PASSWORD)));
     });
+
+    it("sends the one cook sauce_tx handed out, from a wallet, as it was built", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol-one", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(5_000_000_000n));
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: "function main(): Uint256 {\n  return 5;\n}\n",
+          chain: "solana",
+          owner: wallet,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { transaction: string; cursor: string };
+      const before = shim.sent.length;
+      const sent = ok(
+        await wallets.call("sauce_wallet_send", {
+          wallet: "sol-one",
+          transaction: planned,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { ok: boolean; sent: Array<{ what: string; status: string; returned?: unknown }> };
+      assert.equal(sent.ok, true, JSON.stringify(sent));
+      assert.equal(sent.sent.length, 1);
+      assert.equal(sent.sent[0]!.returned, "5");
+      // The one handed out, and nothing besides: its message is the one sauce_tx built.
+      assert.equal(shim.sent.length, before + 1);
+      const handed = getTransactionDecoder().decode(getBase64Encoder().encode(planned.transaction));
+      assert.deepEqual([...shim.sent.at(-1)!.messageBytes], [...handed.messageBytes]);
+    });
   },
 );

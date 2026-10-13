@@ -131,6 +131,11 @@ export function solanaShim(
   /** Runs `run` with the bank's blockhash check off where the cluster's would pass `transaction`:
    *  a recent blockhash that is not the bank's latest, or a simulation that replaces it. */
   const onCluster = <T>(transaction: Transaction, replaced: boolean, run: () => T): T => {
+    // The bank's latest blockhash expires as a cluster's would, after its slots, though nothing
+    // landed since to move it on.
+    const latest = svm.latestBlockhash();
+    const at = issued.get(latest);
+    if (at !== undefined && slot() - at > BLOCKHASH_SLOTS) svm.expireBlockhash();
     const relaxed = replaced || recent(transaction);
     if (relaxed) svm.withBlockhashCheck(false);
     try {
@@ -151,10 +156,33 @@ export function solanaShim(
     return found.exists ? rpcAccount(found) : null;
   };
 
+  let synced = -1n;
+  /** The bank's SlotHashes as a cluster's: the 512 slots before the tip, newest first, none skipped
+   *  — what a lookup table's creation (its recent slot) and its close (its cooldown) read. */
+  const syncSlotHashes = (): void => {
+    const tip = slot();
+    if (tip === synced) return;
+    synced = tip;
+    const count = Number(tip < 512n ? tip : 512n);
+    const entries: ReturnType<LiteSVM["getSlotHashes"]> = [];
+    // Each read hands out copies of the entries: as many as the sysvar is to hold.
+    while (entries.length < count) {
+      const read = svm.getSlotHashes();
+      if (read.length === 0) return;
+      entries.push(...read);
+    }
+    const fresh = entries.slice(0, count);
+    fresh.forEach((entry, index) => {
+      entry.slot = tip - 1n - BigInt(index);
+    });
+    svm.setSlotHashes(fresh);
+  };
+
   const stub = async (input: unknown, init?: { body?: string }): Promise<Response> => {
     const target =
       typeof input === "string" ? input : String((input as { url?: string }).url ?? input);
     if (target !== url) return original(input as Parameters<typeof fetch>[0], init as RequestInit);
+    syncSlotHashes();
     const { id, method, params } = JSON.parse(init!.body!) as {
       id: unknown;
       method: string;
@@ -162,6 +190,9 @@ export function solanaShim(
     };
     switch (method) {
       case "getLatestBlockhash": {
+        // A cluster's latest blockhash is a recent one: the bank's, moved on where it is old.
+        const stale = issued.get(svm.latestBlockhash());
+        if (stale !== undefined && slot() - stale > BLOCKHASH_SLOTS) svm.expireBlockhash();
         const blockhash = svm.latestBlockhash();
         if (!issued.has(blockhash)) issued.set(blockhash, slot());
 
@@ -177,9 +208,14 @@ export function solanaShim(
       case "getBlockHeight":
         return answer(id, Number(slot()));
       case "getSignaturesForAddress": {
-        const [key, config] = params as [string, { limit?: number } | undefined];
-        const found = [...landed.entries()]
-          .reverse()
+        const [key, config] = params as [string, { limit?: number; before?: string } | undefined];
+        const newest = [...landed.entries()].reverse();
+        const from =
+          config?.before === undefined
+            ? 0
+            : newest.findIndex(([signature]) => signature === config.before) + 1;
+        const found = newest
+          .slice(from)
           .filter(([, tx]) =>
             [
               ...(
@@ -208,17 +244,8 @@ export function solanaShim(
         if (commitment !== undefined && commitment !== "finalized")
           return answer(id, Number(slot()));
         // A cluster's finalized slot trails its tip, and its SlotHashes holds it: the recent slot
-        // a lookup table's creation names, which the bank refuses unless SlotHashes has it.
-        const finalized = slot() - 1n;
-        const hashes = svm.getSlotHashes();
-        if (!hashes.some((entry) => entry.slot === finalized) && hashes.length > 0) {
-          // Each read hands out copies: one more entry, for the new slot, ahead of the rest, which
-          // the sysvar keeps (512 of them) as a cluster's does.
-          const fresh = svm.getSlotHashes()[0]!;
-          fresh.slot = finalized;
-          svm.setSlotHashes([fresh, ...hashes].slice(0, 512));
-        }
-        return answer(id, Number(finalized));
+        // a lookup table's creation names.
+        return answer(id, Number(slot() - 1n));
       }
       case "getBalance":
         return answer(id, {
