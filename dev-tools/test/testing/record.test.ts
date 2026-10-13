@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
@@ -15,9 +15,81 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { encodeFunctionData, type Address } from "viem";
 
-import { fork, local } from "../../src/testing/index.js";
-import { rpc } from "../../src/testing/node.js";
-import { anvilMissing, program } from "./support.js";
+import { fork, local, type TestChain } from "../../src/testing/index.js";
+import { rpc, startAnvil } from "../../src/testing/node.js";
+import { startForkNode } from "../../src/testing/state.js";
+import { anvilMissing, program, uniswapV3Pool, type V3Pool } from "./support.js";
+
+/**
+ * A swap of `pool`'s input token from account 0's Pot on `chain`, in what the chain itself reports
+ * of it: the accounts' nonces before it, its transaction, gas and balance changes, and the pinned
+ * block, the cook's and the one after, as their headers say.
+ */
+async function swapOn(chain: TestChain, { pool, tokenIn, tokenOut, funded }: V3Pool) {
+  const alice = chain.account(0);
+  const recipient = chain.account(1).address;
+  const nonces = await Promise.all(
+    Array.from({ length: 10 }, (_, index) =>
+      chain.client.getTransactionCount({ address: chain.account(index).address }),
+    ),
+  );
+  const pinned = await chain.client.getBlock();
+  const ether = await chain.balanceOf(alice.address, "ETH");
+  // The tokens emit no Transfer: what moved is read from their balances.
+  const holding = await chain.balanceOf(alice.pot, tokenIn);
+  const result = await chain.run(program("pool-swap"), {
+    args: [pool, tokenIn, tokenOut, funded, recipient],
+  });
+  const { blockNumber } = await chain.client.getTransactionReceipt({ hash: result.hash! });
+  const cooked = await chain.client.getBlock({ blockNumber });
+  await chain.mine();
+  const after = await chain.client.getBlock();
+  const header = ({ number, timestamp, gasLimit, baseFeePerGas }: typeof pinned) => ({
+    number,
+    timestamp,
+    gasLimit,
+    baseFeePerGas,
+  });
+
+  return {
+    nonces,
+    hash: result.hash,
+    gasUsed: result.gasUsed,
+    returned: result.returned,
+    received: await chain.balanceOf(recipient, tokenOut),
+    paid: holding - (await chain.balanceOf(alice.pot, tokenIn)),
+    etherSpent: ether - (await chain.balanceOf(alice.address, "ETH")),
+    // The pinned block's own gasUsed is not compared: a replay boots from a file at that block, so
+    // the block it reports there is its own genesis, which carries none.
+    blocks: [header(pinned), { ...header(cooked), gasUsed: cooked.gasUsed }, header(after)],
+  };
+}
+
+/** What `anvil_nodeInfo` says a node runs as, and anvil's dev accounts' nonces there. */
+async function nodeOf(url: string) {
+  const info = (await rpc(url, "anvil_nodeInfo")) as {
+    hardFork: string;
+    environment: { baseFee: string; chainId: number; gasLimit: string };
+  };
+  const accounts = (await rpc(url, "eth_accounts")) as string[];
+
+  return {
+    hardFork: info.hardFork,
+    chainId: info.environment.chainId,
+    gasLimit: BigInt(info.environment.gasLimit),
+    // The base fee of the next block.
+    baseFee: BigInt(info.environment.baseFee),
+    nonces: await Promise.all(
+      accounts.map(
+        async (account) =>
+          [
+            account,
+            Number(await rpc(url, "eth_getTransactionCount", [account, "latest"])),
+          ] as const,
+      ),
+    ),
+  };
+}
 
 describe("fork() records, then replays", { skip: anvilMissing() }, () => {
   it("writes what the tests read, without the RPC, and replays it", async () => {
@@ -53,6 +125,104 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
         assert.equal(replay.mode, "replay");
         assert.equal(replay.stack.origin, "live");
         assert.equal((await replay.run(program("multiply"), multiply)).returned, 42n);
+      } finally {
+        await replay.stop();
+      }
+    } finally {
+      await upstream.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replays what it recorded: a swap's gas, what it moved, and the blocks around it", async () => {
+    const upstream = await local();
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-roundtrip-"));
+    const state = join(dir, "swap.json.gz");
+    try {
+      const pool = await uniswapV3Pool(upstream);
+      const block = Number(await upstream.client.getBlockNumber());
+
+      const recording = await fork("base", { block, state, rpcUrl: upstream.rpcUrl });
+      assert.equal(recording.mode, "record");
+      const recorded = await swapOn(recording, pool);
+      await recording.stop();
+      await upstream.stop();
+
+      const replay = await fork("base", { block, state });
+      let replayed: typeof recorded;
+      try {
+        assert.equal(replay.mode, "replay");
+        replayed = await swapOn(replay, pool);
+      } finally {
+        await replay.stop();
+      }
+      assert.deepEqual(replayed, recorded);
+
+      // What makes the comparison worth something: the swap moved what it bought, the upstream's
+      // account 0 had sent transactions, its blocks hold `local()`'s 100M gas rather than anvil's
+      // default 30M, the base fee stepped from the pinned block's, and each block is Base's 2
+      // seconds after the one before it.
+      assert.ok((recorded.returned as bigint) > 0n);
+      assert.equal(recorded.received, recorded.returned);
+      assert.equal(recorded.paid, pool.funded);
+      assert.ok(recorded.nonces[0]! > 0);
+      const [pinned, cooked, after] = recorded.blocks;
+      assert.equal(cooked!.gasLimit, 100_000_000n);
+      assert.notEqual(cooked!.baseFeePerGas, pinned!.baseFeePerGas);
+      assert.equal(cooked!.timestamp - pinned!.timestamp, 2n);
+      assert.equal(after!.timestamp - cooked!.timestamp, 2n);
+    } finally {
+      await upstream.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replays on the node it recorded on: hardfork, gas limit, base fee, dev nonces", async () => {
+    // An Ethereum block from 2024, which a fork runs as Cancun: anvil infers the hardfork from the
+    // block it forks, and runs its own default from a file.
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-node-"));
+    const genesis = join(dir, "upstream.json");
+    writeFileSync(
+      genesis,
+      JSON.stringify({
+        config: { chainId: 1 },
+        number: `0x${(20_000_000).toString(16)}`,
+        timestamp: `0x${(1_717_000_000).toString(16)}`,
+        gasLimit: `0x${(36_000_000).toString(16)}`,
+        baseFeePerGas: "0x1dcd65000",
+        difficulty: "0x0",
+        alloc: {},
+      }),
+    );
+    const upstream = await startAnvil([
+      "--init",
+      genesis,
+      "--chain-id",
+      "1",
+      "--gas-limit",
+      "36000000",
+    ]);
+    const state = join(dir, "node.json.gz");
+    try {
+      // Dev account 0 sends: its nonce is no longer 0, and the pinned block used gas.
+      const [sender] = (await rpc(upstream.url, "eth_accounts")) as string[];
+      for (const value of ["0x1", "0x2"]) {
+        await rpc(upstream.url, "eth_sendTransaction", [{ from: sender, to: sender, value }]);
+      }
+      const block = Number(await rpc(upstream.url, "eth_blockNumber"));
+      const at = { chainId: 1, block, blockInterval: 12 } as const;
+
+      const recording = await startForkNode({ ...at, mode: "record", rpcUrl: upstream.url, state });
+      const recorded = await nodeOf(recording.url);
+      await recording.stop();
+      await upstream.stop();
+      assert.equal(recorded.hardFork, "Cancun");
+      assert.equal(recorded.gasLimit, 36_000_000n);
+      assert.deepEqual(recorded.nonces[0], [sender, 2]);
+
+      const replay = await startForkNode({ ...at, mode: "replay", state });
+      try {
+        assert.deepEqual(await nodeOf(replay.url), recorded);
       } finally {
         await replay.stop();
       }
