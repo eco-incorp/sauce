@@ -11,7 +11,9 @@ import { after, before, describe, it } from "node:test";
 
 import {
   address,
+  getAddressEncoder,
   getCompiledTransactionMessageDecoder,
+  getProgramDerivedAddress,
   getTransactionDecoder,
   type Address,
 } from "@solana/kit";
@@ -202,6 +204,38 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
       ),
       /takes 2 arguments/,
     );
+  });
+
+  it("fills every account the program writes where it uses it: a pda from its seeds and args", async () => {
+    const program = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+    asked.length = 0;
+    const out = ok(
+      await mcp.call("sauce_tx", {
+        source:
+          "function main(program: Address, amount: Uint256) {\n" +
+          "  svm.call(Solana.account(program), [\n" +
+          '    Solana.pda(program, ["state", Solana.owner]).writable(),\n' +
+          "    Solana.systemProgram,\n" +
+          "  ], amount.toBytesLe(8));\n}\n",
+        chain: "solana",
+        owner: OWNER,
+        args: [program, "400"],
+        rpcUrl: url,
+      }),
+    );
+    const transaction = getTransactionDecoder().decode(
+      new Uint8Array(Buffer.from(out.transaction as string, "base64")),
+    );
+    const keys = getCompiledTransactionMessageDecoder().decode(
+      transaction.messageBytes,
+    ).staticAccounts;
+    const [state] = await getProgramDerivedAddress({
+      programAddress: address(program),
+      seeds: [new TextEncoder().encode("state"), getAddressEncoder().encode(address(OWNER))],
+    });
+    for (const key of [state, program, "11111111111111111111111111111111"]) {
+      assert.ok(keys.includes(key as Address), `${key} is attached`);
+    }
   });
 
   it("refuses via and maxExecutionFee on an EVM chain", async () => {
