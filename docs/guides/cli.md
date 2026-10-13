@@ -617,7 +617,9 @@ that used, or a Solana simulation that checks the signatures — and one that wo
 the reason is printed, exit 1, and nothing after it goes out. Each lands before the next is
 simulated, so the cook after its Pot's deployment runs on the Pot. Sign each with the `gas` the plan
 gives it: a cook signed with less than its simulation uses is refused, unsent. A transaction already
-on chain is read back, not sent again.
+on chain is read back, not sent again; one the chain had, pending, then lost (dropped, or reorged
+out) is reported as gone rather than waited for, to sign anew. A Solana transaction missing a
+signature — its fee payer's, or any its message names — is refused by name, before any request.
 
 For each, it prints the hash (a Solana signature), the status and what it cost, the explorer and
 trace pages, the decoded reason a failure gives, and for a cook what moved and what it left in the

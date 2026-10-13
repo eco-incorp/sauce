@@ -20,6 +20,8 @@ import {
   getPublicKeyFromAddress,
   getSignatureFromTransaction,
   getTransactionDecoder,
+  isSolanaError,
+  SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH,
   verifySignature,
   type Address as SvmAddress,
   type AddressesByLookupTableAddress,
@@ -248,6 +250,44 @@ async function broadcastEvm(client: PublicClient, tx: SignedEvm): Promise<void> 
   }
 }
 
+/** How long a transaction the chain has, pending, is waited for: viem's own receipt wait. */
+const PENDING_MOST_MS = 180_000;
+
+/**
+ * Waits until `hash`, which the chain had, is mined — or says it is gone: dropped from the mempool,
+ * or reorged out, it never gets a receipt. Missing twice in a row, so an endpoint whose backends
+ * disagree for a moment does not make it so.
+ */
+async function minedOrGone(client: PublicClient, hash: Hex, what: string): Promise<void> {
+  const deadline = Date.now() + PENDING_MOST_MS;
+  let missing = 0;
+  for (;;) {
+    const receipt = await client.getTransactionReceipt({ hash }).then(
+      () => true,
+      () => false,
+    );
+    if (receipt) return;
+    const there = await client.getTransaction({ hash }).then(
+      () => true,
+      () => false,
+    );
+    missing = there ? 0 : missing + 1;
+    if (missing >= 2) {
+      throw new CliError(
+        `${what} ${hash} was seen, then not found: reorged or dropped, and it was not sent again. ` +
+          "Sign it anew (its nonce may be free again) and send that",
+      );
+    }
+    if (Date.now() > deadline) {
+      throw new CliError(
+        `${what} ${hash} is still pending after ${PENDING_MOST_MS / 60_000} minutes; it was not ` +
+          "sent again. Send it later to read it back, or look it up on the explorer",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+}
+
 async function sendEvm(input: SendInput): Promise<SentEntry[]> {
   const signed = await Promise.all(
     input.transactions.map((raw, index) => signedEvm(raw, `transaction ${index + 1}`)),
@@ -300,6 +340,22 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         sent.push({
           what,
           hash: "",
+          status: "failed",
+          reason: (error as Error).message,
+          lines: [],
+          json: {},
+        });
+        break;
+      }
+    } else {
+      // Read back, not simulated: one the chain then loses never gets a receipt to wait for.
+      try {
+        await minedOrGone(client, tx.hash, what);
+      } catch (error) {
+        if (sent.length === 0) throw error;
+        sent.push({
+          what,
+          hash: tx.hash,
           status: "failed",
           reason: (error as Error).message,
           lines: [],
@@ -382,15 +438,32 @@ async function signedSvm(raw: string, where: string): Promise<SignedSvm> {
   let transaction: Transaction;
   try {
     transaction = getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(raw)));
-  } catch {
+  } catch (error) {
+    // Signatures that do not match the message's signers, by count, named as such.
+    if (isSolanaError(error, SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH)) {
+      const { numRequiredSignatures, signaturesLength, signerAddresses } = error.context;
+      const plural = (count: number, what: string) => `${count} ${what}${count === 1 ? "" : "s"}`;
+      throw new UsageError(
+        `${where} carries ${signaturesLength === 0 ? "no signature" : plural(signaturesLength, "signature")}, ` +
+          `and its message has ${plural(numRequiredSignatures, "signer")} ` +
+          `(${signerAddresses.join(", ")}): sign it with each, with your wallet or signer (no ` +
+          "key ever comes here)",
+      );
+    }
     throw new UsageError(`${where} is base64, but not a Solana transaction`);
   }
   const signers = Object.entries(transaction.signatures);
-  for (const [signer, signature] of signers) {
+  if (signers.length === 0) {
+    throw new UsageError(
+      `${where} has no signer, so no fee payer: a Solana transaction is signed by at least its ` +
+        "fee payer",
+    );
+  }
+  for (const [index, [signer, signature]] of signers.entries()) {
     if (signature === null || signature.every((byte) => byte === 0)) {
       throw new UsageError(
-        `${where} is not signed by ${signer}: sign it with your wallet or signer first (no key ` +
-          "ever comes here)",
+        `${where} is not signed by ${index === 0 ? "its fee payer " : ""}${signer}: sign it with ` +
+          "your wallet or signer first (no key ever comes here)",
       );
     }
     const key = await getPublicKeyFromAddress(signer as SvmAddress);
