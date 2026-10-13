@@ -19,7 +19,7 @@ Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compile
 same code compiles the same bytes.
 
 That install is the library alone. The MCP SDK, zod and LiteSVM, which only `sauce mcp` and Solana
-rehearsals load, are optional peer dependencies it never brings: those commands install them for
+simulations load, are optional peer dependencies it never brings: those commands install them for
 themselves, once per version, into `~/.sauce/runtime/`
 ([Runtime packages](docs/guides/cli.md#runtime-packages)).
 
@@ -69,7 +69,7 @@ Pot, and the shared Pot an intent's body runs on.
 
 For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**.
 Every other chain in the registry is a preview chain: programs compile for it, and the `sauce`
-command and the MCP server rehearse them there but build and send no transaction.
+command and the MCP server simulate them there but build and send no transaction.
 [Chains](docs/reference/chains.md) has the policy, every chain's tokens and protocols, and how to
 request a chain.
 
@@ -205,7 +205,7 @@ coin and per token. These are hot wallets: keep small balances in them.
 
 - [Documentation](docs/README.md): every guide and reference page, one line each.
 - [Quick start](docs/guides/quick-start.md): build a first intent, offline.
-- [The sauce command](docs/guides/cli.md): compile, rehearse, run and publish from a terminal.
+- [The sauce command](docs/guides/cli.md): compile, simulate, run and publish from a terminal.
 - [Agent skills](docs/guides/skills.md): the skills that teach a coding agent to write and run
   programs, beside [the MCP server](docs/guides/mcp.md).
 - [Chains](docs/reference/chains.md), [protocols](docs/reference/protocols.md) and

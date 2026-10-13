@@ -767,7 +767,7 @@ const DOCS_SITE = {
   noun: "page",
   /** What a reader of the manual also needs about the release's chains. */
   chainIndexNotes: [
-    "On a preview chain the `sauce` command and the MCP server still rehearse and read:",
+    "On a preview chain the `sauce` command and the MCP server still simulate and read:",
     "`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and",
     "every read. What they refuse there, before any endpoint is reached or any key is read, is",
     "building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)",

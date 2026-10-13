@@ -465,7 +465,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
   tool(
     "sauce_intent_fill",
     {
-      title: "Fill an intent on its destination: the solver's transactions, or a rehearsal",
+      title: "Fill an intent on its destination: the solver's transactions, or a simulation",
       description:
         "What a solver sends on an intent's DESTINATION chain to fill it, built unsigned for " +
         "the solver (`from`) to sign: the shared intent Pot's deployment when the route cooks " +
@@ -477,10 +477,10 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "fee payer, then the proof to send once it lands, with claimant (the EVM source address " +
         "the reward pays) required. " +
         "Name the intent by its record or txHash, or give the program that opens it (source " +
-        "and the sauce_intent_publish inputs, chain the SOURCE). With dryRun, instead rehearse " +
+        "and the sauce_intent_publish inputs, chain the SOURCE). With dryRun, instead simulate " +
         "the fill there in one eth_simulateV1 block, from any solver (no from needed): per " +
         "intent ok with gas and what moved, or the decoded reason it reverts. Needs the " +
-        "destination's endpoint, and the source's to check the prover. The rehearsal works on " +
+        "destination's endpoint, and the source's to check the prover. The simulation works on " +
         "every chain; the fill is built only for a supported destination. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
@@ -529,7 +529,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         dryRun: z
           .boolean()
           .optional()
-          .describe("Rehearse the fill (eth_simulateV1) instead of building it; nothing signed."),
+          .describe("Simulate the fill (eth_simulateV1) instead of building it; nothing signed."),
         ...endpointInputs("The destination chain"),
       },
       output: refusable({
@@ -589,8 +589,8 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         );
         if (solana !== undefined) {
           throw new UsageError(
-            `dryRun rehearses a fill on an EVM destination, and ${solana.intentHash} goes to ` +
-              "Solana: build its fill instead (from your Solana key), which rehearses the " +
+            `dryRun simulates a fill on an EVM destination, and ${solana.intentHash} goes to ` +
+              "Solana: build its fill instead (from your Solana key), which simulates the " +
               "transaction as it builds it and says what it spends",
           );
         }
@@ -606,7 +606,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           labels,
           endpointOf: (chain) => {
             const url = endpoints[String(chain.id)];
-            if (url === undefined) throw noEndpoint(chain, serverEndpoints, "Rehearsing a fill");
+            if (url === undefined) throw noEndpoint(chain, serverEndpoints, "Simulating a fill");
 
             return url;
           },
@@ -624,7 +624,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           : {
               ...rehearsed,
               notes: [
-                `${past}: the rehearsal shows the Portal refusing it`,
+                `${past}: the simulation shows the Portal refusing it`,
                 ...(rehearsed.notes ?? []),
               ],
             };
@@ -632,7 +632,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       if (args.from === undefined) {
         throw new UsageError(
           "give from: the solver's address, which signs these (its balances and allowances plan " +
-            "them), or dryRun to rehearse the fill with no account",
+            "them), or dryRun to simulate the fill with no account",
         );
       }
       const fills = [];

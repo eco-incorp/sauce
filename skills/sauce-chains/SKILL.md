@@ -178,7 +178,7 @@ sauce run payout-solana.sauce.ts --chain solana --keypair <keypair> \
 ```
 
 Two transfers and the reads are past one Solana transaction, so `sauce run` stages the program
-before the cook, and `sauce simulate` rehearses it staged, in a local copy of its accounts;
+before the cook, and `sauce simulate` runs it staged, in a local copy of its accounts;
 `sauce tx` refuses it, naming how many bytes it is over.
 `sauce-solana` has the rest: binding a slot to the Pot, transaction size, each Token-2022
 extension, and running through the Kitchen or the engine.
@@ -187,7 +187,7 @@ extension, and running through the Kitchen or the engine.
 
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
 `base`, `solana`). Every other chain is a **preview chain**: a program compiles for it and
-`sauce simulate` rehearses it there, but the `sauce` command and the MCP server build and send no
+`sauce simulate` runs it there, but the `sauce` command and the MCP server build and send no
 transaction on it (`sauce tx`, `sauce run`, `sauce pot --deploy`, `sauce intent publish` and the
 intent steps are refused, naming the supported chains and linking the chain's request).
 [references/index.md](references/index.md) has a Support column, and each chain's file says which
@@ -267,7 +267,7 @@ confirm the deployment on a chain.
    `cook(engine, program)` with `main`'s arguments appended to the program, `value` the Kitchen's
    fee plus any native the program spends. `sauce tx <file> --chain <slug> --owner <address> --args …`
    prints it as unsigned JSON, `{ chainId, to, data, value }`, for any wallet or signer, and
-   `sauce simulate` rehearses it. On a preview chain stop at compiling and simulating, and offer the
+   `sauce simulate` runs it. On a preview chain stop at compiling and simulating, and offer the
    chain-support request the refusal links.
 
 ## Common gotchas

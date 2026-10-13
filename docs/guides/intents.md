@@ -499,7 +499,7 @@ Each request is `{ to, data, value }`. Send them from the intended funder on `bu
 
 The helpers address the registry's Portal on the source chain. For a deployment the registry does not carry, set `sourcePortal` while building, or pass `{ portal }` to each helper. The destination `portal` is never silently reused as the submission target.
 
-## Rehearse the fill on the destination
+## Simulate the fill on the destination
 
 Publishing proves the reward is escrowed, not that the intent works. Its body runs on the
 destination, inside the solver's fill, so a swap that falls short of its minimum or a refund that
@@ -521,10 +521,10 @@ export function solverTransactions(built: routes.BuiltIntent, claimant: routes.H
 }
 ```
 
-Rehearse them before publishing. A route that cooks needs the shared Pot deployed first, so a
-rehearsal on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
+Simulate them before publishing. A route that cooks needs the shared Pot deployed first, so a
+simulation on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
 of the fill, in the same simulated block. From the command line,
-[`sauce intent fill`](cli.md#rehearsing-the-fill-sauce-intent-fill) does all of it with no key: it
+[`sauce intent fill`](cli.md#simulating-the-fill-sauce-intent-fill) does all of it with no key: it
 builds the file's intents as `sauce intent publish` does, gives a solver the route's tokens by
 state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
 the destination, and prints what moved, what the shared Pot and the Executor were left holding, and

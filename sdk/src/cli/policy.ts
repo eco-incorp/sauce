@@ -499,7 +499,7 @@ export async function measureEvm(
     }
     if (result.status !== "success") {
       throw new CliError(
-        `transaction ${index + 1} of ${calls.length} would revert in the rehearsal, so nothing was sent`,
+        `transaction ${index + 1} of ${calls.length} would revert in the simulation, so nothing was sent`,
       );
     }
     const logs = result.logs ?? [];
@@ -636,7 +636,7 @@ export async function measureSvm(
     })
     .send();
   if (value.err !== null) {
-    throw new CliError("the transaction would fail in the rehearsal, so nothing was sent");
+    throw new CliError("the transaction would fail in the simulation, so nothing was sent");
   }
   const after = (value.accounts ?? []).map((account) =>
     account === null

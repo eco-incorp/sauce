@@ -116,7 +116,7 @@ export interface CommandOutput {
 export function revertedFirst(output: CommandOutput): CommandOutput {
   if (output.json.ok !== false) return output;
   const error =
-    typeof output.json.reason === "string" ? output.json.reason : "the rehearsal failed";
+    typeof output.json.reason === "string" ? output.json.reason : "the simulation failed";
 
   return {
     ...output,

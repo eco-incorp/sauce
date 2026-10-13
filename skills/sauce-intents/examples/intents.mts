@@ -3,7 +3,7 @@
 // intents where a wallet publishes them), and checks on which chain each name
 // resolves: the body and its delivery on the destination, the reward on the source. Each child's
 // Portal and prover come from the eco-routes registry; the deadline, the creator, the recipient and
-// each destination Kitchen's fee are the developer's. Then builds what rehearsing the swap-on-base
+// each destination Kitchen's fee are the developer's. Then builds what simulating the swap-on-base
 // body on a fork of Base sends: the shared Pot's deploy, and the Portal's fulfill with the Kitchen
 // fee as its value. Pins the funding by transfer (fund-by-transfer.sauce.ts) and the Portal
 // reference (references/portal.md) to the registry's Portal ABI. Offline: nothing is sent.
@@ -201,7 +201,7 @@ check(
   "and destructures one, as anywhere else",
 );
 
-// ---- Rehearsing the swap-on-base body on a fork of Base: what the solver sends there.
+// ---- Simulating the swap-on-base body on a fork of Base: what the solver sends there.
 const { intent } = swapProgram.intents[0]!;
 // The Kitchen fee is the route's native amount: the solver pays it, in Base's native coin, as the
 // value of fulfill. Nothing in the reward pays it back.
@@ -334,7 +334,7 @@ check(
 );
 
 console.log(
-  `rehearsal on a fork of Base: deploy the Pot ${pot} if it has no code, approve the Portal for ` +
+  `simulation on a fork of Base: deploy the Pot ${pot} if it has no code, approve the Portal for ` +
     `the WETH, then fulfill ${intentHash.slice(0, 10)}… with value ${fulfill.value}`,
 );
 console.log(
