@@ -13,6 +13,43 @@ export interface SauceTokenSource {
   approve(spender: bigint, amount: bigint): void;
   transferFrom(from: bigint, to: bigint, amount: bigint): void;
   balanceOf(owner: bigint): bigint;
+  /** Solana: the holder's associated account for the token, under the mint's token program. */
+  accountOf(holder: bigint): SauceSolanaAccount;
+  /** Solana: the token's mint. */
+  readonly mint: SauceSolanaAccount;
+  /** Solana: the token program that owns the mint, SPL Token or Token-2022. */
+  readonly tokenProgram: SauceSolanaAccount;
+}
+
+/**
+ * An account a program compiled for Solana writes where it uses it (`Solana.pda(…)`,
+ * `USDC.accountOf(holder)`): added to main as a parameter and derived as the cook is built, so what
+ * it is made of is known then. Read-only unless `.writable()` or `.signer()` gives it that role.
+ */
+export interface SauceSolanaAccountFields {
+  readonly address: bigint;
+  readonly owner: bigint;
+  readonly dataLen: bigint;
+  writable(): SauceSolanaAccount;
+  signer(): SauceSolanaAccount;
+}
+export type SauceSolanaAccount = bigint & SauceSolanaAccountFields;
+
+/** The accounts a program compiled for Solana names on `Solana`. */
+export interface SauceSolanaAccounts {
+  /** The address `program` derives for the seeds: strings, keys, symbols, an integer's `.toBytesLe(n)`. */
+  pda(program: bigint, seeds: readonly (string | bigint | SauceBytes)[]): SauceSolanaAccount;
+  /** The account at a key. */
+  account(key: bigint): SauceSolanaAccount;
+  /** The authority the program acts with: the Pot, or the signer when cooked directly. */
+  readonly self: SauceSolanaAccount;
+  /** The Pot's owner, who signs the cook. */
+  readonly owner: SauceSolanaAccount;
+  readonly systemProgram: SauceSolanaAccount;
+  readonly tokenProgram: SauceSolanaAccount;
+  readonly token2022Program: SauceSolanaAccount;
+  readonly associatedTokenProgram: SauceSolanaAccount;
+  readonly memoProgram: SauceSolanaAccount;
 }
 
 /**
