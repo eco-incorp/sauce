@@ -10,6 +10,7 @@
  * answer.
  */
 import {
+  AccountRole,
   address,
   appendTransactionMessageInstruction,
   compileTransaction,
@@ -28,6 +29,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { requireChain } from "../src/chains/canonical.js";
 import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
 import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
+import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../src/svm/index.js";
 
 /** A throwaway signer: the signatures are real, the key is the test's alone. */
 const signer = privateKeyToAccount(`0x${"42".repeat(32)}`);
@@ -241,28 +244,41 @@ describe("a plan's next step that cannot be built once something was sent", () =
     labels: [],
     cook: { blockhash: key(10), lastValidBlockHeight: 100n, slot: 1_000n },
   };
-  /** A transaction of the owner's that is not the cook, landed. */
-  const landed = getBase64EncodedWireTransaction(
-    compileTransaction(
-      pipe(
-        createTransactionMessage({ version: 0 }),
-        (message) => setTransactionMessageFeePayer(OWNER, message),
-        (message) =>
-          setTransactionMessageLifetimeUsingBlockhash(
-            { blockhash: key(11) as Blockhash, lastValidBlockHeight: 1n },
-            message,
-          ),
-        (message) =>
-          appendTransactionMessageInstruction(
-            {
-              programAddress: address("11111111111111111111111111111111"),
-              data: new Uint8Array([2, 0, 0, 0]),
-            },
-            message,
-          ),
+  /** A transaction of the owner's, landed: a call that is not a cook, or a cook on `pot`. */
+  const ownerTransaction = (pot?: SvmAddress): string =>
+    getBase64EncodedWireTransaction(
+      compileTransaction(
+        pipe(
+          createTransactionMessage({ version: 0 }),
+          (message) => setTransactionMessageFeePayer(OWNER, message),
+          (message) =>
+            setTransactionMessageLifetimeUsingBlockhash(
+              { blockhash: key(11) as Blockhash, lastValidBlockHeight: 1n },
+              message,
+            ),
+          (message) =>
+            appendTransactionMessageInstruction(
+              pot === undefined
+                ? {
+                    programAddress: address("11111111111111111111111111111111"),
+                    data: new Uint8Array([2, 0, 0, 0]),
+                  }
+                : {
+                    programAddress: address(v12SvmKitchenProgramId()),
+                    // The Kitchen's cook names the Pot third.
+                    accounts: [
+                      { address: OWNER, role: AccountRole.WRITABLE_SIGNER },
+                      { address: key(12) as SvmAddress, role: AccountRole.READONLY },
+                      { address: pot, role: AccountRole.WRITABLE },
+                    ],
+                    data: new Uint8Array([...KITCHEN_DISCRIMINATORS.cook, ...new Uint8Array(40)]),
+                  },
+              message,
+            ),
+        ),
       ),
-    ),
-  );
+    );
+  const landed = ownerTransaction();
   const answers: Record<string, unknown> = {
     getSignatureStatuses: {
       context: { slot: 1_001 },
@@ -333,5 +349,39 @@ describe("a plan's next step that cannot be built once something was sent", () =
       "reading the block height failed: JSON-RPC error: Internal JSON-RPC error (getBlockHeight " +
         "is down at <RPC_URL>)",
     );
+  });
+
+  const confirm = async (transaction: string, carried: SvmPlan) => {
+    answers.getTransaction = {
+      slot: 1_001,
+      blockTime: null,
+      transaction: [transaction, "base64"],
+      meta: { err: null, fee: 5_000, logMessages: [], computeUnitsConsumed: 150 },
+    };
+    const output = await sendCommand({
+      chain: solana,
+      rpcUrl: URL,
+      transactions: [],
+      signatures: [SIGNATURE],
+      cursor: encodeCursor(carried),
+    });
+
+    return (output.json as { next: { step: string; cursor?: string } }).next;
+  };
+  const { cook: _, ...fresh } = plan;
+  const pot = async () =>
+    (await derivePotPda(address(v12SvmKitchenProgramId()), OWNER, new Uint8Array(32).fill(0x11)))
+      .address;
+
+  it("learns how its own cook went from the cook's signature", async () => {
+    const next = await confirm(ownerTransaction(await pot()), fresh);
+    // It ran: nothing is left to build or close.
+    expect(next.step).toBe("done");
+  });
+
+  it("learns nothing from a cook on another Pot, given beside its cursor", async () => {
+    const next = await confirm(ownerTransaction(key(13) as SvmAddress), fresh);
+    expect(next.step).toBe("unknown");
+    expect(decodeCursor(next.cursor!).cooked).toBeUndefined();
   });
 });

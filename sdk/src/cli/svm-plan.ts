@@ -506,6 +506,22 @@ export async function planBuffer(
 const potOf = async (plan: Pick<SvmPlan, "owner" | "salt">): Promise<Address> =>
   (await derivePotPda(kitchen(), plan.owner, hexToBytes(plan.salt))).address;
 
+/**
+ * Whether `transaction`, read back, is `plan`'s cook: a cook the owner pays for, on the plan's Pot
+ * where it cooks through the Kitchen. A Pot the message loads through a table not given in `tables`
+ * cannot be read, and is taken to be the plan's: one more cook, never.
+ */
+export async function isPlanCook(
+  plan: SvmPlan,
+  transaction: Transaction,
+  tables: AddressesByLookupTableAddress = {},
+): Promise<boolean> {
+  const read = readPlanTx(transaction, tables);
+  if (read?.cook !== true || Object.keys(transaction.signatures)[0] !== plan.owner) return false;
+
+  return plan.via === "engine" || read.pot === undefined || read.pot === (await potOf(plan));
+}
+
 /** The Kitchen's `create_pot` for the plan's Pot, the owner paying its rent. */
 async function createPotInstruction(plan: SvmPlan): Promise<Instruction> {
   return buildCreatePotInstruction({
