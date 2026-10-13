@@ -9,6 +9,8 @@
  *   key, and the token syntax adds the accounts it moves through to `main`.
  * - **venues**: on Solana, each price-limit venue a program swaps at by its namespace
  *   (`OrcaWhirlpool.swap(pool, …)`, `svm-venue-methods.ts`).
+ * - **accounts**: on Solana, the accounts a program writes where it uses them (`Solana.pda(…)`,
+ *   `USDC.accountOf(holder)`, `svm-account-expressions.ts`).
  * - **protocols**: every `<Protocol>[.<Contract>]` reference the protocol-accessor rewrite resolves
  *   on the chain — through `resolveProtocolContract`, the rewrite's own resolver, not a copy of its
  *   rules — with each contract's address and vendored methods. A family alias (`Uniswap` for
@@ -38,6 +40,7 @@ import { pascalOfSlug } from "./builder.js";
 import { resolveProtocolContract } from "./protocol-rewrite.js";
 import type { StockToken } from "./token-registry.js";
 import { svmTokenRows, TOKEN_REGISTRY } from "./token-registry.js";
+import { SVM_ACCOUNT_EXPRESSIONS, type SvmAccountExpression } from "./svm-account-expressions.js";
 import { SVM_VENUE_METHODS, SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
 
 export interface SourceToken {
@@ -164,6 +167,8 @@ export interface SourceGlobals {
   /** Solana's price-limit venues as namespaces, each lowered to its own `@sauce/router` swap: none
    *  on an EVM chain. */
   readonly venues: readonly SourceVenue[];
+  /** Solana's accounts as a program writes them where it uses them: none on an EVM chain. */
+  readonly accounts: readonly SvmAccountExpression[];
   /** The interfaces a program binds to an address of its own (EVM chains): the same on each. */
   readonly interfaces: readonly SourceInterface[];
   readonly chains: readonly SourceChainName[];
@@ -319,6 +324,7 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
             methods: SVM_VENUE_METHODS,
           }))
         : [],
+    accounts: resolved.kind === "svm" ? SVM_ACCOUNT_EXPRESSIONS : [],
     interfaces: interfacesOn(resolved),
     chains: CANONICAL_CHAINS.map((other) => chainName(other as CanonicalChain)),
     defines: chainDefines(resolved),

@@ -270,6 +270,18 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       ),
     );
   }
+  if (all && svm) {
+    const width = Math.max(0, ...globals.accounts.map((one) => one.expression.length));
+    text.push(
+      "",
+      `Accounts (${globals.accounts.length}): written where a program uses them, each added to ` +
+        "main and derived when the cook is built; read-only unless .writable() or .signer() " +
+        "gives it that role",
+      ...globals.accounts.map(
+        (one) => `  ${one.expression.padEnd(width)}  ${one.account}: ${one.derive}`,
+      ),
+    );
+  }
   if (all) {
     text.push(
       "",
@@ -312,6 +324,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
               Object.entries(globals.defines).map(([name, value]) => [name, defineValue(value)]),
             ),
             modules: globals.modules,
+            ...(svm ? { accounts: globals.accounts } : {}),
           }
         : {}),
     },

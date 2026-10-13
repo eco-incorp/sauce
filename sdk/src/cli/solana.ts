@@ -628,7 +628,7 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
     if (Object.hasOwn(accounts, name)) throw new UsageError(`--account: ${name} given twice`);
     if (!isSvmAccountName(value)) {
       throw new UsageError(
-        `--account ${name}: '${value}' is not an address, pot, owner, or a token's account: ` +
+        `--account ${name}: '${value}' is not an address, pot, owner, system, or a token's account: ` +
           "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
           "owner's, @to:USDC that of main's argument to, mint:USDC the mint, program:USDC its " +
           'token program, and pda:<program>:"seed",@to,u64:7 an address a program derives',

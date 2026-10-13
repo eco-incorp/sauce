@@ -31,18 +31,33 @@ import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js
 
 const SOLANA = "Solana";
 
-/** The accounts `Solana.<name>` names, each with its derivation and its parameter's name. */
-const KNOWN: Readonly<Record<string, { readonly derivation: string; readonly base: string }>> = {
-  self: { derivation: "self", base: "pot" },
-  owner: { derivation: "owner", base: "owner" },
-  systemProgram: { derivation: "11111111111111111111111111111111", base: "systemProgram" },
-  tokenProgram: { derivation: TOKEN_PROGRAM_ID, base: "tokenProgram" },
-  token2022Program: { derivation: TOKEN_2022_PROGRAM_ID, base: "token2022Program" },
+/** The accounts `Solana.<name>` names: its derivation, its parameter's name and what it is. */
+const KNOWN: Readonly<
+  Record<string, { readonly derivation: string; readonly base: string; readonly account: string }>
+> = {
+  self: { derivation: "self", base: "pot", account: "the Pot (the signer, cooked directly)" },
+  owner: { derivation: "owner", base: "owner", account: "the Pot's owner, who signs the cook" },
+  systemProgram: {
+    derivation: "11111111111111111111111111111111",
+    base: "systemProgram",
+    account: "the System Program",
+  },
+  tokenProgram: { derivation: TOKEN_PROGRAM_ID, base: "tokenProgram", account: "SPL Token" },
+  token2022Program: {
+    derivation: TOKEN_2022_PROGRAM_ID,
+    base: "token2022Program",
+    account: "Token-2022",
+  },
   associatedTokenProgram: {
     derivation: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
     base: "associatedTokenProgram",
+    account: "the Associated Token Account program",
   },
-  memoProgram: { derivation: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr", base: "memoProgram" },
+  memoProgram: {
+    derivation: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+    base: "memoProgram",
+    account: "the Memo program",
+  },
 };
 
 /** The program accounts among them, which a program address may name. */
@@ -53,6 +68,39 @@ const PROGRAMS = new Set([
   "associatedTokenProgram",
   "memoProgram",
 ]);
+
+/** An account expression for a person: what a program writes, the account, how it is derived. */
+export interface SvmAccountExpression {
+  readonly expression: string;
+  readonly account: string;
+  readonly derive: string;
+}
+
+/** Every account expression, as `sauce globals --chain solana` lists them. */
+export const SVM_ACCOUNT_EXPRESSIONS: readonly SvmAccountExpression[] = [
+  {
+    expression: "Solana.pda(program, [seeds])",
+    account: "the address program derives for the seeds",
+    derive: "pda:<program>:<seeds>",
+  },
+  { expression: "Solana.account(key)", account: "the account at a key", derive: "the key" },
+  ...Object.entries(KNOWN).map(([name, known]) => ({
+    expression: `Solana.${name}`,
+    account: known.account,
+    derive: known.derivation,
+  })),
+  {
+    expression: "<Sym>.accountOf(holder)",
+    account: "the holder's associated account for the token",
+    derive: "<holder>:<Sym>",
+  },
+  { expression: "<Sym>.mint", account: "the token's mint", derive: "mint:<Sym>" },
+  {
+    expression: "<Sym>.tokenProgram",
+    account: "the token program that owns the mint",
+    derive: "its id",
+  },
+];
 
 /** What `Solana.<name>(…)` takes. */
 const CALLS = new Set(["pda", "account"]);

@@ -286,6 +286,50 @@ describe("sauce globals", () => {
     expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
   });
 
+  it("lists the accounts a program on Solana writes where it uses them, and none on Base", async () => {
+    const run = await sauce("globals", "--chain", "solana");
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain(
+      "Accounts (12): written where a program uses them, each added to main and derived when " +
+        "the cook is built; read-only unless .writable() or .signer() gives it that role",
+    );
+    expect(run.stdout).toMatch(
+      /^ {2}Solana\.pda\(program, \[seeds\]\) +the address program derives for the seeds: pda:<program>:<seeds>$/m,
+    );
+    expect(run.stdout).toMatch(
+      /^ {2}Solana\.systemProgram +the System Program: 11111111111111111111111111111111$/m,
+    );
+    expect(run.stdout).toMatch(
+      /^ {2}<Sym>\.accountOf\(holder\) +the holder's associated account for the token: <holder>:<Sym>$/m,
+    );
+    const out = json(await sauce("globals", "--chain", "solana", "--json"));
+    expect(out.accounts).toContainEqual({
+      expression: "Solana.owner",
+      account: "the Pot's owner, who signs the cook",
+      derive: "owner",
+    });
+    // Each one the listing names compiles as it is written.
+    for (const { expression } of out.accounts as { expression: string }[]) {
+      const written = expression
+        .replace("<Sym>", "USDC")
+        .replace("(program, [seeds])", '(who, ["a"])')
+        .replace("(key)", "(who)")
+        .replace("(holder)", "(who)");
+      const file = join(work, "account-expression.sauce.ts");
+      writeFileSync(
+        file,
+        `function main(who: Address): Uint256 {\n  return ${written}.dataLen;\n}\n`,
+      );
+      expect([expression, (await sauce("compile", file, "--chain", "solana")).code]).toEqual([
+        expression,
+        0,
+      ]);
+    }
+    const base = json(await sauce("globals", "--chain", "base", "--json"));
+    expect(base.accounts).toBeUndefined();
+    expect((await sauce("globals", "--chain", "base")).stdout).not.toContain("Accounts (");
+  });
+
   it("counts Solana's stock mints, lists them with --stocks and finds one with --search", async () => {
     const count = SVM_TOKEN_REGISTRY["mainnet-beta"].filter((row) => row.stock).length;
     const all = await sauce("globals", "--chain", "solana", "--tokens");
