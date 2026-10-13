@@ -6,7 +6,7 @@
 gets the building half of the [`sauce` command](cli.md) as tools, and the package's agent skills
 as tools and resources. The server compiles programs and action documents and lists a chain's
 names. It builds unsigned transactions: the cook, the Pot's deployment, an intent's publish
-transactions and each step of its life after. It rehearses a cook, takes calls apart, and
+transactions and each step of its life after. It simulates a cook, takes calls apart, and
 broadcasts what the user signed with any signer (`sauce_send`), so the whole path from a program to
 a landed transaction runs through it with the key held elsewhere.
 
@@ -312,7 +312,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_intent_claim`   | `sauce intent claim`   | The unsigned `withdraw` (`batchWithdraw` for several) that pays each proven intent's claimant                                                                                                                                                                                                                                                                                                                                                       |
 | `sauce_intent_refund`  | `sauce intent refund`  | The unsigned `refund` that returns the reward to its creator                                                                                                                                                                                                                                                                                                                                                                                        |
 | `sauce_intent_cancel`  | `sauce intent cancel`  | The unsigned `cancel` (or, with `prove`, `cancelAndProve`) that stops an unfilled intent after its route's deadline                                                                                                                                                                                                                                                                                                                                 |
-| `sauce_send`           | `sauce send`           | Signed transactions (EVM raw `0x…` hex, Solana base64) rehearsed as signed, broadcast in order and confirmed: `ok`, and in `sent` each one's `hash` (a Solana signature), `status`, `explorer` and `trace`, fee or gas, the decoded `reason`, and for a cook what moved, `leftInPot` and on Solana `returns`; with a plan's `cursor`, `next`, its next step built fresh                                                                             |
+| `sauce_send`           | `sauce send`           | Signed transactions (EVM raw `0x…` hex, Solana base64) simulated as signed, broadcast in order and confirmed: `ok`, and in `sent` each one's `hash` (a Solana signature), `status`, `explorer` and `trace`, fee or gas, the decoded `reason`, and for a cook what moved, `leftInPot` and on Solana `returns`; with a plan's `cursor`, `next`, its next step built fresh                                                                             |
 | `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                                                                                                                                                              |
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                                                                                                                                                               |
 | `sauce_wallet_create`  | `sauce wallet new`     | Over stdio with `--wallets` only: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                                                                                                                                                             |
@@ -604,11 +604,13 @@ sauce_send { transactions: ["0x02f8…", "0x02f8…"] }
                         { what: "cook on Pot 0x8a…", hash, status: "success", moves, leftInPot } ] }
 ```
 
-`sauce_send` takes the signed transactions in the order to send them: on an EVM chain the raw
+[mcp-external-signer.ts](../examples/mcp-external-signer.ts) is that flow as code, for any MCP
+client and any signer. `sauce_send` takes the signed transactions in the order to send them (at
+most 32, each no longer than a signed transaction can be): on an EVM chain the raw
 `0x…` hex a signer returns (its chain and sender are read from it), on Solana the base64 wire
-transaction. Each is rehearsed as it was signed first (an `eth_call` from its sender with its gas
+transaction. Each is simulated as it was signed first (an `eth_call` from its sender with its gas
 limit held to what that used; a Solana simulation that checks every signature) and refused, unsent,
-when it would fail; each lands before the next is rehearsed, and the first that does not succeed
+when it would fail; each lands before the next is simulated, and the first that does not succeed
 stops the rest. A transaction already on chain is read back, not sent again. It never takes a key,
 and is served over HTTP as over stdio.
 

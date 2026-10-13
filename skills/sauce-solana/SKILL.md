@@ -288,7 +288,7 @@ Pots and intent steps are built and sent there.
   accounts hold what they hold. `sauce run` signs with `--keypair`; `sauce tx` prints a base64
   transaction for the owner's wallet. Signed there, by any signer,
   `sauce send <signed> --chain solana` sends it (the tool `sauce_send`), checking every signature
-  and rehearsing it as signed first, and prints what it did, as `sauce run` does, with what `main`
+  and simulating it as signed first, and prints what it did, as `sauce run` does, with what `main`
   returned as hex; its blockhash expires about a minute after `sauce tx` built it, after which it
   is refused, to build and sign again. A cook that succeeds, rehearsed or sent, leads with what it
   leaves in the Pot's token accounts (`Left in the Pot`, and `leftInPot` in `--json`): that is the
