@@ -29,18 +29,13 @@
  * The derivation is the ADDRESS the transaction attaches; what a program does with the account is
  * its own to check (the token methods check each holder's account on chain).
  */
-import {
-  address,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-  isAddress,
-  type Address,
-} from "@solana/kit";
+import { address, getAddressEncoder, isAddress, type Address } from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
 import { svmTokenAccount } from "./token-accounts.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "./token-program.js";
+import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
 
 /** A mint's token program, read from the cluster: the owner of the mint's account. */
 export type SvmMintProgramOf = (mint: Address) => Promise<Address>;
@@ -455,7 +450,7 @@ async function resolvePda(
   if (seeds.length > 16) {
     throw new SvmAccountNameError(`${seeds.length} seeds; an address derives from at most 16`);
   }
-  const [value] = await getProgramDerivedAddress({ programAddress: program, seeds });
+  const value = await memoizedGetProgramDerivedAddress(program, seeds);
 
   return { value, label: `the address ${program} derives for ${parsed.text}`, kind: "address" };
 }
