@@ -9,6 +9,15 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 
+import {
+  address,
+  getCompiledTransactionMessageDecoder,
+  getTransactionDecoder,
+  type Address,
+} from "@solana/kit";
+
+import { requireChain } from "../../sdk/dist/chains/canonical.js";
+import { resolveSvmAccountName } from "../../sdk/dist/svm/account-names.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const OWNER = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
@@ -147,6 +156,52 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
     assert.equal(kitchen.via, "kitchen");
     assert.equal(direct.via, "engine");
     assert.ok(direct.size < kitchen.size, `${direct.size} < ${kitchen.size}`);
+  });
+
+  it("fills every account the token methods added, from the owner, the Pot and args", async () => {
+    const to = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+    asked.length = 0;
+    const out = ok(
+      await mcp.call("sauce_tx", {
+        source: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+        chain: "solana",
+        owner: OWNER,
+        args: [to, "400"],
+        rpcUrl: url,
+      }),
+    );
+    const transaction = getTransactionDecoder().decode(
+      new Uint8Array(Buffer.from(out.transaction as string, "base64")),
+    );
+    const keys = getCompiledTransactionMessageDecoder().decode(
+      transaction.messageBytes,
+    ).staticAccounts;
+    const named = {
+      chain: requireChain("solana"),
+      owner: address(OWNER),
+      pot: address(out.pot as string),
+    };
+    for (const derivation of ["self:USDC", "@to:USDC"]) {
+      const { value } = await resolveSvmAccountName(derivation, {
+        ...named,
+        args: { to: address(to) },
+      });
+      assert.ok(keys.includes(value as Address), `${derivation} is attached`);
+    }
+    // With no arguments there is nothing to derive the recipient's account from.
+    asked.length = 0;
+    assert.match(
+      failed(
+        await mcp.call("sauce_tx", {
+          source:
+            "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+          chain: "solana",
+          owner: OWNER,
+          rpcUrl: url,
+        }),
+      ),
+      /takes 2 arguments/,
+    );
   });
 
   it("refuses via and maxExecutionFee on an EVM chain", async () => {
