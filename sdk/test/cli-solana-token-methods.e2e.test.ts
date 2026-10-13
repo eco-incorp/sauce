@@ -797,6 +797,42 @@ describeSvm("the token methods on Solana: every account derived by the command",
     });
     expect(tokenAmount(harness, toPyusd)).toBe(125n);
     expect(tokenAmount(harness, potPyusd)).toBe(held - 125n);
+
+    // Another holder's account in the recipient's place is refused by the program: an account
+    // written where it is used is held to its derivation, as the token methods hold theirs.
+    const someoneElse = await account(pyusd, randomAddress(), 0n, TOKEN_2022_PROGRAM, 6);
+    const wrong = await simulate(file, "--args", to, "1", "--account", `toPYUSD=${someoneElse}`);
+    expect(JSON.parse(wrong.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "wrong holder account"',
+    });
+    // And so is another program in Token-2022's.
+    const notTheProgram = await simulate(
+      file,
+      ...["--args", to, "1", "--account", `token2022Program=${TOKEN_PROGRAM}`],
+    );
+    expect(JSON.parse(notTheProgram.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "wrong program"',
+    });
+  }, 120_000);
+
+  it("holds Solana.account(key) to its key: another account in its slot is refused", async () => {
+    const file = program(
+      "accounts-key",
+      "function main(key: Address): Uint256 {\n  return Solana.account(key).dataLen;\n}\n",
+    );
+    const potAccount = harness.svm.getAccount(pot);
+    if (!potAccount.exists) throw new Error("the Pot was created before the suite");
+    expect(json(await simulate(file, "--args", pot))).toMatchObject({
+      ok: true,
+      returned: String(potAccount.data.length),
+    });
+    const wrong = await simulate(file, "--args", pot, "--account", `keyAccount=${potUsdc}`);
+    expect(JSON.parse(wrong.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "wrong account"',
+    });
   }, 120_000);
 
   it("derives an address from its program and seeds as the cook is built: the Pot, from the Kitchen", async () => {
@@ -813,5 +849,13 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const potAccount = harness.svm.getAccount(pot);
     if (!potAccount.exists) throw new Error("the Pot was created before the suite");
     expect(Number(out.returned)).toBe(potAccount.data.length);
+
+    // The engine derives the address again: another account in its slot is refused, before the
+    // program's own check.
+    const wrong = await simulate(file, "--args", KITCHEN, "0", "--account", `foundPda=${potUsdc}`);
+    expect(JSON.parse(wrong.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "wrong program-derived address"',
+    });
   }, 120_000);
 });
