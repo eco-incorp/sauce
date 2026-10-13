@@ -87,10 +87,10 @@ interface Header {
 const latest = (url: string) =>
   rpc(url, "eth_getBlockByNumber", ["latest", false]) as Promise<Header>;
 
-/** What anvil runs as: its hardfork, and the next block's base fee and gas limit. */
+/** What anvil runs as: its hardfork, and the next block's base fee. */
 interface NodeInfo {
   readonly hardFork: string;
-  readonly environment: { readonly baseFee: string; readonly gasLimit: string };
+  readonly environment: { readonly baseFee: string };
 }
 
 const nodeInfo = (url: string) => rpc(url, "anvil_nodeInfo") as Promise<NodeInfo>;
