@@ -662,9 +662,10 @@ The owner signs and pays every transaction; none needs a fresh keypair, and the 
 key and no endpoint. Every transaction of a step is built on one blockhash, so a signer that takes
 longer than about a minute lets the rest expire: `sauce_send` refuses those, and its `next` is the
 same step built again with only what did not land (`sauce_send` with the cursor alone builds it
-too). A cook handed out is never built again while it can still land; one broadcast another way is
-confirmed with `signatures`, so the plan knows how it went. `close: true` gives up on the cook and
-closes the code buffer. On a server with wallets, `sauce_wallet_send` takes the `sauce_tx` result
+too); a setup of more than 32 transactions comes in several steps. A cook handed out is never built
+again while it can still land, nor once the owner's transactions show it landed; one broadcast
+another way is confirmed with `signatures`, so the plan knows how it went. `close: true` gives up
+on the cook and closes the code buffer, once a cook handed out can no longer land. On a server with wallets, `sauce_wallet_send` takes the `sauce_tx` result
 whole and sends every step.
 
 ## Agent wallets
