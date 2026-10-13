@@ -10,11 +10,31 @@
 import { createHash } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
 
-import { getBase58Decoder, type Address } from "@solana/kit";
+import {
+  address,
+  appendTransactionMessageInstruction,
+  compileTransaction,
+  createTransactionMessage,
+  getBase58Decoder,
+  getBase64EncodedWireTransaction,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  type Address,
+  type Blockhash,
+} from "@solana/kit";
 
+import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { UsageError } from "../src/cli/args.js";
-import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
-import { MAX_CODE_LEN } from "../src/svm/index.js";
+import {
+  decodeCursor,
+  encodeCursor,
+  nextStep,
+  unsignedSigner,
+  type StepContext,
+  type SvmPlan,
+} from "../src/cli/svm-plan.js";
+import { KITCHEN_DISCRIMINATORS, MAX_CODE_LEN } from "../src/svm/index.js";
 
 /** A distinct base58 key of `bytes` bytes, each `fill`. */
 const key = (fill: number, bytes = 32): string =>
@@ -23,7 +43,9 @@ const OWNER = key(7) as Address;
 const MINT = key(8) as Address;
 const TABLE = key(9) as Address;
 const BLOCKHASH = key(10);
+const OTHER_BLOCKHASH = key(11);
 const signature = (index: number): string => key((index % 250) + 1, 64);
+const URL = "http://endpoint.invalid/secret-key";
 
 const plan = (fields: Partial<SvmPlan> = {}): SvmPlan => ({
   owner: OWNER,
@@ -37,6 +59,49 @@ const plan = (fields: Partial<SvmPlan> = {}): SvmPlan => ({
   labels: [],
   ...fields,
 });
+
+type Handler = (...params: never[]) => unknown;
+
+/** An endpoint answering each method with its handler, and refusing any other by name; `calls`
+ *  records every request, in order. */
+function endpoint(handlers: Record<string, Handler>, calls: string[] = []): StepContext["rpc"] {
+  return new Proxy(
+    {},
+    {
+      get:
+        (_, method: string) =>
+        (...params: never[]) => ({
+          send: async () => {
+            calls.push(method);
+            const handler = handlers[method];
+            if (handler === undefined)
+              throw new Error(`the endpoint was not to be asked ${method}`);
+
+            return handler(...params);
+          },
+        }),
+    },
+  ) as StepContext["rpc"];
+}
+
+const context = (rpc: StepContext["rpc"]): StepContext => ({
+  rpc,
+  url: URL,
+  signer: unsignedSigner(OWNER),
+  fee: 5_000n,
+});
+
+/** What a cook step reads once nothing stands in its way: a blockhash, and a rehearsal. */
+const COOK_READS = {
+  getLatestBlockhash: () => ({
+    context: { slot: 2_000n },
+    value: { blockhash: OTHER_BLOCKHASH, lastValidBlockHeight: 3_000n },
+  }),
+  simulateTransaction: () => ({
+    context: { slot: 2_000n },
+    value: { err: null, logs: [], unitsConsumed: 10_000n, returnData: null },
+  }),
+};
 
 /** A cursor of `fields`, as `encodeCursor` writes one. */
 const cursorOf = (fields: unknown): string =>
@@ -221,5 +286,153 @@ describe("a plan's cursor", () => {
       cursorOf(raw({ staged: ["1", sha256Of(payload), payload.length] })),
     );
     expect(decoded.staged?.length).toBe(3);
+  });
+});
+
+/** A transaction of the owner's on `blockhash`: a Kitchen cook, or a call that is not one. */
+function ownerTransaction(blockhash: string, cook: boolean): string {
+  const data = cook
+    ? new Uint8Array([...KITCHEN_DISCRIMINATORS.cook, ...new Uint8Array(40)])
+    : new Uint8Array([2, 0, 0, 0]);
+
+  return getBase64EncodedWireTransaction(
+    compileTransaction(
+      pipe(
+        createTransactionMessage({ version: 0 }),
+        (message) => setTransactionMessageFeePayer(OWNER, message),
+        (message) =>
+          setTransactionMessageLifetimeUsingBlockhash(
+            { blockhash: blockhash as Blockhash, lastValidBlockHeight: 1n },
+            message,
+          ),
+        (message) =>
+          appendTransactionMessageInstruction(
+            {
+              programAddress: cook
+                ? address(v12SvmKitchenProgramId())
+                : address("11111111111111111111111111111111"),
+              data,
+            },
+            message,
+          ),
+      ),
+    ),
+  );
+}
+
+describe("the search for a cook handed out, past its blockhash", () => {
+  const HANDED = { blockhash: BLOCKHASH, lastValidBlockHeight: 100n, slot: 1_000n };
+  const handedOut = plan({ cook: HANDED });
+
+  /** The owner's history: `slots[i]` is the slot of its i-th newest transaction, `cookAt` the
+   *  index of the cook among them; what each request asked is kept. */
+  function history(slots: readonly bigint[], cookAt?: number, missingAt?: number) {
+    const fetched: number[] = [];
+    const pages: Array<string | undefined> = [];
+    let inFlight = 0;
+    let mostInFlight = 0;
+    const handlers: Record<string, Handler> = {
+      ...COOK_READS,
+      getBlockHeight: () => 200n,
+      getSignaturesForAddress: (_owner: never, config: never) => {
+        const { before, limit } = config as { before?: string; limit: number };
+        pages.push(before);
+        const from = before === undefined ? 0 : Number(before.split(":")[1]) + 1;
+
+        return slots.slice(from, from + limit).map((slot, offset) => ({
+          signature: `${signature(from + offset)}:${from + offset}`,
+          slot,
+          err: null,
+        }));
+      },
+      getTransaction: async (wanted: never) => {
+        const index = Number(String(wanted).split(":")[1]);
+        fetched.push(index);
+        inFlight += 1;
+        mostInFlight = Math.max(mostInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight -= 1;
+        if (index === missingAt) return null;
+
+        return {
+          slot: slots[index],
+          transaction: [
+            ownerTransaction(index === cookAt ? BLOCKHASH : OTHER_BLOCKHASH, index === cookAt),
+            "base64",
+          ],
+          meta: { err: null },
+        };
+      },
+    };
+
+    return { handlers, fetched, pages, mostInFlight: () => mostInFlight };
+  }
+
+  it("finds the cook on its blockhash, and moves on past it", async () => {
+    const owner = history([1_003n, 1_002n, 1_001n], 1);
+    const step = await nextStep(handedOut, context(endpoint(owner.handlers)));
+    expect(step.name).toBe("done");
+    expect(step.plan.cooked).toEqual({ ok: true, signature: `${signature(1)}:1` });
+  });
+
+  it("reads no transaction from before the cook was handed out, nor a page past them", async () => {
+    const slots = [1_002n, 1_001n, 1_000n, ...Array.from({ length: 97 }, () => 999n)];
+    const owner = history(slots);
+    const step = await nextStep(handedOut, context(endpoint(owner.handlers)));
+    expect(owner.fetched.sort()).toEqual([0, 1, 2]);
+    expect(owner.pages).toEqual([undefined]);
+    // The cook never landed: a fresh one is built.
+    expect(step.name).toBe("cook");
+    expect(step.plan.cook).toBeUndefined();
+    expect(step.transactions).toHaveLength(1);
+  });
+
+  it("reads a page's transactions several at a time", async () => {
+    const owner = history([...Array.from({ length: 150 }, () => 1_500n), 999n]);
+    await nextStep(handedOut, context(endpoint(owner.handlers)));
+    expect(owner.fetched).toHaveLength(150);
+    expect(owner.pages).toHaveLength(2);
+    expect(owner.mostInFlight()).toBeGreaterThan(1);
+  });
+
+  it("refuses past 500 of the owner's transactions rather than guess, and close goes past", async () => {
+    const owner = history(Array.from({ length: 700 }, () => 1_500n));
+    const asked = nextStep(handedOut, context(endpoint(owner.handlers)));
+    await expect(asked).rejects.toThrow(
+      `${OWNER} sent more than 500 transactions since the cook was handed out, too many to look ` +
+        "through for it: give the cook's signature if it was sent, or close",
+    );
+    expect(owner.fetched).toHaveLength(500);
+    // Closing never cooks, so what the search cannot tell does not hold it up.
+    const closing = await nextStep(handedOut, context(endpoint(owner.handlers)), { close: true });
+    expect(closing.name).toBe("done");
+    expect(closing.plan.closing).toBe(true);
+    expect(closing.notes.join("\n")).toMatch(
+      /whether the cook handed out landed could not be told/,
+    );
+  });
+
+  it("refuses where the endpoint lists a transaction it then does not return", async () => {
+    const owner = history([1_003n, 1_002n, 1_001n, 999n], undefined, 1);
+    await expect(nextStep(handedOut, context(endpoint(owner.handlers)))).rejects.toThrow(
+      /lists .* among .*'s transactions, and does not return it: whether the cook handed out landed cannot be told/,
+    );
+    // The cook found beside it is an answer all the same.
+    const found = history([1_003n, 1_002n, 1_001n, 999n], 2, 1);
+    const step = await nextStep(handedOut, context(endpoint(found.handlers)));
+    expect(step.plan.cooked).toEqual({ ok: true, signature: `${signature(2)}:2` });
+  });
+
+  it("refuses where the endpoint cannot list the owner's transactions, never naming it", async () => {
+    const failing = endpoint({
+      getBlockHeight: () => 200n,
+      getSignaturesForAddress: () => {
+        throw new Error(`fetch failed for ${URL}`);
+      },
+    });
+    const asked = nextStep(handedOut, context(failing));
+    await expect(asked).rejects.toThrow(
+      "reading the owner's transactions since the cook was handed out failed: fetch failed for <RPC_URL>",
+    );
   });
 });

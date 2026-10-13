@@ -812,6 +812,7 @@ export async function nextStep(
   let current: SvmPlan = finalized && plan.payload !== undefined ? withoutPayload(plan) : plan;
   // A cook handed out and not heard of since: never a second while it can still land, nor once
   // it has — and no close while it can still land.
+  let untold: string | undefined;
   if (current.cook !== undefined && current.cooked === undefined) {
     const handed = current.cook;
     const height = await ask(ctx.url, "the block height", () =>
@@ -833,7 +834,17 @@ export async function nextStep(
           (options.close === true ? "given up" : "rebuilt"),
       };
     }
-    const landed = await cookLanded(ctx, current.owner, handed);
+    let landed: SvmPlan["cooked"] | undefined;
+    try {
+      landed = await cookLanded(ctx, current.owner, handed);
+    } catch (error) {
+      // A close never cooks: what the search cannot tell does not hold it up.
+      if (options.close !== true) throw error;
+      untold =
+        "whether the cook handed out landed could not be told " +
+        `(${(error as Error).message.split("\n")[0]}); it is given up either way, and can no ` +
+        "longer land";
+    }
     current = landed === undefined ? withoutCook(current) : { ...current, cooked: landed };
   }
   if (options.close === true || current.cooked !== undefined || current.closing === true) {
@@ -841,6 +852,7 @@ export async function nextStep(
       options.close === true ? { ...current, closing: true } : current,
       ctx,
       state !== undefined,
+      untold === undefined ? [] : [untold],
     );
   }
   // Staged and finalized once (the plan let go of the program), and gone now: closed before its
@@ -1221,15 +1233,22 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
 }
 
 /** The close of the code buffer, or, with none open, the end. */
-async function closeStep(plan: SvmPlan, ctx: StepContext, open: boolean): Promise<PlanStep> {
+async function closeStep(
+  plan: SvmPlan,
+  ctx: StepContext,
+  open: boolean,
+  said: readonly string[] = [],
+): Promise<PlanStep> {
   const buffer = await planBuffer(plan);
-  const notes =
-    plan.table?.address === undefined
+  const notes = [
+    ...said,
+    ...(plan.table?.address === undefined
       ? []
       : [
           `lookup table ${plan.table.address} stays for a later cook naming the same accounts ` +
             `(--lookup-table ${plan.table.address}); sauce reclaim closes it`,
-        ];
+        ]),
+  ];
   if (buffer === undefined || !open) {
     return { name: "done", transactions: [], plan, overview: overview(plan, "done"), notes };
   }
@@ -1253,11 +1272,18 @@ async function closeStep(plan: SvmPlan, ctx: StepContext, open: boolean): Promis
 
 /** How many of the owner's transactions a landed-cook search reads, at most, before it gives up. */
 const HISTORY_MOST = 500;
+/** A page of the owner's signatures, as the endpoint lists them, newest first. */
+const HISTORY_PAGE = 100;
+/** How many of a page's transactions the search reads at once. */
+const HISTORY_BATCH = 10;
 
 /**
  * Whether the cook handed out landed: a transaction of the owner's, since the slot the cook was
  * built at, on the cook's blockhash, that cooks. Landed — succeeded or failed — it cannot land
- * again. An endpoint that cannot say refuses the step rather than risk a second cook.
+ * again. The owner's transactions are read a batch at a time, newest first, and none from before
+ * that slot, which cannot be the cook. An endpoint that cannot say — a page it does not list, a
+ * transaction it lists and does not return, more of them than the search reads — refuses the step
+ * rather than risk a second cook.
  */
 async function cookLanded(
   ctx: StepContext,
@@ -1265,42 +1291,71 @@ async function cookLanded(
   handed: CookHandedOut,
 ): Promise<SvmPlan["cooked"] | undefined> {
   let before: Signature | undefined;
-  for (let read = 0; read < HISTORY_MOST;) {
+  let read = 0;
+  let unread: string | undefined;
+  for (;;) {
     const page = await ask(ctx.url, "the owner's transactions since the cook was handed out", () =>
       ctx.rpc
-        .getSignaturesForAddress(owner, { limit: 100, ...(before === undefined ? {} : { before }) })
+        .getSignaturesForAddress(owner, {
+          limit: HISTORY_PAGE,
+          ...(before === undefined ? {} : { before }),
+        })
         .send(),
     );
-    for (const entry of page) {
-      if (BigInt(entry.slot) < handed.slot) return undefined;
-      read += 1;
-      const response = await ask(ctx.url, `transaction ${entry.signature}`, () =>
-        ctx.rpc
-          .getTransaction(entry.signature as Signature, {
-            commitment: "confirmed",
-            encoding: "base64",
-            maxSupportedTransactionVersion: 0,
-          })
-          .send(),
+    const since = page.filter((entry) => BigInt(entry.slot) >= handed.slot);
+    const reading = since.slice(0, HISTORY_MOST - read);
+    for (let at = 0; at < reading.length; at += HISTORY_BATCH) {
+      const found = await Promise.all(
+        reading.slice(at, at + HISTORY_BATCH).map(async (entry) => {
+          const response = await ask(ctx.url, `transaction ${entry.signature}`, () =>
+            ctx.rpc
+              .getTransaction(entry.signature as Signature, {
+                commitment: "confirmed",
+                encoding: "base64",
+                maxSupportedTransactionVersion: 0,
+              })
+              .send(),
+          );
+          if (response === null) {
+            unread ??= entry.signature;
+
+            return undefined;
+          }
+          const transaction = getTransactionDecoder().decode(
+            new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
+          );
+          const { lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
+            transaction.messageBytes,
+          ) as { lifetimeToken: string };
+
+          return lifetimeToken === handed.blockhash && isCook(transaction)
+            ? { ok: (response.meta?.err ?? null) === null, signature: entry.signature }
+            : undefined;
+        }),
       );
-      if (response === null) continue;
-      const transaction = getTransactionDecoder().decode(
-        new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
-      );
-      const { lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
-        transaction.messageBytes,
-      ) as { lifetimeToken: string };
-      if (lifetimeToken === handed.blockhash && isCook(transaction)) {
-        return { ok: (response.meta?.err ?? null) === null, signature: entry.signature };
-      }
+      const cook = found.find((each) => each !== undefined);
+      if (cook !== undefined) return cook;
     }
-    if (page.length < 100) return undefined;
+    read += reading.length;
+    if (reading.length < since.length) {
+      throw new CliError(
+        `${owner} sent more than ${HISTORY_MOST} transactions since the cook was handed out, too ` +
+          "many to look through for it: give the cook's signature if it was sent, or close",
+      );
+    }
+    // The page reaches before the cook was handed out, or the owner's history ends.
+    if (since.length < page.length || page.length < HISTORY_PAGE) break;
     before = page.at(-1)!.signature as Signature;
   }
-  throw new CliError(
-    `${owner} sent more than ${HISTORY_MOST} transactions since the cook was handed out, too many ` +
-      "to look through for it: give the cook's signature if it was sent, or close",
-  );
+  if (unread !== undefined) {
+    throw new CliError(
+      `the endpoint lists ${unread} among ${owner}'s transactions, and does not return it: ` +
+        "whether the cook handed out landed cannot be told. Ask again, give the cook's signature " +
+        "if it was sent, or close",
+    );
+  }
+
+  return undefined;
 }
 
 /** The associated-token-account program, which creates a holder's token account for a mint. */
