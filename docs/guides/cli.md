@@ -670,8 +670,11 @@ and what did not is built again: a signer slow enough to let the blockhash expir
 what is left, which `--cursor` alone (nothing sent) builds. A cook handed out is never built again
 while it can still land, nor once the owner's transactions show it landed; one broadcast another
 way is confirmed with `--signature <signature>`. `--close` gives up on the cook and closes the code
-buffer, once a cook handed out can no longer land. A lookup table the plan created stays
-for the next cook naming the same accounts (`--lookup-table <address>`).
+buffer, once a cook handed out can no longer land. A cook through a lookup table extended a moment
+ago comes back with nothing to sign and a `wait` naming the slot the table is in use from, the
+next one, about half a second on: `--cursor` alone, sent again, builds the cook (`sauce run` waits
+for it itself). A lookup table the plan created stays for the next cook naming the same accounts
+(`--lookup-table <address>`).
 
 `--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the

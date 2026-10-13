@@ -202,6 +202,9 @@ export interface PlanStep {
   readonly notes: readonly string[];
   /** Nothing to sign yet: why, and when to ask again. */
   readonly wait?: string;
+  /** The cook's lookup tables are not all in use yet: the slot they are from. Asked again from
+   *  then, the cook is built. */
+  readonly readyAt?: bigint;
   /** The cook's rehearsal failed: why, and its logs. It is built anyway, at the most compute. */
   readonly fails?: { readonly reason: string; readonly logs: readonly string[] };
   /** The execution fee the cook signs, in lamports. */
@@ -1139,40 +1142,48 @@ async function tableTransactions(
   };
 }
 
-/** How long a cook's step waits for a lookup table the setup just extended to come into use. */
-const TABLE_WARMUP = { tries: 30, delayMs: 500 };
-
-/** The cook, rehearsed for its compute: built at the most where its rehearsal fails. */
+/**
+ * The cook, rehearsed for its compute: built at the most where its rehearsal fails. Through a
+ * lookup table extended so recently that the cluster is not past that slot yet, nothing is built:
+ * the step says from which slot it is (`readyAt`), at once, and the caller asks again — a signer's
+ * call is never held up waiting for a slot.
+ */
 async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
   const tables: AddressesByLookupTableAddress = {};
-  for (const table of [
+  const through = [
     ...plan.lookupTables,
     ...(plan.table?.address === undefined ? [] : [plan.table.address]),
-  ]) {
-    let held = await tableState(ctx, table);
-    if (held === undefined) {
-      throw new CliError(`lookup table ${table} is not on the cluster: is it closed?`);
-    }
-    // Addresses a table takes in slot N are usable from slot N + 1.
-    for (let attempt = 0; ; attempt++) {
-      const slot = await ask(ctx.url, "the slot", () =>
-        ctx.rpc.getSlot({ commitment: "confirmed" }).send(),
-      );
-      if (slot > held.lastExtendedSlot) break;
-      if (attempt >= TABLE_WARMUP.tries) {
-        return {
-          name: "cook",
-          transactions: [],
-          plan,
-          overview: overview(plan, "cook"),
-          notes: [],
-          wait: `lookup table ${table} comes into use after slot ${held.lastExtendedSlot}: ask again`,
-        };
+  ];
+  if (through.length > 0) {
+    const [held, slot] = await Promise.all([
+      Promise.all(through.map((table) => tableState(ctx, table))),
+      ask(ctx.url, "the slot", () => ctx.rpc.getSlot({ commitment: "confirmed" }).send()),
+    ]);
+    let late: { table: Address; readyAt: bigint } | undefined;
+    for (const [index, table] of through.entries()) {
+      const state = held[index];
+      if (state === undefined) {
+        throw new CliError(`lookup table ${table} is not on the cluster: is it closed?`);
       }
-      await new Promise((resolve) => setTimeout(resolve, TABLE_WARMUP.delayMs));
-      held = (await tableState(ctx, table)) ?? held;
+      // Addresses a table takes in slot N are usable from slot N + 1.
+      if (state.lastExtendedSlot >= slot && state.lastExtendedSlot + 1n > (late?.readyAt ?? 0n)) {
+        late = { table, readyAt: state.lastExtendedSlot + 1n };
+      }
+      tables[table] = [...state.addresses];
     }
-    tables[table] = [...held.addresses];
+    if (late !== undefined) {
+      return {
+        name: "cook",
+        transactions: [],
+        plan,
+        overview: overview(plan, "cook"),
+        notes: [],
+        readyAt: late.readyAt,
+        wait:
+          `not ready yet: lookup table ${late.table} is usable from slot ${late.readyAt} ` +
+          `(now ${slot}); ask again`,
+      };
+    }
   }
   const fee =
     ctx.fee ??

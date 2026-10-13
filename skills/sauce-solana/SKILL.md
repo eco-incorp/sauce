@@ -336,7 +336,10 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   transaction; none needs a fresh keypair. A transaction broadcast another way is confirmed with
   `--signature <signature>`, so the plan knows how its cook went (a cook it handed out is never
   built again while it can still land, nor once it has). `--close` gives up on the cook and closes
-  the buffer, once a cook handed out can no longer land.
+  the buffer, once a cook handed out can no longer land. A step with nothing to sign says why in
+  `wait`; a cook through a lookup table extended a moment ago is one, the table in use from the
+  next slot, about half a second on: the cursor alone, sent again, builds the cook (`sauce run`
+  waits for it itself).
 - **Accounts past one transaction go through a lookup table.** Each account a transaction lists
   costs 32 bytes, and one taken through an address lookup table one byte. `sauce run` creates a
   table holding a staged cook's accounts when they do not fit, from the signer, which pays its

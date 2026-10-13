@@ -1887,6 +1887,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
       ? {}
       : { expiresAtBlockHeight: built.lastValidBlockHeight.toString() }),
     ...(step.fails === undefined ? {} : { fails: step.fails.reason }),
+    ...(step.wait === undefined ? {} : { wait: step.wait }),
     cursor,
   };
   const potNote = direct
@@ -1912,15 +1913,18 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
           `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
           "expires in about a minute. `sauce send <signed> --cursor <cursor>` sends it and reads " +
           "back what main returned."
-        : `This is the plan's ${step.name} step: ${built.transactions.length} transactions, base64 ` +
-          `and signed by no one, on one blockhash that expires in about a minute. ${input.owner} ` +
-          "signs each and pays for it; `sauce send <signed>… --cursor <cursor>` sends them in " +
-          "order and builds the next step fresh (" +
-          step.overview
-            .filter((stage) => stage.state === "later")
-            .map((stage) => stage.what)
-            .join(", then ") +
-          "). Whatever expires before it lands is built again, from what the cluster shows.",
+        : step.wait !== undefined
+          ? `Nothing to sign yet: ${step.wait}. \`sauce send --cursor <cursor>\` builds the ` +
+            `${step.name} step then.`
+          : `This is the plan's ${step.name} step: ${built.transactions.length} transactions, base64 ` +
+            `and signed by no one, on one blockhash that expires in about a minute. ${input.owner} ` +
+            "signs each and pays for it; `sauce send <signed>… --cursor <cursor>` sends them in " +
+            "order and builds the next step fresh (" +
+            step.overview
+              .filter((stage) => stage.state === "later")
+              .map((stage) => stage.what)
+              .join(", then ") +
+            "). Whatever expires before it lands is built again, from what the cluster shows.",
       ...(step.fails === undefined
         ? []
         : [
@@ -2019,6 +2023,10 @@ async function closePlanBuffer(
     };
   }
 }
+
+/** How long a run waits for a lookup table its setup just extended to come into use: the slot
+ *  after, usually well inside the first try. */
+const TABLE_WARMUP = { tries: 30, delayMs: 500 };
 
 /** What a run asks before it creates a Pot that does not fit in the cook's own transaction. */
 const potApproval = (input: SvmRunInput, pot: Address) => ({
@@ -2133,6 +2141,12 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       }
       if (tx.kind === "accounts") accountsMade = { sent, made: made ?? [] };
     }
+    step = await after();
+  }
+  // A lookup table the setup just extended is in use from the next slot: a run, the owner's own
+  // process, waits for it, a little.
+  for (let tries = 0; step.readyAt !== undefined && tries < TABLE_WARMUP.tries; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, TABLE_WARMUP.delayMs));
     step = await after();
   }
   if (step.wait !== undefined) throw new CliError(`${step.wait}${await closedAgain()}`);

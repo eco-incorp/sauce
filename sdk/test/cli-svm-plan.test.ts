@@ -23,6 +23,7 @@ import {
   type Address,
   type Blockhash,
 } from "@solana/kit";
+import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
 
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { UsageError } from "../src/cli/args.js";
@@ -471,5 +472,57 @@ describe("the setup a plan still needs", () => {
       "account 1",
       "account 2",
     ]);
+  });
+});
+
+describe("a cook through a lookup table extended a moment ago", () => {
+  const tableAccount = (lastExtendedSlot: bigint) => ({
+    context: { slot: 1n },
+    value: {
+      data: [
+        Buffer.from(
+          getAddressLookupTableEncoder().encode({
+            deactivationSlot: 2n ** 64n - 1n,
+            lastExtendedSlot,
+            lastExtendedSlotStartIndex: 0,
+            authority: OWNER,
+            addresses: [MINT],
+          }),
+        ).toString("base64"),
+        "base64",
+      ],
+      executable: false,
+      lamports: 1n,
+      owner: "AddressLookupTab1e1111111111111111111111111",
+      space: 88n,
+    },
+  });
+  const through = plan({ lookupTables: [TABLE], tail: [{ address: MINT, role: 0 }] });
+
+  it("is not ready until the slot after its extension, and says so at once", async () => {
+    const calls: string[] = [];
+    const rpc = endpoint({ getAccountInfo: () => tableAccount(500n), getSlot: () => 500n }, calls);
+    const step = await nextStep(through, context(rpc));
+    expect(step.name).toBe("cook");
+    expect(step.transactions).toEqual([]);
+    expect(step.readyAt).toBe(501n);
+    expect(step.wait).toBe(
+      `not ready yet: lookup table ${TABLE} is usable from slot 501 (now 500); ask again`,
+    );
+    expect(step.plan).toEqual(through);
+    // Read once, never polled.
+    expect(calls.filter((call) => call === "getSlot")).toHaveLength(1);
+  });
+
+  it("is built once the cluster is past that slot", async () => {
+    const rpc = endpoint({
+      ...COOK_READS,
+      getAccountInfo: () => tableAccount(500n),
+      getSlot: () => 501n,
+    });
+    const step = await nextStep(through, context(rpc));
+    expect(step.wait).toBeUndefined();
+    expect(step.transactions).toHaveLength(1);
+    expect(step.transactions[0]!.lookupTables).toEqual({ [TABLE]: [MINT] });
   });
 });
