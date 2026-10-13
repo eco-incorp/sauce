@@ -440,6 +440,8 @@ export interface SvmSent {
   readonly slot?: bigint;
   /** The fee it paid, in lamports, where the node said. */
   readonly fee?: bigint;
+  /** What the engine returned, where it ran and the node said: a program's `main`'s value. */
+  readonly returnData?: Uint8Array;
 }
 
 /** Polls until `signature` is confirmed (or a minute passes); its error, or null, and its slot. */
@@ -465,7 +467,11 @@ async function confirmed(
  * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). From a wallet
  * (`--wallet`), the fee payer's, it is held to the wallet's policy first (`policy.ts`).
  */
-async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): Promise<SvmSent> {
+export async function sendAndConfirm(
+  rpc: Rpc,
+  url: string,
+  transaction: Transaction,
+): Promise<SvmSent> {
   const signature = getSignatureFromTransaction(transaction);
   const payer = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
     .staticAccounts[0];
@@ -484,10 +490,26 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
     reservation?.released("sending failed");
     throw error;
   }
+
+  return svmLanded(rpc, url, signature, (ok) =>
+    ok ? reservation?.sent(signature) : reservation?.released(`${signature} failed`),
+  );
+}
+
+/**
+ * Polls until `signature` is confirmed (or a minute passes) and reads it back: whether it failed
+ * and why, its logs, units, fee and what the engine returned. `seen` is told whether it succeeded
+ * first.
+ */
+export async function svmLanded(
+  rpc: Rpc,
+  url: string,
+  signature: Signature,
+  seen?: (ok: boolean) => void,
+): Promise<SvmSent> {
   // The status is the verdict: it is what confirmed, and it carries the error.
   const { err: statusErr, slot } = await confirmed(rpc, url, signature);
-  if (statusErr === null) reservation?.sent(signature);
-  else reservation?.released(`${signature} failed`);
+  seen?.(statusErr === null);
   // The transaction itself — its logs, units and return data — can lag its status on a node.
   let response;
   for (let tries = 0; ; tries++) {
@@ -510,6 +532,8 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
       : new Uint8Array(getBase64Encoder().encode(meta.returnData.data[0]));
   const err = statusErr ?? meta?.err ?? null;
   const logs = meta?.logMessages ?? [];
+  // The engine's own: the node's return data where the engine set it last, else its log line.
+  const returned = meta?.returnData?.programId === engine() ? returnData : engineReturn(logs);
 
   return {
     signature,
@@ -521,6 +545,7 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
     logs,
     slot,
     ...(meta?.fee === undefined ? {} : { fee: BigInt(meta.fee) }),
+    ...(returned === undefined ? {} : { returnData: returned }),
   };
 }
 

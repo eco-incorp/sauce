@@ -134,7 +134,7 @@ export const chainRef = z
 /** An integer as a JSON number (exact to 2^53) or as a decimal or 0x-hex string. */
 const integer = z.union([z.string().min(1).max(80), z.number().int().nonnegative()]);
 
-const RPC_URL = z
+export const RPC_URL = z
   .string()
   .min(1)
   .max(2048)

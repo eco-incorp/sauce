@@ -116,6 +116,7 @@ import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } 
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
 import { publishCommand } from "./publish.js";
+import { sendCommand, signedChain } from "./send.js";
 import { simulateCommand } from "./simulate.js";
 import {
   intentDestinations,
@@ -3023,6 +3024,64 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         },
         io,
       );
+    },
+  },
+  send: {
+    usage: "sauce send <signed transaction>… [--chain <slug|id>] [options]",
+    summary: "Broadcast transactions signed elsewhere, wait for them, and report what they did",
+    flags: {
+      chain: {
+        type: "string",
+        value: "<slug|id>",
+        help: "The chain they are for (default: the transactions say)",
+      },
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Sends transactions you signed with any signer — a hardware wallet, a KMS, another wallet's",
+      "tool — and never takes a key. Each operand is one SIGNED transaction: on an EVM chain the",
+      "raw 0x… hex a signer returns (its chain and sender are read from it); on Solana the base64",
+      "wire transaction, every signature checked against its message. `-` reads them from stdin,",
+      "separated by whitespace.",
+      "",
+      "They go out in the order given. Each is rehearsed as it was signed first — on an EVM chain",
+      "an eth_call from its sender, its gas limit held to what that used; on Solana a simulation",
+      "that checks the signatures — and one that would fail is not sent: the reason is printed",
+      "(exit 1), and nothing after it is sent. Each is confirmed before the next is rehearsed, so",
+      "a cook after its Pot's deployment runs on the Pot. Prints, for each, the hash (a Solana",
+      "signature), status and what it cost, the explorer and trace pages, the decoded reason a",
+      "failure gives, and for a cook what moved and what it left in the Pot; on Solana what main",
+      "returned, as hex. A Solana transaction lands within about a minute of being built, or",
+      "never: one whose blockhash has expired is refused, to build and sign again.",
+      ...SUPPORTED_ONLY("Sends"),
+      "",
+      "Examples:",
+      "  sauce send 0x02f8… 0x02f8…              (sauce tx's plan: the deployment, then the cook)",
+      "  sauce send AQAB… --chain solana",
+    ].join("\n"),
+    run: async (args, io) => {
+      const given = args.positionals;
+      const transactions =
+        given.length === 1 && given[0] === "-"
+          ? io
+              .readStdin()
+              .split(/\s+/)
+              .filter((word) => word !== "")
+          : given;
+      if (transactions.includes("-")) {
+        throw new UsageError("`-` reads every transaction from stdin, and comes alone");
+      }
+      const chainFlag = stringFlag(args, "chain");
+      const chain = signedChain(
+        transactions,
+        chainFlag === undefined ? undefined : parseChain(chainFlag),
+      );
+      // Before any endpoint is reached.
+      requireSupported("sending", [chain]);
+
+      return sendCommand({ chain, rpcUrl: requiredEndpoint(args, io, chain), transactions });
     },
   },
   pot: {

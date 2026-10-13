@@ -90,6 +90,7 @@ export {
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
+export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export {
   CHAIN_SUPPORT_ISSUES_URL,

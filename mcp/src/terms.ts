@@ -114,7 +114,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/`?sauce run`?(?= would)/g, "a signed run"],
   [
     command("sauce run"),
-    "a signed run (outside this server: sign and send sauce_tx's transaction)",
+    "a signed run (sign sauce_tx's transactions with any signer, then sauce_send them)",
   ],
   // fill's: --rpc-url is one destination's endpoint; the call's rpcUrls names each.
   [/so give --config, which names each destination's/g, "so give rpcUrls, which names each one"],
