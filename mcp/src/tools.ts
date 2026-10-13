@@ -2101,7 +2101,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "tables, for later cooks naming the same accounts. Nothing in use is closed: a buffer " +
         "or an active table a transaction named in the last 300 slots (about two minutes) is " +
         "listed with `inUse` and `freeFromSlot`, and left open, as a cook built for it may " +
-        "still land; `keep` takes the cursors of plans still under way, whose buffers and " +
+        "still land, and one whose history the endpoint cannot read is kept so too " +
+        "(`historyUnread`, said in a note); `keep` takes the cursors of plans still under way, " +
+        "whose buffers and " +
         "tables stay open (`kept`) however long their cooks wait. A call takes 32 code buffers " +
         "and 24 lookup tables at most (the tables it can act on first); `remaining` counts the " +
         "rest, for a call once these are closed. Send the signed transactions " +

@@ -12,7 +12,11 @@ import { after, before, describe, it } from "node:test";
 
 import { decodeFunctionData, getAddress, type Hex } from "viem";
 
-import { v12EngineAddress, v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
+import {
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12SvmKitchenProgramId,
+} from "../../sdk/dist/deployments/index.js";
 import { potSalt, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import { v12PotAbi } from "../../sdk/dist/evm/engine.js";
 import {
@@ -1076,6 +1080,41 @@ describe("sauce_reclaim", () => {
       message,
       /sauce_reclaim is Solana's: a cook on base leaves no code buffer or lookup table open/,
     );
+  });
+  it("keeps what it cannot read the history of as in use, closes none of it, and says so", async () => {
+    // An endpoint that finds one code buffer of the owner's, and answers no history.
+    const owner = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi";
+    const stub = await solanaRpcStub({
+      scans: {
+        [v12SvmKitchenProgramId()]: [
+          { pubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", data: Buffer.alloc(91) },
+        ],
+      },
+    });
+    try {
+      const out = ok(
+        await mcp.call("sauce_reclaim", { chain: "solana", owner, rpcUrl: stub.url }),
+      ) as {
+        buffers: Array<{ inUse?: boolean; historyUnread?: boolean }>;
+        transactions: unknown[];
+        notes: string[];
+      };
+      assert.equal(out.buffers.length, 1);
+      assert.equal(out.buffers[0]!.inUse, true);
+      assert.equal(out.buffers[0]!.historyUnread, true);
+      assert.deepEqual(out.transactions, []);
+      assert.ok(
+        out.notes.some((note) =>
+          /^the history of 2 accounts \(1 code buffer\) could not be read: .+; it is kept as in use, and none is closed/.test(
+            note,
+          ),
+        ),
+        JSON.stringify(out.notes),
+      );
+      assert.ok(!JSON.stringify(out).includes(stub.url));
+    } finally {
+      await stub.close();
+    }
   });
 });
 

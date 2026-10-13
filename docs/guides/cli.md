@@ -703,7 +703,8 @@ Nothing in use is closed. A buffer, or an active table, that a transaction named
 slots (about two minutes) is listed `in use until slot <slot>` and left open, as a cook built for
 it may still land. A plan you mean to carry on with, whose cook may be handed out later than that,
 is kept whole with `--keep <cursor | @file>`, its cursor: its buffer and table stay open however
-long its cook waits.
+long its cook waits. One whose transaction history the endpoint cannot read is kept as in use too
+(`historyUnread`), said in one note: nothing is closed on a guess.
 
 A run takes 32 code buffers and 24 lookup tables at most, at most 30 transactions on one blockhash,
 the tables it can close or deactivate first; an owner with more is told how many remain

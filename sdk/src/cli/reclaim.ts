@@ -94,6 +94,8 @@ export interface Use {
   readonly inUse: boolean;
   /** Named lately: the first slot it is left open no more. */
   readonly freeFromSlot?: bigint;
+  /** Its history could not be read: why, the endpoint never named. */
+  readonly unread?: string;
   /** A plan given to keep holds it. */
   readonly kept?: boolean;
 }
@@ -178,6 +180,7 @@ type Limit = ReturnType<typeof limiter>;
  */
 async function useOf(
   rpc: Rpc,
+  url: string,
   accounts: readonly Address[],
   slot: bigint,
   limit: Limit,
@@ -202,8 +205,10 @@ async function useOf(
     const free = newest.reduce((a, b) => (b > a ? b : a)) + IN_USE_SLOTS + 1n;
 
     return slot >= free ? { inUse: false } : { inUse: true, freeFromSlot: free };
-  } catch {
-    return { inUse: true };
+  } catch (error) {
+    const message = ((error as Error).message ?? String(error)).split("\n")[0]!;
+
+    return { inUse: true, unread: message.split(url).join("<RPC_URL>") };
   }
 }
 
@@ -285,7 +290,7 @@ export async function reclaimable(
   const use = (accounts: readonly Address[]): Promise<Use> =>
     accounts.some((account) => kept.has(account))
       ? Promise.resolve({ inUse: true, kept: true })
-      : useOf(rpc, accounts, slot, limit);
+      : useOf(rpc, url, accounts, slot, limit);
   const bufferUses = await Promise.all(
     found.map((item, index) => use([item.pubkey, codes[index]!])),
   );
@@ -470,6 +475,7 @@ const useJson = (use: Use) =>
         inUse: true,
         ...(use.freeFromSlot === undefined ? {} : { freeFromSlot: use.freeFromSlot.toString() }),
         ...(use.kept === true ? { kept: true } : {}),
+        ...(use.unread === undefined ? {} : { historyUnread: true }),
       };
 
 const useText = (use: Use): string =>
@@ -537,18 +543,17 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
   const total = [...found.buffers.map(held), ...found.tables.map(held)].reduce((a, b) => a + b, 0n);
   const waiting = found.tables.filter((table) => table.state === "deactivating");
   const seconds = (slots: bigint): number => Math.ceil(Number(slots) * 0.4);
+  // An unread history is said once, for every buffer and table it leaves open (below).
   const leftOpen = (what: string, use: Use): string[] =>
-    !use.inUse
+    !use.inUse || use.unread !== undefined
       ? []
       : use.kept === true
         ? [`${what} is left open: a plan given to keep holds it`]
-        : use.freeFromSlot === undefined
-          ? [`${what} is left open: its transactions could not be read, to tell it is not in use`]
-          : [
-              `${what} is left open: a transaction named it lately, and a cook built for it may ` +
-                `still land; reclaim from slot ${use.freeFromSlot} (now ${found.slot}, about ` +
-                `${seconds(use.freeFromSlot - found.slot)}s)`,
-            ];
+        : [
+            `${what} is left open: a transaction named it lately, and a cook built for it may ` +
+              `still land; reclaim from slot ${use.freeFromSlot} (now ${found.slot}, about ` +
+              `${seconds(use.freeFromSlot! - found.slot)}s)`,
+          ];
   const more = (count: number, what: string, share: number): string[] =>
     count === 0
       ? []
@@ -556,8 +561,30 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
           `${share + count} ${what} are open, more than a run takes: this one lists and closes ` +
             `${share}, and the other ${count} are for the next run, once these are closed`,
         ];
+  // What could not be told not in use, in one note: kept as in use, none of it closed.
+  const unreadBuffers = found.buffers.filter((one) => one.use.unread !== undefined);
+  const unreadTables =
+    input.keepTables === true ? [] : found.tables.filter((one) => one.use.unread !== undefined);
+  const counted = (count: number, what: string): string[] =>
+    count === 0 ? [] : [`${count} ${what}${count === 1 ? "" : "s"}`];
+  const unreadAccounts = unreadBuffers.length * 2 + unreadTables.length;
+  const unreadNote =
+    unreadAccounts === 0
+      ? []
+      : [
+          `the history of ${unreadAccounts} account${unreadAccounts === 1 ? "" : "s"} (` +
+            [
+              ...counted(unreadBuffers.length, "code buffer"),
+              ...counted(unreadTables.length, "lookup table"),
+            ].join(", ") +
+            `) could not be read: ${[...unreadBuffers, ...unreadTables][0]!.use.unread}; ` +
+            `${unreadBuffers.length + unreadTables.length === 1 ? "it is" : "they are"} kept as ` +
+            "in use, and none is closed: reclaim again, through another endpoint if it keeps " +
+            "failing",
+        ];
   const notes = [
     ...more(found.remaining.buffers, "code buffers", found.buffers.length),
+    ...unreadNote,
     ...more(found.remaining.tables, "Sauce lookup tables", found.tables.length),
     ...found.buffers.flatMap((one) => leftOpen(`code buffer ${one.codeBuffer}`, one.use)),
     ...(input.keepTables === true

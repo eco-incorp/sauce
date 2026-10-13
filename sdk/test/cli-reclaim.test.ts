@@ -7,7 +7,9 @@
  * a plan to keep that is another owner's, or a file that holds none, and tables a plan given to keep
  * holds, deactivated or closable — kept, nothing built for them, said so — and an owner with more
  * open than one run handles: the histories read a few at a time, a run's share taken (the tables it
- * can act on first) and the rest said to remain. Closing on a cluster is `cli-reclaim.e2e.test.ts`.
+ * can act on first) and the rest said to remain; and histories the endpoint cannot read, whose
+ * buffers and tables are kept as in use and said so, in one note, never naming the endpoint.
+ * Closing on a cluster is `cli-reclaim.e2e.test.ts`.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -530,5 +532,84 @@ describe("lookup tables a plan given to keep holds, past their activity", () => 
         `lookup table ${table} is left open: a plan given to keep holds it`,
       );
     }
+  });
+});
+
+describe("transaction histories the endpoint cannot read", () => {
+  const original = globalThis.fetch;
+  beforeAll(async () => {
+    const { address: feeConfig } = await deriveExecutionFeeConfigPda(
+      v12SvmKitchenProgramId() as Address,
+    );
+    const table = tableAccount(OWNER, [feeConfig]);
+    globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+      if (String(input) !== URL) return original(input as string, init as RequestInit);
+      const { id, method, params } = JSON.parse(init!.body!) as {
+        id: unknown;
+        method: string;
+        params: unknown[];
+      };
+      if (method === "getSignaturesForAddress") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id,
+          error: { code: -32603, message: `history unavailable at ${URL}` },
+        });
+      }
+      const answers: Record<string, () => unknown> = {
+        getSlot: () => 1_000,
+        getAccountInfo: () => ({ context: { slot: 1_000 }, value: null }),
+        getProgramAccounts: () =>
+          params[0] === v12SvmKitchenProgramId()
+            ? [0, 1].map((index) => ({
+                pubkey: key(100 + index),
+                account: {
+                  data: [Buffer.alloc(91).toString("base64"), "base64"],
+                  executable: false,
+                  lamports: 1_000,
+                  owner: v12SvmKitchenProgramId(),
+                  rentEpoch: 0,
+                  space: 91,
+                },
+              }))
+            : [
+                {
+                  pubkey: TABLE,
+                  account: { ...table, lamports: 1_000_000, rentEpoch: 0, space: 88 },
+                },
+              ],
+        getMultipleAccounts: () => ({
+          context: { slot: 1_000 },
+          value: (params[0] as unknown[]).map(() => null),
+        }),
+      };
+
+      return Response.json({ jsonrpc: "2.0", id, result: answers[method]!() });
+    }) as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = original;
+  });
+
+  it("keeps what they make up as in use, closes none of it, and says so once", async () => {
+    const output = await reclaimCommand({ owner: OWNER, rpcUrl: URL });
+    const json = output.json as {
+      buffers: Array<{ inUse?: boolean; historyUnread?: boolean }>;
+      lookupTables: Array<{ inUse?: boolean; historyUnread?: boolean }>;
+      transactions: unknown[];
+    };
+    expect(json.buffers).toHaveLength(2);
+    for (const one of [...json.buffers, ...json.lookupTables]) {
+      expect(one).toMatchObject({ inUse: true, historyUnread: true });
+    }
+    expect(json.transactions).toEqual([]);
+    const unread = output.notes!.filter((note) => /could not be read/.test(note));
+    expect(unread).toEqual([
+      "the history of 5 accounts (2 code buffers, 1 lookup table) could not be read: " +
+        "JSON-RPC error: Internal JSON-RPC error (history unavailable at <RPC_URL>); they are " +
+        "kept as in use, and none is closed: reclaim again, through another endpoint if it keeps " +
+        "failing",
+    ]);
+    expect(JSON.stringify(output)).not.toContain(URL);
   });
 });
