@@ -39,6 +39,7 @@ import {
   getTransactionDecoder,
   getTransactionSize,
   isAddress,
+  isSignature,
   isSignerRole,
   TRANSACTION_SIZE_LIMIT,
   type Address,
@@ -250,9 +251,14 @@ const LIST_MOST = 256;
 const NAMED_MOST = 64;
 /** The most a cursor may carry, decoded: a staged program at its largest, and its accounts. */
 const CURSOR_MAX = 2 * MAX_CODE_LEN;
+/** A slot, a block height, a nonce, lamports: each a u64 on Solana. */
+const U64_MAX = 2n ** 64n - 1n;
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 const b64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
 const unb64 = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "base64"));
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
+  a.length === b.length && a.every((byte, index) => byte === b[index]);
 
 /** The plan as an opaque string, to hand back for the next step. */
 export function encodeCursor(plan: SvmPlan): string {
@@ -325,8 +331,9 @@ export function decodeCursor(text: string): SvmPlan {
     return value;
   };
   const integer = (value: unknown, what: string): bigint => {
-    if (typeof value !== "string" || !/^\d{1,30}$/.test(value))
+    if (typeof value !== "string" || !/^\d{1,20}$/.test(value) || BigInt(value) > U64_MAX) {
       throw bad(`${what} is not an integer`);
+    }
 
     return BigInt(value);
   };
@@ -359,7 +366,10 @@ export function decodeCursor(text: string): SvmPlan {
       label,
     };
   });
-  const payload = raw.payload === undefined ? undefined : unb64(String(raw.payload));
+  if (raw.payload !== undefined && (typeof raw.payload !== "string" || !BASE64.test(raw.payload))) {
+    throw bad("payload is not base64");
+  }
+  const payload = raw.payload === undefined ? undefined : unb64(raw.payload);
   if (payload !== undefined && (payload.length === 0 || payload.length > MAX_CODE_LEN)) {
     throw bad("payload");
   }
@@ -368,7 +378,16 @@ export function decodeCursor(text: string): SvmPlan {
     const [nonce, sha256, length] = list(raw.staged, "staged");
     if (typeof sha256 !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(sha256)) throw bad("sha256");
     if (typeof length !== "number" || !Number.isInteger(length) || length < 1) throw bad("length");
+    if (length > MAX_CODE_LEN) throw bad("length");
     staged = { nonce: integer(nonce, "nonce"), sha256: hexToBytes(sha256 as Hex), length };
+    // Carried until it is staged: the program the digest and length are of.
+    if (
+      payload !== undefined &&
+      (payload.length !== length ||
+        !sameBytes(new Uint8Array(createHash("sha256").update(payload).digest()), staged.sha256))
+    ) {
+      throw bad("staged is not the payload's");
+    }
   }
   let table: SvmPlan["table"];
   if (raw.table !== undefined) {
@@ -400,9 +419,12 @@ export function decodeCursor(text: string): SvmPlan {
   let cooked: SvmPlan["cooked"];
   if (raw.cooked !== undefined) {
     const [ok, signature] = list(raw.cooked, "cooked");
-    if (typeof ok !== "boolean" || typeof signature !== "string") throw bad("cooked");
+    if (typeof ok !== "boolean" || typeof signature !== "string" || !isSignature(signature)) {
+      throw bad("cooked");
+    }
     cooked = { ok, signature };
   }
+  if (raw.returnType !== undefined && typeof raw.returnType !== "string") throw bad("returnType");
 
   return {
     owner: key(raw.owner, "owner"),
@@ -754,9 +776,6 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
 const CHUNK = 900;
 /** Grow instructions in one transaction, well inside its size. */
 const GROWS_PER_TRANSACTION = 40;
-
-const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
-  a.length === b.length && a.every((byte, index) => byte === b[index]);
 
 // ---------------------------------------------------------------------------------------------
 // The next step
