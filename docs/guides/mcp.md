@@ -668,7 +668,11 @@ too); a setup of more than 32 transactions comes in several steps. A cook handed
 again while it can still land, nor once the owner's transactions show it landed; one broadcast
 another way is confirmed with `signatures`, so the plan knows how it went. `close: true` gives up
 on the cook and closes the code buffer, once a cook handed out can no longer land. On a server with wallets, `sauce_wallet_send` takes the `sauce_tx` result
-whole and sends every step.
+whole and sends every step, each transaction built on a fresh blockhash and signed by the wallet.
+It holds the whole plan to the wallet's policy before it sends any of it, as far as it can be
+measured then (the rent and the fees the setup takes, the cook's execution fee), and each
+transaction again, reserved in the ledger, as it is sent; what the cook's program moves is
+measured when the cook goes out.
 
 ## Agent wallets
 
