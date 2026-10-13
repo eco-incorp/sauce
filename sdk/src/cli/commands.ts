@@ -78,7 +78,7 @@ import { rehearse } from "./rehearse.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
-import { svmCookSize } from "./solana.js";
+import { svmCookSize, svmPayload } from "./solana.js";
 import type { Funding } from "./funding.js";
 import {
   intentDestinations,
@@ -381,7 +381,9 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
   const payload =
     input.args === undefined && program.entryParams.length > 0
       ? undefined
-      : hexToBytes(payloadOf(program, input.args));
+      : input.chain.kind === "svm"
+        ? svmPayload(program, input.args)
+        : hexToBytes(payloadOf(program, input.args));
   const cook =
     input.chain.kind === "svm" && payload !== undefined
       ? await svmCookSize(
@@ -389,6 +391,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           program.manifest ?? { accounts: [] },
           input.accounts ?? {},
           input.via,
+          program.derivedAccounts,
         )
       : undefined;
   const cooks = intentCooks(program.intents);
@@ -435,9 +438,28 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
-      ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+      ...(program.manifest === undefined ? {} : { manifest: manifestJson(program) }),
     },
     ...(notes.length === 0 ? {} : { notes }),
+  };
+}
+
+/**
+ * The program's account manifest as `--json` prints it: each slot with how it is derived, where the
+ * SDK added it to the program (`derive`, an `--account` value: `self:USDC`, `@to:USDC`), so a
+ * reader sees which accounts a cook fills by itself and which it must be given.
+ */
+export function manifestJson(program: CompiledSauceProgram): unknown {
+  const manifest = program.manifest!;
+  const derived = program.derivedAccounts ?? {};
+
+  return {
+    ...manifest,
+    accounts: manifest.accounts.map((entry) =>
+      entry.kind === "slot" && Object.hasOwn(derived, entry.name)
+        ? { ...entry, derive: derived[entry.name] }
+        : entry,
+    ),
   };
 }
 
@@ -455,7 +477,7 @@ export type ArgsInput =
  * tuple parameter, which takes JSON (`[1, 2]`, `{"amount": 1}`); `--args-json` values are taken as
  * parsed. `encodeEntryArguments` then checks every one against its declared type.
  */
-function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryValue[] {
+export function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryValue[] {
   if (args.from === "--args-json") return args.values as EntryValue[];
 
   return args.values.map((raw, index) => {

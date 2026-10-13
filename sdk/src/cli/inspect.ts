@@ -39,7 +39,7 @@ import { ecoRoutesVaultConfig, predictVaultAddress } from "../routes/vault.js";
 import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
 import { connect, receiptOf } from "./chain.js";
-import type { CommandOutput } from "./commands.js";
+import { manifestJson, type CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 
@@ -614,7 +614,11 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
             `  accounts: ${program.manifest.accounts
               .map((account) =>
                 account.kind === "slot"
-                  ? `${account.name} (${account.requires})`
+                  ? `${account.name} (${account.requires}${
+                      program.derivedAccounts?.[account.name] === undefined
+                        ? ""
+                        : `, ${program.derivedAccounts[account.name]}`
+                    })`
                   : `any more, from ${account.from}`,
               )
               .join(", ")}`,
@@ -629,7 +633,7 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
         ...described.json,
         entryEncoding: program.entryEncoding,
         entryParams: program.entryParams,
-        ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+        ...(program.manifest === undefined ? {} : { manifest: manifestJson(program) }),
       },
       intents: intents.map((intent) => intent.json),
     },

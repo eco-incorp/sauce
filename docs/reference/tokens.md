@@ -7,10 +7,11 @@ A program compiled for a chain names that chain's registered tokens by symbol, w
 same token is a property of the chain's export, `Base.USDC`, with its `address`, `decimals` and
 `symbol`. Amounts are integers in the token's smallest units: nothing scales them by decimals.
 
-On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
-(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token methods
-(`USDC.transfer(...)`) are EVM-only. Each Solana mint's token program is legacy SPL Token or
-Token-2022, whose mints a program moves with the checked writes.
+On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token
+accounts are added to `main` and derived when the cook is built, and the symbol alone is the
+mint's 32-byte key, a value for the `@sauce/token` functions (`balanceOf(USDC, account)`). Each
+Solana mint's token program is legacy SPL Token or Token-2022, whose mints move by the checked
+writes.
 
 | Chain | Tokens | Tokenized stocks |
 | --- | --- | --- |
@@ -188,12 +189,18 @@ function main(recipient: Address, amount: Uint256) {
 
 ### On Solana
 
-A stock on Solana is a Token-2022 mint, and its symbol is the mint's 32-byte key, a value for
-`@sauce/token`'s functions: `balanceOf(TSLAx, account)`. A program moves one with the checked
-writes, `transferChecked` and `approveChecked`, which take the mint's token program, the mint and
-its decimals beside the token accounts (`transfer` and `approve` take legacy SPL Token mints only).
-`sauce` names each of those accounts by the symbol: `program:TSLAx` the token program,
-`mint:TSLAx` the mint, `pot:TSLAx` the Pot's token account and `owner:TSLAx` the owner's.
+A stock on Solana is a Token-2022 mint with the same methods: `SPACEX.transfer(to, amount)`
+lowers to the checked write, `transferChecked`, with the mint's decimals, and the accounts it moves
+through are added to `main` and derived ([Solana](../guides/solana.md)). Its symbol alone is the mint's 32-byte
+key, a value for `@sauce/token`'s functions: `balanceOf(TSLAx, account)`. Written out, the checked
+writes take the mint's token program, the mint and its decimals beside the token accounts
+(`transfer` and `approve` take legacy SPL Token mints only). `sauce` names each of those accounts by
+the symbol:
+
+- `program:TSLAx`, the token program;
+- `mint:TSLAx`, the mint;
+- `pot:TSLAx`, the Pot's token account;
+- `owner:TSLAx`, the owner's.
 
 - Amounts are raw, in the mint's decimals. The issuer's multiplier, by which a wallet shows them,
   moves for splits and dividends, so a raw unit is not always one share.
@@ -206,17 +213,10 @@ its decimals beside the token accounts (`transfer` and `approve` take legacy SPL
   balance. A new token account is usable, not frozen.
 
 ```ts
-function main(
-  tokenProgram: Account,
-  source: Account<Writable>,
-  mint: Account,
-  destination: Account<Writable>,
-  pot: Account<Signer>,
-  amount: Uint256,
-): Uint256 {
-  const before = balanceOf(SPACEX, destination);
-  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9);
-  return balanceOf(SPACEX, destination) - before;
+function main(recipient: Address, amount: Uint256): Uint256 {
+  const before = SPACEX.balanceOf(recipient);
+  SPACEX.transfer(recipient, amount);
+  return SPACEX.balanceOf(recipient) - before;
 }
 ```
 

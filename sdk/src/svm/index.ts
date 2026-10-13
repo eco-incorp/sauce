@@ -23,6 +23,7 @@ export * from "./loader.js";
 export * from "./token-program.js";
 export * from "./token-extensions.js";
 export * from "./token-accounts.js";
+export * from "./account-names.js";
 export * from "./venues/index.js";
 export * from "./recipes/index.js";
 export * from "./accessors.js";

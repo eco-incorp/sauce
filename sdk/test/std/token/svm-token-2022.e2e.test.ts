@@ -556,7 +556,13 @@ describeToken2022("@sauce/token e2e: Token-2022 on the real token program", () =
         );
 
         expect(toBigInt(returned)).toBe(MINTED - MOVED);
-        expect(tokenAmount(harness, dest)).toBe(MOVED);
+        // PreStocks' mints charge a transfer fee, which Token-2022 withholds from what arrives: the
+        // amount the SDK nets from the mint's own schedule at the harness's epoch, 0.
+        const token = await resolveSvmToken(bankLoader(harness), mint);
+        expect(tokenAmount(harness, dest)).toBe(svmTokenReceived(token, MOVED, 0n));
+        if (token.extensions.transferFee === undefined) {
+          expect(tokenAmount(harness, dest)).toBe(MOVED);
+        }
       },
     );
 

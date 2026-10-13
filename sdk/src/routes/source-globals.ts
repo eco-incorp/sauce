@@ -6,7 +6,11 @@
  *
  * - **tokens**: `token-registry.ts`'s rows for the chain, the symbols `<Sym>.transfer(...)` and a
  *   bare `USDC` resolve. On Solana they are the cluster's mints: a bare `USDC` is the mint's 32-byte
- *   key, and the token syntax is EVM-only.
+ *   key, and the token syntax adds the accounts it moves through to `main`.
+ * - **venues**: on Solana, each price-limit venue a program swaps at by its namespace
+ *   (`OrcaWhirlpool.swap(pool, …)`, `svm-venue-methods.ts`).
+ * - **accounts**: on Solana, the accounts a program writes where it uses them (`Solana.pda(…)`,
+ *   `USDC.accountOf(holder)`, `svm-account-expressions.ts`).
  * - **protocols**: every `<Protocol>[.<Contract>]` reference the protocol-accessor rewrite resolves
  *   on the chain — through `resolveProtocolContract`, the rewrite's own resolver, not a copy of its
  *   rules — with each contract's address and vendored methods. A family alias (`Uniswap` for
@@ -36,6 +40,8 @@ import { pascalOfSlug } from "./builder.js";
 import { resolveProtocolContract } from "./protocol-rewrite.js";
 import type { StockToken } from "./token-registry.js";
 import { svmTokenRows, TOKEN_REGISTRY } from "./token-registry.js";
+import { SVM_ACCOUNT_EXPRESSIONS, type SvmAccountExpression } from "./svm-account-expressions.js";
+import { SVM_VENUE_METHODS, SVM_VENUE_NAMESPACES } from "./svm-venue-methods.js";
 
 export interface SourceToken {
   readonly symbol: string;
@@ -143,10 +149,26 @@ export interface SourceModule {
   readonly functions: readonly string[];
 }
 
+/** A Solana venue a program swaps at by its namespace (`OrcaWhirlpool.swap(pool, …)`). */
+export interface SourceVenue {
+  readonly namespace: string;
+  /** The venue's name for a person. */
+  readonly name: string;
+  /** Its program, in base58. */
+  readonly program: string;
+  /** Each method's signature. */
+  readonly methods: readonly string[];
+}
+
 export interface SourceGlobals {
   readonly chain: SourceChainName;
   readonly tokens: readonly SourceToken[];
   readonly protocols: readonly SourceNamespace[];
+  /** Solana's price-limit venues as namespaces, each lowered to its own `@sauce/router` swap: none
+   *  on an EVM chain. */
+  readonly venues: readonly SourceVenue[];
+  /** Solana's accounts as a program writes them where it uses them: none on an EVM chain. */
+  readonly accounts: readonly SvmAccountExpression[];
   /** The interfaces a program binds to an address of its own (EVM chains): the same on each. */
   readonly interfaces: readonly SourceInterface[];
   readonly chains: readonly SourceChainName[];
@@ -293,6 +315,16 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
       ),
     ].sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)),
     protocols: namespacesOn(resolved),
+    venues:
+      resolved.kind === "svm"
+        ? Object.entries(SVM_VENUE_NAMESPACES).map(([namespace, venue]) => ({
+            namespace,
+            name: venue.name,
+            program: venue.program,
+            methods: SVM_VENUE_METHODS,
+          }))
+        : [],
+    accounts: resolved.kind === "svm" ? SVM_ACCOUNT_EXPRESSIONS : [],
     interfaces: interfacesOn(resolved),
     chains: CANONICAL_CHAINS.map((other) => chainName(other as CanonicalChain)),
     defines: chainDefines(resolved),

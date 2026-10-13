@@ -51,6 +51,46 @@ of `main`, given to `--args` as the mint's base58 address:
 | `USDC` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | `0x3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7` | 6 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 | `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 
+## Venues
+
+Each venue whose swap a price limit stops, by the namespace a program swaps at one of its pools
+with: `<Venue>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`, or `trySwap(…)`,
+which returns 0 where `swap` reverts. The pool's accounts, and the Pot's, are derived when the
+cook is built ([the `@sauce/router` reference](../../api/router.md)).
+
+| Namespace | Venue | Program |
+| --- | --- | --- |
+| `RaydiumClmm` | Raydium CLMM | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
+| `PancakeswapClmm` | PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` |
+| `Byreal` | Byreal | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2` |
+| `StabbleClmm` | Stabble CLMM | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` |
+| `OrcaWhirlpool` | Orca Whirlpools | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` |
+| `Cropper` | Cropper | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` |
+| `Defituna` | DefiTuna | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9` |
+| `Crema` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
+| `Phoenix` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` |
+
+## Accounts
+
+The accounts a program writes where it uses them, each added to `main`, derived when the cook
+is built (so what it is made of is known then) and checked on chain at the top of `main` to be
+the account it names. Each is read-only unless `.writable()` or `.signer()` gives it that role.
+
+| Expression | The account | Derived as |
+| --- | --- | --- |
+| `Solana.pda(program, [seeds])` | the address program derives for the seeds | `pda:<program>:<seeds>` |
+| `Solana.account(key)` | the account at a key | `<key>` |
+| `Solana.self` | the Pot (the signer, cooked directly) | `self` |
+| `Solana.owner` | the Pot's owner, who signs the cook | `owner` |
+| `Solana.systemProgram` | the System Program | `11111111111111111111111111111111` |
+| `Solana.tokenProgram` | SPL Token | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` |
+| `Solana.token2022Program` | Token-2022 | `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` |
+| `Solana.associatedTokenProgram` | the Associated Token Account program | `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL` |
+| `Solana.memoProgram` | the Memo program | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+| `<Sym>.accountOf(holder)` | the holder's associated account for the token | `<holder>:<Sym>` |
+| `<Sym>.mint` | the token's mint | `mint:<Sym>` |
+| `<Sym>.tokenProgram` | the token program that owns the mint | `program:<Sym>` |
+
 ## Protocols
 
 The registry records no protocol deployment on this chain.

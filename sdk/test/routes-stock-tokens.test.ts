@@ -150,9 +150,10 @@ describe("stock tokens wherever a token symbol is declared", () => {
     expect(tokensOf("Base")).not.toContain('"TSLAon"');
     expect(Base.SPCXc).toMatchObject({ address: SPCXC, decimals: 8, symbol: "SPCXc" });
     expect(Ethereum.SPCXon.decimals).toBe(18);
-    // Solana's: a mint only Solana has is declared as a value, and its export carries the mint.
+    // Solana's: a mint only Solana has is declared with the same token methods (the SDK adds the
+    // accounts they move through to main), and its export carries the mint.
     for (const symbol of ["NVDA_US", "SPACEX"]) {
-      expect(declarations).toContain(`const ${symbol}: bigint;`);
+      expect(declarations).toContain(`const ${symbol}: bigint & SauceTokenSource;`);
     }
     expect(tokensOf("Solana")).toContain('"TSLAx"');
     expect(tokensOf("Solana")).toContain('"SPACEX"');
