@@ -290,8 +290,9 @@ describe("sauce globals", () => {
     const run = await sauce("globals", "--chain", "solana");
     expect(run.code).toBe(0);
     expect(run.stdout).toContain(
-      "Accounts (12): written where a program uses them, each added to main and derived when " +
-        "the cook is built; read-only unless .writable() or .signer() gives it that role",
+      "Accounts (12): written where a program uses them, each added to main, derived when the " +
+        "cook is built and checked on chain; read-only unless .writable() or .signer() gives it " +
+        "that role",
     );
     expect(run.stdout).toMatch(
       /^ {2}Solana\.pda\(program, \[seeds\]\) +the address program derives for the seeds: pda:<program>:<seeds>$/m,

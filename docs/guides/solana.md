@@ -67,7 +67,16 @@ It runs with `sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 
 - **Roles.** Each account is read-only; `.writable()` and `.signer()` give it a role, and chain. An account written more than once is one slot with every role its uses give it.
 - **Known when the transaction is built.** A program, key, holder or seed is an `Address` parameter of `main`, a 32-byte key, `ctx.self()`, `Solana.self`, `Solana.owner` or a program account. A seed can also be a token symbol (its mint), a string of up to 32 bytes, an integer parameter's or literal's `.toBytesLe(n)` (`n` 1, 2, 4, 8 or 16) or ``hex`…` ``. A seed computed as the program runs is refused: take that account as an `Account` parameter.
 - **Names.** A slot is named for what it holds (`systemProgram`, `potWSOL`); a derived address for the constant it initializes (`destPda`) or its first string seed (`statePda`).
-- **Checked by the program, not by the SDK.** The cook commands attach what the expression derives. A transaction built another way can attach any account in the slot, so check what matters in the program (`.address`, `.owner`, its bytes); the token methods check their own.
+- **Each is checked on chain.** The cook commands attach what the expression derives. A transaction built another way, such as a solver filling the cook, could attach another account, so compiling adds a check for each account at the top of `main`. A wrong account is refused with one of these reasons:
+  - `wrong account`: `Solana.account(key)` is not at `key`.
+  - `wrong program-derived address`: the engine derives `Solana.pda(...)` again with `crypto.findPDA`, at the program's canonical bump.
+  - `wrong holder account`: `USDC.accountOf(holder)` is not a USDC token account held by `holder`.
+  - `wrong mint`: `USDC.mint` is not that mint.
+  - `wrong program`: a program account is not that program.
+
+  The Pot and the owner are pinned by their signatures. An account made from either one makes it a signer; elsewhere, add `.signer()` where its identity matters. The first `accountOf` costs about 290 bytes, shared with the token methods' reads; every other check costs 25 to 60.
+
+- **`accountOf` names an account that exists.** `sauce run` creates a missing one before the cook. For an account the program creates itself, use `Solana.pda(Solana.associatedTokenProgram, [holder, Solana.tokenProgram, USDC])`. The Associated Token Account program checks that address when it creates the account.
 
 `sauce globals --chain solana` lists the expressions under Accounts; in TypeScript, `routes.sourceGlobals("solana").accounts`.
 

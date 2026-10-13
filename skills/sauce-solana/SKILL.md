@@ -154,10 +154,30 @@ sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 1000000
   `const dest`), else for its first string seed (`statePda` for `"state"`). `sauce compile --json` lists every slot with its `derive`, and
   `--account NAME=<value>` replaces one.
 - **Where they can stand.** In `main` itself, as with the token methods.
-- **The account is the one attached.** `sauce run`, `simulate` and `tx` attach what the expression
-  derives. A transaction built another way can attach any account in that slot. The token methods
-  check their accounts on chain; an account written this way is checked only by what the program
-  checks itself (its `.address`, `.owner`, its bytes) and by what the program it calls checks.
+- **Each is checked on chain.** `sauce run`, `simulate` and `tx` attach what the expression
+  derives, but a transaction built another way (a solver filling the cook, say) could attach another
+  account in that slot. So compiling also adds a check for each account, at the top of `main` before
+  the program's own code. An account in the wrong slot is refused with one of these reasons:
+  - `wrong account`: `Solana.account(key)` is not at `key`;
+  - `wrong program-derived address`: the engine derives `Solana.pda(program, [seeds])` again, at
+    the program's canonical bump, and it is not that address;
+  - `wrong holder account`: `USDC.accountOf(holder)` is not a token account of USDC's mint, owned by
+    a token program and held by `holder`;
+  - `wrong mint`: `USDC.mint` is not USDC's mint;
+  - `wrong program`: a program account, or `USDC.tokenProgram`, is not that program.
+
+  The Pot and the owner are what the cook attaches, so their signatures are what pins them. When a
+  holder or a seed is made of either one, it becomes a signer; elsewhere, give it `.signer()` where
+  its identity matters. An `--account` that replaces one of these accounts has to pass the same
+  check. Each check costs bytes. The first `accountOf` costs about 290, because it compiles in
+  `@sauce/token`'s account check, which the token methods' reads share. Each other check costs
+  25 to 60.
+
+- **`accountOf` names an account that exists.** Its check reads the account when the program starts,
+  and `sauce run` creates a missing one before the cook, asking first (or with `--yes`). For an
+  account the program creates itself, use the address the Associated Token Account program derives,
+  which that program checks when it creates the account:
+  `Solana.pda(Solana.associatedTokenProgram, [holder, Solana.tokenProgram, USDC])`.
 
 [examples/wrap.sauce.ts](examples/wrap.sauce.ts) is the program above.
 

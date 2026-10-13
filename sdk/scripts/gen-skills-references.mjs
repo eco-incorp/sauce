@@ -1189,9 +1189,9 @@ function renderChain(chain, supported, site) {
     lines.push(
       "## Accounts",
       "",
-      "The accounts a program writes where it uses them, each added to `main` and derived when the",
-      "cook is built, so what it is made of is known then. Each is read-only unless `.writable()` or",
-      "`.signer()` gives it that role.",
+      "The accounts a program writes where it uses them, each added to `main`, derived when the cook",
+      "is built (so what it is made of is known then) and checked on chain at the top of `main` to be",
+      "the account it names. Each is read-only unless `.writable()` or `.signer()` gives it that role.",
       "",
       "| Expression | The account | Derived as |",
       "| --- | --- | --- |",

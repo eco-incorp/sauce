@@ -9,8 +9,8 @@
 // pay.sauce.ts: the accounts the token methods add to main and how each is derived, the checks
 // after each write, the same file on Base, and a derivation resolved to the account it names. Then
 // wrap.sauce.ts and the accounts written where they are used: each one's derivation and role, the
-// names the skill gives, one slot for an account written twice, and the refusal of a seed computed
-// as the program runs.
+// names the skill gives, one slot for an account written twice, the check each is held to and its
+// reason, and the refusal of a seed computed as the program runs.
 // Offline: nothing is sent.
 //
 //   node solana.mts
@@ -239,7 +239,7 @@ check(stock.derivedAccounts?.mintPYUSD === "mint:PYUSD", "and takes its mint as 
 
 // Accounts where they are used: wrap.sauce.ts writes each account in its calls. Compiling adds each
 // to main with its derivation and the role its uses give it, as the skill's section says, and the
-// balance read adds the Pot, whose key the read checks the account's holder against.
+// Pot, whose key the Pot's WSOL account is checked to be held by.
 const wrap = routes.compileSauceProgram(
   "solana",
   readFileSync(new URL("./wrap.sauce.ts", import.meta.url), "utf8"),
@@ -251,18 +251,18 @@ check(
   JSON.stringify(wrap.derivedAccounts) ===
     JSON.stringify({
       potWSOL: "self:WSOL",
+      pot: "self",
       systemProgram: "11111111111111111111111111111111",
       owner: "owner",
       tokenProgram: TOKEN_PROGRAM_ID,
-      pot: "self",
     }) &&
     JSON.stringify(wrapRoles) ===
       JSON.stringify({
         potWSOL: "writable",
+        pot: "readonly_signer",
         systemProgram: "readonly",
         owner: "writable_signer",
         tokenProgram: "readonly",
-        pot: "readonly_signer",
       }),
   `wrap.sauce.ts's accounts, derivations and roles, not ${JSON.stringify(wrap.derivedAccounts)} ${JSON.stringify(wrapRoles)}`,
 );
@@ -299,6 +299,21 @@ check(
 check(
   skill.includes("| `pda:<program>:<seeds>`") && skill.includes("`destPda`"),
   "the skill's table",
+);
+// Each account is checked on chain, with the reason the skill names: the checks open main.
+for (const reason of [
+  "wrong account",
+  "wrong program-derived address",
+  "wrong holder account",
+  "wrong mint",
+  "wrong program",
+]) {
+  check(table.source.includes(`"${reason}");`), `the lowering checks with "${reason}"`);
+  check(skill.includes(`\`${reason}\``), `the skill names "${reason}"`);
+}
+check(
+  table.source.includes("crypto.findPDA(program, [to.toBytesBe(32)])"),
+  "the engine derives a program-derived address again",
 );
 // A seed computed as the program runs is refused, naming the Account parameter.
 let refused = "";

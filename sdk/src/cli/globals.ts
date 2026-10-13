@@ -275,8 +275,8 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     text.push(
       "",
       `Accounts (${globals.accounts.length}): written where a program uses them, each added to ` +
-        "main and derived when the cook is built; read-only unless .writable() or .signer() " +
-        "gives it that role",
+        "main, derived when the cook is built and checked on chain; read-only unless " +
+        ".writable() or .signer() gives it that role",
       ...globals.accounts.map(
         (one) => `  ${one.expression.padEnd(width)}  ${one.account}: ${one.derive}`,
       ),
