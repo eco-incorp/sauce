@@ -671,7 +671,11 @@ another way is confirmed with `signatures`, so the plan knows how it went. `clos
 on the cook and closes the code buffer, once a cook handed out can no longer land. A step with
 nothing to sign says why in `wait`: a cook handed out that can still land, or a cook through a
 lookup table extended a moment ago, which is in use from the next slot, about half a second on.
-Nothing waits on the server: call `sauce_send` with the cursor alone again for the step. On a server with wallets, `sauce_wallet_send` takes the `sauce_tx` result
+Nothing waits on the server: call `sauce_send` with the cursor alone again for the step. A cook its
+simulation says would fail is not built, so none is handed out to land and fail: `sauce_tx` returns
+an error result, and `sauce_send` a `next`, saying why in `fails` with the simulation's `logs`;
+once what it needs is there (a funded Pot, an account it names), the cursor alone simulates it
+again and builds it. On a server with wallets, `sauce_wallet_send` takes the `sauce_tx` result
 whole and sends every step, each transaction built on a fresh blockhash and signed by the wallet.
 It holds the whole plan to the wallet's policy before it sends any of it, as far as it can be
 measured then (the rent and the fees the setup takes, the cook's execution fee), and each

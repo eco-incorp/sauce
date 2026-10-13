@@ -32,6 +32,7 @@ import {
   decodeCursor,
   encodeCursor,
   nextStep,
+  signableStep,
   unsignedSigner,
   type StepContext,
   type SvmPlan,
@@ -563,5 +564,30 @@ describe("what a wallet's send takes of a plan, from a tool's result", () => {
     expect(plannedHandedOut({ transactions: [{ what: "no transaction" }, null, cook] })).toEqual([
       { what: "cook on Pot", transaction: "AQAB" },
     ]);
+  });
+});
+
+describe("a cook its simulation says would fail", () => {
+  it("is not built, so no cook is handed out to land, and says why", async () => {
+    const rpc = endpoint({
+      ...COOK_READS,
+      simulateTransaction: () => ({
+        context: { slot: 2_000n },
+        value: {
+          err: { InstructionError: [2, { Custom: 6001 }] },
+          logs: ["Program log: the Pot holds too little"],
+          unitsConsumed: 10_000n,
+          returnData: null,
+        },
+      }),
+    });
+    const step = await nextStep(plan(), context(rpc));
+    expect(step.name).toBe("cook");
+    expect(step.transactions).toEqual([]);
+    expect(step.fails?.logs).toEqual(["Program log: the Pot holds too little"]);
+    expect(step.fails?.reason).toMatch(/6001|0x1771/);
+    const built = await signableStep(step, context(rpc));
+    expect(built.transactions).toEqual([]);
+    expect(built.plan.cook).toBeUndefined();
   });
 });

@@ -1897,7 +1897,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "first step, every transaction base64 for the owner to sign on one blockhash, sent in " +
         "order by sauce_send with the cursor, which returns the next step; a step with nothing " +
         "to sign says why in `wait` (a lookup table in use only from the next slot), and " +
-        "sauce_send with the cursor alone builds it then. Nothing needs a " +
+        "sauce_send with the cursor alone builds it then. A Solana cook its simulation says " +
+        "would fail is not built: the result is an error carrying `fails` and the simulation's " +
+        "`logs`, and its cursor, which sauce_send simulates again once what the cook needs is " +
+        "there. Nothing needs a " +
         "fresh keypair: the owner signs and pays every transaction. `notes` say what must be " +
         "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,
@@ -1930,6 +1933,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         return {
           json: { ...output.json, sourceSha256: program.sourceSha256 },
           notes: output.notes,
+          // A cook its simulation says would fail is not built: the result says why, as an error.
+          ...(output.exitCode === undefined ? {} : { isError: true }),
         };
       }
       const chain = program.input.chain;

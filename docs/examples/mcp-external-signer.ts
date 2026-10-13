@@ -64,7 +64,8 @@ export async function cookWithYourSigner(
     sent.push(...((report.sent as unknown[] | undefined) ?? []));
     steps.push(String(step.step ?? "cook"));
     const next = report.next as Record<string, unknown> | undefined;
-    if (report.ok !== true || next === undefined || next.step === "done") {
+    // Done, stopped, or a cook its simulation says would fail (`fails` says why): yours to act on.
+    if (report.ok !== true || next === undefined || next.step === "done" || "fails" in next) {
       return { ...report, sent, steps };
     }
     step = next;

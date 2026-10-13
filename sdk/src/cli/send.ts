@@ -242,6 +242,7 @@ interface NextStep {
   readonly expiresAtBlockHeight?: string;
   readonly wait?: string;
   readonly fails?: string;
+  readonly logs?: readonly string[];
   readonly cursor?: string;
   readonly notes?: readonly string[];
 }
@@ -274,8 +275,8 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
     ...(step.fails === undefined
       ? []
       : [
-          `simulated now, the cook would fail: ${step.fails.reason}. Fix what it needs and send the ` +
-            "cursor alone for a fresh one, or give up on it with close",
+          `simulated now, the cook would fail: ${step.fails.reason}, so none was built. Fix what it ` +
+            "needs and send the cursor alone to simulate it again, or give up on it with close",
         ]),
   ];
 
@@ -287,7 +288,7 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
       ? {}
       : { expiresAtBlockHeight: built.lastValidBlockHeight.toString() }),
     ...(step.wait === undefined ? {} : { wait: step.wait }),
-    ...(step.fails === undefined ? {} : { fails: step.fails.reason }),
+    ...(step.fails === undefined ? {} : { fails: step.fails.reason, logs: step.fails.logs }),
     cursor: encodeCursor(built.plan),
     ...(notes.length === 0 ? {} : { notes }),
   };

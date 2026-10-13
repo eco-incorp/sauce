@@ -35,6 +35,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
+import { decodeCursor } from "../../sdk/dist/cli/svm-plan.js";
 import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
   fixture,
@@ -281,6 +282,31 @@ describe(
       assert.equal(hexToBigInt(sent.sent[0]!.returns as Hex), 400n);
       assert.equal(tokenAmount(harness, dest), 400n);
       assert.deepEqual(Object.keys(shim.sent.at(-1)!.signatures), [owner.address]);
+    });
+
+    it("builds no cook its simulation says would fail: an error saying why, nothing to sign", async () => {
+      const result = erred(
+        await mcp.call("sauce_tx", {
+          source: SWEEP,
+          chain: "solana",
+          owner: owner.address,
+          defines: { MINT: bytesToHex(new Uint8Array(getAddressCodec().encode(mint))) },
+          accounts: { tokenProgram: TOKEN_PROGRAM, source, dest, authority: "pot" },
+          args: ["5000"],
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as {
+        transaction?: string;
+        transactions: unknown[];
+        fails: string;
+        logs: string[];
+        cursor: string;
+      };
+      assert.equal(result.transaction, undefined);
+      assert.deepEqual(result.transactions, []);
+      assert.ok(result.fails.length > 0);
+      assert.ok(result.logs.length > 0);
+      assert.equal(decodeCursor(result.cursor).cook, undefined);
     });
   },
 );

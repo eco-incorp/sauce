@@ -205,7 +205,8 @@ export interface PlanStep {
   /** The cook's lookup tables are not all in use yet: the slot they are from. Asked again from
    *  then, the cook is built. */
   readonly readyAt?: bigint;
-  /** The cook's rehearsal failed: why, and its logs. It is built anyway, at the most compute. */
+  /** The cook's simulation failed: why, and its logs. Nothing is built, and no cook is handed out:
+   *  asked again once what it needs is there, the cook is simulated again. */
   readonly fails?: { readonly reason: string; readonly logs: readonly string[] };
   /** The execution fee the cook signs, in lamports. */
   readonly fee?: bigint;
@@ -1237,8 +1238,21 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
     value === undefined || value.err === null
       ? undefined
       : { reason: failureReason(value.err, logs, returned), logs };
+  // One its simulation says would fail is not built: a signer is never handed a cook that could
+  // land and fail, and the plan remembers none that could still land.
+  if (fails !== undefined) {
+    return {
+      name: "cook",
+      transactions: [],
+      plan,
+      overview: overview(plan, "cook"),
+      notes: [],
+      fee,
+      fails,
+    };
+  }
   const unitLimit =
-    fails === undefined && value?.unitsConsumed !== undefined && value.unitsConsumed !== null
+    value?.unitsConsumed !== undefined && value.unitsConsumed !== null
       ? recommendedComputeUnitLimit(BigInt(value.unitsConsumed))
       : ENGINE_GAS_LIMIT_CU;
 
@@ -1263,7 +1277,6 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
         ? ["the endpoint did not simulate the cook, so it is built at the most compute it may use"]
         : [],
     fee,
-    ...(fails === undefined ? {} : { fails }),
     ...(value === undefined ? { unrehearsed: true as const } : {}),
   };
 }
@@ -1629,7 +1642,7 @@ export async function signableStep(
   readonly plan: SvmPlan;
 }> {
   const { lifetime, ...built } = await signableTransactions(step.transactions, ctx);
-  const cooks = step.transactions.some((tx) => tx.kind === "cook");
+  const cooks = step.fails === undefined && step.transactions.some((tx) => tx.kind === "cook");
 
   return {
     ...built,

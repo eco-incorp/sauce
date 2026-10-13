@@ -45,6 +45,7 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { decodeCursor } from "../src/cli/svm-plan.js";
 import { buildExecuteTransaction, derivePotPda } from "../src/svm/index.js";
 import {
   CLI_FIXTURES,
@@ -411,8 +412,34 @@ describeSvm("sauce send: sauce tx's cook, signed elsewhere, on Solana", () => {
     expect(harness.svm.getBalance(recipient)).toBe(1_000_000n);
   }, 120_000);
 
-  it("refuses a cook that would fail, and sends nothing", async () => {
-    const cook = await cookFor(5_000n);
+  it("builds no cook its simulation says would fail, and hands none out", async () => {
+    // More than the Pot's account holds.
+    const run = await sauce(
+      ...["tx", sweep, "--chain", "solana", "--owner", owner.address, "--define", mintDefine],
+      ...["--account", `tokenProgram=${TOKEN_PROGRAM}`, "--account", `source=${source}`],
+      ...["--account", `dest=${dest}`, "--account", "authority=pot"],
+      ...["--rpc-url", RPC_URL, "--args", "5000"],
+    );
+    expect(run.code).toBe(1);
+    const out = JSON.parse(run.stdout) as {
+      transaction?: string;
+      transactions: unknown[];
+      fails: string;
+      logs: string[];
+      cursor: string;
+    };
+    expect(out.transaction).toBeUndefined();
+    expect(out.transactions).toEqual([]);
+    expect(out.fails).toMatch(/insufficient funds|0x1/);
+    expect(out.logs.length).toBeGreaterThan(0);
+    // Nothing handed out: the plan remembers no cook that could land.
+    expect(decodeCursor(out.cursor).cook).toBeUndefined();
+  }, 120_000);
+
+  it("refuses a cook that would fail by the time it is sent, and sends nothing", async () => {
+    const cook = await cookFor(500n);
+    // The Pot's account is emptied between the cook's building and its sending.
+    setTokenAccount(harness, source, mint, pot, 0n);
     const sent = shim.sent.length;
 
     const run = await sauce("send", await signed(cook.transaction), "--rpc-url", RPC_URL);
