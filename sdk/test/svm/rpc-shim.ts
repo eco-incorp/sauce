@@ -190,6 +190,8 @@ export function solanaShim(
         const meta = result.meta();
         const asked = (params[1] as { accounts?: { addresses: string[] } } | undefined)?.accounts;
         const post = failed ? [] : result.postAccounts();
+        // The last return data any instruction set, as a cluster reports it: what `main` returned.
+        const returned = meta.returnData();
 
         return answer(id, {
           context: context(),
@@ -197,7 +199,13 @@ export function solanaShim(
             err: failed ? rpcError(result.err()) : null,
             logs: meta.logs(),
             unitsConsumed: Number(meta.computeUnitsConsumed()),
-            returnData: null,
+            returnData:
+              returned.data().length === 0
+                ? null
+                : {
+                    programId: getBase58Decoder().decode(returned.programId()),
+                    data: [b64(returned.data()), "base64"],
+                  },
             accounts:
               asked === undefined || failed
                 ? null

@@ -345,8 +345,11 @@ const COOK = {
     .describe(
       "Solana only: each Account parameter main takes, by name: a base58 address, `pot` (the " +
         "Pot, signed for by the Kitchen), `owner`, `pot:USDC` or `owner:USDC` (that holder's " +
-        "associated account for a token, by symbol or mint), `mint:USDC` (the mint) or " +
-        "`program:USDC` (its token program). sauce_compile's manifest lists them.",
+        "associated account for a token, by symbol or mint), `@to:USDC` (that of main's " +
+        "argument `to`), `mint:USDC` (the mint) or `program:USDC` (its token program). " +
+        "sauce_compile's manifest lists them; one with a `derive` (an account the token methods " +
+        "added, such as USDC.transfer(to, amount)'s) is filled by itself, and named here only to " +
+        "replace it.",
     ),
   via: z
     .enum(["kitchen", "engine"])

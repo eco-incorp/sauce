@@ -60,6 +60,13 @@ import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
+  isSvmAccountName,
+  resolveSvmAccountName,
+  SvmAccountNameError,
+  type ResolvedSvmAccountName,
+  type SvmMintProgramOf,
+} from "../svm/account-names.js";
+import {
   type AccountResolution,
   buildAtaPrepend,
   buildCloseCodeBufferInstruction,
@@ -99,6 +106,7 @@ import {
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
   type Approver,
+  argumentValues,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
@@ -597,17 +605,13 @@ async function sendInstructions(
 // Accounts, the Pot, the cook
 // ---------------------------------------------------------------------------------------------
 
-/**
- * A value that names an account by its token: `pot:<token>` or `owner:<token>`, that one's
- * associated token account for the mint; `mint:<token>`, the mint itself; `program:<token>`, the
- * token program that owns the mint. The token is a registered symbol (`USDC`, or a stock's, which
- * can carry a "_": `NVDA_US`) or a mint's base58 address.
- */
-const TOKEN_NAMED = /^(pot|owner|mint|program):([A-Za-z0-9_]+)$/;
 /** The System program, which owns every wallet. */
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 
-/** `--account name=<pubkey | pot | owner | pot:<token> | owner:<token> | mint:<token> | program:<token>>`, parsed. */
+/**
+ * `--account name=<value>`, parsed: an address, `pot`, `owner`, `self`, `@<argument>`, or a token's
+ * account (`pot:USDC`, `@to:USDC`, `mint:USDC`, `program:USDC`) — `svm/account-names.ts`'s language.
+ */
 export function parseAccounts(raws: readonly string[]): Record<string, string> {
   const accounts: Record<string, string> = {};
   for (const raw of raws) {
@@ -620,11 +624,12 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
       );
     }
     if (Object.hasOwn(accounts, name)) throw new UsageError(`--account: ${name} given twice`);
-    if (value !== "pot" && value !== "owner" && !isAddress(value) && !TOKEN_NAMED.test(value)) {
+    if (!isSvmAccountName(value)) {
       throw new UsageError(
         `--account ${name}: '${value}' is not an address, pot, owner, or a token's account: ` +
           "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
-          "owner's, mint:USDC the mint and program:USDC its token program",
+          "owner's, @to:USDC that of main's argument to, mint:USDC the mint and program:USDC its " +
+          "token program",
       );
     }
     accounts[name] = value;
@@ -633,12 +638,12 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
   return accounts;
 }
 
-/** One `<whose>:<token>` resolved: the account, what it is for a person, and which kind it is. */
+/** One account named by what it is, resolved: the account, what it is for a person, which kind. */
 interface TokenAccountNamed {
   readonly address: Address;
   readonly label: string;
   /** A holder's token account, which a transfer can bring into being, or the mint or its program. */
-  readonly kind: "account" | "mint" | "program";
+  readonly kind: "account" | "mint" | "program" | "address";
   /** A holder's token account's mint, holder and token program. */
   readonly account?: {
     readonly mint: Address;
@@ -648,7 +653,7 @@ interface TokenAccountNamed {
 }
 
 /** The token program that owns a mint the registry does not record, read from the cluster. */
-export type MintProgramOf = (mint: Address) => Promise<Address>;
+export type MintProgramOf = SvmMintProgramOf;
 
 /**
  * A mint's token program read from the account's owner on the cluster `rpcUrl` serves: legacy SPL
@@ -665,17 +670,52 @@ const mintProgramOn =
       return value === null ? null : value.owner;
     });
 
-/** The name a person reads for a token program. */
-const programName = (program: Address): string =>
-  program === TOKEN_2022_PROGRAM_ID ? "Token-2022" : "SPL Token";
+/**
+ * main's `Address` arguments, by name, as keys: what an account derived from one (`@to:USDC`) is
+ * derived from. None before the arguments are given.
+ */
+export function svmKeyArguments(
+  program: CompiledSauceProgram,
+  args: ArgsInput | undefined,
+): Record<string, Address> {
+  if (args === undefined) return {};
+  const keys: Record<string, Address> = {};
+  let values: readonly unknown[];
+  try {
+    values = argumentValues(program.entryParams, args);
+  } catch {
+    // A malformed argument is reported where the payload is encoded, in its own words.
+    return {};
+  }
+  program.entryParams.forEach((param, index) => {
+    const value = values[index];
+    if (param.type !== "Address" || typeof value !== "string") return;
+    if (isAddress(value)) keys[param.name] = address(value);
+    else if (/^0x[0-9a-fA-F]{64}$/.test(value)) {
+      keys[param.name] = getBase58Decoder().decode(hexToBytes(value as Hex)) as Address;
+    }
+  });
+
+  return keys;
+}
 
 /**
- * Each `--account` value that names an account by its token as that account: `pot:USDC` and
- * `owner:<mint>` the associated token account of the Pot (or the owner) for the mint, under the
- * token program that owns the mint; `mint:USDC` the mint; `program:USDC` that token program — the
- * accounts `@sauce/token`'s writes take. A symbol is one of the cluster's registered mints, whose
- * row records its program; any other mint is given by its base58 address, and its program is read
- * with `programOf`. Every other value is left as it is.
+ * Every account the cook attaches, by slot: what `--account` names, over the derivations the SDK
+ * wrote for the accounts it added to the program (`derivedAccounts`, for the token methods), so a
+ * program written with `USDC.transfer(to, amount)` needs no `--account`.
+ */
+export const svmAccountsWanted = (
+  program: Pick<CompiledSauceProgram, "derivedAccounts">,
+  given: Readonly<Record<string, string>>,
+): Record<string, string> => ({ ...program.derivedAccounts, ...given });
+
+/**
+ * Each `--account` value resolved (`svm/account-names.ts`): `pot` and `owner` as they are (and
+ * `self` as one of them), `pot:USDC`, `owner:<mint>` and `@to:USDC` the holder's associated token
+ * account for the mint, under the token program that owns the mint; `mint:USDC` the mint;
+ * `program:USDC` that token program; `@to` main's argument `to` — the accounts `@sauce/token`'s
+ * writes take. A symbol is one of the cluster's registered mints, whose row records its program;
+ * any other mint is given by its base58 address, and its program is read with `programOf`.
  */
 export async function resolveTokenAccounts(
   given: Readonly<Record<string, string>>,
@@ -684,72 +724,35 @@ export async function resolveTokenAccounts(
   chain: CanonicalChain,
   via: "kitchen" | "engine" = "kitchen",
   programOf: MintProgramOf = async () => TOKEN_PROGRAM_ID,
+  args: Readonly<Record<string, Address>> = {},
 ): Promise<{
   readonly accounts: Record<string, string>;
   readonly named: ReadonlyMap<string, TokenAccountNamed>;
 }> {
   const accounts: Record<string, string> = {};
   const named = new Map<string, TokenAccountNamed>();
-  const rows = svmTokenRows(chain);
   for (const [name, value] of Object.entries(given)) {
-    const match = TOKEN_NAMED.exec(value);
-    if (match === null) {
-      accounts[name] = value;
-      continue;
+    let resolved: ResolvedSvmAccountName;
+    try {
+      resolved = await resolveSvmAccountName(value, { chain, owner, pot, via, args, programOf });
+    } catch (error) {
+      if (error instanceof SvmAccountNameError) {
+        throw new UsageError(`--account ${name}=${value}: ${error.message}`);
+      }
+      throw error;
     }
-    const [, whose, token] = match as unknown as [
-      string,
-      "pot" | "owner" | "mint" | "program",
-      string,
-    ];
-    if (whose === "pot" && via === "engine") {
-      throw new UsageError(
-        `--account ${name}=${value}: --via engine cooks with no Pot, so there is no Pot's token ` +
-          `account to pass: give the account the program reads by its address (owner:${token} ` +
-          "for the owner's), or cook through the Kitchen",
-      );
-    }
-    // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
-    const row = rows.find((candidate) => candidate.symbol.toUpperCase() === token.toUpperCase());
-    if (row === undefined && !isAddress(token)) {
-      // The cluster's other mints by name, its tokenized stocks by count: there are over a thousand.
-      const listed = rows.filter((candidate) => candidate.stock === undefined);
-      const stocks = rows.length - listed.length;
-      throw new UsageError(
-        `--account ${name}=${value}: ${token} is not a mint ${chain.slug} registers ` +
-          `(${listed.map((candidate) => candidate.symbol).join(", ") || "none"}` +
-          (stocks > 0
-            ? `, and ${stocks} stock tokens: sauce globals --chain ${chain.slug} --stocks`
-            : "") +
-          `): give the mint's base58 address, ${whose}:<mint>`,
-      );
-    }
-    const mint = address(row?.mint ?? token);
-    const what = row?.symbol ?? `mint ${mint}`;
-    if (whose === "mint") {
-      accounts[name] = mint;
-      named.set(name, { address: mint, label: `the ${what} mint`, kind: "mint" });
-      continue;
-    }
-    const tokenProgram = row?.tokenProgram ?? (await programOf(mint));
-    if (whose === "program") {
-      accounts[name] = tokenProgram;
+    accounts[name] = resolved.value;
+    if (resolved.label !== undefined && resolved.value !== "pot" && resolved.value !== "owner") {
       named.set(name, {
-        address: tokenProgram,
-        label: `${what}'s token program, ${programName(tokenProgram)}`,
-        kind: "program",
+        address: resolved.value,
+        label: resolved.label,
+        kind:
+          resolved.kind === "account" || resolved.kind === "mint" || resolved.kind === "program"
+            ? resolved.kind
+            : "address",
+        ...(resolved.account === undefined ? {} : { account: resolved.account }),
       });
-      continue;
     }
-    const holder = whose === "pot" ? pot : owner;
-    const account = await svmTokenAccount({ mint, tokenProgram }, holder);
-    accounts[name] = account;
-    named.set(name, {
-      address: account,
-      label: `${whose === "pot" ? "the Pot" : "the owner"}'s ${what} account`,
-      kind: "account",
-      account: { mint, holder, program: tokenProgram },
-    });
   }
 
   return { accounts, named };
@@ -988,7 +991,7 @@ function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
  * 32-byte word, a public key, where the EVM's ABI encoding keeps 20 bytes: each is encoded as that
  * word, from base58 (or 32 bytes of hex).
  */
-function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined): Uint8Array {
+export function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined): Uint8Array {
   const keyed = program.entryParams.some((param) => /\bAddress\b/.test(param.type));
   if (keyed && program.entryEncoding === "compact-v1") {
     throw new UsageError(
@@ -1166,12 +1169,13 @@ async function prepare(
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
   const given = await resolveTokenAccounts(
-    input.accounts,
+    svmAccountsWanted(program, input.accounts),
     input.owner,
     pot,
     input.chain,
     via,
     mintProgramOn(rpc, input.rpcUrl),
+    svmKeyArguments(program, input.args),
   );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
@@ -1252,18 +1256,33 @@ export interface SvmCookSize {
 export async function svmCookSize(
   bytecode: Uint8Array,
   manifest: AccountManifest,
-  given: Readonly<Record<string, string>>,
+  accountsNamed: Readonly<Record<string, string>>,
   via: CookVia = "kitchen",
+  derived: Readonly<Record<string, string>> = {},
 ): Promise<SvmCookSize> {
   const owner = placeholderKey(0);
   const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
   const pot = await potOf(target);
+  const chain = requireChain("solana");
+  // The accounts the SDK added to the program, as each is derived where it can be with no cluster
+  // and no arguments (`self` is the Pot, a program id is itself); one derived from an argument is a
+  // distinct account of its own, as it is in a real cook.
+  const given: Record<string, string> = { ...accountsNamed };
+  for (const [name, value] of Object.entries(derived)) {
+    if (Object.hasOwn(given, name)) continue;
+    try {
+      given[name] = (await resolveSvmAccountName(value, { chain, owner, pot, via })).value;
+    } catch {
+      // Measured with a placeholder, below.
+    }
+  }
   // A token account (`pot:USDC`) is a distinct account of its own, as it is in a real cook. With no
   // cluster, an unregistered mint's program is taken as legacy SPL Token: a key is a key to the size.
-  const accountsGiven = (await resolveTokenAccounts(given, owner, pot, requireChain("solana")))
-    .accounts;
+  const accountsGiven = (await resolveTokenAccounts(given, owner, pot, chain, via)).accounts;
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
-  const assumed = slots.filter((slot) => !Object.hasOwn(given, slot.name)).map((s) => s.name);
+  const assumed = slots
+    .filter((slot) => !Object.hasOwn(given, slot.name) && !Object.hasOwn(derived, slot.name))
+    .map((s) => s.name);
   const named: AccountManifest = { accounts: slots };
   const signer = unsignedSigner(owner);
   // The accounts given, as a cook resolves them; every other slot a distinct account, which signs
