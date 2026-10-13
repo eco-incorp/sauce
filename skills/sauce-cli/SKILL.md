@@ -394,14 +394,14 @@ each and prints what it did, as `run` does: the hash, explorer and trace links, 
 a cook what moved and what stayed in the Pot. It takes no key. A signed EVM transaction is the raw
 hex a signer returns, a Solana one the base64 wire transaction. Each is simulated as signed first, and one
 that would fail is not sent (exit 1), nor anything after it. When `sauce tx` plans the Pot's
-deployment and then the cook, have the cook signed with a gas limit that has room, or after the
-deployment lands: a gas estimate taken while the Pot has no code is far too low, and `send`
-refuses the cook for it. A Solana transaction lands within about a minute of being built, or
-never: one signed later is refused, to build and sign again. A Solana cook needing more than one
-transaction (a program staged in a code buffer, a lookup table, a Pot to create first) comes from
-`sauce tx` as a plan: its first step's transactions and a `cursor`;
-`sauce send <signed>… --cursor <cursor>` sends them and prints `next`, the step after, until
-`next.step` is `done` (`sauce-solana` has the steps).
+deployment and then the cook, each comes with `gas`: have each signed with that limit. The cook's is
+estimated as if the deployment had landed, where a signer's own estimate, taken while the Pot has
+no code, is far too low, and `send` refuses a cook signed short of gas. A Solana transaction lands
+within about a minute of being built, or never: one signed later is refused, to build and sign
+again. A Solana cook needing more than one transaction (a program staged in a code buffer, a lookup
+table, a Pot to create first) comes from `sauce tx` as a plan: its first step's transactions and a
+`cursor`; `sauce send <signed>… --cursor <cursor>` sends them and prints `next`, the step after,
+until `next.step` is `done` (`sauce-solana` has the steps).
 
 ## Arguments to `main`
 
