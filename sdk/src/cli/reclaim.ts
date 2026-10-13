@@ -439,12 +439,17 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
   const chain = requireChain("solana");
   const rpc = createSolanaRpc(input.rpcUrl);
   const kept = new Set<Address>();
-  for (const cursor of input.keep ?? []) {
+  const plans = (input.keep ?? []).map((cursor) => {
     const plan = decodeCursor(cursor);
     if (plan.owner !== input.owner) {
       throw new UsageError(`a plan to keep is ${plan.owner}'s, not ${input.owner}'s`);
     }
-    const buffer = await planBuffer(plan);
+
+    return plan;
+  });
+  const buffers = await Promise.all(plans.map((plan) => planBuffer(plan)));
+  for (const [index, plan] of plans.entries()) {
+    const buffer = buffers[index];
     for (const at of [
       buffer?.codeBuffer,
       buffer?.code,
