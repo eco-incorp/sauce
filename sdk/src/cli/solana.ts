@@ -628,8 +628,8 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
       throw new UsageError(
         `--account ${name}: '${value}' is not an address, pot, owner, or a token's account: ` +
           "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
-          "owner's, @to:USDC that of main's argument to, mint:USDC the mint and program:USDC its " +
-          "token program",
+          "owner's, @to:USDC that of main's argument to, mint:USDC the mint, program:USDC its " +
+          'token program, and pda:<program>:"seed",@to,u64:7 an address a program derives',
       );
     }
     accounts[name] = value;
@@ -671,24 +671,36 @@ const mintProgramOn =
     });
 
 /**
- * main's `Address` arguments, by name, as keys: what an account derived from one (`@to:USDC`) is
- * derived from. None before the arguments are given.
+ * main's `Address` arguments, by name, as keys, and its `Uint256` ones as integers: what an account
+ * derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before the arguments are
+ * given.
  */
 export function svmKeyArguments(
   program: CompiledSauceProgram,
   args: ArgsInput | undefined,
-): Record<string, Address> {
-  if (args === undefined) return {};
+): { readonly keys: Record<string, Address>; readonly integers: Record<string, bigint> } {
   const keys: Record<string, Address> = {};
+  const integers: Record<string, bigint> = {};
+  if (args === undefined) return { keys, integers };
   let values: readonly unknown[];
   try {
     values = argumentValues(program.entryParams, args);
   } catch {
     // A malformed argument is reported where the payload is encoded, in its own words.
-    return {};
+    return { keys, integers };
   }
   program.entryParams.forEach((param, index) => {
     const value = values[index];
+    if (param.type === "Uint256") {
+      if (
+        (typeof value === "string" && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)) ||
+        typeof value === "number" ||
+        typeof value === "bigint"
+      ) {
+        integers[param.name] = BigInt(value);
+      }
+      return;
+    }
     if (param.type !== "Address" || typeof value !== "string") return;
     if (isAddress(value)) keys[param.name] = address(value);
     else if (/^0x[0-9a-fA-F]{64}$/.test(value)) {
@@ -696,7 +708,7 @@ export function svmKeyArguments(
     }
   });
 
-  return keys;
+  return { keys, integers };
 }
 
 /**
@@ -724,7 +736,10 @@ export async function resolveTokenAccounts(
   chain: CanonicalChain,
   via: "kitchen" | "engine" = "kitchen",
   programOf: MintProgramOf = async () => TOKEN_PROGRAM_ID,
-  args: Readonly<Record<string, Address>> = {},
+  args: {
+    readonly keys?: Readonly<Record<string, Address>>;
+    readonly integers?: Readonly<Record<string, bigint>>;
+  } = {},
 ): Promise<{
   readonly accounts: Record<string, string>;
   readonly named: ReadonlyMap<string, TokenAccountNamed>;
@@ -734,7 +749,15 @@ export async function resolveTokenAccounts(
   for (const [name, value] of Object.entries(given)) {
     let resolved: ResolvedSvmAccountName;
     try {
-      resolved = await resolveSvmAccountName(value, { chain, owner, pot, via, args, programOf });
+      resolved = await resolveSvmAccountName(value, {
+        chain,
+        owner,
+        pot,
+        via,
+        args: args.keys ?? {},
+        integers: args.integers ?? {},
+        programOf,
+      });
     } catch (error) {
       if (error instanceof SvmAccountNameError) {
         throw new UsageError(`--account ${name}=${value}: ${error.message}`);

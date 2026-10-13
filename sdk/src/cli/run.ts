@@ -482,7 +482,7 @@ const COOK: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=<address>",
-    help: "An account main takes, by name: an address, pot, owner, self, pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC or program:USDC (its token program). The accounts the token methods add are derived without it",
+    help: "An account main takes, by name: an address, pot, owner, self, pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program) or pda:<program>:<seeds>. The accounts the token methods add are derived without it",
     only: "svm",
   },
   accounts: {
