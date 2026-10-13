@@ -124,7 +124,16 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
     `owner`, `self`, `@to` or a base58 key; the token is a symbol, a base58 mint, or `@mint` for
     main's argument `mint`;
   - `mint:<token>`: the mint;
-  - `program:<token>`: the mint's token program.
+  - `program:<token>`: the mint's token program;
+  - `pda:<program>:<seeds>`: the address a program derives for its seeds. The program is a base58
+    key or `@prog`, and the seeds are comma-separated, each one of:
+    - `"text"`, or a bare word: its bytes;
+    - `pot`, `owner`, `self`, `@to` or a base58 key: that key's 32 bytes;
+    - `mint:USDC`: the mint's key;
+    - `u8:7` to `u128:7`, or `u64:@index`: an integer, little-endian;
+    - hex digits after `0x`: those bytes.
+
+    The Pot itself is `pda:<the Kitchen program id>:"pot",owner,<its 32-byte salt>`.
 
   `sauce compile --json` lists the slots in its `manifest` (each one the token methods added with
   its `derive`), and a missing one is named with the role it needs.

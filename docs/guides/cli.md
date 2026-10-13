@@ -1355,7 +1355,10 @@ language, extended:
 - `self`: the Pot, or the signer with `--via engine`;
 - `@to`: `main`'s argument `to`;
 - `<holder>:<token>`: an associated token account. The holder is `pot`, `owner`, `self`, `@to` or a
-  base58 key, and the token is a symbol, a base58 mint, or `@mint` for `main`'s argument `mint`.
+  base58 key, and the token is a symbol, a base58 mint, or `@mint` for `main`'s argument `mint`;
+- `pda:<program>:<seeds>`: the address a program derives for its seeds, comma-separated. A seed is
+  `"text"` or a bare word, a key (`pot`, `owner`, `self`, `@to`, base58), `mint:USDC`, an integer
+  (`u8:7` to `u128:7`, or `u64:@index` from an argument) or hex bytes after `0x`.
 
 `simulate`, `run` and `tx` derive each such slot from the owner, the Pot and `main`'s arguments,
 and an `--account` for one of them replaces its derivation. `run` creates a recipient's missing
