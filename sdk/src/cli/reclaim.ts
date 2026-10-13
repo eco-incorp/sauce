@@ -177,6 +177,12 @@ type Limit = ReturnType<typeof limiter>;
  * Whether what `accounts` make up (a code buffer and its code account, a lookup table) is in use at
  * `slot`: named by a transaction within IN_USE_SLOTS, which a cook built then could still follow. A
  * history that cannot be read counts as in use: nothing is closed on a guess.
+ *
+ * Only the owner's own cook can be lost to a close: the Kitchen's cook_from_account needs the
+ * owner's signature on its own buffer. The engine's direct cooks can run any code account's bytes,
+ * but such a cook is its sender's, and a close under it fails only that cook. A transaction naming
+ * the buffer makes it look in use, delaying the close. The owner's own late cook is what
+ * IN_USE_SLOTS and --keep cover.
  */
 async function useOf(
   rpc: Rpc,
