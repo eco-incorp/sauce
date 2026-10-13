@@ -33,6 +33,7 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 | `sauce simulate` | Rehearses the cook from the Pot's owner, with no key: gas, or why it reverts      |
 | `sauce run`      | Compiles, rehearses, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
+| `sauce send`     | Broadcasts transactions signed elsewhere, waits for them, reports what they did   |
 | `sauce intent`   | Publishes, fills, proves, claims, refunds and cancels intents (`sauce-intents`)   |
 | `sauce wallet`   | Creates, lists and imports the wallets `--wallet` signs with                      |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
@@ -387,6 +388,17 @@ any wallet to sign from the owner. `--format cast` prints it as a `cast send` li
 `run`, it is refused on a preview chain. It rehearses nothing: show the user the program, the
 arguments and `sauce simulate`'s outcome before handing it over, as before `run`.
 
+**Signed elsewhere**: whatever signs it — a hardware wallet, a KMS, another wallet's tool — hands
+back the signed bytes, and `sauce send <signed>… --chain base` broadcasts them in order, waits for
+each and prints what it did, as `run` does: the hash, explorer and trace links, the status, and for
+a cook what moved and what stayed in the Pot. It takes no key. A signed EVM transaction is the raw
+hex a signer returns, a Solana one the base64 wire transaction. Each is rehearsed as signed first, and one
+that would fail is not sent (exit 1), nor anything after it. When `sauce tx` plans the Pot's
+deployment and then the cook, have the cook signed with a gas limit that has room, or after the
+deployment lands: a gas estimate taken while the Pot has no code is far too low, and `send`
+refuses the cook for it. A Solana transaction lands within about a minute of being built, or
+never: one signed later is refused, to build and sign again.
+
 ## Arguments to `main`
 
 A program whose `main` declares typed parameters takes them at run time, so one compiled program
@@ -526,9 +538,11 @@ each `sauce <command>` is the tool `sauce_<command>` (`sauce intent publish` is
 description gives its inputs. `sauce_simulate` returns `leftInPot` first after `ok`, and a note
 when the cook leaves anything in the Pot: tell the user.
 
-The tools sign nothing, so `sauce run` has none: the user signs what they return. The one exception
-is a server started over stdio with `--wallets` and a password source (`--password-env <NAME>`,
-given from the client's config): it sends from its own wallets. `sauce_wallet_create` makes one
+The tools sign nothing, so `sauce run` has none: the user signs what they return, with any
+signer, and `sauce_send` broadcasts the signed transactions (`sauce send`), waits for each and
+returns what it did. The one exception is a server started over stdio with `--wallets` and a
+password source (`--password-env <NAME>`, given from the client's config): it sends from its own
+wallets. `sauce_wallet_create` makes one
 (`sauce wallet new`), `sauce_wallet_list` names them, and `sauce_wallet_send` rehearses what another
 tool returned, holds it to the wallet's policy, signs and sends it: `sauce run` from a wallet. Each
 transaction it sent comes back with its hash, `explorer` and `trace` to give the user, and a cook
@@ -546,7 +560,8 @@ Over HTTP, nothing signs.
 - Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's
   body) before the first real send. Then show the user the program, its arguments and what the
   rehearsal says will happen (what leaves the wallet, what arrives where, what is left in the
-  Pot), and send, or hand over `sauce tx`'s transaction, only once they confirm.
+  Pot), and send, or hand over `sauce tx`'s transaction to be signed and `sauce send`, only once
+  they confirm.
 - Report every transaction sent with its explorer link and its trace link, for the user to open,
   and what the command printed of it: what moved and what stayed in the Pot. Never fetch either
   link.

@@ -17,6 +17,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce run`      | Compile, sign, send and wait for the cook on your Pot                             |
 | `sauce intent`   | Publish, fill, prove, claim, refund and cancel cross-chain intents                |
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
+| `sauce send`     | Broadcast transactions signed elsewhere, wait for them, and report what they did  |
 | `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
 | `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
@@ -589,6 +590,33 @@ What must be true for it to land — the Pot funded, sent from its owner — goe
 named with `--pot` and no code is not planned (its owner and salt are not known): the note names
 `sauce pot --deploy`. On Solana a Pot not created yet is created by the cook's own transaction,
 ahead of the cook (`createsPot`), when the two fit in one.
+
+### Signed elsewhere: `sauce send`
+
+A key that never touches this machine — a hardware wallet, a KMS, another wallet's tool — signs
+what `sauce tx` prints, and `sauce send` broadcasts the signed bytes, waits for each to land and
+reports what it did, as `sauce run` reports its own. It takes no key:
+
+```sh
+sauce send 0x02f8…deploy 0x02f8…cook --rpc-url <url>
+sauce send AQAB… --chain solana
+```
+
+Each operand is one signed transaction: on an EVM chain the raw `0x…` hex a signer returns (its
+chain and sender are read from it), on Solana the base64 wire transaction (every signature is
+checked against its message); `-` reads them from stdin. They go out in the order given, each
+rehearsed as it was signed first — an `eth_call` from its sender with its gas limit held to what
+that used, or a Solana simulation that checks the signatures — and one that would fail is not sent:
+the reason is printed, exit 1, and nothing after it goes out. Each lands before the next is
+rehearsed, so the cook after its Pot's deployment runs on the Pot. Sign that cook with a gas limit
+that has room, or after the deployment has landed: a gas estimate taken while the Pot has no code
+prices a call to an empty address, and `sauce send` refuses the cook for it. A transaction already
+on chain is read back, not sent again.
+
+For each, it prints the hash (a Solana signature), the status and what it cost, the explorer and
+trace pages, the decoded reason a failure gives, and for a cook what moved and what it left in the
+Pot; on Solana, what `main` returned, as hex. A Solana transaction lands within about a minute of
+being built, or never: one whose blockhash has expired is refused, to build and sign again.
 
 `--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the

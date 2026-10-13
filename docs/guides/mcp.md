@@ -6,7 +6,9 @@
 gets the building half of the [`sauce` command](cli.md) as tools, and the package's agent skills
 as tools and resources. The server compiles programs and action documents and lists a chain's
 names. It builds unsigned transactions: the cook, the Pot's deployment, an intent's publish
-transactions and each step of its life after. It also rehearses a cook and takes calls apart.
+transactions and each step of its life after. It rehearses a cook, takes calls apart, and
+broadcasts what the user signed with any signer (`sauce_send`), so the whole path from a program to
+a landed transaction runs through it with the key held elsewhere.
 
 ## Quick start
 
@@ -140,9 +142,10 @@ there return `refused` instead, with how to request the chain.
 **The local stdio server signs only with wallets in its wallet directory, unlocked by the password
 source it was started with; the HTTP server never signs.** Neither ever asks for a key or a
 password. Without [agent wallets](#agent-wallets), every transaction comes back unsigned, for a
-wallet the user holds. That lets the server run anywhere: on the agent's machine over stdio, or on
-a host of your own over Streamable HTTP. Transactions it does not send are signed and sent by local
-means: a wallet, `cast send`, or `sauce run` with the user's own keystore.
+signer the user holds: a wallet, a hardware wallet, a KMS, another wallet's MCP server. That lets
+the server run anywhere: on the agent's machine over stdio, or on a host of your own over
+Streamable HTTP. What that signer signs comes back to `sauce_send`, which broadcasts it, waits for
+it to land and reports what it did ([Signing what it builds](#signing-what-it-builds)).
 
 ## The command
 
@@ -309,6 +312,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_intent_claim`   | `sauce intent claim`   | The unsigned `withdraw` (`batchWithdraw` for several) that pays each proven intent's claimant                                                                                                                                                                                                                                  |
 | `sauce_intent_refund`  | `sauce intent refund`  | The unsigned `refund` that returns the reward to its creator                                                                                                                                                                                                                                                                   |
 | `sauce_intent_cancel`  | `sauce intent cancel`  | The unsigned `cancel` (or, with `prove`, `cancelAndProve`) that stops an unfilled intent after its route's deadline                                                                                                                                                                                                            |
+| `sauce_send`           | `sauce send`           | Signed transactions (EVM raw `0x…` hex, Solana base64) rehearsed as signed, broadcast in order and confirmed: `ok`, and in `sent` each one's `hash` (a Solana signature), `status`, `explorer` and `trace`, fee or gas, the decoded `reason`, and for a cook what moved, `leftInPot` and on Solana `returns`                   |
 | `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                                         |
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                                          |
 | `sauce_wallet_create`  | `sauce wallet new`     | Over stdio with `--wallets` only: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                                        |
@@ -580,19 +584,38 @@ tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line a
 
 ### Signing what it builds
 
-The server's transactions are for the user's own wallet, or, on a server started with
+The server's transactions are for the user's own signer, or, on a server started with
 `--wallets`, for [`sauce_wallet_send`](#agent-wallets). On an EVM chain, `sauce_tx` returns what
-any wallet signs. Send it from the Pot's owner, since `cook()` is the owner's alone. From a terminal:
+any wallet signs. Sign it as the Pot's owner, since `cook()` is the owner's alone.
 
-```sh
-cast send <to> <data> --value <value> --rpc-url <url> --keystore <keystore>
+The signer hands back signed bytes, and `sauce_send` sends them. A session with a hardware wallet
+or a KMS, the key never near the agent:
+
+```text
+sauce_tx   { source, chain: "base", owner: "0xYou", args: [...] }
+  → { pot, transactions: [ { what: "Kitchen.deployPot(…)", to, data, value },
+                           { what: "cook on Pot 0x8a…", to, data, value } ] }
+           the signer signs both, nonces n and n + 1
+sauce_send { transactions: ["0x02f8…", "0x02f8…"] }
+  → { ok: true, sent: [ { what: "Kitchen.deployPot at 0x…", hash, status: "success", … },
+                        { what: "cook on Pot 0x8a…", hash, status: "success", moves, leftInPot } ] }
 ```
+
+`sauce_send` takes the signed transactions in the order to send them: on an EVM chain the raw
+`0x…` hex a signer returns (its chain and sender are read from it), on Solana the base64 wire
+transaction. Each is rehearsed as it was signed first (an `eth_call` from its sender with its gas
+limit held to what that used; a Solana simulation that checks every signature) and refused, unsent,
+when it would fail; each lands before the next is rehearsed, and the first that does not succeed
+stops the rest. A transaction already on chain is read back, not sent again. It never takes a key,
+and is served over HTTP as over stdio.
 
 A Pot with no code yet needs no step of its own: `sauce_tx` returns its deployment as the first
 entry of `transactions` (marked `deploysPot`), with a note, then the cook. Send them in that order:
-any account may send the first, only the owner the second. `sauce_wallet_send` sends such a plan
-whole, rehearsing both together and holding them to the wallet's policy before it sends either. On
-Solana the same transaction creates the Pot ahead of the cook (`createsPot`).
+any account may send the first, only the owner the second. Sign the cook with a gas limit that has
+room, or once the deployment has landed: an estimate taken while the Pot has no code prices a call
+to an empty address, and `sauce_send` refuses the cook for it. `sauce_wallet_send` sends such a
+plan whole, rehearsing both together and holding them to the wallet's policy before it sends
+either. On Solana the same transaction creates the Pot ahead of the cook (`createsPot`).
 
 The other transactions:
 
@@ -605,8 +628,9 @@ The other transactions:
 - The proof, claim, refund and cancellation can be sent from any account. Each `transactions`
   entry names its `chainId`; the sender pays the gas and the value, and the reward goes to the
   claimant or the creator, never the sender.
-- On Solana, `sauce_tx`'s `transaction` is base64, for the owner to sign and send. Its blockhash
-  expires in about a minute.
+- On Solana, `sauce_tx`'s `transaction` is base64, for the owner to sign and send with
+  `sauce_send`. Its blockhash expires in about a minute: one signed later is refused, to build
+  and sign again.
 
 ## Agent wallets
 
