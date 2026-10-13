@@ -614,7 +614,8 @@ most 32, each no longer than a signed transaction can be): on an EVM chain the r
 transaction. Each is simulated as it was signed first (an `eth_call` from its sender with its gas
 limit held to what that used; a Solana simulation that checks every signature) and refused, unsent,
 when it would fail; each lands before the next is simulated, and the first that does not succeed
-stops the rest. A transaction already on chain is read back, not sent again. It never takes a key,
+stops the rest. A transaction already on chain is read back, not sent again; one the chain had,
+pending, then lost (dropped or reorged out) is reported gone, to sign anew. It never takes a key,
 and is served over HTTP as over stdio.
 
 A Pot with no code yet needs no step of its own: `sauce_tx` returns its deployment as the first

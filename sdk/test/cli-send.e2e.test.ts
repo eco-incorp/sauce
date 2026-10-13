@@ -6,7 +6,8 @@
  * owner with no Pot yet (Kitchen.deployPot, then the cook), signed with consecutive nonces. Sent in
  * order, the deployment lands and a cook signed short of gas is refused, unsent; signed again with
  * room, it pays the recipient and reports what moved and what stayed in the Pot. Sent twice, it is
- * read back, not resent. A cook that would revert is refused before it is broadcast.
+ * read back, not resent. A cook that would revert is refused before it is broadcast. A transaction
+ * the chain had, pending, then dropped is said to be gone, not waited out.
  *
  * Solana, on the released Kitchen and engine in LiteSVM (`svm/rpc-shim.ts`, which checks every
  * signature it is sent): `sauce tx`'s one-transaction cook, the Pot created in it, signed by the
@@ -233,6 +234,43 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     expect(run.stderr).toMatch(/not sent — it would revert/);
     expect(await nonce()).toBe(before);
   }, 120_000);
+
+  it("says a transaction it saw, then lost, was reorged or dropped, rather than wait it out", async () => {
+    const rpc = ethereum.publicClient.request as unknown as (args: {
+      method: string;
+      params: unknown[];
+    }) => Promise<unknown>;
+    const before = await nonce();
+    const fees = await ethereum.publicClient.estimateFeesPerGas();
+    const signed = await signer.signTransaction({
+      chainId: 1,
+      type: "eip1559",
+      to: RECIPIENT,
+      value: 1n,
+      nonce: before,
+      gas: 21_000n,
+      maxFeePerGas: fees.maxFeePerGas * 2n,
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+    });
+    await rpc({ method: "evm_setAutomine", params: [false] });
+    try {
+      const hash = (await rpc({ method: "eth_sendRawTransaction", params: [signed] })) as Hex;
+      // The chain has it, pending: sauce send reads it back rather than send it again, and waits.
+      const sending = sauce("send", signed, "--rpc-url", ethereum.rpcUrl, "--json");
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await rpc({ method: "anvil_dropTransaction", params: [hash] });
+
+      const run = await sending;
+
+      expect(run.code).toBe(1);
+      expect(run.stderr).toMatch(
+        new RegExp(`${hash} was seen, then not found: reorged or dropped`),
+      );
+      expect(await nonce()).toBe(before);
+    } finally {
+      await rpc({ method: "evm_setAutomine", params: [true] });
+    }
+  }, 60_000);
 });
 
 const RPC_URL = "http://127.0.0.1:65533/";
@@ -304,7 +342,7 @@ describeSvm("sauce send: sauce tx's cook, signed elsewhere, on Solana", () => {
     const sent = shim.sent.length;
     const unsigned = await sauce("send", cook.transaction, "--rpc-url", RPC_URL);
     expect(unsigned.code).toBe(2);
-    expect(unsigned.stderr).toContain(`is not signed by ${owner.address}`);
+    expect(unsigned.stderr).toContain(`is not signed by its fee payer ${owner.address}`);
     // One byte of the message changed after signing: its signature no longer verifies.
     const wire = new Uint8Array(getBase64Encoder().encode(await signed(cook.transaction)));
     wire[wire.length - 1] ^= 1;
