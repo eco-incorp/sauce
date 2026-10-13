@@ -177,7 +177,21 @@ export async function sendCommand(input: SendInput): Promise<CommandOutput> {
   const count = input.transactions.length + (input.signatures ?? []).length;
   const ok = failed === undefined && sent.length === count;
   const landedCount = sent.filter((entry) => entry.hash !== "").length;
-  const next = plan === undefined ? undefined : await nextOf(input, done.plan ?? plan);
+  // What was sent stands whatever building the next step does: a failure there comes back with the
+  // cursor to ask again with.
+  const carried = done.plan ?? plan;
+  const next =
+    carried === undefined
+      ? undefined
+      : await nextOf(input, carried).catch((error: unknown): NextStep => ({
+          step: "unknown",
+          plan: [],
+          cursor: encodeCursor(carried),
+          notes: [
+            `the next step could not be built: ${(error as Error).message.split("\n")[0]}; send ` +
+              "the cursor alone to ask again",
+          ],
+        }));
 
   return {
     text: [
@@ -546,16 +560,12 @@ async function sendSvm(
   );
   const sent: SentEntry[] = [];
   let carried = plan;
-  // What the plan learns of its cook from a send: landed (succeeded or failed), or, refused before
-  // it was sent, not landed — so a fresh one can be built at once.
-  const learn = (tx: Transaction, result: SvmSent | undefined): void => {
+  // What the plan learns of its cook from a send: that it landed, succeeded or failed. One refused
+  // before it was sent teaches nothing — the signed bytes are the caller's, and could still land
+  // another way — so the plan keeps it as handed out, until its blockhash has expired.
+  const learn = (tx: Transaction, result: SvmSent): void => {
     if (carried === undefined || !isCook(tx)) return;
-    if (result !== undefined) {
-      carried = { ...carried, cooked: { ok: result.ok, signature: result.signature } };
-    } else {
-      const { cook: _cook, ...rest } = carried;
-      carried = rest;
-    }
+    carried = { ...carried, cooked: { ok: result.ok, signature: result.signature } };
   };
   const report = (
     tx: SignedSvm,
@@ -641,7 +651,6 @@ async function sendSvm(
             ? "build it again and sign the new one"
             : "send the cursor alone for the step built again, and sign that")
         : `it would fail: ${said}`;
-      learn(tx.transaction, undefined);
       if (sent.length === 0 && carried === undefined) {
         throw new CliError(
           `${what}: not sent — ${reason}` +

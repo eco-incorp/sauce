@@ -24,6 +24,7 @@ import {
   parseChain,
   planChain,
   plannedCursor,
+  plannedHandedOut,
   plannedTransactions,
   readPolicy,
   sendPlan,
@@ -245,7 +246,14 @@ export function registerWalletTools(
         const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
         guard.gate(chain);
         const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
-        const sent = await sendSvmPlan({ wallet: unlocked, guard, chain, cursor, rpcUrl });
+        const sent = await sendSvmPlan({
+          wallet: unlocked,
+          guard,
+          chain,
+          cursor,
+          rpcUrl,
+          handedOut: plannedHandedOut(args.transaction),
+        });
 
         return { json: sent.json, notes: sent.notes };
       }

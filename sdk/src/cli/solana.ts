@@ -131,6 +131,8 @@ import {
   signableStep,
   tableAddresses,
   unsignedSigner,
+  type CookHandedOut,
+  type PlanStep,
   type PlanTokenAccount,
   type PlanTx,
   type StepContext,
@@ -1956,9 +1958,15 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
 /**
  * Builds a plan's transaction for `ctx.signer` on a fresh blockhash, signs it, rehearses it and
  * sends it, failing with the logs if the rehearsal fails: how this process sends every step.
+ * `sending` is told the blockhash's lifetime once the rehearsal passed, before it goes out: from
+ * then on, it can land.
  */
-export async function sendPlanTx(ctx: StepContext, tx: PlanTx): Promise<SvmSent> {
-  const { value: latestBlockhash } = await ask(ctx.url, "the latest blockhash", () =>
+export async function sendPlanTx(
+  ctx: StepContext,
+  tx: PlanTx,
+  sending?: (lifetime: CookHandedOut) => void,
+): Promise<SvmSent> {
+  const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );
   const transaction = await buildPlanTx(tx, ctx, latestBlockhash);
@@ -1976,6 +1984,11 @@ export async function sendPlanTx(ctx: StepContext, tx: PlanTx): Promise<SvmSent>
       `${tx.what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
     );
   }
+  sending?.({
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    slot: BigInt(context.slot),
+  });
 
   return sendAndConfirm(ctx.rpc, ctx.url, transaction);
 }
@@ -2066,14 +2079,26 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   let accountsMade: { sent: SvmSent; made: string[] } | undefined;
   const staged: SvmSent[] = [];
   const tabled: SvmSent[] = [];
-  // Once the buffer is there, a run that stops closes it again, and says whether it did.
+  // Once the buffer is there, a run that stops closes it again, and says whether it did; a lookup
+  // table it created stays, and is named.
   const closedAgain = async (): Promise<string> =>
-    buffer === undefined || staged.length === 0
+    (buffer === undefined || staged.length === 0
       ? ""
-      : `\n${(await closePlanBuffer(plan, ctx)).open ?? `The code buffer ${buffer.codeBuffer} was closed again.`}`;
+      : `\n${(await closePlanBuffer(plan, ctx)).open ?? `The code buffer ${buffer.codeBuffer} was closed again.`}`) +
+    (tabled.length === 0 || plan.table?.address === undefined
+      ? ""
+      : `\nLookup table ${plan.table.address} stays: sauce reclaim --chain solana closes it.`);
+  // The step after, read from the cluster: a failure to read it is a stop like any other.
+  const after = async (): Promise<PlanStep> => {
+    try {
+      return await nextStep(plan, ctx);
+    } catch (error) {
+      throw new CliError(`${(error as Error).message}${await closedAgain()}`);
+    }
+  };
 
   let step = await nextStep(plan, ctx);
-  if (step.name === "setup") {
+  while (step.name === "setup") {
     // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
     // before anything is sent.
     if (step.transactions.some((tx) => tx.kind === "pot")) {
@@ -2108,7 +2133,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       }
       if (tx.kind === "accounts") accountsMade = { sent, made: made ?? [] };
     }
-    step = await nextStep(plan, ctx);
+    step = await after();
   }
   if (step.wait !== undefined) throw new CliError(`${step.wait}${await closedAgain()}`);
   if (step.fails !== undefined) {
@@ -2122,7 +2147,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   }
   const cookTx = step.transactions[0];
   if (step.name !== "cook" || cookTx === undefined) {
-    throw new Error(`internal: the plan's step after its setup is ${step.name}`);
+    throw new CliError(
+      `the plan's step after its setup is ${step.name}, not the cook${await closedAgain()}`,
+    );
   }
   if (step.unrehearsed === true) {
     throw new CliError(
@@ -2138,20 +2165,32 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   // What the cook moves: every account it may write, read before it is sent and once it lands.
   const tracked = writableAccounts(transaction, cookTx.lookupTables ?? {});
   const before = await accountsNow(prepared.rpc, tracked).catch(() => undefined);
-  const cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
-  const after =
+  let cook: SvmSent;
+  try {
+    cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
+  } catch (error) {
+    // Sent, perhaps: the cook may still land, so the buffer it runs from stays.
+    throw new CliError(
+      `${(error as Error).message}` +
+        (buffer === undefined
+          ? ""
+          : `\nThe code buffer ${buffer.codeBuffer} stays open, as the cook may still land: ` +
+            "sauce reclaim --chain solana closes it once it has."),
+    );
+  }
+  const landedAs =
     cook.ok && before !== undefined
       ? await accountsNow(prepared.rpc, tracked).catch(() => undefined)
       : undefined;
   const moved =
-    before === undefined || after === undefined
+    before === undefined || landedAs === undefined
       ? undefined
       : await movedBy(
           prepared.rpc,
           input.chain,
           tracked,
           before,
-          after,
+          landedAs,
           await accountLabels(input, prepared.pot, prepared.given),
           input.owner,
         );

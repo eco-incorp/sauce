@@ -35,7 +35,7 @@ import { measureEvm, noPolicyNote, rehearsePlan, type SendGuard } from "./policy
 import { cookReport } from "./receipt.js";
 import { decodeReturned } from "./returned.js";
 import { sendPlannedSvm, sendPlanTx, type SvmSent } from "./solana.js";
-import { decodeCursor, encodeCursor, nextStep } from "./svm-plan.js";
+import { decodeCursor, encodeCursor, isCook, nextStep } from "./svm-plan.js";
 import { HOT_WALLET } from "./wallet-commands.js";
 import type { Unlocked } from "./wallets.js";
 
@@ -389,6 +389,52 @@ export function plannedCursor(value: unknown): string | undefined {
   return typeof found === "string" ? found : undefined;
 }
 
+/** One transaction of a plan's step as a tool handed it out: base64, for the owner to sign. */
+export interface HandedOutTx {
+  readonly what: string;
+  readonly transaction: string;
+}
+
+/** The step's transactions `value` hands out — `sauce_tx`'s `transaction` or `transactions`, or a
+ *  send's `next.transactions` — as they were built. */
+export function plannedHandedOut(value: unknown): HandedOutTx[] {
+  let parsed = value;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const fields = parsed as {
+    transaction?: unknown;
+    transactions?: unknown;
+    next?: { transactions?: unknown } | null;
+  };
+  if (typeof fields.transaction === "string") {
+    return [{ what: "the cook", transaction: fields.transaction }];
+  }
+  const list = Array.isArray(fields.transactions)
+    ? fields.transactions
+    : Array.isArray(fields.next?.transactions)
+      ? fields.next.transactions
+      : [];
+
+  return (list as unknown[]).flatMap((entry) => {
+    const one = entry as { what?: unknown; transaction?: unknown } | null;
+
+    return one !== null && typeof one === "object" && typeof one.transaction === "string"
+      ? [
+          {
+            what: typeof one.what === "string" ? one.what : "a transaction",
+            transaction: one.transaction,
+          },
+        ]
+      : [];
+  });
+}
+
 /** How many times a plan's step waits, a second each, for the cluster to catch up. */
 const PLAN_WAITS = 10;
 
@@ -396,7 +442,10 @@ const PLAN_WAITS = 10;
  * Sends a Solana plan from a wallet, step by step (`svm-plan.ts`): each step built from what the
  * cluster shows, each transaction built on a fresh blockhash, signed by the wallet, rehearsed and
  * held to its policy as it is sent (`solana.ts#sendPlanTx`), until the plan is done. A cook that
- * would fail is not sent, and the code buffer the plan staged is closed again.
+ * would fail is not sent, and the code buffer the plan staged is closed again. A cook a tool
+ * already handed out (`handedOut`, with the plan remembering it) is the one sent: built again, it
+ * could land twice. Once a cook goes out, the plan remembers it before anything can fail, and a
+ * failure after that returns the cursor rather than lose it.
  */
 export async function sendSvmPlan(input: {
   readonly wallet: Unlocked;
@@ -404,6 +453,7 @@ export async function sendSvmPlan(input: {
   readonly chain: CanonicalChain;
   readonly cursor: string;
   readonly rpcUrl: string;
+  readonly handedOut?: readonly HandedOutTx[];
 }): Promise<{ readonly json: Record<string, unknown>; readonly notes: string[] }> {
   const { wallet, guard, chain } = input;
   if (chain.kind !== "svm") throw new UsageError("a plan's cursor is a Solana plan's");
@@ -422,6 +472,53 @@ export async function sendSvmPlan(input: {
   const sent: SentEntry[] = [];
   const said: string[] = [];
   let done = false;
+  const entryOf = (what: string, result: SvmSent, cook: boolean): SentEntry => {
+    const returns =
+      cook && result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
+    const returned =
+      returns === undefined || plan.returnType === undefined
+        ? undefined
+        : (decodeReturned(plan.returnType, returns, chain) ?? null);
+
+    return {
+      what,
+      hash: result.signature,
+      status: result.ok ? "success" : "failed",
+      ...(result.slot === undefined ? {} : { blockNumber: result.slot.toString() }),
+      ...(result.fee === undefined ? {} : { fee: result.fee.toString() }),
+      ...(result.reason === undefined ? {} : { reason: result.reason }),
+      ...(returns === undefined ? {} : { returns }),
+      ...(returned === undefined ? {} : { returnType: plan.returnType, returned }),
+    };
+  };
+  // The cook the plan handed out, sent as it was built: a fresh one could land beside it.
+  const handed = (input.handedOut ?? []).map((tx) => ({
+    ...tx,
+    cook: isCook(
+      getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(tx.transaction))),
+    ),
+  }));
+  if (plan.cook !== undefined && plan.cooked === undefined && handed.some((tx) => tx.cook)) {
+    for (const tx of handed) {
+      let result: SvmSent;
+      try {
+        result = await sendPlannedSvm(input.rpcUrl, wallet.signer, {
+          feePayer: wallet.signer.address,
+          transaction: tx.transaction,
+          what: tx.what,
+        });
+      } catch (error) {
+        // Refused before it went out (expired, say): the plan, from the cluster, says what next.
+        said.push(
+          `${tx.what}, as handed out, was not sent: ${(error as Error).message.split("\n")[0]}`,
+        );
+        break;
+      }
+      sent.push(entryOf(tx.what, result, tx.cook));
+      if (tx.cook) plan = { ...plan, cooked: { ok: result.ok, signature: result.signature } };
+      else if (!result.ok) break;
+    }
+  }
   for (let waits = 0; ;) {
     const step = await nextStep(plan, ctx);
     if (step.name === "done") {
@@ -447,33 +544,35 @@ export async function sendSvmPlan(input: {
     let next = step.plan;
     for (const tx of (giving ?? step).transactions) {
       let result: SvmSent;
+      let out = false;
       try {
-        result = await sendPlanTx(ctx, tx);
+        // A cook is remembered as handed out the moment it can land, before it goes.
+        result = await sendPlanTx(
+          ctx,
+          tx,
+          tx.kind === "cook"
+            ? (lifetime) => {
+                out = true;
+                next = { ...next, cook: lifetime };
+              }
+            : undefined,
+        );
       } catch (error) {
+        const message = (error as Error).message.split("\n")[0]!;
+        if (out) {
+          said.push(
+            `the cook went out, and how it went is not known: ${message}; send the cursor ` +
+              "again to learn it (a cook is never sent twice)",
+          );
+        } else if (sent.length === 0) {
+          throw error;
+        }
         // Once one is sent, a refusal of the next is part of the result, not the whole of it.
-        if (sent.length === 0) throw error;
-        sent.push({ what: tx.what, hash: "", status: "failed", reason: (error as Error).message });
+        sent.push({ what: tx.what, hash: "", status: "failed", reason: message });
         stopped = true;
         break;
       }
-      const returns =
-        tx.kind === "cook" && result.ok
-          ? bytesToHex(result.returnData ?? new Uint8Array())
-          : undefined;
-      const returned =
-        returns === undefined || plan.returnType === undefined
-          ? undefined
-          : (decodeReturned(plan.returnType, returns, chain) ?? null);
-      sent.push({
-        what: tx.what,
-        hash: result.signature,
-        status: result.ok ? "success" : "failed",
-        ...(result.slot === undefined ? {} : { blockNumber: result.slot.toString() }),
-        ...(result.fee === undefined ? {} : { fee: result.fee.toString() }),
-        ...(result.reason === undefined ? {} : { reason: result.reason }),
-        ...(returns === undefined ? {} : { returns }),
-        ...(returned === undefined ? {} : { returnType: plan.returnType, returned }),
-      });
+      sent.push(entryOf(tx.what, result, tx.kind === "cook"));
       if (tx.kind === "cook") {
         next = { ...next, cooked: { ok: result.ok, signature: result.signature } };
       } else if (!result.ok) {
