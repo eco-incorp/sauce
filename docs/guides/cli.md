@@ -567,10 +567,7 @@ prints the cook unsigned, for any wallet to sign from the owner:
 The value is `--value`, or else the Kitchen's fee, read from the chain, which also checks the Pot.
 When the chain shows the Pot has no code yet, it prints the plan instead: the Pot's deployment
 first, marked `deploysPot`, then the cook, to send in that order (any account may send the first;
-only the owner the second). Each comes with `gas`, the limit to sign it with: the two are simulated
-together, so the cook's is estimated as if the deployment had landed, with 30% room. A signer's own
-estimate of the cook, taken while the Pot has no code, prices a call to an empty address and is
-far too low:
+only the owner the second):
 
 ```json
 {
@@ -582,18 +579,14 @@ far too low:
       "deploysPot": "0x8a…",
       "to": "0x…",
       "data": "0x…",
-      "value": "0",
-      "gas": "208539"
+      "value": "0"
     },
-    { "what": "cook on Pot 0x8a…", "to": "0x8a…", "data": "0x…", "value": "1000", "gas": "167698" }
+    { "what": "cook on Pot 0x8a…", "to": "0x8a…", "data": "0x…", "value": "1000" }
   ]
 }
 ```
 
-What must be true for it to land — the Pot funded, sent from its owner — goes to stderr. A cook
-that would revert after the deployment, as a cook on a Pot not funded yet does, comes with no
-`gas` and a note saying why: fund the Pot (its address takes tokens before it is deployed) and
-build it again. A Pot
+What must be true for it to land — the Pot funded, sent from its owner — goes to stderr. A Pot
 named with `--pot` and no code is not planned (its owner and salt are not known): the note names
 `sauce pot --deploy`. On Solana a Pot not created yet is created by the cook's own transaction,
 ahead of the cook (`createsPot`), when the two fit in one.
@@ -615,8 +608,9 @@ checked against its message); `-` reads them from stdin. They go out in the orde
 simulated as it was signed first — an `eth_call` from its sender with its gas limit held to what
 that used, or a Solana simulation that checks the signatures — and one that would fail is not sent:
 the reason is printed, exit 1, and nothing after it goes out. Each lands before the next is
-simulated, so the cook after its Pot's deployment runs on the Pot. Sign each with the `gas` the plan
-gives it: a cook signed with less than its simulation uses is refused, unsent. A transaction already
+simulated, so the cook after its Pot's deployment runs on the Pot. Sign that cook with a gas limit
+that has room, or after the deployment has landed: a gas estimate taken while the Pot has no code
+prices a call to an empty address, and `sauce send` refuses the cook for it. A transaction already
 on chain is read back, not sent again.
 
 For each, it prints the hash (a Solana signature), the status and what it cost, the explorer and

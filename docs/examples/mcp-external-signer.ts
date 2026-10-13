@@ -17,16 +17,11 @@ export interface Unsigned {
   readonly to?: string;
   readonly data?: string;
   readonly value?: string;
-  /** EVM: the gas limit to sign it with, where the server gives one. A cook planned after its
-   *  Pot's deployment has one, estimated as if the deployment had landed: a signer's own estimate,
-   *  taken while the Pot has no code, is far too low. */
-  readonly gas?: string;
   readonly transaction?: string;
   readonly feePayer?: string;
 }
 
-/** Your signer: the transaction signed, as raw `0x…` hex on an EVM chain, base64 on Solana. On an
- *  EVM chain, sign with `gas` as the gas limit where it is given. */
+/** Your signer: the transaction signed, as raw `0x…` hex on an EVM chain, base64 on Solana. */
 export type Sign = (unsigned: Unsigned, index: number) => Promise<string>;
 
 /** The transactions a sauce_tx result carries, in the order they are sent. */
