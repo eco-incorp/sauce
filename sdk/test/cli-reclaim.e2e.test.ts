@@ -85,8 +85,9 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
         ),
       ),
     );
-  /** Sends a plan's setup and leaves it there: a buffer and a table open, the cook never sent. */
-  const abandonedSetup = async (salt: string): Promise<void> => {
+  /** Sends a plan's setup and leaves it there: a buffer and a table open, the cook never sent. The
+   *  cursor the plan would carry on from. */
+  const abandonedSetup = async (salt: string): Promise<string> => {
     const step = jsonOf(
       await sauce(
         ...["tx", wide, "--chain", "solana", "--owner", owner.signer.address, "--salt", salt],
@@ -99,7 +100,10 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
       ...["send", ...(await sign(step.transactions)), "--cursor", step.cursor],
       ...["--rpc-url", RPC_URL, "--json"],
     );
-    expect(jsonOf(sent).ok).toBe(true);
+    const out = jsonOf(sent) as { ok: boolean; next: { cursor: string } };
+    expect(out.ok).toBe(true);
+
+    return out.next.cursor;
   };
   const listing = async (): Promise<Listing> =>
     jsonOf(
@@ -147,7 +151,7 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
   });
 
   it("lists what a plan left open, and closes it with transactions signed elsewhere", async () => {
-    await abandonedSetup("left-open");
+    const cursor = await abandonedSetup("left-open");
     const found = await listing();
     expect(found.buffers).toHaveLength(1);
     expect(found.buffers[0]!.finalized).toBe(true);
@@ -166,6 +170,12 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
     expect(jsonOf(sent).ok).toBe(true);
     const buffer = address(found.buffers[0]!.codeBuffer);
     expect(harness.svm.getAccount(buffer).exists).toBe(false);
+    // The plan it was staged for, past the blockhash of the cook it handed out, says its buffer is
+    // gone and its cook never ran, rather than done.
+    harness.svm.warpToSlot(harness.svm.getClock().slot + 200n);
+    const gone = await sauce("send", "--cursor", cursor, "--rpc-url", RPC_URL, "--json");
+    expect(gone.code).toBe(1);
+    expect(gone.stdout + gone.stderr).toMatch(/is gone, and the plan's cook never ran/);
     // The buffer's rent came back, less two transactions' fees.
     expect((harness.svm.getBalance(owner.signer.address) ?? 0n) - before).toBe(
       BigInt(found.buffers[0]!.lamports) - 10_000n,

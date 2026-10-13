@@ -50,9 +50,11 @@ const kitchen = (): Address => address(v12SvmKitchenProgramId());
  *  the discriminator, owner, nonce, digest, capacity, len, finalized and two bumps. */
 const CODE_BUFFER_DISCRIMINATOR = new Uint8Array([116, 250, 175, 3, 238, 173, 92, 241]);
 const CODE_BUFFER_SIZE = 91;
-/** How many slots a deactivated table waits before it closes: the recent slot hashes a cluster
- *  keeps, which must no longer hold its deactivation slot. */
+/** How many slots a deactivated table waits before it closes, at the least: the recent slot hashes
+ *  a cluster keeps, which must no longer hold its deactivation slot (more, where slots are skipped). */
 const TABLE_COOLDOWN_SLOTS = 512n;
+/** The sysvar of the recent slot hashes: a u64 count, then each slot (u64) and its hash. */
+const SLOT_HASHES = address("SysvarS1otHashes111111111111111111111111111");
 /** A table that is not deactivated holds the largest u64 as its deactivation slot. */
 const ACTIVE = 2n ** 64n - 1n;
 /** Buffers closed in one transaction: three accounts each, well inside its size. */
@@ -116,6 +118,25 @@ export async function reclaimable(
   named: readonly Address[] = [],
 ): Promise<Reclaimable> {
   const slot = await ask(url, "the slot", () => rpc.getSlot({ commitment: "confirmed" }).send());
+  // The slots a deactivated table may not close in: those its cluster still holds hashes of.
+  const recentSlots = await ask(url, "the recent slot hashes", () =>
+    rpc.getAccountInfo(SLOT_HASHES, { encoding: "base64" }).send(),
+  ).then(
+    ({ value }) => {
+      if (value === null) return undefined;
+      const data = bytesOf(value.data[0]);
+      const view = new DataView(data.buffer, data.byteOffset);
+      const count = Math.min(
+        Number(view.getBigUint64(0, true)),
+        Math.floor((data.length - 8) / 40),
+      );
+
+      return new Set(
+        Array.from({ length: count }, (_, index) => view.getBigUint64(8 + index * 40, true)),
+      );
+    },
+    () => undefined,
+  );
   const found = (await ask(url, "the owner's code buffers", () =>
     rpc
       .getProgramAccounts(kitchen(), {
@@ -220,13 +241,20 @@ export async function reclaimable(
     if (named.length === 0 && !table.addresses.includes(feeConfig)) return [];
     const deactivated = table.deactivationSlot !== ACTIVE;
     const closableFrom = table.deactivationSlot + TABLE_COOLDOWN_SLOTS + 1n;
+    // Closable once its deactivation slot has left the recent slot hashes; read where the cluster
+    // gives them, else by the count of slots, the soonest it can be.
+    const cooled =
+      slot > table.deactivationSlot &&
+      (recentSlots === undefined ? slot >= closableFrom : !recentSlots.has(table.deactivationSlot));
 
     return [
       {
         address: item.pubkey,
         addresses: table.addresses.length,
-        state: !deactivated ? "active" : slot >= closableFrom ? "closable" : "deactivating",
-        ...(deactivated && slot < closableFrom ? { closableFromSlot: closableFrom } : {}),
+        state: !deactivated ? "active" : cooled ? "closable" : "deactivating",
+        ...(deactivated && !cooled
+          ? { closableFromSlot: closableFrom > slot ? closableFrom : slot + 1n }
+          : {}),
         lamports: item.lamports,
       },
     ];
@@ -405,32 +433,43 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
   }
   await input.approve?.(transactions.map((tx) => tx.what));
   const ctx = { rpc, url: input.rpcUrl, signer: input.signer };
-  const sent: Array<{ tx: PlanTx; sent: SvmSent }> = [];
+  // Each closes something of its own: one that fails, or is refused, leaves the others to go.
+  const sent: Array<{ tx: PlanTx; sent?: SvmSent; refused?: string }> = [];
   for (const tx of transactions) {
-    const result = await sendPlanTx(ctx, tx);
-    sent.push({ tx, sent: result });
-    if (!result.ok) break;
+    try {
+      sent.push({ tx, sent: await sendPlanTx(ctx, tx) });
+    } catch (error) {
+      sent.push({ tx, refused: (error as Error).message.split("\n")[0]! });
+    }
   }
-  const failed = sent.find((one) => !one.sent.ok);
+  const failed = sent.find((one) => one.sent?.ok !== true);
 
   return {
     text: [
       ...lines,
-      ...sent.flatMap(({ tx, sent: one }) => [
-        `${tx.what} ${one.signature}: ${one.ok ? "success" : "failed"}` +
-          (one.reason === undefined ? "" : `, ${one.reason}`),
-        ...linkLines(txLinks(chain, one.signature)),
-      ]),
+      ...sent.flatMap(({ tx, sent: one, refused }) =>
+        one === undefined
+          ? [`${tx.what}: not sent, ${refused}`]
+          : [
+              `${tx.what} ${one.signature}: ${one.ok ? "success" : "failed"}` +
+                (one.reason === undefined ? "" : `, ${one.reason}`),
+              ...linkLines(txLinks(chain, one.signature)),
+            ],
+      ),
     ].join("\n"),
     json: {
       ...listing,
-      sent: sent.map(({ tx, sent: one }) => ({
-        what: tx.what,
-        hash: one.signature,
-        ...txLinks(chain, one.signature),
-        status: one.ok ? "success" : "failed",
-        ...(one.reason === undefined ? {} : { reason: one.reason }),
-      })),
+      sent: sent.map(({ tx, sent: one, refused }) =>
+        one === undefined
+          ? { what: tx.what, hash: "", status: "failed", reason: `not sent: ${refused}` }
+          : {
+              what: tx.what,
+              hash: one.signature,
+              ...txLinks(chain, one.signature),
+              status: one.ok ? "success" : "failed",
+              ...(one.reason === undefined ? {} : { reason: one.reason }),
+            },
+      ),
     },
     notes,
     ...(failed === undefined ? {} : { exitCode: 1 }),
