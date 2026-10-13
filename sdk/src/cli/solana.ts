@@ -639,7 +639,7 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
 }
 
 /** One account named by what it is, resolved: the account, what it is for a person, which kind. */
-interface TokenAccountNamed {
+export interface TokenAccountNamed {
   readonly address: Address;
   readonly label: string;
   /** A holder's token account, which a transfer can bring into being, or the mint or its program. */
@@ -723,8 +723,9 @@ export async function resolveTokenAccounts(
   pot: Address,
   chain: CanonicalChain,
   via: "kitchen" | "engine" = "kitchen",
-  programOf: MintProgramOf = async () => TOKEN_PROGRAM_ID,
+  programOf?: MintProgramOf,
   args: Readonly<Record<string, Address>> = {},
+  derived: ReadonlySet<string> = new Set(),
 ): Promise<{
   readonly accounts: Record<string, string>;
   readonly named: ReadonlyMap<string, TokenAccountNamed>;
@@ -734,10 +735,21 @@ export async function resolveTokenAccounts(
   for (const [name, value] of Object.entries(given)) {
     let resolved: ResolvedSvmAccountName;
     try {
-      resolved = await resolveSvmAccountName(value, { chain, owner, pot, via, args, programOf });
+      resolved = await resolveSvmAccountName(value, {
+        chain,
+        owner,
+        pot,
+        via,
+        args,
+        ...(programOf === undefined ? {} : { programOf }),
+      });
     } catch (error) {
       if (error instanceof SvmAccountNameError) {
-        throw new UsageError(`--account ${name}=${value}: ${error.message}`);
+        throw new UsageError(
+          derived.has(name)
+            ? `the account ${name} (${value}): ${error.message}`
+            : `--account ${name}=${value}: ${error.message}`,
+        );
       }
       throw error;
     }
@@ -1186,6 +1198,12 @@ async function prepare(
   const manifest = program.manifest ?? { accounts: [] };
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
+  // The slots the token methods added that no `--account` gave: the command derives each.
+  const derived = new Set(
+    Object.keys(program.derivedAccounts ?? {}).filter(
+      (name) => !Object.hasOwn(input.accounts, name),
+    ),
+  );
   const given = await resolveTokenAccounts(
     svmAccountsWanted(program, input.accounts),
     input.owner,
@@ -1194,6 +1212,7 @@ async function prepare(
     via,
     mintProgramOn(rpc, input.rpcUrl),
     svmKeyArguments(program, input.args),
+    derived,
   );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
@@ -1214,12 +1233,6 @@ async function prepare(
     via,
   });
   const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, input.lookupTables ?? []);
-
-  const derived = new Set(
-    Object.keys(program.derivedAccounts ?? {}).filter(
-      (name) => !Object.hasOwn(input.accounts, name),
-    ),
-  );
 
   return {
     rpc,
@@ -1315,7 +1328,11 @@ export async function svmCookSize(
   }
   // A token account (`pot:USDC`) is a distinct account of its own, as it is in a real cook. With no
   // cluster, an unregistered mint's program is taken as legacy SPL Token: a key is a key to the size.
-  const accountsGiven = (await resolveTokenAccounts(given, owner, pot, chain, via)).accounts;
+  // Sizing only: with no cluster, an unregistered mint's program is taken as SPL Token's, since a
+  // key is a key to the size. A cook never assumes one (`resolveSvmAccountName` fails closed).
+  const accountsGiven = (
+    await resolveTokenAccounts(given, owner, pot, chain, via, async () => TOKEN_PROGRAM_ID)
+  ).accounts;
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
   const assumed = slots
     .filter((slot) => !Object.hasOwn(given, slot.name) && !Object.hasOwn(derived, slot.name))
@@ -2187,44 +2204,34 @@ async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<Sv
 }
 
 /**
- * The Pot's and the owner's token accounts the cook names (`pot:USDC`, `owner:WSOL`) that solana
- * does not have yet, created by the owner before the cook, idempotently, as the rehearsal's copy
- * made them empty: a program paying into an account that does not exist fails. Asked for as the
- * Pot's creation is: their rent comes from the owner.
+ * The token accounts a cook names that solana does not have yet — the Pot's and the owner's
+ * (`pot:USDC`), and a holder's the token methods derived (`@to:USDC`, a recipient's) — each with
+ * the idempotent associated-token-account instruction that creates it, `payer` paying the rent. The
+ * one list both `sauce run`'s step before the cook and a step plan an external signer sends create:
+ * a program paying into an account that does not exist fails, and a rehearsal's local copy makes
+ * each empty.
  */
-async function ensureTokenAccounts(
-  input: SvmRunInput,
-  prepared: Prepared,
-): Promise<{ sent: SvmSent; made: string[] } | undefined> {
+export async function svmTokenAccountsToCreate(
+  rpc: Rpc,
+  url: string,
+  named: ReadonlyMap<string, TokenAccountNamed>,
+  payer: TransactionSigner,
+): Promise<{
+  readonly accounts: readonly { readonly label: string; readonly address: Address }[];
+  readonly instructions: readonly Instruction[];
+}> {
   const missing: TokenAccountNamed[] = [];
-  for (const token of prepared.given.named.values()) {
+  for (const token of named.values()) {
     if (token.account === undefined || missing.some((one) => one.address === token.address))
       continue;
-    if (!(await exists(prepared.rpc, input.rpcUrl, token.address, token.label)))
-      missing.push(token);
-  }
-  if (missing.length === 0) return undefined;
-  const made = missing.map((token) => `${token.label}, ${token.address}`);
-  const actions = made.map((one) => `create ${one}`);
-  if (!input.approver.auto && !input.approver.canAsk) throw unapproved(actions, input.approver.why);
-  const agreed = await input.approver.approve(
-    actions.join("; "),
-    `${made.join("; ")}: not on solana yet, and the cook names ${missing.length === 1 ? "it" : "them"}. ` +
-      "Create now, the owner paying the rent? [y/N] ",
-  );
-  if (agreed !== true) {
-    throw new CliError(
-      `${made.join("; ")} ${missing.length === 1 ? "does" : "do"} not exist on solana, so nothing ` +
-        "was sent: create each (its associated token account, idempotently), or pass " +
-        "--yes (-y) to create them before the cook",
-    );
+    if (!(await exists(rpc, url, token.address, token.label))) missing.push(token);
   }
   const instructions = await Promise.all(
     missing.map(
       async (token) =>
         (
           await buildAtaPrepend({
-            payer: input.signer,
+            payer,
             owner: token.account!.holder,
             mint: token.account!.mint,
             tokenProgram: token.account!.program,
@@ -2232,11 +2239,49 @@ async function ensureTokenAccounts(
         ).instruction,
     ),
   );
+
+  return {
+    accounts: missing.map((token) => ({ label: token.label, address: token.address })),
+    instructions,
+  };
+}
+
+/**
+ * The token accounts the cook names that solana does not have yet (`svmTokenAccountsToCreate`),
+ * created by the owner before the cook, as the rehearsal's copy made them empty. Asked for as the
+ * Pot's creation is: their rent comes from the owner.
+ */
+async function ensureTokenAccounts(
+  input: SvmRunInput,
+  prepared: Prepared,
+): Promise<{ sent: SvmSent; made: string[] } | undefined> {
+  const { accounts, instructions } = await svmTokenAccountsToCreate(
+    prepared.rpc,
+    input.rpcUrl,
+    prepared.given.named,
+    input.signer,
+  );
+  if (accounts.length === 0) return undefined;
+  const made = accounts.map((token) => `${token.label}, ${token.address}`);
+  const actions = made.map((one) => `create ${one}`);
+  if (!input.approver.auto && !input.approver.canAsk) throw unapproved(actions, input.approver.why);
+  const agreed = await input.approver.approve(
+    actions.join("; "),
+    `${made.join("; ")}: not on solana yet, and the cook names ${accounts.length === 1 ? "it" : "them"}. ` +
+      "Create now, the owner paying the rent? [y/N] ",
+  );
+  if (agreed !== true) {
+    throw new CliError(
+      `${made.join("; ")} ${accounts.length === 1 ? "does" : "do"} not exist on solana, so nothing ` +
+        "was sent: create each (its associated token account, idempotently), or pass " +
+        "--yes (-y) to create them before the cook",
+    );
+  }
   const sent = await sendInstructions(
     prepared.rpc,
     input.rpcUrl,
     input.signer,
-    instructions,
+    [...instructions],
     "creating the token accounts",
   );
   if (!sent.ok) throw new CliError(sentLine("creating the token accounts", sent));
