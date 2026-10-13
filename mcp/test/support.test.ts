@@ -320,6 +320,6 @@ describe("still runs on a preview chain", () => {
       rpcUrl: url,
     });
     assert.doesNotMatch(textOf(simulated), /preview-chain/);
-    assert.ok(methods.length > 0, "the rehearsal reached the endpoint");
+    assert.ok(methods.length > 0, "the simulation reached the endpoint");
   });
 });

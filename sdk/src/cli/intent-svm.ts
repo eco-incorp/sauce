@@ -90,7 +90,7 @@ export async function svmFillCommand(
       : (input.solver ?? context.svmSigner?.address);
     if (solver === undefined) {
       throw new UsageError(
-        `a fill on ${chain.slug} is rehearsed from the solver's own accounts (Solana's simulation ` +
+        `a fill on ${chain.slug} is simulated from the solver's own accounts (Solana's simulation ` +
           "takes no overrides): --solver <key>, or --keypair <path>",
       );
     }

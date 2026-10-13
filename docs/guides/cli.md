@@ -3,7 +3,7 @@
 [Documentation](../README.md) · [Compiling programs](compiling.md) · [Create an intent](intents.md)
 
 `@eco-incorp/sauce` installs a `sauce` command. It compiles a program file exactly as the SDK
-compiles a route body, deploys the Pot the program runs on, rehearses the cook, signs it, sends it
+compiles a route body, deploys the Pot the program runs on, simulates the cook, signs it, sends it
 and waits for it — on an EVM chain or on Solana — and takes transactions and programs back apart
 afterwards. It needs no other tool and no configuration: it reads no environment variables, and
 reads a chain through a built-in public endpoint unless you give it
@@ -13,7 +13,7 @@ reads a chain through a built-in public endpoint unless you give it
 | ---------------- | --------------------------------------------------------------------------------- |
 | `sauce compile`  | Compile a program file; print its bytecode, or with `--json` what it takes        |
 | `sauce actions`  | Lower a JSON actions document for a chain; print the SauceScript and its bytecode |
-| `sauce simulate` | Rehearse the cook with no key, no deployed Pot and assumed balances: what it did  |
+| `sauce simulate` | Simulate the cook with no key, no deployed Pot and assumed balances: what it did  |
 | `sauce run`      | Compile, sign, send and wait for the cook on your Pot                             |
 | `sauce intent`   | Publish, fill, prove, claim, refund and cancel cross-chain intents                |
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
@@ -28,7 +28,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce init`     | Scaffold a project that uses this package                                         |
 | `sauce skills`   | Install, update or check this package's agent skills in a project                 |
 | `sauce update`   | Update this `sauce` command to the latest release, the way it was installed       |
-| `sauce runtime`  | Install or check the packages `sauce mcp` and Solana rehearsals load              |
+| `sauce runtime`  | Install or check the packages `sauce mcp` and Solana simulations load             |
 
 Every command takes `--help`. A mistyped invocation exits 2. A program that does not compile, a
 cook that reverts, a rejected settle, an outdated skills install and a transaction on a
@@ -107,7 +107,7 @@ Nothing is shown, and nothing read, with `--offline`. To turn it off:
 ### Runtime packages
 
 Two commands load packages that no install of `@eco-incorp/sauce` brings, being its optional peer
-dependencies: `sauce mcp` (the MCP SDK and zod) and a Solana rehearsal in a local copy (LiteSVM).
+dependencies: `sauce mcp` (the MCP SDK and zod) and a Solana simulation in a local copy (LiteSVM).
 Each takes your own copies where they are exactly the versions the package pins. Otherwise its
 first use installs them for itself, once per version, into `~/.sauce/runtime/<version>`: `npm ci`
 on the lockfile the package ships, so every package is the one pinned, checked by its integrity
@@ -183,13 +183,13 @@ removes any secret it was given, error messages included.
 
 For the initial release, the command builds and sends transactions on three chains: **Ethereum**,
 **Base** and **Solana**. Every other chain it knows is a **preview chain**, where it compiles,
-rehearses and reads but builds no transaction. [Chains](../reference/chains.md) has the policy:
+simulates and reads but builds no transaction. [Chains](../reference/chains.md) has the policy:
 which chains a cook, a publish and each step after it are held to, and every chain's support.
 
 | On a preview chain                                                                                                                  | Does                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `compile`, `actions`, `simulate`, `globals`, `price`, `pools`, `inspect`, `verify`, `intent status`, `intent import`, `intent list` | What it does everywhere                                                        |
-| `intent publish --dry-run`, `intent fill` without `--send`                                                                          | Rehearses, sending nothing                                                     |
+| `intent publish --dry-run`, `intent fill` without `--send`                                                                          | Simulates, sending nothing                                                     |
 | `pot`                                                                                                                               | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
 | `tx`, `run`, `pot --deploy`, `pot --format cast`                                                                                    | Refused                                                                        |
 | `intent publish`, also with `--format`; `intent fill --send`; `intent prove`, `claim`, `refund`, `cancel`                           | Refused                                                                        |
@@ -198,7 +198,7 @@ The refusal comes before the command reaches an endpoint or reads a key. The com
 says why, which chains are supported, and how to ask for the one it refused:
 
 ```text
-sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. For the initial release, the sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. On a preview chain a program still compiles, and simulate and dry runs rehearse it.
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. For the initial release, the sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. On a preview chain a program still compiles, and simulate and dry runs still run it.
 To ask for Optimism: add your use case to its request if there is one (https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Optimism%22), or open one (https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Optimism+%2810%29&chain=Optimism&chain-id=10).
 ```
 
@@ -240,8 +240,8 @@ sauce pot --chain base --keystore ~/.keys/me.json
 # 4. Fund the Pot with what the program spends: send its address the tokens, from any wallet —
 #    or let `sauce run --fund` pull them in with the cook (see "Funding a run" below).
 
-# 5. Rehearse the cook from the Pot's owner: no key, nothing sent. It can come first: a Pot not
-#    deployed yet is deployed in the rehearsal, and --assume-balance gives it what it spends.
+# 5. Simulate the cook from the Pot's owner: no key, nothing sent. It can come first: a Pot not
+#    deployed yet is deployed in the simulation, and --assume-balance gives it what it spends.
 sauce simulate pay.sauce.ts --chain base --owner 0xYou \
   --assume-balance USDC:1 --args 0x… 1000000
 
@@ -250,7 +250,7 @@ sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
   --args 0x… 1000000
 ```
 
-`sauce run` compiles, rehearses the cook, signs it, sends it and waits for the receipt, then prints
+`sauce run` compiles, simulates the cook, signs it, sends it and waits for the receipt, then prints
 the hash, the status and the gas used, the transaction's explorer page and its trace, what the cook
 cost, and what it moved:
 
@@ -330,9 +330,9 @@ With no terminal at all — or on Windows, which has no `/dev/tty` — a run sen
 `--yes` approves what it needs, and a keystore needs `--password-file`. Neither ever waits
 on a stdin that is spent.
 
-### Rehearsing: `sauce simulate`
+### Simulating: `sauce simulate`
 
-`sauce simulate` runs the cook as a rehearsal from the Pot's owner: no key, no transaction, and
+`sauce simulate` runs the cook as a simulation from the Pot's owner: no key, no transaction, and
 nothing on chain changes. It needs neither a deployed Pot nor the tokens the program spends:
 
 ```sh
@@ -341,33 +341,33 @@ sauce simulate pay.sauce.ts --chain base --owner 0xYou \
 ```
 
 The owner is `--owner`, or the owner's key: `--keystore` (or `--private-key`; on Solana,
-`--keypair`) names it, and signs nothing but the pulls `--fund` rehearses.
+`--keypair`) names it, and signs nothing but the pulls `--fund` simulates.
 
-- **A Pot that is not deployed** is deployed in the rehearsal first. Anyone may send a Pot's
-  `Kitchen.deployPot(owner, salt)`, and the Pot is the owner's whoever sends it, so the rehearsal
+- **A Pot that is not deployed** is deployed in the simulation first. Anyone may send a Pot's
+  `Kitchen.deployPot(owner, salt)`, and the Pot is the owner's whoever sends it, so the simulation
   sends it ahead of the cook. Name such a Pot by `--owner` (and `--salt`): a `--pot` address alone
   does not say whose it is.
 - **`--assume-balance <TOKEN|address>:<amount>`**, repeatable, with the amount as `--fund` takes
-  it, gives the Pot that balance for this rehearsal only, by state override. `ETH:<amount>` sets
+  it, gives the Pot that balance for this simulation only, by state override. `ETH:<amount>` sets
   the Pot's native balance. A token keeps balances in its own storage (a proxy's, behind one), and
   the command finds the word with `eth_call` and state overrides alone — Solidity mappings at slots
   0–255, Vyper's at 0–31, OpenZeppelin's namespaced ERC-20 and Solady's — then confirms it with
   `balanceOf`. A token whose balance is computed rather than stored (rebasing, shares) is refused.
 - **The cook's value**: an owner holding less than it (the Kitchen's fee, plus whatever `--value`
-  or `--fund ETH:` adds) is given it for the rehearsal, and told.
-- **`--fund`**: with the owner's key the rehearsal includes the signed pulls, and before the cook,
+  or `--fund ETH:` adds) is given it for the simulation, and told.
+- **`--fund`**: with the owner's key the simulation includes the signed pulls, and before the cook,
   in the same block, each approval or transfer `run` would send first (see
   [Funding a run](#funding-a-run---fund)). With no key the pulls cannot be signed, so the Pot is
   credited what they would bring — its balance plus each amount, or the amount on top of an
   `--assume-balance` of the same token — `--sweep` still runs, and a shortfall in your wallet is
   reported rather than refused.
 
-It rehearses through `eth_simulateV1` where the endpoint serves it: one simulated block holding
+It simulates through `eth_simulateV1` where the endpoint serves it: one simulated block holding
 the deployment and the cook, state carried from one to the next, with the cook's logs. Everything
-it reads first (the Pot, the Kitchen's fee, the balances it assumes) and the rehearsal itself run on
+it reads first (the Pot, the Kitchen's fee, the balances it assumes) and the simulation itself run on
 one block: the latest when the command starts, or the one `--block <number | latest | safe |
-finalized>` names, so a limit computed from a quote can be rehearsed on the state the quote saw. The
-`Rehearsed with …` line, and `block` in `--json`, say which. On success it prints each
+finalized>` names, so a limit computed from a quote can be simulated on the state the quote saw. The
+`Simulated with …` line, and `block` in `--json`, say which. On success it prints each
 transaction's gas — the Pot's deployment and the cook, when it deploys the Pot first (`transactions`
 in `--json`, where `gas` is the cook's) — and what the program returned — read as the type `main` declares, where it declares one (`main returns
 Address: 0xd0b5…`, an array as its elements, a record as its fields; `returnType` and `returned`
@@ -378,10 +378,10 @@ The cook succeeds from 0xYou: gas used 128999 for the cook, after the Pot's depl
 Left in the Pot, not in the owner's wallet:
   1 USDC (it held 2 USDC before)
   Only another cook moves it out. To end in a wallet, the program must send it there, or name the wallet as the recipient of the call that produces it.
-Rehearsed with eth_simulateV1 on the state of block 36120411; nothing was signed or sent:
-  1. Kitchen.deployPot(0xYou, 0x00…00), gas used 160415: Pot 0x8a… is not deployed on base yet, so the rehearsal deploys it first, as sauce run does (asking, or with --yes) and sauce tx plans. Any account may send it; the Pot is the owner's either way.
+Simulated with eth_simulateV1 on the state of block 36120411; nothing was signed or sent:
+  1. Kitchen.deployPot(0xYou, 0x00…00), gas used 160415: Pot 0x8a… is not deployed on base yet, so the simulation deploys it first, as sauce run does (asking, or with --yes) and sauce tx plans. Any account may send it; the Pot is the owner's either way.
   2. the cook, from the owner 0xYou, gas used 128999
-Assumed for this rehearsal only, by state override:
+Assumed for this simulation only, by state override:
   the Pot holds 2 USDC: --assume-balance (its balance word 0x1d39…: Solidity mapping at slot 9)
   the owner holds 0.00000374478538635 ETH: the cook's value; it holds 0, and a real cook needs the value and gas
 What moved, in order:
@@ -413,7 +413,7 @@ not deployed is then put in place as its deployment would leave it: an `eth_call
 the real `Kitchen.deployPot` and returns the Pot's code, and the cook runs from the owner against
 that code, set at the Pot's address by override with its Router's storage word and a new
 contract's nonce. That route reports the result and an estimated gas but no logs, so not what
-moved. The `Rehearsed with …` line names the route taken, and why it fell back.
+moved. The `Simulated with …` line names the route taken, and why it fell back.
 
 A revert prints `The cook reverts: <reason>` (or `Deploying the Pot reverts: …`) and exits 1: a
 Pot, Kitchen, Router, Permit2 or Portal error by name, ERC-20's standard errors, `Error(string)`, or
@@ -422,7 +422,7 @@ says what the check is: `"SPL" (a V3-style pool's price-limit check: the limit i
 of the pool's current price, or at or past a bound …)`, and likewise `AS`, `LOK`, `IIA`, `TF`, the
 token helpers' `STF`, `ST`, `SA`, `STE`, and a V2-style pair's `UniswapV2: K` (or any fork's). A
 `main` argument named like a price limit (`sqrtPriceLimitX96`) at or past `MIN_SQRT_RATIO` or
-`MAX_SQRT_RATIO` is named on stderr before the rehearsal, by `compile` and `publish` too. `--json`
+`MAX_SQRT_RATIO` is named on stderr before the simulation, by `compile` and `publish` too. `--json`
 carries the same as fields: `block`, `path`, `fallback`, `deployPot`, `assumed`, `gas` and
 `gasKind` (`used` or `estimated`), `returns`, `returnType` and `returned`, `transfers`,
 `approvals`, `nativeTransfers`, `balanceChanges` and `otherLogs`, amounts as decimal strings in
@@ -504,10 +504,10 @@ Security notes:
   until a later cook spends it or you change it. `transfer` mode's transfer is likewise sent before
   the cook, and the tokens stay in the Pot if the cook fails.
 
-`sauce simulate --fund` rehearses the same wrapped cook, with nothing sent. The pulls carry your
+`sauce simulate --fund` runs the same wrapped cook, with nothing sent. The pulls carry your
 signature, so give the owner's key (`--keystore` or `--private-key`) to sign them. Without a key
 the Pot is credited what the pulls would bring instead, by state override
-([Rehearsing](#rehearsing-sauce-simulate)). With the key, each approval `run` would ask for (a
+([Simulating](#simulating-sauce-simulate)). With the key, each approval `run` would ask for (a
 standing allowance reset to zero first, as for USDT) and `transfer` mode's transfer runs from your
 wallet before the cook, in the same `eth_simulateV1` block, and nothing of it is sent: each is
 listed as a transaction of its own, with its gas (`transactions` in `--json`, with its `to` and
@@ -832,7 +832,7 @@ A program file may start with a `#!` line that runs it through `sauce simulate`:
 ```
 
 After `chmod +x pay.sauce.ts`, `./pay.sauce.ts --chain base --owner
-<address> --args <recipient> 1000000` rehearses the cook, exactly as `sauce simulate pay.sauce.ts`
+<address> --args <recipient> 1000000` simulates the cook, exactly as `sauce simulate pay.sauce.ts`
 with those flags does. Running the file never spends: sending it is still `sauce run`. The command
 blanks the line before compiling, so the program and its error positions are the file's own.
 
@@ -939,7 +939,7 @@ needs what the SDK cannot look up: `--intent-deadline <unix seconds>` and `--int
 <address>`, and, when the intent's body compiles to a program of its own,
 `--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing, and
 refuses a deadline at or before now, which no solver could ever fill (`sauce intent fill` still
-rehearses one, with a note, to show the Portal's refusal). `--intent-reward-deadline <unix seconds>`
+simulates one, with a note, to show the Portal's refusal). `--intent-reward-deadline <unix seconds>`
 sets when an unproven reward becomes refundable (the fill deadline by default), and
 `--intent-prover <address>` overrides the prover the registry records for the pair.
 `--intent-execution-fee auto` reads that fee from each destination's Kitchen, and says what it
@@ -976,14 +976,14 @@ There are two ways to get such a file's intents onto the chain:
   naming the value and pointing at `sauce run`, and so is one that does anything else. An argument
   must be one word to be fixed (an address, an unsigned integer or a `bool`); an array, a record,
   bytes or a string is refused.
-  `--dry-run` rehearses the transactions together (`eth_simulateV1`) and sends nothing, from the
+  `--dry-run` simulates the transactions together (`eth_simulateV1`) and sends nothing, from the
   signer's wallet or `--from <address>`'s, printing each one's gas or revert (`gasUsed` and
   `reason` in `--json`); `--assume-balance USDC:2` (repeatable, `ETH:` for the
-  native currency) gives that wallet the reward for the rehearsal only, by state override, as
+  native currency) gives that wallet the reward for the simulation only, by state override, as
   `simulate` gives a Pot one. `--format json` (or `cast`) prints the transactions unsigned, with
   `--from <address>` when there is no signer. Publishing, sent or printed, needs a supported source
   and supported destinations ([Supported and preview chains](#supported-and-preview-chains)); a
-  dry run rehearses on any chain.
+  dry run simulates on any chain.
 
   The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), which is
   what a solver checks once it sees `IntentPublished`, so paying the vault directly needs no
@@ -995,7 +995,7 @@ There are two ways to get such a file's intents onto the chain:
   counts the intent funded. A token whose `transfer` returns `false`, or keeps a fee, stops the
   command before the intent is announced, with what was paid still in the vault: top it up and run
   it again, or refund it after the reward deadline. A `--dry-run` reports `Portal.isIntentFunded`
-  after the rehearsed transactions, and `--format` prints each intent's `vault`, `vaultFrom` (`read`
+  after the simulated transactions, and `--format` prints each intent's `vault`, `vaultFrom` (`read`
   when the Portal agreed, `derived` with no endpoint) and `fundVia`.
 
   `--intent-fund-via publishAndFund` (also taken by `run`, `tx`, `simulate`, `compile` and
@@ -1017,7 +1017,7 @@ Everything after publishing is a verb of `sauce intent` too. Each takes the inte
 | Verb                   | What it does                                                                 |
 | ---------------------- | ---------------------------------------------------------------------------- |
 | `sauce intent publish` | Publish a file's fixed intents from your wallet — or, with no file, make one |
-| `sauce intent fill`    | Rehearse a solver's fill on the destination; with `--send`, send it          |
+| `sauce intent fill`    | Simulate a solver's fill on the destination; with `--send`, send it          |
 | `sauce intent prove`   | Send the proof of a filled (or cancelled) intent, paying the prover's fee    |
 | `sauce intent claim`   | Withdraw a proven intent's reward to its claimant, on the source             |
 | `sauce intent refund`  | Return an unearned reward to its creator, once the Portal allows it          |
@@ -1055,14 +1055,14 @@ the fill to be proven.
 
 It writes the intent as a `.sauce.ts` file (`--out`, else
 `intent-<source>-to-<destination>-<time>.sauce.ts`), headed by the command that publishes it again,
-shows it, rehearses publishing it and filling it on the destination, and with a signer publishes it
+shows it, simulates publishing it and filling it on the destination, and with a signer publishes it
 once you approve (or with `--yes`), storing it.
 
-### Rehearsing the fill: `sauce intent fill`
+### Simulating the fill: `sauce intent fill`
 
-`publish --dry-run` rehearses the source side: the reward paid into the vault and `publish`. What the intent
+`publish --dry-run` simulates the source side: the reward paid into the vault and `publish`. What the intent
 does — the swap, the minimum it checks, the refund — runs on the destination, when a solver fills
-it, and that is where it fails. `sauce intent fill` rehearses that fill with no key and sends
+it, and that is where it fails. `sauce intent fill` simulates that fill with no key and sends
 nothing. It takes the file and the flags `publish` does (or the intent's hash), and the
 destination's endpoint:
 
@@ -1098,10 +1098,10 @@ Portal's Executor:
 
 ```text
 Intent 0xf261…5d2c from ethereum to base: the fill succeeds, gas used 1874288
-Rehearsed with eth_simulateV1 on base, one block from the solver 0x5A0c…F111; nothing was signed or sent:
+Simulated with eth_simulateV1 on base, one block from the solver 0x5A0c…F111; nothing was signed or sent:
   1. approve the Portal for 998 USDC (gas 55425)
   2. Portal.fulfill(0xf261…5d2c, route, 0xe94c…0a6c, 0x5A0c…F111) with 3744785386350 wei: the route's nativeAmount, the Kitchen's fee for its cook (gas 1874288)
-Assumed for this rehearsal only, by state override:
+Assumed for this simulation only, by state override:
   the solver holds 998 USDC: the route's tokens, which the solver delivers (its balance word 0xc2e6…e5a4: Solidity mapping at slot 9)
   the solver holds 0.00000374478538635 ETH: fulfill's value
 What moved, in order:
@@ -1143,19 +1143,19 @@ not filled.
 
 ### Filling it for real: `sauce intent fill --send`
 
-A rehearsal sends nothing, so it runs on a preview chain too. With `--send` and a signer, the
+A simulation sends nothing, so it runs on a preview chain too. With `--send` and a signer, the
 signer is the solver, and the fill is sent — to a supported destination only:
 
 ```sh
 sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json
 ```
 
-It is rehearsed first exactly as above, but with nothing assumed: on the signer's own balances, so
-a solver short of a token, or of the value, sees the rehearsal revert and nothing is sent. Then it
+It is simulated first exactly as above, but with nothing assumed: on the signer's own balances, so
+a solver short of a token, or of the value, sees the simulation revert and nothing is sent. Then it
 says what the fill spends — each token the route delivers (which the Portal pulls from you into
 its Executor) and the value, split into the Kitchen's fee, what the route spends and the proof's
 fee — and asks you to approve; `--yes` approves without asking, and with no terminal (or with
-`--json`) and no `--yes` it stops there. The transactions go out in order, each rehearsed again just before, and it
+`--json`) and no `--yes` it stops there. The transactions go out in order, each simulated again just before, and it
 prints each one's hash, block and gas, the gas cost, what the fulfill moved, the Portal's
 `IntentFulfilled` record and, when the fill proved itself, the Hyperlane message id the proof
 travels as (the Hyperlane explorer finds it by that id). The intent and the fill go into the store.
@@ -1215,14 +1215,14 @@ sauce intent claim 0x<intent hash> --keystore ~/.keys/me.json
 - Solana is read as any chain is; a `--config` names its endpoint under its chain id,
   `1399811149`.
 - **`fill`** sends `Portal.fulfill` from the solver: its token accounts pay the route's tokens into
-  the Portal's executor, which runs the route's calls. The rehearsal runs on the accounts as they
+  the Portal's executor, which runs the route's calls. The simulation runs on the accounts as they
   are (Solana's simulation takes no overrides, so `--solver` names a Solana key whose accounts
   hold the tokens) and prints the token accounts the fill moves. `--claimant`, the address on the
   source chain the reward pays, is required: a Solana key is not one. With `--send` and
   `--keypair` the fill is sent, then its proof: the Portal's `prove` through the HyperProver, with
   eco-routes' proof_helper paying Hyperlane's Interchain Gas Paymaster for the message's delivery in
   the same transaction. What the proof spends (the gas paymaster's quote and the message accounts'
-  rent) is measured by a rehearsal and approved. `--no-prove` leaves it to `prove`.
+  rent) is measured by a simulation and approved. `--no-prove` leaves it to `prove`.
 - **`prove`** and **`cancel`** sign with `--keypair`, which pays their fee: their transactions are
   built for it, so on Solana they need it. A cancellation's proof waits until the slot that
   cancelled it is finalized; `--and-prove` sends the cancellation and its proof in one transaction.
@@ -1344,7 +1344,7 @@ decimals and symbol are read from the token (or given, `0x…:8`). It reads
 everything in five rounds, each a few `eth_call`s carrying up to 32 reads apiece (Multicall3's
 `aggregate3`, sent deployless, so it needs nothing deployed), all at one block: `--block <number |
 latest | safe | finalized>`, or the latest when it starts. It names that block (`block` in
-`--json`), so `sauce simulate --block` can rehearse a swap on the prices its `maxPrice` came from.
+`--json`), so `sauce simulate --block` can run a swap on the prices its `maxPrice` came from.
 It reads on every chain, preview chains included.
 
 Pools with liquidity at their price come first, **deepest first, by that liquidity** (`sortedBy`
@@ -1511,11 +1511,11 @@ each account's lamports are listed, named
 by their `--account` names, as the owner, the Pot and the Kitchen's fee config; the owner's
 lamports include the transaction's fee. `--json` lists them as `tokenChanges` and
 `lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so the
-rehearsal runs on the accounts as they are, and the owner must hold the Pot's rent and the fees (a
+simulation runs on the accounts as they are, and the owner must hold the Pot's rent and the fees (a
 shortfall is named). A cook too large for one transaction, or one given `--assume-balance`, is
-rehearsed in a local copy instead: LiteSVM, which the package brings, with every account the
+simulated in a local copy instead: LiteSVM, which the package brings, with every account the
 cook names read from the cluster, the cluster's rent, and the released engine and Kitchen, the
-owner given the lamports the staging and the fees take (any address can rehearse), the Pot created
+owner given the lamports the staging and the fees take (any address can simulate), the Pot created
 where missing, the program staged into a code buffer as `run` stages it, then the cook, its
 accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
 spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
@@ -1530,7 +1530,7 @@ one for a staged cook whose accounts do not fit, paid by the signer, and prints 
 next cook to reuse. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
 configure), and prints the signature, status and compute units — and the logs when it fails. A
 program too large for one transaction is staged in a Kitchen code buffer first and the buffer is
-closed again after the cook — or when staging or the cook's rehearsal fails; if closing it fails,
+closed again after the cook — or when staging or the cook's simulation fails; if closing it fails,
 the run still prints the cook and warns with the buffer's address. A failure is named for the
 program the logs show failing — the Kitchen's or the engine's refusals by name, and a token
 program's in the words it logged. `tx` prints the
@@ -1642,7 +1642,7 @@ amount is a string in whole tokens (`"1.5"`), or in base units ending in `n`, as
 - `perDay` is the last 24 hours, every chain together, counted from `<name>.ledger.jsonl` beside
   the wallet.
 
-What a transaction moves is measured, not read from its calldata. An EVM transaction is rehearsed
+What a transaction moves is measured, not read from its calldata. An EVM transaction is simulated
 with `eth_simulateV1`, and its token and native transfers out of the wallet and its Pot are
 counted. A Solana transaction is simulated with the accounts it writes reported. A limit that
 cannot be measured on the endpoint (no `eth_simulateV1`, for one) refuses the send. A refused send

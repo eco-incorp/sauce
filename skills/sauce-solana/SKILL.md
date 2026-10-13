@@ -290,17 +290,17 @@ Pots and intent steps are built and sent there.
   `sauce send <signed> --chain solana` sends it (the tool `sauce_send`), checking every signature
   and simulating it as signed first, and prints what it did, as `sauce run` does, with what `main`
   returned as hex; its blockhash expires about a minute after `sauce tx` built it, after which it
-  is refused, to build and sign again. A cook that succeeds, rehearsed or sent, leads with what it
+  is refused, to build and sign again. A cook that succeeds, simulated or sent, leads with what it
   leaves in the Pot's token accounts (`Left in the Pot`, and `leftInPot` in `--json`): that is the
   owner's, but not in their wallet, and only another cook moves it out. A sent one prints its
   Solscan page and its trace (calls and balance changes), links for the user to open, and each
   token account's change, read before the cook and once it lands.
-- **A rehearsal in a local copy.** A cook too large for one transaction, or one given
+- **A simulation in a local copy.** A cook too large for one transaction, or one given
   `--assume-balance`, `sauce simulate` runs in a local copy of every account the cook names, read
   from the cluster as it is, with the cluster's rent and the released engine and Kitchen (the copy
-  is LiteSVM, which the first rehearsal installs for the command): the Pot created where it is
+  is LiteSVM, which the first simulation installs for the command): the Pot created where it is
   missing, the owner given the lamports the staging and the fees take (so any address can
-  rehearse), the program staged as `sauce run` stages it, then the cook. Nothing is signed or sent. A failure names the account an
+  simulate), the program staged as `sauce run` stages it, then the cook. Nothing is signed or sent. A failure names the account an
   error gives only by its index, and what `main` returned when the program finished first. There
   `--assume-balance USDC:1000` gives the account the cook spends USDC from (the Pot's, or the
   owner's with `--via engine`) that balance, whole tokens as `--fund` takes them, and a
@@ -323,7 +323,7 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 ```
 
 - A program too large for one transaction is staged through the Kitchen by `sauce run`, and
-  rehearsed by `sauce simulate` in a local copy. For any other signer, `sauce tx` prints it as a
+  simulated by `sauce simulate` in a local copy. For any other signer, `sauce tx` prints it as a
   plan of steps: the setup (the Pot and the token accounts the cook names, where missing; the
   program staged in a code buffer; a lookup table, where the accounts do not fit), the cook, then
   the code buffer's close. A step is `{ step, plan, transactions, cursor }`, each transaction
