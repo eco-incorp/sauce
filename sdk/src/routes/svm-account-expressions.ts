@@ -26,7 +26,7 @@
  */
 import { walk, TYPE_KEYS, type AstNode } from "./ast-walk.js";
 import { methodCall } from "./token-rewrite.js";
-import { base58, keyLiteral, nameOf, type SvmLowering } from "./svm-lowering.js";
+import { base58, keyLiteral, nameOf, type Holder, type SvmLowering } from "./svm-lowering.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 const SOLANA = "Solana";
@@ -242,7 +242,8 @@ export function collectAccountExpressions(l: SvmLowering): void {
     if (solanaMember(node) === "owner") {
       return { derivation: `owner:${token.name}`, base: `owner${token.stem}` };
     }
-    const holder = l.holderOf(node, "holder", spelled);
+    const holder: Holder =
+      solanaMember(node) === "self" ? { kind: "self" } : l.holderOf(node, "holder", spelled);
     if (holder.kind === "account") {
       throw new Error(
         `${spelled} on Solana: \`${holder.param}\` is an account, not a holder's key: pass the ` +

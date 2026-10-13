@@ -101,13 +101,16 @@ describe("accounts as expressions on Solana", () => {
     expect(program.derivedAccounts).toMatchObject({ toUSDC: "@to:USDC", mintUSDC: "mint:USDC" });
   });
 
-  it("names a Token-2022 mint's program and the owner's account", () => {
+  it("names a Token-2022 mint's program, and the owner's and the Pot's accounts", () => {
     const program = compile(
-      "function main(): Uint256 {\n  return PYUSD.tokenProgram.dataLen + PYUSD.accountOf(Solana.owner).dataLen;\n}\n",
+      "function main(): Uint256 {\n" +
+        "  return PYUSD.tokenProgram.dataLen + PYUSD.accountOf(Solana.owner).dataLen +\n" +
+        "    PYUSD.accountOf(Solana.self).dataLen;\n}\n",
     );
     expect(program.derivedAccounts).toEqual({
       token2022Program: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
       ownerPYUSD: "owner:PYUSD",
+      potPYUSD: "self:PYUSD",
     });
   });
 
