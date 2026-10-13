@@ -5,7 +5,13 @@
  */
 import { address, type Address } from "@solana/kit";
 
-import { svmPoolSlot, svmSlotAccounts } from "../../src/svm/pool-slot.js";
+import { requireChain } from "../../src/chains/canonical.js";
+import {
+  isSvmAccountName,
+  resolveSvmAccountName,
+  type SvmAccountNameContext,
+} from "../../src/svm/account-names.js";
+import { SVM_SLOT_PARTS, svmPoolSlot, svmSlotAccounts } from "../../src/svm/pool-slot.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import { BYTES, SNAPSHOT, pool, USDC, USDT, WSOL, key } from "./venue-fixture.js";
 
@@ -61,5 +67,44 @@ describe("svmPoolSlot", () => {
     );
     const nowhere = address("11111111111111111111111111111112") as Address;
     await expect(svmPoolSlot(load, nowhere, USDC)).rejects.toThrow("has no account");
+  });
+});
+
+describe("slot:<pool>:<token>.<part>, the account-name form", () => {
+  const SOLANA = requireChain("solana");
+  const ctx = (more: Partial<SvmAccountNameContext> = {}): SvmAccountNameContext => ({
+    chain: SOLANA,
+    owner: address("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"),
+    pot: address("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"),
+    load,
+    ...more,
+  });
+
+  it("names each of a pool's nine accounts paying a token, the pool a key or main's argument", async () => {
+    const p = pool("orca-whirlpool-sol-usdc");
+    const ticks = key(USDC) < key(WSOL) ? p.payA : p.payB; // paying USDC
+    const expected = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra, ...ticks];
+    for (const [index, part] of SVM_SLOT_PARTS.entries()) {
+      expect(await resolveSvmAccountName(`slot:${p.pool}:USDC.${part}`, ctx())).toEqual({
+        value: expected[index],
+        label: `pool ${p.pool}'s ${part}, paying USDC`,
+        kind: "address",
+      });
+    }
+    expect(
+      (await resolveSvmAccountName("slot:@pool:WSOL.ticks0", ctx({ args: { pool: p.pool } })))
+        .value,
+    ).toBe((key(WSOL) < key(USDC) ? p.payA : p.payB)[0]);
+  });
+
+  it("refuses with no loader, and a pool whose slot cannot be read", async () => {
+    const p = pool("orca-whirlpool-sol-usdc");
+    await expect(
+      resolveSvmAccountName(`slot:${p.pool}:USDC.vaultA`, ctx({ load: undefined })),
+    ).rejects.toThrow("slot is read from the cluster, which this resolution has no way to do");
+    await expect(resolveSvmAccountName(`slot:${p.pool}:USDT.vaultA`, ctx())).rejects.toThrow(
+      `pool ${p.pool}'s slot paying USDT could not be read: Orca Whirlpools pool`,
+    );
+    expect(isSvmAccountName(`slot:${p.pool}:USDC.vault`)).toBe(false);
   });
 });

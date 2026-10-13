@@ -13,6 +13,11 @@
  *                        or a base58 address
  *   mint:<token>         the mint
  *   program:<token>      the token program that owns the mint
+ *   slot:<pool>:<token>.<part>
+ *                        one of the nine accounts `@sauce/router`'s swap at a price takes for the
+ *                        pool (base58, or `@<param>`) paying the token: `program`, `pool`, `config`,
+ *                        `vaultA`, `vaultB`, `extra`, `ticks0`, `ticks1`, `ticks2`, read from the
+ *                        pool's own state through `load` (`svm/pool-slot.ts`)
  *
  * A token is a symbol the chain registers (`USDC`, a stock's `TSLAx`, matched without regard to
  * case), a mint's base58 address, or `@<param>`, a mint given as main's argument. A registered
@@ -25,7 +30,9 @@ import { address, isAddress, type Address } from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
+import { svmPoolSlot, SVM_SLOT_PARTS, type SvmSlot, type SvmSlotPart } from "./pool-slot.js";
 import { svmTokenAccount } from "./token-accounts.js";
+import type { OwnedAccountLoader } from "./venues/types.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "./token-program.js";
 
 /** A mint's token program, read from the cluster: the owner of the mint's account. */
@@ -48,6 +55,11 @@ export interface SvmAccountNameContext {
    * unregistered mint's program is refused: nothing assumes one.
    */
   readonly programOf?: SvmMintProgramOf;
+  /**
+   * The cluster's accounts, owner and data: what a pool's slot (`slot:…`) is read from. Without it
+   * a slot is refused.
+   */
+  readonly load?: OwnedAccountLoader;
 }
 
 /** One name, resolved. */
@@ -83,7 +95,13 @@ type Token =
 type Parsed =
   | { readonly kind: "holder"; readonly holder: Holder }
   | { readonly kind: "account"; readonly holder: Holder; readonly token: Token }
-  | { readonly kind: "mint" | "program"; readonly token: Token };
+  | { readonly kind: "mint" | "program"; readonly token: Token }
+  | {
+      readonly kind: "slot";
+      readonly pool: Holder;
+      readonly token: Token;
+      readonly part: SvmSlotPart;
+    };
 
 const PARAM = /^@([A-Za-z_$][A-Za-z0-9_$]*)$/;
 const SYMBOL = /^[A-Za-z0-9_]+$/;
@@ -104,9 +122,23 @@ function parseToken(text: string): Token | undefined {
   return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
 }
 
+/** `slot:<pool>:<token>.<part>`. */
+function parseSlot(value: string): Parsed | undefined {
+  const parts = /^slot:([^:]+):([^:.]+)\.([A-Za-z0-9]+)$/.exec(value);
+  if (parts === null) return undefined;
+  const pool = parseHolder(parts[1]!);
+  const token = parseToken(parts[2]!);
+  const part = SVM_SLOT_PARTS.find((one) => one === parts[3]);
+  if (pool === undefined || (pool.kind !== "arg" && pool.kind !== "address")) return undefined;
+  if (token === undefined || part === undefined) return undefined;
+
+  return { kind: "slot", pool, token, part };
+}
+
 function parse(value: string): Parsed | undefined {
   const holder = parseHolder(value);
   if (holder !== undefined) return { kind: "holder", holder };
+  if (value.startsWith("slot:")) return parseSlot(value);
   const at = value.indexOf(":");
   if (at <= 0) return undefined;
   const head = value.slice(0, at);
@@ -274,6 +306,7 @@ export async function resolveSvmAccountName(
   }
 
   const rows = svmTokenRows(ctx.chain);
+  if (parsed.kind === "slot") return resolveSlot(parsed, ctx, rows);
   const tokenText = value.slice(value.indexOf(":") + 1);
   const whose = value.slice(0, value.indexOf(":"));
   const { mint, row, what } = mintOf(parsed.token, whose, ctx, rows);
@@ -295,4 +328,57 @@ export async function resolveSvmAccountName(
     kind: "account",
     account: { mint, holder: holder.key, program },
   };
+}
+
+/** Each loader's slots already read, by pool and token paid: a cook names each slot's nine parts. */
+const SLOTS = new WeakMap<OwnedAccountLoader, Map<string, Promise<SvmSlot>>>();
+
+/** One account of a pool's slot, the slot read once per loader, pool and token paid. */
+async function resolveSlot(
+  parsed: Extract<Parsed, { kind: "slot" }>,
+  ctx: SvmAccountNameContext,
+  rows: readonly SvmTokenRow[],
+): Promise<ResolvedSvmAccountName> {
+  const pool =
+    parsed.pool.kind === "arg"
+      ? argument(parsed.pool.param, ctx)
+      : address((parsed.pool as { key: string }).key);
+  const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
+  const load = ctx.load;
+  if (load === undefined) {
+    throw new SvmAccountNameError(
+      `pool ${pool}'s slot is read from the cluster, which this resolution has no way to do`,
+    );
+  }
+  let read = SLOTS.get(load);
+  if (read === undefined) {
+    read = new Map();
+    SLOTS.set(load, read);
+  }
+  const key = `${pool}:${mint}`;
+  let slot = read.get(key);
+  if (slot === undefined) {
+    slot = svmPoolSlot(load, pool, mint);
+    read.set(key, slot);
+  }
+  let resolved: SvmSlot;
+  try {
+    resolved = await slot;
+  } catch (error) {
+    throw new SvmAccountNameError(
+      `pool ${pool}'s slot paying ${what} could not be read: ${(error as Error).message}`,
+    );
+  }
+  const index = SVM_SLOT_PARTS.indexOf(parsed.part);
+  const value = [
+    resolved.program,
+    resolved.pool,
+    resolved.config,
+    resolved.vaultA,
+    resolved.vaultB,
+    resolved.extra,
+    ...resolved.ticks,
+  ][index]!;
+
+  return { value, label: `pool ${pool}'s ${parsed.part}, paying ${what}`, kind: "address" };
 }

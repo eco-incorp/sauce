@@ -66,6 +66,8 @@ import {
   type ResolvedSvmAccountName,
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
+import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
+import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
   type AccountResolution,
   buildAtaPrepend,
@@ -726,6 +728,7 @@ export async function resolveTokenAccounts(
   programOf?: MintProgramOf,
   args: Readonly<Record<string, Address>> = {},
   derived: ReadonlySet<string> = new Set(),
+  load?: OwnedAccountLoader,
 ): Promise<{
   readonly accounts: Record<string, string>;
   readonly named: ReadonlyMap<string, TokenAccountNamed>;
@@ -742,6 +745,7 @@ export async function resolveTokenAccounts(
         via,
         args,
         ...(programOf === undefined ? {} : { programOf }),
+        ...(load === undefined ? {} : { load }),
       });
     } catch (error) {
       if (error instanceof SvmAccountNameError) {
@@ -1213,6 +1217,8 @@ async function prepare(
     mintProgramOn(rpc, input.rpcUrl),
     svmKeyArguments(program, input.args),
     derived,
+    // A pool's slot (`slot:…`, the venue namespaces') is read from the pool on the cluster.
+    coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc)),
   );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
