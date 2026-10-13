@@ -8,7 +8,8 @@
  *
  * The mints are planted at their registry addresses: USDC and USDT (SPL Token, moved by the legacy
  * transfer), PYUSD as mainnet holds it (Token-2022 with its extensions, moved by `transferChecked`
- * with the registry's decimals), and a PreStocks stock's mint with a 1.5% transfer fee (its
+ * with the registry's decimals), SPACEX, PreStocks' SpaceX mint as mainnet holds it (two
+ * transfer-fee schedules, each run at its epoch), and a PreStocks stock's mint with a 1.5% fee (its
  * registry row's address and decimals, the fee config built here: the fee is Token-2022's to
  * withhold). Each holder's account is checked on chain, so a wrong account given in place of a
  * derived one is refused, and the derivation is the cook's: `--via engine` spends the owner's.
@@ -33,7 +34,7 @@ import {
   type Address,
   type KeyPairSigner,
 } from "@solana/kit";
-import { FailedTransactionMetadata } from "litesvm";
+import { Clock, FailedTransactionMetadata } from "litesvm";
 import {
   findAssociatedTokenPda,
   getApproveInstruction,
@@ -45,7 +46,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli } from "../src/cli/run.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { svmTokenRows } from "../src/routes/token-registry.js";
-import { derivePotPda } from "../src/svm/index.js";
+import { derivePotPda, resolveSvmToken, svmTokenReceived } from "../src/svm/index.js";
 import {
   describeSvm,
   ENGINE_SO,
@@ -65,6 +66,13 @@ const KITCHEN = address(v12SvmKitchenProgramId());
 const ENGINE = v12SvmEngineProgramId();
 const SOLANA = requireChain("solana");
 const codec = getAddressCodec();
+
+/** SPACEX, PreStocks' SpaceX token, as mainnet holds it: two transfer-fee schedules. */
+const SPACEX_IMAGE = (
+  JSON.parse(readFileSync(join(HERE, "svm/fixtures/token-2022/stock-mints.json"), "utf8")) as {
+    mints: { SPACEX: { dataBase64: string } };
+  }
+).mints.SPACEX;
 
 /** PYUSD's mint as mainnet holds it. */
 const PYUSD_IMAGE = (
@@ -420,6 +428,47 @@ describeSvm("the token methods on Solana: every account derived by the command",
     expect(tokenAmount(harness, toPyusd)).toBe(1_000_000n);
     // 1.5% of 1,000,000 withheld by Token-2022, and the program measured what arrived.
     expect(tokenAmount(harness, toStock)).toBe(985_000n);
+  }, 120_000);
+
+  it("pays SPACEX, PreStocks' mint as mainnet holds it, less the fee its schedule charges at the epoch", async () => {
+    const row = rowOf("SPACEX");
+    const spacex = plantMint(
+      address(row.mint),
+      new Uint8Array(Buffer.from(SPACEX_IMAGE.dataBase64, "base64")),
+      TOKEN_2022_PROGRAM,
+    );
+    await account(spacex, pot, 10_000_000_000n, TOKEN_2022_PROGRAM, row.decimals);
+    const file = program(
+      "pay-spacex",
+      "function main(to: Address, amount: Uint256): Uint256 {\n" +
+        "  const before = SPACEX.balanceOf(to);\n" +
+        "  SPACEX.transfer(to, amount);\n" +
+        "  return SPACEX.balanceOf(to) - before;\n" +
+        "}\n",
+    );
+    // What Token-2022 withholds at an epoch, as the SDK nets it from the mint's own schedules.
+    const token = await resolveSvmToken(async (key) => {
+      const found = harness.svm.getAccount(key);
+      return found.exists ? { owner: found.programAddress, data: found.data } : null;
+    }, spacex);
+    const clock = harness.svm.getClock();
+    try {
+      for (const epoch of [0n, 1039n]) {
+        harness.svm.setClock(
+          new Clock(clock.slot, clock.epochStartTimestamp, epoch, epoch, clock.unixTimestamp),
+        );
+        const to = randomAddress();
+        const toSpacex = await account(spacex, to, 0n, TOKEN_2022_PROGRAM, row.decimals);
+        const out = json(await run(file, "--args", to, "1000000"));
+        expect(out).toMatchObject({ cook: { status: "success" } });
+        // 0.5% under the older schedule, 1% from epoch 1039 under the newer.
+        const received = svmTokenReceived(token, 1_000_000n, epoch);
+        expect(received).toBe(epoch === 0n ? 995_000n : 990_000n);
+        expect(tokenAmount(harness, toSpacex)).toBe(received);
+      }
+    } finally {
+      harness.svm.setClock(clock);
+    }
   }, 120_000);
 
   it("approves a spender, the delegate account checked to be the spender", async () => {
