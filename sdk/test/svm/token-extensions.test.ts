@@ -186,11 +186,12 @@ describe("parseMintExtensions — Pausable and ScaledUiAmount, the tokenized sto
   it("routes every real stock mint (fixtures/token-2022/stock-mints.json)", () => {
     const { mints } = JSON.parse(
       readFileSync(join(HERE, "fixtures/token-2022/stock-mints.json"), "utf8"),
-    ) as { mints: Record<string, { dataBase64: string }> };
+    ) as { mints: Record<string, { dataBase64: string; extensions: string[] }> };
     for (const fixture of Object.values(mints)) {
       const ext = parseMintExtensions(Uint8Array.from(Buffer.from(fixture.dataBase64, "base64")));
       expect(ext.blocking).toEqual([]);
-      expect(ext.transferFee).toBeUndefined();
+      // A transfer fee routes (the recipient gets less): PreStocks' mints charge one.
+      expect(ext.transferFee !== undefined).toBe(fixture.extensions.includes("transferFeeConfig"));
       expect(ext.transferHook).toBeUndefined();
       expect(ext.advisories.some((r) => r.startsWith("ScaledUiAmount"))).toBe(true);
     }
