@@ -27,15 +27,17 @@ const signed = (chainId: number): Promise<Hex> =>
 
 describe("the chain a send is for", () => {
   it("is the chain each EVM transaction was signed for", async () => {
-    expect(signedChain([await signed(8453), await signed(8453)]).slug).toBe("base");
+    expect(signedChain({ transactions: [await signed(8453), await signed(8453)] }).slug).toBe(
+      "base",
+    );
   });
 
   it("refuses transactions signed for different chains in one call", async () => {
     const [ethereum, base] = [await signed(1), await signed(8453)];
-    expect(() => signedChain([ethereum, base])).toThrow(
+    expect(() => signedChain({ transactions: [ethereum, base] })).toThrow(
       /the transactions are for base, not ethereum: send each chain's in a call of its own/,
     );
-    expect(() => signedChain([base], requireChain("ethereum"))).toThrow(
+    expect(() => signedChain({ transactions: [base] }, requireChain("ethereum"))).toThrow(
       /the transactions are for base, not ethereum/,
     );
   });
@@ -49,16 +51,20 @@ describe("the chain a send is for", () => {
       gas: 21_000n,
       gasPrice: 1n,
     });
-    expect(() => signedChain([legacy])).toThrow(/names no chain/);
-    expect(signedChain([legacy], requireChain("base")).slug).toBe("base");
+    expect(() => signedChain({ transactions: [legacy] })).toThrow(/names no chain/);
+    expect(signedChain({ transactions: [legacy] }, requireChain("base")).slug).toBe("base");
   });
 
   it("is Solana for a base64 wire transaction, and refuses what is neither", () => {
-    expect(signedChain(["AQABAgM="]).slug).toBe("solana");
-    expect(() => signedChain(["not a transaction!"])).toThrow(/is not a signed transaction/);
+    expect(signedChain({ transactions: ["AQABAgM="] }).slug).toBe("solana");
+    expect(() => signedChain({ transactions: ["not a transaction!"] })).toThrow(
+      /is not a signed transaction/,
+    );
     expect(() =>
-      signedChain([serializeTransaction({ chainId: 1, type: "eip1559", to: RECIPIENT })]),
+      signedChain({
+        transactions: [serializeTransaction({ chainId: 1, type: "eip1559", to: RECIPIENT })],
+      }),
     ).not.toThrow();
-    expect(() => signedChain([])).toThrow(/missing the signed transactions/);
+    expect(() => signedChain({ transactions: [] })).toThrow(/missing the signed transactions/);
   });
 });

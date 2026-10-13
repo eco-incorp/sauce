@@ -13,7 +13,7 @@
  * execution suite.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -296,12 +296,6 @@ const WIDE = [
   "",
 ].join("\n");
 
-interface PlanStep {
-  readonly step: string;
-  readonly transactions?: ReadonlyArray<{ what: string; transaction: string }>;
-  readonly cursor?: string;
-}
-
 describe(
   "a staged Solana cook as a plan, through the tools alone",
   { skip: !svmArtifactsPresent },
@@ -312,22 +306,11 @@ describe(
     let wallets: Connected;
     let dir: string;
     let owner: KeyPairSigner;
+    let walletAddress: SvmAddress;
     const accounts = Object.fromEntries(
       Array.from({ length: WIDE_ACCOUNTS }, (_, i) => [`a${i}`, randomAddress()]),
     );
     const PASSWORD = `throwaway-${process.pid}-${Date.now()}`;
-
-    const sign = (step: PlanStep): Promise<string[]> =>
-      Promise.all(
-        (step.transactions ?? []).map(async ({ transaction }) =>
-          getBase64EncodedWireTransaction(
-            await signTransaction(
-              [owner.keyPair],
-              getTransactionDecoder().decode(getBase64Encoder().encode(transaction)),
-            ),
-          ),
-        ),
-      );
 
     before(async () => {
       harness = await startEngine(
@@ -354,37 +337,37 @@ describe(
       if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
     });
 
-    it("signs each step sauce_tx and sauce_send return, to the end: setup, cook, close", async () => {
-      const first = ok(
-        await mcp.call("sauce_tx", {
+    it("signs each step sauce_tx and sauce_send return, to the end: the documented example", async () => {
+      // docs/examples/mcp-external-signer.ts, the signer a Solana keypair the server never sees.
+      const done = (await cookWithYourSigner(
+        async (name, args) => ok(await mcp.call(name, args)),
+        async (unsigned) =>
+          getBase64EncodedWireTransaction(
+            await signTransaction(
+              [owner.keyPair],
+              getTransactionDecoder().decode(getBase64Encoder().encode(unsigned.transaction!)),
+            ),
+          ),
+        {
           source: WIDE,
           chain: "solana",
           owner: owner.address,
           salt: "plan",
           accounts,
           rpcUrl: SOLANA_URL,
-        }),
-      ) as unknown as PlanStep;
-      assert.equal(first.step, "setup");
-      const steps: string[] = [];
-      let step = first;
-      let cookReturned: unknown;
-      for (let round = 0; round < 6; round++) {
-        const sent = ok(
-          await mcp.call("sauce_send", {
-            transactions: await sign(step),
-            cursor: step.cursor,
-            rpcUrl: SOLANA_URL,
-          }),
-        ) as { ok: boolean; sent: Array<Record<string, unknown>>; next: PlanStep };
-        assert.equal(sent.ok, true, JSON.stringify(sent.sent));
-        cookReturned ??= sent.sent.find((one) => one.returnType !== undefined)?.returned;
-        steps.push(sent.next.step);
-        if (sent.next.step === "done") break;
-        step = sent.next;
-      }
-      assert.deepEqual(steps, ["cook", "close", "done"]);
-      assert.equal(cookReturned, "7");
+        },
+        SOLANA_URL,
+      )) as { ok: boolean; steps: string[]; sent: Array<Record<string, unknown>> };
+
+      assert.equal(done.ok, true, JSON.stringify(done.sent));
+      assert.deepEqual(done.steps, ["setup", "cook", "close"]);
+      // What main returned, read on the cook alone: the Pot's creation names the engine, and runs
+      // no program.
+      assert.deepEqual(
+        done.sent.filter((one) => one.returns !== undefined).map((one) => one.returned),
+        ["7"],
+      );
+      assert.equal(done.sent.at(-1)!.what, "closing the code buffer");
       // Only the owner ever signed.
       assert.ok(shim.sent.every((tx) => Object.keys(tx.signatures).join() === owner.address));
     });
@@ -394,6 +377,7 @@ describe(
         await wallets.call("sauce_wallet_create", { name: "sol", kind: "solana" }),
       );
       const wallet = address(String(created.address));
+      walletAddress = wallet;
       harness.svm.airdrop(wallet, lamports(50_000_000_000n));
       const planned = ok(
         await wallets.call("sauce_tx", {
@@ -419,6 +403,62 @@ describe(
       assert.equal(sent.sent.find((one) => one.what.startsWith("cook on Pot"))?.returned, "7");
       assert.ok(sent.sent.every((one) => one.status === "success"));
       assert.ok(wallets.received.every((text) => !text.includes(PASSWORD)));
+    });
+
+    it("holds a wallet's whole plan to its policy before sending any, and keeps the ledger whole", async () => {
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: WIDE,
+          chain: "solana",
+          owner: walletAddress,
+          salt: "policy",
+          accounts,
+          rpcUrl: SOLANA_URL,
+        }),
+      );
+      const policy = join(dir, "wallets", "sol.policy.json");
+      const ledger = join(dir, "wallets", "sol.ledger.jsonl");
+      const lines = (): Array<{ id: string; state: string }> =>
+        existsSync(ledger)
+          ? readFileSync(ledger, "utf8")
+              .trim()
+              .split("\n")
+              .filter((line) => line !== "")
+              .map((line) => JSON.parse(line) as { id: string; state: string })
+          : [];
+      // A day's native limit below the rent the plan's setup takes: refused before anything goes.
+      writeFileSync(policy, JSON.stringify({ native: { perDay: "0.01" } }), { mode: 0o600 });
+      const count = shim.sent.length;
+      const before = lines().length;
+      assert.match(
+        failed(
+          await wallets.call("sauce_wallet_send", {
+            wallet: "sol",
+            transaction: planned,
+            rpcUrl: SOLANA_URL,
+          }),
+        ),
+        /native\.perDay is 0\.01 SOL/,
+      );
+      assert.equal(shim.sent.length, count);
+      assert.equal(lines().length, before);
+
+      // Room for it: every transaction reserved in the ledger, then sent.
+      writeFileSync(policy, JSON.stringify({ native: { perDay: "5" } }), { mode: 0o600 });
+      const sent = ok(
+        await wallets.call("sauce_wallet_send", {
+          wallet: "sol",
+          transaction: planned,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { ok: boolean; sent: Array<{ status: string }> };
+      assert.equal(sent.ok, true, JSON.stringify(sent));
+      const written = lines().slice(before);
+      const reserved = written.filter((line) => line.state === "reserved").map((line) => line.id);
+      const closed = written.filter((line) => line.state === "sent").map((line) => line.id);
+      assert.equal(reserved.length, sent.sent.length);
+      assert.deepEqual([...closed].sort(), [...reserved].sort());
+      rmSync(policy);
     });
 
     it("sends the one cook sauce_tx handed out, from a wallet, as it was built", async () => {
