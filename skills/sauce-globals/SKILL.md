@@ -53,7 +53,10 @@ On Solana the methods are the same, and `Token(mint)` takes a mint given as an `
 of `main`. A Solana balance belongs to a token account, so compiling adds the token accounts each
 call moves through to `main`. The cook derives them when it is built, and the program checks each
 one belongs to the holder named. So every holder is known by then: `ctx.self()` (the Pot), an
-`Address` argument of `main`, or a key written out (`sauce-solana`).
+`Address` argument of `main`, or a key written out (`sauce-solana`). A symbol also names its
+accounts there: `USDC.accountOf(holder)`, `USDC.mint` and `USDC.tokenProgram`. `Solana` names the
+rest a program writes where it uses them (`Solana.pda(program, [seeds])`, `Solana.systemProgram`,
+…), each added to `main` the same way; `sauce globals --chain solana` lists them under Accounts.
 
 The same library as functions, token first: `transfer(token, to, amount)`,
 `transferFrom(token, from, to, amount)`, `approve(token, spender, amount)`,

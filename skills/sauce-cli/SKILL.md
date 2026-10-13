@@ -511,7 +511,9 @@ USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
   with `--account NAME=<value>`. The token methods (`USDC.transfer(to, amount)`) are the exception:
   compiling adds their accounts to `main`, and the command derives each from the owner, the Pot and
   main's arguments, so they need no `--account` (one given replaces the derivation); so do a venue's
-  namespace's (`OrcaWhirlpool.swap(pool, …)`), whose pool accounts it reads from the pool.
+  namespace's (`OrcaWhirlpool.swap(pool, …)`), whose pool accounts it reads from the pool, and an
+  account the program writes where it uses it (`Solana.pda(program, [seeds])`,
+  `USDC.accountOf(holder)`, `Solana.systemProgram`), which `sauce globals --chain solana` lists.
   `sauce compile --json` shows each slot's `derive`. `sauce run` creates a recipient's missing token
   account before the cook, asking first, or with `--yes`. A cook signs with `--keypair`, and the
   execution fee is read from the cluster and printed as `fee`, with no

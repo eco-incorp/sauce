@@ -1349,10 +1349,13 @@ that the cluster does not have (a guard on it fails with no message of its own).
 
 The token methods need none of this. In `USDC.transfer(to, amount)`, `USDC.balanceOf(ctx.self())`
 or `Token(mint).approve(spender, amount)`, compiling adds every account the call moves through to
-`main`, and `sauce compile --json` lists each with its `derive`. That value is in the same
-language, extended:
+`main`. So it does for an account the program writes where it uses it, such as
+`Solana.pda(program, ["state", owner]).writable()`, `USDC.accountOf(to)` or
+`Solana.systemProgram` (`sauce globals --chain solana` lists them). `sauce compile --json` lists
+each added account with its `derive`. That value is in the same language, extended:
 
 - `self`: the Pot, or the signer with `--via engine`;
+- `system`: the System Program;
 - `@to`: `main`'s argument `to`;
 - `<holder>:<token>`: an associated token account. The holder is `pot`, `owner`, `self`, `@to` or a
   base58 key, and the token is a symbol, a base58 mint, or `@mint` for `main`'s argument `mint`;
@@ -1364,7 +1367,8 @@ language, extended:
   (`u8:7` to `u128:7`, or `u64:@index` from an argument) or hex bytes after `0x`.
 
 `simulate`, `run` and `tx` derive each such slot from the owner, the Pot and `main`'s arguments,
-and an `--account` for one of them replaces its derivation. `run` creates a recipient's missing
+so whatever it is made of must be known when the transaction is built; and an `--account` for one
+of them replaces its derivation. `run` creates a recipient's missing
 token account before the cook, asking first (or with `--yes`), as it does for `pot:USDC`. The
 [Solana guide](solana.md#the-token-methods-every-account-derived) has what the lowering checks and
 requires.
