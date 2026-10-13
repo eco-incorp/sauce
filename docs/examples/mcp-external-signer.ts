@@ -53,7 +53,8 @@ export async function cookWithYourSigner(
     for (const [index, unsigned] of unsignedOf(step).entries()) {
       signed.push(await sign(unsigned, index));
     }
-    // Nothing to sign yet (a cook handed out can still land): ask again in a moment.
+    // Nothing to sign yet (a cook handed out can still land, or a lookup table is in use only
+    // from the next slot; `wait` says which): ask again in a moment.
     if (signed.length === 0) await new Promise((resolve) => setTimeout(resolve, 2_000));
     const report = await callTool("sauce_send", {
       transactions: signed,
