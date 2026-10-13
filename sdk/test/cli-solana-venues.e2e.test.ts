@@ -1,0 +1,299 @@
+/**
+ * Solana's venue namespaces, EXECUTED: `OrcaWhirlpool.swap(pool, USDC, WSOL, …)`,
+ * `RaydiumClmm.trySwap(…)` and `Phoenix.swap(…)` compiled for Solana and run through the `sauce`
+ * command with the pool as main's argument and no `--account` — the pool's nine accounts read from
+ * the pool on the cluster as the cook is built (`svm/pool-slot.ts`), the trader's derived from the
+ * owner and the Pot — against the released Kitchen and engine and the venues' own mainnet programs
+ * and pools (`svm/venue-fixture.ts`) in LiteSVM, behind a JSON-RPC shim (`svm/rpc-shim.ts`).
+ *
+ * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
+ * in CI.
+ */
+import { generateKeyPairSync } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { address, createKeyPairSignerFromBytes, lamports } from "@solana/kit";
+import type { Address, KeyPairSigner } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
+import { Rent } from "litesvm";
+
+import { nodeIo, runCli } from "../src/cli/run.js";
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import {
+  buildSetExecutionFeeInstruction,
+  deriveProgramDataPda,
+  derivePotPda,
+} from "../src/svm/index.js";
+import {
+  describeSvm,
+  ENGINE_SO,
+  randomAddress,
+  sendInstructions,
+  setTokenAccount,
+  startEngine,
+  tokenAmount,
+} from "./svm/engine-harness.js";
+import type { EngineHarness } from "./svm/engine-harness.js";
+import { solanaShim } from "./svm/rpc-shim.js";
+import type { SolanaShim } from "./svm/rpc-shim.js";
+import {
+  allIn,
+  BYTES,
+  key,
+  loadVenues,
+  manifest,
+  pool,
+  restoreVenues,
+  TOKEN,
+  USDC,
+  WSOL,
+} from "./svm/venue-fixture.js";
+
+const SOLANA_URL = "http://127.0.0.1:65532/";
+const KITCHEN = address(v12SvmKitchenProgramId());
+const ENGINE = address(v12SvmEngineProgramId());
+/** USDC is the higher-key token of the pair: paying it, the pools' price rises. */
+const PAYS_LOWER = key(USDC) < key(WSOL);
+
+interface Run {
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+async function sauce(...argv: string[]): Promise<Run> {
+  let stdout = "";
+  let stderr = "";
+  const code = await runCli(argv, {
+    ...nodeIo(),
+    confirm: async () => undefined,
+    stdout: (text) => void (stdout += text),
+    stderr: (text) => void (stderr += text),
+  });
+
+  return { code, stdout, stderr };
+}
+
+const json = (run: Run): Record<string, unknown> => {
+  if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}${run.stdout}`);
+
+  return JSON.parse(run.stdout) as Record<string, unknown>;
+};
+
+/** A keypair file as solana-keygen writes it, and the signer it holds. */
+async function keypairFile(dir: string): Promise<{ path: string; signer: KeyPairSigner }> {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const seed = privateKey.export({ format: "der", type: "pkcs8" }).subarray(-32);
+  const pub = publicKey.export({ format: "der", type: "spki" }).subarray(-32);
+  const bytes = new Uint8Array([...seed, ...pub]);
+  const path = join(dir, "owner.json");
+  writeFileSync(path, JSON.stringify([...bytes]));
+
+  return { path, signer: await createKeyPairSignerFromBytes(bytes) };
+}
+
+describeSvm("Solana's venue namespaces through the sauce command, every account derived", () => {
+  let harness: EngineHarness;
+  let shim: SolanaShim;
+  let work: string;
+  let owner: { path: string; signer: KeyPairSigner };
+  let pot: Address;
+  let potUsdc: Address;
+  let potWsol: Address;
+
+  const program = (name: string, source: string): string => {
+    const path = join(work, `${name}.sauce.ts`);
+    writeFileSync(path, source);
+
+    return path;
+  };
+  const run = (file: string, ...rest: string[]) =>
+    sauce(
+      ...["run", file, "--chain", "solana", "--rpc-url", SOLANA_URL, "--keypair", owner.path],
+      ...["--json", "--yes", ...rest],
+    );
+  const simulate = (file: string, ...rest: string[]) =>
+    sauce(
+      ...["simulate", file, "--chain", "solana", "--rpc-url", SOLANA_URL],
+      ...["--owner", owner.signer.address, "--json", ...rest],
+    );
+  /** A swap's limit a little past the pool's own price with its fee: the swap runs. */
+  const priceAbove = (name: string): bigint => (allIn(pool(name), PAYS_LOWER) * 10003n) / 10000n;
+
+  beforeAll(async () => {
+    harness = await startEngine(BigInt(manifest.unixTimestamp) + 60n, ENGINE_SO as string, ENGINE);
+    // Mainnet's rent and its Kitchen fee, as the distributed swap's suite runs them.
+    harness.svm.setRent(new Rent(5080n, 1.0, 50));
+    const feeConfig = harness.svm.getAccount(harness.feeConfig);
+    if (!feeConfig.exists) throw new Error("the harness made no Kitchen fee config");
+    harness.svm.setAccount({
+      address: harness.feeConfig,
+      data: feeConfig.data,
+      executable: false,
+      lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(feeConfig.data.length))),
+      programAddress: feeConfig.programAddress,
+      space: BigInt(feeConfig.data.length),
+    });
+    const { address: programData } = await deriveProgramDataPda(KITCHEN);
+    const priced = await sendInstructions(harness, [
+      buildSetExecutionFeeInstruction({
+        kitchen: KITCHEN,
+        authority: harness.payer.address,
+        programData,
+        feeConfig: harness.feeConfig,
+        fee: 85_672n,
+      }),
+    ]);
+    if (!priced.ok) throw new Error(`set_execution_fee: ${priced.err}`);
+    loadVenues(harness.svm);
+    restoreVenues(harness.svm);
+    work = mkdtempSync(join(tmpdir(), "sauce-solana-venues-"));
+    owner = await keypairFile(work);
+    harness.svm.airdrop(owner.signer.address, lamports(10_000_000_000n));
+    pot = (await derivePotPda(KITCHEN, owner.signer.address, new Uint8Array(32))).address;
+    const ata = async (mint: Address) =>
+      (await findAssociatedTokenPda({ owner: pot, mint, tokenProgram: TOKEN }))[0];
+    potUsdc = setTokenAccount(harness, await ata(USDC), USDC, pot, 10_000n * 10n ** 6n);
+    potWsol = await ata(WSOL);
+    shim = solanaShim(harness.svm, SOLANA_URL, () => [...BYTES.keys()]);
+    shim.install();
+  }, 120_000);
+
+  afterAll(() => {
+    shim?.restore();
+    if (work !== undefined) rmSync(work, { recursive: true, force: true });
+  });
+
+  it("`sauce compile --json` lists the pool's slot and the trader's accounts with their derivations", async () => {
+    const file = program(
+      "orca-compile",
+      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
+        "  return OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+    );
+    const out = json(await sauce("compile", file, "--chain", "solana", "--json"));
+    const derive = (out.manifest as { accounts: { name: string; derive?: string }[] }).accounts.map(
+      (slot) => `${slot.name}=${slot.derive}`,
+    );
+    expect(derive).toEqual([
+      "poolProgram=slot:@pool:USDC.program",
+      "poolAccount=slot:@pool:USDC.pool",
+      "poolConfig=slot:@pool:USDC.config",
+      "poolVaultA=slot:@pool:USDC.vaultA",
+      "poolVaultB=slot:@pool:USDC.vaultB",
+      "poolExtra=slot:@pool:USDC.extra",
+      "poolTicks0=slot:@pool:USDC.ticks0",
+      "poolTicks1=slot:@pool:USDC.ticks1",
+      "poolTicks2=slot:@pool:USDC.ticks2",
+      "pot=self",
+      "potUSDC=self:USDC",
+      "mintUSDC=mint:USDC",
+      "mintWSOL=mint:WSOL",
+      `tokenProgram=${TOKEN}`,
+      "token2022Program=TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "memoProgram=MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+      "potWSOL=self:WSOL",
+    ]);
+  });
+
+  it("swaps at an Orca whirlpool given only its address, creating the Pot's WSOL account first", async () => {
+    restoreVenues(harness.svm);
+    const file = program(
+      "orca",
+      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
+        "  return OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+    );
+    const orca = pool("orca-whirlpool-sol-usdc");
+    const amount = 100n * 10n ** 6n;
+    const args = ["--args", orca.pool, String(amount), String(priceAbove(orca.name))];
+    expect(harness.svm.getAccount(potWsol).exists).toBe(false);
+    const before = tokenAmount(harness, potUsdc);
+
+    // Simulated first, then run: what main returns is what arrived in the Pot.
+    const rehearsed = json(await simulate(file, ...args));
+    expect(rehearsed).toMatchObject({ ok: true });
+    const out = json(await run(file, ...args));
+    expect(out).toMatchObject({ cook: { status: "success" } });
+    const bought = tokenAmount(harness, potWsol);
+    expect(bought).toBeGreaterThan(0n);
+    expect(BigInt(rehearsed.returned as string)).toBe(bought);
+    expect(tokenAmount(harness, potUsdc)).toBe(before - amount);
+  }, 300_000);
+
+  it("RaydiumClmm.trySwap then forwards what arrived; past its limit it skips, moving nothing", async () => {
+    restoreVenues(harness.svm);
+    const file = program(
+      "raydium-forward",
+      "function main(pool: Address, to: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
+        "  const got = RaydiumClmm.trySwap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n" +
+        "  if (got > 0) WSOL.transfer(to, got);\n" +
+        "  return got;\n}\n",
+    );
+    const raydium = pool("raydium-clmm-sol-usdc");
+    const to = randomAddress();
+    const [toWsol] = await findAssociatedTokenPda({ owner: to, mint: WSOL, tokenProgram: TOKEN });
+    const amount = 50n * 10n ** 6n;
+    const before = tokenAmount(harness, potUsdc);
+
+    const out = json(
+      await run(file, "--args", raydium.pool, to, String(amount), String(priceAbove(raydium.name))),
+    );
+    expect(out).toMatchObject({ cook: { status: "success" } });
+    expect(tokenAmount(harness, toWsol)).toBeGreaterThan(0n);
+    expect(tokenAmount(harness, potUsdc)).toBe(before - amount);
+
+    // A limit below the pool's price: the try form returns 0, and nothing moves.
+    const skipped = json(
+      await simulate(
+        file,
+        "--args",
+        raydium.pool,
+        to,
+        String(amount),
+        String(priceAbove(raydium.name) / 2n),
+      ),
+    );
+    expect(skipped).toMatchObject({ ok: true, returned: "0" });
+  }, 300_000);
+
+  it("takes from Phoenix's order book, its slot the same paying either token", async () => {
+    restoreVenues(harness.svm);
+    const file = program(
+      "phoenix",
+      "function main(market: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
+        "  return Phoenix.trySwap(market, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+    );
+    const phoenix = pool("phoenix-sol-usdc");
+    // Any limit above the book's best offer: Phoenix's own arithmetic is the router's to hold.
+    const out = json(
+      await simulate(file, "--args", phoenix.pool, String(20n * 10n ** 6n), String(10n ** 30n)),
+    );
+    expect(out).toMatchObject({ ok: true });
+    expect(BigInt(out.returned as string)).toBeGreaterThan(0n);
+  }, 300_000);
+
+  it("refuses a pool no price-limit venue owns before the cook, and another venue's on chain", async () => {
+    const file = program(
+      "orca-refused",
+      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
+        "  return OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+    );
+    const dlmm = pool("meteora-dlmm-sol-usdc");
+    const wrong = await simulate(file, "--args", dlmm.pool, "1", "1");
+    expect(wrong.code).toBe(2);
+    expect(wrong.stderr).toContain(
+      `the account poolProgram (slot:@pool:USDC.program): pool ${dlmm.pool}'s slot paying USDC ` +
+        "could not be read",
+    );
+    expect(wrong.stderr).toContain("which is not a venue whose swap stops at a price limit");
+    // Another venue's pool, even one holding the token paid: its program refuses it on chain, by
+    // the venue's own check, before anything moves.
+    const stabble = pool("stabble-clmm-usdc-usdt");
+    const other = await simulate(file, "--args", stabble.pool, "1", "1");
+    expect(other.code).toBe(1);
+    expect(JSON.parse(other.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "not an Orca whirlpool"',
+    });
+  }, 120_000);
+});
