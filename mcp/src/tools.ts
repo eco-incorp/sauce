@@ -255,7 +255,7 @@ const PATH = z
     "Instead of source: the program's file on this machine, relative to the directory the " +
       "server runs in (or absolute), read when the call runs, with its relative imports read " +
       "beside it — as `sauce compile <file>` reads it. sourceSha256 in the result is that " +
-      "file's sha256, to tie what was compiled or rehearsed to the file. Only a server over " +
+      "file's sha256, to tie what was compiled or simulated to the file. Only a server over " +
       "stdio reads files; give source, or path, not both.",
   );
 
@@ -279,7 +279,7 @@ const POT = {
     .optional()
     .describe(
       "The Pot's owner: a 0x address on an EVM chain, a base58 public key on Solana. With the " +
-        "salt it derives the Pot; only the owner may cook on it. To rehearse (sauce_simulate) any " +
+        "salt it derives the Pot; only the owner may cook on it. To simulate (sauce_simulate) any " +
         "address will do: nothing is signed, and a missing Pot or balance is supplied.",
     ),
   salt: z
@@ -412,7 +412,7 @@ const EXPECT_REVERT = z
   .optional()
   .describe(
     "Expect the cook to revert with a reason containing this text (a guard's message, such as " +
-      "bought below minTokens): the rehearsal is ok, with asExpected, only when it does, and " +
+      "bought below minTokens): the simulation is ok, with asExpected, only when it does, and " +
       "fails when the cook succeeds or reverts for another reason.",
   );
 
@@ -727,7 +727,7 @@ function evmCook(args: CookArgs, program: Program): CookInput {
 
   if (args.owner === undefined && args.pot === undefined) {
     throw new UsageError(
-      "give owner (the Pot's owner, whose Pot the cook runs on; to rehearse, any address will do) " +
+      "give owner (the Pot's owner, whose Pot the cook runs on; to simulate, any address will do) " +
         "or pot (the Pot's address)",
     );
   }
@@ -1179,7 +1179,7 @@ function withSendNote(output: ToolOutput): ToolOutput {
       notes: [
         ...(output.notes ?? []),
         `To send ${count === 1 ? "it" : `these ${count}`} from one of this server's wallets: ` +
-          "sauce_wallet_send { wallet, transaction: <this result> }. It rehearses them first, " +
+          "sauce_wallet_send { wallet, transaction: <this result> }. It simulates them first, " +
           "and holds them to the wallet's policy.",
       ],
     };
@@ -1532,7 +1532,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "move the price 1% against the taker, through its ticks). `empty` lists the pools with " +
         "no liquidity at their price, which a swap skips; `checked`, what was looked at. Every " +
         "read is at one block, `block` (the latest, or the one given): pass it to " +
-        "sauce_simulate's block to rehearse on the prices a maxPrice was taken from. On Solana " +
+        "sauce_simulate's block to simulate on the prices a maxPrice was taken from. On Solana " +
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
         "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
         "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts the distributed swap " +
@@ -1960,7 +1960,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ...(fee === undefined
             ? ["The Kitchen's fee was not read (no endpoint): value is as given."]
             : []),
-          "sauce_tx does not rehearse the cook: run sauce_simulate to see whether it reverts now.",
+          "sauce_tx does not simulate the cook: run sauce_simulate to see whether it reverts now.",
         ],
       };
     },
@@ -2073,12 +2073,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
   tool(
     "sauce_simulate",
     {
-      title: "Rehearse a cook, with no key and nothing sent",
+      title: "Simulate a cook, with no key and nothing sent",
       description:
-        "Rehearses the cook from the Pot's owner on the chain as it is now, to see what it would " +
+        "Simulates the cook from the Pot's owner on the chain as it is now, to see what it would " +
         "do before building the transaction with sauce_tx. Needs an endpoint (rpcUrl, or the " +
         "server's). EVM: through eth_simulateV1 (else eth_call with state overrides; `path` " +
-        "says which), on a Pot that need not be deployed yet — the rehearsal deploys it first, " +
+        "says which), on a Pot that need not be deployed yet — the simulation deploys it first, " +
         "and `transactions` gives each transaction's gas (Kitchen.deployPot, then the cook). " +
         "Returns ok, gas, what main returns, the ERC-20 transfers and approvals, native " +
         "transfers and each address's net balance change, and first `leftInPot`: what the Pot " +
@@ -2086,13 +2086,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "wallet, until another cook moves it (empty when it leaves nothing; a note says so " +
         "otherwise, to tell the user). A cook that reverts is an ERROR " +
         "result, led by reverted: true and error (the decoded reason), with ok: false and the " +
-        "`stage` it reverts at: it did not work. expectRevert holds a rehearsal of a guard to " +
+        "`stage` it reverts at: it did not work. expectRevert holds a simulation of a guard to " +
         "its revert instead (ok, and asExpected, only when it reverts with that reason). " +
         "assumeBalance gives the " +
-        "Pot balances for the rehearsal only; fund rehearses pulling tokens from the owner into " +
+        "Pot balances for the simulation only; fund simulates pulling tokens from the owner into " +
         "the Pot in the cook, the Pot credited what they would bring. block pins the chain's " +
-        "state (sauce_pools' block, to rehearse on the prices a limit was taken from). " +
-        "`scenarios` rehearses one program several times — each its own args, defines and " +
+        "state (sauce_pools' block, to simulate on the prices a limit was taken from). " +
+        "`scenarios` simulates one program several times — each its own args, defines and " +
         "balances, all at one block — with one result each. summary returns only what decides " +
         "a trade: ok or the reason, what main returns, leftInPot, balance changes, transfers, " +
         "each transaction's gas and the block. Solana: the Kitchen cook simulated from the owner (a " +
@@ -2107,12 +2107,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         ...sourceInputs(local),
         ...COOK,
         assumeBalance: TOKEN_AMOUNTS.describe(
-          "Balances the Pot holds for this rehearsal only. Each <TOKEN|address>:<amount>, the " +
+          "Balances the Pot holds for this simulation only. Each <TOKEN|address>:<amount>, the " +
             "amount in whole tokens (USDC:2 is 2 USDC), or base units ending in n " +
             "(USDC:2000000n); ETH:<amount> for an EVM chain's native currency. EVM: by state " +
             "override. Solana: in a local copy of the accounts the cook names (the Pot's token " +
             "account for the mint, or the owner's via engine), as a cook too large for one " +
-            "transaction is rehearsed too.",
+            "transaction is simulated too.",
         ),
         fund: TOKEN_AMOUNTS.describe(
           "EVM only: tokens the cook would pull from the owner into the Pot before the program " +
@@ -2128,7 +2128,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .optional()
           .describe("With fund: return what is left of each funded token to the owner afterwards."),
         block: BLOCK.describe(
-          "EVM only: the block to rehearse on, a number, or latest, safe, finalized (default: " +
+          "EVM only: the block to simulate on, a number, or latest, safe, finalized (default: " +
             "latest).",
         ),
         scenarios: z
@@ -2137,7 +2137,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .max(MAX_SCENARIOS)
           .optional()
           .describe(
-            `Up to ${MAX_SCENARIOS} rehearsals of the same program, in order, all at one block ` +
+            `Up to ${MAX_SCENARIOS} simulations of the same program, in order, all at one block ` +
               "(block, or the latest when the call starts); on Solana, all in local copies of one " +
               "read of the accounts, at one slot. Each scenario's args and " +
               "assumeBalance replace the call's own; its defines are laid over the call's. " +
@@ -2314,9 +2314,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "and must agree, or the tool refuses, and only what the vault does not hold yet is " +
         "transferred. intentFundVia publishAndFund gives each reward token's approve to the " +
         "Portal (a USDT-style reset to 0 first where needed), then Portal.publishAndFund, " +
-        "instead. dryRun rehearses them together through eth_simulateV1 from `from` and reports " +
+        "instead. dryRun simulates them together through eth_simulateV1 from `from` and reports " +
         "each intent's isIntentFunded after them (intents[].funded), assumeBalance giving that " +
-        "wallet balances for the rehearsal only. A program that measures an amount on chain, or " +
+        "wallet balances for the simulation only. A program that measures an amount on chain, or " +
         "does anything besides open intents, is refused: run it on a Pot (sauce_tx) instead. " +
         "dryRun works on every chain; the transactions only where the source and every " +
         `destination are supported. ${UNSIGNED} ${SUPPORTED_ONLY}`,
@@ -2336,11 +2336,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .boolean()
           .optional()
           .describe(
-            "Rehearse the transactions together (eth_simulateV1) instead; needs from and an " +
+            "Simulate the transactions together (eth_simulateV1) instead; needs from and an " +
               "endpoint.",
           ),
         assumeBalance: TOKEN_AMOUNTS.describe(
-          "With dryRun: balances `from` holds for the rehearsal only, by state override. Each " +
+          "With dryRun: balances `from` holds for the simulation only, by state override. Each " +
             "<TOKEN|address>:<amount>, the amount in whole tokens (USDC:2 is 2 USDC), or base " +
             "units ending in n (USDC:2000000n).",
         ),
@@ -2356,7 +2356,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
       if (assume.length > 0 && args.dryRun !== true) {
         throw new UsageError(
-          "assumeBalance goes with dryRun: it gives the wallet a balance for a rehearsal, and " +
+          "assumeBalance goes with dryRun: it gives the wallet a balance for a simulation, and " +
             "nothing to transactions that are sent",
         );
       }

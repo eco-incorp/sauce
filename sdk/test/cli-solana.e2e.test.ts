@@ -987,13 +987,13 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
   }, 60_000);
 
   it("`sauce simulate` creates a missing Pot in the same transaction as the cook, sending nothing", async () => {
-    const salt = hexToBytes(potSalt("rehearsed"));
+    const salt = hexToBytes(potSalt("simulated"));
     const pot = await potOf(salt);
     const { flags } = accountsFor(pot, 1_000n);
     const before = rpc.sent.length;
     const run = await sauce(
       ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
-      ...["--salt", "rehearsed", "--rpc-url", RPC_URL, ...flags, "--args", "400"],
+      ...["--salt", "simulated", "--rpc-url", RPC_URL, ...flags, "--args", "400"],
     );
     expect(run.stderr).toBe("");
     expect(run.code).toBe(0);
@@ -1933,7 +1933,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       ...["--salt", salt, "--rpc-url", RPC_URL, ...argv.slice(at)],
     );
     expect(rehearsed.code).toBe(0);
-    expect(rehearsed.stdout).toContain("Rehearsed in a local copy (LiteSVM)");
+    expect(rehearsed.stdout).toContain("Simulated in a local copy (LiteSVM)");
     expect(rehearsed.stdout).toMatch(/1 USDC/);
   }, 120_000);
 });

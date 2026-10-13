@@ -260,7 +260,7 @@ three CL factories (`AerodromeSlipstream.CLFactory`, `.CLFactoryGaugeCaps`, `.CL
 Uniswap V3, PancakeSwap V3 and Uniswap V4. Which of them hold a pair, and at which tiers, spacings
 and keys, changes over time: `sauce pools --chain base USDC SPCXc` lists every pool of the pair at
 each, with its fee, price and depth, and `--v4-key <fee:spacing>` tries a V4 key beyond the
-standard four. Write the loops for what it lists. A one-line program rehearsed with
+standard four. Write the loops for what it lists. A one-line program simulated with
 `sauce simulate` answers the same question for one venue: it prints what `main` returns, a pool's
 address (`0` for none) or its liquidity.
 
@@ -281,9 +281,9 @@ Slipstream factories (see "More venues").
 
 **A Slipstream fee moves.** A Slipstream pool's fee is set by its fee module and can change from
 one block to the next. The program reads it in the cook, so each pool's own limit is always right;
-but the all-in price a rehearsal shows can differ from a pool listing read a few blocks earlier,
-and the cook's from the rehearsal's. Rehearse just before sending, and take the price from the
-rehearsal, not from an older listing.
+but the all-in price a simulation shows can differ from a pool listing read a few blocks earlier,
+and the cook's from the simulation's. Simulate just before sending, and take the price from the
+simulation, not from an older listing.
 
 ## Inputs and units
 
@@ -351,25 +351,25 @@ whole budget buys at least `budget × 1e18 ÷ maxPrice`:
 - **To buy as much as fills within `maxPrice`**: `minTokens` is the least worth the gas, or `0`, and
   the rest of the budget comes back.
 
-**`maxAvgPrice`, from a rehearsal.** `maxPrice` bounds every unit; `maxAvgPrice` bounds the
-average, and so catches a market that has moved against the order between the rehearsal and the
-cook. Rehearse with `maxAvgPrice` 0, read the average from what `main` returns (`spent × 1e18 ÷
+**`maxAvgPrice`, from a simulation.** `maxPrice` bounds every unit; `maxAvgPrice` bounds the
+average, and so catches a market that has moved against the order between the simulation and the
+cook. Simulate with `maxAvgPrice` 0, read the average from what `main` returns (`spent × 1e18 ÷
 bought`, in `maxPrice`'s units), and set **`maxAvgPrice` halfway from that average to `maxPrice`**,
-rounded up. The cook as rehearsed lands; one whose average has moved past halfway reverts
-`average too high`. A rehearsal averaging 2,700 USDC per WETH, with `maxPrice` 2,713.5, gives
+rounded up. The cook as simulated lands; one whose average has moved past halfway reverts
+`average too high`. A simulation averaging 2,700 USDC per WETH, with `maxPrice` 2,713.5, gives
 `maxAvgPrice` 2,706.75, **2706750000**; one averaging 148.5 per SPCXc, with `maxPrice` 150, gives
-149.25, **1492500000000000000**. Below the rehearsed average the cook reverts as it stands; at
+149.25, **1492500000000000000**. Below the simulated average the cook reverts as it stands; at
 `maxPrice` the cap adds nothing the per-pool limits do not already guarantee.
 
 ## Running it
 
 The budget must be in the Pot before the program runs: send it there from any wallet, or let
-`sauce run --fund` pull it from the signer in the same cook (`sauce-cli`). **Rehearse before
+`sauce run --fund` pull it from the signer in the same cook (`sauce-cli`). **Simulate before
 sending**, with no key and nothing sent, on the block `sauce pools` read the prices at
 (`--block <number>`, which it prints): once with `maxAvgPrice` 0 to read the average, then once
 with `minTokens` above what fills, which reverts `bought below minTokens`, and once with
 `maxAvgPrice` below the average, which reverts `average too high`: that shows both checks work.
-Then send it with `maxAvgPrice` from the rule above; `sauce run` rehearses it once more before
+Then send it with `maxAvgPrice` from the rule above; `sauce run` simulates it once more before
 signing. Buying SPCXc with 1,000 USDC at most 150 each, all of it or nothing (prices change: take
 the reference from `sauce pools` when you run it):
 
@@ -394,18 +394,18 @@ sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> \
 
 The second asks for 10 SPCXc, more than 1,000 USDC buys at 150; the third caps the average at 140,
 below the reference (taken here as 148.5) and so below any average; the last sends with
-`maxAvgPrice` 149.25, halfway from a rehearsed average of 148.5 to 150. Each is one cook on the
+`maxAvgPrice` 149.25, halfway from a simulated average of 148.5 to 150. Each is one cook on the
 owner's Pot: `sauce tx` with the same `--args` and `--owner <address>` prints it unsigned,
 `{ chainId, to, data, value }`, for any signer to send instead. SPCXc is built into the Base node,
-so rehearse against Base itself, not a local copy of the chain.
+so simulate against Base itself, not a local copy of the chain.
 
 For the initial release the swap is sent only on Ethereum or Base: on a preview chain such as
 Arbitrum or Optimism a program compiles and simulates, and `sauce tx` and `sauce run` refuse it
 with the chain-support request to post (`sauce-chains`).
 
-**Reading a rehearsal.** `sauce simulate` prints what `main` returned, by name, and what the cook
+**Reading a simulation.** `sauce simulate` prints what `main` returned, by name, and what the cook
 moved. Buying WETH with 2,000 USDC over two pools on a local chain, with the addresses as
-placeholders and the lines on how it was rehearsed left out:
+placeholders and the lines on how it was simulated left out:
 
 ```text
 The cook succeeds from <owner>: gas used 729747, returns <the same three words, in hex>
@@ -468,8 +468,8 @@ differently gets its own `venue` value and branch in `trade`.
 buyDecimals)` times the price.
 - `minTokens` follows the recipe: `budget × 1e18 ÷ maxPrice`, rounded up, to spend everything, less
   to accept a partial fill.
-- `maxAvgPrice` is halfway from a rehearsal's average to `maxPrice`.
-- The rehearsals: the trade, a `minTokens` revert and a `maxAvgPrice` revert.
+- `maxAvgPrice` is halfway from a simulation's average to `maxPrice`.
+- The simulations: the trade, a `minTokens` revert and a `maxAvgPrice` revert.
 
 [examples/distributed-swap.mts](examples/distributed-swap.mts) compiles the program for Base and
 pins this page to it: the code above, the venues and the lookups, a V4 pool id held as a

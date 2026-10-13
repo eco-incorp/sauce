@@ -277,7 +277,7 @@ describe("sauce runtime", () => {
     expect(status).toMatchObject({
       dir: runtimeDir(),
       installed: false,
-      uses: { "sauce mcp": "own", "Solana rehearsals": "own" },
+      uses: { "sauce mcp": "own", "Solana simulations": "own" },
     });
     expect(Object.keys(status.packages).sort()).toEqual(Object.keys(pinned()).sort());
     const text = (await sauce("runtime", "status")).stdout;

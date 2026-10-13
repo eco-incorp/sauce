@@ -165,7 +165,7 @@ export async function findBalanceSlot(
   if (code === B20_CODE) {
     throw new CliError(
       `--assume-balance ${label}: ${token} is a B20 token, a precompile of the Base node, which ` +
-        "keeps its balances where no state override reaches, so a rehearsal cannot give the Pot " +
+        "keeps its balances where no state override reaches, so a simulation cannot give the Pot " +
         "one. Fund the Pot with it instead (--fund), from an account that holds it.",
     );
   }
@@ -174,7 +174,7 @@ export async function findBalanceSlot(
   if (current === undefined) {
     throw new CliError(
       `--assume-balance ${label}: ${token} does not answer balanceOf(address), so it is not an ` +
-        "ERC-20 the rehearsal can give a balance of",
+        "ERC-20 the simulation can give a balance of",
     );
   }
   // One call with every candidate written: the marker that comes back names the slot.

@@ -59,7 +59,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
       title: "Write, compile and run a Sauce program",
       description:
         "Walks an agent through a Sauce program for a task, end to end with this server's " +
-        "tools: read the skills, look up the chain's names, compile, rehearse, and build the " +
+        "tools: read the skills, look up the chain's names, compile, simulate, and build the " +
         "unsigned Pot deployment and cook for the user to sign.",
       argsSchema: {
         task: z.string().min(1).max(4000).describe("What the program should do, in plain words."),
@@ -67,7 +67,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
       },
     },
     ({ task, chain }): GetPromptResult => ({
-      description: "Write, compile, rehearse and build a Sauce program",
+      description: "Write, compile, simulate and build a Sauce program",
       messages: [
         {
           role: "user",
@@ -84,7 +84,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   rather than writing addresses. (A fixed sequence of protocol operations can be an",
               "   actions document in JSON instead: sauce_actions, and the sauce-actions skill.)",
               "2. sauce_compile until the program compiles; read any error and fix the line it names.",
-              "3. sauce_simulate, to rehearse the cook from the Pot's owner: check what it moved (or",
+              "3. sauce_simulate, to simulate the cook from the Pot's owner: check what it moved (or",
               "   why it reverts) before going on.",
               "4. sauce_pot for the owner's Pot: its address and what it holds. Its deployment needs",
               "   no step of its own: sauce_tx plans it first when the Pot has no code yet.",
@@ -146,7 +146,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "3. sauce_compile with intentDeadline (Unix seconds, in the future) and intentCreator",
               "   until it compiles; sauce_inspect with the source and main's arguments as args",
               "   lists each intent's route and reward.",
-              "4. For an intent fixed when it is built, rehearse both sides with the same inputs,",
+              "4. For an intent fixed when it is built, simulate both sides with the same inputs,",
               "   main's arguments (its inputs: recipient, amounts, limits) as args:",
               "   sauce_intent_publish with dryRun and from (the source, from the wallet that",
               "   funds the reward) and sauce_intent_fill with dryRun (a solver's fill, on the",
@@ -162,7 +162,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   deadline, sauce_intent_refund (from the reward's deadline) or sauce_intent_cancel",
               "   then sauce_intent_prove then sauce_intent_refund (sooner) returns the reward.",
               `Intents publish only between ${supportedChainNames()}, the chains this release`,
-              "supports: an intent that involves a preview chain compiles and rehearses, and the",
+              "supports: an intent that involves a preview chain compiles and simulates, and the",
               "tools that build its transactions return `refused` with the chain-support request to",
               "offer the user instead.",
               "Nothing here signs: hand the wallet's owner the unsigned transactions, in order, and",

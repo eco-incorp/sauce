@@ -85,7 +85,7 @@ const MEASURED = [
   "",
 ].join("\n");
 
-describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", () => {
+describeEvm("sauce intent fill: a solver's fill, simulated on the destination", () => {
   let base: LocalChain;
   let work: string;
   let usdc: Address;
@@ -271,7 +271,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     // fill rehearses it anyway, where compile and publish refuse it, and says so.
     expect(run.stderr).toContain(
       "--intent-deadline 1000 (1970-01-01T00:16:40.000Z) has passed: an intent can be filled " +
-        "only until its deadline: the rehearsal shows the Portal refusing it",
+        "only until its deadline: the simulation shows the Portal refusing it",
     );
     expect(run.stdout).toContain(
       "the fill reverts: IntentExpired(): the route's deadline, 1000 (1970-01-01T00:16:40.000Z), " +
@@ -374,7 +374,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     );
     expect(run.code).toBe(1);
     expect(run.stderr).toContain(
-      `the solver delivers ${computed}, and the rehearsal cannot give it a balance: no storage ` +
+      `the solver delivers ${computed}, and the simulation cannot give it a balance: no storage ` +
         `slot of ${computed} holds the balance its balanceOf reports`,
     );
     expect(run.stderr).toContain("Pass --solver <an address that holds it>.");

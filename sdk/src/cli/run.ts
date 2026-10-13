@@ -1364,11 +1364,11 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
   }
   // Rehearsed on the source, then on the destination, before anything is sent.
   const dry = await publishCommand({ ...program, dryRun: true, rpcUrl, from: creator }, io);
-  io.stderr(`Publishing, rehearsed on ${created.source.slug}:\n${dry.text}\n\n`);
+  io.stderr(`Publishing, simulated on ${created.source.slug}:\n${dry.text}\n\n`);
   if (dry.exitCode !== undefined && dry.exitCode !== 0) {
     return {
       ...dry,
-      notes: [`${created.file} is written, and not published: the rehearsal reverts`],
+      notes: [`${created.file} is written, and not published: the simulation reverts`],
     };
   }
   if (lookup(created.destination) !== undefined) {
@@ -1381,7 +1381,7 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
       endpointFlag: "--config",
     });
     io.stderr(
-      `Filling, rehearsed on ${created.destination.slug} (as a solver will):\n${fill.text}\n\n`,
+      `Filling, simulated on ${created.destination.slug} (as a solver will):\n${fill.text}\n\n`,
     );
   }
   if (account === undefined) {
@@ -1684,13 +1684,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       },
       "dry-run": {
         type: "boolean",
-        help: "Rehearse the transactions together (eth_simulateV1); send nothing",
+        help: "Simulate the transactions together (eth_simulateV1); send nothing",
       },
       "assume-balance": {
         type: "string",
         multiple: true,
         value: "<TOKEN:amount>",
-        help: "With --dry-run: give the wallet this balance, in whole tokens, for the rehearsal only",
+        help: "With --dry-run: give the wallet this balance, in whole tokens, for the simulation only",
       },
       format: {
         type: "string",
@@ -1722,12 +1722,12 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20",
       "does), then publishAndFund, which records the intent Funded and emits IntentFunded.",
       "",
-      "--dry-run rehearses the transactions together through eth_simulateV1 from the signer's",
+      "--dry-run simulates the transactions together through eth_simulateV1 from the signer's",
       "wallet, or --from's with no key, then asks the Portal whether each intent is funded, and",
-      "sends nothing. --assume-balance TOKEN:amount gives that wallet a balance for the rehearsal",
+      "sends nothing. --assume-balance TOKEN:amount gives that wallet a balance for the simulation",
       "only, by state override (repeatable; the amount as `sauce run --fund` takes it;",
       "ETH:<amount> for the native currency), so a wallet that does not hold the reward yet can",
-      "rehearse publishing it.",
+      "simulate publishing it.",
       "",
       "With no <file>, it makes one: which chains, what is delivered and to whom, the reward",
       "(suggested: what is delivered plus a margin over the solver's destination costs — gas, the",
@@ -1736,7 +1736,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "and how the reward is funded (--intent-fund-via, a transfer to the vault by default), each",
       "asked at a terminal unless its flag gives it (with no terminal, every flag still needed is",
       "named). It writes the intent as a .sauce.ts file (--out, default",
-      "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, rehearses",
+      "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, simulates",
       "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
       "with a signer publishes it once you approve (or with --yes), storing it. It reads",
       "both chains.",
@@ -1796,7 +1796,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       const assume = assumedBalancesOf(args, program.chain);
       if (assume.length > 0 && args.values["dry-run"] !== true) {
         throw new UsageError(
-          "--assume-balance goes with --dry-run: it gives the wallet a balance for a rehearsal, " +
+          "--assume-balance goes with --dry-run: it gives the wallet a balance for a simulation, " +
             "and nothing to a transaction that is sent",
         );
       }
@@ -1836,7 +1836,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--yes]",
       "sauce intent fill <intent-hash> --claimant <address> --send --keypair <path>   (to Solana)",
     ],
-    summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
+    summary: "Fill a file's (or a stored) intents on their destination: simulated, or --send",
     trailing: "args",
     flags: {
       ...PROGRAM,
@@ -1855,7 +1855,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       solver: {
         type: "string",
         value: "<address|key>",
-        help: "Rehearse as this account (default: one nobody holds the key of; on Solana, required)",
+        help: "Simulate as this account (default: one nobody holds the key of; on Solana, required)",
       },
       claimant: {
         type: "string",
@@ -1868,7 +1868,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       },
       send: {
         type: "boolean",
-        help: "Send the fill, from the signer, after rehearsing it",
+        help: "Send the fill, from the signer, after simulating it",
       },
       ...EVM_SIGNER,
       keypair: LIFECYCLE.keypair!,
@@ -1896,7 +1896,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "With no --send, nothing is signed or sent: the solver is given the route's tokens and the",
       "value by state override, where a token keeps the balance found as simulate's",
       "--assume-balance finds it. With --send the signer is the solver and nothing is assumed: the",
-      "rehearsal runs on its real balances, a fill that would revert is not sent, and what it",
+      "simulation runs on its real balances, a fill that would revert is not sent, and what it",
       "spends (each token, the value and what it is for) is shown for you to approve at the",
       "terminal, or with --yes. Then the transactions are sent in order, and the intent and its",
       "fill go into the store (--store, default ~/.sauce/intents).",
@@ -1916,7 +1916,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "An intent to Solana (one `sauce intent import` stored from its publishing transaction) is",
       "filled through Solana's Portal program: Portal.fulfill, the solver's token accounts paying",
-      "the route's tokens, rehearsed by simulateTransaction on the accounts as they are (Solana's",
+      "the route's tokens, simulated by simulateTransaction on the accounts as they are (Solana's",
       "simulation takes no overrides: --solver names a Solana key, whose accounts pay). --claimant,",
       "an address on the source chain, is required: the reward pays it, and a Solana key is none.",
       "With --send and --keypair it is sent, then its proof through the HyperProver, the IGP's gas",
@@ -1942,12 +1942,12 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       const sending = args.values.send === true;
       if (!sending && (hasSigner(args, io) || hasSvmSigner(args, io))) {
         throw new UsageError(
-          "a signer goes with --send: without it, fill rehearses and signs nothing (--solver " +
-            "names who it rehearses as)",
+          "a signer goes with --send: without it, fill simulates and signs nothing (--solver " +
+            "names who it simulates as)",
         );
       }
       if (sending && solver !== undefined) {
-        throw new UsageError("--solver is for a rehearsal: with --send, the signer is the solver");
+        throw new UsageError("--solver is for a simulation: with --send, the signer is the solver");
       }
       const yes =
         args.values.yes === true
@@ -1991,7 +1991,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
         // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
         const past = pastDeadline(program);
-        if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
+        if (past !== undefined) io.stderr(`${past}: the simulation shows the Portal refusing it\n`);
         targets = fillTargets(program, io);
         labels = defineLabels(program);
         from = program.file;
@@ -2639,7 +2639,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
       "sauce simulate <file | -> --chain solana --owner <pubkey> [--account NAME=<value>]… [options]",
     ],
-    summary: "Rehearse the cook from the Pot's owner, with no key: what it did, or why it reverts",
+    summary: "Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts",
     flags: {
       ...PROGRAM,
       ...COOK,
@@ -2648,12 +2648,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         type: "string",
         multiple: true,
         value: "<TOKEN:amount>",
-        help: "Give the Pot this balance, in whole tokens, for the rehearsal only: USDC:2, ETH:0.1",
+        help: "Give the Pot this balance, in whole tokens, for the simulation only: USDC:2, ETH:0.1",
       },
       block: {
         type: "string",
         value: "<number|tag>",
-        help: "Rehearse on this block: a number, or latest, safe, finalized (default: latest)",
+        help: "Simulate on this block: a number, or latest, safe, finalized (default: latest)",
         only: "evm",
       },
       "expect-revert": {
@@ -2687,26 +2687,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ARGS,
     },
     details: [
-      "Compiles the file, builds the cook and rehearses it from the Pot's owner: no key, no",
+      "Compiles the file, builds the cook and simulates it from the Pot's owner: no key, no",
       "transaction, no local node. Prints the gas, what the program returns and what the cook",
       "did, or the decoded reason it reverts (exit 1).",
       "",
-      "It rehearses through eth_simulateV1, which returns the cook's logs: the output lists the",
+      "It simulates through eth_simulateV1, which returns the cook's logs: the output lists the",
       "ERC-20 transfers and approvals (registry symbols, whole units), the native transfers the",
       "node traces, and each address's net change. An endpoint without eth_simulateV1 falls back",
       "to eth_call with state overrides, which gives the result and the gas but no logs. The",
       "output names the route it took.",
       "",
-      "A Pot that is not deployed yet is deployed in the rehearsal first, from --owner (and",
+      "A Pot that is not deployed yet is deployed in the simulation first, from --owner (and",
       "--salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.",
-      "An owner holding less than the cook's value is given it for the rehearsal.",
+      "An owner holding less than the cook's value is given it for the simulation.",
       "",
-      "--assume-balance TOKEN:amount gives the Pot that balance for this rehearsal only, by state",
+      "--assume-balance TOKEN:amount gives the Pot that balance for this simulation only, by state",
       "override: repeatable, the amount as --fund takes it, ETH:<amount> for the native currency.",
       "Where a token keeps the balance is found by asking it, with eth_call; a token that stores",
       "no balance it reports (rebasing, shares) is refused.",
       "",
-      "With --fund and the owner's key (--keystore or --private-key), the rehearsal includes the",
+      "With --fund and the owner's key (--keystore or --private-key), the simulation includes the",
       "pulls `sauce run --fund` would make, signed and not sent; an approval the run would ask for",
       "is reported, not made. With no key the pulls cannot be signed, so the Pot is credited what",
       "they would bring, by state override, and --sweep still runs.",
@@ -2719,7 +2719,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "the accounts a checked write takes. An account the cluster does not have is named in a",
       "note. Where main declares a return type, what it",
       "returned is read as that type. A Pot the Kitchen has not created is created first, in the",
-      "same transaction. --via engine rehearses the engine's own paid cook instead: no Kitchen and",
+      "same transaction. --via engine simulates the engine's own paid cook instead: no Kitchen and",
       "no Pot (so no pot or pot:<token> account), --owner signing as the program's authority and",
       "paying the fee. Either way the cook pays the Kitchen's execution fee, read from the cluster",
       "and printed; --max-execution-fee refuses one above it. Prints the compute units and what the",
@@ -2727,10 +2727,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "accounts the transaction writes before it and as the simulation leaves them — or the reason",
       "(a program's revert message decoded) and the program logs. Solana's simulateTransaction",
       "takes no account overrides, so the owner must hold the Pot's rent and the fees there.",
-      "A cook too large for one transaction, or one given --assume-balance, is rehearsed in a",
+      "A cook too large for one transaction, or one given --assume-balance, is simulated in a",
       "local copy instead (LiteSVM, which the package brings): every account it names read from",
       "the cluster with its rent, the released engine and Kitchen, the owner given the lamports",
-      "the staging and the fees take (any address can rehearse), the Pot created",
+      "the staging and the fees take (any address can simulate), the Pot created",
       "if missing, the program staged into a code buffer as `sauce run` stages it, then the cook,",
       "its accounts through a lookup table. There --assume-balance TOKEN:amount gives the account",
       "the cook spends that token from (the Pot's, or the owner's with --via engine) that balance,",
@@ -2739,7 +2739,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "A cook that reverts exits 1, and the first line says so: The cook reverts: <reason>. In",
       "--json, reverted: true and error lead the JSON, and the same line leads stderr.",
-      "--expect-revert <text> holds a rehearsal of a guard to its revert: it exits 0 only when the",
+      "--expect-revert <text> holds a simulation of a guard to its revert: it exits 0 only when the",
       "cook reverts with a reason containing the text, and 1 when it succeeds or reverts otherwise.",
       "",
       "Examples:",
@@ -2791,7 +2791,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ARGS,
     },
     details: [
-      "Compiles the file, builds the cook on the signer's Pot (or --pot), rehearses it, signs it,",
+      "Compiles the file, builds the cook on the signer's Pot (or --pot), simulates it, signs it,",
       "sends it and waits for the receipt: prints the hash, status and gas used, and the decoded",
       "reason when it reverts (exit 1). The signer is the owner. The value defaults to the",
       "Kitchen's execution fee, read from the chain.",
@@ -2958,7 +2958,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       '    "native": { "perTransaction": "0.01", "perDay": "0.05" },',
       '    "tokens": { "USDC": { "perTransaction": "100", "perDay": "500" } } }',
       "What a transaction moves out of the wallet (and the Pot it cooks on) is measured by",
-      "rehearsing it, and a send that breaks a limit is refused, naming it; the last 24 hours are",
+      "simulating it, and a send that breaks a limit is refused, naming it; the last 24 hours are",
       "counted from <name>.ledger.jsonl. With no policy, sends work, and say no limits are set.",
       "",
       "Examples:",
@@ -3383,7 +3383,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "It reads the chain in five requests, each one eth_call for every read in it, all at one",
       "block, which it names: --block, or the latest when it starts. Pass that block to sauce",
-      "simulate --block to rehearse on the prices maxPrice was taken from.",
+      "simulate --block to run on the prices maxPrice was taken from.",
       "",
       "On Solana: every pool of the pair at each venue whose swap takes a price limit that stops",
       "it (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper,",
@@ -3776,11 +3776,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   runtime: {
     usage: ["sauce runtime [status] [--json]", "sauce runtime install [--json]"],
-    summary: "Install or check the packages sauce mcp and Solana rehearsals load",
+    summary: "Install or check the packages sauce mcp and Solana simulations load",
     flags: { ...JSON_FLAG, ...HELP },
     details: [
       "Two commands load packages a library install of this package leaves out, being its",
-      "optional peer dependencies: sauce mcp (the MCP SDK and zod) and a Solana rehearsal in a",
+      "optional peer dependencies: sauce mcp (the MCP SDK and zod) and a Solana simulation in a",
       "local copy (LiteSVM). Each takes your own copies, where the package resolves them at",
       "exactly the versions it pins; else this version's runtime folder, ~/.sauce/runtime/<version>,",
       "which the first use installs with npm ci from the lockfile the package ships (every package",
@@ -3919,7 +3919,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "source add sauce_wallet_create, sauce_wallet_list and sauce_wallet_send: the server then",
       "signs with the wallets of that directory alone, unlocked by that password, which it reads",
       "once at start (from the variable an MCP client's config passes from the agent's .env, a",
-      "file, or a command) and which no tool takes or returns. sauce_wallet_send rehearses what it",
+      "file, or a command) and which no tool takes or returns. sauce_wallet_send simulates what it",
       "is given and holds it to the wallet's policy (sauce wallet --help) before it sends.",
       "The HTTP server never signs: --wallets is refused there, and it has no wallet tools.",
       "",
@@ -4021,6 +4021,7 @@ function mainHelp(): string {
     "sauce: compile SauceScript, and run it on a chain.",
     "",
     "Usage: sauce <command> [options]",
+    "       sauce --version (-v)",
     "",
     "Commands:",
     ...Object.entries(COMMANDS).map(
@@ -4179,6 +4180,9 @@ function rememberSecrets(given: readonly string[]): void {
  *  in its first tool result instead (`mcp.ts`), its stdout being the protocol's over stdio. */
 const NO_NOTICE = new Set(["update", "mcp"]);
 
+/** What asks for the package's version in place of a command: the spellings other CLIs teach. */
+const VERSION_WORDS = new Set(["--version", "-v", "-V", "version"]);
+
 /** The update check's notice, on stderr after what the command printed (`update-check.ts`). */
 function printNotice(io: CliIo, check: UpdateCheck | undefined): void {
   const latest = check?.latest();
@@ -4209,7 +4213,7 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
 
     return 0;
   }
-  if (name === "--version") {
+  if (VERSION_WORDS.has(name)) {
     const { name: pkg, version } = packageInfo();
     io.stdout(`${pkg} ${version}\n`);
     printNotice(io, lead === 0 && !rest.includes("--no-update-check") ? io.updateCheck : undefined);

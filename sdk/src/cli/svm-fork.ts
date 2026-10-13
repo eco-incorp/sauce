@@ -222,10 +222,10 @@ export async function openFork(
     litesvm = await import("litesvm");
   } catch (error) {
     throw new CliError(
-      "rehearsing this cook runs it in a local copy of the accounts it names, with LiteSVM, which " +
+      "simulating this cook runs it in a local copy of the accounts it names, with LiteSVM, which " +
         `does not load here (${(error as Error).message.split("\n")[0]}): it ships native ` +
         "binaries for Linux and macOS on x64 and arm64. Send the cook with `sauce run`, " +
-        "which stages it and rehearses the staged cook on the cluster first",
+        "which stages it and simulates the staged cook on the cluster first",
     );
   }
   const { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM, Rent } = litesvm;

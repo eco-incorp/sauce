@@ -1452,7 +1452,7 @@ const tooLarge = (prepared: Prepared, size: number, what: string): CliError => {
       `${TRANSACTION_SIZE_LIMIT}. A cook that large runs from a code buffer the program is staged ` +
       `into first, in transactions the owner signs and sends, which ${what} cannot do. Shrink the ` +
       `payload by at least ${over} bytes to fit, or let \`sauce run\` stage it (with the owner's ` +
-      "--keypair; it rehearses the staged cook before sending it)." +
+      "--keypair; it simulates the staged cook before sending it)." +
       (tables
         ? ""
         : " Its accounts cost 32 bytes each listed in the transaction and one through an address " +
@@ -1485,7 +1485,7 @@ async function ownerShort(
       `${input.owner} holds ${held.value} lamports, and the cook takes ${needed}: ` +
       (creating ? `${rent} in rent for the Pot, ` : "") +
       `the execution fee of ${prepared.fee} and the transaction's. Solana's simulateTransaction ` +
-      "takes no balance overrides, so the owner must hold them for a rehearsal too"
+      "takes no balance overrides, so the owner must hold them for a simulation too"
     );
   } catch {
     return undefined;
@@ -1592,7 +1592,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
     logs: result.logs,
   };
   const how = [
-    "Rehearsed with simulateTransaction, signatures unchecked; nothing was signed or sent:",
+    "Simulated with simulateTransaction, signatures unchecked; nothing was signed or sent:",
     ...(created
       ? []
       : [
@@ -1882,7 +1882,7 @@ async function stagedRehearsal(
     logs,
   };
   const how = [
-    `Rehearsed in a local copy (LiteSVM) of the ${fork.loaded} accounts the cook names, read from ` +
+    `Simulated in a local copy (LiteSVM) of the ${fork.loaded} accounts the cook names, read from ` +
       `solana at slot ${fork.slot}, with the released engine and Kitchen: ` +
       (fitsOne
         ? "a cluster's simulation takes no balance to assume."

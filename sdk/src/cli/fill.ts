@@ -201,7 +201,7 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
 export function fillTargets(input: ProgramInput, files: CliFiles): readonly FillTarget[] {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
-      `sauce intent fill rehearses intents an EVM chain opens, and ${input.chain.slug} is not one: ` +
+      `sauce intent fill simulates intents an EVM chain opens, and ${input.chain.slug} is not one: ` +
         "the eco-routes Portal this SDK publishes through is EVM only",
     );
   }
@@ -215,7 +215,7 @@ export function fillTargets(input: ProgramInput, files: CliFiles): readonly Fill
         `the intent to ${intent.destination.slug} uses ` +
           `${intent.captures.map((name) => `\`${name}\``).join(", ")}, which the program measures ` +
           "or computes while it runs: its route exists only once the program has run, so it " +
-          "cannot be rehearsed from the file. Name it by its hash once `sauce run` has published " +
+          "cannot be simulated from the file. Name it by its hash once `sauce run` has published " +
           "it, or make the value a literal, one of main's arguments (given with --args) or a " +
           "top-level `const` of a literal",
       );
@@ -316,7 +316,7 @@ async function destinationClient(input: FillInput, target: FillTarget): Promise<
   } catch (error) {
     if (error instanceof CliError && input.endpointFlag === "--rpc-url") {
       throw new CliError(
-        `${error.message}. sauce intent fill rehearses on the intent's destination, so --rpc-url is ` +
+        `${error.message}. sauce intent fill simulates on the intent's destination, so --rpc-url is ` +
           `${target.destination.slug}'s endpoint, not ${target.source.slug}'s`,
       );
     }
@@ -363,7 +363,7 @@ async function rehearseFill(input: FillInput, target: FillTarget): Promise<Fill>
             .replace(/ Fund the Pot instead\.$/, "")
             .replace(/\.$/, "");
           throw new CliError(
-            `the solver delivers ${symbol}, and the rehearsal cannot give it a balance: ` +
+            `the solver delivers ${symbol}, and the simulation cannot give it a balance: ` +
               `${why}. Pass --solver <an address that holds it>.`,
           );
         });
@@ -413,7 +413,7 @@ async function rehearseFill(input: FillInput, target: FillTarget): Promise<Fill>
     });
   } catch (error) {
     throw new CliError(
-      `rehearsing a fill needs eth_simulateV1 — the deploy, the approvals and the fulfill in one ` +
+      `simulating a fill needs eth_simulateV1 — the deploy, the approvals and the fulfill in one ` +
         `block — and the ${chain.slug} endpoint did not run it: ` +
         ((error as { shortMessage?: string }).shortMessage ?? "the request failed").replace(
           /\.$/,
@@ -556,7 +556,7 @@ function fillLines(fill: Fill, sending: boolean): string[] {
         ? `${head(fill)}the fill reverts: ${outcome.reason}`
         : `${head(fill)}the ${outcome.stage === "deploy" ? "Pot's deployment" : "approval"} before the ` +
           `fill reverts: ${outcome.reason}`,
-    `Rehearsed with eth_simulateV1 on ${fill.target.destination.slug}, one block from the solver ` +
+    `Simulated with eth_simulateV1 on ${fill.target.destination.slug}, one block from the solver ` +
       `${plan.solver}; ${sending ? "nothing assumed" : "nothing was signed or sent"}:`,
     ...plan.steps.map((step, index) => {
       const ran = fill.results[index]!;
@@ -574,7 +574,7 @@ function fillLines(fill: Fill, sending: boolean): string[] {
   ];
   if (fill.assumed.length > 0) {
     lines.push(
-      "Assumed for this rehearsal only, by state override:",
+      "Assumed for this simulation only, by state override:",
       ...fill.assumed.map(
         (balance) =>
           `  the solver holds ${assumedText(balance)}: ${balance.because}` +
@@ -748,7 +748,7 @@ async function replanned(input: FillInput, fills: readonly Fill[]): Promise<Fill
     const approved = fills[index]!.plan;
     if (!fill.outcome.ok) {
       throw new CliError(
-        `not sent: ${fill.plan.hashes.intentHash} no longer rehearses on ` +
+        `not sent: ${fill.plan.hashes.intentHash} no longer simulates on ` +
           `${fill.target.destination.slug} (${fill.outcome.reason}): run it again`,
       );
     }
@@ -865,7 +865,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
     if (target.destination.kind !== "evm") {
       throw new CliError(
         `the intent to ${target.destination.slug} is fulfilled through Solana's Portal program, ` +
-          "which this rehearsal does not run: it rehearses an EVM destination's Portal.fulfill",
+          "which this simulation does not run: it simulates an EVM destination's Portal.fulfill",
       );
     }
   }
@@ -898,7 +898,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
         : {
             notes: [
               ...notes,
-              ...(input.send === undefined ? [] : ["not sent: the rehearsal reverts"]),
+              ...(input.send === undefined ? [] : ["not sent: the simulation reverts"]),
             ],
           }),
       ...(ok ? {} : { exitCode: 1 }),
