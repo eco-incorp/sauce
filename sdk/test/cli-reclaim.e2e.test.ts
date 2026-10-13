@@ -36,8 +36,9 @@ import {
 
 import { ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS } from "@solana-program/address-lookup-table";
 
-import { decodeCursor, readPlanTx } from "../src/cli/svm-plan.js";
-import { v12SvmEngineProgramId } from "../src/deployments/index.js";
+import { decodeCursor } from "../src/cli/svm-plan.js";
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { KITCHEN_DISCRIMINATORS } from "../src/svm/index.js";
 import { jsonOf, sauce, sauceWith } from "./cli-anvil.js";
 import {
   describeSvm,
@@ -159,6 +160,22 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
     } finally {
       globalThis.fetch = shimmed;
     }
+  };
+  /** Whether a base64 transaction carries the Kitchen's close_code_buffer instruction. */
+  const closesBuffer = (wire: string): boolean => {
+    const message = getCompiledTransactionMessageDecoder().decode(
+      getTransactionDecoder().decode(getBase64Encoder().encode(wire)).messageBytes,
+    ) as {
+      staticAccounts: readonly Address[];
+      instructions: readonly { programAddressIndex: number; data?: Uint8Array }[];
+    };
+    const kitchen = address(v12SvmKitchenProgramId());
+
+    return message.instructions.some(
+      (instruction) =>
+        message.staticAccounts[instruction.programAddressIndex] === kitchen &&
+        KITCHEN_DISCRIMINATORS.closeCodeBuffer.every((byte, at) => instruction.data?.[at] === byte),
+    );
   };
   /** Past the slot each of `found`'s buffers and tables in use is free from. */
   const warpPast = (found: Listing): void => {
@@ -354,11 +371,16 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
   it("sends every close but one the cluster refuses, and says which", async () => {
     await abandonedSetup("refused-close");
     warpPast(await listing());
+    // Refused: the simulation of a transaction carrying the Kitchen's close_code_buffer.
+    let refusals = 0;
     const run = await answering(
       "simulateTransaction",
-      (params) =>
-        readPlanTx(getTransactionDecoder().decode(getBase64Encoder().encode(String(params[0]))))
-          ?.what === "closing the code buffer",
+      (params) => {
+        const closes = closesBuffer(String(params[0]));
+        if (closes) refusals += 1;
+
+        return closes;
+      },
       {
         result: {
           context: { slot: 1 },
@@ -377,6 +399,7 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
           ...["--rpc-url", RPC_URL, "--json"],
         ),
     );
+    expect(refusals).toBe(1);
     expect(run.code).toBe(1);
     const out = JSON.parse(run.stdout) as {
       buffers: Listing["buffers"];
