@@ -18,6 +18,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce intent`   | Publish, fill, prove, claim, refund and cancel cross-chain intents                |
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
 | `sauce send`     | Broadcast transactions signed elsewhere, wait for them, and report what they did  |
+| `sauce reclaim`  | List the code buffers and lookup tables a Solana owner left open, and close them  |
 | `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
 | `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
@@ -668,6 +669,25 @@ what is left, which `--cursor` alone (nothing sent) builds. A cook handed out is
 while it can still land; one broadcast another way is confirmed with `--signature <signature>`.
 `--close` gives up on the cook and closes the code buffer. A lookup table the plan created stays
 for the next cook naming the same accounts (`--lookup-table <address>`).
+
+### What a cook left open: `sauce reclaim`
+
+```sh
+sauce reclaim --chain solana --owner <pubkey>
+sauce reclaim --chain solana --keypair ~/.config/solana/id.json --yes
+```
+
+lists the Kitchen code buffers a Solana owner has open — a plan given up on, or never finished,
+leaves one; a run closes its own, and names one it could not — and the lookup tables its cooks went
+through, which a run keeps for the next cook naming the same accounts, each with the rent it holds.
+The tables are the owner's that hold the Kitchen's execution-fee config, which every Sauce cook's
+table holds; `--lookup-table <address>` names one outright, for an endpoint that refuses the scan.
+With `--owner` alone it prints the transactions that close them, unsigned, for any signer and
+`sauce send`; with the owner's key it asks, then sends them (`--yes` without asking). A buffer
+closes in one transaction, its rent back at once. A table closes in two: deactivated now, and
+closed once its deactivation slot has left the cluster's recent slot hashes, 512 slots (about three
+and a half minutes) later; the listing says the slot it closes from, and the command run again
+then closes it. A cook naming a deactivated table fails: `--keep-tables` closes the buffers only.
 
 `--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the

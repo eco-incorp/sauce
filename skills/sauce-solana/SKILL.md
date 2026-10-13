@@ -335,6 +335,14 @@ cursor }`, every transaction base64 for the owner to sign, on one blockhash that
   transaction; none needs a fresh keypair. A transaction broadcast another way is confirmed with
   `--signature <signature>`, so the plan knows how its cook went (a cook it handed out is never
   built again while it can still land). `--close` gives up on the cook and closes the buffer.
+- **Rent left open.** A code buffer a plan never closed, and the lookup tables cooks keep for the
+  next cook naming the same accounts, hold the owner's rent.
+  `sauce reclaim --chain solana --owner <pubkey>` lists them with that rent and prints the
+  transactions that close them, unsigned (the tool `sauce_reclaim`); with `--keypair <keypair>` it
+  sends them. A buffer closes at
+  once; a table is deactivated first and closed about 512 slots later (run it again then; the
+  listing names the slot), and a cook naming a deactivated table fails, so `--keep-tables` leaves
+  the tables.
 - **Accounts past one transaction go through a lookup table.** Each account a transaction lists
   costs 32 bytes, and one taken through an address lookup table one byte. `sauce run` creates a
   table holding a staged cook's accounts when they do not fit, from the signer, which pays its

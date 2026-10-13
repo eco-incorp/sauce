@@ -34,6 +34,7 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 | `sauce run`      | Compiles, rehearses, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
 | `sauce send`     | Broadcasts transactions signed elsewhere, waits for them, reports what they did   |
+| `sauce reclaim`  | Lists the code buffers and lookup tables a Solana owner left open; closes them    |
 | `sauce intent`   | Publishes, fills, proves, claims, refunds and cancels intents (`sauce-intents`)   |
 | `sauce wallet`   | Creates, lists and imports the wallets `--wallet` signs with                      |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
