@@ -1,6 +1,7 @@
 /**
  * Solana's venue namespaces, EXECUTED: `OrcaWhirlpool.swap(pool, USDC, WSOL, …)`,
- * `RaydiumClmm.trySwap(…)` and `Phoenix.swap(…)` compiled for Solana and run through the `sauce`
+ * `RaydiumClmm.trySwap(…)`, `Phoenix.swap(…)` and every other venue's `swap` compiled for Solana
+ * and run through the `sauce`
  * command with the pool as main's argument and no `--account` — the pool's nine accounts read from
  * the pool on the cluster as the cook is built (`svm/pool-slot.ts`), the trader's derived from the
  * owner and the Pot — against the released Kitchen and engine and the venues' own mainnet programs
@@ -48,6 +49,7 @@ import {
   restoreVenues,
   TOKEN,
   USDC,
+  USDT,
   WSOL,
 } from "./svm/venue-fixture.js";
 
@@ -314,6 +316,51 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     expect(out).toMatchObject({ ok: true });
     expect(BigInt(out.returned as string)).toBeGreaterThan(0n);
   }, 300_000);
+
+  it.each([
+    ["PancakeswapClmm", "pancakeswap-clmm-sol-usdc", WSOL],
+    ["Byreal", "byreal-usdc", address("4SoQ8UkWfeDH47T56PA53CZCeW4KytYCiU65CwBWoJUt")],
+    ["StabbleClmm", "stabble-clmm-usdc-usdt", USDT],
+    ["Cropper", "cropper-sol-usdc", WSOL],
+    ["Defituna", "defituna-sol-usdc", WSOL],
+    ["Crema", "crema-sol-usdc", WSOL],
+  ] as const)(
+    "%s.swap at %s, given only the pool and the mint bought, lands what it bought in the Pot",
+    async (namespace, name, buy) => {
+      restoreVenues(harness.svm);
+      const file = program(
+        `venue-${namespace}`,
+        "function main(pool: Address, buy: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
+          `  return ${namespace}.swap(pool, USDC, buy, amountIn, maxPrice, 1);\n}\n`,
+      );
+      const p = pool(name);
+      const amount = 5n * 10n ** 6n;
+      const maxPrice = (allIn(p, key(USDC) < key(buy)) * 10003n) / 10000n;
+      const args = ["--args", p.pool, buy, String(amount), String(maxPrice)];
+      const mint = harness.svm.getAccount(buy);
+      if (!mint.exists) throw new Error(`the fixture has no mint ${buy}`);
+      const [potBuy] = await findAssociatedTokenPda({
+        owner: pot,
+        mint: buy,
+        tokenProgram: mint.programAddress,
+      });
+      const held = harness.svm.getAccount(potBuy).exists ? tokenAmount(harness, potBuy) : 0n;
+      const before = tokenAmount(harness, potUsdc);
+
+      // The run creates the Pot's account for what it buys where there is none (--yes).
+      expect(json(await run(file, ...args))).toMatchObject({ cook: { status: "success" } });
+      const bought = tokenAmount(harness, potBuy) - held;
+      expect(bought).toBeGreaterThan(0n);
+      const paid = before - tokenAmount(harness, potUsdc);
+      expect(paid > 0n && paid <= amount).toBe(true);
+      // Simulated again, what main returns is what arrives.
+      restoreVenues(harness.svm);
+      const again = json(await simulate(file, ...args));
+      expect(again).toMatchObject({ ok: true });
+      expect(BigInt(again.returned as string)).toBeGreaterThan(0n);
+    },
+    300_000,
+  );
 
   it("refuses a pool no price-limit venue owns before the cook, and another venue's on chain", async () => {
     const file = program(

@@ -439,6 +439,13 @@ async function programAccounts(
   const layout = CLMM[venue.layout];
   return query([
     { dataSize: BigInt(layout.size) },
+    {
+      memcmp: {
+        offset: 0n,
+        bytes: getBase58Decoder().decode(new Uint8Array(layout.discriminator)),
+        encoding: "base58",
+      },
+    },
     { memcmp: { offset: BigInt(layout.mintA), bytes: lower, encoding: "base58" } },
     { memcmp: { offset: BigInt(layout.mintB), bytes: higher, encoding: "base58" } },
   ]);

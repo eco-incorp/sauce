@@ -67,6 +67,7 @@ import {
   type SvmMintProgramOf,
 } from "../svm/account-names.js";
 import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
+import type { SvmSlot } from "../svm/pool-slot.js";
 import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
   type AccountResolution,
@@ -750,6 +751,8 @@ export async function resolveTokenAccounts(
 }> {
   const accounts: Record<string, string> = {};
   const named = new Map<string, TokenAccountNamed>();
+  // This cook's pool slots, each read once for its nine names and never kept for another cook.
+  const slots = new Map<string, Promise<SvmSlot>>();
   for (const [name, value] of Object.entries(given)) {
     let resolved: ResolvedSvmAccountName;
     try {
@@ -761,7 +764,7 @@ export async function resolveTokenAccounts(
         args: args.keys ?? {},
         integers: args.integers ?? {},
         ...(programOf === undefined ? {} : { programOf }),
-        ...(load === undefined ? {} : { load }),
+        ...(load === undefined ? {} : { load, slots }),
       });
     } catch (error) {
       if (error instanceof SvmAccountNameError) {

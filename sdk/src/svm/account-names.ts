@@ -72,6 +72,12 @@ export interface SvmAccountNameContext {
    * a slot is refused.
    */
   readonly load?: OwnedAccountLoader;
+  /**
+   * The slots this resolution has read, by pool and token paid, which the nine names of one slot
+   * share. Give one map per cook, never across cooks: a pool's tick arrays move with its price.
+   * Without it each name reads its slot.
+   */
+  readonly slots?: Map<string, Promise<SvmSlot>>;
 }
 
 /** One name, resolved. */
@@ -420,10 +426,7 @@ export async function resolveSvmAccountName(
   };
 }
 
-/** Each loader's slots already read, by pool and token paid: a cook names each slot's nine parts. */
-const SLOTS = new WeakMap<OwnedAccountLoader, Map<string, Promise<SvmSlot>>>();
-
-/** One account of a pool's slot, the slot read once per loader, pool and token paid. */
+/** One account of a pool's slot, the slot read once per resolution (`slots`), pool and token paid. */
 async function resolveSlot(
   parsed: Extract<Parsed, { kind: "slot" }>,
   ctx: SvmAccountNameContext,
@@ -440,16 +443,11 @@ async function resolveSlot(
       `pool ${pool}'s slot is read from the cluster, which this resolution has no way to do`,
     );
   }
-  let read = SLOTS.get(load);
-  if (read === undefined) {
-    read = new Map();
-    SLOTS.set(load, read);
-  }
   const key = `${pool}:${mint}`;
-  let slot = read.get(key);
+  let slot = ctx.slots?.get(key);
   if (slot === undefined) {
     slot = svmPoolSlot(load, pool, mint);
-    read.set(key, slot);
+    ctx.slots?.set(key, slot);
   }
   let resolved: SvmSlot;
   try {

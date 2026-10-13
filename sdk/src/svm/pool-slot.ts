@@ -24,9 +24,11 @@ import { address, getAddressDecoder, getAddressEncoder, type Address } from "@so
 
 import {
   BYREAL_PROGRAM_ID,
+  CLMMPOOL_DISCRIMINATOR,
   CREMA_PROGRAM_ID,
   CROPPER_PROGRAM_ID,
   DEFITUNA_PROGRAM_ID,
+  FUSION_POOL_DISCRIMINATOR,
   fetchCremaPoolConfig,
   fetchCropperConfig,
   fetchDefiTunaPoolConfig,
@@ -34,10 +36,13 @@ import {
   fetchPhoenixConfig,
   ORCA_WHIRLPOOL_PROGRAM_ID,
   PANCAKESWAP_CLMM_PROGRAM_ID,
+  PHOENIX_MARKET_DISCRIMINANT,
   PHOENIX_PROGRAM_ID,
+  RAYDIUM_CLMM_POOL_DISCRIMINATOR,
   RAYDIUM_CLMM_PROGRAM_ID,
   STABBLE_CLMM_PROGRAM_ID,
 } from "./venues/index.js";
+import { WHIRLPOOL_DISCRIMINATOR } from "./venues/orca-whirlpool/index.js";
 import { memoizedGetProgramDerivedAddress } from "./venues/pda-memo.js";
 import type { AccountLoader, OwnedAccountLoader } from "./venues/types.js";
 
@@ -65,12 +70,17 @@ export const SVM_PRICE_LIMIT_VENUES: readonly SvmPriceLimitVenue[] = [
   { name: "Phoenix", program: PHOENIX_PROGRAM_ID, layout: "phoenix" },
 ];
 
-/** Where a concentrated-liquidity layout keeps the pair (lower key first), its liquidity, price and tick. */
+/**
+ * A concentrated-liquidity layout: its pool account's size and discriminator (the first 8 bytes,
+ * Anchor's hash of the account's name), and where it keeps the pair (lower key first), its
+ * liquidity, price and tick.
+ */
 export const SVM_CLMM_LAYOUT: Readonly<
   Record<
     Exclude<SvmPoolLayout, "phoenix">,
     {
       readonly size: number;
+      readonly discriminator: readonly number[];
       readonly mintA: number;
       readonly mintB: number;
       readonly liquidity: number;
@@ -79,15 +89,52 @@ export const SVM_CLMM_LAYOUT: Readonly<
     }
   >
 > = {
-  raydium: { size: 1544, mintA: 73, mintB: 105, liquidity: 237, price: 253, tick: 269 },
-  whirlpool: { size: 653, mintA: 101, mintB: 181, liquidity: 49, price: 65, tick: 81 },
-  defituna: { size: 423, mintA: 11, mintB: 43, liquidity: 151, price: 167, tick: 183 },
-  crema: { size: 748, mintA: 40, mintB: 72, liquidity: 174, price: 190, tick: 206 },
+  // PoolState, for every Raydium-layout fork.
+  raydium: {
+    size: 1544,
+    discriminator: RAYDIUM_CLMM_POOL_DISCRIMINATOR,
+    mintA: 73,
+    mintB: 105,
+    liquidity: 237,
+    price: 253,
+    tick: 269,
+  },
+  // Whirlpool, for Orca and Cropper.
+  whirlpool: {
+    size: 653,
+    discriminator: WHIRLPOOL_DISCRIMINATOR,
+    mintA: 101,
+    mintB: 181,
+    liquidity: 49,
+    price: 65,
+    tick: 81,
+  },
+  // FusionPool.
+  defituna: {
+    size: 423,
+    discriminator: FUSION_POOL_DISCRIMINATOR,
+    mintA: 11,
+    mintB: 43,
+    liquidity: 151,
+    price: 167,
+    tick: 183,
+  },
+  // Clmmpool.
+  crema: {
+    size: 748,
+    discriminator: CLMMPOOL_DISCRIMINATOR,
+    mintA: 40,
+    mintB: 72,
+    liquidity: 174,
+    price: 190,
+    tick: 206,
+  },
 };
 
-/** Where a Phoenix market keeps its base mint and its quote mint. */
+/** Where a Phoenix market keeps its base mint and its quote mint, in its 576-byte header. */
 export const PHOENIX_BASE_MINT_AT = 48;
 export const PHOENIX_QUOTE_MINT_AT = 128;
+const PHOENIX_HEADER_SIZE = 576;
 
 /** A slot's nine accounts, in the program's order. */
 export interface SvmSlot {
@@ -247,17 +294,18 @@ async function raydiumTickArrays(
     ]);
   };
   const chosen = await Promise.all(starts.map(at));
-  // Fewer than three with liquidity: the nearest that exist with none.
-  for (let distance = 0; chosen.length < 3 && distance <= 8; distance++) {
-    for (const start of distance === 0
-      ? [current]
-      : [current + distance * span, current - distance * span]) {
-      if (chosen.length >= 3 || starts.includes(start)) continue;
-      const key = await at(start);
-      if ((await load(key)) !== null) {
-        starts.push(start);
-        chosen.push(key);
-      }
+  // Fewer than three with liquidity: the nearest that exist with none, nearest first, every
+  // candidate read at once.
+  if (chosen.length < 3) {
+    const candidates: number[] = [current];
+    for (let distance = 1; distance <= 8; distance++)
+      candidates.push(current + distance * span, current - distance * span);
+    const unmarked = candidates.filter((start) => !starts.includes(start));
+    const keys = await Promise.all(unmarked.map(at));
+    const exist = await Promise.all(keys.map(async (key) => (await load(key)) !== null));
+    for (const [i, key] of keys.entries()) {
+      if (chosen.length >= 3) break;
+      if (exist[i]) chosen.push(key);
     }
   }
   if (chosen.length < 3) {
@@ -306,7 +354,14 @@ export async function svmPoolSlot(
   }
   const data = account.data;
   const loadData: AccountLoader = async (key) => (await load(key))?.data ?? null;
+  // The account's own kind, before a byte of it is read as a pool's: an account of the venue's
+  // program that is not a pool is refused here rather than read at a pool's offsets.
+  const notAPool = (what: string) =>
+    new Error(`${pool} is not a ${venue.name} ${what}: its account is another of the program's`);
   if (venue.layout === "phoenix") {
+    if (data.length < PHOENIX_HEADER_SIZE || le(data, 0, 8) !== PHOENIX_MARKET_DISCRIMINANT) {
+      throw notAPool("market");
+    }
     const base = keyAt(data, PHOENIX_BASE_MINT_AT);
     const quote = keyAt(data, PHOENIX_QUOTE_MINT_AT);
     if (pay !== base && pay !== quote) {
@@ -318,6 +373,7 @@ export async function svmPoolSlot(
   if (data.length !== layout.size) {
     throw new Error(`${pool} is ${data.length} bytes, not a ${venue.name} pool's ${layout.size}`);
   }
+  if (!layout.discriminator.every((byte, i) => data[i] === byte)) throw notAPool("pool");
   const lower = keyAt(data, layout.mintA);
   const higher = keyAt(data, layout.mintB);
   if (pay !== lower && pay !== higher) {
