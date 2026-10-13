@@ -13,6 +13,9 @@
  * execution suite.
  */
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import {
@@ -31,6 +34,7 @@ import { bytesToHex, hexToBigInt, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
+import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
   fixture,
@@ -220,6 +224,144 @@ describe(
       assert.equal(hexToBigInt(sent.sent[0]!.returns as Hex), 400n);
       assert.equal(tokenAmount(harness, dest), 400n);
       assert.deepEqual(Object.keys(shim.sent.at(-1)!.signatures), [owner.address]);
+    });
+  },
+);
+
+/** A program staged in a code buffer, naming more accounts than a transaction lists. */
+const WIDE_ACCOUNTS = 40;
+const WIDE = [
+  `function main(${Array.from({ length: WIDE_ACCOUNTS }, (_, i) => `a${i}: Account`).join(", ")}): Uint256 {`,
+  `  const blob = hex\`${"ab".repeat(1500)}\`;`,
+  "  require(blob.length == 1500);",
+  "  return 7;",
+  "}",
+  "",
+].join("\n");
+
+interface PlanStep {
+  readonly step: string;
+  readonly transactions?: ReadonlyArray<{ what: string; transaction: string }>;
+  readonly cursor?: string;
+}
+
+describe(
+  "a staged Solana cook as a plan, through the tools alone",
+  { skip: !svmArtifactsPresent },
+  () => {
+    let harness: EngineHarness;
+    let shim: SolanaShim;
+    let mcp: Connected;
+    let wallets: Connected;
+    let dir: string;
+    let owner: KeyPairSigner;
+    const accounts = Object.fromEntries(
+      Array.from({ length: WIDE_ACCOUNTS }, (_, i) => [`a${i}`, randomAddress()]),
+    );
+    const PASSWORD = `throwaway-${process.pid}-${Date.now()}`;
+
+    const sign = (step: PlanStep): Promise<string[]> =>
+      Promise.all(
+        (step.transactions ?? []).map(async ({ transaction }) =>
+          getBase64EncodedWireTransaction(
+            await signTransaction(
+              [owner.keyPair],
+              getTransactionDecoder().decode(getBase64Encoder().encode(transaction)),
+            ),
+          ),
+        ),
+      );
+
+    before(async () => {
+      harness = await startEngine(
+        1_700_000_000n,
+        ENGINE_SO as string,
+        address(v12SvmEngineProgramId()),
+      );
+      owner = await generateKeyPairSigner();
+      harness.svm.airdrop(owner.address, lamports(50_000_000_000n));
+      shim = solanaShim(harness.svm, SOLANA_URL);
+      shim.install();
+      mcp = await connect();
+      dir = mkdtempSync(join(tmpdir(), "sauce-mcp-plan-"));
+      wallets = await connect(undefined, undefined, {
+        store: new WalletStore(join(dir, "wallets")),
+        password: PASSWORD,
+        source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
+      });
+    });
+    after(async () => {
+      shim?.restore();
+      await mcp?.close();
+      await wallets?.close();
+      if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("signs each step sauce_tx and sauce_send return, to the end: setup, cook, close", async () => {
+      const first = ok(
+        await mcp.call("sauce_tx", {
+          source: WIDE,
+          chain: "solana",
+          owner: owner.address,
+          salt: "plan",
+          accounts,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as unknown as PlanStep;
+      assert.equal(first.step, "setup");
+      const steps: string[] = [];
+      let step = first;
+      let cookReturned: unknown;
+      for (let round = 0; round < 6; round++) {
+        const sent = ok(
+          await mcp.call("sauce_send", {
+            transactions: await sign(step),
+            cursor: step.cursor,
+            rpcUrl: SOLANA_URL,
+          }),
+        ) as { ok: boolean; sent: Array<Record<string, unknown>>; next: PlanStep };
+        assert.equal(sent.ok, true, JSON.stringify(sent.sent));
+        cookReturned ??= sent.sent.find((one) => one.returnType !== undefined)?.returned;
+        steps.push(sent.next.step);
+        if (sent.next.step === "done") break;
+        step = sent.next;
+      }
+      assert.deepEqual(steps, ["cook", "close", "done"]);
+      assert.equal(cookReturned, "7");
+      // Only the owner ever signed.
+      assert.ok(shim.sent.every((tx) => Object.keys(tx.signatures).join() === owner.address));
+    });
+
+    it("sends the whole plan from a wallet with sauce_wallet_send, from sauce_tx's result", async () => {
+      const created = ok(
+        await wallets.call("sauce_wallet_create", { name: "sol", kind: "solana" }),
+      );
+      const wallet = address(String(created.address));
+      harness.svm.airdrop(wallet, lamports(50_000_000_000n));
+      const planned = ok(
+        await wallets.call("sauce_tx", {
+          source: WIDE,
+          chain: "solana",
+          owner: wallet,
+          accounts,
+          rpcUrl: SOLANA_URL,
+        }),
+      );
+      const sent = ok(
+        await wallets.call("sauce_wallet_send", {
+          wallet: "sol",
+          transaction: planned,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { ok: boolean; sent: Array<{ what: string; status: string; returned?: unknown }> };
+      assert.equal(sent.ok, true, JSON.stringify(sent));
+      const whats = sent.sent.map((one) => one.what);
+      assert.equal(whats[0], "creating the Pot");
+      assert.ok(whats.includes("creating the lookup table"));
+      assert.equal(whats.at(-1), "closing the code buffer");
+      assert.equal(sent.sent.find((one) => one.what.startsWith("cook on Pot"))?.returned, "7");
+      assert.ok(sent.sent.every((one) => one.status === "success"));
+      assert.ok(wallets.received.every((text) => !text.includes(PASSWORD)));
     });
   },
 );

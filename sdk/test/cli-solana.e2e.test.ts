@@ -1334,21 +1334,28 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     });
     const { codeBuffer } = out.staged as { codeBuffer: Address };
     expect(harness.svm.getAccount(codeBuffer).exists).toBe(false);
-    // Too large for a single unsigned transaction: it says by how much, and that `sauce run`
-    // stages it.
+    // Too large for a single unsigned transaction: `sauce tx` plans it, its first step everything the
+    // cook needs on the cluster — the missing Pot, the buffer, the program in chunks, finalized —
+    // for the owner to sign, and a cursor `sauce send` takes on from.
     const program = compileSauceProgram("solana", readFileSync(big, "utf8"), {}).bytecode.length;
-    const refused = await sauce(
-      ...["tx", big, "--owner", owner.signer.address, "--salt", "absent"],
-      ...["--rpc-url", RPC_URL],
-    );
-    expect(refused.code).toBe(1);
-    expect(refused.stderr).toMatch(
-      new RegExp(
-        `the payload \\(the program, with no arguments\\) is ${program} bytes, so its cook is ` +
-          "a (\\d+)-byte transaction, (\\d+) past Solana's 1232\\. .* Shrink the payload by at " +
-          "least \\2 bytes to fit, or let `sauce run` stage it",
+    const planned = json(
+      await sauce(
+        ...["tx", big, "--owner", owner.signer.address, "--salt", "absent"],
+        ...["--rpc-url", RPC_URL],
       ),
-    );
+    ) as { step: string; transactions: Array<{ what: string; feePayer: string }>; cursor: string };
+    expect(planned.step).toBe("setup");
+    expect(planned.cursor).toMatch(/^sauce-plan-1\./);
+    expect(planned.transactions.map((tx) => tx.what)).toEqual([
+      "creating the Pot",
+      "creating the code buffer",
+      ...Array.from(
+        { length: Math.ceil(program / 900) },
+        (_, index) => `writing bytes ${index * 900}… of the program`,
+      ),
+      "finalizing the code buffer",
+    ]);
+    expect(planned.transactions.every((tx) => tx.feePayer === owner.signer.address)).toBe(true);
     // A simulation stages it in a local copy of the accounts, the missing Pot created there first.
     const rehearsed = await sauce(
       ...["simulate", big, "--owner", owner.signer.address, "--salt", "absent"],

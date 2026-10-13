@@ -3,10 +3,11 @@
  * against Solana in process: `globalThis.fetch` answers the calls to `url` from the bank and passes
  * every other request on, so an anvil beside it is reached as usual. It answers what the CLI's
  * Solana steps ask — the blockhash, the clock and accounts, balances, simulation (with the
- * accounts it is asked to report), sending, statuses with their slot, the landed transaction and
- * the finalized slot (one behind the tip, held in SlotHashes as a cluster's is) — and refuses
- * anything else by name. `sendTransaction` checks every signature
- * against the message first, so a test proves the CLI signed what it sent.
+ * accounts it is asked to report), sending, statuses with their slot, the landed transaction, a
+ * key's transactions, the block height and the finalized slot (one behind the tip, held in
+ * SlotHashes as a cluster's is) — and refuses anything else by name. A blockhash it hands out is
+ * good for 150 slots, as a cluster's is, where the bank takes only its latest. `sendTransaction`
+ * checks every signature against the message first, so a test proves the CLI signed what it sent.
  */
 import {
   address,
@@ -14,6 +15,7 @@ import {
   getBase58Encoder,
   getBase64Decoder,
   getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
   getPublicKeyFromAddress,
   getTransactionDecoder,
   getTransactionEncoder,
@@ -23,6 +25,8 @@ import {
   type Transaction,
 } from "@solana/kit";
 import { FailedTransactionMetadata, type LiteSVM } from "litesvm";
+
+import { FIELDLESS } from "../../src/cli/svm-fork.js";
 
 const b64 = (bytes: ReadonlyUint8Array): string => getBase64Decoder().decode(bytes);
 
@@ -40,6 +44,27 @@ const rpcAccount = (account: {
   space: account.data.length,
 });
 
+/** The addresses a v0 message loads through lookup tables, read from the tables in `svm`. */
+function loadedKeys(svm: LiteSVM, transaction: Transaction): string[] {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+    addressTableLookups?: readonly {
+      lookupTableAddress: Address;
+      writableIndexes: readonly number[];
+      readonlyIndexes: readonly number[];
+    }[];
+  };
+
+  return (message.addressTableLookups ?? []).flatMap((lookup) => {
+    const table = svm.getAccount(lookup.lookupTableAddress);
+    if (!table.exists) return [];
+    // A table's addresses follow its 56-byte header, 32 bytes each.
+    const key = (index: number): string =>
+      getBase58Decoder().decode(table.data.subarray(56 + index * 32, 88 + index * 32));
+
+    return [...lookup.writableIndexes, ...lookup.readonlyIndexes].map(key);
+  });
+}
+
 function rpcError(err: unknown): unknown {
   const detail = err as { index?: number; err?: () => unknown };
   if (typeof detail.index === "number" && typeof detail.err === "function") {
@@ -55,7 +80,8 @@ function rpcError(err: unknown): unknown {
     };
   }
 
-  return String(err);
+  // A transaction error with no fields, by its name, as a cluster spells it.
+  return typeof err === "number" ? (FIELDLESS[err] ?? String(err)) : String(err);
 }
 
 interface Landed {
@@ -70,9 +96,14 @@ export interface SolanaShim {
   readonly url: string;
   /** Every transaction sent, in order, decoded. */
   readonly sent: Transaction[];
+  /** Makes every blockhash handed out so far expire, as a minute's wait would on a cluster. */
+  expire(): void;
   install(): void;
   restore(): void;
 }
+
+/** How many slots a blockhash stays valid for after it is handed out, as on a cluster. */
+const BLOCKHASH_SLOTS = 150n;
 
 /**
  * A Solana endpoint at `url`, answered from `svm`. `known` names the accounts `getProgramAccounts`
@@ -86,6 +117,28 @@ export function solanaShim(
   const original = globalThis.fetch;
   const landed = new Map<string, Landed>();
   const sent: Transaction[] = [];
+  // Every blockhash handed out, and the slot it was: a cluster takes a transaction on any of them
+  // for BLOCKHASH_SLOTS slots, where the bank takes only its latest.
+  const issued = new Map<string, bigint>();
+  const recent = (transaction: Transaction): boolean => {
+    const { lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
+      transaction.messageBytes,
+    ) as { lifetimeToken: string };
+    const at = issued.get(lifetimeToken);
+
+    return at !== undefined && slot() - at <= BLOCKHASH_SLOTS;
+  };
+  /** Runs `run` with the bank's blockhash check off where the cluster's would pass `transaction`:
+   *  a recent blockhash that is not the bank's latest, or a simulation that replaces it. */
+  const onCluster = <T>(transaction: Transaction, replaced: boolean, run: () => T): T => {
+    const relaxed = replaced || recent(transaction);
+    if (relaxed) svm.withBlockhashCheck(false);
+    try {
+      return run();
+    } finally {
+      if (relaxed) svm.withBlockhashCheck(true);
+    }
+  };
   const decode = (wire: string): Transaction =>
     getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(wire)));
   const slot = (): bigint => svm.getClock().slot;
@@ -108,11 +161,47 @@ export function solanaShim(
       params: unknown[];
     };
     switch (method) {
-      case "getLatestBlockhash":
+      case "getLatestBlockhash": {
+        const blockhash = svm.latestBlockhash();
+        if (!issued.has(blockhash)) issued.set(blockhash, slot());
+
         return answer(id, {
           context: context(),
-          value: { blockhash: svm.latestBlockhash(), lastValidBlockHeight: 1_000_000 },
+          value: {
+            blockhash,
+            lastValidBlockHeight: Number(issued.get(blockhash)! + BLOCKHASH_SLOTS),
+          },
         });
+      }
+      // The block height, as the slot: no slot is skipped here.
+      case "getBlockHeight":
+        return answer(id, Number(slot()));
+      case "getSignaturesForAddress": {
+        const [key, config] = params as [string, { limit?: number } | undefined];
+        const found = [...landed.entries()]
+          .reverse()
+          .filter(([, tx]) =>
+            [
+              ...(
+                getCompiledTransactionMessageDecoder().decode(tx.transaction.messageBytes) as {
+                  staticAccounts: readonly string[];
+                }
+              ).staticAccounts,
+              ...loadedKeys(svm, tx.transaction),
+            ].includes(key),
+          )
+          .slice(0, config?.limit ?? 1000)
+          .map(([signature, tx]) => ({
+            signature,
+            slot: Number(tx.slot),
+            err: tx.err,
+            memo: null,
+            blockTime: null,
+            confirmationStatus: "confirmed",
+          }));
+
+        return answer(id, found);
+      }
       case "getSlot": {
         // No commitment is the server's default, finalized (which a client leaves out).
         const commitment = (params[0] as { commitment?: string } | undefined)?.commitment;
@@ -123,8 +212,11 @@ export function solanaShim(
         const finalized = slot() - 1n;
         const hashes = svm.getSlotHashes();
         if (!hashes.some((entry) => entry.slot === finalized) && hashes.length > 0) {
-          hashes[0]!.slot = finalized;
-          svm.setSlotHashes(hashes);
+          // Each read hands out copies: one more entry, for the new slot, ahead of the rest, which
+          // the sysvar keeps (512 of them) as a cluster's does.
+          const fresh = svm.getSlotHashes()[0]!;
+          fresh.slot = finalized;
+          svm.setSlotHashes([fresh, ...hashes].slice(0, 512));
         }
         return answer(id, Number(finalized));
       }
@@ -183,8 +275,11 @@ export function solanaShim(
         return answer(id, Number(svm.minimumBalanceForRentExemption(BigInt(params[0] as number))));
       case "simulateTransaction": {
         const transaction = decode(params[0] as string);
+        const replaced =
+          (params[1] as { replaceRecentBlockhash?: boolean } | undefined)
+            ?.replaceRecentBlockhash === true;
         svm.withSigverify(false);
-        const result = svm.simulateTransaction(transaction);
+        const result = onCluster(transaction, replaced, () => svm.simulateTransaction(transaction));
         svm.withSigverify(true);
         const failed = result instanceof FailedTransactionMetadata;
         const meta = result.meta();
@@ -222,7 +317,7 @@ export function solanaShim(
           }
         }
         const signature = getBase58Decoder().decode(Object.values(transaction.signatures)[0]!);
-        const result = svm.sendTransaction(transaction);
+        const result = onCluster(transaction, false, () => svm.sendTransaction(transaction));
         const failed = result instanceof FailedTransactionMetadata;
         const meta = failed ? result.meta() : result;
         landed.set(signature, {
@@ -291,6 +386,10 @@ export function solanaShim(
   return {
     url,
     sent,
+    expire: () => {
+      issued.clear();
+      svm.expireBlockhash();
+    },
     install: () => {
       globalThis.fetch = stub as unknown as typeof fetch;
     },
