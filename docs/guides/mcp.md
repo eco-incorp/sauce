@@ -611,16 +611,15 @@ most 32, each no longer than a signed transaction can be): on an EVM chain the r
 transaction. Each is simulated as it was signed first (an `eth_call` from its sender with its gas
 limit held to what that used; a Solana simulation that checks every signature) and refused, unsent,
 when it would fail; each lands before the next is simulated, and the first that does not succeed
-stops the rest. A transaction already on chain is read back, not sent again. It never takes a key,
+stops the rest. A transaction already on chain is read back, not sent again; one the chain had,
+pending, then lost (dropped or reorged out) is reported gone, to sign anew. It never takes a key,
 and is served over HTTP as over stdio.
 
 A Pot with no code yet needs no step of its own: `sauce_tx` returns its deployment as the first
 entry of `transactions` (marked `deploysPot`), with a note, then the cook. Send them in that order:
-any account may send the first, only the owner the second. Each comes with `gas`, the limit to sign
-it with: the cook's is estimated as if the deployment had landed (the two simulated together), with
-30% room, where a signer's own estimate, taken while the Pot has no code, is far too low. A cook
-that would revert after the deployment (a Pot not funded yet) comes with no `gas`, and a note
-saying why: fund the Pot and call `sauce_tx` again. `sauce_wallet_send` sends such a
+any account may send the first, only the owner the second. Sign the cook with a gas limit that has
+room, or once the deployment has landed: an estimate taken while the Pot has no code prices a call
+to an empty address, and `sauce_send` refuses the cook for it. `sauce_wallet_send` sends such a
 plan whole, rehearsing both together and holding them to the wallet's policy before it sends
 either. On Solana the same transaction creates the Pot ahead of the cook (`createsPot`).
 

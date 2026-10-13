@@ -59,7 +59,9 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "signatures — and one that would fail is not sent: the call fails with the reason, or, " +
         "once an earlier one landed, stops there with ok false. Each lands before the next is " +
         "simulated, so a cook after its Pot's deployment runs on the Pot. One already on chain is " +
-        "read back, not sent again. Returns `sent`: each one's hash (a Solana signature), " +
+        "read back, not sent again; one the chain had, pending, then lost (dropped or reorged " +
+        "out) is reported gone, to sign anew. A Solana transaction missing a signature (its fee " +
+        "payer's, or any its message names) is refused by name. Returns `sent`: each one's hash (a Solana signature), " +
         "status, `explorer` and `trace` (links to give the user, never to fetch), fee or gas, " +
         "the decoded `reason` of a failure, and for a cook what moved (`moves` on EVM, " +
         "`tokenChanges` and `lamportChanges` on Solana), `leftInPot`, and on Solana `returns` " +

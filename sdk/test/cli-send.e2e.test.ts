@@ -3,13 +3,11 @@
  * standing in for a KMS or a hardware wallet — then broadcast, confirmed and reported.
  *
  * Ethereum, on an anvil running the released gated stack (`cli-anvil.ts`): `sauce tx`'s plan for an
- * owner with no Pot yet (Kitchen.deployPot, then the cook). Built before the Pot is funded, the cook
- * comes with no gas and a note saying why; built after, each transaction comes with the gas to sign
- * it with, the cook's as if the deployment had landed. Signed with those limits and consecutive
- * nonces and sent in order, both land: the recipient paid, what moved and what stayed in the Pot
- * reported. A cook signed short of gas is refused, unsent; signed again with room it lands, and
- * sent twice it is read back, not resent. A cook that would revert is refused before it is
- * broadcast.
+ * owner with no Pot yet (Kitchen.deployPot, then the cook), signed with consecutive nonces. Sent in
+ * order, the deployment lands and a cook signed short of gas is refused, unsent; signed again with
+ * room, it pays the recipient and reports what moved and what stayed in the Pot. Sent twice, it is
+ * read back, not resent. A cook that would revert is refused before it is broadcast. A transaction
+ * the chain had, pending, then dropped is said to be gone, not waited out.
  *
  * Solana, on the released Kitchen and engine in LiteSVM (`svm/rpc-shim.ts`, which checks every
  * signature it is sent): `sauce tx`'s one-transaction cook, the Pot created in it, signed by the
@@ -84,7 +82,6 @@ interface Unsigned {
   readonly to: Address;
   readonly data: Hex;
   readonly value: string;
-  readonly gas?: string;
 }
 
 describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", () => {
@@ -154,82 +151,51 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     expect(run.stderr).toMatch(/is not signed: sign it with your wallet or signer first/);
   });
 
-  it("gives each transaction of the plan its gas, the cook's as if the Pot were there", async () => {
-    const build = async () => {
-      const built = await sauce(
-        ...["tx", PAY, "--chain", "ethereum", "--owner", signer.address],
-        ...["--args-json", JSON.stringify([RECIPIENT, AMOUNT.toString()])],
-        ...["--rpc-url", ethereum.rpcUrl],
-      );
-
-      return { plan: jsonOf(built) as unknown as typeof plan, notes: built.stderr };
-    };
-    // Unfunded, the cook would revert after the deployment: it is given no gas, and told why.
-    const unfunded = await build();
-    expect(unfunded.plan.transactions).toHaveLength(2);
-    expect(unfunded.plan.transactions[1]!.gas).toBeUndefined();
-    expect(unfunded.notes).toMatch(/The cook is given no gas: simulated after the deployment/);
-    expect(unfunded.notes).toMatch(/Fund the Pot first/);
-    for (const token of [usdc, usdt]) await ethereum.mint(token, unfunded.plan.pot, FUNDED);
-
-    const funded = await build();
-    plan = funded.plan;
-    const [deploy, cook] = plan.transactions as [Unsigned, Unsigned];
-    expect(BigInt(deploy.gas!)).toBeGreaterThan(0n);
-    expect(funded.notes).toMatch(
-      new RegExp(`the cook's, ${cook.gas}, is estimated as if the deployment had landed`),
+  it("sends the plan in order: the Pot deployed, and a cook signed short of gas refused", async () => {
+    const built = await sauce(
+      ...["tx", PAY, "--chain", "ethereum", "--owner", signer.address],
+      ...["--args-json", JSON.stringify([RECIPIENT, AMOUNT.toString()])],
+      ...["--rpc-url", ethereum.rpcUrl],
     );
-    // The signer's own estimate of the cook, while the Pot has no code, is far below it.
-    const ownEstimate = await ethereum.publicClient.estimateGas({
-      account: signer.address,
-      to: cook.to,
-      data: cook.data,
-      value: BigInt(cook.value),
-    });
-    expect(BigInt(cook.gas!)).toBeGreaterThan(ownEstimate * 2n);
-
-    // Signed with the limits the plan gives, sent together in order: both land.
+    plan = jsonOf(built) as unknown as typeof plan;
+    expect(plan.transactions).toHaveLength(2);
+    for (const token of [usdc, usdt]) await ethereum.mint(token, plan.pot, FUNDED);
+    const [deploy, cook] = plan.transactions as [Unsigned, Unsigned];
     const first = await nonce();
-    const signed = [
-      await sign(deploy, first, BigInt(deploy.gas!)),
-      await sign(cook, first + 1, BigInt(cook.gas!)),
-    ];
+    const deployGas = await ethereum.publicClient.estimateGas({
+      account: signer.address,
+      to: deploy.to,
+      data: deploy.data,
+    });
+    // An estimate taken before the Pot exists prices a call to an empty address: far too little.
+    const signed = [await sign(deploy, first, deployGas), await sign(cook, first + 1, 50_000n)];
+
     const run = await sauce("send", ...signed, "--rpc-url", ethereum.rpcUrl, "--json");
 
-    const out = jsonOf(run) as {
+    expect(run.code).toBe(1);
+    const out = JSON.parse(run.stdout) as {
       ok: boolean;
-      sent: Array<Record<string, unknown>>;
+      sent: Array<{ what: string; status: string; hash: string; reason?: string }>;
     };
-    expect(out.ok).toBe(true);
+    expect(out.ok).toBe(false);
     expect(out.sent[0]).toMatchObject({
       status: "success",
       what: expect.stringMatching(/deployPot/),
     });
-    expect(out.sent[1]).toMatchObject({
-      what: `cook on Pot ${plan.pot}`,
-      status: "success",
-      from: signer.address,
-    });
-    expect(out.sent[1]!.moves).toEqual(expect.arrayContaining([expect.any(Object)]));
-    expect(out.sent[1]!.leftInPot).toEqual(expect.any(Array));
+    expect(out.sent[1]).toMatchObject({ status: "failed", hash: "" });
+    expect(out.sent[1]!.reason).toMatch(
+      /signed with a gas limit of 50000, and the simulation used/,
+    );
     expect(await ethereum.publicClient.getCode({ address: plan.pot })).toMatch(/^0x[0-9a-f]{2,}/);
-    expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(AMOUNT);
-    expect(await ethereum.balanceOf(usdt, RECIPIENT)).toBe(AMOUNT);
+    expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(0n);
+    expect(await nonce()).toBe(first + 1);
     expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
   }, 120_000);
 
-  it("refuses a cook signed short of gas, and sends it signed again with room", async () => {
-    const cook = await cookFor(AMOUNT);
-    const before = await nonce();
-    const short = await sauce(
-      ...["send", await sign(cook, before, 50_000n)],
-      ...["--rpc-url", ethereum.rpcUrl, "--json"],
-    );
-    expect(short.code).toBe(1);
-    expect(short.stderr).toMatch(/signed with a gas limit of 50000, and the simulation used/);
-    expect(await nonce()).toBe(before);
+  it("sends the cook signed again with room: the recipient paid, what moved reported", async () => {
+    const cook = plan.transactions[1]!;
+    const signed = await sign(cook, await nonce(), 1_000_000n);
 
-    const signed = await sign(cook, before, 1_000_000n);
     const run = await sauce("send", signed, "--rpc-url", ethereum.rpcUrl, "--json");
 
     const out = jsonOf(run) as {
@@ -237,17 +203,24 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
       sent: Array<Record<string, unknown>>;
     };
     expect(out.ok).toBe(true);
-    expect(out.sent[0]).toMatchObject({ what: `cook on Pot ${plan.pot}`, status: "success" });
-    expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(AMOUNT * 2n);
+    expect(out.sent[0]).toMatchObject({
+      what: `cook on Pot ${plan.pot}`,
+      status: "success",
+      from: signer.address,
+    });
+    expect(out.sent[0]!.moves).toEqual(expect.arrayContaining([expect.any(Object)]));
+    expect(out.sent[0]!.leftInPot).toEqual(expect.any(Array));
+    expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(AMOUNT);
+    expect(await ethereum.balanceOf(usdt, RECIPIENT)).toBe(AMOUNT);
 
     // Sent again, it is the same transaction: read back, not resent.
-    const after = await nonce();
+    const before = await nonce();
     const again = jsonOf(await sauce("send", signed, "--rpc-url", ethereum.rpcUrl, "--json")) as {
       sent: Array<{ hash: string; status: string }>;
     };
     expect(again.sent[0]).toMatchObject({ hash: out.sent[0]!.hash, status: "success" });
-    expect(await nonce()).toBe(after);
-    expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(AMOUNT * 2n);
+    expect(await nonce()).toBe(before);
+    expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(AMOUNT);
   }, 120_000);
 
   it("refuses a cook that would revert, and sends nothing", async () => {
@@ -261,6 +234,43 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     expect(run.stderr).toMatch(/not sent — it would revert/);
     expect(await nonce()).toBe(before);
   }, 120_000);
+
+  it("says a transaction it saw, then lost, was reorged or dropped, rather than wait it out", async () => {
+    const rpc = ethereum.publicClient.request as unknown as (args: {
+      method: string;
+      params: unknown[];
+    }) => Promise<unknown>;
+    const before = await nonce();
+    const fees = await ethereum.publicClient.estimateFeesPerGas();
+    const signed = await signer.signTransaction({
+      chainId: 1,
+      type: "eip1559",
+      to: RECIPIENT,
+      value: 1n,
+      nonce: before,
+      gas: 21_000n,
+      maxFeePerGas: fees.maxFeePerGas * 2n,
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+    });
+    await rpc({ method: "evm_setAutomine", params: [false] });
+    try {
+      const hash = (await rpc({ method: "eth_sendRawTransaction", params: [signed] })) as Hex;
+      // The chain has it, pending: sauce send reads it back rather than send it again, and waits.
+      const sending = sauce("send", signed, "--rpc-url", ethereum.rpcUrl, "--json");
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await rpc({ method: "anvil_dropTransaction", params: [hash] });
+
+      const run = await sending;
+
+      expect(run.code).toBe(1);
+      expect(run.stderr).toMatch(
+        new RegExp(`${hash} was seen, then not found: reorged or dropped`),
+      );
+      expect(await nonce()).toBe(before);
+    } finally {
+      await rpc({ method: "evm_setAutomine", params: [true] });
+    }
+  }, 60_000);
 });
 
 const RPC_URL = "http://127.0.0.1:65533/";
@@ -332,7 +342,7 @@ describeSvm("sauce send: sauce tx's cook, signed elsewhere, on Solana", () => {
     const sent = shim.sent.length;
     const unsigned = await sauce("send", cook.transaction, "--rpc-url", RPC_URL);
     expect(unsigned.code).toBe(2);
-    expect(unsigned.stderr).toContain(`is not signed by ${owner.address}`);
+    expect(unsigned.stderr).toContain(`is not signed by its fee payer ${owner.address}`);
     // One byte of the message changed after signing: its signature no longer verifies.
     const wire = new Uint8Array(getBase64Encoder().encode(await signed(cook.transaction)));
     wire[wire.length - 1] ^= 1;
