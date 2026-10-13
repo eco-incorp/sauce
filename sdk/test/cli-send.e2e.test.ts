@@ -7,8 +7,9 @@
  * comes with no gas and a note saying why; built after, each transaction comes with the gas to sign
  * it with, the cook's as if the deployment had landed. Signed with those limits and consecutive
  * nonces and sent in order, both land: the recipient paid, what moved and what stayed in the Pot
- * reported. A cook signed short of gas is refused, unsent; signed again with room it lands, and
- * sent twice it is read back, not resent. A cook that would revert is refused before it is
+ * reported. Without the plan's gas, the cook signed with the signer's own estimate (taken while
+ * the Pot has no code) is refused, unsent, as before. A cook signed short of gas is refused; signed
+ * again with room it lands, and sent twice it is read back, not resent. A cook that would revert is refused before it is
  * broadcast. A transaction the chain had, pending, then dropped is said to be gone, not waited out.
  *
  * Solana, on the released Kitchen and engine in LiteSVM (`svm/rpc-shim.ts`, which checks every
@@ -111,6 +112,16 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
       maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
     });
   };
+  /** `sauce tx`'s plan for the signer's Pot of `salt`, which has no code yet, and its notes. */
+  const planFor = async (...salt: string[]) => {
+    const built = await sauce(
+      ...["tx", PAY, "--chain", "ethereum", "--owner", signer.address, ...salt],
+      ...["--args-json", JSON.stringify([RECIPIENT, AMOUNT.toString()])],
+      ...["--rpc-url", ethereum.rpcUrl],
+    );
+
+    return { plan: jsonOf(built) as unknown as typeof plan, notes: built.stderr };
+  };
   const cookFor = async (amount: bigint): Promise<Unsigned> =>
     jsonOf(
       await sauce(
@@ -155,15 +166,7 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
   });
 
   it("gives each transaction of the plan its gas, the cook's as if the Pot were there", async () => {
-    const build = async () => {
-      const built = await sauce(
-        ...["tx", PAY, "--chain", "ethereum", "--owner", signer.address],
-        ...["--args-json", JSON.stringify([RECIPIENT, AMOUNT.toString()])],
-        ...["--rpc-url", ethereum.rpcUrl],
-      );
-
-      return { plan: jsonOf(built) as unknown as typeof plan, notes: built.stderr };
-    };
+    const build = () => planFor();
     // Unfunded, the cook would revert after the deployment: it is given no gas, and told why.
     const unfunded = await build();
     expect(unfunded.plan.transactions).toHaveLength(2);
@@ -216,6 +219,39 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(AMOUNT);
     expect(await ethereum.balanceOf(usdt, RECIPIENT)).toBe(AMOUNT);
     expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
+  }, 120_000);
+
+  it("refuses the cook signed with the signer's own estimate instead, as before", async () => {
+    const salt = ["--salt", "own-estimate"];
+    const { pot } = (await planFor(...salt)).plan;
+    for (const token of [usdc, usdt]) await ethereum.mint(token, pot, FUNDED);
+    const [deploy, cook] = (await planFor(...salt)).plan.transactions as [Unsigned, Unsigned];
+    // Estimated by the signer while the Pot has no code: a call to an empty address.
+    const ownEstimate = await ethereum.publicClient.estimateGas({
+      account: signer.address,
+      to: cook.to,
+      data: cook.data,
+      value: BigInt(cook.value),
+    });
+    const first = await nonce();
+    const run = await sauce(
+      ...["send", await sign(deploy, first, BigInt(deploy.gas!))],
+      ...[await sign(cook, first + 1, ownEstimate), "--rpc-url", ethereum.rpcUrl, "--json"],
+    );
+
+    expect(run.code).toBe(1);
+    const out = JSON.parse(run.stdout) as {
+      sent: Array<{ what: string; status: string; hash: string; reason?: string }>;
+    };
+    expect(out.sent[0]).toMatchObject({
+      status: "success",
+      what: expect.stringMatching(/deployPot/),
+    });
+    expect(out.sent[1]).toMatchObject({ status: "failed", hash: "" });
+    expect(out.sent[1]!.reason).toMatch(
+      new RegExp(`signed with a gas limit of ${ownEstimate}, and the simulation used`),
+    );
+    expect(await nonce()).toBe(first + 1);
   }, 120_000);
 
   it("refuses a cook signed short of gas, and sends it signed again with room", async () => {
