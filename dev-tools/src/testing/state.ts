@@ -20,7 +20,10 @@
  * hardfork (anvil infers it from the block it forks) as flags, and, once the node is up, the next
  * block's base fee (a fork steps it from the pinned block's gas, `--init` carries the pinned block's
  * forward) and the dev accounts' nonces (a fork keeps the chain's). What a replay cannot reproduce
- * is a block hash, or a block's PREVRANDAO, which anvil derives from the one before it.
+ * is a block hash, or a block's PREVRANDAO, which anvil derives from the one before it. A version 1
+ * file, written before the kit recorded the node, still replays, at the gas limit its genesis
+ * records: on anvil's default hardfork, with the pinned block's base fee carried forward and the dev
+ * accounts' nonces at 0. Record it again to replay those too.
  *
  * Anvil's dev accounts are made plain accounts in every fork: their keys are public, and some carry
  * an EIP-7702 delegation on mainnets, which would make tokens check their signatures through it.
@@ -50,8 +53,13 @@ interface StateHeader {
   readonly nonces: Readonly<Record<string, number>>;
 }
 
+/** What a recording knows of the node: none of it in a version 1 file. */
+type NodeHeader = Pick<StateHeader, "hardfork" | "nextBaseFee" | "nonces">;
+
 interface StateFile {
-  readonly sauce: StateHeader & { readonly version: 2 };
+  readonly sauce:
+    | (StateHeader & { readonly version: 2 })
+    | (Omit<StateHeader, keyof NodeHeader> & { readonly version: 1 });
   readonly genesis: Record<string, unknown> & {
     readonly gasLimit: string;
     alloc: Record<string, unknown>;
@@ -157,13 +165,12 @@ async function replay(
 ): Promise<ForkNode> {
   const file = JSON.parse(gunzipSync(readFileSync(state)).toString("utf8")) as StateFile;
   const header = file.sauce;
-  if ((header?.version as number) === 1) {
-    throw new Error(
-      `${state} was recorded by an earlier testing kit, which did not record the node a replay ` +
-        "must run on: record it again",
-    );
+  if (header?.version !== 1 && header?.version !== 2) {
+    throw new Error(`${state} is not a recorded chain state`);
   }
-  if (header?.version !== 2) throw new Error(`${state} is not a recorded chain state`);
+  // A version 1 file records none of the node (see the module's header).
+  const recorded: Partial<NodeHeader> & Pick<NodeHeader, "nonces"> =
+    header.version === 2 ? header : { nonces: {} };
   if (header.chainId !== chainId || header.block !== block) {
     throw new Error(
       `${state} holds chain ${header.chainId} at block ${header.block}, not chain ${chainId} at ` +
@@ -185,8 +192,7 @@ async function replay(
         // `--init` takes neither from the genesis.
         "--gas-limit",
         String(gasLimit),
-        "--hardfork",
-        header.hardfork,
+        ...(recorded.hardfork === undefined ? [] : ["--hardfork", recorded.hardfork]),
       ],
       anvil === undefined ? {} : { binary: anvil },
     );
@@ -202,7 +208,12 @@ async function replay(
       gasLimit: BigInt(head.gasLimit),
       hardfork: info.hardFork.toLowerCase(),
     };
-    const expected = { block, timestamp: header.timestamp, gasLimit, hardfork: header.hardfork };
+    const expected = {
+      block,
+      timestamp: header.timestamp,
+      gasLimit,
+      hardfork: recorded.hardfork ?? booted.hardfork,
+    };
     if (
       Object.entries(expected).some(([key, value]) => booted[key as keyof typeof booted] !== value)
     ) {
@@ -211,11 +222,11 @@ async function replay(
       );
     }
     // What `--init` cannot be given: set once the node is up, before anything is mined.
-    if (header.nextBaseFee !== undefined) {
-      await rpc(node.url, "anvil_setNextBlockBaseFeePerGas", [header.nextBaseFee]);
+    if (recorded.nextBaseFee !== undefined) {
+      await rpc(node.url, "anvil_setNextBlockBaseFeePerGas", [recorded.nextBaseFee]);
     }
     await Promise.all(
-      Object.entries(header.nonces).map(([account, nonce]) =>
+      Object.entries(recorded.nonces).map(([account, nonce]) =>
         rpc(node.url, "anvil_setNonce", [account, `0x${nonce.toString(16)}`]),
       ),
     );

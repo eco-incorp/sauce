@@ -120,7 +120,8 @@ the EVM hardfork the fork ran, the base fee of the block after the pinned one, a
 accounts' nonces, and the replay sets them again. So a cook replayed uses the same gas, pays the same
 fees, and is the same transaction, hash included. A replay cannot reproduce block hashes, or the
 PREVRANDAO value of the blocks after the pinned one. A state file written by an earlier version of
-the kit lacks these values and is refused: record it again.
+the kit lacks these values: it still replays at its recorded gas limit, but sets none of the rest.
+Record it again to replay them too.
 
 ## The chain
 

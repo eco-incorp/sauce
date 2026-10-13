@@ -1356,11 +1356,13 @@ recording proxy in its own process (`recorder.mjs`, configured over stdin, never
 genesis written
 with the pinned block's own header in a gzipped `{ sauce: {...}, genesis }` file that must not
 mention the RPC. A replay runs on the node its recording ran on: what anvil's `--init` does not take
-from a genesis is in the header (version 2; an older file is refused) and set again — the gas limit
+from a genesis is in the header (version 2) and set again — the gas limit
 and the hardfork (which a fork infers from the block: Ethereum at 20M forks as Cancun) as flags,
 and the next block's base fee and the dev accounts' nonces once the node is up. `record.test.ts`
 holds a Uniswap V3 swap recorded and replayed to the same transaction hash, gas, balances, base
-fees and block spacing. Block hashes and PREVRANDAO are not reproduced. `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
+fees and block spacing. Block hashes and PREVRANDAO are not reproduced. A version 1 file, recorded
+before, replays at its genesis's gas limit alone (`test/testing/state/base.json.gz` is one, until it
+is recorded again). `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
 release or deploys it at the release addresses through `sdk/src/evm/release-stack.ts#deployReleaseStack`
 — the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too; it reads no file, so
 each caller passes the artifacts (the kit from `sdk/dist/artifacts`). `chain.ts`'s `TestChain` funds through `sdk/src/evm/balance-slot.ts` (the slot

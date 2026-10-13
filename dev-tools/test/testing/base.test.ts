@@ -1,7 +1,9 @@
 /**
  * `fork()` on Base, replayed from `state/base.json.gz` — Base at block 52,384,000, recorded once —
  * with no RPC. Record it again (`RECAPTURE_ANVIL_STATE=1`, the RPC from `sdk/rpc.config.json`) when
- * the suite starts reading state it did not read before, or the pinned block moves.
+ * the suite starts reading state it did not read before, or the pinned block moves. The file is a
+ * version 1 recording, which replays at its gas limit alone (`state.ts`): recording it again adds
+ * the node's hardfork, next base fee and dev nonces.
  */
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
