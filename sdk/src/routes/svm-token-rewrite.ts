@@ -40,8 +40,10 @@
  * known then: `self` (or `ctx.self()`, which as a holder is the program's own account, the Pot, as
  * on the EVM), a parameter of `main` declared `Address` (its argument), or a 32-byte key written
  * out. One computed while the program runs is refused, naming the explicit form: an
- * `Account` parameter of `main` in its place is the token account itself, which the caller attaches
- * and the program does not check (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`).
+ * `Account` parameter of `main` in its place is the token account itself, PAID AS ATTACHED. The
+ * call names no holder to check it against, so it is not checked, and whoever builds the
+ * transaction chooses it; the skill and the manual say so, and point to an `Address` recipient
+ * (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`).
  *
  * The accounts are `main`'s parameters, so every call stands in `main` itself (a helper has no
  * account parameters), and the program has a `main` (a script has no signature to add them to).
@@ -273,11 +275,15 @@ export function rewriteSvmTokenSyntax(
   rows: readonly SvmTokenRow[],
 ): SvmTokenRewriteResult {
   const none: SvmTokenRewriteResult = { source, rewrote: false, derived: {} };
+  // Before parsing: a program that names neither `Token` nor a symbol has nothing to lower. The
+  // scan stops at the first symbol it meets; a mention in a comment only costs the parse.
+  if (!source.includes(TOKEN_FACTORY_NAME) && !namesSymbol(source, tokens)) return none;
   const program = parseSauce(source);
   const declarations = countDeclarations(program);
   const declared = new Set(declarations.keys());
   const isSymbol = (name: string): boolean => tokens.has(name) && !declared.has(name);
   const factoryOwned = !declared.has(TOKEN_FACTORY_NAME);
+  const index = rowIndex(rows);
 
   // -- the sites, found in the whole program ------------------------------------------------------
   interface Site {
@@ -290,12 +296,6 @@ export function rewriteSvmTokenSyntax(
     walk(program, (n) => {
       if (isFactoryCall(n)) factories.add(n);
     });
-  }
-  if (
-    factories.size === 0 &&
-    ![...declarations.keys(), ...identifiers(program)].some((name) => isSymbol(name))
-  ) {
-    return none;
   }
 
   const main = findMain(program);
@@ -400,7 +400,7 @@ export function rewriteSvmTokenSyntax(
     }
     const key = keyLiteral(argument, source);
     if (key !== undefined) {
-      const row = rows.find((candidate) => candidate.address.toLowerCase() === key.toLowerCase());
+      const row = index.byKey.get(key.toLowerCase());
       if (row !== undefined) return { value, name: row.symbol, stem: row.symbol, row, spelled };
       literalTokens++;
 
@@ -415,7 +415,7 @@ export function rewriteSvmTokenSyntax(
   /** A registered symbol's mint: the registry's row when the compile's mint is the row's. */
   const symbolToken = (symbol: string): TokenRef => {
     const key = keyHex(tokens.get(symbol)!);
-    const row = rows.find((candidate) => candidate.symbol === symbol);
+    const row = index.bySymbol.get(symbol);
     if (row !== undefined && row.address.toLowerCase() === key) {
       return { value: symbol, name: symbol, stem: symbol, row, spelled: symbol };
     }
@@ -815,12 +815,33 @@ function isCtxSelf(node: AstNode, declared: ReadonlySet<string>): boolean {
   );
 }
 
-/** Every identifier the program reads or declares, for the cheap "names no token" bail. */
-function identifiers(program: AstNode): string[] {
-  const names: string[] = [];
-  walk(program, (n) => {
-    if (n.type === "Identifier") names.push(nameOf(n));
-  });
+/** Whether `source` has an identifier that is one of `tokens`, stopping at the first. */
+function namesSymbol(source: string, tokens: ReadonlyMap<string, bigint>): boolean {
+  for (const [name] of source.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)) {
+    if (tokens.has(name)) return true;
+  }
 
-  return names;
+  return false;
+}
+
+/** The registry's rows by symbol and by key, built once per registry. */
+interface RowIndex {
+  readonly bySymbol: ReadonlyMap<string, SvmTokenRow>;
+  /** By the mint's 32-byte key, lowercase hex. */
+  readonly byKey: ReadonlyMap<string, SvmTokenRow>;
+}
+
+const ROW_INDEXES = new WeakMap<readonly SvmTokenRow[], RowIndex>();
+
+function rowIndex(rows: readonly SvmTokenRow[]): RowIndex {
+  let index = ROW_INDEXES.get(rows);
+  if (index === undefined) {
+    index = {
+      bySymbol: new Map(rows.map((row) => [row.symbol, row])),
+      byKey: new Map(rows.map((row) => [row.address.toLowerCase(), row])),
+    };
+    ROW_INDEXES.set(rows, index);
+  }
+
+  return index;
 }

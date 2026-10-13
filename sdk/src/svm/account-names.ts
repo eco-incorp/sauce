@@ -59,7 +59,10 @@ export interface SvmAccountNameContext {
   readonly args?: Readonly<Record<string, Address>>;
   /** main's integer arguments, by parameter name: what a `u64:@<param>` seed takes. */
   readonly integers?: Readonly<Record<string, bigint>>;
-  /** An unregistered mint's token program. Without it, an unregistered mint is SPL Token's. */
+  /**
+   * An unregistered mint's token program, read from the cluster. Without it, a name that needs an
+   * unregistered mint's program is refused: nothing assumes one.
+   */
   readonly programOf?: SvmMintProgramOf;
 }
 
@@ -258,6 +261,35 @@ function mintOf(
   return { mint, ...(row === undefined ? {} : { row }), what: row?.symbol ?? `mint ${mint}` };
 }
 
+/**
+ * An unregistered mint's token program, from the cluster: SPL Token or Token-2022, and nothing
+ * else. FAILS CLOSED: with no way to read it, or a read that fails or finds another owner, the name
+ * is refused — an assumed program would derive the wrong token account, or attach the wrong program.
+ */
+async function programOfMint(mint: Address, ctx: SvmAccountNameContext): Promise<Address> {
+  if (ctx.programOf === undefined) {
+    throw new SvmAccountNameError(
+      `mint ${mint} is not one ${ctx.chain.slug} registers, and its token program can only be ` +
+        "read from the cluster, which this resolution has no way to do",
+    );
+  }
+  let program: Address;
+  try {
+    program = await ctx.programOf(mint);
+  } catch (error) {
+    throw new SvmAccountNameError(
+      `the token program of mint ${mint} could not be read: ${(error as Error).message}`,
+    );
+  }
+  if (program !== TOKEN_PROGRAM_ID && program !== TOKEN_2022_PROGRAM_ID) {
+    throw new SvmAccountNameError(
+      `mint ${mint} is owned by ${program}, neither SPL Token nor Token-2022`,
+    );
+  }
+
+  return program;
+}
+
 /** Who a holder is: the Pot or the owner by role, else a key; and how a person reads it. */
 function holderOf(
   holder: Holder,
@@ -335,12 +367,7 @@ export async function resolveSvmAccountName(
   const whose = value.slice(0, value.indexOf(":"));
   const { mint, row, what } = mintOf(parsed.token, whose, ctx, rows);
   if (parsed.kind === "mint") return { value: mint, label: `the ${what} mint`, kind: "mint" };
-  const program =
-    row !== undefined
-      ? address(row.tokenProgram)
-      : ctx.programOf === undefined
-        ? TOKEN_PROGRAM_ID
-        : await ctx.programOf(mint);
+  const program = row !== undefined ? address(row.tokenProgram) : await programOfMint(mint, ctx);
   if (parsed.kind !== "account") {
     return {
       value: program,

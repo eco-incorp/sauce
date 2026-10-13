@@ -8,7 +8,8 @@
  *
  * The mints are planted at their registry addresses: USDC and USDT (SPL Token, moved by the legacy
  * transfer), PYUSD as mainnet holds it (Token-2022 with its extensions, moved by `transferChecked`
- * with the registry's decimals), and a PreStocks stock's mint with a 1.5% transfer fee (its
+ * with the registry's decimals), SPACEX, PreStocks' SpaceX mint as mainnet holds it (two
+ * transfer-fee schedules, each run at its epoch), and a PreStocks stock's mint with a 1.5% fee (its
  * registry row's address and decimals, the fee config built here: the fee is Token-2022's to
  * withhold). Each holder's account is checked on chain, so a wrong account given in place of a
  * derived one is refused, and the derivation is the cook's: `--via engine` spends the owner's.
@@ -25,10 +26,15 @@ import {
   address,
   createKeyPairSignerFromBytes,
   getAddressCodec,
+  getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
+  getTransactionDecoder,
   lamports,
+  signTransaction,
   type Address,
   type KeyPairSigner,
 } from "@solana/kit";
+import { Clock, FailedTransactionMetadata } from "litesvm";
 import {
   findAssociatedTokenPda,
   getApproveInstruction,
@@ -40,7 +46,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli } from "../src/cli/run.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { svmTokenRows } from "../src/routes/token-registry.js";
-import { derivePotPda } from "../src/svm/index.js";
+import { derivePotPda, resolveSvmToken, svmTokenReceived } from "../src/svm/index.js";
 import {
   describeSvm,
   ENGINE_SO,
@@ -60,6 +66,13 @@ const KITCHEN = address(v12SvmKitchenProgramId());
 const ENGINE = v12SvmEngineProgramId();
 const SOLANA = requireChain("solana");
 const codec = getAddressCodec();
+
+/** SPACEX, PreStocks' SpaceX token, as mainnet holds it: two transfer-fee schedules. */
+const SPACEX_IMAGE = (
+  JSON.parse(readFileSync(join(HERE, "svm/fixtures/token-2022/stock-mints.json"), "utf8")) as {
+    mints: { SPACEX: { dataBase64: string } };
+  }
+).mints.SPACEX;
 
 /** PYUSD's mint as mainnet holds it. */
 const PYUSD_IMAGE = (
@@ -417,6 +430,47 @@ describeSvm("the token methods on Solana: every account derived by the command",
     expect(tokenAmount(harness, toStock)).toBe(985_000n);
   }, 120_000);
 
+  it("pays SPACEX, PreStocks' mint as mainnet holds it, less the fee its schedule charges at the epoch", async () => {
+    const row = rowOf("SPACEX");
+    const spacex = plantMint(
+      address(row.mint),
+      new Uint8Array(Buffer.from(SPACEX_IMAGE.dataBase64, "base64")),
+      TOKEN_2022_PROGRAM,
+    );
+    await account(spacex, pot, 10_000_000_000n, TOKEN_2022_PROGRAM, row.decimals);
+    const file = program(
+      "pay-spacex",
+      "function main(to: Address, amount: Uint256): Uint256 {\n" +
+        "  const before = SPACEX.balanceOf(to);\n" +
+        "  SPACEX.transfer(to, amount);\n" +
+        "  return SPACEX.balanceOf(to) - before;\n" +
+        "}\n",
+    );
+    // What Token-2022 withholds at an epoch, as the SDK nets it from the mint's own schedules.
+    const token = await resolveSvmToken(async (key) => {
+      const found = harness.svm.getAccount(key);
+      return found.exists ? { owner: found.programAddress, data: found.data } : null;
+    }, spacex);
+    const clock = harness.svm.getClock();
+    try {
+      for (const epoch of [0n, 1039n]) {
+        harness.svm.setClock(
+          new Clock(clock.slot, clock.epochStartTimestamp, epoch, epoch, clock.unixTimestamp),
+        );
+        const to = randomAddress();
+        const toSpacex = await account(spacex, to, 0n, TOKEN_2022_PROGRAM, row.decimals);
+        const out = json(await run(file, "--args", to, "1000000"));
+        expect(out).toMatchObject({ cook: { status: "success" } });
+        // 0.5% under the older schedule, 1% from epoch 1039 under the newer.
+        const received = svmTokenReceived(token, 1_000_000n, epoch);
+        expect(received).toBe(epoch === 0n ? 995_000n : 990_000n);
+        expect(tokenAmount(harness, toSpacex)).toBe(received);
+      }
+    } finally {
+      harness.svm.setClock(clock);
+    }
+  }, 120_000);
+
   it("approves a spender, the delegate account checked to be the spender", async () => {
     const approve = program(
       "approve",
@@ -515,6 +569,100 @@ describeSvm("the token methods on Solana: every account derived by the command",
     expect(out).toMatchObject({ ok: true });
     // An Address main returns is read back as the key it is, in base58.
     expect(out.returned).toBe(pot);
+  }, 120_000);
+
+  it("creates a Token-2022 recipient's missing account under Token-2022, and pays it by transferChecked", async () => {
+    const file = program(
+      "pay-pyusd",
+      "function main(to: Address, amount: Uint256) {\n  PYUSD.transfer(to, amount);\n}\n",
+    );
+    await account(pyusd, pot, 1_000n, TOKEN_2022_PROGRAM, 6); // what the Pot pays from
+    const to = randomAddress();
+    const toPyusd = await ataOf(pyusd, to, TOKEN_2022_PROGRAM);
+    expect(harness.svm.getAccount(toPyusd).exists).toBe(false);
+
+    expect(json(await run(file, "--yes", "--args", to, "250"))).toMatchObject({
+      cook: { status: "success" },
+    });
+    const made = harness.svm.getAccount(toPyusd);
+    expect(made.exists && made.programAddress).toBe(TOKEN_2022_PROGRAM);
+    expect(tokenAmount(harness, toPyusd)).toBe(250n);
+  }, 120_000);
+
+  it("`--via engine` with a Token-2022 mint pays from the owner's own Token-2022 account", async () => {
+    const file = program(
+      "pay-pyusd-engine",
+      "function main(to: Address, amount: Uint256) {\n  PYUSD.transfer(to, amount);\n}\n",
+    );
+    const ownerPyusd = await account(pyusd, owner.signer.address, 500n, TOKEN_2022_PROGRAM, 6);
+    const to = randomAddress();
+    const toPyusd = await account(pyusd, to, 0n, TOKEN_2022_PROGRAM, 6);
+
+    expect(json(await run(file, "--via", "engine", "--args", to, "40"))).toMatchObject({
+      cook: { status: "success" },
+    });
+    expect(tokenAmount(harness, toPyusd)).toBe(40n);
+    expect(tokenAmount(harness, ownerPyusd)).toBe(460n);
+  }, 120_000);
+
+  it("`sauce tx` prints the cook with every derived account filled; signed by the owner, it lands", async () => {
+    const file = program(
+      "pay-tx",
+      "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+    );
+    const to = randomAddress();
+    const toUsdc = await account(usdc, to, 0n, TOKEN_PROGRAM, 6);
+    const printed = json(
+      await sauce(
+        ...["tx", file, "--chain", "solana", "--rpc-url", SOLANA_URL],
+        ...["--owner", owner.signer.address, "--args", to, "33"],
+      ),
+    );
+    const unsigned = getTransactionDecoder().decode(
+      new Uint8Array(getBase64Encoder().encode(printed.transaction as string)),
+    );
+    const keys = getCompiledTransactionMessageDecoder().decode(
+      unsigned.messageBytes,
+    ).staticAccounts;
+    expect(keys).toEqual(expect.arrayContaining([toUsdc, potUsdc, TOKEN_PROGRAM, pot]));
+    const signed = await signTransaction([owner.signer.keyPair], unsigned);
+    const result = harness.svm.sendTransaction(signed);
+    harness.svm.expireBlockhash();
+    expect(result instanceof FailedTransactionMetadata ? result.meta().logs() : "ok").toBe("ok");
+    expect(tokenAmount(harness, toUsdc)).toBe(33n);
+
+    // With no arguments, nothing to derive `@to:USDC` from: refused, naming main's parameters.
+    const bare = await sauce(
+      ...["tx", file, "--chain", "solana", "--rpc-url", SOLANA_URL],
+      ...["--owner", owner.signer.address],
+    );
+    expect(bare.code).toBe(2);
+    expect(bare.stderr).toContain("takes 2 arguments: pass them after --args");
+  }, 120_000);
+
+  it("refuses a token program the cook attaches that is neither SPL Token nor Token-2022", async () => {
+    const file = program(
+      "any-mint-program",
+      "function main(mint: Address, to: Address, amount: Uint256) {\n  Token(mint).transfer(to, amount);\n}\n",
+    );
+    const to = randomAddress();
+    await account(usdc, to, 0n, TOKEN_PROGRAM, 6);
+    const out = await simulate(
+      file,
+      ...["--account", "mintProgram=11111111111111111111111111111111"],
+      ...["--args", usdc, to, "1"],
+    );
+    expect(JSON.parse(out.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "not the token program"',
+    });
+    // A mint whose program cannot be read is refused before anything is built: never assumed.
+    const missing = randomAddress();
+    const unread = await simulate(file, "--args", missing, to, "1");
+    expect(unread.code).toBe(2);
+    expect(unread.stderr).toContain(
+      `the account mintProgram (program:@mint): the token program of mint ${missing} could not be read`,
+    );
   }, 120_000);
 
   it("Token(mint) of an argument: the mint's program read from the cluster, the decimals from the mint", async () => {
