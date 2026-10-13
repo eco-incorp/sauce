@@ -29,7 +29,8 @@ import {
   type SafeWrite,
   type TokenImports,
 } from "./token-rewrite.js";
-import { resolveTokenMap } from "./token-registry.js";
+import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
+import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
 import { unknownGlobalError } from "./unknown-global.js";
@@ -374,10 +375,26 @@ export function compileScopedRoute(
   options: SauceCompileOptions,
   scope: RouteScope,
 ): CompiledSauceRoute {
-  const { chain, compiled, source } = compileForChain(destination, sauce, options, scope);
+  const { chain, compiled, source, derivedAccounts } = compileForChain(
+    destination,
+    sauce,
+    options,
+    scope,
+  );
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
 
   if (chain.kind === "svm") {
+    if (derivedAccounts !== undefined) {
+      // A route's accounts are the caller's `execution.accounts`, built before this compile: the
+      // accounts the token methods add, which a cook derives, have no place there.
+      throw new Error(
+        `compileSauceRoute: the token methods on Solana (\`USDC.transfer(to, amount)\`) add ` +
+          `accounts to main (${Object.keys(derivedAccounts).join(", ")}) that a cook derives, ` +
+          "which a route's execution.accounts cannot: compile the program with " +
+          "compileSauceProgram and cook it (sauce run), or pass the accounts as Account " +
+          "parameters to @sauce/token's transfer.",
+      );
+    }
     const svmExecution = execution as SauceSvmExecutionInput;
     if (svmExecution.code === undefined) {
       throw new Error(
@@ -419,6 +436,13 @@ export interface CompiledSauceProgram {
   readonly entryParams: readonly EntryParam[];
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
+  /**
+   * The accounts the SDK added to `main` for the token methods (`USDC.transfer(to, amount)` on
+   * Solana), by parameter name: how each is derived, as an `--account` value — `self:USDC`, the
+   * Pot's USDC account; `@to:USDC`, the USDC account of main's argument `to`. `sauce` fills each
+   * from the cook (`svm/account-names.ts#resolveSvmAccountName`). Absent when it added none.
+   */
+  readonly derivedAccounts?: Readonly<Record<string, string>>;
   /**
    * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
    * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
@@ -499,6 +523,7 @@ export function compileSauceProgram(
       : { entrySchema: program.compiled.entrySchema }),
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+    ...(program.derivedAccounts === undefined ? {} : { derivedAccounts: program.derivedAccounts }),
     intents: program.intents,
     source: program.source,
   };
@@ -521,6 +546,7 @@ function compileForChain(
   readonly source: string;
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
+  readonly derivedAccounts?: Readonly<Record<string, string>>;
   readonly intents: readonly LoweredIntent[];
 } {
   const chain = requireChain(destination);
@@ -626,19 +652,23 @@ function compileForChain(
     for (const write of rewritten.writes) writes.add(write);
     erc20 ||= rewritten.erc20;
   };
-  if (tokenMap.size > 0) absorb(rewriteTokenMembers(source, tokenMap));
-  absorb(rewriteTokenFactory(source));
-  if (tokenRewrote) {
-    if (chain.kind === "svm") {
-      throw new Error(
-        `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 token rewrite ` +
-          "(`Token(addr)` / `<Sym>.transfer(...)` / `self.<Sym>`) is EVM-only. On svm a token " +
-          "symbol is the mint, a value for the @sauce/token functions with the accounts as " +
-          "Account parameters: `transfer(USDC, tokenProgram, source, dest, authority, amount)`, " +
-          "`balanceOf(USDC, account)`; or the SPL account-plan `Token` emitter (see token/api.ts).",
-      );
+  // On svm the same syntax lowers to @sauce/token's SVM arm instead, with the accounts each call
+  // moves through added to `main`, and how each is derived reported beside the manifest.
+  let derivedAccounts: Readonly<Record<string, string>> | undefined;
+  if (chain.kind === "svm") {
+    const lowered = rewriteSvmTokenSyntax(
+      source,
+      svmTokenValues(tokenMap, options.defines),
+      svmTokenRows(chain),
+    );
+    if (lowered.rewrote) {
+      source = lowered.source;
+      derivedAccounts = lowered.derived;
     }
-    source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
+  } else {
+    if (tokenMap.size > 0) absorb(rewriteTokenMembers(source, tokenMap));
+    absorb(rewriteTokenFactory(source));
+    if (tokenRewrote) source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
 
   if (options.accessors !== false) {
@@ -696,7 +726,32 @@ function compileForChain(
   }
   const { intents } = sugar;
 
-  return manifest === undefined
-    ? { chain, compiled, source, entryEncoding, intents }
-    : { chain, compiled, source, entryEncoding, manifest, intents };
+  return {
+    chain,
+    compiled,
+    source,
+    entryEncoding,
+    ...(manifest === undefined ? {} : { manifest }),
+    ...(derivedAccounts === undefined ? {} : { derivedAccounts }),
+    intents,
+  };
+}
+
+/**
+ * The mint each token symbol is in an svm compile: the registry's, or the caller's where a define
+ * gives the symbol a key of its own (a devnet mint), so an account derived from the symbol is the
+ * one the program's own value names.
+ */
+function svmTokenValues(
+  tokens: ReadonlyMap<string, bigint>,
+  defines: Readonly<Record<string, DefineValue>> | undefined,
+): ReadonlyMap<string, bigint> {
+  const own = Object.entries(defines ?? {}).filter(
+    ([name, value]) => tokens.has(name) && typeof value === "bigint",
+  );
+  if (own.length === 0) return tokens;
+  const values = new Map(tokens);
+  for (const [name, value] of own) values.set(name, value as bigint);
+
+  return values;
 }

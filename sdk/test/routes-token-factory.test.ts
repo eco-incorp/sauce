@@ -269,7 +269,7 @@ describe("Token(addr) through compileSauceRoute", () => {
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
-  it("an svm destination rejects Token(addr) with the EVM-only error", () => {
+  it("an svm destination refuses Token(addr) of an EVM address: a mint is a 32-byte key", () => {
     expect(() =>
       openRoute("solana", `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`, {
         execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
@@ -280,6 +280,6 @@ describe("Token(addr) through compileSauceRoute", () => {
         prover: "0x4444444444444444444444444444444444444444",
         rewardDeadline: 1000n,
       }).reward(0n),
-    ).toThrow(/svm/);
+    ).toThrow(/Token\(0x[0-9a-fA-F]{40}\) on Solana: the mint must be known/);
   });
 });
