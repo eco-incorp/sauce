@@ -95,9 +95,42 @@ describe("svm account names", () => {
       label: "PYUSD's token program, Token-2022",
       kind: "program",
     });
-    expect(await resolveSvmAccountName(`program:${TO}`, ctx())).toMatchObject({
-      value: TOKEN_PROGRAM_ID,
+    // A mint the chain does not register: its program read through `programOf`, and only that.
+    const asked: Address[] = [];
+    const programOf = async (mint: Address) => {
+      asked.push(mint);
+
+      return TOKEN_2022_PROGRAM_ID;
+    };
+    expect(await resolveSvmAccountName("program:@mint", ctx({ programOf }))).toEqual({
+      value: TOKEN_2022_PROGRAM_ID,
+      label: `mint ${MINT}'s token program, Token-2022`,
+      kind: "program",
     });
+    expect(asked).toEqual([MINT]);
+  });
+
+  it("fails closed on an unregistered mint's program: never assumes SPL Token", async () => {
+    for (const name of [`program:${TO}`, "pot:@mint"]) {
+      await expect(resolveSvmAccountName(name, ctx())).rejects.toThrow(
+        "its token program can only be read from the cluster",
+      );
+    }
+    await expect(
+      resolveSvmAccountName(
+        "program:@mint",
+        ctx({
+          programOf: async () => {
+            throw new Error("the endpoint did not answer");
+          },
+        }),
+      ),
+    ).rejects.toThrow(
+      `the token program of mint ${MINT} could not be read: the endpoint did not answer`,
+    );
+    await expect(
+      resolveSvmAccountName("@to:@mint", ctx({ programOf: async () => key(7) })),
+    ).rejects.toThrow(`mint ${MINT} is owned by ${key(7)}, neither SPL Token nor Token-2022`);
   });
 
   it("refuses what it cannot resolve, saying why", async () => {
