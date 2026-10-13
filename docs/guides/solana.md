@@ -4,7 +4,110 @@
 
 Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 
-Two consequences. The EVM name rewrites (`USDC.transfer(...)`, protocol members) do not apply here — there is no address to fold in without an account slot to put it in. A registered token symbol is still a value: compiled for `solana` (`sauce compile --chain solana`, `routes.compileSauceProgram("solana", source)`), `USDC` is the mint's 32-byte key, which the `@sauce/token` functions take first (`balanceOf(USDC, account)`); `routes.SVM_TOKEN_REGISTRY` lists the mints, mainnet's and devnet's. And you want `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.
+A registered token symbol has the same methods it has on an EVM chain, and the SDK writes the accounts they need for you, as it does for any account a program writes where it uses it (`Solana.pda(program, [seeds])`, below). `USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf` and `Token(mint)` lower to the `@sauce/token` functions, and every account those take is added to `main` as an `Account` parameter. Protocol members are EVM-only: on Solana there is no contract address to fold in, and no account slot to put one in. A symbol alone is a value. Compiled for `solana` (`sauce compile --chain solana`, `routes.compileSauceProgram("solana", source)`), `USDC` is the mint's 32-byte key, which the `@sauce/token` functions take first (`balanceOf(USDC, account)`); `routes.SVM_TOKEN_REGISTRY` lists the mints, mainnet's and devnet's. For a program whose accounts you write yourself, use `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.
+
+## The token methods, every account derived
+
+A program pays, approves and reads a token as it would on Base, and the same source compiles for both:
+
+```ts
+function main(to: Address, amount: Uint256) {
+  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  USDC.transfer(to, amount);
+}
+```
+
+Compiled for Solana, the accounts the calls move through come after `main`'s own parameters. `CompiledSauceProgram.derivedAccounts` says how each is derived, as an `--account` value:
+
+| Slot           | Derivation                                    | The account                                |
+| -------------- | --------------------------------------------- | ------------------------------------------ |
+| `tokenProgram` | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | the token program that owns the mint       |
+| `pot`          | `self`                                        | the Pot (the signer, cooked directly)      |
+| `potUSDC`      | `self:USDC`                                   | the Pot's USDC account                     |
+| `toUSDC`       | `@to:USDC`                                    | the USDC account of `main`'s argument `to` |
+
+`sauce run`, `simulate` and `tx`, and the MCP server's cook tools, fill every derived slot from the owner, the Pot and `main`'s arguments, so the program above runs with `--args <recipient> 400` and no `--account`. A recipient's associated token account that does not exist yet is created before the cook, once the owner agrees (or with `--yes`). From TypeScript, `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })` from `@eco-incorp/sauce/svm` resolves one derivation to the address to put in the cook's `AccountResolution`.
+
+What the lowering guarantees and requires:
+
+- **Each holder's account is checked on chain.** After each write the program requires the token account it paid, or paid from, to belong to the holder the call named: `wrong recipient account`, `wrong sender account`, `wrong spender account`, and `wrong holder account` for a read. A builder that attaches another account cannot redirect the transfer.
+- **Each mint's own write.** An SPL Token mint moves by the plain `transfer`/`approve` (about 360 bytes with the check): for such a mint it does what the checked write does, in about 220 bytes less and one account fewer. A Token-2022 mint moves by `transferChecked`/`approveChecked`, with the registry's decimals and the mint as one more account (about 585 bytes). `Token(mint)` of an `Address` argument takes the checked write, with the decimals read from the mint. Its token program is read from the cluster when the cook is built; a mint whose program cannot be read is refused, never assumed, and every write requires its token program to be SPL Token or Token-2022 before calling it.
+- **Every holder is known when the transaction is built.** A holder can be `ctx.self()` (or `self`): as a token's holder it is the Pot, as on an EVM chain. It can also be an `Address` parameter of `main`, or a 32-byte key. A holder computed as the program runs is refused, because no transaction can attach its account. Pass its token account as an `Account` parameter in the holder's place instead (`USDC.transfer(dest, amount)` with `dest: Account<Writable>`). That account is paid as attached: the call names no holder, so nothing checks whose it is, and whoever builds the transaction chooses it. Prefer an `Address` recipient, which the program checks, or check the account in the program (`require(ownerOf(USDC, dest) == expected, ...)`).
+- **Only in `main`, in a module.** The methods must stand in `main` itself: a helper has no account parameters, and a script has no `main` to add them to. `compileSauceRoute` refuses the added accounts, because a route's `execution.accounts` are built before the compile.
+
+## Accounts where they are used
+
+For what the token methods do not cover, a program writes each account where it uses it, and the SDK adds it to `main` the same way. This program wraps the owner's SOL into the Pot's WSOL account with the System Program's transfer and SPL Token's SyncNative:
+
+```ts
+function main(lamports: Uint256): Uint256 {
+  const potWsol = WSOL.accountOf(Solana.self).writable();
+  let transfer = hex`02000000`;
+  svm.call(
+    Solana.systemProgram,
+    [Solana.owner.writable().signer(), potWsol],
+    transfer.concat(lamports.toBytesLe(8)),
+  );
+  svm.call(Solana.tokenProgram, [potWsol], hex`11`);
+  return WSOL.balanceOf(ctx.self());
+}
+```
+
+It runs with `sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 1000000` and no `--account`. The accounts a program can write this way, each with how it is derived:
+
+| Expression                                                                                          | The account                                                | Derivation                            |
+| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------- |
+| `Solana.pda(program, [seeds])`                                                                      | the address `program` derives for the seeds                | `pda:<program>:<seeds>`               |
+| `Solana.account(key)`                                                                               | the account at a key                                       | the key                               |
+| `Solana.self`, `Solana.owner`                                                                       | the Pot (the signer, cooked directly), and the Pot's owner | `self`, `owner`                       |
+| `Solana.systemProgram`, `tokenProgram`, `token2022Program`, `associatedTokenProgram`, `memoProgram` | the program                                                | its id                                |
+| `USDC.accountOf(holder)`                                                                            | the holder's associated USDC account                       | `self:USDC`, `owner:USDC`, `@to:USDC` |
+| `USDC.mint`, `USDC.tokenProgram`                                                                    | the mint, and the token program that owns it               | `mint:USDC`, its id                   |
+
+- **Roles.** Each account is read-only; `.writable()` and `.signer()` give it a role, and chain. An account written more than once is one slot with every role its uses give it.
+- **Known when the transaction is built.** A program, key, holder or seed is an `Address` parameter of `main`, a 32-byte key, `ctx.self()`, `Solana.self`, `Solana.owner` or a program account. A seed can also be a token symbol (its mint), a string of up to 32 bytes, an integer parameter's or literal's `.toBytesLe(n)` (`n` 1, 2, 4, 8 or 16) or ``hex`…` ``. A seed computed as the program runs is refused: take that account as an `Account` parameter.
+- **Names.** A slot is named for what it holds (`systemProgram`, `potWSOL`); a derived address for the constant it initializes (`destPda`) or its first string seed (`statePda`).
+- **Each is checked on chain.** The cook commands attach what the expression derives. A transaction built another way, such as a solver filling the cook, could attach another account, so compiling adds a check for each account at the top of `main`. A wrong account is refused with one of these reasons:
+  - `wrong account`: `Solana.account(key)` is not at `key`.
+  - `wrong program-derived address`: the engine derives `Solana.pda(...)` again with `crypto.findPDA`, at the program's canonical bump.
+  - `wrong holder account`: `USDC.accountOf(holder)` is not a USDC token account held by `holder`.
+  - `wrong mint`: `USDC.mint` is not that mint.
+  - `wrong program`: a program account is not that program.
+
+  The Pot and the owner are pinned by their signatures. An account made from either one makes it a signer; elsewhere, add `.signer()` where its identity matters. The first `accountOf` costs about 290 bytes, shared with the token methods' reads; every other check costs 25 to 60.
+
+- **`accountOf` names an account that exists.** `sauce run` creates a missing one before the cook. For an account the program creates itself, use `Solana.pda(Solana.associatedTokenProgram, [holder, Solana.tokenProgram, USDC])`. The Associated Token Account program checks that address when it creates the account.
+
+`sauce globals --chain solana` lists the expressions under Accounts; in TypeScript, `routes.sourceGlobals("solana").accounts`.
+
+## Venues by namespace
+
+A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain:
+
+```ts
+function main(
+  pool: Address,
+  to: Address,
+  amountIn: Uint256,
+  maxPrice: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const got = OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+  if (got > 0) WSOL.transfer(to, got);
+  return got;
+}
+```
+
+The namespaces are `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`, `OrcaWhirlpool`, `Cropper`, `Defituna`, `Crema` and `Phoenix`. Each has two methods, both taking `(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`: `swap` returns what arrived, and `trySwap` returns 0 where `swap` reverts. `maxPrice` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
+
+- **One venue's function.** Each call compiles to that venue's own `@sauce/router` function (`orcaWhirlpool`, `tryOrcaWhirlpool`), never `trySwap`, and keeps that function's checks: the venue's program, the pool's owner, the pair, `minOut`.
+- **The accounts are added to `main`.**
+  - The pool's nine (`slot:@pool:USDC.program` through `ticks2`) are read from the pool on the cluster as the cook is built. Its tick arrays follow the token paid, so the slot is that direction's (`svm.svmPoolSlot`, the same `sauce pools --chain solana` lists).
+  - The trader's are the Pot's.
+  - What is bought lands in the Pot's own account for `tokenOut`, which `sauce run` creates when it is missing.
+- **What must be known.** The pool and both tokens are each a parameter of `main` declared `Address`, a 32-byte key, or (a token) a registered symbol. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
+
+`sauce globals --chain solana` lists the namespaces under Venues. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools whose venues its program reads as it runs, and takes their accounts itself.
 
 ## Compile an SPL transfer
 

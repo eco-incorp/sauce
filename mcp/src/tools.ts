@@ -344,9 +344,15 @@ const COOK = {
     .optional()
     .describe(
       "Solana only: each Account parameter main takes, by name: a base58 address, `pot` (the " +
-        "Pot, signed for by the Kitchen), `owner`, `pot:USDC` or `owner:USDC` (that holder's " +
-        "associated account for a token, by symbol or mint), `mint:USDC` (the mint) or " +
-        "`program:USDC` (its token program). sauce_compile's manifest lists them.",
+        "Pot, signed for by the Kitchen), `owner`, `system` (the System Program), `pot:USDC` or `owner:USDC` (that holder's " +
+        "associated account for a token, by symbol or mint), `@to:USDC` (that of main's " +
+        "argument `to`), `mint:USDC` (the mint), `program:USDC` (its token program) or " +
+        "`slot:@pool:USDC.vaultA` (a pool's account, read from the pool), " +
+        '`pda:<program>:"seed",@to,u64:7` (an address the program derives for those seeds). ' +
+        "sauce_compile's manifest lists them; one with a `derive` (an account the token methods " +
+        "added, such as USDC.transfer(to, amount)'s, or one the program writes where it uses it, " +
+        "such as Solana.pda(program, [seeds])) is filled by itself, and named here only to " +
+        "replace it.",
     ),
   via: z
     .enum(["kitchen", "engine"])
@@ -1248,7 +1254,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Lists the names a program on one chain may use without declaring them — use it before " +
         "writing a program, to call tokens and protocols by name instead of by address: token " +
         "symbols with their addresses and decimals, protocol namespaces with each contract's " +
-        "address (with `protocol`, also its methods), the chain names that open intents, the " +
+        "address (with `protocol`, also its methods), on Solana the venue namespaces " +
+        "(`venues`: OrcaWhirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut) and " +
+        "eight more, each pool's accounts derived as the cook is built) and the accounts a " +
+        "program writes where it uses them (`accounts`: Solana.pda(program, [seeds]), " +
+        "USDC.accountOf(holder), Solana.systemProgram, …), the chain names that open intents, the " +
         "defines, and the @sauce/token functions. With no filter, everything but the chain's " +
         "tokenized stocks (Ethereum and Solana have over a thousand each; Base's include " +
         "Coinbase's, such as SPCXc for SpaceX; Solana's are Token-2022 mints, such as TSLAx), " +

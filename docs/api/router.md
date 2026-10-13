@@ -274,6 +274,11 @@ import, naming it: "`woofi` is not exported by module …" on Solana, "`trySwap`
 
 ## On Solana
 
+A program that knows its pool needs none of these functions directly: the venue's namespace,
+`OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)` (or `trySwap`), compiles to that
+venue's `orcaWhirlpool`/`tryOrcaWhirlpool` below, with the slot and the trader added to `main` and
+derived when the cook is built ([Solana: venues by namespace](../guides/solana.md#venues-by-namespace)).
+
 On Solana `@sauce/router` swaps at the venues whose swap takes a price limit that stops it and
 leaves the rest of the input, the venues of [the distributed swap on Solana](../guides/solana-distributed-swap.md),
 and at Manifest's book. Each venue's swap comes in four forms:

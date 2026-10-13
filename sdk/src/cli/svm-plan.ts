@@ -62,7 +62,6 @@ import { bytesToHex, hexToBytes, type Hex } from "viem";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
-  buildAtaPrepend,
   buildCloseCodeBufferInstruction,
   buildComputeBudgetPrepend,
   buildCookAndPayFromAccountPinnedInstruction,
@@ -94,7 +93,7 @@ import {
   recommendedComputeUnitLimit,
 } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
-import { failureReason } from "./solana.js";
+import { failureReason, svmTokenAccountsToCreate } from "./solana.js";
 import { messageAccounts } from "./svm-effects.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
@@ -815,28 +814,6 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
   return value !== null;
 }
 
-/** The most accounts one `getMultipleAccounts` reads. */
-const ACCOUNTS_PER_READ = 100;
-
-/** Which of `accounts` the cluster holds, read together: one request per hundred. */
-async function existing(
-  ctx: StepContext,
-  accounts: readonly Address[],
-  what: string,
-): Promise<boolean[]> {
-  const held: boolean[] = [];
-  for (let at = 0; at < accounts.length; at += ACCOUNTS_PER_READ) {
-    const { value } = await ask(ctx.url, what, () =>
-      ctx.rpc
-        .getMultipleAccounts(accounts.slice(at, at + ACCOUNTS_PER_READ), { encoding: "base64" })
-        .send(),
-    );
-    held.push(...value.map((account) => account !== null && account !== undefined));
-  }
-
-  return held;
-}
-
 /** A write's chunk: what a write transaction carries besides its signature, header and accounts. */
 const CHUNK = 900;
 /** Grow instructions in one transaction, well inside its size. */
@@ -1000,39 +977,43 @@ async function setupTransactions(
 ): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[] }> {
   const transactions: PlanTx[] = [];
   const notes: string[] = [];
-  // The Pot, where the setup creates it, and the token accounts: what the cluster holds of them.
-  const potToCheck = plan.pot === "setup" ? [await potOf(plan)] : [];
-  const held = await existing(
-    ctx,
-    [...potToCheck, ...plan.tokenAccounts.map((account) => account.address)],
-    potToCheck.length === 0 ? "the token accounts" : "the Pot and the token accounts",
-  );
-  if (potToCheck.length > 0 && held.shift() !== true) {
+  // The Pot, where the setup creates it, and the token accounts the cook names that the cluster
+  // does not hold, found and made as `sauce run` makes them (`svmTokenAccountsToCreate`).
+  const [potMissing, made] = await Promise.all([
+    plan.pot === "setup"
+      ? potOf(plan).then(async (pot) => !(await exists(ctx, pot, "the Pot")))
+      : false,
+    svmTokenAccountsToCreate(
+      ctx.rpc,
+      ctx.url,
+      new Map(
+        plan.tokenAccounts.map((account) => [
+          account.address,
+          {
+            address: account.address,
+            label: account.label,
+            kind: "account" as const,
+            account: { mint: account.mint, holder: account.holder, program: account.program },
+          },
+        ]),
+      ),
+      ctx.signer,
+    ),
+  ]);
+  if (potMissing) {
     transactions.push({
       what: "creating the Pot",
       kind: "pot",
       instructions: [await createPotInstruction(plan)],
     });
   }
-  const missing = plan.tokenAccounts.filter((_, index) => !held[index]);
-  if (missing.length > 0) {
+  if (made.accounts.length > 0) {
+    const byAddress = new Map(plan.tokenAccounts.map((account) => [account.address, account]));
     transactions.push({
       what: "creating the token accounts",
       kind: "accounts",
-      accounts: missing,
-      instructions: await Promise.all(
-        missing.map(
-          async (account) =>
-            (
-              await buildAtaPrepend({
-                payer: ctx.signer,
-                owner: account.holder,
-                mint: account.mint,
-                tokenProgram: account.program,
-              })
-            ).instruction,
-        ),
-      ),
+      accounts: made.accounts.map((one) => byAddress.get(one.address)!),
+      instructions: [...made.instructions],
     });
   }
   const buffer = await planBuffer(plan);

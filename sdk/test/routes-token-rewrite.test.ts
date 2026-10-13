@@ -157,7 +157,7 @@ describe("openRoute: token member rewrite end to end", () => {
     expect(built.intent.route.calls).toHaveLength(1);
   });
 
-  it("an svm destination throws the named error", () => {
+  it("an svm destination refuses a script's token write by name: its accounts go to main", () => {
     expect(() =>
       openRoute("solana", `USDC.transfer(${TO}, 5n);`, {
         execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
@@ -169,7 +169,7 @@ describe("openRoute: token member rewrite end to end", () => {
         rewardDeadline: 1000n,
         tokenDefines: { USDC },
       }),
-    ).toThrow(/svm/i);
+    ).toThrow(/`USDC.transfer\(…\)` on Solana: .* this program has no main/);
   });
 });
 
@@ -446,21 +446,21 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
   });
 });
 
-// --- SVM: registry-default token/balance-sugar behavior must never SILENTLY rewrite -------------
+// --- SVM: the same syntax lowers to the SVM arm, with the accounts a cook derives ---------------
+// (routes-svm-token-methods.test.ts holds the lowering itself; these hold the route path to it.)
 
-describe("svm: the token/balance-sugar pass is refused by name for an svm destination", () => {
-  it("with accessors:false, self.USDC on a registered Solana mint is the named svm error", () => {
-    // Isolates the token/balance-sugar pass from the protocol-accessor pass's OWN self-sugar. The
-    // registry has Solana mints now, so the balance sugar recognises `self.USDC` and the svm guard
-    // names it, rather than the compiler failing on a bare `self`.
-    expect(() =>
-      compileSauceRoute(
-        "solana",
-        `function main() { return self.USDC; }`,
-        { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-        { accessors: false },
-      ),
-    ).toThrow(/is svm — the ERC20 token rewrite .* is EVM-only/);
+describe("svm: the token syntax on a route, whose accounts are the caller's", () => {
+  it("self.USDC lowers, and a route refuses the accounts it adds, which only a cook derives", () => {
+    for (const accessors of [false, undefined]) {
+      expect(() =>
+        compileSauceRoute(
+          "solana",
+          `function main() { return self.USDC; }`,
+          { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+          accessors === undefined ? {} : { accessors },
+        ),
+      ).toThrow(/add accounts to main \(potUSDC, pot\) that a cook derives/);
+    }
   });
 
   it("a bare registered symbol is the mint's key, a value the program compiles with", () => {
@@ -476,16 +476,7 @@ describe("svm: the token/balance-sugar pass is refused by name for an svm destin
     );
   });
 
-  it("with accessors default ON, the pre-existing self-sugar rewrite fires and the existing svm guard throws -- a safe, named failure, never a silent drop", () => {
-    expect(() =>
-      compileSauceRoute("solana", `function main() { return self.USDC; }`, {
-        code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-        accounts: [],
-      }),
-    ).toThrow(/svm/i);
-  });
-
-  it("the tokenDefines-on-svm named error still fires when the caller explicitly supplies tokens", () => {
+  it("a script's token write is refused by name: its accounts go to main, which it has not", () => {
     expect(() =>
       compileSauceRoute(
         "solana",
@@ -493,6 +484,6 @@ describe("svm: the token/balance-sugar pass is refused by name for an svm destin
         { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { tokens: { USDC } },
       ),
-    ).toThrow(/svm/i);
+    ).toThrow(/`USDC.transfer\(…\)` on Solana: .* this program has no main/);
   });
 });

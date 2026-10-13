@@ -139,13 +139,16 @@ function main(recipient: Address, floor: Uint256) {
 It names no chain. `sauce run <file> --chain base` compiles it for Base, where `USDC` is Base's
 USDC; `--chain ethereum` gives the same file Ethereum's. What changes per call, such as `recipient`
 and `floor`, is a parameter of `main`, passed with the transaction (`--args`), so one compiled
-program serves every call. That program is for an EVM chain: on Solana every account, a recipient
-included, is an `Account` parameter attached with `--account`, never an `Address` argument
-(`sauce-solana`).
+program serves every call. On Solana the same token methods compile too. A balance there belongs to
+a token account, so compiling adds the accounts each call moves through to `main`, and the command
+derives them from the owner, the Pot and main's arguments. Any other account is written where it
+is used (`Solana.pda(program, [seeds])`, `USDC.accountOf(holder)`), which compiling adds the same
+way, or taken as an `Account` parameter attached with `--account` (`sauce-solana`).
 
 On an EVM chain the executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and
 makes the calls. Token writes are SafeERC20 however they are spelled, so USDT works. On Solana the
-Pot is an account the program is given, and `ctx.self()` there is the engine's program id.
+Pot is an account the program is given, and `ctx.self()` there is the engine's program id, except
+as a token's holder (`USDC.balanceOf(ctx.self())`), where it is the Pot as on an EVM chain.
 
 Two references hold what a program can name. The language (types, operators, statements, and the
 `ctx`, `crypto`, `Math`, `abi`, `evm` and `svm` builtins) is
@@ -295,10 +298,12 @@ or an imported ABI), with `available(...)` for a chain that may lack it.
 Any swap inside a program, through `@sauce/router`: one function per venue (Uniswap V2, V3 and V4,
 Curve, Balancer V2, DODO V2, Trader Joe LB, WOOFi, Maverick V2), which venues are paid first and
 which call back through the Pot's Router, exact input, price limits and partial fills, the reverts,
-and the guard every leg needs.
+and the guard every leg needs. On Solana it covers each price-limit venue as a namespace
+(`OrcaWhirlpool.swap(pool, …)`, its accounts derived) and the function behind it.
 
-- **Holds** the functions' arguments, `sauce price` for turning a price into a limit, and an
-  example: one guarded Uniswap V3 leg that returns its unspent input.
+- **Holds** the functions' arguments, `sauce price` for turning a price into a limit, and two
+  examples: one guarded Uniswap V3 leg that returns its unspent input, and a swap at an Orca
+  whirlpool on Solana by its namespace, forwarded.
 - **Load it** for one swap, or a swap as one step of a program. One order over several pools
   under one price is `sauce-distributed-swap`; a swap as a step of a JSON document is
   `sauce-actions`.
@@ -363,14 +368,19 @@ and program bodies, cascades, on which chain each name resolves, and simulating 
 
 ### `sauce-solana`
 
-Programs for Solana: every account an `Account` parameter with its roles, the account manifest,
-the Pot's key and token accounts, `@sauce/token` for SPL Token and Token-2022 (and what each
-extension does to a program), CPIs and raw account reads, transaction size, and running through
-the Kitchen or directly on the engine.
+Programs for Solana: the token methods with the accounts they move through derived and checked,
+any other account written where it is used or taken as an `Account` parameter, with its roles, the
+account manifest, the Pot's key and
+token accounts, `@sauce/token` for SPL Token and Token-2022 (and what each extension does to a
+program), CPIs and raw account reads, transaction size, and running through the Kitchen or directly
+on the engine.
 
-- **Holds** examples that move a mint's tokens and move PYUSD with `transferChecked`.
-- **Load it** for any program compiled for Solana, beside the skill for the task: namespaces and
-  token methods do not exist there.
+- **Holds** examples that pay USDC with `USDC.transfer(to, amount)` (one file for Base and
+  Solana), wrap SOL into the Pot's WSOL through the System Program with every account written where
+  it is used, move a mint's tokens with the accounts written out, and move PYUSD with
+  `transferChecked`.
+- **Load it** for any program compiled for Solana, beside the skill for the task: protocol
+  namespaces do not exist there, and a token method's holders must be known before it runs.
 - **Asked as:** "Send 10 TSLAx from my Pot to a wallet on Solana."
 
 ### `sauce-cli`

@@ -4,8 +4,8 @@
  * cook handed out — the owner's transactions since its slot, read a batch at a time, the search
  * stopping where they reach before it, and refusing rather than guessing where it cannot finish
  * (too many, or one the endpoint lists and does not return), which close goes past; the setup's
- * account checks in one read; a cook whose lookup table is not in use yet, said so at once rather
- * than waited for; and what a wallet's send takes from a tool's result. Executing plans is
+ * token accounts read in one request; a cook whose lookup table is not in use yet, said so at once
+ * rather than waited for; and what a wallet's send takes from a tool's result. Executing plans is
  * `cli-send.e2e.test.ts` and `mcp/test/send.e2e.test.ts`.
  */
 import { createHash, randomBytes } from "node:crypto";
@@ -571,7 +571,7 @@ describe("the search for a cook handed out, past its blockhash", () => {
 });
 
 describe("the setup a plan still needs", () => {
-  it("checks the Pot and every token account in one read", async () => {
+  it("reads every token account in one request, as sauce run finds and makes them", async () => {
     const accounts = [key(20), key(21), key(22)].map((at, index) => ({
       address: at as Address,
       holder: OWNER,
@@ -582,6 +582,8 @@ describe("the setup a plan still needs", () => {
     const calls: string[] = [];
     const rpc = endpoint(
       {
+        // The Pot, not created yet.
+        getAccountInfo: () => ({ context: { slot: 1n }, value: null }),
         getMultipleAccounts: (keys: never) => ({
           context: { slot: 1n },
           value: (keys as string[]).map((at) =>
@@ -594,7 +596,7 @@ describe("the setup a plan still needs", () => {
       calls,
     );
     const step = await nextStep(plan({ pot: "setup", tokenAccounts: accounts }), context(rpc));
-    expect(calls).toEqual(["getMultipleAccounts"]);
+    expect(calls.sort()).toEqual(["getAccountInfo", "getMultipleAccounts"]);
     expect(step.name).toBe("setup");
     expect(step.transactions.map((tx) => tx.what)).toEqual([
       "creating the Pot",

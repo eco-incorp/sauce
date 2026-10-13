@@ -119,7 +119,7 @@ export interface TokenRewriteResult extends TokenImports {
   readonly balanceSites: number;
 }
 
-interface Splice {
+export interface Splice {
   readonly start: number;
   readonly end: number;
   readonly replacement: string;
@@ -128,7 +128,7 @@ interface Splice {
 /** Splice from the end backward so earlier offsets stay valid. The ranges never overlap: a write
  *  only replaces the text BEFORE its first argument, so a site nested inside the arguments is
  *  spliced independently. */
-function applySplices(source: string, splices: readonly Splice[]): string {
+export function applySplices(source: string, splices: readonly Splice[]): string {
   let out = source;
   for (const site of [...splices].sort((a, b) => b.start - a.start)) {
     out = out.slice(0, site.start) + site.replacement + out.slice(site.end);
@@ -148,7 +148,7 @@ function tokenAddressOf(tokens: TokenSymbols, symbol: string): bigint | undefine
 }
 
 /** A `<object>.<method>(...)` call, taken apart. */
-interface MethodCall {
+export interface MethodCall {
   readonly call: AstNode;
   readonly callee: AstNode;
   readonly object: AstNode;
@@ -156,7 +156,7 @@ interface MethodCall {
 }
 
 /** `<object>.<method>(...)`, non-computed and non-optional, or `undefined` for any other node. */
-function methodCall(node: AstNode): MethodCall | undefined {
+export function methodCall(node: AstNode): MethodCall | undefined {
   if (node.type !== "CallExpression" || (node as { optional?: boolean }).optional) return undefined;
   const callee = (node as { callee?: AstNode }).callee;
   if (!callee || callee.type !== "MemberExpression") return undefined;
@@ -175,7 +175,7 @@ function methodCall(node: AstNode): MethodCall | undefined {
 }
 
 /** Every call that is a whole statement on its own — the only place a write can stand. */
-function statementCalls(program: AstNode): ReadonlySet<AstNode> {
+export function statementCalls(program: AstNode): ReadonlySet<AstNode> {
   const calls = new Set<AstNode>();
   walk(program, (n) => {
     if (n.type === "ExpressionStatement") calls.add(child(n, "expression"));
@@ -284,7 +284,7 @@ const HEX_ADDRESS_LITERAL_RE = /^0x[0-9a-fA-F]{40}n?$/;
 /** By node identity: every node that must never be claimed as a balance-sugar candidate because it
  *  sits in one of the five excluded parent roles -- a call/new callee, the object of an outer member
  *  chain, anywhere inside an assignment's left-hand subtree, or an update expression's operand. */
-function collectValuePositionExclusions(program: AstNode): ReadonlySet<AstNode> {
+export function collectValuePositionExclusions(program: AstNode): ReadonlySet<AstNode> {
   const excluded = new Set<AstNode>();
   walk(program, (n) => {
     if (n.type === "CallExpression" || n.type === "NewExpression") {
@@ -379,7 +379,7 @@ export interface TokenFactoryResult extends TokenImports {
   readonly sites: number;
 }
 
-function isFactoryCall(node: AstNode): boolean {
+export function isFactoryCall(node: AstNode): boolean {
   if (node.type !== "CallExpression" || (node as { optional?: boolean }).optional) return false;
   const callee = (node as { callee?: AstNode }).callee;
 
@@ -390,7 +390,7 @@ function isFactoryCall(node: AstNode): boolean {
 }
 
 /** The single address argument of a `Token(...)` call. */
-function factoryArgument(call: AstNode): AstNode {
+export function factoryArgument(call: AstNode): AstNode {
   const args = (call as { arguments?: AstNode[] }).arguments ?? [];
   if (args.length !== 1 || args[0]!.type === "SpreadElement") {
     throw new Error(
@@ -423,15 +423,16 @@ function refuseFactory(what: string): Error {
  * address). Whole-program, like the shadow rule, rather than scope-exact: over-refusing is an error
  * a caller can act on, while under-refusing would lower a call on some other `t`.
  */
-function bindingCalls(
+export function bindingCalls(
   program: AstNode,
   declarator: AstNode,
   name: string,
   declarations: ReadonlyMap<string, number>,
+  refuse: (what: string) => Error = refuseFactory,
 ): ReadonlyArray<MethodCall> {
   const at = `\`${name} = ${TOKEN_FACTORY_NAME}(...)\``;
   if ((declarations.get(name) ?? 0) !== 1) {
-    throw refuseFactory(`${at}: \`${name}\` is declared more than once`);
+    throw refuse(`${at}: \`${name}\` is declared more than once`);
   }
 
   const receivers = new Map<AstNode, MethodCall>();
@@ -458,7 +459,7 @@ function bindingCalls(
   walk(program, (n) => {
     if (n.type !== "Identifier" || (n as unknown as { name: string }).name !== name) return;
     if (names.has(n) || receivers.has(n)) return;
-    throw refuseFactory(
+    throw refuse(
       assigned.has(n)
         ? `${at}: \`${name}\` is reassigned`
         : `${at}: \`${name}\` is used other than as \`${name}.<method>(...)\``,

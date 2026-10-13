@@ -483,7 +483,7 @@ const COOK: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=<address>",
-    help: "An account main takes, by name: an address, pot, owner, pot:USDC (the Pot's USDC account), mint:USDC or program:USDC (its token program)",
+    help: "An account main takes, by name: an address, pot, owner, self, system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it",
     only: "svm",
   },
   accounts: {
@@ -2524,7 +2524,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         type: "string",
         multiple: true,
         value: "NAME=<address>",
-        help: "Solana: an account main takes (an address, pot, owner, pot:USDC, mint:USDC, program:USDC), to size the cook",
+        help: "Solana: an account main takes (an address, pot, owner, self, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook",
       },
       via: {
         type: "string",

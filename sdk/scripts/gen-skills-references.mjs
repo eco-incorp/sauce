@@ -423,6 +423,8 @@ export async function skillsReferences(api, documented) {
       protocols: protocols
         .filter((p) => p.chains.includes(chain.slug))
         .map((p) => ({ ...p, deployed: p.deployed.filter((d) => d.chain === chain.slug) })),
+      venues: sourceGlobals.get(chain.slug).venues ?? [],
+      accounts: sourceGlobals.get(chain.slug).accounts ?? [],
     };
   });
 
@@ -827,12 +829,13 @@ function renderGlobals(data) {
   if (globals.tokens.some((entry) => entry.chain.kind === "svm")) {
     tokens.push(
       "",
-      "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
-      "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token",
-      "methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana",
-      "file in `sauce-chains`; a program for devnet takes its mint as an `Address` parameter of",
-      "`main`. That file also names each mint's token program: legacy SPL Token, or Token-2022, whose",
-      "mints a program moves with the checked writes (`sauce-solana`).",
+      "On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token",
+      "accounts are added to `main` and derived when the cook is built (`sauce-solana`), and the",
+      "symbol alone is the mint's 32-byte key, a value for the `@sauce/token` functions",
+      "(`balanceOf(USDC, account)`). Devnet's mints, which differ, are in the Solana file in",
+      "`sauce-chains`; a program for devnet takes its mint as an `Address` parameter of `main`",
+      "(`Token(mint)`). That file also names each mint's token program: legacy SPL Token, or",
+      "Token-2022, whose mints move by the checked writes.",
     );
   }
   tokens.push(
@@ -940,10 +943,11 @@ function renderGlobals(data) {
     "one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and",
     "not in a local copy of the chain.",
     "",
-    "On Solana each is a Token-2022 mint: the symbol is the mint's 32-byte key, a value for the",
-    "`@sauce/token` functions (`balanceOf(TSLAx, account)`), and a program moves one with the checked",
-    "writes (`transferChecked`), which take the mint, its token program and its decimals. Amounts are",
-    "raw: the issuer's multiplier, which a wallet shows them times, does not apply to them. A mint",
+    "On Solana each is a Token-2022 mint with the same token methods (`TSLAx.transfer(to, amount)`),",
+    "which lower to the checked writes (`transferChecked`, with the mint, its token program and its",
+    "decimals), and its symbol alone is the mint's 32-byte key, a value for the `@sauce/token`",
+    "functions (`balanceOf(TSLAx, account)`). Amounts are raw: the issuer's multiplier, which a",
+    "wallet shows them times, does not apply to them. A mint",
     "marked with a transfer fee (PreStocks') keeps part of every transfer, so the recipient gets less",
     "than was sent: measure the balance change. The rest is in the skill's",
     "[Tokenized stocks](../SKILL.md#tokenized-stocks).",
@@ -1165,6 +1169,35 @@ function renderChain(chain, supported, site) {
         "",
       );
     }
+  }
+  if (chain.venues.length > 0) {
+    lines.push(
+      "## Venues",
+      "",
+      "Each venue whose swap a price limit stops, by the namespace a program swaps at one of its pools",
+      "with: `<Venue>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`, or `trySwap(…)`,",
+      "which returns 0 where `swap` reverts. The pool's accounts, and the Pot's, are derived when the",
+      "cook is built (`sauce-swaps`).",
+      "",
+      "| Namespace | Venue | Program |",
+      "| --- | --- | --- |",
+      ...chain.venues.map((v) => `| \`${v.namespace}\` | ${v.name} | \`${v.program}\` |`),
+      "",
+    );
+  }
+  if (chain.accounts.length > 0) {
+    lines.push(
+      "## Accounts",
+      "",
+      "The accounts a program writes where it uses them, each added to `main`, derived when the cook",
+      "is built (so what it is made of is known then) and checked on chain at the top of `main` to be",
+      "the account it names. Each is read-only unless `.writable()` or `.signer()` gives it that role.",
+      "",
+      "| Expression | The account | Derived as |",
+      "| --- | --- | --- |",
+      ...chain.accounts.map((a) => `| \`${a.expression}\` | ${a.account} | \`${a.derive}\` |`),
+      "",
+    );
   }
   lines.push("## Protocols", "");
   if (chain.protocols.length === 0) {
@@ -1770,10 +1803,11 @@ function renderTokens(data, globalsSkill) {
     "same token is a property of the chain's export, `Base.USDC`, with its `address`, `decimals` and",
     "`symbol`. Amounts are integers in the token's smallest units: nothing scales them by decimals.",
     "",
-    "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
-    "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token methods",
-    "(`USDC.transfer(...)`) are EVM-only. Each Solana mint's token program is legacy SPL Token or",
-    "Token-2022, whose mints a program moves with the checked writes.",
+    "On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token",
+    "accounts are added to `main` and derived when the cook is built, and the symbol alone is the",
+    "mint's 32-byte key, a value for the `@sauce/token` functions (`balanceOf(USDC, account)`). Each",
+    "Solana mint's token program is legacy SPL Token or Token-2022, whose mints move by the checked",
+    "writes.",
     "",
     "| Chain | Tokens | Tokenized stocks |",
     "| --- | --- | --- |",

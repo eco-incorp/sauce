@@ -196,7 +196,10 @@ interface ArrayConstructor {
   new (length: SauceInt): any[];
 }
 
-/** The ERC-20 token at `address`: `Token(addr).transfer(to, amount)`, with SafeERC20 writes. */
+/**
+ * The token at `address`: `Token(addr).transfer(to, amount)`. On an EVM chain an ERC-20, its writes
+ * SafeERC20; on Solana a mint, the accounts each method moves through added to main.
+ */
 declare function Token(address: SauceInt): SauceTokenSource;
 
 // `@sauce/token`, whose functions every program on a chain calls with no import: an EVM token is
