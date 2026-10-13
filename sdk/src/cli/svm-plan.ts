@@ -846,6 +846,39 @@ export async function nextStep(
   return cookStep(setup.plan, ctx);
 }
 
+/**
+ * Every transaction `plan` has still to send, as the cluster shows it now: the whole setup that is
+ * not there yet, then the cook, then the code buffer's close — the cook and the close by kind
+ * alone, for what they cost to be counted before any is sent (a wallet's policy).
+ */
+export async function transactionsAhead(plan: SvmPlan, ctx: StepContext): Promise<PlanTx[]> {
+  const buffer = await planBuffer(plan);
+  const state = buffer === undefined ? undefined : await bufferState(ctx, plan);
+  const finalized =
+    state !== undefined &&
+    state.finalized &&
+    plan.staged !== undefined &&
+    sameBytes(state.sha256, plan.staged.sha256);
+  const setup = await setupTransactions(plan, ctx, state, finalized, Number.MAX_SAFE_INTEGER);
+
+  return [
+    ...setup.transactions,
+    ...(plan.cooked === undefined
+      ? [
+          {
+            what: "the cook",
+            kind: "cook" as const,
+            instructions: [],
+            createsPot: plan.pot === "inline" && !(await exists(ctx, await potOf(plan), "the Pot")),
+          },
+        ]
+      : []),
+    ...(buffer === undefined
+      ? []
+      : [{ what: "closing the code buffer", kind: "close" as const, instructions: [] }]),
+  ];
+}
+
 const withoutPayload = (plan: SvmPlan): SvmPlan => {
   const { payload: _payload, ...rest } = plan;
 
@@ -864,6 +897,7 @@ async function setupTransactions(
   ctx: StepContext,
   state: BufferState | undefined,
   finalized: boolean,
+  most = STEP_MOST,
 ): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[] }> {
   const transactions: PlanTx[] = [];
   const notes: string[] = [];
@@ -979,14 +1013,14 @@ async function setupTransactions(
   }
   // A step a signer can sign before its blockhash expires: what is past it comes in the next,
   // built from what the cluster shows then (the finalize after every write, the table after it).
-  if (transactions.length > STEP_MOST) {
+  if (transactions.length > most) {
     notes.push(
-      `the setup is ${transactions.length} transactions: this step is the first ${STEP_MOST}, and ` +
+      `the setup is ${transactions.length} transactions: this step is the first ${most}, and ` +
         "the next step has the rest",
     );
   }
 
-  return { transactions: transactions.slice(0, STEP_MOST), plan: next, notes };
+  return { transactions: transactions.slice(0, most), plan: next, notes };
 }
 
 /** The most transactions one step holds, all on one blockhash: what a signer and the sends that
@@ -1159,7 +1193,7 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
     overview: overview(plan, "cook"),
     notes:
       value === undefined
-        ? ["the endpoint did not rehearse the cook, so it is built at the most compute it may use"]
+        ? ["the endpoint did not simulate the cook, so it is built at the most compute it may use"]
         : [],
     fee,
     ...(fails === undefined ? {} : { fails }),
