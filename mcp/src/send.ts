@@ -17,7 +17,7 @@ import {
   signedChain,
   supportedChainNames,
 } from "./sdk.js";
-import { chainRef, refusable, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
+import { chainRef, LIMITS, refusable, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
 
 /**
  * The most a call sends, and the longest one signed transaction can be: an EVM transaction's 128
@@ -25,9 +25,6 @@ import { chainRef, refusable, RPC_URL, toolRegistrar, type ToolContext } from ".
  */
 export const SEND_MOST = 32;
 export const SIGNED_MOST = 2 + 2 * 128 * 1024;
-
-/** The most a plan's cursor holds: a staged program at its largest, compressed, in base64. */
-const CURSOR_MAX = 4 * 1024 * 1024;
 
 /** The sending tools, in the order `tools/list` gives them (after the intent tools). */
 export const SEND_TOOL_NAMES = ["sauce_send"] as const;
@@ -88,7 +85,7 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         cursor: z
           .string()
           .min(1)
-          .max(CURSOR_MAX)
+          .max(LIMITS.cursor)
           .optional()
           .describe(
             "Solana: the plan's cursor sauce_tx (or the last sauce_send's `next`) returned. With " +

@@ -53,6 +53,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["signature"], input: "signatures" },
   { flags: ["close"], input: "close: true" },
   { flags: ["keep-tables"], input: "keepTables" },
+  { flags: ["keep"], input: "keep" },
   { flags: ["via"], input: "via" },
   { flags: ["compact-args"], input: "compactArgs" },
   { flags: ["define", "defines"], input: "defines", lowLevel: true },

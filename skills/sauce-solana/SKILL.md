@@ -343,8 +343,10 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   transactions that close them, unsigned (the tool `sauce_reclaim`); with `--keypair <keypair>` it
   sends them. A buffer closes at
   once; a table is deactivated first and closed about 512 slots later (run it again then; the
-  listing names the slot), and a cook naming a deactivated table fails, so `--keep-tables` leaves
-  the tables.
+  listing names the slot), serving cooks until then and none after, so `--keep-tables` leaves the
+  tables. Nothing in use is closed: a buffer or an active table a transaction named in the last
+  300 slots is listed in use, with the slot it can close from, as a cook built for it may still
+  land; `--keep <cursor>` keeps a plan still under way whole, however long its cook waits.
 - **Accounts past one transaction go through a lookup table.** Each account a transaction lists
   costs 32 bytes, and one taken through an address lookup table one byte. `sauce run` creates a
   table holding a staged cook's accounts when they do not fit, from the signer, which pays its

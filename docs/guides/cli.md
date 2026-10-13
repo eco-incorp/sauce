@@ -689,7 +689,13 @@ With `--owner` alone it prints the transactions that close them, unsigned, for a
 closes in one transaction, its rent back at once. A table closes in two: deactivated now, and
 closed once its deactivation slot has left the cluster's recent slot hashes, 512 slots (about three
 and a half minutes) later; the listing says the slot it closes from, and the command run again
-then closes it. A cook naming a deactivated table fails: `--keep-tables` closes the buffers only.
+then closes it. It serves cooks until then, and none after: `--keep-tables` closes the buffers only.
+
+Nothing in use is closed. A buffer, or an active table, that a transaction named in the last 300
+slots (about two minutes) is listed `in use until slot <slot>` and left open, as a cook built for
+it may still land. A plan you mean to carry on with, whose cook may be handed out later than that,
+is kept whole with `--keep <cursor | @file>`, its cursor: its buffer and table stay open however
+long its cook waits.
 
 `--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the

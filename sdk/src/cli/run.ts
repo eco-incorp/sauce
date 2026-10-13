@@ -1628,7 +1628,7 @@ const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 /** A cursor from a file: the cursor itself, or the JSON a step was printed as (its `cursor`, or its
  *  `next.cursor`). */
-function cursorOf(text: string): string {
+function cursorOf(text: string, flag = "--cursor"): string {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return trimmed;
   try {
@@ -1638,7 +1638,7 @@ function cursorOf(text: string): string {
   } catch {
     // Reported below.
   }
-  throw new UsageError("--cursor @file: the file holds JSON with no cursor (nor next.cursor)");
+  throw new UsageError(`${flag} @file: the file holds JSON with no cursor (nor next.cursor)`);
 }
 
 /** The chain `sauce pot` is for: `--chain`, required — it has no program to say. */
@@ -3144,7 +3144,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   reclaim: {
     usage:
-      "sauce reclaim --chain solana (--owner <pubkey> | --keypair <path> | --wallet <name>) [--lookup-table <address>]… [--keep-tables] [--yes]",
+      "sauce reclaim --chain solana (--owner <pubkey> | --keypair <path> | --wallet <name>) [--lookup-table <address>]… [--keep <cursor | @file>]… [--keep-tables] [--yes]",
     summary: "List the code buffers and lookup tables a Solana owner left open, and close them",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain: solana" },
@@ -3158,6 +3158,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<address>",
         help: "A lookup table to close (default: the owner's Sauce tables, scanned for)",
+      },
+      keep: {
+        type: "string",
+        multiple: true,
+        value: "<cursor | @file>",
+        help: "A plan still under way, by its cursor: its code buffer and lookup table stay open",
       },
       "keep-tables": {
         type: "boolean",
@@ -3183,8 +3189,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "A buffer closes in one transaction, its rent back at once. A table closes in two: it is",
       "deactivated now, and closed once its deactivation slot has left the cluster's recent slot",
-      "hashes, 512 slots (about three and a half minutes) later: run the command again then. A",
-      "cook naming a deactivated table fails, so --keep-tables leaves them.",
+      "hashes, 512 slots (about three and a half minutes) later: run the command again then. It",
+      "serves cooks until then, and none after, so --keep-tables leaves them.",
+      "",
+      "Nothing in use is closed: a buffer or an active table a transaction named in the last 300",
+      "slots (about two minutes) is left open, as a cook built for it may still land, and the",
+      "listing says from which slot it can close. A plan you mean to carry on with, whose cook",
+      "may be handed out later, is kept whole with --keep and its cursor.",
       "",
       "With the owner's key (--keypair, or --wallet), it asks, then sends each transaction and",
       "prints it; --yes sends without asking. With --owner alone it prints the transactions",
@@ -3220,6 +3231,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           parsePubkey("lookup-table", at),
         ),
         ...(args.values["keep-tables"] === true ? { keepTables: true } : {}),
+        keep: repeatedFlag(args, "keep").map((given) =>
+          given.startsWith("@") ? cursorOf(readInput(io, given.slice(1)), "--keep") : given,
+        ),
         ...(signer === undefined
           ? {}
           : {

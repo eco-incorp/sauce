@@ -303,7 +303,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                                                                                                                                                                     |
 | `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read — or, while the Pot has no code, `{ chainId, pot, transactions }`, its deployment then the cook; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction, cursor }`, base64 and signed by no one — or, for a cook of several transactions, the first step of its plan, `{ step, plan, transactions, cursor }` |
 | `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                                                                                                                                                      |
-| `sauce_reclaim`        | `sauce reclaim`        | Solana: an owner's open code buffers and Sauce lookup tables (each table `active`, `deactivating` with `closableFromSlot`, or `closable`), the rent they hold, and the unsigned `transactions` that close the buffers and deactivate or close the tables                                                                                                                                                                                            |
+| `sauce_reclaim`        | `sauce reclaim`        | Solana: an owner's open code buffers and Sauce lookup tables (each table `active`, `deactivating` with `closableFromSlot`, or `closable`; what is in use with `inUse` and `freeFromSlot`, or `kept`), the rent they hold, and the unsigned `transactions` that close the buffers and deactivate or close the tables not in use                                                                                                                      |
 | `sauce_simulate`       | `sauce simulate`       | `ok`, then `leftInPot` (what the Pot holds after the cook of what it moved, with a note when that is anything), the `path` taken, each transaction's gas (`transactions`), what `main` returns, `moves` by role, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                               |
 | `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded`                                                                                                                                          |
 | `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill rehearsed: the calls and gas, what moved, or the decoded `reason`                                                                                                                                                                                                              |
@@ -354,6 +354,7 @@ server's instructions also list:
 | `--signature`              | `signatures`           |
 | `--close`                  | `close: true`          |
 | `--keep-tables`            | `keepTables`           |
+| `--keep`                   | `keep`                 |
 | `--via`                    | `via`                  |
 | `--compact-args`           | `compactArgs`          |
 | `--chain`                  | `chain`                |
@@ -679,7 +680,11 @@ measured when the cook goes out.
 What a plan given up on leaves open — a code buffer, and the lookup tables cooks keep for the next
 one naming the same accounts — `sauce_reclaim` lists, with the rent each holds, and returns the
 transactions that close it, unsigned, for `sauce_send`. A buffer closes at once; a table is
-deactivated, then closed about 512 slots later (call again then: `closableFromSlot` says when).
+deactivated, then closed about 512 slots later (call again then: `closableFromSlot` says when),
+serving cooks until then. Nothing in use is closed: a buffer or an active table a transaction named
+in the last 300 slots is listed with `inUse` and `freeFromSlot`, and left open, as a cook built for
+it may still land; `keep` takes the cursors of plans still under way, whose buffers and tables stay
+open (`kept`) however long their cooks wait.
 
 ## Agent wallets
 

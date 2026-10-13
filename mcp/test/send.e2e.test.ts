@@ -415,26 +415,51 @@ describe(
           rpcUrl: SOLANA_URL,
         }),
       ) as unknown as PlanStep;
-      ok(
+      const { next: cook } = ok(
         await mcp.call("sauce_send", {
           transactions: await sign(setup),
           cursor: setup.cursor,
           rpcUrl: SOLANA_URL,
         }),
-      );
-      // The cook is never sent: its buffer and table stay open.
-      const found = ok(
-        await mcp.call("sauce_reclaim", {
-          chain: "solana",
-          owner: owner.address,
-          rpcUrl: SOLANA_URL,
-        }),
-      ) as {
-        buffers: Array<{ codeBuffer: string }>;
-        lookupTables: Array<{ address: string; state: string }>;
+      ) as unknown as { next: PlanStep };
+      type Use = { inUse?: boolean; freeFromSlot?: string; kept?: boolean };
+      type Found = {
+        buffers: Array<{ codeBuffer: string } & Use>;
+        lookupTables: Array<{ address: string; state: string } & Use>;
         transactions: Array<{ what: string; transaction: string }>;
       };
+      const reclaim = async (more: Record<string, unknown> = {}): Promise<Found> =>
+        ok(
+          await mcp.call("sauce_reclaim", {
+            chain: "solana",
+            owner: owner.address,
+            rpcUrl: SOLANA_URL,
+            ...more,
+          }),
+        ) as unknown as Found;
+      // The cook the plan handed out can still land: its buffer and table are in use, and nothing
+      // closes them.
+      const inUse = await reclaim();
+      assert.equal(inUse.buffers.length, 1);
+      const buffer = inUse.buffers[0]!;
+      assert.equal(buffer.inUse, true);
+      const held = [buffer, ...inUse.lookupTables.filter((table) => table.inUse === true)];
+      assert.ok(held.length >= 2);
+      for (const one of held) {
+        const at = "codeBuffer" in one ? one.codeBuffer : one.address;
+        assert.ok(inUse.transactions.every((tx) => !tx.what.includes(at)));
+      }
+      // Past that, the plan given to keep keeps them.
+      harness.svm.warpToSlot(
+        held.map((one) => BigInt(one.freeFromSlot!)).reduce((a, b) => (b > a ? b : a)),
+      );
+      const kept = await reclaim({ keep: [cook.cursor] });
+      assert.equal(kept.buffers[0]!.kept, true);
+      assert.ok(kept.transactions.every((tx) => !tx.what.includes(buffer.codeBuffer)));
+      // The cook is never sent: its buffer and table stay open until reclaimed.
+      const found = await reclaim();
       assert.equal(found.buffers.length, 1);
+      assert.equal(found.buffers[0]!.inUse, undefined);
       // This plan's table, and the one the plan before it kept for later cooks.
       assert.equal(found.lookupTables.length, 2);
       assert.ok(found.lookupTables.every((table) => table.state === "active"));
@@ -446,13 +471,7 @@ describe(
       ) as { ok: boolean };
       assert.equal(sent.ok, true);
       assert.equal(harness.svm.getAccount(address(found.buffers[0]!.codeBuffer)).exists, false);
-      const after = ok(
-        await mcp.call("sauce_reclaim", {
-          chain: "solana",
-          owner: owner.address,
-          rpcUrl: SOLANA_URL,
-        }),
-      ) as { buffers: unknown[]; lookupTables: Array<{ state: string }> };
+      const after = await reclaim();
       assert.equal(after.buffers.length, 0);
       assert.ok(after.lookupTables.every((table) => table.state === "deactivating"));
     });

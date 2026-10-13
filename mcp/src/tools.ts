@@ -119,6 +119,10 @@ export const LIMITS = {
   hex: 1024 * 1024,
   /** Entries of a list or map: defines, arguments, accounts, balances. */
   entries: 64,
+  /** Characters of a plan's cursor: a staged program at its largest, compressed, in base64. */
+  cursor: 4 * 1024 * 1024,
+  /** Plans named at once, by their cursors. */
+  plans: 8,
 } as const;
 
 // ---------------------------------------------------------------------------------------------
@@ -2085,9 +2089,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "blockhash: each buffer's close (its rent back at once), each active table's " +
         "deactivation, each closable table's close. A table closes in two steps a cluster keeps " +
         "about 512 slots (three and a half minutes) apart: call again after the deactivation " +
-        "to get its close. keepTables leaves the tables, for later cooks naming the same " +
-        "accounts (a cook naming a deactivated table fails). Send the signed transactions with " +
-        `sauce_send. ${UNSIGNED} Solana only. ${SUPPORTED_ONLY}`,
+        "to get its close; it serves cooks until then, and none after. keepTables leaves the " +
+        "tables, for later cooks naming the same accounts. Nothing in use is closed: a buffer " +
+        "or an active table a transaction named in the last 300 slots (about two minutes) is " +
+        "listed with `inUse` and `freeFromSlot`, and left open, as a cook built for it may " +
+        "still land; `keep` takes the cursors of plans still under way, whose buffers and " +
+        "tables stay open (`kept`) however long their cooks wait. Send the signed transactions " +
+        `with sauce_send. ${UNSIGNED} Solana only. ${SUPPORTED_ONLY}`,
       input: {
         chain: chainRef,
         owner: z.string().min(32).max(64).describe("The owner: a base58 public key."),
@@ -2100,6 +2108,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .boolean()
           .optional()
           .describe("Close the code buffers only, and leave the lookup tables."),
+        keep: z
+          .array(z.string().min(1).max(LIMITS.cursor))
+          .max(LIMITS.plans)
+          .optional()
+          .describe(
+            "Plans still under way, by the cursors sauce_tx or sauce_send returned: their code " +
+              "buffers and lookup tables are left open.",
+          ),
         rpcUrl: RPC_URL,
       },
       output: refusable({
@@ -2128,6 +2144,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           rpcUrl,
           lookupTables: (args.lookupTables ?? []).map((at) => parsePubkey("lookupTables", at)),
           ...(args.keepTables === true ? { keepTables: true } : {}),
+          ...(args.keep === undefined ? {} : { keep: args.keep }),
         }),
       );
     },

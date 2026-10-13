@@ -3,11 +3,13 @@
  * and engine in LiteSVM (`svm/rpc-shim.ts`, which checks every signature it is sent and scans the
  * accounts the cluster saw for `getProgramAccounts`).
  *
- * A plan's setup is sent and its cook never is: a code buffer and a lookup table stay open. With
- * the owner's address alone, `reclaim` lists both and returns the buffer's close and the table's
- * deactivation unsigned; signed elsewhere and sent with `sauce send`, the buffer's rent comes back.
- * The table then waits out its cooldown, named with the slot it closes from, and closes after it.
- * With the owner's keypair, `reclaim --yes` does the same itself; without --yes and no terminal,
+ * A plan's setup is sent and its cook never is: a code buffer and a lookup table stay open. While
+ * the cook the plan handed out can still land, `reclaim` lists both in use and closes neither, and
+ * a plan given with --keep keeps both past that. Then, with the owner's address alone, it returns
+ * the buffer's close and the table's deactivation unsigned; signed elsewhere and sent with
+ * `sauce send`, the buffer's rent comes back. The table then waits out its cooldown, named with the
+ * slot it closes from, and closes after it. With the owner's keypair, `reclaim --yes` leaves a
+ * handed-out cook's buffer alone, so the cook lands, then closes it; without --yes and no terminal,
  * it sends nothing.
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
@@ -53,14 +55,30 @@ const WIDE = [
   "",
 ].join("\n");
 
+interface Use {
+  readonly inUse?: boolean;
+  readonly freeFromSlot?: string;
+  readonly kept?: boolean;
+}
+
 interface Listing {
-  readonly buffers: ReadonlyArray<{ codeBuffer: string; finalized: boolean; lamports: string }>;
-  readonly lookupTables: ReadonlyArray<{
-    address: string;
-    state: string;
-    closableFromSlot?: string;
-  }>;
+  readonly buffers: ReadonlyArray<
+    { codeBuffer: string; finalized: boolean; lamports: string } & Use
+  >;
+  readonly lookupTables: ReadonlyArray<
+    {
+      address: string;
+      state: string;
+      closableFromSlot?: string;
+    } & Use
+  >;
   readonly transactions: ReadonlyArray<{ what: string; transaction: string; feePayer: string }>;
+}
+
+interface Step {
+  readonly step: string;
+  readonly cursor: string;
+  readonly transactions: Listing["transactions"];
 }
 
 describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup tables", () => {
@@ -86,32 +104,41 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
       ),
     );
   /** Sends a plan's setup and leaves it there: a buffer and a table open, the cook never sent. The
-   *  cursor the plan would carry on from. */
-  const abandonedSetup = async (salt: string): Promise<string> => {
+   *  step the plan hands out next: its cook. */
+  const abandonedSetup = async (salt: string): Promise<Step> => {
     const step = jsonOf(
       await sauce(
         ...["tx", wide, "--chain", "solana", "--owner", owner.signer.address, "--salt", salt],
         ...flags,
         ...["--rpc-url", RPC_URL],
       ),
-    ) as unknown as Listing & { step: string; cursor: string };
+    ) as unknown as Step;
     expect(step.step).toBe("setup");
     const sent = await sauce(
       ...["send", ...(await sign(step.transactions)), "--cursor", step.cursor],
       ...["--rpc-url", RPC_URL, "--json"],
     );
-    const out = jsonOf(sent) as { ok: boolean; next: { cursor: string } };
+    const out = jsonOf(sent) as { ok: boolean; next: Step };
     expect(out.ok).toBe(true);
+    expect(out.next.step).toBe("cook");
 
-    return out.next.cursor;
+    return out.next;
   };
-  const listing = async (): Promise<Listing> =>
+  const listing = async (...more: string[]): Promise<Listing> =>
     jsonOf(
       await sauce(
-        ...["reclaim", "--chain", "solana", "--owner", owner.signer.address],
+        ...["reclaim", "--chain", "solana", "--owner", owner.signer.address, ...more],
         ...["--rpc-url", RPC_URL, "--json"],
       ),
     ) as unknown as Listing;
+  /** Past the slot each of `found`'s buffers and tables in use is free from. */
+  const warpPast = (found: Listing): void => {
+    const free = [...found.buffers, ...found.lookupTables].flatMap((one) =>
+      one.freeFromSlot === undefined ? [] : [BigInt(one.freeFromSlot)],
+    );
+    expect(free.length).toBeGreaterThan(0);
+    harness.svm.warpToSlot(free.reduce((a, b) => (b > a ? b : a)));
+  };
 
   beforeAll(async () => {
     harness = await startEngine(
@@ -151,9 +178,35 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
   });
 
   it("lists what a plan left open, and closes it with transactions signed elsewhere", async () => {
-    const cursor = await abandonedSetup("left-open");
+    const { cursor } = await abandonedSetup("left-open");
+    // The cook the plan handed out can still land: its buffer and table are in use, and left open.
+    const fresh = await sauce(
+      ...["reclaim", "--chain", "solana", "--owner", owner.signer.address],
+      ...["--rpc-url", RPC_URL, "--json"],
+    );
+    const inUse = jsonOf(fresh) as unknown as Listing;
+    expect(inUse.buffers).toHaveLength(1);
+    expect(inUse.buffers[0]).toMatchObject({ inUse: true });
+    expect(inUse.lookupTables).toHaveLength(1);
+    expect(inUse.lookupTables[0]).toMatchObject({ state: "active", inUse: true });
+    expect(inUse.transactions).toHaveLength(0);
+    expect(fresh.stderr).toMatch(
+      new RegExp(
+        `code buffer ${inUse.buffers[0]!.codeBuffer} is left open: a transaction named it ` +
+          `lately, and a cook built for it may still land; reclaim from slot ` +
+          `${inUse.buffers[0]!.freeFromSlot} `,
+      ),
+    );
+    // Past that, a plan given to keep keeps both.
+    warpPast(inUse);
+    const kept = await listing("--keep", cursor);
+    expect(kept.buffers[0]).toMatchObject({ inUse: true, kept: true });
+    expect(kept.lookupTables[0]).toMatchObject({ inUse: true, kept: true });
+    expect(kept.transactions).toHaveLength(0);
+
     const found = await listing();
     expect(found.buffers).toHaveLength(1);
+    expect(found.buffers[0]!.inUse).toBeUndefined();
     expect(found.buffers[0]!.finalized).toBe(true);
     expect(found.lookupTables).toHaveLength(1);
     expect(found.lookupTables[0]!.state).toBe("active");
@@ -172,7 +225,6 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
     expect(harness.svm.getAccount(buffer).exists).toBe(false);
     // The plan it was staged for, past the blockhash of the cook it handed out, says its buffer is
     // gone and its cook never ran, rather than done.
-    harness.svm.warpToSlot(harness.svm.getClock().slot + 200n);
     const gone = await sauce("send", "--cursor", cursor, "--rpc-url", RPC_URL, "--json");
     expect(gone.code).toBe(1);
     expect(gone.stdout + gone.stderr).toMatch(/is gone, and the plan's cook never ran/);
@@ -202,11 +254,26 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
   }, 300_000);
 
   it("closes them itself with the owner's keypair, once agreed to", async () => {
-    await abandonedSetup("keyed");
+    const cook = await abandonedSetup("keyed");
     const argv = [
       ...["reclaim", "--chain", "solana", "--keypair", owner.path, "--keep-tables"],
       ...["--rpc-url", RPC_URL],
     ];
+    // The cook handed out can still land: --yes closes nothing, and the cook lands after it.
+    const early = await sauce(...argv, "--yes", "--json");
+    expect(early.code).toBe(0);
+    expect((jsonOf(early) as unknown as Listing).transactions).toHaveLength(0);
+    expect(early.stderr).toMatch(/there is nothing to close now/);
+    const cooked = jsonOf(
+      await sauce(
+        ...["send", ...(await sign(cook.transactions)), "--cursor", cook.cursor],
+        ...["--rpc-url", RPC_URL, "--json"],
+      ),
+    ) as { ok: boolean; sent: Array<{ returned?: string }> };
+    expect(cooked.ok).toBe(true);
+    expect(cooked.sent.map((one) => one.returned)).toContain("7");
+    warpPast(await listing());
+
     // No terminal to ask on, and no --yes: nothing is sent.
     const asked = await sauceWith({ canAsk: () => false }, ...argv);
     expect(asked.code).toBe(1);
