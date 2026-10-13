@@ -178,20 +178,24 @@ export async function sendCommand(input: SendInput): Promise<CommandOutput> {
   const ok = failed === undefined && sent.length === count;
   const landedCount = sent.filter((entry) => entry.hash !== "").length;
   // What was sent stands whatever building the next step does: a failure there comes back with the
-  // cursor to ask again with.
+  // cursor to ask again with. With nothing sent, the failure is the answer.
   const carried = done.plan ?? plan;
   const next =
     carried === undefined
       ? undefined
-      : await nextOf(input, carried).catch((error: unknown): NextStep => ({
-          step: "unknown",
-          plan: [],
-          cursor: encodeCursor(carried),
-          notes: [
-            `the next step could not be built: ${(error as Error).message.split("\n")[0]}; send ` +
-              "the cursor alone to ask again",
-          ],
-        }));
+      : await nextOf(input, carried).catch((error: unknown): NextStep => {
+          if (sent.length === 0) throw error;
+
+          return {
+            step: "unknown",
+            plan: [],
+            cursor: encodeCursor(carried),
+            notes: [
+              `the next step could not be built: ${(error as Error).message.split("\n")[0]}; ` +
+                "send the cursor alone to ask again",
+            ],
+          };
+        });
 
   return {
     text: [
