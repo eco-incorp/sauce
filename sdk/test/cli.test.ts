@@ -1663,7 +1663,7 @@ describe("sauce intent fill, offline", () => {
       ...NOWHERE,
     );
     expect(run.code).toBe(2);
-    expect(run.stderr).toMatch(/rehearses intents an EVM chain opens, and solana is not one/);
+    expect(run.stderr).toMatch(/simulates intents an EVM chain opens, and solana is not one/);
   });
 });
 

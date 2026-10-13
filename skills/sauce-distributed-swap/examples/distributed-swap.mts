@@ -3,7 +3,7 @@
 // the SKILL.md shows the program's own code, and that its venues and lookups, its typed reads, the
 // Slipstream swap through uniswapV3, a V4 pool id held as a Uint256, the `maxPrice` values, the
 // limits the program derives from them, each pool's own limit, `minTokens`, `maxAvgPrice`, the
-// rehearsal it reads, the chains it compiles on, and the arguments of its commands (and the program
+// simulation it reads, the chains it compiles on, and the arguments of its commands (and the program
 // header's) are what the program and the arithmetic give. Asserts what can be checked offline;
 // sends nothing.
 //
@@ -227,7 +227,7 @@ check(spcxc.decimals === 8, "SPCXc has 8 decimals");
 check(skill.includes(spcxc.address) && source.includes(spcxc.address), "both name SPCXc's address");
 
 // maxPrice: the price in whole tokens times 10^(18 + payDecimals - buyDecimals); maxAvgPrice the
-// same, halfway from a rehearsal's average to maxPrice: 148.5 to 150, 2,700 to 2,713.5.
+// same, halfway from a simulation's average to maxPrice: 148.5 to 150, 2,700 to 2,713.5.
 const spcxScale = 10n ** BigInt(18 + usdc.decimals - spcxc.decimals);
 const wethScale = 10n ** BigInt(18 + usdc.decimals - weth.decimals);
 const buyWeth = (27135n * wethScale) / 10n; // 2,713.5
@@ -315,7 +315,7 @@ for (const [minTokens, maxAvgPrice, what] of [
 ] as const)
   check(
     skill.includes(args(spcxc.address, spend, buySpcxc, minTokens, maxAvgPrice)),
-    `the skill rehearses ${what}`,
+    `the skill simulates ${what}`,
   );
 const header = (line: string) => line.replace("\n  ", "\n//     ");
 check(
@@ -327,7 +327,7 @@ check(
   "the program header's WETH command passes its own",
 );
 
-// The rehearsal the skill reads: 2,000 USDC over two pools for 0.738558490183795118 WETH, its
+// The simulation the skill reads: 2,000 USDC over two pools for 0.738558490183795118 WETH, its
 // average in maxPrice's units, and maxAvgPrice halfway from it to 2,713.5.
 const spent = 2000n * 10n ** BigInt(usdc.decimals);
 const bought = 738558490183795118n;

@@ -273,7 +273,7 @@ describe("the picker: sauce intent at a terminal", () => {
       );
       expect(code).toBe(0);
       expect(asked[0]).toContain(`${record.intentHash.slice(0, 18)}…  arbitrum -> base  published`);
-      expect(asked[1]).toMatch(/status\n.*fill, rehearsed/s);
+      expect(asked[1]).toMatch(/status\n.*fill, simulated/s);
       expect(stdout).toContain(`Intent ${record.intentHash}: arbitrum -> base`);
       expect(stdout).toContain("published arbitrum");
     } finally {

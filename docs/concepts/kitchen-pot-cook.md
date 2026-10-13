@@ -98,7 +98,7 @@ names the wallet as the call's beneficiary (`onBehalfOf`, `receiver`, `recipient
 parameter. Keeping a position in the Pot is a choice too: a later cook can then withdraw it or
 borrow against it without the wallet moving anything back first.
 
-The `sauce` command says which it was, before and after. A rehearsal (`sauce simulate`) and a sent
+The `sauce` command says which it was, before and after. A simulation (`sauce simulate`) and a sent
 cook (`sauce run`) lead with what the Pot holds after the cook of each token the cook moved, with
 what it held before; a cook that leaves the Pot nothing prints none:
 
@@ -113,7 +113,7 @@ Left in the Pot, not in the owner's wallet:
 its own books, with no token for it, shows in no balance. Below it, what moved is listed in order,
 each party by its role (`wallet`, `Pot`, `Kitchen`, a registry name, a token's symbol, `mint` and
 `burn`). Before sending, review three things together: the final program, the arguments it is
-called with, and what the rehearsal says will happen, meaning what leaves your wallet, what arrives
+called with, and what the simulation says will happen, meaning what leaves your wallet, what arrives
 where, and what stays in the Pot. A sent transaction prints its explorer page and its trace on
 BlockSec's Phalcon explorer (its calls and balance changes), to open in a browser.
 
@@ -173,7 +173,7 @@ The [Solana guide](../guides/solana.md) covers accounts, staging and both ways t
 | --------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------- |
 | Find a Pot's address        | `sauce pot --owner <address>`                   | `v12PredictPot(owner, salt)` from `@eco-incorp/sauce`                            |
 | Deploy a Pot                | `sauce run` (when needed), `sauce pot --deploy` | `routes.sauceEvmDeployPotCall({ owner, salt })`                                  |
-| Rehearse a cook             | `sauce simulate`                                | an `eth_call` of the cook from the owner, on a deployed Pot                      |
+| Simulate a cook             | `sauce simulate`                                | an `eth_call` of the cook from the owner, on a deployed Pot                      |
 | Build a cook                | `sauce tx`                                      | `v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine`         |
 | Send a cook                 | `sauce run`                                     | your own wallet client, with the cook as `to`, `data` and `value`                |
 | Read the fee                | read by `sauce run` and `sauce tx`              | `destinationExecutionFee()`                                                      |

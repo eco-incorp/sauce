@@ -405,7 +405,7 @@ async function walletBalances(
   return {
     overrides: mergeOverrides(overrides),
     lines:
-      lines.length === 0 ? [] : ["Assumed for this rehearsal only, by state override:", ...lines],
+      lines.length === 0 ? [] : ["Assumed for this simulation only, by state override:", ...lines],
     json,
     notes,
   };
@@ -593,10 +593,10 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
       },
       notes: [
         ...assumed.notes,
-        `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +
+        `This simulates publishing on ${input.chain.slug} only. What the intent does runs on ` +
           `${[...new Set(plans.map((plan) => plan.intent.destination.slug))].join(" and ")}, when ` +
           "a solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +
-          "endpoint, rehearses that.",
+          "endpoint, simulates that.",
       ],
       ...(ok ? {} : { exitCode: 1 }),
     };

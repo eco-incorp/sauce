@@ -48,8 +48,8 @@ export const MCP_EXTRA: Extra = {
 
 /** A Solana rehearsal's, imported by `svm-fork.ts`. */
 export const LITESVM_EXTRA: Extra = {
-  command: "Solana rehearsals",
-  what: "rehearsing this cook in a local copy of the accounts it names",
+  command: "Solana simulations",
+  what: "simulating this cook in a local copy of the accounts it names",
   packages: ["litesvm"],
   importer: here("./"),
 };

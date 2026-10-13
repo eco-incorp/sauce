@@ -3,7 +3,7 @@
 // program id the SDK records for it, written beside its key, and listed in the skill's table with
 // its function, which takes the arguments the skill gives; that the pool offsets the library reads
 // are the SDK's own for each venue; that the program's accounts are the ones its header and the
-// skill name, in order; and that `maxPrice`, `minTokens`, `maxAvgPrice` and the rehearsal's average
+// skill name, in order; and that `maxPrice`, `minTokens`, `maxAvgPrice` and the simulation's average
 // the skill and the header give are what the arithmetic gives. Asserts what can be checked offline;
 // sends nothing.
 //
@@ -237,7 +237,7 @@ check(maxAvg === 119_750_000_000_000_000n, "maxAvgPrice halfway between 119.5 an
 for (const value of [buySol, floorSol, sellSol, maxAvg])
   check(skill.includes(`**${value}**`), `the skill quotes ${value}`);
 check(skill.includes(`\`${minTokens}\``), `the skill quotes minTokens ${minTokens}`);
-// The commands pass them: the rehearsal, and the run with its checks set.
+// The commands pass them: the simulation, and the run with its checks set.
 check(
   prose.includes(`--args ${budget} ${buySol} 0 0`) &&
     prose.includes(`--args ${budget} ${buySol} ${minTokens} ${maxAvg}`),
@@ -250,7 +250,7 @@ check(
 
 check(prose.includes(`--max-price ${floorSol}`), "the skill chooses pools within that floor");
 
-// The rehearsal the skill reads: 2,000 USDC for 16.983900131 SOL, and its average.
+// The simulation the skill reads: 2,000 USDC for 16.983900131 SOL, and its average.
 const spent = 2000n * 10n ** BigInt(usdc);
 const bought = 16_983_900_131n;
 check(
