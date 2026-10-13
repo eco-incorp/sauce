@@ -1,0 +1,271 @@
+/**
+ * An account of a Solana cook named by what it is rather than by its address: the language
+ * `sauce --account NAME=<value>` takes, in which the SDK also writes how each account it adds to a
+ * program is derived (`CompiledSauceProgram.derivedAccounts`, for the token methods).
+ *
+ *   pot | owner          the cook's Pot, or its owner (the signer)
+ *   self                 the authority the program acts with: the Pot, cooked through the Kitchen;
+ *                        the owner, cooked directly on the engine (`via: "engine"`)
+ *   <base58>             that address
+ *   @<param>             the key given as main's argument `<param>`
+ *   <holder>:<token>     the holder's associated token account for the mint, under the token
+ *                        program that owns the mint; a holder is `pot`, `owner`, `self`, `@<param>`
+ *                        or a base58 address
+ *   mint:<token>         the mint
+ *   program:<token>      the token program that owns the mint
+ *
+ * A token is a symbol the chain registers (`USDC`, a stock's `TSLAx`, matched without regard to
+ * case), a mint's base58 address, or `@<param>`, a mint given as main's argument. A registered
+ * mint's program is the registry's; any other is read from the cluster through `programOf`.
+ *
+ * The derivation is the ADDRESS the transaction attaches; what a program does with the account is
+ * its own to check (the token methods check each holder's account on chain).
+ */
+import { address, isAddress, type Address } from "@solana/kit";
+
+import type { CanonicalChain } from "../chains/canonical.js";
+import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
+import { svmTokenAccount } from "./token-accounts.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "./token-program.js";
+
+/** A mint's token program, read from the cluster: the owner of the mint's account. */
+export type SvmMintProgramOf = (mint: Address) => Promise<Address>;
+
+/** What `resolveSvmAccountName` resolves names against: the cook, and main's arguments. */
+export interface SvmAccountNameContext {
+  /** The chain whose registered mints a symbol names. */
+  readonly chain: CanonicalChain;
+  /** The cook's owner: its signer. */
+  readonly owner: Address;
+  /** The owner's Pot. */
+  readonly pot: Address;
+  /** Through the Kitchen on the Pot (the default), or directly on the engine, with no Pot. */
+  readonly via?: "kitchen" | "engine";
+  /** main's `Address` arguments, by parameter name, as keys. */
+  readonly args?: Readonly<Record<string, Address>>;
+  /** An unregistered mint's token program. Without it, an unregistered mint is SPL Token's. */
+  readonly programOf?: SvmMintProgramOf;
+}
+
+/** One name, resolved. */
+export interface ResolvedSvmAccountName {
+  /** `pot` or `owner`, which a cook attaches with their signing roles, or an address. */
+  readonly value: "pot" | "owner" | Address;
+  /** What the account is, for a person, where the name says more than its address. */
+  readonly label?: string;
+  readonly kind: "pot" | "owner" | "address" | "account" | "mint" | "program";
+  /** A holder's token account: its mint, holder and token program, which create it. */
+  readonly account?: {
+    readonly mint: Address;
+    readonly holder: Address;
+    readonly program: Address;
+  };
+}
+
+/** A name that cannot be resolved; its message reads after the name. */
+export class SvmAccountNameError extends Error {
+  override readonly name = "SvmAccountNameError";
+}
+
+type Holder =
+  | { readonly kind: "pot" | "owner" | "self" }
+  | { readonly kind: "arg"; readonly param: string }
+  | { readonly kind: "address"; readonly key: string };
+
+type Token =
+  | { readonly kind: "symbol"; readonly symbol: string }
+  | { readonly kind: "address"; readonly key: string }
+  | { readonly kind: "arg"; readonly param: string };
+
+type Parsed =
+  | { readonly kind: "holder"; readonly holder: Holder }
+  | { readonly kind: "account"; readonly holder: Holder; readonly token: Token }
+  | { readonly kind: "mint" | "program"; readonly token: Token };
+
+const PARAM = /^@([A-Za-z_$][A-Za-z0-9_$]*)$/;
+const SYMBOL = /^[A-Za-z0-9_]+$/;
+
+function parseHolder(text: string): Holder | undefined {
+  if (text === "pot" || text === "owner" || text === "self") return { kind: text };
+  const param = PARAM.exec(text);
+  if (param !== null) return { kind: "arg", param: param[1]! };
+
+  return isAddress(text) ? { kind: "address", key: text } : undefined;
+}
+
+function parseToken(text: string): Token | undefined {
+  const param = PARAM.exec(text);
+  if (param !== null) return { kind: "arg", param: param[1]! };
+  if (isAddress(text)) return { kind: "address", key: text };
+
+  return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
+}
+
+function parse(value: string): Parsed | undefined {
+  const holder = parseHolder(value);
+  if (holder !== undefined) return { kind: "holder", holder };
+  const at = value.indexOf(":");
+  if (at <= 0) return undefined;
+  const head = value.slice(0, at);
+  const token = parseToken(value.slice(at + 1));
+  if (token === undefined) return undefined;
+  if (head === "mint" || head === "program") return { kind: head, token };
+  const of = parseHolder(head);
+
+  return of === undefined ? undefined : { kind: "account", holder: of, token };
+}
+
+/** Whether `value` is a name this language has (it says nothing of whether it resolves). */
+export function isSvmAccountName(value: string): boolean {
+  return parse(value) !== undefined;
+}
+
+/** The name a person reads for a token program. */
+const programName = (program: Address): string =>
+  program === TOKEN_2022_PROGRAM_ID ? "Token-2022" : "SPL Token";
+
+/** main's argument `param`, as a key. */
+function argument(param: string, ctx: SvmAccountNameContext): Address {
+  const key = ctx.args?.[param];
+  if (key === undefined) {
+    throw new SvmAccountNameError(
+      `the account is derived from main's argument \`${param}\`, which was not given: pass ` +
+        "main's arguments",
+    );
+  }
+
+  return key;
+}
+
+/** A token's mint and its row, when the chain registers it. */
+function mintOf(
+  token: Token,
+  whose: string,
+  ctx: SvmAccountNameContext,
+  rows: readonly SvmTokenRow[],
+): { readonly mint: Address; readonly row?: SvmTokenRow; readonly what: string } {
+  if (token.kind === "symbol") {
+    // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
+    const upper = token.symbol.toUpperCase();
+    const row = rows.find((candidate) => candidate.symbol.toUpperCase() === upper);
+    if (row === undefined) {
+      // The chain's other mints by name, its tokenized stocks by count: there are over a thousand.
+      const listed = rows.filter((candidate) => candidate.stock === undefined);
+      const stocks = rows.length - listed.length;
+      throw new SvmAccountNameError(
+        `${token.symbol} is not a mint ${ctx.chain.slug} registers ` +
+          `(${listed.map((candidate) => candidate.symbol).join(", ") || "none"}` +
+          (stocks > 0
+            ? `, and ${stocks} stock tokens: sauce globals --chain ${ctx.chain.slug} --stocks`
+            : "") +
+          `): give the mint's base58 address, ${whose}:<mint>`,
+      );
+    }
+
+    return { mint: address(row.mint), row, what: row.symbol };
+  }
+  const mint = token.kind === "arg" ? argument(token.param, ctx) : address(token.key);
+  const row = rows.find((candidate) => candidate.mint === mint);
+
+  return { mint, ...(row === undefined ? {} : { row }), what: row?.symbol ?? `mint ${mint}` };
+}
+
+/** Who a holder is: the Pot or the owner by role, else a key; and how a person reads it. */
+function holderOf(
+  holder: Holder,
+  ctx: SvmAccountNameContext,
+  token: string,
+): { readonly key: Address; readonly whose: string } {
+  const engine = ctx.via === "engine";
+  switch (holder.kind) {
+    case "pot":
+      if (engine) {
+        throw new SvmAccountNameError(
+          "--via engine cooks with no Pot, so there is no Pot's token account to pass: give the " +
+            `account the program reads by its address (owner:${token} for the owner's), or cook ` +
+            "through the Kitchen",
+        );
+      }
+      return { key: ctx.pot, whose: "the Pot's" };
+    case "owner":
+      return { key: ctx.owner, whose: "the owner's" };
+    case "self":
+      return engine
+        ? { key: ctx.owner, whose: "the owner's" }
+        : { key: ctx.pot, whose: "the Pot's" };
+    case "arg":
+      return { key: argument(holder.param, ctx), whose: `main's argument ${holder.param}'s` };
+    case "address":
+      return { key: address(holder.key), whose: `${holder.key}'s` };
+  }
+}
+
+/**
+ * Resolves one name to the account a cook attaches. `pot` and `owner` stay as they are (and `self`
+ * becomes one of them), so the cook gives each its signing role; every other name becomes an
+ * address. Throws `SvmAccountNameError` for a name the language does not have, a symbol the chain
+ * does not register, the Pot's token account cooked with no Pot, or an argument not given.
+ */
+export async function resolveSvmAccountName(
+  value: string,
+  ctx: SvmAccountNameContext,
+): Promise<ResolvedSvmAccountName> {
+  const parsed = parse(value);
+  if (parsed === undefined) {
+    throw new SvmAccountNameError(
+      `'${value}' is not an address, pot, owner, self, @<argument>, or a token's account: ` +
+        "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
+        "owner's, @to:USDC main's argument to's, mint:USDC the mint and program:USDC its token " +
+        "program",
+    );
+  }
+  if (parsed.kind === "holder") {
+    const { holder } = parsed;
+    switch (holder.kind) {
+      case "pot":
+        return { value: "pot", kind: "pot" };
+      case "owner":
+        return { value: "owner", kind: "owner" };
+      case "self":
+        return ctx.via === "engine"
+          ? { value: "owner", kind: "owner" }
+          : { value: "pot", kind: "pot" };
+      case "arg":
+        return {
+          value: argument(holder.param, ctx),
+          label: `main's argument ${holder.param}`,
+          kind: "address",
+        };
+      case "address":
+        return { value: address(holder.key), kind: "address" };
+    }
+  }
+
+  const rows = svmTokenRows(ctx.chain);
+  const tokenText = value.slice(value.indexOf(":") + 1);
+  const whose = value.slice(0, value.indexOf(":"));
+  const { mint, row, what } = mintOf(parsed.token, whose, ctx, rows);
+  if (parsed.kind === "mint") return { value: mint, label: `the ${what} mint`, kind: "mint" };
+  const program =
+    row !== undefined
+      ? address(row.tokenProgram)
+      : ctx.programOf === undefined
+        ? TOKEN_PROGRAM_ID
+        : await ctx.programOf(mint);
+  if (parsed.kind !== "account") {
+    return {
+      value: program,
+      label: `${what}'s token program, ${programName(program)}`,
+      kind: "program",
+    };
+  }
+  const holder = holderOf(parsed.holder, ctx, tokenText);
+  const account = await svmTokenAccount({ mint, tokenProgram: program }, holder.key);
+
+  return {
+    value: account,
+    label: `${holder.whose} ${what} account`,
+    kind: "account",
+    account: { mint, holder: holder.key, program },
+  };
+}
