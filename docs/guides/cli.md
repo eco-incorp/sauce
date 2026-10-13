@@ -606,10 +606,10 @@ sauce send AQAB… --chain solana
 Each operand is one signed transaction: on an EVM chain the raw `0x…` hex a signer returns (its
 chain and sender are read from it), on Solana the base64 wire transaction (every signature is
 checked against its message); `-` reads them from stdin. They go out in the order given, each
-rehearsed as it was signed first — an `eth_call` from its sender with its gas limit held to what
+simulated as it was signed first — an `eth_call` from its sender with its gas limit held to what
 that used, or a Solana simulation that checks the signatures — and one that would fail is not sent:
 the reason is printed, exit 1, and nothing after it goes out. Each lands before the next is
-rehearsed, so the cook after its Pot's deployment runs on the Pot. Sign that cook with a gas limit
+simulated, so the cook after its Pot's deployment runs on the Pot. Sign that cook with a gas limit
 that has room, or after the deployment has landed: a gas estimate taken while the Pot has no code
 prices a call to an empty address, and `sauce send` refuses the cook for it. A transaction already
 on chain is read back, not sent again.

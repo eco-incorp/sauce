@@ -1924,7 +1924,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
       ...(step.fails === undefined
         ? []
         : [
-            `Rehearsed now, the cook would fail: ${step.fails.reason}. It is built anyway, at the ` +
+            `Simulated now, the cook would fail: ${step.fails.reason}. It is built anyway, at the ` +
               "most compute; sauce send refuses it until it would succeed.",
           ]),
     ],
@@ -2153,7 +2153,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   }
   if (step.unrehearsed === true) {
     throw new CliError(
-      `the endpoint did not rehearse the cook, so it was not sent${await closedAgain()}`,
+      `the endpoint did not simulate the cook, so it was not sent${await closedAgain()}`,
     );
   }
   plan = step.plan;

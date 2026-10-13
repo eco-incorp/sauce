@@ -40,7 +40,7 @@ import {
 } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
+import { v12SvmKitchenProgramId } from "../deployments/index.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, landed, reasonOf, simulate, type Sent } from "./chain.js";
@@ -64,7 +64,6 @@ import {
 } from "./svm-plan.js";
 import {
   accountsNow,
-  messageAccounts,
   movedBy,
   svmLeftInPot,
   svmLeftInPotJson,
@@ -273,7 +272,7 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
     ...(step.fails === undefined
       ? []
       : [
-          `rehearsed now, the cook would fail: ${step.fails.reason}. Fix what it needs and send the ` +
+          `simulated now, the cook would fail: ${step.fails.reason}. Fix what it needs and send the ` +
             "cursor alone for a fresh one, or give up on it with close",
         ]),
   ];
@@ -403,7 +402,7 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
       if (tx.gas !== undefined && tx.gas < rehearsal.gas) {
         sent.push(
           refused(
-            `it is signed with a gas limit of ${tx.gas}, and the rehearsal used ${rehearsal.gas}: ` +
+            `it is signed with a gas limit of ${tx.gas}, and the simulation used ${rehearsal.gas}: ` +
               "it would run out of gas. Sign it again with a higher limit",
           ),
         );
@@ -546,10 +545,6 @@ async function tablesOf(
   return tables;
 }
 
-/** Whether `transaction` calls the engine, directly or through the Kitchen. */
-const runsEngine = (transaction: Transaction, tables: AddressesByLookupTableAddress): boolean =>
-  messageAccounts(transaction, tables).includes(v12SvmEngineProgramId() as SvmAddress);
-
 async function sendSvm(
   input: SendInput,
   plan: SvmPlan | undefined,
@@ -586,7 +581,6 @@ async function sendSvm(
       told?.what ?? `transaction ${index + 1}`,
       result,
       told?.pot,
-      tables,
       moved,
       carried?.returnType,
     );
@@ -706,13 +700,14 @@ function svmEntry(
   what: string,
   result: SvmSent,
   pot: SvmAddress | undefined,
-  tables: AddressesByLookupTableAddress,
   moved: SvmMoved | undefined,
   returnType: string | undefined,
 ): SentEntry {
   const left = moved === undefined || pot === undefined ? undefined : svmLeftInPot(moved, pot);
   const returns =
-    result.ok && runsEngine(tx.transaction, tables)
+    // A cook's: what `main` returned. A transaction that only names the engine (a Pot's
+    // creation) runs no program.
+    result.ok && isCook(tx.transaction)
       ? bytesToHex(result.returnData ?? new Uint8Array())
       : undefined;
   const returned =

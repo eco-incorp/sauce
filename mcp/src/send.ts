@@ -17,7 +17,14 @@ import {
   signedChain,
   supportedChainNames,
 } from "./sdk.js";
-import { chainRef, LIMITS, refusable, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
+import { chainRef, refusable, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
+
+/**
+ * The most a call sends, and the longest one signed transaction can be: an EVM transaction's 128
+ * KiB as hex (a Solana one is 1232 bytes, base64). Over HTTP the server is no unbounded relay.
+ */
+export const SEND_MOST = 32;
+export const SIGNED_MOST = 2 + 2 * 128 * 1024;
 
 /** The most a plan's cursor holds: a staged program at its largest, compressed, in base64. */
 const CURSOR_MAX = 4 * 1024 * 1024;
@@ -47,11 +54,11 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "land, and reports what it did. It takes no key and never signs. `transactions` are the " +
         "SIGNED bytes, in the order to send them: on an EVM chain the raw 0x… hex a signer " +
         "returns (chain and sender read from it), on Solana the base64 wire transaction (every " +
-        "signature checked). Each is rehearsed as signed first — EVM an eth_call from its sender " +
+        "signature checked). Each is simulated as signed first — EVM an eth_call from its sender " +
         "with its gas limit held to what that used, Solana a simulation that checks the " +
         "signatures — and one that would fail is not sent: the call fails with the reason, or, " +
         "once an earlier one landed, stops there with ok false. Each lands before the next is " +
-        "rehearsed, so a cook after its Pot's deployment runs on the Pot. One already on chain is " +
+        "simulated, so a cook after its Pot's deployment runs on the Pot. One already on chain is " +
         "read back, not sent again. Returns `sent`: each one's hash (a Solana signature), " +
         "status, `explorer` and `trace` (links to give the user, never to fetch), fee or gas, " +
         "the decoded `reason` of a failure, and for a cook what moved (`moves` on EVM, " +
@@ -71,12 +78,12 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "reached, with `refused` saying how to request the chain.",
       input: {
         transactions: z
-          .array(z.string().min(2).max(LIMITS.hex))
-          .max(LIMITS.entries)
+          .array(z.string().min(2).max(SIGNED_MOST))
+          .max(SEND_MOST)
           .optional()
           .describe(
-            "The signed transactions, in the order to send them: raw 0x… hex on an EVM chain, " +
-              "base64 wire transactions on Solana.",
+            `The signed transactions, in the order to send them (at most ${SEND_MOST}): raw 0x… ` +
+              "hex on an EVM chain, base64 wire transactions on Solana.",
           ),
         cursor: z
           .string()
@@ -90,7 +97,7 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
           ),
         signatures: z
           .array(z.string().min(32).max(100))
-          .max(LIMITS.entries)
+          .max(SEND_MOST)
           .optional()
           .describe(
             "Solana: signatures of the plan's transactions you broadcast another way, to confirm " +

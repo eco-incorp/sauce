@@ -62,6 +62,7 @@ import {
   getCompiledTransactionMessageDecoder,
   isAddress as isSolanaAddress,
   type Address as SvmAddress,
+  type AddressesByLookupTableAddress,
   type createSolanaRpc,
   type Transaction,
 } from "@solana/kit";
@@ -83,7 +84,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
-import { derivePotPda } from "../svm/index.js";
+import { derivePotPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeSymbol, tokenInfo, wordsOf } from "./effects.js";
@@ -613,19 +614,27 @@ export async function measureSvm(
     decimals: 9,
     amount,
   });
-  if ((message.addressTableLookups ?? []).length > 0) {
+  // The accounts it loads through lookup tables, read from the tables: a staged cook's.
+  const tables: AddressesByLookupTableAddress = {};
+  try {
+    for (const { lookupTableAddress } of (message.addressTableLookups ?? []) as readonly {
+      lookupTableAddress: SvmAddress;
+    }[]) {
+      Object.assign(tables, await fetchAlt(rpc, lookupTableAddress));
+    }
+  } catch {
     return {
       ...base,
       native: native(0n),
       tokens: [],
       approvals: [],
       unmeasured: {
-        native: "it loads accounts from lookup tables, which are not measured",
-        tokens: "it loads accounts from lookup tables, which are not measured",
+        native: "a lookup table it loads accounts from could not be read",
+        tokens: "a lookup table it loads accounts from could not be read",
       },
     };
   }
-  const tracked = writableAccounts(transaction);
+  const tracked = writableAccounts(transaction, tables);
   const before = await accountsNow(rpc, tracked);
   const wire = getBase64EncodedWireTransaction(transaction);
   const { value } = await rpc

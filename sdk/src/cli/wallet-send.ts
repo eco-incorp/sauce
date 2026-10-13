@@ -13,10 +13,12 @@
  * rehearses it as signed and refuses it if it would fail, as `sauce intent fill --send` does.
  */
 import {
+  address,
   createSolanaRpc,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
+  type KeyPairSigner,
 } from "@solana/kit";
 import {
   bytesToHex,
@@ -28,14 +30,23 @@ import {
 } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { fetchExecutionFee, MAX_POT_LEN } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, revertReason, sendAndWait, simulate, type TxRequest } from "./chain.js";
 import { txLinks } from "./links.js";
-import { measureEvm, noPolicyNote, rehearsePlan, type SendGuard } from "./policy.js";
+import { measureEvm, noPolicyNote, rehearsePlan, type Measured, type SendGuard } from "./policy.js";
 import { cookReport } from "./receipt.js";
 import { decodeReturned } from "./returned.js";
 import { sendPlannedSvm, sendPlanTx, type SvmSent } from "./solana.js";
-import { decodeCursor, encodeCursor, isCook, nextStep } from "./svm-plan.js";
+import {
+  decodeCursor,
+  encodeCursor,
+  isCook,
+  nextStep,
+  transactionsAhead,
+  type SvmPlan,
+} from "./svm-plan.js";
 import { HOT_WALLET } from "./wallet-commands.js";
 import type { Unlocked } from "./wallets.js";
 
@@ -435,6 +446,82 @@ export function plannedHandedOut(value: unknown): HandedOutTx[] {
   });
 }
 
+/** A Solana transaction's base fee, per signature: every plan transaction carries one. */
+const SIGNATURE_FEE = 5_000n;
+/** An SPL token account's bytes, and a lookup table's header and each address in it. */
+const TOKEN_ACCOUNT_LEN = 165n;
+const TABLE_HEADER_LEN = 56n;
+/** A code buffer's metadata account. */
+const CODE_BUFFER_LEN = 91n;
+
+/**
+ * What each transaction `plan` has still to send takes out of the owner's lamports, as far as it can
+ * be known before any is sent: the rent of what it creates (the Pot, token accounts, the code buffer
+ * and its code account, the lookup table and each address added to it), each transaction's fee, and
+ * the cook's execution fee. What the cook's program moves cannot be known until its setup is on the
+ * cluster: it is measured when the cook is sent.
+ */
+async function planOutflows(
+  plan: SvmPlan,
+  ctx: { readonly rpc: ReturnType<typeof createSolanaRpc>; readonly url: string },
+  owner: KeyPairSigner,
+  chain: CanonicalChain,
+): Promise<Measured[]> {
+  const step = { ...ctx, signer: owner };
+  const ahead = await transactionsAhead(plan, step);
+  const [base, one] = await Promise.all([
+    ctx.rpc.getMinimumBalanceForRentExemption(0n).send(),
+    ctx.rpc.getMinimumBalanceForRentExemption(1n).send(),
+  ]);
+  const rent = (bytes: bigint): bigint => BigInt(base) + bytes * (BigInt(one) - BigInt(base));
+  const fee = ahead.some((tx) => tx.kind === "cook")
+    ? await fetchExecutionFee(ctx.rpc, address(v12SvmKitchenProgramId()))
+    : 0n;
+  const kitchen = v12SvmKitchenProgramId();
+  let tableBytes = TABLE_HEADER_LEN;
+
+  return ahead.map((tx): Measured => {
+    const programs = [
+      ...new Set(
+        tx.instructions
+          .map((instruction) => instruction.programAddress as string)
+          .filter((program) => program !== "ComputeBudget111111111111111111111111111111"),
+      ),
+    ];
+    let lamports = SIGNATURE_FEE;
+    if (tx.kind === "pot") lamports += rent(BigInt(MAX_POT_LEN));
+    if (tx.kind === "accounts") {
+      lamports += BigInt(tx.accounts?.length ?? 0) * rent(TOKEN_ACCOUNT_LEN);
+    }
+    if (tx.kind === "buffer" && tx.what === "creating the code buffer") {
+      lamports += rent(CODE_BUFFER_LEN) + rent(BigInt(plan.staged?.length ?? 0));
+    }
+    if (tx.kind === "table") {
+      if (tx.what === "creating the lookup table") lamports += rent(TABLE_HEADER_LEN);
+      else {
+        // An extend pays the rent of the addresses it adds, the bytes of its data past the u32 tag
+        // and the u64 count: 32 each, as the table holds them.
+        const data = tx.instructions[0]?.data ?? new Uint8Array();
+        const added = BigInt(Math.max(0, data.length - 12));
+        lamports += rent(tableBytes + added) - rent(tableBytes);
+        tableBytes += added;
+      }
+    }
+    if (tx.kind === "cook") {
+      lamports += fee + (tx.createsPot === true ? rent(BigInt(MAX_POT_LEN)) : 0n);
+    }
+
+    return {
+      chain,
+      to: tx.kind === "cook" || tx.kind === "close" ? [kitchen] : programs,
+      native: { token: "native", symbol: "SOL", decimals: 9, amount: lamports },
+      tokens: [],
+      approvals: [],
+      unmeasured: {},
+    };
+  });
+}
+
 /** How many times a plan's step waits, a second each, for the cluster to catch up. */
 const PLAN_WAITS = 10;
 
@@ -469,6 +556,11 @@ export async function sendSvmPlan(input: {
     );
   }
   const ctx = { rpc: createSolanaRpc(input.rpcUrl), url: input.rpcUrl, signer: wallet.signer };
+  // The whole plan held to the wallet's policy before any of it is sent, as far as it can be
+  // measured now; each transaction is measured again, and reserved in the ledger, as it is sent.
+  if (guard.policy !== undefined) {
+    await guard.preflight(await planOutflows(plan, ctx, wallet.signer, chain));
+  }
   const sent: SentEntry[] = [];
   const said: string[] = [];
   let done = false;
