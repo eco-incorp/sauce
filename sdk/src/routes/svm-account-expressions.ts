@@ -83,7 +83,7 @@ export const SVM_ACCOUNT_EXPRESSIONS: readonly SvmAccountExpression[] = [
     account: "the address program derives for the seeds",
     derive: "pda:<program>:<seeds>",
   },
-  { expression: "Solana.account(key)", account: "the account at a key", derive: "the key" },
+  { expression: "Solana.account(key)", account: "the account at a key", derive: "<key>" },
   ...Object.entries(KNOWN).map(([name, known]) => ({
     expression: `Solana.${name}`,
     account: known.account,
@@ -98,7 +98,7 @@ export const SVM_ACCOUNT_EXPRESSIONS: readonly SvmAccountExpression[] = [
   {
     expression: "<Sym>.tokenProgram",
     account: "the token program that owns the mint",
-    derive: "its id",
+    derive: "program:<Sym>",
   },
 ];
 

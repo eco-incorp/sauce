@@ -70,6 +70,27 @@ cook is built ([the `@sauce/router` reference](../../api/router.md)).
 | `Crema` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
 | `Phoenix` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` |
 
+## Accounts
+
+The accounts a program writes where it uses them, each added to `main` and derived when the
+cook is built, so what it is made of is known then. Each is read-only unless `.writable()` or
+`.signer()` gives it that role.
+
+| Expression | The account | Derived as |
+| --- | --- | --- |
+| `Solana.pda(program, [seeds])` | the address program derives for the seeds | `pda:<program>:<seeds>` |
+| `Solana.account(key)` | the account at a key | `<key>` |
+| `Solana.self` | the Pot (the signer, cooked directly) | `self` |
+| `Solana.owner` | the Pot's owner, who signs the cook | `owner` |
+| `Solana.systemProgram` | the System Program | `11111111111111111111111111111111` |
+| `Solana.tokenProgram` | SPL Token | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` |
+| `Solana.token2022Program` | Token-2022 | `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` |
+| `Solana.associatedTokenProgram` | the Associated Token Account program | `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL` |
+| `Solana.memoProgram` | the Memo program | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+| `<Sym>.accountOf(holder)` | the holder's associated account for the token | `<holder>:<Sym>` |
+| `<Sym>.mint` | the token's mint | `mint:<Sym>` |
+| `<Sym>.tokenProgram` | the token program that owns the mint | `program:<Sym>` |
+
 ## Protocols
 
 The registry records no protocol deployment on this chain.

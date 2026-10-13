@@ -424,6 +424,7 @@ export async function skillsReferences(api, documented) {
         .filter((p) => p.chains.includes(chain.slug))
         .map((p) => ({ ...p, deployed: p.deployed.filter((d) => d.chain === chain.slug) })),
       venues: sourceGlobals.get(chain.slug).venues ?? [],
+      accounts: sourceGlobals.get(chain.slug).accounts ?? [],
     };
   });
 
@@ -1181,6 +1182,20 @@ function renderChain(chain, supported, site) {
       "| Namespace | Venue | Program |",
       "| --- | --- | --- |",
       ...chain.venues.map((v) => `| \`${v.namespace}\` | ${v.name} | \`${v.program}\` |`),
+      "",
+    );
+  }
+  if (chain.accounts.length > 0) {
+    lines.push(
+      "## Accounts",
+      "",
+      "The accounts a program writes where it uses them, each added to `main` and derived when the",
+      "cook is built, so what it is made of is known then. Each is read-only unless `.writable()` or",
+      "`.signer()` gives it that role.",
+      "",
+      "| Expression | The account | Derived as |",
+      "| --- | --- | --- |",
+      ...chain.accounts.map((a) => `| \`${a.expression}\` | ${a.account} | \`${a.derive}\` |`),
       "",
     );
   }
