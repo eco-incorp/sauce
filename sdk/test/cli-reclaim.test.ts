@@ -4,10 +4,15 @@
  * there is no such account, it is no lookup table, or the owner is not its authority — an endpoint
  * that refuses to scan the lookup-table program, a cluster whose recent slot hashes cannot be read
  * (a deactivated table then closes by the count of slots), the slot and those hashes read together,
- * a plan to keep that is another owner's, and an owner with more open than one run handles: the
- * histories read a few at a time, a run's share taken (the tables it can act on first) and the
- * rest said to remain. Closing on a cluster is `cli-reclaim.e2e.test.ts`.
+ * a plan to keep that is another owner's, or a file that holds none, and tables a plan given to keep
+ * holds, deactivated or closable — kept, nothing built for them, said so — and an owner with more
+ * open than one run handles: the histories read a few at a time, a run's share taken (the tables it
+ * can act on first) and the rest said to remain. Closing on a cluster is `cli-reclaim.e2e.test.ts`.
  */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { getBase58Decoder, type Address } from "@solana/kit";
 import {
   ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS,
@@ -19,6 +24,7 @@ import { reclaimable, reclaimCommand } from "../src/cli/reclaim.js";
 import { encodeCursor } from "../src/cli/svm-plan.js";
 import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { deriveExecutionFeeConfigPda } from "../src/svm/index.js";
+import { sauce } from "./cli-anvil.js";
 
 const key = (fill: number): Address =>
   getBase58Decoder().decode(new Uint8Array(32).fill(fill)) as Address;
@@ -231,22 +237,70 @@ describe("the slot and the recent slot hashes", () => {
   });
 });
 
+/** A plan's cursor: `owner`'s, through `lookupTables`. */
+const cursorFor = (owner: Address, lookupTables: readonly Address[] = []) =>
+  encodeCursor({
+    owner,
+    salt: `0x${"11".repeat(32)}`,
+    via: "kitchen",
+    tail: [],
+    lookupTables,
+    pot: "there",
+    tokenAccounts: [],
+    payload: new Uint8Array([1, 2, 3]),
+    labels: [],
+  });
+
 describe("a plan to keep", () => {
   it("is refused when it is another owner's, before any endpoint is asked", async () => {
-    const cursor = encodeCursor({
-      owner: OTHER,
-      salt: `0x${"11".repeat(32)}`,
-      via: "kitchen",
-      tail: [],
-      lookupTables: [],
-      pot: "there",
-      tokenAccounts: [],
-      payload: new Uint8Array([1, 2, 3]),
-      labels: [],
-    });
+    const cursor = cursorFor(OTHER);
     const asked = reclaimCommand({ owner: OWNER, rpcUrl: "http://127.0.0.1:9/", keep: [cursor] });
     await expect(asked).rejects.toThrow(UsageError);
     await expect(asked).rejects.toThrow(`a plan to keep is ${OTHER}'s, not ${OWNER}'s`);
+  });
+
+  describe("from a file, --keep @file", () => {
+    let dir: string;
+    beforeAll(() => {
+      dir = mkdtempSync(join(tmpdir(), "sauce-reclaim-keep-"));
+    });
+    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+    const keep = async (name: string, text: string) => {
+      const path = join(dir, name);
+      writeFileSync(path, text);
+
+      return sauce(
+        ...["reclaim", "--chain", "solana", "--owner", OWNER, "--keep", `@${path}`],
+        ...["--rpc-url", "http://127.0.0.1:9/"],
+      );
+    };
+
+    it("is refused, by what is wrong with it, where the file holds no cursor", async () => {
+      const broken = await keep("broken.json", '{ "cursor": "sauce-plan-1.');
+      expect(broken.code).toBe(2);
+      expect(broken.stderr).toMatch(/--keep @file: the file holds no JSON that parses/);
+      const none = await keep(
+        "none.json",
+        JSON.stringify({ step: "cook", next: { step: "done" } }),
+      );
+      expect(none.code).toBe(2);
+      expect(none.stderr).toMatch(
+        /--keep @file: the file holds JSON with no cursor \(nor next\.cursor\)/,
+      );
+    });
+
+    it("takes the cursor a step was printed with, or a send's next one", async () => {
+      // Another owner's, so the run stops at it, before any endpoint is asked.
+      const cursor = cursorFor(OTHER);
+      for (const text of [
+        JSON.stringify({ step: "cook", cursor }),
+        JSON.stringify({ ok: true, next: { step: "cook", cursor } }),
+        `${cursor}\n`,
+      ]) {
+        const run = await keep("step.json", text);
+        expect(run.stderr).toMatch(`a plan to keep is ${OTHER}'s, not ${OWNER}'s`);
+      }
+    });
   });
 });
 
@@ -397,5 +451,84 @@ describe("an owner with more open than one run handles", () => {
           "other 8 are for the next run, once these are closed",
       );
     });
+  });
+});
+
+describe("lookup tables a plan given to keep holds, past their activity", () => {
+  // Deactivated at 990, which the cluster's slot hashes still hold; deactivated at 500, closable.
+  const DEACTIVATING = key(30);
+  const CLOSABLE = key(31);
+  const NOT_KEPT = key(32);
+  const original = globalThis.fetch;
+  beforeAll(async () => {
+    const { address: feeConfig } = await deriveExecutionFeeConfigPda(
+      v12SvmKitchenProgramId() as Address,
+    );
+    const asRpc = (account: ReturnType<typeof tableAccount>) => ({
+      ...account,
+      lamports: 1_000_000,
+      rentEpoch: 0,
+      space: Number(account.space),
+    });
+    const tables = [
+      { pubkey: DEACTIVATING, account: asRpc(tableAccount(OWNER, [feeConfig], 990n)) },
+      { pubkey: CLOSABLE, account: asRpc(tableAccount(OWNER, [feeConfig], 500n)) },
+      { pubkey: NOT_KEPT, account: asRpc(tableAccount(OWNER, [feeConfig], 500n)) },
+    ];
+    const hashes = slotHashes([990n]);
+    globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+      if (String(input) !== URL) return original(input as string, init as RequestInit);
+      const { id, method, params } = JSON.parse(init!.body!) as {
+        id: unknown;
+        method: string;
+        params: unknown[];
+      };
+      const answers: Record<string, () => unknown> = {
+        getSlot: () => 1_000,
+        getAccountInfo: () => ({
+          context: { slot: 1_000 },
+          value: { ...hashes, lamports: 1, rentEpoch: 0, space: Number(hashes.space) },
+        }),
+        getProgramAccounts: () => (params[0] === v12SvmKitchenProgramId() ? [] : tables),
+        getSignaturesForAddress: () => [],
+        getLatestBlockhash: () => ({
+          context: { slot: 1_000 },
+          value: { blockhash: key(10), lastValidBlockHeight: 1_150 },
+        }),
+      };
+
+      return Response.json({ jsonrpc: "2.0", id, result: answers[method]!() });
+    }) as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = original;
+  });
+
+  it("keeps them, deactivated or closable: nothing is built for them, and each is said kept", async () => {
+    const output = await reclaimCommand({
+      owner: OWNER,
+      rpcUrl: URL,
+      keep: [cursorFor(OWNER, [DEACTIVATING, CLOSABLE])],
+    });
+    const json = output.json as {
+      lookupTables: Array<{ address: string; state: string; inUse?: boolean; kept?: boolean }>;
+      transactions: Array<{ what: string }>;
+    };
+    const byAddress = new Map(json.lookupTables.map((one) => [one.address, one]));
+    expect(byAddress.get(DEACTIVATING)).toMatchObject({
+      state: "deactivating",
+      inUse: true,
+      kept: true,
+    });
+    expect(byAddress.get(CLOSABLE)).toMatchObject({ state: "closable", inUse: true, kept: true });
+    expect(byAddress.get(NOT_KEPT)).toMatchObject({ state: "closable" });
+    expect(byAddress.get(NOT_KEPT)!.kept).toBeUndefined();
+    // Only the table no plan holds is closed.
+    expect(json.transactions.map((tx) => tx.what)).toEqual([`closing lookup table ${NOT_KEPT}`]);
+    for (const table of [DEACTIVATING, CLOSABLE]) {
+      expect(output.notes).toContain(
+        `lookup table ${table} is left open: a plan given to keep holds it`,
+      );
+    }
   });
 });

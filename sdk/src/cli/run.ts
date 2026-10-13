@@ -1631,13 +1631,17 @@ const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 function cursorOf(text: string, flag = "--cursor"): string {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return trimmed;
+  let json: { cursor?: unknown; next?: { cursor?: unknown } | null } | null;
   try {
-    const json = JSON.parse(trimmed) as { cursor?: unknown; next?: { cursor?: unknown } };
-    const found = json.next?.cursor ?? json.cursor;
-    if (typeof found === "string") return found;
+    json = JSON.parse(trimmed) as typeof json;
   } catch {
-    // Reported below.
+    throw new UsageError(
+      `${flag} @file: the file holds no JSON that parses: give the cursor alone, or the JSON a ` +
+        "step was printed as",
+    );
   }
+  const found = json?.next?.cursor ?? json?.cursor;
+  if (typeof found === "string") return found;
   throw new UsageError(`${flag} @file: the file holds JSON with no cursor (nor next.cursor)`);
 }
 
