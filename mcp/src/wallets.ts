@@ -25,6 +25,7 @@ import {
   planChain,
   plannedCursor,
   plannedHandedOut,
+  planFor,
   plannedTransactions,
   readPolicy,
   sendPlan,
@@ -239,6 +240,8 @@ export function registerWalletTools(
       // A Solana plan (sauce_tx's, or sauce_send's `next`): every step, from its cursor.
       const cursor = plannedCursor(args.transaction);
       if (cursor !== undefined) {
+        // The plan's owner, held to the wallet before the wallet is unlocked or anything is read.
+        planFor(cursor, store.info(walletName(args.wallet)));
         const chain =
           args.chain === undefined
             ? parseChain("solana", "chain")
