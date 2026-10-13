@@ -97,8 +97,8 @@ describe("the update note", () => {
       chains: [],
       notes: [NOTE],
     });
-    const more = withNote(json({ ok: true, notes: ["rehearsed"] }), NOTE);
-    assert.deepEqual(more.structuredContent?.notes, ["rehearsed", NOTE]);
+    const more = withNote(json({ ok: true, notes: ["simulated"] }), NOTE);
+    assert.deepEqual(more.structuredContent?.notes, ["simulated", NOTE]);
     // An error's text, or a text that is not the JSON, gets the note as a text of its own.
     const failure = withNote({ isError: true, content: [{ type: "text", text: "no" }] }, NOTE);
     assert.deepEqual(failure, {

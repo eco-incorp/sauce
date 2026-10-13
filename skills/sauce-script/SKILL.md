@@ -56,8 +56,8 @@ fields one word each, an array as its elements one word each, with no length or 
 and `: bytes` as the bytes themselves, unwrapped, so `return abi.encode(spent, bought)` gives two
 words. A `void` `main` returns nothing.
 
-That makes a rehearsal a way to read a chain: a program that only looks something up and returns
-it, rehearsed with `sauce simulate`, prints the answer and sends nothing.
+That makes a simulation a way to read a chain: a program that only looks something up and returns
+it, simulated with `sauce simulate`, prints the answer and sends nothing.
 
 ```sauce chain=base,arbitrum
 // The Uniswap V3 WETH/USDC pool at the 0.05% tier (500 millionths), or 0 where there is none.
@@ -407,9 +407,9 @@ and a Kitchen-made Pot:
 The first call to a contract in a transaction costs 2,600 more than later ones, as on any EVM
 chain. A loop is what adds up in the program itself: a hundred iterations of a little arithmetic
 cost about 100,000 gas. Read a value once and keep it in a local rather than calling for it twice,
-and bound each loop by its input. The real figure is the rehearsal's:
+and bound each loop by its input. The real figure is the simulation's:
 `sauce simulate` prints it, and `sauce run` and most signers set the gas limit from an estimate.
-Leave headroom when the chain can move between the rehearsal and the send; a swap that crosses more
+Leave headroom when the chain can move between the simulation and the send; a swap that crosses more
 ticks spends more.
 
 ## In an editor
