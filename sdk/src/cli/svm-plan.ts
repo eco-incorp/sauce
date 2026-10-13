@@ -151,12 +151,22 @@ export interface SvmPlan {
   readonly returnType?: string;
   /** Names for the accounts a cook writes, for what it moved. */
   readonly labels: readonly (readonly [string, string])[];
-  /** The cook was handed out, built on a blockhash valid until this block height. */
-  readonly cook?: { readonly lastValidBlockHeight: bigint };
+  /**
+   * The cook was handed out: the blockhash it was built on, the last block height that blockhash
+   * is valid to, and the slot it was read at, which no landing of it can precede.
+   */
+  readonly cook?: CookHandedOut;
   /** The cook landed: whether it succeeded, and where. */
   readonly cooked?: { readonly ok: boolean; readonly signature: string };
   /** The plan gave up on its cook: what is left is the code buffer's close. */
   readonly closing?: boolean;
+}
+
+/** A cook handed out to a signer, as the plan remembers it. */
+export interface CookHandedOut {
+  readonly blockhash: string;
+  readonly lastValidBlockHeight: bigint;
+  readonly slot: bigint;
 }
 
 /** What a step's transaction does, by kind. */
@@ -179,7 +189,7 @@ export interface PlanTx {
 export interface PlanStage {
   readonly step: "setup" | "cook" | "close";
   readonly what: string;
-  readonly state: "done" | "next" | "later";
+  readonly state: "done" | "next" | "later" | "given up";
 }
 
 export interface PlanStep {
@@ -234,6 +244,10 @@ async function ask<T>(url: string, what: string, request: () => Promise<T>): Pro
 // ---------------------------------------------------------------------------------------------
 
 const CURSOR_PREFIX = "sauce-plan-1.";
+/** The most entries a cursor's list holds: a table's addresses, the cook's accounts. */
+const LIST_MOST = 256;
+/** The most token accounts or lookup tables a plan names, as a command takes them. */
+const NAMED_MOST = 64;
 /** The most a cursor may carry, decoded: a staged program at its largest, and its accounts. */
 const CURSOR_MAX = 2 * MAX_CODE_LEN;
 
@@ -276,7 +290,11 @@ export function encodeCursor(plan: SvmPlan): string {
         }),
     ...(plan.returnType === undefined ? {} : { returnType: plan.returnType }),
     labels: plan.labels,
-    ...(plan.cook === undefined ? {} : { cook: `${plan.cook.lastValidBlockHeight}` }),
+    ...(plan.cook === undefined
+      ? {}
+      : {
+          cook: [plan.cook.blockhash, `${plan.cook.lastValidBlockHeight}`, `${plan.cook.slot}`],
+        }),
     ...(plan.cooked === undefined ? {} : { cooked: [plan.cooked.ok, plan.cooked.signature] }),
     ...(plan.closing === true ? { closing: true } : {}),
   };
@@ -300,6 +318,7 @@ export function decodeCursor(text: string): SvmPlan {
   } catch {
     throw bad("it does not decode");
   }
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) throw bad("not a plan");
   const key = (value: unknown, what: string): Address => {
     if (typeof value !== "string" || !isAddress(value)) throw bad(`${what} is not an address`);
 
@@ -311,8 +330,8 @@ export function decodeCursor(text: string): SvmPlan {
 
     return BigInt(value);
   };
-  const list = (value: unknown, what: string): unknown[] => {
-    if (!Array.isArray(value) || value.length > 512) throw bad(`${what} is not a list`);
+  const list = (value: unknown, what: string, most = LIST_MOST): unknown[] => {
+    if (!Array.isArray(value) || value.length > most) throw bad(`${what} is not a list`);
 
     return value;
   };
@@ -328,7 +347,7 @@ export function decodeCursor(text: string): SvmPlan {
 
     return { address: key(at, "an account"), role: role as AccountRole };
   });
-  const tokenAccounts = list(raw.tokenAccounts, "tokenAccounts").map((entry) => {
+  const tokenAccounts = list(raw.tokenAccounts, "tokenAccounts", NAMED_MOST).map((entry) => {
     const [at, holder, mint, program, label] = list(entry, "a token account");
     if (typeof label !== "string" || label.length > 200) throw bad("a token account's label");
 
@@ -353,7 +372,8 @@ export function decodeCursor(text: string): SvmPlan {
   }
   let table: SvmPlan["table"];
   if (raw.table !== undefined) {
-    const given = raw.table as Record<string, unknown>;
+    const given = raw.table as Record<string, unknown> | null;
+    if (given === null || typeof given !== "object") throw bad("table");
     table = {
       addresses: list(given.addresses, "the table's addresses").map((at) => key(at, "an address")),
       ...(given.address === undefined ? {} : { address: key(given.address, "the table") }),
@@ -368,6 +388,15 @@ export function decodeCursor(text: string): SvmPlan {
 
     return [at, label] as const;
   });
+  const cookOf = ([blockhash, height, slot]: unknown[]): CookHandedOut => {
+    if (typeof blockhash !== "string" || !isAddress(blockhash)) throw bad("the cook's blockhash");
+
+    return {
+      blockhash,
+      lastValidBlockHeight: integer(height, "the cook's last valid block height"),
+      slot: integer(slot, "the cook's slot"),
+    };
+  };
   let cooked: SvmPlan["cooked"];
   if (raw.cooked !== undefined) {
     const [ok, signature] = list(raw.cooked, "cooked");
@@ -383,7 +412,9 @@ export function decodeCursor(text: string): SvmPlan {
       ? {}
       : { maxExecutionFee: integer(raw.maxExecutionFee, "maxExecutionFee") }),
     tail,
-    lookupTables: list(raw.lookupTables, "lookupTables").map((at) => key(at, "a lookup table")),
+    lookupTables: list(raw.lookupTables, "lookupTables", NAMED_MOST).map((at) =>
+      key(at, "a lookup table"),
+    ),
     pot: raw.pot,
     tokenAccounts,
     ...(payload === undefined ? {} : { payload }),
@@ -391,9 +422,7 @@ export function decodeCursor(text: string): SvmPlan {
     ...(table === undefined ? {} : { table }),
     ...(typeof raw.returnType === "string" ? { returnType: raw.returnType } : {}),
     labels,
-    ...(raw.cook === undefined
-      ? {}
-      : { cook: { lastValidBlockHeight: integer(raw.cook, "cook") } }),
+    ...(raw.cook === undefined ? {} : { cook: cookOf(list(raw.cook, "cook", 3)) }),
     ...(cooked === undefined ? {} : { cooked }),
     ...(raw.closing === true ? { closing: true } : {}),
   };
@@ -761,8 +790,33 @@ export async function nextStep(
     );
   }
   // Staged: the payload is no longer needed once the cluster holds it.
-  const current: SvmPlan = finalized && plan.payload !== undefined ? withoutPayload(plan) : plan;
+  let current: SvmPlan = finalized && plan.payload !== undefined ? withoutPayload(plan) : plan;
+  // A cook handed out and not heard of since: never a second while it can still land, nor once
+  // it has — and no close while it can still land.
+  if (current.cook !== undefined && current.cooked === undefined) {
+    const handed = current.cook;
+    const height = await ask(ctx.url, "the block height", () =>
+      ctx.rpc.getBlockHeight({ commitment: "confirmed" }).send(),
+    );
+    if (height <= handed.lastValidBlockHeight) {
+      const name = options.close === true ? "close" : "cook";
 
+      return {
+        name,
+        transactions: [],
+        plan: current,
+        overview: overview(current, name),
+        notes: [],
+        wait:
+          `the cook handed out last can still land until block height ` +
+          `${handed.lastValidBlockHeight} (now ${height}): send it, or give its signature if it ` +
+          `was sent another way; ask again once that height has passed to have it ` +
+          (options.close === true ? "given up" : "rebuilt"),
+      };
+    }
+    const landed = await cookLanded(ctx, current.owner, handed);
+    current = landed === undefined ? withoutCook(current) : { ...current, cooked: landed };
+  }
   if (options.close === true || current.cooked !== undefined || current.closing === true) {
     return closeStep(
       options.close === true ? { ...current, closing: true } : current,
@@ -770,9 +824,13 @@ export async function nextStep(
       state !== undefined,
     );
   }
-  // Staged and finalized once (the plan let go of the program), and gone now: closed.
+  // Staged and finalized once (the plan let go of the program), and gone now: closed before its
+  // cook ever ran.
   if (buffer !== undefined && state === undefined && current.payload === undefined) {
-    return closeStep(current, ctx, false);
+    throw new CliError(
+      `the code buffer ${buffer.codeBuffer} is gone, and the plan's cook never ran: something ` +
+        "closed it (sauce reclaim?). Make a new plan",
+    );
   }
   const setup = await setupTransactions(current, ctx, state, finalized);
   if (setup.transactions.length > 0) {
@@ -784,33 +842,8 @@ export async function nextStep(
       notes: setup.notes,
     };
   }
-  let ready = setup.plan;
-  if (ready.cook !== undefined) {
-    // A cook was handed out and nothing said how it went: never two that could both land.
-    const height = await ask(ctx.url, "the block height", () =>
-      ctx.rpc.getBlockHeight({ commitment: "confirmed" }).send(),
-    );
-    if (height <= ready.cook.lastValidBlockHeight) {
-      return {
-        name: "cook",
-        transactions: [],
-        plan: ready,
-        overview: overview(ready, "cook"),
-        notes: [],
-        wait:
-          `the cook handed out last can still land until block height ` +
-          `${ready.cook.lastValidBlockHeight} (now ${height}): send it, or give its signature if ` +
-          "it was sent another way; ask again once that height has passed to have it rebuilt",
-      };
-    }
-    const landed = buffer === undefined ? undefined : await cookLanded(ctx, buffer.code);
-    if (landed !== undefined) {
-      return closeStep({ ...ready, cooked: landed }, ctx, true);
-    }
-    ready = withoutCook(ready);
-  }
 
-  return cookStep(ready, ctx);
+  return cookStep(setup.plan, ctx);
 }
 
 const withoutPayload = (plan: SvmPlan): SvmPlan => {
@@ -944,9 +977,21 @@ async function setupTransactions(
     transactions.push(...made.transactions);
     next = made.plan;
   }
+  // A step a signer can sign before its blockhash expires: what is past it comes in the next,
+  // built from what the cluster shows then (the finalize after every write, the table after it).
+  if (transactions.length > STEP_MOST) {
+    notes.push(
+      `the setup is ${transactions.length} transactions: this step is the first ${STEP_MOST}, and ` +
+        "the next step has the rest",
+    );
+  }
 
-  return { transactions, plan: next, notes };
+  return { transactions: transactions.slice(0, STEP_MOST), plan: next, notes };
 }
+
+/** The most transactions one step holds, all on one blockhash: what a signer and the sends that
+ *  confirm each in turn finish well inside the minute it is valid for. */
+const STEP_MOST = 32;
 
 /** A table's creation recent slot is usable while SlotHashes holds it: 512 slots. Past this many,
  *  a table that has not appeared is made at a new slot. */
@@ -1153,34 +1198,56 @@ async function closeStep(plan: SvmPlan, ctx: StepContext, open: boolean): Promis
   };
 }
 
+/** How many of the owner's transactions a landed-cook search reads, at most, before it gives up. */
+const HISTORY_MOST = 500;
+
 /**
- * Whether a cook ran from `code`: a landed transaction naming it whose Kitchen or engine instruction
- * is a staged cook. Any one — succeeded or failed — has landed, and cannot land again.
+ * Whether the cook handed out landed: a transaction of the owner's, since the slot the cook was
+ * built at, on the cook's blockhash, that cooks. Landed — succeeded or failed — it cannot land
+ * again. An endpoint that cannot say refuses the step rather than risk a second cook.
  */
-async function cookLanded(ctx: StepContext, code: Address): Promise<SvmPlan["cooked"] | undefined> {
-  const signatures = await ask(ctx.url, "the code account's transactions", () =>
-    ctx.rpc.getSignaturesForAddress(code, { limit: 100 }).send(),
-  );
-  for (const entry of signatures) {
-    const response = await ask(ctx.url, `transaction ${entry.signature}`, () =>
+async function cookLanded(
+  ctx: StepContext,
+  owner: Address,
+  handed: CookHandedOut,
+): Promise<SvmPlan["cooked"] | undefined> {
+  let before: Signature | undefined;
+  for (let read = 0; read < HISTORY_MOST;) {
+    const page = await ask(ctx.url, "the owner's transactions since the cook was handed out", () =>
       ctx.rpc
-        .getTransaction(entry.signature as Signature, {
-          commitment: "confirmed",
-          encoding: "base64",
-          maxSupportedTransactionVersion: 0,
-        })
+        .getSignaturesForAddress(owner, { limit: 100, ...(before === undefined ? {} : { before }) })
         .send(),
     );
-    if (response === null) continue;
-    const transaction = getTransactionDecoder().decode(
-      new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
-    );
-    if (isCook(transaction)) {
-      return { ok: (response.meta?.err ?? null) === null, signature: entry.signature };
+    for (const entry of page) {
+      if (BigInt(entry.slot) < handed.slot) return undefined;
+      read += 1;
+      const response = await ask(ctx.url, `transaction ${entry.signature}`, () =>
+        ctx.rpc
+          .getTransaction(entry.signature as Signature, {
+            commitment: "confirmed",
+            encoding: "base64",
+            maxSupportedTransactionVersion: 0,
+          })
+          .send(),
+      );
+      if (response === null) continue;
+      const transaction = getTransactionDecoder().decode(
+        new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
+      );
+      const { lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
+        transaction.messageBytes,
+      ) as { lifetimeToken: string };
+      if (lifetimeToken === handed.blockhash && isCook(transaction)) {
+        return { ok: (response.meta?.err ?? null) === null, signature: entry.signature };
+      }
     }
+    if (page.length < 100) return undefined;
+    before = page.at(-1)!.signature as Signature;
   }
-
-  return undefined;
+  throw new CliError(
+    `${owner} sent more than ${HISTORY_MOST} transactions since the cook was handed out, too many ` +
+      "to look through for it: give the cook's signature if it was sent, or close",
+  );
 }
 
 /** The associated-token-account program, which creates a holder's token account for a mint. */
@@ -1321,7 +1388,8 @@ function overview(plan: SvmPlan, at: PlanStep["name"]): PlanStage[] {
         plan.staged === undefined
           ? `${how}${plan.pot === "inline" ? ", creating the Pot ahead of it" : ""}`
           : `${how}, from the code buffer`,
-      state: plan.cooked !== undefined ? "done" : state("cook"),
+      state:
+        plan.cooked !== undefined ? "done" : plan.closing === true ? "given up" : state("cook"),
     },
     ...(plan.staged === undefined
       ? []
@@ -1368,16 +1436,20 @@ export async function buildPlanTx(
   return transaction;
 }
 
-/** `txs` for a signer that is not this process: each built on one fresh blockhash, base64. */
+/**
+ * `txs` for a signer that is not this process: each built on one fresh blockhash, base64, and that
+ * blockhash's lifetime — what a cook among them is remembered by.
+ */
 export async function signableTransactions(
   txs: readonly PlanTx[],
   ctx: StepContext,
 ): Promise<{
   readonly transactions: readonly SignableTx[];
   readonly lastValidBlockHeight?: bigint;
+  readonly lifetime?: CookHandedOut;
 }> {
   if (txs.length === 0) return { transactions: [] };
-  const { value: latest } = await ask(ctx.url, "the latest blockhash", () =>
+  const { value: latest, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );
   const transactions = await Promise.all(
@@ -1388,13 +1460,21 @@ export async function signableTransactions(
     })),
   );
 
-  return { transactions, lastValidBlockHeight: latest.lastValidBlockHeight };
+  return {
+    transactions,
+    lastValidBlockHeight: latest.lastValidBlockHeight,
+    lifetime: {
+      blockhash: latest.blockhash,
+      lastValidBlockHeight: latest.lastValidBlockHeight,
+      slot: BigInt(context.slot),
+    },
+  };
 }
 
 /**
- * A step's transactions for a signer that is not this process: each built on one fresh blockhash,
- * for the owner to sign, and the plan to carry on from — the cook, handed out, marked with the last
- * block height its blockhash is valid to, so it is never built again while it can still land.
+ * A step's transactions for a signer that is not this process, each built on one fresh blockhash,
+ * for the owner to sign, and the plan to carry on from — the cook, handed out, remembered by that
+ * blockhash, so it is never built again while it can still land, nor once it has.
  */
 export async function signableStep(
   step: PlanStep,
@@ -1404,14 +1484,11 @@ export async function signableStep(
   readonly lastValidBlockHeight?: bigint;
   readonly plan: SvmPlan;
 }> {
-  const built = await signableTransactions(step.transactions, ctx);
+  const { lifetime, ...built } = await signableTransactions(step.transactions, ctx);
   const cooks = step.transactions.some((tx) => tx.kind === "cook");
 
   return {
     ...built,
-    plan:
-      cooks && built.lastValidBlockHeight !== undefined
-        ? { ...step.plan, cook: { lastValidBlockHeight: built.lastValidBlockHeight } }
-        : step.plan,
+    plan: cooks && lifetime !== undefined ? { ...step.plan, cook: lifetime } : step.plan,
   };
 }

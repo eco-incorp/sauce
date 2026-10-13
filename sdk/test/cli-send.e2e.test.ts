@@ -527,10 +527,63 @@ describeSvm("sauce send: a staged Solana cook as a plan of steps, signed elsewhe
     );
     expect(confirmed.sent[0]).toMatchObject({ status: "success" });
     expect(shim.sent.length).toBe(sent);
-    // Given up: the close comes next, and after it the plan is done.
+    // Given up while the cook handed out can still land: the close waits for that first.
+    const early = await send(setup.next.cursor!, "--close");
+    expect(early.next.step).toBe("close");
+    expect(early.next.transactions).toBeUndefined();
+    expect(early.next.wait).toMatch(/can still land until block height/);
+    // Past its blockhash, the cook never having landed, the close comes; after it, the plan is done.
+    harness.svm.warpToSlot(harness.svm.getClock().slot + 200n);
     const giving = await send(setup.next.cursor!, "--close");
-    expect(giving.next.step).toBe("close");
+    expect(giving.next.transactions!.map((tx) => tx.what)).toEqual(["closing the code buffer"]);
     const closed = await send(giving.next.cursor!, ...(await signAll(giving.next)));
     expect(closed.next.step).toBe("done");
+    expect(closed.next.plan.find((stage) => stage.step === "cook")!.state).toBe("given up");
+  }, 300_000);
+
+  it("keeps a cook refused after its blockhash expired as handed out, and builds a fresh one only past it", async () => {
+    const first = await planFor("expired-cook");
+    const setup = await send(first.cursor!, ...(await signAll(first)));
+    const [cook] = await signAll(setup.next);
+    // The signer took too long: past its blockhash, the signed cook is refused, never sent.
+    harness.svm.warpToSlot(harness.svm.getClock().slot + 200n);
+    const stale = await sauce(
+      ...["send", cook!, "--cursor", setup.next.cursor!, "--rpc-url", RPC_URL, "--json"],
+    );
+    expect(stale.code).toBe(1);
+    const refused = JSON.parse(stale.stdout) as { sent: Array<{ reason: string }>; next: Step };
+    expect(refused.sent[0]!.reason).toMatch(/blockhash has expired/);
+    // The cluster shows no cook on that blockhash: the next step is a fresh one.
+    expect(refused.next.step).toBe("cook");
+    expect(refused.next.transactions).toHaveLength(1);
+    const cooked = await send(refused.next.cursor!, ...(await signAll(refused.next)));
+    expect(cooked.sent[0]).toMatchObject({ status: "success", returned: "7" });
+  }, 300_000);
+
+  it("splits a setup past one step's transactions into steps", async () => {
+    const big = join(work, "big.sauce.ts");
+    writeFileSync(
+      big,
+      [
+        "function main(): Uint256 {",
+        `  const blob = hex\`${"cd".repeat(31_000)}\`;`,
+        "  require(blob.length == 31000);",
+        "  return 9;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const first = jsonOf(
+      await sauce(
+        ...["tx", big, "--chain", "solana", "--owner", owner.address, "--salt", "big"],
+        ...["--rpc-url", RPC_URL],
+      ),
+    ) as unknown as Step;
+    expect(first.transactions).toHaveLength(32);
+    const second = await send(first.cursor!, ...(await signAll(first)));
+    expect(second.next.step).toBe("setup");
+    expect(second.next.transactions!.at(-1)!.what).toBe("finalizing the code buffer");
+    const third = await send(second.next.cursor!, ...(await signAll(second.next)));
+    expect(third.next.step).toBe("cook");
   }, 300_000);
 });

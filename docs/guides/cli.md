@@ -663,11 +663,13 @@ sauce tx big.sauce.ts --chain solana --owner <pubkey> > step.json
 sauce send <signed>… --cursor @step.json --json > next.json
 ```
 
-until `next.step` is `done`. A step is built from what the cluster shows, so what landed is skipped
+until `next.step` is `done`; a setup of more than 32 transactions comes in several steps. A step is
+built from what the cluster shows, so what landed is skipped
 and what did not is built again: a signer slow enough to let the blockhash expire re-signs only
 what is left, which `--cursor` alone (nothing sent) builds. A cook handed out is never built again
-while it can still land; one broadcast another way is confirmed with `--signature <signature>`.
-`--close` gives up on the cook and closes the code buffer. A lookup table the plan created stays
+while it can still land, nor once the owner's transactions show it landed; one broadcast another
+way is confirmed with `--signature <signature>`. `--close` gives up on the cook and closes the code
+buffer, once a cook handed out can no longer land. A lookup table the plan created stays
 for the next cook naming the same accounts (`--lookup-table <address>`).
 
 ### What a cook left open: `sauce reclaim`

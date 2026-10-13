@@ -1526,6 +1526,16 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(harness.svm.getAccount(address(closed![1]!)).exists).toBe(false);
   }, 120_000);
 
+  it("stages a program past one step's transactions, the setup sent in steps", async () => {
+    const out = json(await runVault("run", blobProgram("huge.sauce.ts", 31_000), "--json")) as {
+      cook: { status: string };
+      staged: { codeBuffer: Address; transactions: string[] };
+    };
+    expect(out.cook.status).toBe("success");
+    expect(out.staged.transactions.length).toBeGreaterThan(32);
+    expect(harness.svm.getAccount(out.staged.codeBuffer).exists).toBe(false);
+  }, 120_000);
+
   it("closes the code buffer of a staged cook whose rehearsal fails", async () => {
     const run = await runVault("run", blobProgram("wrong.sauce.ts", 1500, 1));
     expect(run.code).toBe(1);

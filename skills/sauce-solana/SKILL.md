@@ -326,15 +326,17 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   rehearsed by `sauce simulate` in a local copy. For any other signer, `sauce tx` prints it as a
   plan of steps: the setup (the Pot and the token accounts the cook names, where missing; the
   program staged in a code buffer; a lookup table, where the accounts do not fit), the cook, then
-  the code buffer's close. A step is `{ step, plan, transactions: [{ what, transaction, feePayer }],
-cursor }`, every transaction base64 for the owner to sign, on one blockhash that expires in about
-  a minute; `sauce send <signed>… --cursor <cursor>` sends them in order and returns `next`, the
-  step after, built fresh from what the cluster shows, with its own cursor, until `next.step` is
-  `done`. What did not land is built again, so a signer slow enough to let a blockhash expire
+  the code buffer's close. A step is `{ step, plan, transactions, cursor }`, each transaction
+  `{ what, transaction, feePayer }`, base64 for the owner to sign, all on one blockhash that
+  expires in about a minute; `sauce send <signed>… --cursor <cursor>` sends them in order and
+  returns `next`, the step after, built fresh from what the cluster shows, with its own cursor,
+  until `next.step` is `done` (a setup of more than 32 transactions comes in several steps). What
+  did not land is built again, so a signer slow enough to let a blockhash expire
   re-signs only what is left: the cursor alone builds that step. The owner signs and pays every
   transaction; none needs a fresh keypair. A transaction broadcast another way is confirmed with
   `--signature <signature>`, so the plan knows how its cook went (a cook it handed out is never
-  built again while it can still land). `--close` gives up on the cook and closes the buffer.
+  built again while it can still land, nor once it has). `--close` gives up on the cook and closes
+  the buffer, once a cook handed out can no longer land.
 - **Rent left open.** A code buffer a plan never closed, and the lookup tables cooks keep for the
   next cook naming the same accounts, hold the owner's rent.
   `sauce reclaim --chain solana --owner <pubkey>` lists them with that rent and prints the
