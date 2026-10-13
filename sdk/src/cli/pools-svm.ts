@@ -26,24 +26,16 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows } from "../routes/token-registry.js";
 import { coalescingAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
 import {
-  CREMA_PROGRAM_ID,
-  CROPPER_PROGRAM_ID,
-  DEFITUNA_PROGRAM_ID,
-  fetchCremaPoolConfig,
-  fetchCropperConfig,
-  fetchDefiTunaPoolConfig,
-  fetchOrcaWhirlpoolConfig,
-  fetchPhoenixConfig,
-  ORCA_WHIRLPOOL_PROGRAM_ID,
-  PHOENIX_PROGRAM_ID,
-} from "../svm/venues/index.js";
-import {
-  BYREAL_PROGRAM_ID,
-  PANCAKESWAP_CLMM_PROGRAM_ID,
-  RAYDIUM_CLMM_PROGRAM_ID,
-  STABBLE_CLMM_PROGRAM_ID,
-} from "../svm/venues/index.js";
-import { memoizedGetProgramDerivedAddress } from "../svm/venues/pda-memo.js";
+  PHOENIX_BASE_MINT_AT,
+  SVM_CLMM_LAYOUT,
+  SVM_PRICE_LIMIT_VENUES,
+  svmClmmSlot,
+  svmPhoenixSlot,
+  type SvmPoolLayout,
+  type SvmPriceLimitVenue,
+  type SvmSlot,
+} from "../svm/pool-slot.js";
+import { fetchPhoenixConfig } from "../svm/venues/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 import { svmReader } from "./solana.js";
@@ -56,37 +48,11 @@ const E18 = 10n ** 18n;
 /** The discriminant every Phoenix market's header opens with, little-endian. */
 const PHOENIX_MARKET = 8_167_313_896_524_341_111n;
 
-type Layout = "raydium" | "whirlpool" | "defituna" | "crema" | "phoenix";
+type Layout = SvmPoolLayout;
+type SvmVenue = SvmPriceLimitVenue;
+const CLMM = SVM_CLMM_LAYOUT;
 
-interface SvmVenue {
-  readonly name: string;
-  readonly program: Address;
-  readonly layout: Layout;
-}
-
-/** Every venue, in the order the skill names them. */
-export const SVM_PRICE_LIMIT_VENUES: readonly SvmVenue[] = [
-  { name: "Raydium CLMM", program: RAYDIUM_CLMM_PROGRAM_ID, layout: "raydium" },
-  { name: "PancakeSwap CLMM", program: PANCAKESWAP_CLMM_PROGRAM_ID, layout: "raydium" },
-  { name: "Byreal", program: BYREAL_PROGRAM_ID, layout: "raydium" },
-  { name: "Stabble CLMM", program: STABBLE_CLMM_PROGRAM_ID, layout: "raydium" },
-  { name: "Orca Whirlpools", program: ORCA_WHIRLPOOL_PROGRAM_ID, layout: "whirlpool" },
-  { name: "Cropper", program: CROPPER_PROGRAM_ID, layout: "whirlpool" },
-  { name: "DefiTuna", program: DEFITUNA_PROGRAM_ID, layout: "defituna" },
-  { name: "Crema", program: CREMA_PROGRAM_ID, layout: "crema" },
-  { name: "Phoenix", program: PHOENIX_PROGRAM_ID, layout: "phoenix" },
-];
-
-/** Where a concentrated-liquidity layout keeps the pair, the liquidity, the price and the fee. */
-const CLMM: Record<
-  Exclude<Layout, "phoenix">,
-  { size: number; mintA: number; mintB: number; liquidity: number; price: number; tick: number }
-> = {
-  raydium: { size: 1544, mintA: 73, mintB: 105, liquidity: 237, price: 253, tick: 269 },
-  whirlpool: { size: 653, mintA: 101, mintB: 181, liquidity: 49, price: 65, tick: 81 },
-  defituna: { size: 423, mintA: 11, mintB: 43, liquidity: 151, price: 167, tick: 183 },
-  crema: { size: 748, mintA: 40, mintB: 72, liquidity: 174, price: 190, tick: 206 },
-};
+export { SVM_PRICE_LIMIT_VENUES, type SvmSlot };
 
 export interface SvmPoolsInput {
   readonly chain: CanonicalChain;
@@ -121,25 +87,10 @@ interface Mint {
   readonly decimals: number;
 }
 
-/** A slot's nine accounts, in the program's order. */
-export interface SvmSlot {
-  readonly program: Address;
-  readonly pool: Address;
-  readonly config: Address;
-  readonly vaultA: Address;
-  readonly vaultB: Address;
-  readonly extra: Address;
-  readonly ticks: readonly [Address, Address, Address];
-}
-
 const le = (data: Uint8Array, offset: number, length: number): bigint => {
   let value = 0n;
   for (let i = length - 1; i >= 0; i--) value = (value << 8n) | BigInt(data[offset + i]!);
   return value;
-};
-const i32 = (data: Uint8Array, offset: number): number => {
-  const raw = Number(le(data, offset, 4));
-  return raw >= 0x8000_0000 ? raw - 0x1_0000_0000 : raw;
 };
 const keyAt = (data: Uint8Array, offset: number): Address =>
   getAddressDecoder().decode(data.subarray(offset, offset + 32));
@@ -567,7 +518,7 @@ async function clmmPool(
   const unfilled: Record<string, string> = {};
   for (const pay of [first, second]) {
     try {
-      slots[pay.symbol] = await clmmSlot(rpc, ask, venue, pool, data, pay === lower, load);
+      slots[pay.symbol] = await svmClmmSlot(venue, pool, data, pay === lower, load);
     } catch (error) {
       unfilled[pay.symbol] = (error as Error).message;
     }
@@ -586,136 +537,6 @@ async function clmmPool(
   };
 }
 
-/** The nine accounts a concentrated-liquidity pool's slot takes, paying the lower-key token or not. */
-async function clmmSlot(
-  rpc: Rpc,
-  ask: Ask,
-  venue: SvmVenue,
-  pool: Address,
-  data: Uint8Array,
-  paysLower: boolean,
-  load: (key: Address) => Promise<Uint8Array | null>,
-): Promise<SvmSlot> {
-  const program = venue.program;
-  if (venue.layout === "raydium") {
-    return {
-      program,
-      pool,
-      config: keyAt(data, 9),
-      vaultA: keyAt(data, 137),
-      vaultB: keyAt(data, 169),
-      extra: keyAt(data, 201),
-      ticks: await raydiumTickArrays(program, pool, data, paysLower, load),
-    };
-  }
-  const window = (windows: { aToB: { tickArrays: Address[] }; bToA: { tickArrays: Address[] } }) =>
-    (paysLower ? windows.aToB : windows.bToA).tickArrays as unknown as [Address, Address, Address];
-  if (venue.layout === "whirlpool") {
-    const cfg =
-      program === CROPPER_PROGRAM_ID
-        ? await fetchCropperConfig(load, pool)
-        : await fetchOrcaWhirlpoolConfig(load, pool);
-    return {
-      program,
-      pool,
-      config: SYSTEM,
-      vaultA: keyAt(data, 133),
-      vaultB: keyAt(data, 213),
-      extra: cfg.oracle,
-      ticks: window(cfg.windows),
-    };
-  }
-  if (venue.layout === "defituna") {
-    const cfg = await fetchDefiTunaPoolConfig(load, pool);
-    return {
-      program,
-      pool,
-      config: SYSTEM,
-      vaultA: keyAt(data, 75),
-      vaultB: keyAt(data, 107),
-      extra: SYSTEM,
-      ticks: window(cfg.windows),
-    };
-  }
-  const cfg = await fetchCremaPoolConfig(load, pool);
-  return {
-    program,
-    pool,
-    config: cfg.clmmConfig,
-    vaultA: cfg.tokenVaultA,
-    vaultB: cfg.tokenVaultB,
-    extra: cfg.tickArrayMap,
-    ticks: window(cfg.windows),
-  };
-}
-
-/**
- * A Raydium-layout pool's swap loads every account given as a tick array, so each must exist, and
- * starts at the first holding liquidity in its direction: the arrays the pool's bitmap (1,024 bits
- * at 904, bit 512 the array starting at tick 0) marks, nearest its price that way in walk order,
- * then the other way, then arrays near its price that exist with none, which the swap loads and
- * never reaches. An array is the program address of `["tick_array", pool, start]`, `start` a
- * big-endian i32.
- */
-async function raydiumTickArrays(
-  program: Address,
-  pool: Address,
-  data: Uint8Array,
-  down: boolean,
-  load: (key: Address) => Promise<Uint8Array | null>,
-): Promise<[Address, Address, Address]> {
-  const span = 60 * Number(le(data, 235, 2));
-  const current = Math.floor(i32(data, 269) / span) * span;
-  const bitmap = data.subarray(904, 904 + 128);
-  const marked = (start: number) => {
-    const bit = start / span + 512;
-    return bit >= 0 && bit < 1024 && ((bitmap[bit >> 3]! >> (bit & 7)) & 1) === 1;
-  };
-  const step = down ? -span : span;
-  const starts: number[] = [];
-  for (
-    let start = current;
-    starts.length < 3 && Math.abs(start - current) <= 512 * span;
-    start += step
-  )
-    if (marked(start)) starts.push(start);
-  for (
-    let start = current - step;
-    starts.length < 3 && Math.abs(start - current) <= 512 * span;
-    start -= step
-  )
-    if (marked(start)) starts.push(start);
-  const at = (start: number) => {
-    const seed = new Uint8Array(4);
-    new DataView(seed.buffer).setInt32(0, start, false);
-    return memoizedGetProgramDerivedAddress(program, [
-      new TextEncoder().encode("tick_array"),
-      new Uint8Array(getAddressEncoder().encode(pool)),
-      seed,
-    ]);
-  };
-  const chosen = await Promise.all(starts.map(at));
-  // Fewer than three with liquidity: the nearest that exist with none.
-  for (let distance = 0; chosen.length < 3 && distance <= 8; distance++) {
-    for (const start of distance === 0
-      ? [current]
-      : [current + distance * span, current - distance * span]) {
-      if (chosen.length >= 3 || starts.includes(start)) continue;
-      const key = await at(start);
-      if ((await load(key)) !== null) {
-        starts.push(start);
-        chosen.push(key);
-      }
-    }
-  }
-  if (chosen.length < 3) {
-    throw new CliError(
-      `it has ${chosen.length} tick arrays near its price, and its swap takes three`,
-    );
-  }
-  return chosen as [Address, Address, Address];
-}
-
 /** A Phoenix market: skipped, or listed with its sides (its best offer each way) and slots. */
 async function phoenixPool(
   venue: SvmVenue,
@@ -727,7 +548,7 @@ async function phoenixPool(
 ): Promise<Listed | { why: string }> {
   if (le(data, 8, 8) !== 1n) return { why: "not open for taking (post-only, paused or closed)" };
   const cfg = await fetchPhoenixConfig(load, market);
-  const base = keyAt(data, 48) === first.mint ? first : second;
+  const base = keyAt(data, PHOENIX_BASE_MINT_AT) === first.mint ? first : second;
   const quote = base === first ? second : first;
   const fee = le(data, 856, 8);
   const tickQuote = cfg.tickSizeInQuoteLotsPerBaseUnit * cfg.quoteLotSize; // quote atoms per base unit per tick
@@ -761,18 +582,7 @@ async function phoenixPool(
           ),
     );
   }
-  const log = await memoizedGetProgramDerivedAddress(venue.program, [
-    new TextEncoder().encode("log"),
-  ]);
-  const slot: SvmSlot = {
-    program: venue.program,
-    pool: market,
-    config: log,
-    vaultA: cfg.baseVault,
-    vaultB: cfg.quoteVault,
-    extra: SYSTEM,
-    ticks: [SYSTEM, SYSTEM, SYSTEM],
-  };
+  const slot = await svmPhoenixSlot(market, load);
 
   return {
     venue: venue.name,
