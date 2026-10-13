@@ -32,7 +32,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 
-import { rpc, startAnvil, type AnvilProcess } from "./node.js";
+import { rpc, startAnvil, stopWithProcess, type AnvilProcess } from "./node.js";
 
 export type ForkMode = "replay" | "record" | "live";
 
@@ -256,6 +256,7 @@ const RECORDER = join(dirname(fileURLToPath(import.meta.url)), "recorder.mjs");
 async function startRecorder(upstream: string, block: number, work: string) {
   const out = join(work, "recorded.json");
   const child = spawn(process.execPath, [RECORDER], { stdio: ["pipe", "pipe", "inherit"] });
+  stopWithProcess(child);
   child.stdin!.end(JSON.stringify({ upstream, block: `0x${block.toString(16)}`, out }));
   const port = await new Promise<number>((ok, fail) => {
     child.stdout!.once("data", (chunk: Buffer) => ok(Number(chunk.toString().trim())));

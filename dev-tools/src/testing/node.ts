@@ -1,9 +1,11 @@
 /**
  * A local anvil: started on a free port, waited for, stopped. Every test file can start its own, in
  * parallel. A port that already answers is refused, naming what holds it, and a node is handed back
- * only once its own anvil answers: never one a crashed run left running, nor anything else that
- * speaks JSON-RPC there. The repository's own suites start anvil the same way
- * (`sdk/test/anvil-process.ts`), which the published kit cannot import.
+ * only once its own anvil answers, from the port it listens on: never one a crashed run left
+ * running, nor anything else that speaks JSON-RPC there, even a process that took the port between
+ * the check and anvil's start. Nothing the kit starts outlives the process that started it. The
+ * repository's own suites start anvil the same way (`sdk/test/anvil-process.ts`), which the
+ * published kit cannot import.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { connect, createServer } from "node:net";
@@ -35,40 +37,87 @@ function answers(port: number): Promise<boolean> {
   });
 }
 
+interface Listener {
+  readonly pid: number;
+  readonly command: string;
+}
+
 /**
- * The processes listening on `port`: `pid 123 (anvil)`. Read the fast way each system has — macOS's
- * `netstat -anv` names a socket's process, Linux's `ss -p` too — and else by lsof, which on a busy
- * macOS can take tens of seconds, so it is given five.
+ * The processes listening on `port`. Read the fast way each system has — macOS's `netstat -anv`
+ * names a socket's process, Linux's `ss -p` too — and else by lsof, which on a busy macOS can take
+ * tens of seconds, so it is given five. None, when no tool names one.
  */
-function holdersOf(port: number): string {
+function listenersOf(port: number): Listener[] {
   const run = (command: string, args: readonly string[]) =>
     spawnSync(command, args, { encoding: "utf8", timeout: 5_000 }).stdout ?? "";
-  let holders: string[] = [];
+  let listeners: Listener[] = [];
   if (process.platform === "darwin") {
-    holders = run("netstat", ["-anv", "-p", "tcp"])
+    listeners = run("netstat", ["-anv", "-p", "tcp"])
       .split("\n")
       .filter((line) => / LISTEN /.test(line) && line.split(/\s+/)[3]?.endsWith(`.${port}`))
       .flatMap((line) => {
         const found = /\s(\S+):(\d+)\s/.exec(line.slice(line.indexOf(" LISTEN ")));
 
-        return found === null ? [] : [`pid ${found[2]} (${found[1]})`];
+        return found === null ? [] : [{ pid: Number(found[2]), command: found[1]! }];
       });
   } else if (process.platform === "linux") {
-    holders = [...run("ss", ["-ltnpH", `sport = :${port}`]).matchAll(/\("([^"]+)",pid=(\d+)/g)].map(
-      ([, command, pid]) => `pid ${pid} (${command})`,
-    );
+    listeners = [
+      ...run("ss", ["-ltnpH", `sport = :${port}`]).matchAll(/\("([^"]+)",pid=(\d+)/g),
+    ].map(([, command, pid]) => ({ pid: Number(pid), command: command! }));
   }
-  if (holders.length === 0) {
-    holders = [
+  if (listeners.length === 0) {
+    listeners = [
       ...run("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpc"]).matchAll(
         /^p(\d+)\nc(.*)$/gm,
       ),
-    ].map(([, pid, command]) => `pid ${pid} (${command})`);
+    ].map(([, pid, command]) => ({ pid: Number(pid), command: command! }));
   }
 
-  return holders.length === 0
+  return listeners.filter(
+    (listener, index) => listeners.findIndex(({ pid }) => pid === listener.pid) === index,
+  );
+}
+
+/** What holds `port`, for a refusal: `pid 123 (anvil)`. */
+function holdersOf(port: number, listeners = listenersOf(port)): string {
+  return listeners.length === 0
     ? `a process none of netstat, ss and lsof named (\`lsof -nP -iTCP:${port} -sTCP:LISTEN\`)`
-    : [...new Set(holders)].join(", ");
+    : listeners.map(({ pid, command }) => `pid ${pid} (${command})`).join(", ");
+}
+
+/** The processes the kit started that still run. */
+const running = new Set<ChildProcess>();
+
+/**
+ * Keeps `child` from outliving this process: stopped when it exits, or when a signal that would end
+ * it arrives — which then ends it as the signal would have, unless something else of the process
+ * handles that signal.
+ */
+export function stopWithProcess(child: ChildProcess): void {
+  if (running.size === 0) {
+    process.once("exit", stopRunning);
+    for (const signal of ENDING) process.once(signal, ended);
+  }
+  running.add(child);
+  child.once("exit", () => {
+    running.delete(child);
+    if (running.size > 0) return;
+    process.off("exit", stopRunning);
+    for (const signal of ENDING) process.off(signal, ended);
+  });
+}
+
+const ENDING = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+
+function stopRunning(): void {
+  for (const child of running) child.kill("SIGKILL");
+}
+
+function ended(signal: NodeJS.Signals): void {
+  stopRunning();
+  // Each of these listeners was registered once: with none left, the signal's own action applies.
+  for (const each of ENDING) process.off(each, ended);
+  if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
 }
 
 /** One JSON-RPC request, with the node's error message when it fails. */
@@ -130,6 +179,7 @@ export async function startAnvil(
     );
   });
   await spawned;
+  stopWithProcess(child);
 
   const exited = () => child.exitCode !== null || child.signalCode !== null;
   const stop = async (): Promise<void> => {
@@ -149,8 +199,19 @@ export async function startAnvil(
       () => true,
       () => false,
     );
-    // What answered is this anvil only while it runs: one that could not bind the port exits.
-    if (up && !exited()) return { url, process: child, stop };
+    // What answered is this anvil only while it runs (one that could not bind the port exits), and
+    // only when it is what listens there: another process may have taken the port first.
+    if (up && !exited()) {
+      const listeners = listenersOf(port);
+      if (listeners.length === 0 || listeners.some(({ pid }) => pid === child.pid)) {
+        return { url, process: child, stop };
+      }
+      await stop();
+      throw new Error(
+        `port ${port} answers, but ${holdersOf(port, listeners)} holds it, not this anvil ` +
+          `(pid ${child.pid}): another process took the port before anvil could`,
+      );
+    }
     if (!up) await new Promise((ok) => setTimeout(ok, 100));
   }
   await stop();
