@@ -22,13 +22,12 @@ const load: OwnedAccountLoader = async (at) => {
 };
 
 describe("svmPoolSlot", () => {
-  // Byreal is left out: byreal-sol-usdc's fixture slot is the System program throughout (its fees
-  // are more than one rate, so the distributed swap skips it and its accounts were never dumped), and
-  // byreal-usdc's tick arrays past the first were chosen by the dump from a scan of the arrays that
-  // exist, where the slot reader takes them from the pool's bitmap, as `sauce pools` always has.
+  // byreal-sol-usdc is left out: its fixture slot is the System program throughout (its fees are
+  // more than one rate, so the distributed swap skips it and its accounts were never dumped).
   it.each([
     ["raydium-clmm-sol-usdc", WSOL, USDC],
     ["pancakeswap-clmm-sol-usdc", WSOL, USDC],
+    ["byreal-usdc", address("4SoQ8UkWfeDH47T56PA53CZCeW4KytYCiU65CwBWoJUt"), USDC],
     ["stabble-clmm-usdc-usdt", USDC, USDT],
     ["orca-whirlpool-sol-usdc", WSOL, USDC],
     ["cropper-sol-usdc", WSOL, USDC],
