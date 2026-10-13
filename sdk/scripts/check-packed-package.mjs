@@ -486,12 +486,25 @@ try {
     export type Types = [${actionTypes.join(", ")}];
   `,
   );
+  // A signature over what a cook returns, typed by the testing kit's own exports: each must resolve
+  // through the installed declarations to its real type, not to an unresolved `any`.
+  writeFileSync(
+    join(work, "testing-exports.ts"),
+    `
+    import type { CookResult, Effects, Movement } from '${name}/testing';
+    type IsAny<T> = 0 extends 1 & T ? true : false;
+    export const resolved: [IsAny<CookResult>, IsAny<Effects>, IsAny<Movement>] = [false, false, false];
+    export const transfers = (result: CookResult): readonly Movement[] => result.transfers;
+    export const effects = (result: CookResult): Effects => result.effects;
+  `,
+  );
   execFileSync(
     process.execPath,
     [
       join(work, "node_modules/typescript/bin/tsc"),
       join(work, "consumer.ts"),
       join(work, "actions-exports.ts"),
+      join(work, "testing-exports.ts"),
       "--target",
       "ES2022",
       "--module",
@@ -515,6 +528,7 @@ try {
     `Clean package install: all ${documented.length} exports the actions pages name typecheck ` +
       `from ./actions, the type-only ones being ${actionTypes.join(", ")}`,
   );
+  console.log("Clean package install: ./testing's CookResult, Effects and Movement types resolve");
 
   // The `sauce` bin, run the way a consumer runs it — through npx, from the install, with nothing
   // but the tarball's files. It compiles the example its own agent skill ships, builds the Pot and

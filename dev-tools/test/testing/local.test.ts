@@ -9,7 +9,13 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { concat, encodeAbiParameters, numberToHex, size, toHex, type Hex } from "viem";
 
-import { CookReverted, local, type TestChain } from "../../src/testing/index.js";
+import {
+  CookReverted,
+  local,
+  type Effects,
+  type Movement,
+  type TestChain,
+} from "../../src/testing/index.js";
 import { rpc } from "../../src/testing/node.js";
 import { anvilMissing, program } from "./support.js";
 
@@ -33,6 +39,11 @@ describe("local()", { skip: anvilMissing() }, () => {
     assert.equal(result.returned, 42n);
     assert.ok(result.hash);
     assert.ok(result.gasUsed > 0n);
+    // Typed by the kit's own exports: it moved nothing.
+    const transfers: readonly Movement[] = result.transfers;
+    const effects: Effects = result.effects;
+    assert.deepEqual(transfers, []);
+    assert.deepEqual(effects.moves, transfers);
   });
 
   it("simulates without sending", async () => {
