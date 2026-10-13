@@ -1355,7 +1355,12 @@ recording proxy in its own process (`recorder.mjs`, configured over stdin, never
 `--no-storage-caching` for anvil (no RPC cache, read or written), dev accounts' code cleared, the
 genesis written
 with the pinned block's own header in a gzipped `{ sauce: {...}, genesis }` file that must not
-mention the RPC. `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
+mention the RPC. A replay runs on the node its recording ran on: what anvil's `--init` does not take
+from a genesis is in the header (version 2; an older file is refused) and set again — the gas limit
+and the hardfork (which a fork infers from the block: Ethereum at 20M forks as Cancun) as flags,
+and the next block's base fee and the dev accounts' nonces once the node is up. `record.test.ts`
+holds a Uniswap V3 swap recorded and replayed to the same transaction hash, gas, balances, base
+fees and block spacing. Block hashes and PREVRANDAO are not reproduced. `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
 release or deploys it at the release addresses through `sdk/src/evm/release-stack.ts#deployReleaseStack`
 — the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too; it reads no file, so
 each caller passes the artifacts (the kit from `sdk/dist/artifacts`). `chain.ts`'s `TestChain` funds through `sdk/src/evm/balance-slot.ts` (the slot
@@ -1364,20 +1369,25 @@ through `compileSauceProgram` afresh on every call (a program is its whole impor
 nothing is kept), decodes returns with `routes/returned.ts` by `main`'s declared type (a string stays
 a string) and effects with `evm/effects.ts` (both moved out of `cli/` for the same reason). `run`
 reports the transaction it mined: only the gas is estimated first (the block's limit when that
-reverts, so the cook is sent anyway), and `returned` or the revert comes from
-`debug_traceTransaction` of that transaction, never from a rehearsal on the block before;
+reverts, so the cook is sent anyway), for the pending block, and `returned` or the revert comes
+from `debug_traceTransaction` of that transaction, never from a rehearsal on the block before; a
+revert that carries no reason takes the failure of the call it passed on (a Pot passes on the
+engine's out-of-gas as an empty revert, so the trace's top frame alone says only "reverted");
 `simulate` is the rehearsal. A Sauce `require`'s revert data is the message's own bytes, not
 `Error(string)`; `program.ts#reasonOf` reads both, and a called contract's `Error`/`Panic` comes
 back through the cook unchanged. `node.ts` starts anvil as `sdk/test/anvil-process.ts` does (a
 copy: the published kit cannot import a test, nor `sdk/src` hold `node:child_process`): a port that
 already answers is refused, naming its holder, and a node is handed back only once its own anvil
-answers. `node.ts` (anvil) and `state.ts` (the recorder) are the only shipped modules beside the
+answers, and only when the process listening on its port is that anvil (another can take the port
+between `freePort()` and the bind). Every process the kit starts is stopped when the process that
+started it exits or is ended by SIGINT, SIGTERM or SIGHUP (`stopWithProcess`). `node.ts` (anvil) and `state.ts` (the recorder) are the only shipped modules beside the
 command's that start a process, which `no-embedded-rpc.test.ts` lists;
 `optional-dependencies.test.ts` walks `/testing`'s graph with the other exports. The kit's suites
 (`test/testing/`, node:test) are `node.test.ts`, `program.test.ts` (no chain), `local.test.ts`,
 `record.test.ts` (records from an anvil on the machine, then replays with it stopped) and Base
 replayed from `test/testing/state/base.json.gz`; record that again as the actions suites do
-(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`).
+(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). The package script gives each test
+and hook `--test-timeout`, as the guide tells consumers to.
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
 

@@ -6,7 +6,9 @@
 `anvil`, makes the released engine, Router and Kitchen ready there, and gives you test accounts with
 Pots. You fund an account or a Pot, run a program as a cook, and assert on what `main` returned and
 on what moved. Write the tests with `node:test`'s `describe` and `it`; the kit's functions are plain
-async functions, so any runner works.
+async functions, so any runner works. Give each test and hook a generous timeout, since a fork boots
+anvil and makes the stack ready, which takes seconds: `node:test` has no default limit, mocha allows
+2 seconds, and vitest and jest 5.
 
 A test forks a real chain at a block you pin. The first run records every account and storage slot
 the tests read into a state file you commit. Every later run, CI included, replays that file: no
@@ -81,10 +83,11 @@ describe("swap.sauce.ts on Base", () => {
 });
 ```
 
-Run it with Node's test runner. TypeScript runs through `tsx` (or Node's own type stripping):
+Run it with Node's test runner, with a time limit for each test and hook. TypeScript runs through
+`tsx` (or Node's own type stripping):
 
 ```sh
-npx tsx --test swap.test.ts
+npx tsx --test --test-timeout=120000 swap.test.ts
 ```
 
 ## Record and replay
@@ -111,6 +114,13 @@ reads.
 
 Every block after the pinned one is the chain's block time later (12 seconds on Ethereum, 2
 elsewhere; set it with `blockInterval`), so nothing depends on the wall clock.
+
+A replay runs on the node the recording ran on. The state file also records the block's gas limit,
+the EVM hardfork the fork ran, the base fee of the block after the pinned one, and the test
+accounts' nonces, and the replay sets them again. So a cook replayed uses the same gas, pays the same
+fees, and is the same transaction, hash included. A replay cannot reproduce block hashes, or the
+PREVRANDAO value of the blocks after the pinned one. A state file written by an earlier version of
+the kit lacks these values and is refused: record it again.
 
 ## The chain
 
@@ -152,13 +162,16 @@ that chain's own, fee included; pass `zeroFee: true` to clear it.
 - `effects`: the decoded logs in full: transfers, approvals, balance changes, the rest.
 - `gasUsed`, and `hash` after `run`.
 
+`effects` is an `Effects`, and each of `transfers` a `Movement`; the kit exports both types.
+
 A cook that reverts throws `CookReverted`. Its `reason` is the program's `require` or `throw`
-message, or a called contract's error; `data` is the raw revert data.
+message, a called contract's error, or why the node halted it, such as `out of gas`; `data` is the
+raw revert data.
 
 What `run` reports is the transaction it mined: `returned` and a revert's reason are read from the
 node's trace of that transaction, so a program reading the block number or the time returns what
-it read in its own block. Only the gas is estimated first, and a cook is sent even when the
-estimate reverts. A reverted cook is mined like any other transaction: it moves nothing, but it
+it read in its own block. Only the gas is estimated first, for the block the cook is mined in, and a
+cook is sent even when the estimate reverts. A reverted cook is mined like any other transaction: it moves nothing, but it
 takes a block and a nonce. `simulate` is the rehearsal.
 
 ## Funding
