@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @dev Minimal callback interface matching Uniswap V3
 interface ISwapCallback {
@@ -23,20 +24,24 @@ interface IPancakeCallback {
 
 /**
  * @title MockV3Pool
- * @notice Mock Uniswap V3 pool for unit testing SauceRouter swap logic
- * @dev Implements the same swap + callback pattern as real V3 pools:
- *      1. Compute output amounts
- *      2. Transfer output tokens to recipient
- *      3. Call uniswapV3SwapCallback on msg.sender
- *      4. Verify input tokens were received
+ * @notice Mock Uniswap V3 pool for unit testing the Router's swap logic
+ * @dev Follows the real pool's order:
+ *      1. Compute the amounts (a constant rate; `depth` caps the fill when a price limit is set)
+ *      2. Transfer the output to the recipient
+ *      3. Call the swap callback on msg.sender, with `data` as given
+ *      4. Require the input lane to have arrived, as Uniswap V3's `IIA` check does
  */
 contract MockV3Pool {
+    using SafeERC20 for IERC20;
+
+    uint160 internal constant MIN_SQRT_RATIO = 4_295_128_739;
+    uint160 internal constant MAX_SQRT_RATIO = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342;
+
     address public immutable token0;
     address public immutable token1;
     uint24 public immutable fee;
 
-    // Mock exchange rate: token0 per token1 (scaled by 1e18)
-    // e.g., for ETH/USDC: 1 ETH = 3000 USDC → rate = 3000e6 (USDC decimals)
+    // Mock exchange rate: token1 per token0 (scaled by 1e18)
     uint256 public exchangeRate;
     uint128 public poolLiquidity = 1e18;
 
@@ -45,19 +50,48 @@ contract MockV3Pool {
 
     bool public usePancakeCallback;
 
-    /// @dev A V3 fork that re-enters under its own callback name (Synthra, UnitFlow). Nonzero
-    ///      overrides both named callbacks above: the pool calls this selector with the standard
-    ///      `(int256,int256,bytes)` arguments and bubbles its revert, as a real fork does.
+    /// @dev A V3 fork that re-enters under its own callback name (Synthra, UnitFlow, Algebra).
+    ///      Nonzero overrides both named callbacks above: the pool calls this selector with the
+    ///      standard `(int256,int256,bytes)` arguments and bubbles its revert, as a real fork does.
     bytes4 public callbackSelector;
+
+    /// @dev The most input an exact-input swap fills when the caller set a price limit (anything but
+    ///      the boundary one step inside the sqrt-price range): the input at which the price reaches
+    ///      that limit. 0 means the limit is never reached. A limited fill asks for less and sends
+    ///      proportionally less, as a real pool does.
+    uint256 public depth;
 
     /// @dev Malicious-pool knobs, all off by default (an honest pool). `extraCallbacks` re-enters
     ///      the callback that many more times after the first, with the same deltas.
     ///      `inputAdjustment` is added to the input lane the pool asks to be paid, and returns:
     ///      positive inflates it past the exact input, negative is a partial fill.
-    ///      `skipCallback` hands out the output and never calls back.
+    ///      `skipCallback` hands out the output and never calls back. `outputLaneAsk` makes the pool
+    ///      ask to be paid that much on the OUTPUT lane too. `tamperedData` replaces the callback data
+    ///      the pool hands back. A dishonest pool skips the payment check.
+    /// @dev A plugin that spends the gas it is given, like Base QuickSwap V4 / Hydrex V4's arbitrage plugins: after
+    ///      the swap, when at least `elasticThreshold` gas is left, it runs an "arbitrage" that never finishes under
+    ///      a gas limit of min(`elasticCap`, what is left), catching its failure. 0 is no plugin.
+    uint256 public elasticThreshold;
+    uint256 public elasticCap;
     uint8 public extraCallbacks;
     int256 public inputAdjustment;
     bool public skipCallback;
+    int256 public outputLaneAsk;
+    bool public tamper;
+    bytes public tamperedData;
+
+    /// @dev Return `(0, 0)` from `swap` after the callback has been paid in full: the pool takes the
+    ///      input and reports it took none, so a Router that trusts the return value under-reports
+    ///      what left the Pot.
+    bool public underreportReturn;
+
+    /// @dev Off by default so a gas measurement pays for no bookkeeping: record each swap's
+    ///      arguments for a test to read back.
+    bool public recording;
+    int256 public lastAmountSpecified;
+    uint160 public lastSqrtPriceLimitX96;
+    address public lastRecipient;
+    bytes public lastData;
 
     event Swap(
         address indexed sender,
@@ -106,6 +140,28 @@ contract MockV3Pool {
         callbackSelector = _selector;
     }
 
+    function setDepth(
+        uint256 _depth
+    ) external {
+        depth = _depth;
+    }
+
+    function setElasticPlugin(
+        uint256 threshold,
+        uint256 cap
+    ) external {
+        elasticThreshold = threshold;
+        elasticCap = cap;
+    }
+
+    /// @dev The elastic plugin's arbitrage: it spends every unit of gas it is handed.
+    function burnArbitrage() external view {
+        require(msg.sender == address(this), "self");
+        assembly {
+            for { } 1 { } { }
+        }
+    }
+
     function setExtraCallbacks(
         uint8 _count
     ) external {
@@ -122,6 +178,31 @@ contract MockV3Pool {
         bool _skip
     ) external {
         skipCallback = _skip;
+    }
+
+    function setOutputLaneAsk(
+        int256 _ask
+    ) external {
+        outputLaneAsk = _ask;
+    }
+
+    function setUnderreportReturn(
+        bool _under
+    ) external {
+        underreportReturn = _under;
+    }
+
+    function setTamperedData(
+        bytes calldata _data
+    ) external {
+        tamper = true;
+        tamperedData = _data;
+    }
+
+    function setRecording(
+        bool _recording
+    ) external {
+        recording = _recording;
     }
 
     function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
@@ -152,63 +233,66 @@ contract MockV3Pool {
         address recipient,
         bool zeroForOne,
         int256 amountSpecified,
-        uint160, /* sqrtPriceLimitX96 */
+        uint160 sqrtPriceLimitX96,
         bytes calldata data
     ) external returns (int256 amount0, int256 amount1) {
+        require(amountSpecified != 0, "AS");
+        if (recording) {
+            lastAmountSpecified = amountSpecified;
+            lastSqrtPriceLimitX96 = sqrtPriceLimitX96;
+            lastRecipient = recipient;
+            lastData = data;
+        }
+
         bool exactInput = amountSpecified > 0;
-
-        if (zeroForOne) {
-            // token0 → token1
-            if (exactInput) {
-                uint256 amountIn = uint256(amountSpecified);
-                uint256 amountOut = (amountIn * exchangeRate) / 1e18;
-                amount0 = int256(amountIn); // positive: caller owes token0
-                amount1 = -int256(amountOut); // negative: pool owes token1
-            } else {
-                uint256 amountOut = uint256(-amountSpecified);
-                uint256 amountIn = (amountOut * 1e18) / exchangeRate + 1; // round up
-                amount0 = int256(amountIn);
-                amount1 = -int256(amountOut);
+        bool limited = sqrtPriceLimitX96 != (zeroForOne ? MIN_SQRT_RATIO + 1 : MAX_SQRT_RATIO - 1);
+        uint256 amountIn;
+        uint256 amountOut;
+        if (exactInput) {
+            amountIn = uint256(amountSpecified);
+            if (limited && depth != 0 && amountIn > depth) {
+                amountIn = depth;
             }
-            amount0 += inputAdjustment;
-
-            // Step 1: Transfer output tokens to recipient
-            IERC20(token1).transfer(recipient, uint256(-amount1));
-
-            // Step 2: Callback — ask caller to pay input tokens
-            _callback(amount0, amount1, data);
-
-            // Step 3: Verify we received the input tokens
-            // (real pool checks balance delta, we just trust the callback)
+            amountOut = zeroForOne ? (amountIn * exchangeRate) / 1e18 : (amountIn * 1e18) / exchangeRate;
         } else {
-            // token1 → token0
-            if (exactInput) {
-                uint256 amountIn = uint256(amountSpecified);
-                uint256 amountOut = (amountIn * 1e18) / exchangeRate;
-                amount0 = -int256(amountOut); // negative: pool owes token0
-                amount1 = int256(amountIn); // positive: caller owes token1
-            } else {
-                uint256 amountOut = uint256(-amountSpecified);
-                uint256 amountIn = (amountOut * exchangeRate) / 1e18 + 1;
-                amount0 = -int256(amountOut);
-                amount1 = int256(amountIn);
-            }
-            amount1 += inputAdjustment;
+            amountOut = uint256(-amountSpecified);
+            amountIn = zeroForOne ? (amountOut * 1e18) / exchangeRate + 1 : (amountOut * exchangeRate) / 1e18 + 1;
+        }
 
-            // Transfer output tokens to recipient
-            IERC20(token0).transfer(recipient, uint256(-amount0));
+        int256 inputLane = int256(amountIn) + inputAdjustment;
+        int256 outputLane = -int256(amountOut) + outputLaneAsk;
+        (amount0, amount1) = zeroForOne ? (inputLane, outputLane) : (outputLane, inputLane);
+        (address tokenIn, address tokenOut) = zeroForOne ? (token0, token1) : (token1, token0);
 
-            // Callback
-            _callback(amount0, amount1, data);
+        IERC20(tokenOut).safeTransfer(recipient, amountOut);
+
+        uint256 balanceBefore = IERC20(tokenIn).balanceOf(address(this));
+        bytes memory handedBack = data;
+        if (tamper) {
+            handedBack = tamperedData;
+        }
+        _callback(amount0, amount1, handedBack);
+
+        bool honest = extraCallbacks == 0 && inputAdjustment <= 0 && outputLaneAsk == 0 && !skipCallback;
+        if (honest && inputLane > 0) {
+            require(IERC20(tokenIn).balanceOf(address(this)) >= balanceBefore + uint256(inputLane), "IIA");
         }
 
         emit Swap(msg.sender, recipient, amount0, amount1, sqrtPriceX96, poolLiquidity, 0);
+
+        if (elasticThreshold != 0 && gasleft() >= elasticThreshold) {
+            try this.burnArbitrage{ gas: elasticCap }() { } catch { }
+        }
+
+        if (underreportReturn) {
+            (amount0, amount1) = (int256(0), int256(0));
+        }
     }
 
     function _callback(
         int256 amount0,
         int256 amount1,
-        bytes calldata data
+        bytes memory data
     ) internal {
         if (skipCallback) {
             return;
@@ -221,7 +305,7 @@ contract MockV3Pool {
     function _callbackOnce(
         int256 amount0,
         int256 amount1,
-        bytes calldata data
+        bytes memory data
     ) internal {
         if (callbackSelector != bytes4(0)) {
             (bool ok, bytes memory ret) =
