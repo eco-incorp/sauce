@@ -2208,7 +2208,7 @@ async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<Sv
  * (`pot:USDC`), and a holder's the token methods derived (`@to:USDC`, a recipient's) — each with
  * the idempotent associated-token-account instruction that creates it, `payer` paying the rent. The
  * one list both `sauce run`'s step before the cook and a step plan an external signer sends create:
- * a program paying into an account that does not exist fails, and a rehearsal's local copy makes
+ * a program paying into an account that does not exist fails, and a simulation's local copy makes
  * each empty.
  */
 export async function svmTokenAccountsToCreate(
@@ -2248,7 +2248,7 @@ export async function svmTokenAccountsToCreate(
 
 /**
  * The token accounts the cook names that solana does not have yet (`svmTokenAccountsToCreate`),
- * created by the owner before the cook, as the rehearsal's copy made them empty. Asked for as the
+ * created by the owner before the cook, as the simulation's copy made them empty. Asked for as the
  * Pot's creation is: their rent comes from the owner.
  */
 async function ensureTokenAccounts(
