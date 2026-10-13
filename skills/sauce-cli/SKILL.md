@@ -392,7 +392,7 @@ arguments and `sauce simulate`'s outcome before handing it over, as before `run`
 back the signed bytes, and `sauce send <signed>… --chain base` broadcasts them in order, waits for
 each and prints what it did, as `run` does: the hash, explorer and trace links, the status, and for
 a cook what moved and what stayed in the Pot. It takes no key. A signed EVM transaction is the raw
-hex a signer returns, a Solana one the base64 wire transaction. Each is rehearsed as signed first, and one
+hex a signer returns, a Solana one the base64 wire transaction. Each is simulated as signed first, and one
 that would fail is not sent (exit 1), nor anything after it. When `sauce tx` plans the Pot's
 deployment and then the cook, have the cook signed with a gas limit that has room, or after the
 deployment lands: a gas estimate taken while the Pot has no code is far too low, and `send`
