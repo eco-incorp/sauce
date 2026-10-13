@@ -96,7 +96,7 @@ describe(
     });
 
     /** The external signer: signs each transaction sauce_tx built with consecutive nonces. */
-    const evmSigner = async (gasOf: (index: number) => bigint): Promise<Sign> => {
+    const evmSigner = async (gasOf: (tx: Unsigned, index: number) => bigint): Promise<Sign> => {
       const nonce = await local.publicClient.getTransactionCount({ address: signer.address });
       const fees = await local.publicClient.estimateFeesPerGas();
 
@@ -108,7 +108,7 @@ describe(
           data: tx.data as Hex,
           value: BigInt(tx.value ?? "0"),
           nonce: nonce + index,
-          gas: gasOf(index),
+          gas: gasOf(tx, index),
           maxFeePerGas: fees.maxFeePerGas * 2n,
           maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
         });
@@ -121,15 +121,30 @@ describe(
     };
 
     it("deploys the Pot and cooks on it: the documented example, end to end", async () => {
-      const planned = ok(await mcp.call("sauce_tx", program)) as { pot: Address };
+      // Unfunded, the cook would revert after the deployment: no gas is suggested for it.
+      const planned = ok(await mcp.call("sauce_tx", program)) as {
+        pot: Address;
+        transactions: Unsigned[];
+        notes: string[];
+      };
+      assert.equal(planned.transactions[1]!.gas, undefined);
+      assert.ok(planned.notes.some((note) => /The cook is given no gas/.test(note)));
       await local.mint(usdc, planned.pot, AMOUNT * 2n);
 
-      // docs/examples/mcp-external-signer.ts, as a reader runs it.
+      // docs/examples/mcp-external-signer.ts, as a reader runs it, signing with the gas each
+      // transaction comes with: the cook's estimated as if the deployment had landed.
+      const signedWith: bigint[] = [];
       const sent = (await cookWithYourSigner(
         async (name, args) => ok(await mcp.call(name, args)),
-        await evmSigner(() => 1_000_000n),
+        await evmSigner((tx) => {
+          assert.ok(tx.gas !== undefined, `${tx.what} comes with its gas`);
+          signedWith.push(BigInt(tx.gas));
+
+          return BigInt(tx.gas);
+        }),
         program,
       )) as { ok: boolean; chain: string; sent: Array<Record<string, unknown>> };
+      assert.equal(signedWith.length, 2);
 
       assert.equal(sent.ok, true);
       assert.equal(sent.chain, "ethereum");
@@ -148,7 +163,7 @@ describe(
       // The Pot is there now: sauce_tx builds the cook alone. Signed short of gas, it is refused
       // after the transfer ahead of it lands.
       const built = ok(await mcp.call("sauce_tx", program)) as unknown as Unsigned;
-      const sign = await evmSigner((index) => (index === 0 ? 21_000n : 30_000n));
+      const sign = await evmSigner((_, index) => (index === 0 ? 21_000n : 30_000n));
       const transfer = await sign({ chainId: 1, to: RECIPIENT, data: "0x", value: "1" }, 0);
       const cook = await sign(built, 1);
 

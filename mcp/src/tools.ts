@@ -1885,7 +1885,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "which also says whether the Pot is deployed. When the endpoint shows the Pot has no " +
         "code yet, it returns { chainId, pot, transactions } instead: first Kitchen.deployPot " +
         "(marked deploysPot; any account may send it), then the cook — send them in order, or " +
-        "pass the whole result to a wallet that sends a plan. On Solana it returns { chain, " +
+        "pass the whole result to a wallet that sends a plan. Each comes with `gas`, the limit " +
+        "to sign it with: the cook's estimated as if the deployment had landed, with 30% room " +
+        "(a signer's own estimate, taken while the Pot has no code, is far too low); a cook " +
+        "that would revert after the deployment, on a Pot not funded yet, has none, and a note " +
+        "says why. On Solana it returns { chain, " +
         "via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction }: the Kitchen cook " +
         "(or, via engine, the engine's own paid cook, with no Pot) as a base64 transaction for " +
         "the owner to sign, which needs an endpoint (its blockhash and the fee); a Pot not " +
