@@ -4,7 +4,9 @@
  * there is no such account, it is no lookup table, or the owner is not its authority — an endpoint
  * that refuses to scan the lookup-table program, a cluster whose recent slot hashes cannot be read
  * (a deactivated table then closes by the count of slots), the slot and those hashes read together,
- * and a plan to keep that is another owner's. Closing on a cluster is `cli-reclaim.e2e.test.ts`.
+ * a plan to keep that is another owner's, and an owner with more open than one run handles: the
+ * histories read a few at a time, a run's share taken (the tables it can act on first) and the
+ * rest said to remain. Closing on a cluster is `cli-reclaim.e2e.test.ts`.
  */
 import { getBase58Decoder, type Address } from "@solana/kit";
 import {
@@ -245,5 +247,155 @@ describe("a plan to keep", () => {
     const asked = reclaimCommand({ owner: OWNER, rpcUrl: "http://127.0.0.1:9/", keep: [cursor] });
     await expect(asked).rejects.toThrow(UsageError);
     await expect(asked).rejects.toThrow(`a plan to keep is ${OTHER}'s, not ${OWNER}'s`);
+  });
+});
+
+/** A code buffer as the Kitchen scan returns it. */
+const bufferItem = (index: number) => ({
+  pubkey: key(100 + index),
+  account: { data: [Buffer.alloc(91).toString("base64"), "base64"], lamports: 1_000n },
+});
+
+describe("an owner with more open than one run handles", () => {
+  const feeConfig = async () =>
+    (await deriveExecutionFeeConfigPda(v12SvmKitchenProgramId() as Address)).address;
+  /** A Sauce table as the scan returns it, deactivated at `deactivationSlot`. */
+  const tableItem = async (index: number, deactivationSlot = ACTIVE) => ({
+    pubkey: key(200 + index),
+    account: tableAccount(OWNER, [await feeConfig()], deactivationSlot),
+  });
+
+  it("reads at most eight transaction histories at once", async () => {
+    const tables = await Promise.all(Array.from({ length: 10 }, (_, index) => tableItem(index)));
+    let inFlight = 0;
+    let most = 0;
+    const rpc = endpoint(
+      cluster(1_000n, {
+        getProgramAccounts: (program: never) =>
+          String(program) === v12SvmKitchenProgramId()
+            ? Array.from({ length: 20 }, (_, index) => bufferItem(index))
+            : tables,
+        getMultipleAccounts: (keys: never) => ({
+          context: { slot: 1_000n },
+          value: (keys as unknown[]).map(() => null),
+        }),
+        getSignaturesForAddress: async () => {
+          inFlight += 1;
+          most = Math.max(most, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 2));
+          inFlight -= 1;
+
+          return [];
+        },
+      }),
+    );
+    const found = await reclaimable(rpc, URL, OWNER);
+    expect(found.buffers).toHaveLength(20);
+    expect(found.tables).toHaveLength(10);
+    expect(most).toBe(8);
+  });
+
+  it("takes 32 code buffers and 24 lookup tables a run, the tables it can act on first", async () => {
+    // 28 deactivating, scanned first; then one active, and one closable.
+    const tables = [
+      ...(await Promise.all(Array.from({ length: 28 }, (_, index) => tableItem(index, 990n)))),
+      await tableItem(28),
+      await tableItem(29, 500n),
+    ];
+    const read: number[] = [];
+    const rpc = endpoint(
+      cluster(1_000n, {
+        getAccountInfo: () => ({ context: { slot: 1_000n }, value: slotHashes([990n]) }),
+        getProgramAccounts: (program: never) =>
+          String(program) === v12SvmKitchenProgramId()
+            ? Array.from({ length: 40 }, (_, index) => bufferItem(index))
+            : tables,
+        getMultipleAccounts: (keys: never) => {
+          read.push((keys as unknown[]).length);
+
+          return { context: { slot: 1_000n }, value: (keys as unknown[]).map(() => null) };
+        },
+      }),
+    );
+    const found = await reclaimable(rpc, URL, OWNER);
+    expect(found.buffers.map((one) => one.codeBuffer)).toEqual(
+      Array.from({ length: 32 }, (_, index) => key(100 + index)),
+    );
+    expect(read).toEqual([32]);
+    expect(found.tables).toHaveLength(24);
+    expect(found.tables.slice(0, 2).map((one) => [one.address, one.state])).toEqual([
+      [key(229), "closable"],
+      [key(228), "active"],
+    ]);
+    expect(found.remaining).toEqual({ buffers: 8, tables: 6 });
+  });
+
+  it("refuses more tables named than a run takes, before any endpoint is asked", async () => {
+    const named = Array.from({ length: 25 }, (_, index) => key(200 + index));
+    const asked = reclaimable(endpoint({}), URL, OWNER, named);
+    await expect(asked).rejects.toThrow(UsageError);
+    await expect(asked).rejects.toThrow(/25 lookup tables named: a run takes 24 at most/);
+  });
+
+  describe("as the command says it", () => {
+    const original = globalThis.fetch;
+    beforeAll(() => {
+      globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+        if (String(input) !== URL) return original(input as string, init as RequestInit);
+        const { id, method, params } = JSON.parse(init!.body!) as {
+          id: unknown;
+          method: string;
+          params: unknown[];
+        };
+        const kitchenScan = () =>
+          Array.from({ length: 40 }, (_, index) => ({
+            pubkey: key(100 + index),
+            account: {
+              data: [Buffer.alloc(91).toString("base64"), "base64"],
+              executable: false,
+              lamports: 1_000,
+              owner: v12SvmKitchenProgramId(),
+              rentEpoch: 0,
+              space: 91,
+            },
+          }));
+        const answers: Record<string, () => unknown> = {
+          getSlot: () => 1_000,
+          getAccountInfo: () => ({ context: { slot: 1_000 }, value: null }),
+          getProgramAccounts: () => (params[0] === v12SvmKitchenProgramId() ? kitchenScan() : []),
+          getMultipleAccounts: () => ({
+            context: { slot: 1_000 },
+            value: (params[0] as unknown[]).map(() => null),
+          }),
+          getSignaturesForAddress: () => [],
+          getLatestBlockhash: () => ({
+            context: { slot: 1_000 },
+            value: { blockhash: key(10), lastValidBlockHeight: 1_150 },
+          }),
+        };
+
+        return Response.json({ jsonrpc: "2.0", id, result: answers[method]!() });
+      }) as typeof fetch;
+    });
+    afterAll(() => {
+      globalThis.fetch = original;
+    });
+
+    it("closes a run's share, and says how many remain for the next", async () => {
+      const output = await reclaimCommand({ owner: OWNER, rpcUrl: URL });
+      const json = output.json as {
+        buffers: unknown[];
+        remaining?: { buffers: number; lookupTables: number };
+        transactions: unknown[];
+      };
+      expect(json.buffers).toHaveLength(32);
+      expect(json.remaining).toEqual({ buffers: 8, lookupTables: 0 });
+      // Six closes a transaction.
+      expect(json.transactions).toHaveLength(6);
+      expect(output.notes).toContain(
+        "40 code buffers are open, more than a run takes: this one lists and closes 32, and the " +
+          "other 8 are for the next run, once these are closed",
+      );
+    });
   });
 });

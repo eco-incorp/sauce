@@ -352,7 +352,9 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   listing names the slot), serving cooks until then and none after, so `--keep-tables` leaves the
   tables. Nothing in use is closed: a buffer or an active table a transaction named in the last
   300 slots is listed in use, with the slot it can close from, as a cook built for it may still
-  land; `--keep <cursor>` keeps a plan still under way whole, however long its cook waits.
+  land; `--keep <cursor>` keeps a plan still under way whole, however long its cook waits. A run
+  takes 32 code buffers and 24 lookup tables at most, the tables it can act on first, and says how
+  many remain (`remaining`) for the next run.
 - **Accounts past one transaction go through a lookup table.** Each account a transaction lists
   costs 32 bytes, and one taken through an address lookup table one byte. `sauce run` creates a
   table holding a staged cook's accounts when they do not fit, from the signer, which pays its

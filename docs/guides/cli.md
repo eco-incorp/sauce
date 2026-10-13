@@ -705,6 +705,10 @@ it may still land. A plan you mean to carry on with, whose cook may be handed ou
 is kept whole with `--keep <cursor | @file>`, its cursor: its buffer and table stay open however
 long its cook waits.
 
+A run takes 32 code buffers and 24 lookup tables at most, at most 30 transactions on one blockhash,
+the tables it can close or deactivate first; an owner with more is told how many remain
+(`remaining` in the JSON), for the next run once these are closed.
+
 `--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the
 endpoint and the signer as `<RPC_URL>` and `<PRIVATE_KEY>` placeholders: the command never fills in

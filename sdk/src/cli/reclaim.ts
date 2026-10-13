@@ -76,6 +76,16 @@ const CLOSES_PER_TRANSACTION = 6;
  * Closed under a cook, the cook fails — it never runs twice — but the plan it belongs to is lost.
  */
 const IN_USE_SLOTS = 300n;
+/**
+ * What one run takes: 32 code buffers and 24 lookup tables, at most 30 transactions on one
+ * blockhash, which a signer signs well inside its minute. An owner with more is told how many
+ * remain, and the next run, once these are closed, takes them.
+ */
+export const BUFFERS_PER_RUN = 32;
+export const TABLES_PER_RUN = 24;
+/** The transaction histories read at once, to tell what is in use: an endpoint is asked a few at
+ *  a time, never one request for every account at once. */
+const HISTORIES_AT_ONCE = 8;
 
 /** Whether something is left open, as far as the cluster and the plans given say. */
 export interface Use {
@@ -118,6 +128,8 @@ export interface Reclaimable {
   readonly tables: readonly OwnedTable[];
   /** No table was named, and the endpoint refused the scan for the owner's: none could be found. */
   readonly scanRefused: boolean;
+  /** What is open past this run's share: for the next run, once these are closed. */
+  readonly remaining: { readonly buffers: number; readonly tables: number };
   readonly slot: bigint;
 }
 
@@ -138,19 +150,51 @@ const memcmp = (offset: number, bytes: string) => ({
   memcmp: { offset: BigInt(offset), bytes, encoding: "base58" },
 });
 
+/** A gate letting at most `most` of the calls it is given run at once, the rest in turn. */
+function limiter(most: number): <T>(call: () => Promise<T>) => Promise<T> {
+  let running = 0;
+  const waiting: Array<() => void> = [];
+
+  return async (call) => {
+    // A call that finishes hands its place to the next waiting, so no more than `most` ever run.
+    if (running < most) running += 1;
+    else await new Promise<void>((resolve) => waiting.push(resolve));
+    try {
+      return await call();
+    } finally {
+      const next = waiting.shift();
+      if (next === undefined) running -= 1;
+      else next();
+    }
+  };
+}
+
+type Limit = ReturnType<typeof limiter>;
+
 /**
  * Whether what `accounts` make up (a code buffer and its code account, a lookup table) is in use at
  * `slot`: named by a transaction within IN_USE_SLOTS, which a cook built then could still follow. A
  * history that cannot be read counts as in use: nothing is closed on a guess.
  */
-async function useOf(rpc: Rpc, accounts: readonly Address[], slot: bigint): Promise<Use> {
+async function useOf(
+  rpc: Rpc,
+  accounts: readonly Address[],
+  slot: bigint,
+  limit: Limit,
+): Promise<Use> {
   try {
     const newest = (
       await Promise.all(
-        accounts.map(async (account) =>
-          (await rpc.getSignaturesForAddress(account, { limit: 1, commitment: "confirmed" }).send())
-            .slice(0, 1)
-            .map((one) => BigInt(one.slot)),
+        accounts.map((account) =>
+          limit(async () =>
+            (
+              await rpc
+                .getSignaturesForAddress(account, { limit: 1, commitment: "confirmed" })
+                .send()
+            )
+              .slice(0, 1)
+              .map((one) => BigInt(one.slot)),
+          ),
         ),
       )
     ).flat();
@@ -197,13 +241,19 @@ export async function reclaimable(
   named: readonly Address[] = [],
   kept: ReadonlySet<Address> = new Set(),
 ): Promise<Reclaimable> {
+  if (named.length > TABLES_PER_RUN) {
+    throw new UsageError(
+      `${named.length} lookup tables named: a run takes ${TABLES_PER_RUN} at most; name the rest ` +
+        "in a run of their own",
+    );
+  }
   // The slot, and the slots a deactivated table may not close in: those its cluster still holds
   // hashes of. Read together.
   const [slot, recentSlots] = await Promise.all([
     ask(url, "the slot", () => rpc.getSlot({ commitment: "confirmed" }).send()),
     recentSlotsOf(rpc, url),
   ]);
-  const found = (await ask(url, "the owner's code buffers", () =>
+  const scanned = (await ask(url, "the owner's code buffers", () =>
     rpc
       .getProgramAccounts(kitchen(), {
         encoding: "base64",
@@ -218,6 +268,9 @@ export async function reclaimable(
     pubkey: Address;
     account: { data: [string, string]; lamports: bigint | number };
   }[];
+  // A run's share; the rest remain for the next.
+  const found = scanned.slice(0, BUFFERS_PER_RUN);
+  const limit = limiter(HISTORIES_AT_ONCE);
   const codes = await Promise.all(
     found.map(async (item) => (await deriveCodePda(kitchen(), item.pubkey)).address),
   );
@@ -232,7 +285,7 @@ export async function reclaimable(
   const use = (accounts: readonly Address[]): Promise<Use> =>
     accounts.some((account) => kept.has(account))
       ? Promise.resolve({ inUse: true, kept: true })
-      : useOf(rpc, accounts, slot);
+      : useOf(rpc, accounts, slot, limit);
   const bufferUses = await Promise.all(
     found.map((item, index) => use([item.pubkey, codes[index]!])),
   );
@@ -333,10 +386,13 @@ export async function reclaimable(
       },
     ];
   });
+  // A run's share, the tables it can act on first: closable, then active, then deactivating.
+  const order = { closable: 0, active: 1, deactivating: 2 } as const;
+  const share = [...owned].sort((a, b) => order[a.state] - order[b.state]).slice(0, TABLES_PER_RUN);
   // A deactivated table serves cooks until it can close, and takes no more addresses: past any use
   // its close could get in the way of, unless a plan given to keep holds it.
   const tables = await Promise.all(
-    owned.map(async (table): Promise<OwnedTable> => ({
+    share.map(async (table): Promise<OwnedTable> => ({
       ...table,
       use:
         table.state === "active" || kept.has(table.address)
@@ -345,7 +401,13 @@ export async function reclaimable(
     })),
   );
 
-  return { buffers, tables, scanRefused, slot };
+  return {
+    buffers,
+    tables,
+    scanRefused,
+    remaining: { buffers: scanned.length - found.length, tables: owned.length - share.length },
+    slot,
+  };
 }
 
 /** The transactions that close what `found` holds, as a plan's step: the buffers not in use, and
@@ -487,7 +549,16 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
                 `still land; reclaim from slot ${use.freeFromSlot} (now ${found.slot}, about ` +
                 `${seconds(use.freeFromSlot - found.slot)}s)`,
             ];
+  const more = (count: number, what: string, share: number): string[] =>
+    count === 0
+      ? []
+      : [
+          `${share + count} ${what} are open, more than a run takes: this one lists and closes ` +
+            `${share}, and the other ${count} are for the next run, once these are closed`,
+        ];
   const notes = [
+    ...more(found.remaining.buffers, "code buffers", found.buffers.length),
+    ...more(found.remaining.tables, "Sauce lookup tables", found.tables.length),
     ...found.buffers.flatMap((one) => leftOpen(`code buffer ${one.codeBuffer}`, one.use)),
     ...(input.keepTables === true
       ? []
@@ -537,6 +608,14 @@ export async function reclaimCommand(input: ReclaimInput): Promise<CommandOutput
       ...useJson(one.use),
     })),
     lamports: total.toString(),
+    ...(found.remaining.buffers === 0 && found.remaining.tables === 0
+      ? {}
+      : {
+          remaining: {
+            buffers: found.remaining.buffers,
+            lookupTables: found.remaining.tables,
+          },
+        }),
   };
   const lines = [
     `${input.owner} has ${found.buffers.length} code buffer${found.buffers.length === 1 ? "" : "s"} ` +

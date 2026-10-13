@@ -85,6 +85,7 @@ import {
   publishCommand,
   readPoolAt,
   reclaimCommand,
+  TABLES_PER_RUN,
   registeredBalances,
   requireSupported,
   resolvePriceTokens,
@@ -2101,16 +2102,21 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "or an active table a transaction named in the last 300 slots (about two minutes) is " +
         "listed with `inUse` and `freeFromSlot`, and left open, as a cook built for it may " +
         "still land; `keep` takes the cursors of plans still under way, whose buffers and " +
-        "tables stay open (`kept`) however long their cooks wait. Send the signed transactions " +
+        "tables stay open (`kept`) however long their cooks wait. A call takes 32 code buffers " +
+        "and 24 lookup tables at most (the tables it can act on first); `remaining` counts the " +
+        "rest, for a call once these are closed. Send the signed transactions " +
         `with sauce_send. ${UNSIGNED} Solana only. ${SUPPORTED_ONLY}`,
       input: {
         chain: chainRef,
         owner: z.string().min(32).max(64).describe("The owner: a base58 public key."),
         lookupTables: z
           .array(z.string().min(32).max(64))
-          .max(LIMITS.entries)
+          .max(TABLES_PER_RUN)
           .optional()
-          .describe("Lookup tables to close, by address (default: the owner's, scanned for)."),
+          .describe(
+            `Lookup tables to close, by address, ${TABLES_PER_RUN} at most (default: the ` +
+              "owner's, scanned for).",
+          ),
         keepTables: z
           .boolean()
           .optional()
