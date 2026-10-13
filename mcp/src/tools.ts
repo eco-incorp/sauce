@@ -1897,7 +1897,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "(marked deploysPot; any account may send it), then the cook — send them in order, or " +
         "pass the whole result to a wallet that sends a plan. Each comes with `gas`, the limit " +
         "to sign it with: the cook's estimated as if the deployment had landed, with 30% room " +
-        "(a signer's own estimate, taken while the Pot has no code, is far too low); a cook " +
+        "(a signer's own estimate, taken while the Pot has no code, is far too low), the " +
+        "deployment's unless the endpoint does not report it apart; a cook " +
         "that would revert after the deployment, on a Pot not funded yet, has none, and a note " +
         "says why. On Solana it returns { chain, " +
         "via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction }: the Kitchen cook " +

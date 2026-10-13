@@ -829,7 +829,12 @@ export async function planGas(
       `each transaction's gas is a limit to sign it with: the cook's, ${gas}, is estimated as if ` +
       `the deployment had landed (${rehearsal.gas} ${rehearsal.gasKind}, simulated after it), with ` +
       "30% room. A signer's own estimate of the cook, taken while the Pot has no code, is far " +
-      "too low",
+      "too low" +
+      // Not the deployment's: it calls the Kitchen, which has code, so a signer estimates it right.
+      (rehearsal.deployGas === undefined
+        ? ". The deployment carries no gas: the endpoint did not report it apart, and a signer's " +
+          "own estimate of it is right, as the Kitchen it calls has code"
+        : ""),
   };
 }
 

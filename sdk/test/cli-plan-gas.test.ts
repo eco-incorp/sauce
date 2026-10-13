@@ -1,7 +1,8 @@
 /**
  * The gas `sauce tx` suggests for a plan that deploys the Pot, then cooks (`commands.ts#planGas`),
  * from each thing the simulation of the two can answer: both ran (each with 30% room, the cook's
- * as if the deployment had landed), the deployment reverts (no gas for either), the cook reverts
+ * as if the deployment had landed), both ran with the deployment's gas not reported apart (the cook's
+ * alone, and why), the deployment reverts (no gas for either), the cook reverts
  * after it (no gas, and why), the endpoint could not estimate, or could not simulate at all (the
  * plan stands without). And with no endpoint there is no plan to give gas to: the cook alone.
  */
@@ -45,6 +46,28 @@ describe("the gas sauce tx suggests for a plan's deployment and cook", () => {
     expect(gas.cook).toBe(167_698n);
     expect(gas.note).toMatch(
       /the cook's, 167698, is estimated as if the deployment had landed \(128999 used, simulated after it\), with 30% room/,
+    );
+  });
+
+  it("gives the cook its gas alone when the endpoint does not report the deployment's apart", async () => {
+    const gas = await planGas(
+      client,
+      target,
+      cook,
+      answering({
+        ...base,
+        ok: true,
+        returns: "0x",
+        gas: 128_999n,
+        beforeGas: [],
+        gasKind: "used",
+        traced: true,
+      }),
+    );
+    expect(gas.deploy).toBeUndefined();
+    expect(gas.cook).toBe(167_698n);
+    expect(gas.note).toMatch(
+      /The deployment carries no gas: the endpoint did not report it apart, and a signer's own estimate of it is right, as the Kitchen it calls has code$/,
     );
   });
 

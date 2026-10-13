@@ -570,7 +570,8 @@ first, marked `deploysPot`, then the cook, to send in that order (any account ma
 only the owner the second). Each comes with `gas`, the limit to sign it with: the two are simulated
 together, so the cook's is estimated as if the deployment had landed, with 30% room. A signer's own
 estimate of the cook, taken while the Pot has no code, prices a call to an empty address and is
-far too low:
+far too low. Where the endpoint does not report the deployment's gas apart, the deployment carries
+none, as a signer's own estimate of it is right (the Kitchen it calls has code). The plan:
 
 ```json
 {

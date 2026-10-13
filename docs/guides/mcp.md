@@ -623,7 +623,9 @@ A Pot with no code yet needs no step of its own: `sauce_tx` returns its deployme
 entry of `transactions` (marked `deploysPot`), with a note, then the cook. Send them in that order:
 any account may send the first, only the owner the second. Each comes with `gas`, the limit to sign
 it with: the cook's is estimated as if the deployment had landed (the two simulated together), with
-30% room, where a signer's own estimate, taken while the Pot has no code, is far too low. A cook
+30% room, where a signer's own estimate, taken while the Pot has no code, is far too low; where the
+endpoint does not report the deployment's apart, the deployment carries none, as a signer estimates
+it right. A cook
 that would revert after the deployment (a Pot not funded yet) comes with no `gas`, and a note
 saying why: fund the Pot and call `sauce_tx` again. `sauce_wallet_send` sends such a
 plan whole, simulating both together and holding them to the wallet's policy before it sends
