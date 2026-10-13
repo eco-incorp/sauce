@@ -20,6 +20,8 @@ import {
   getPublicKeyFromAddress,
   getSignatureFromTransaction,
   getTransactionDecoder,
+  isSolanaError,
+  SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH,
   verifySignature,
   type Address as SvmAddress,
   type AddressesByLookupTableAddress,
@@ -382,15 +384,32 @@ async function signedSvm(raw: string, where: string): Promise<SignedSvm> {
   let transaction: Transaction;
   try {
     transaction = getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(raw)));
-  } catch {
+  } catch (error) {
+    // Signatures that do not match the message's signers, by count, named as such.
+    if (isSolanaError(error, SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH)) {
+      const { numRequiredSignatures, signaturesLength, signerAddresses } = error.context;
+      const plural = (count: number, what: string) => `${count} ${what}${count === 1 ? "" : "s"}`;
+      throw new UsageError(
+        `${where} carries ${signaturesLength === 0 ? "no signature" : plural(signaturesLength, "signature")}, ` +
+          `and its message has ${plural(numRequiredSignatures, "signer")} ` +
+          `(${signerAddresses.join(", ")}): sign it with each, with your wallet or signer (no ` +
+          "key ever comes here)",
+      );
+    }
     throw new UsageError(`${where} is base64, but not a Solana transaction`);
   }
   const signers = Object.entries(transaction.signatures);
-  for (const [signer, signature] of signers) {
+  if (signers.length === 0) {
+    throw new UsageError(
+      `${where} has no signer, so no fee payer: a Solana transaction is signed by at least its ` +
+        "fee payer",
+    );
+  }
+  for (const [index, [signer, signature]] of signers.entries()) {
     if (signature === null || signature.every((byte) => byte === 0)) {
       throw new UsageError(
-        `${where} is not signed by ${signer}: sign it with your wallet or signer first (no key ` +
-          "ever comes here)",
+        `${where} is not signed by ${index === 0 ? "its fee payer " : ""}${signer}: sign it with ` +
+          "your wallet or signer first (no key ever comes here)",
       );
     }
     const key = await getPublicKeyFromAddress(signer as SvmAddress);

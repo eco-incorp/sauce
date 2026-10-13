@@ -304,7 +304,7 @@ describeSvm("sauce send: sauce tx's cook, signed elsewhere, on Solana", () => {
     const sent = shim.sent.length;
     const unsigned = await sauce("send", cook.transaction, "--rpc-url", RPC_URL);
     expect(unsigned.code).toBe(2);
-    expect(unsigned.stderr).toContain(`is not signed by ${owner.address}`);
+    expect(unsigned.stderr).toContain(`is not signed by its fee payer ${owner.address}`);
     // One byte of the message changed after signing: its signature no longer verifies.
     const wire = new Uint8Array(getBase64Encoder().encode(await signed(cook.transaction)));
     wire[wire.length - 1] ^= 1;
