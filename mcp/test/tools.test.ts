@@ -122,6 +122,7 @@ describe("the sauce command's flags as the tools' inputs", () => {
       ["run"],
       ["tx"],
       ["send"],
+      ["reclaim"],
       ["pot"],
       ["globals"],
       ["price"],

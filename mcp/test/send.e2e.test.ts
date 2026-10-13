@@ -24,6 +24,7 @@ import {
   getAddressCodec,
   getBase64Encoder,
   getBase64EncodedWireTransaction,
+  getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
   lamports,
   signTransaction,
@@ -280,7 +281,20 @@ describe(
       );
       owner = await generateKeyPairSigner();
       harness.svm.airdrop(owner.address, lamports(50_000_000_000n));
-      shim = solanaShim(harness.svm, SOLANA_URL);
+      // The bank cannot list its accounts: a scan looks through every account a sent
+      // transaction names.
+      shim = solanaShim(harness.svm, SOLANA_URL, () => [
+        ...new Set(
+          shim.sent.flatMap(
+            (tx) =>
+              (
+                getCompiledTransactionMessageDecoder().decode(tx.messageBytes) as {
+                  staticAccounts: readonly SvmAddress[];
+                }
+              ).staticAccounts,
+          ),
+        ),
+      ]);
       shim.install();
       mcp = await connect();
       dir = mkdtempSync(join(tmpdir(), "sauce-mcp-plan-"));
@@ -330,6 +344,59 @@ describe(
       assert.equal(cookReturned, "7");
       // Only the owner ever signed.
       assert.ok(shim.sent.every((tx) => Object.keys(tx.signatures).join() === owner.address));
+    });
+
+    it("closes what a plan left open with sauce_reclaim and sauce_send", async () => {
+      const setup = ok(
+        await mcp.call("sauce_tx", {
+          source: WIDE,
+          chain: "solana",
+          owner: owner.address,
+          salt: "left-open",
+          accounts,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as unknown as PlanStep;
+      ok(
+        await mcp.call("sauce_send", {
+          transactions: await sign(setup),
+          cursor: setup.cursor,
+          rpcUrl: SOLANA_URL,
+        }),
+      );
+      // The cook is never sent: its buffer and table stay open.
+      const found = ok(
+        await mcp.call("sauce_reclaim", {
+          chain: "solana",
+          owner: owner.address,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as {
+        buffers: Array<{ codeBuffer: string }>;
+        lookupTables: Array<{ address: string; state: string }>;
+        transactions: Array<{ what: string; transaction: string }>;
+      };
+      assert.equal(found.buffers.length, 1);
+      // This plan's table, and the one the plan before it kept for later cooks.
+      assert.equal(found.lookupTables.length, 2);
+      assert.ok(found.lookupTables.every((table) => table.state === "active"));
+      const sent = ok(
+        await mcp.call("sauce_send", {
+          transactions: await sign(found as unknown as PlanStep),
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { ok: boolean };
+      assert.equal(sent.ok, true);
+      assert.equal(harness.svm.getAccount(address(found.buffers[0]!.codeBuffer)).exists, false);
+      const after = ok(
+        await mcp.call("sauce_reclaim", {
+          chain: "solana",
+          owner: owner.address,
+          rpcUrl: SOLANA_URL,
+        }),
+      ) as { buffers: unknown[]; lookupTables: Array<{ state: string }> };
+      assert.equal(after.buffers.length, 0);
+      assert.ok(after.lookupTables.every((table) => table.state === "deactivating"));
     });
 
     it("sends the whole plan from a wallet with sauce_wallet_send, from sauce_tx's result", async () => {
