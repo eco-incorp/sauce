@@ -397,7 +397,10 @@ that would fail is not sent (exit 1), nor anything after it. When `sauce tx` pla
 deployment and then the cook, have the cook signed with a gas limit that has room, or after the
 deployment lands: a gas estimate taken while the Pot has no code is far too low, and `send`
 refuses the cook for it. A Solana transaction lands within about a minute of being built, or
-never: one signed later is refused, to build and sign again.
+never: one signed later is refused, to build and sign again. One the chain already has is read
+back, not sent again; one it had, pending, then lost (dropped or reorged out) is reported gone, to
+sign anew. A Solana transaction missing a signature, its fee payer's or any its message names, is
+refused by name.
 
 ## Arguments to `main`
 
