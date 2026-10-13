@@ -1625,6 +1625,21 @@ function hexOperand(args: ParsedArgs, what: string): `0x${string}` {
 
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
+/** A cursor from a file: the cursor itself, or the JSON a step was printed as (its `cursor`, or its
+ *  `next.cursor`). */
+function cursorOf(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) return trimmed;
+  try {
+    const json = JSON.parse(trimmed) as { cursor?: unknown; next?: { cursor?: unknown } };
+    const found = json.next?.cursor ?? json.cursor;
+    if (typeof found === "string") return found;
+  } catch {
+    // Reported below.
+  }
+  throw new UsageError("--cursor @file: the file holds JSON with no cursor (nor next.cursor)");
+}
+
 /** The chain `sauce pot` is for: `--chain`, required — it has no program to say. */
 const potChain = (args: ParsedArgs): CanonicalChain =>
   parseChain(requiredFlag(args, "chain", "<slug|id>"));
@@ -3027,13 +3042,31 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   send: {
-    usage: "sauce send <signed transaction>… [--chain <slug|id>] [options]",
+    usage: [
+      "sauce send <signed transaction>… [--chain <slug|id>] [options]",
+      "sauce send [<signed transaction>…] --cursor <cursor | @file> [--signature <signature>]… [--close]",
+    ],
     summary: "Broadcast transactions signed elsewhere, wait for them, and report what they did",
     flags: {
       chain: {
         type: "string",
         value: "<slug|id>",
         help: "The chain they are for (default: the transactions say)",
+      },
+      cursor: {
+        type: "string",
+        value: "<cursor | @file>",
+        help: "Solana: the plan's cursor sauce tx (or the last send) gave; prints its next step",
+      },
+      signature: {
+        type: "string",
+        multiple: true,
+        value: "<signature>",
+        help: "Solana: a transaction of the plan you broadcast another way, to confirm",
+      },
+      close: {
+        type: "boolean",
+        help: "Solana, with --cursor: give up on the cook, and close the code buffer it staged",
       },
       ...ENDPOINT,
       ...JSON_FLAG,
@@ -3053,13 +3086,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "a cook after its Pot's deployment runs on the Pot. Prints, for each, the hash (a Solana",
       "signature), status and what it cost, the explorer and trace pages, the decoded reason a",
       "failure gives, and for a cook what moved and what it left in the Pot; on Solana what main",
-      "returned, as hex. A Solana transaction lands within about a minute of being built, or",
-      "never: one whose blockhash has expired is refused, to build and sign again.",
+      "returned. A Solana transaction lands within about a minute of being built, or never: one",
+      "whose blockhash has expired is refused, to build and sign again.",
+      "",
+      "A Solana cook too large for one transaction is a plan of steps (sauce tx prints the first,",
+      "and its cursor): the setup (the Pot, token accounts, the program staged in a code buffer, a",
+      "lookup table), the cook, then closing the code buffer. With --cursor, after sending it",
+      "prints the next step, built fresh from what the cluster shows, with the cursor for the one",
+      "after: sign its transactions and send them with that cursor, until the step is done.",
+      "Whatever did not land is built again, so a step whose blockhash expired comes back with",
+      "only what is left. --cursor alone builds the next step without sending anything; a",
+      "transaction you broadcast another way is confirmed with --signature, so the plan knows",
+      "how its cook went. --close gives up on the cook and closes the code buffer. A cursor",
+      "carries no key and no endpoint; @file reads it from a file, or from the JSON a step was",
+      "printed as.",
       ...SUPPORTED_ONLY("Sends"),
       "",
       "Examples:",
       "  sauce send 0x02f8… 0x02f8…              (sauce tx's plan: the deployment, then the cook)",
       "  sauce send AQAB… --chain solana",
+      "  sauce send AQAB… AQAB… --cursor @step.json --json > next.json",
     ].join("\n"),
     run: async (args, io) => {
       const given = args.positionals;
@@ -3073,15 +3119,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       if (transactions.includes("-")) {
         throw new UsageError("`-` reads every transaction from stdin, and comes alone");
       }
+      const cursorFlag = stringFlag(args, "cursor");
+      const cursor =
+        cursorFlag === undefined
+          ? undefined
+          : cursorFlag.startsWith("@")
+            ? cursorOf(readInput(io, cursorFlag.slice(1)))
+            : cursorFlag;
+      const signatures = repeatedFlag(args, "signature");
       const chainFlag = stringFlag(args, "chain");
-      const chain = signedChain(
-        transactions,
-        chainFlag === undefined ? undefined : parseChain(chainFlag),
-      );
+      const input = { transactions, signatures, ...(cursor === undefined ? {} : { cursor }) };
+      const chain = signedChain(input, chainFlag === undefined ? undefined : parseChain(chainFlag));
       // Before any endpoint is reached.
       requireSupported("sending", [chain]);
 
-      return sendCommand({ chain, rpcUrl: requiredEndpoint(args, io, chain), transactions });
+      return sendCommand({
+        ...input,
+        chain,
+        rpcUrl: requiredEndpoint(args, io, chain),
+        ...(args.values.close === true ? { close: true } : {}),
+      });
     },
   },
   pot: {

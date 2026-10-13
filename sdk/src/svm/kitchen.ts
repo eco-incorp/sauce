@@ -64,14 +64,9 @@ const DISCRIMINATOR = {
   writeCodeBuffer: new Uint8Array([205, 152, 182, 5, 148, 70, 20, 25]),
 } as const;
 
-/**
- * The two cooks' discriminators, by the index of the Pot among each one's accounts: what tells a
- * transaction read back that it cooks, and on which Pot.
- */
-export const KITCHEN_COOKS = [
-  { discriminator: DISCRIMINATOR.cook, potIndex: 2 },
-  { discriminator: DISCRIMINATOR.cookFromAccount, potIndex: 4 },
-] as const;
+/** Each Kitchen instruction's discriminator, by name: what tells an instruction read back what it is. */
+export const KITCHEN_DISCRIMINATORS: Readonly<Record<keyof typeof DISCRIMINATOR, Uint8Array>> =
+  DISCRIMINATOR;
 
 /** The kitchen's own `#[constant]`s, from the same IDL. */
 export const CODE_BUFFER_SEED = "buffer";

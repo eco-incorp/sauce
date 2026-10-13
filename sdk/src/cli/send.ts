@@ -23,6 +23,7 @@ import {
   verifySignature,
   type Address as SvmAddress,
   type AddressesByLookupTableAddress,
+  type Signature,
   type Transaction,
 } from "@solana/kit";
 import {
@@ -40,7 +41,7 @@ import {
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
-import { deriveExecutionFeeConfigPda, fetchAlt, KITCHEN_COOKS } from "../svm/index.js";
+import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, landed, reasonOf, simulate, type Sent } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
@@ -48,7 +49,19 @@ import { linkLines, txLinks } from "./links.js";
 import { guardOf, type Reservation } from "./policy.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import { failureReason, sendAndConfirm, svmLanded, svmReader, type SvmSent } from "./solana.js";
+import { decodeReturned, returnedLine } from "./returned.js";
 import { requireSupported } from "./support.js";
+import {
+  decodeCursor,
+  encodeCursor,
+  isCook,
+  nextStep,
+  readPlanTx,
+  signableStep,
+  unsignedSigner,
+  type SignableTx,
+  type SvmPlan,
+} from "./svm-plan.js";
 import {
   accountsNow,
   messageAccounts,
@@ -68,6 +81,12 @@ export interface SendInput {
   /** Signed transactions, in the order they are sent: raw `0x…` hex on an EVM chain, base64 on
    *  Solana. */
   readonly transactions: readonly string[];
+  /** Solana signatures of transactions already broadcast another way: confirmed and reported. */
+  readonly signatures?: readonly string[];
+  /** A Solana plan's cursor (`sauce tx`'s, or an earlier send's): the next step comes back after. */
+  readonly cursor?: string;
+  /** With a cursor: give up on the cook, and close what the plan staged. */
+  readonly close?: boolean;
 }
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})+$/;
@@ -78,15 +97,18 @@ const SIGNED_SHAPES =
   "a signed transaction: an EVM chain's raw 0x… hex, or Solana's base64 wire transaction";
 
 /**
- * The chain signed `transactions` are for: an EVM transaction's own chain id, Solana for a base64
- * one — all the same, and `given`'s where it is given.
+ * The chain a send is for: an EVM transaction's own chain id, Solana for a base64 one, a plan's
+ * cursor or a signature — all the same, and `given`'s where it is given.
  */
 export function signedChain(
-  transactions: readonly string[],
+  input: Pick<SendInput, "transactions" | "signatures" | "cursor">,
   given?: CanonicalChain,
 ): CanonicalChain {
-  if (transactions.length === 0) throw new UsageError("missing the signed transactions to send");
-  const chains = transactions.map((raw, index) => {
+  const solana = input.cursor !== undefined || (input.signatures ?? []).length > 0;
+  if (input.transactions.length === 0 && !solana) {
+    throw new UsageError("missing the signed transactions to send");
+  }
+  const chains = input.transactions.map((raw, index) => {
     const where = `transaction ${index + 1}`;
     if (HEX.test(raw)) {
       let chainId: number | undefined;
@@ -110,11 +132,14 @@ export function signedChain(
     if (BASE64.test(raw)) return requireChain("solana");
     throw new UsageError(`${where} is not ${SIGNED_SHAPES}`);
   });
+  if (solana) chains.push(requireChain("solana"));
   const chain = given ?? chains[0]!;
   const other = chains.find((one) => one.id !== chain.id);
   if (other !== undefined) {
     throw new UsageError(
-      `the transactions are for ${other.slug}, not ${chain.slug}: send each chain's in a call of its own`,
+      solana && other.kind === "svm"
+        ? `a plan's cursor and a signature are Solana's, not ${chain.slug}'s`
+        : `the transactions are for ${other.slug}, not ${chain.slug}: send each chain's in a call of its own`,
     );
   }
 
@@ -142,13 +167,23 @@ export async function sendCommand(input: SendInput): Promise<CommandOutput> {
   if (chain.kind === "evm" && input.transactions.some((raw) => !HEX.test(raw))) {
     throw new UsageError(`a transaction on ${chain.slug} is a raw 0x… one: ${SIGNED_SHAPES}`);
   }
-  const sent = chain.kind === "svm" ? await sendSvm(input) : await sendEvm(input);
+  if (input.close === true && input.cursor === undefined) {
+    throw new UsageError("close gives up on a plan's cook: give the plan's cursor");
+  }
+  const plan = input.cursor === undefined ? undefined : decodeCursor(input.cursor);
+  const done = chain.kind === "svm" ? await sendSvm(input, plan) : { sent: await sendEvm(input) };
+  const { sent } = done;
   const failed = sent.find((entry) => entry.status !== "success");
-  const ok = failed === undefined && sent.length === input.transactions.length;
+  const count = input.transactions.length + (input.signatures ?? []).length;
+  const ok = failed === undefined && sent.length === count;
   const landedCount = sent.filter((entry) => entry.hash !== "").length;
+  const next = plan === undefined ? undefined : await nextOf(input, done.plan ?? plan);
 
   return {
-    text: sent.flatMap((entry) => entry.lines).join("\n"),
+    text: [
+      ...sent.flatMap((entry) => entry.lines),
+      ...(next === undefined ? [] : [`next: ${JSON.stringify(next, null, 2)}`]),
+    ].join("\n"),
     json: {
       chain: chain.slug,
       chainId: chain.id,
@@ -161,16 +196,81 @@ export async function sendCommand(input: SendInput): Promise<CommandOutput> {
         ...entry.json,
         ...(entry.reason === undefined ? {} : { reason: entry.reason }),
       })),
+      ...(next === undefined ? {} : { next }),
     },
-    ...(failed === undefined
+    ...(failed === undefined && next?.notes === undefined
       ? {}
       : {
           notes: [
-            `${failed.what} did not succeed${failed.reason === undefined ? "" : `: ${failed.reason}`}; ` +
-              `nothing after it was sent (${landedCount} of ${input.transactions.length} sent)`,
+            ...(failed === undefined
+              ? []
+              : [
+                  `${failed.what} did not succeed${failed.reason === undefined ? "" : `: ${failed.reason}`}; ` +
+                    `nothing after it was sent (${landedCount} of ${count} sent)`,
+                ]),
+            ...(next?.notes ?? []),
           ],
         }),
     ...(ok ? {} : { exitCode: 1 }),
+  };
+}
+
+/** A plan's next step, as a send returns it: built fresh, for the owner to sign. */
+interface NextStep {
+  readonly step: string;
+  readonly plan: readonly unknown[];
+  readonly transactions?: readonly SignableTx[];
+  readonly expiresAtBlockHeight?: string;
+  readonly wait?: string;
+  readonly fails?: string;
+  readonly cursor?: string;
+  readonly notes?: readonly string[];
+}
+
+/** The step after what was sent: from the plan as the sends left it, and the cluster now. */
+async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
+  const ctx = {
+    rpc: createSolanaRpc(input.rpcUrl),
+    url: input.rpcUrl,
+    signer: unsignedSigner(plan.owner),
+  };
+  const step = await nextStep(plan, ctx, { close: input.close === true });
+  if (step.name === "done") {
+    return {
+      step: "done",
+      plan: step.overview,
+      ...(step.notes.length === 0 ? {} : { notes: step.notes }),
+    };
+  }
+  const built = await signableStep(step, ctx);
+  const notes = [
+    ...step.notes,
+    ...(built.transactions.length === 0
+      ? []
+      : [
+          `${built.transactions.length} transaction${built.transactions.length === 1 ? "" : "s"} ` +
+            `for ${plan.owner} to sign, on one blockhash that expires in about a minute; send ` +
+            "them with this cursor, which builds the step after",
+        ]),
+    ...(step.fails === undefined
+      ? []
+      : [
+          `rehearsed now, the cook would fail: ${step.fails.reason}. Fix what it needs and send the ` +
+            "cursor alone for a fresh one, or give up on it with close",
+        ]),
+  ];
+
+  return {
+    step: step.name,
+    plan: step.overview,
+    ...(built.transactions.length === 0 ? {} : { transactions: built.transactions }),
+    ...(built.lastValidBlockHeight === undefined
+      ? {}
+      : { expiresAtBlockHeight: built.lastValidBlockHeight.toString() }),
+    ...(step.wait === undefined ? {} : { wait: step.wait }),
+    ...(step.fails === undefined ? {} : { fails: step.fails.reason }),
+    cursor: encodeCursor(built.plan),
+    ...(notes.length === 0 ? {} : { notes }),
   };
 }
 
@@ -428,37 +528,14 @@ async function tablesOf(
   return tables;
 }
 
-/** The Pot a Kitchen cook in `transaction` runs on, if it has one. */
-function cookedPot(
-  transaction: Transaction,
-  tables: AddressesByLookupTableAddress,
-): SvmAddress | undefined {
-  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
-    instructions: readonly {
-      programAddressIndex: number;
-      accountIndices?: readonly number[];
-      data?: Uint8Array;
-    }[];
-  };
-  const accounts = messageAccounts(transaction, tables);
-  for (const instruction of message.instructions) {
-    if (accounts[instruction.programAddressIndex] !== v12SvmKitchenProgramId()) continue;
-    const data = instruction.data ?? new Uint8Array();
-    const cook = KITCHEN_COOKS.find(({ discriminator }) =>
-      discriminator.every((byte, index) => data[index] === byte),
-    );
-    const at = cook === undefined ? undefined : instruction.accountIndices?.[cook.potIndex];
-    if (at !== undefined) return accounts[at];
-  }
-
-  return undefined;
-}
-
 /** Whether `transaction` calls the engine, directly or through the Kitchen. */
 const runsEngine = (transaction: Transaction, tables: AddressesByLookupTableAddress): boolean =>
   messageAccounts(transaction, tables).includes(v12SvmEngineProgramId() as SvmAddress);
 
-async function sendSvm(input: SendInput): Promise<SentEntry[]> {
+async function sendSvm(
+  input: SendInput,
+  plan: SvmPlan | undefined,
+): Promise<{ sent: SentEntry[]; plan?: SvmPlan }> {
   const signed = await Promise.all(
     input.transactions.map((raw, index) => signedSvm(raw, `transaction ${index + 1}`)),
   );
@@ -468,10 +545,74 @@ async function sendSvm(input: SendInput): Promise<SentEntry[]> {
     v12SvmKitchenProgramId() as SvmAddress,
   );
   const sent: SentEntry[] = [];
-  for (const [index, tx] of signed.entries()) {
+  let carried = plan;
+  // What the plan learns of its cook from a send: landed (succeeded or failed), or, refused before
+  // it was sent, not landed — so a fresh one can be built at once.
+  const learn = (tx: Transaction, result: SvmSent | undefined): void => {
+    if (carried === undefined || !isCook(tx)) return;
+    if (result !== undefined) {
+      carried = { ...carried, cooked: { ok: result.ok, signature: result.signature } };
+    } else {
+      const { cook: _cook, ...rest } = carried;
+      carried = rest;
+    }
+  };
+  const report = (
+    tx: SignedSvm,
+    index: number,
+    tables: AddressesByLookupTableAddress,
+    result: SvmSent,
+    moved: SvmMoved | undefined,
+  ): SentEntry => {
+    const told = readPlanTx(tx.transaction, tables);
+
+    return svmEntry(
+      input.chain,
+      tx,
+      told?.what ?? `transaction ${index + 1}`,
+      result,
+      told?.pot,
+      tables,
+      moved,
+      carried?.returnType,
+    );
+  };
+
+  // Broadcast another way: confirmed, and read back.
+  for (const [index, signature] of (input.signatures ?? []).entries()) {
+    const result = await svmLanded(rpc, input.rpcUrl, signature as Signature);
+    const response = await read(`transaction ${signature}`, () =>
+      rpc
+        .getTransaction(signature as Signature, {
+          commitment: "confirmed",
+          encoding: "base64",
+          maxSupportedTransactionVersion: 0,
+        })
+        .send(),
+    );
+    if (response === null) {
+      throw new CliError(`signature ${signature}: the cluster has no such transaction`);
+    }
+    const transaction = getTransactionDecoder().decode(
+      new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
+    );
+    const tx: SignedSvm = {
+      transaction,
+      wire: response.transaction[0],
+      feePayer: Object.keys(transaction.signatures)[0] as SvmAddress,
+    };
+    const tables = await tablesOf(read, rpc, transaction);
+    sent.push(report(tx, index, tables, result, undefined));
+    learn(transaction, result);
+    if (!result.ok) return { sent, ...(carried === undefined ? {} : { plan: carried }) };
+  }
+
+  const offset = (input.signatures ?? []).length;
+  for (const [at, tx] of signed.entries()) {
+    const index = offset + at;
     const tables = await tablesOf(read, rpc, tx.transaction);
-    const pot = cookedPot(tx.transaction, tables);
-    const what = pot === undefined ? `transaction ${index + 1}` : `cook on Pot ${pot}`;
+    const known = readPlanTx(tx.transaction, tables);
+    const what = known?.what ?? `transaction ${index + 1}`;
     const signature = getSignatureFromTransaction(tx.transaction);
     // One the cluster has already (sent before, by this or by the signer) is read back, not resent.
     const {
@@ -479,7 +620,8 @@ async function sendSvm(input: SendInput): Promise<SentEntry[]> {
     } = await read("the transaction's status", () => rpc.getSignatureStatuses([signature]).send());
     if (status !== null && status !== undefined) {
       const result = await svmLanded(rpc, input.rpcUrl, signature);
-      sent.push(svmEntry(input.chain, tx, what, result, pot, tables, undefined));
+      sent.push(report(tx, index, tables, result, undefined));
+      learn(tx.transaction, result);
       if (!result.ok) break;
       continue;
     }
@@ -491,9 +633,13 @@ async function sendSvm(input: SendInput): Promise<SentEntry[]> {
       const said = failureReason(value.err, value.logs ?? []);
       const reason = /BlockhashNotFound/.test(said)
         ? "its blockhash has expired (a Solana transaction lands within about a minute of being " +
-          "built, or never): build it again and sign the new one"
+          "built, or never): " +
+          (carried === undefined
+            ? "build it again and sign the new one"
+            : "send the cursor alone for the step built again, and sign that")
         : `it would fail: ${said}`;
-      if (sent.length === 0) {
+      learn(tx.transaction, undefined);
+      if (sent.length === 0 && carried === undefined) {
         throw new CliError(
           `${what}: not sent — ${reason}` +
             ((value.logs ?? []).length === 0 ? "" : `\n${(value.logs ?? []).join("\n")}`),
@@ -504,8 +650,8 @@ async function sendSvm(input: SendInput): Promise<SentEntry[]> {
         hash: "",
         status: "failed",
         reason: `not sent — ${reason}`,
-        lines: [],
-        json: {},
+        lines: [`${what}: not sent — ${reason}`],
+        json: (value.logs ?? []).length === 0 ? {} : { logs: value.logs },
       });
       break;
     }
@@ -518,9 +664,10 @@ async function sendSvm(input: SendInput): Promise<SentEntry[]> {
         ? await accountsNow(rpc, tracked).catch(() => undefined)
         : undefined;
     const labels = new Map<string, string>([
-      [tx.feePayer, "the signer, which paid the fee"],
+      ...(carried?.labels ?? []),
+      [tx.feePayer, carried === undefined ? "the signer, which paid the fee" : "the owner"],
       [feeConfig, "the Kitchen's fee config"],
-      ...(pot === undefined ? [] : [[pot, "the Pot"] as const]),
+      ...(known?.pot === undefined ? [] : [[known.pot, "the Pot"] as const]),
     ]);
     const moved =
       before === undefined || after === undefined
@@ -528,11 +675,12 @@ async function sendSvm(input: SendInput): Promise<SentEntry[]> {
         : await movedBy(rpc, input.chain, tracked, before, after, labels, tx.feePayer).catch(
             () => undefined,
           );
-    sent.push(svmEntry(input.chain, tx, what, result, pot, tables, moved));
+    sent.push(report(tx, index, tables, result, moved));
+    learn(tx.transaction, result);
     if (!result.ok) break;
   }
 
-  return sent;
+  return { sent, ...(carried === undefined ? {} : { plan: carried }) };
 }
 
 /** A landed Solana transaction's report: its line and links, what `main` returned, what moved. */
@@ -544,12 +692,17 @@ function svmEntry(
   pot: SvmAddress | undefined,
   tables: AddressesByLookupTableAddress,
   moved: SvmMoved | undefined,
+  returnType: string | undefined,
 ): SentEntry {
   const left = moved === undefined || pot === undefined ? undefined : svmLeftInPot(moved, pot);
   const returns =
     result.ok && runsEngine(tx.transaction, tables)
       ? bytesToHex(result.returnData ?? new Uint8Array())
       : undefined;
+  const returned =
+    returns === undefined || returnType === undefined
+      ? undefined
+      : (decodeReturned(returnType, returns, chain) ?? null);
 
   return {
     what,
@@ -562,6 +715,9 @@ function svmEntry(
         (result.reason === undefined ? "" : `, ${result.reason}`),
       ...linkLines(txLinks(chain, result.signature)),
       ...(returns === undefined || returns === "0x" ? [] : [`returns ${returns}`]),
+      ...(returns === undefined || returnType === undefined
+        ? []
+        : [returnedLine(returnType, returns, chain)]),
       ...(left === undefined ? [] : svmLeftInPotLines(left, "the signer's wallet")),
       ...(moved === undefined ? [] : svmMovedLines(moved)),
       ...(result.ok ? [] : ["Program logs:", ...result.logs.map((line) => `  ${line}`)]),
@@ -574,6 +730,7 @@ function svmEntry(
         ? {}
         : { computeUnits: result.computeUnits.toString() }),
       ...(returns === undefined ? {} : { returns }),
+      ...(returned === undefined ? {} : { returnType, returned }),
       ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
       ...(moved === undefined ? {} : svmMovedJson(moved)),
       ...(result.ok ? {} : { logs: result.logs }),
