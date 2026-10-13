@@ -29,8 +29,10 @@ import {
   lamports,
   signTransaction,
   type Address as SvmAddress,
+  type Blockhash,
   type KeyPairSigner,
 } from "@solana/kit";
+import { getTransferSolInstruction } from "@solana-program/system";
 import {
   bytesToHex,
   encodeAbiParameters,
@@ -42,7 +44,7 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
-import { derivePotPda } from "../src/svm/index.js";
+import { buildExecuteTransaction, derivePotPda } from "../src/svm/index.js";
 import {
   CLI_FIXTURES,
   describeEvm,
@@ -180,7 +182,9 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
       what: expect.stringMatching(/deployPot/),
     });
     expect(out.sent[1]).toMatchObject({ status: "failed", hash: "" });
-    expect(out.sent[1]!.reason).toMatch(/signed with a gas limit of 50000, and the rehearsal used/);
+    expect(out.sent[1]!.reason).toMatch(
+      /signed with a gas limit of 50000, and the simulation used/,
+    );
     expect(await ethereum.publicClient.getCode({ address: plan.pot })).toMatch(/^0x[0-9a-f]{2,}/);
     expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(0n);
     expect(await nonce()).toBe(first + 1);
@@ -341,6 +345,32 @@ describeSvm("sauce send: sauce tx's cook, signed elsewhere, on Solana", () => {
     expect(again.sent[0]).toMatchObject({ hash: out.sent[0]!.hash, status: "success" });
     expect(shim.sent.length).toBe(sent);
     expect(tokenAmount(harness, dest)).toBe(400n);
+  }, 120_000);
+
+  it("sends a transaction that runs no Sauce program: a plain transfer, with no return to read", async () => {
+    const recipient = randomAddress();
+    const transfer = await buildExecuteTransaction({
+      payer: owner,
+      instructions: [
+        getTransferSolInstruction({ source: owner, destination: recipient, amount: 1_000_000n }),
+      ],
+      latestBlockhash: {
+        blockhash: harness.svm.latestBlockhash() as Blockhash,
+        lastValidBlockHeight: 1_000_000n,
+      },
+    });
+
+    const run = await sauce(
+      ...["send", getBase64EncodedWireTransaction(transfer), "--rpc-url", RPC_URL, "--json"],
+    );
+
+    const out = jsonOf(run) as { sent: Array<Record<string, unknown>> };
+    expect(out.sent[0]).toMatchObject({ what: "transaction 1", status: "success" });
+    expect(out.sent[0]).not.toHaveProperty("returns");
+    expect(out.sent[0]!.lamportChanges).toEqual(
+      expect.arrayContaining([expect.objectContaining({ account: recipient, delta: "1000000" })]),
+    );
+    expect(harness.svm.getBalance(recipient)).toBe(1_000_000n);
   }, 120_000);
 
   it("refuses a cook that would fail, and sends nothing", async () => {
