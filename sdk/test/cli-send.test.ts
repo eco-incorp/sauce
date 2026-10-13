@@ -5,13 +5,29 @@
  * contract creation, and a Solana transaction whose signatures are not all there (none, fewer than
  * its message's signers, or not its fee payer's), each refused by name before anything is read.
  * And the wait for a transaction read back: mined, gone (missing twice in a row, not once), or still
- * pending when the wait runs out.
+ * pending when the wait runs out. And a plan's next step that cannot be built once something was
+ * sent: what was sent stands, with the cursor to ask again; with nothing sent, the failure is the
+ * answer.
  */
+import {
+  address,
+  appendTransactionMessageInstruction,
+  compileTransaction,
+  createTransactionMessage,
+  getBase58Decoder,
+  getBase64EncodedWireTransaction,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  type Address as SvmAddress,
+  type Blockhash,
+} from "@solana/kit";
 import { serializeTransaction, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
+import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
 
 /** A throwaway signer: the signatures are real, the key is the test's alone. */
 const signer = privateKeyToAccount(`0x${"42".repeat(32)}`);
@@ -202,6 +218,120 @@ describe("the wait for a transaction read back", () => {
       minedOrGone(client(["pending"]), HASH, "the cook", { pollMs: 1, mostMs: 20 }),
     ).rejects.toThrow(
       new RegExp(`the cook ${HASH} is still pending after 0.02 seconds; it was not sent again`),
+    );
+  });
+});
+
+describe("a plan's next step that cannot be built once something was sent", () => {
+  const URL = "http://endpoint.invalid/secret-key";
+  const key = (fill: number, bytes = 32): string =>
+    getBase58Decoder().decode(new Uint8Array(bytes).fill(fill));
+  const OWNER = key(7) as SvmAddress;
+  const SIGNATURE = key(5, 64);
+  /** A plan whose cook was handed out: its next step reads the block height first. */
+  const plan: SvmPlan = {
+    owner: OWNER,
+    salt: `0x${"11".repeat(32)}`,
+    via: "kitchen",
+    tail: [],
+    lookupTables: [],
+    pot: "there",
+    tokenAccounts: [],
+    payload: new Uint8Array([1, 2, 3]),
+    labels: [],
+    cook: { blockhash: key(10), lastValidBlockHeight: 100n, slot: 1_000n },
+  };
+  /** A transaction of the owner's that is not the cook, landed. */
+  const landed = getBase64EncodedWireTransaction(
+    compileTransaction(
+      pipe(
+        createTransactionMessage({ version: 0 }),
+        (message) => setTransactionMessageFeePayer(OWNER, message),
+        (message) =>
+          setTransactionMessageLifetimeUsingBlockhash(
+            { blockhash: key(11) as Blockhash, lastValidBlockHeight: 1n },
+            message,
+          ),
+        (message) =>
+          appendTransactionMessageInstruction(
+            {
+              programAddress: address("11111111111111111111111111111111"),
+              data: new Uint8Array([2, 0, 0, 0]),
+            },
+            message,
+          ),
+      ),
+    ),
+  );
+  const answers: Record<string, unknown> = {
+    getSignatureStatuses: {
+      context: { slot: 1_001 },
+      value: [{ slot: 1_001, confirmations: null, err: null, confirmationStatus: "confirmed" }],
+    },
+    getTransaction: {
+      slot: 1_001,
+      blockTime: null,
+      transaction: [landed, "base64"],
+      meta: { err: null, fee: 5_000, logMessages: [], computeUnitsConsumed: 150 },
+    },
+  };
+  const original = globalThis.fetch;
+  beforeAll(() => {
+    // The endpoint answers the confirmation and the read back, and fails what the next step asks.
+    globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+      if (String(input) !== URL) return original(input as string, init as RequestInit);
+      const { id, method } = JSON.parse(init!.body!) as { id: unknown; method: string };
+
+      return method in answers
+        ? Response.json({ jsonrpc: "2.0", id, result: answers[method] })
+        : Response.json({
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32603, message: `${method} is down at ${URL}` },
+          });
+    }) as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = original;
+  });
+  const solana = requireChain("solana");
+
+  it("keeps what was sent, and hands back the cursor to ask again", async () => {
+    const output = await sendCommand({
+      chain: solana,
+      rpcUrl: URL,
+      transactions: [],
+      signatures: [SIGNATURE],
+      cursor: encodeCursor(plan),
+    });
+    const json = output.json as {
+      ok: boolean;
+      sent: Array<{ hash: string; status: string }>;
+      next: { step: string; cursor: string; notes: string[] };
+    };
+    expect(json.ok).toBe(true);
+    expect(json.sent.map((one) => [one.hash, one.status])).toEqual([[SIGNATURE, "success"]]);
+    expect(json.next.step).toBe("unknown");
+    expect(decodeCursor(json.next.cursor)).toEqual(plan);
+    expect(json.next.notes).toEqual([
+      "the next step could not be built: reading the block height failed: JSON-RPC error: " +
+        "Internal JSON-RPC error (getBlockHeight is down at <RPC_URL>); send the cursor alone to " +
+        "ask again",
+    ]);
+    expect(output.notes).toEqual(json.next.notes);
+    expect(JSON.stringify(output)).not.toContain(URL);
+  });
+
+  it("fails as the next step does, with nothing sent", async () => {
+    const asked = sendCommand({
+      chain: solana,
+      rpcUrl: URL,
+      transactions: [],
+      cursor: encodeCursor(plan),
+    });
+    await expect(asked).rejects.toThrow(
+      "reading the block height failed: JSON-RPC error: Internal JSON-RPC error (getBlockHeight " +
+        "is down at <RPC_URL>)",
     );
   });
 });

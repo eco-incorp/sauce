@@ -70,7 +70,10 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "table), and a `cursor`. Send them signed with that cursor, and `next` is the step " +
         "after (the cook, then the code buffer's close), built fresh, with its own cursor; " +
         "repeat until `next.step` is done. Whatever did not land is built again, so a step " +
-        "that expired comes back with only what is left: send the cursor alone for it. Needs " +
+        "that expired comes back with only what is left: send the cursor alone for it. A step " +
+        "with nothing to sign says why in `next.wait` (a cook handed out that can still land, " +
+        "or a lookup table in use only from the next slot, about half a second on): call again " +
+        "with the cursor alone for it; nothing waits here. Needs " +
         "the chain's " +
         `endpoint (rpcUrl, or the server's). It sends only on ${supportedChainNames()}, the ` +
         "chains this release supports; on any other it is refused before any endpoint is " +

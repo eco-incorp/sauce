@@ -671,7 +671,10 @@ same step built again with only what did not land (`sauce_send` with the cursor 
 too); a setup of more than 32 transactions comes in several steps. A cook handed out is never built
 again while it can still land, nor once the owner's transactions show it landed; one broadcast
 another way is confirmed with `signatures`, so the plan knows how it went. `close: true` gives up
-on the cook and closes the code buffer, once a cook handed out can no longer land. On a server with wallets, `sauce_wallet_send` takes the `sauce_tx` result
+on the cook and closes the code buffer, once a cook handed out can no longer land. A step with
+nothing to sign says why in `wait`: a cook handed out that can still land, or a cook through a
+lookup table extended a moment ago, which is in use from the next slot, about half a second on.
+Nothing waits on the server: call `sauce_send` with the cursor alone again for the step. On a server with wallets, `sauce_wallet_send` takes the `sauce_tx` result
 whole and sends every step, each transaction built on a fresh blockhash and signed by the wallet.
 It holds the whole plan to the wallet's policy before it sends any of it, as far as it can be
 measured then (the rent and the fees the setup takes, the cook's execution fee), and each

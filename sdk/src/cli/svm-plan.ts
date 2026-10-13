@@ -39,6 +39,7 @@ import {
   getTransactionDecoder,
   getTransactionSize,
   isAddress,
+  isSignature,
   isSignerRole,
   TRANSACTION_SIZE_LIMIT,
   type Address,
@@ -201,6 +202,9 @@ export interface PlanStep {
   readonly notes: readonly string[];
   /** Nothing to sign yet: why, and when to ask again. */
   readonly wait?: string;
+  /** The cook's lookup tables are not all in use yet: the slot they are from. Asked again from
+   *  then, the cook is built. */
+  readonly readyAt?: bigint;
   /** The cook's rehearsal failed: why, and its logs. It is built anyway, at the most compute. */
   readonly fails?: { readonly reason: string; readonly logs: readonly string[] };
   /** The execution fee the cook signs, in lamports. */
@@ -250,9 +254,14 @@ const LIST_MOST = 256;
 const NAMED_MOST = 64;
 /** The most a cursor may carry, decoded: a staged program at its largest, and its accounts. */
 const CURSOR_MAX = 2 * MAX_CODE_LEN;
+/** A slot, a block height, a nonce, lamports: each a u64 on Solana. */
+const U64_MAX = 2n ** 64n - 1n;
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 const b64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
 const unb64 = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "base64"));
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
+  a.length === b.length && a.every((byte, index) => byte === b[index]);
 
 /** The plan as an opaque string, to hand back for the next step. */
 export function encodeCursor(plan: SvmPlan): string {
@@ -325,8 +334,9 @@ export function decodeCursor(text: string): SvmPlan {
     return value;
   };
   const integer = (value: unknown, what: string): bigint => {
-    if (typeof value !== "string" || !/^\d{1,30}$/.test(value))
+    if (typeof value !== "string" || !/^\d{1,20}$/.test(value) || BigInt(value) > U64_MAX) {
       throw bad(`${what} is not an integer`);
+    }
 
     return BigInt(value);
   };
@@ -359,7 +369,10 @@ export function decodeCursor(text: string): SvmPlan {
       label,
     };
   });
-  const payload = raw.payload === undefined ? undefined : unb64(String(raw.payload));
+  if (raw.payload !== undefined && (typeof raw.payload !== "string" || !BASE64.test(raw.payload))) {
+    throw bad("payload is not base64");
+  }
+  const payload = raw.payload === undefined ? undefined : unb64(raw.payload);
   if (payload !== undefined && (payload.length === 0 || payload.length > MAX_CODE_LEN)) {
     throw bad("payload");
   }
@@ -368,7 +381,16 @@ export function decodeCursor(text: string): SvmPlan {
     const [nonce, sha256, length] = list(raw.staged, "staged");
     if (typeof sha256 !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(sha256)) throw bad("sha256");
     if (typeof length !== "number" || !Number.isInteger(length) || length < 1) throw bad("length");
+    if (length > MAX_CODE_LEN) throw bad("length");
     staged = { nonce: integer(nonce, "nonce"), sha256: hexToBytes(sha256 as Hex), length };
+    // Carried until it is staged: the program the digest and length are of.
+    if (
+      payload !== undefined &&
+      (payload.length !== length ||
+        !sameBytes(new Uint8Array(createHash("sha256").update(payload).digest()), staged.sha256))
+    ) {
+      throw bad("staged is not the payload's");
+    }
   }
   let table: SvmPlan["table"];
   if (raw.table !== undefined) {
@@ -400,9 +422,12 @@ export function decodeCursor(text: string): SvmPlan {
   let cooked: SvmPlan["cooked"];
   if (raw.cooked !== undefined) {
     const [ok, signature] = list(raw.cooked, "cooked");
-    if (typeof ok !== "boolean" || typeof signature !== "string") throw bad("cooked");
+    if (typeof ok !== "boolean" || typeof signature !== "string" || !isSignature(signature)) {
+      throw bad("cooked");
+    }
     cooked = { ok, signature };
   }
+  if (raw.returnType !== undefined && typeof raw.returnType !== "string") throw bad("returnType");
 
   return {
     owner: key(raw.owner, "owner"),
@@ -750,13 +775,32 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
   return value !== null;
 }
 
+/** The most accounts one `getMultipleAccounts` reads. */
+const ACCOUNTS_PER_READ = 100;
+
+/** Which of `accounts` the cluster holds, read together: one request per hundred. */
+async function existing(
+  ctx: StepContext,
+  accounts: readonly Address[],
+  what: string,
+): Promise<boolean[]> {
+  const held: boolean[] = [];
+  for (let at = 0; at < accounts.length; at += ACCOUNTS_PER_READ) {
+    const { value } = await ask(ctx.url, what, () =>
+      ctx.rpc
+        .getMultipleAccounts(accounts.slice(at, at + ACCOUNTS_PER_READ), { encoding: "base64" })
+        .send(),
+    );
+    held.push(...value.map((account) => account !== null && account !== undefined));
+  }
+
+  return held;
+}
+
 /** A write's chunk: what a write transaction carries besides its signature, header and accounts. */
 const CHUNK = 900;
 /** Grow instructions in one transaction, well inside its size. */
 const GROWS_PER_TRANSACTION = 40;
-
-const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
-  a.length === b.length && a.every((byte, index) => byte === b[index]);
 
 // ---------------------------------------------------------------------------------------------
 // The next step
@@ -793,6 +837,7 @@ export async function nextStep(
   let current: SvmPlan = finalized && plan.payload !== undefined ? withoutPayload(plan) : plan;
   // A cook handed out and not heard of since: never a second while it can still land, nor once
   // it has — and no close while it can still land.
+  let untold: string | undefined;
   if (current.cook !== undefined && current.cooked === undefined) {
     const handed = current.cook;
     const height = await ask(ctx.url, "the block height", () =>
@@ -814,7 +859,17 @@ export async function nextStep(
           (options.close === true ? "given up" : "rebuilt"),
       };
     }
-    const landed = await cookLanded(ctx, current.owner, handed);
+    let landed: SvmPlan["cooked"] | undefined;
+    try {
+      landed = await cookLanded(ctx, current.owner, handed);
+    } catch (error) {
+      // A close never cooks: what the search cannot tell does not hold it up.
+      if (options.close !== true) throw error;
+      untold =
+        "whether the cook handed out landed could not be told " +
+        `(${(error as Error).message.split("\n")[0]}); it is given up either way, and can no ` +
+        "longer land";
+    }
     current = landed === undefined ? withoutCook(current) : { ...current, cooked: landed };
   }
   if (options.close === true || current.cooked !== undefined || current.closing === true) {
@@ -822,6 +877,7 @@ export async function nextStep(
       options.close === true ? { ...current, closing: true } : current,
       ctx,
       state !== undefined,
+      untold === undefined ? [] : [untold],
     );
   }
   // Staged and finalized once (the plan let go of the program), and gone now: closed before its
@@ -901,18 +957,21 @@ async function setupTransactions(
 ): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[] }> {
   const transactions: PlanTx[] = [];
   const notes: string[] = [];
-  const pot = await potOf(plan);
-  if (plan.pot === "setup" && !(await exists(ctx, pot, "the Pot"))) {
+  // The Pot, where the setup creates it, and the token accounts: what the cluster holds of them.
+  const potToCheck = plan.pot === "setup" ? [await potOf(plan)] : [];
+  const held = await existing(
+    ctx,
+    [...potToCheck, ...plan.tokenAccounts.map((account) => account.address)],
+    potToCheck.length === 0 ? "the token accounts" : "the Pot and the token accounts",
+  );
+  if (potToCheck.length > 0 && held.shift() !== true) {
     transactions.push({
       what: "creating the Pot",
       kind: "pot",
       instructions: [await createPotInstruction(plan)],
     });
   }
-  const missing: PlanTokenAccount[] = [];
-  for (const account of plan.tokenAccounts) {
-    if (!(await exists(ctx, account.address, account.label))) missing.push(account);
-  }
+  const missing = plan.tokenAccounts.filter((_, index) => !held[index]);
   if (missing.length > 0) {
     transactions.push({
       what: "creating the token accounts",
@@ -1083,40 +1142,48 @@ async function tableTransactions(
   };
 }
 
-/** How long a cook's step waits for a lookup table the setup just extended to come into use. */
-const TABLE_WARMUP = { tries: 30, delayMs: 500 };
-
-/** The cook, rehearsed for its compute: built at the most where its rehearsal fails. */
+/**
+ * The cook, rehearsed for its compute: built at the most where its rehearsal fails. Through a
+ * lookup table extended so recently that the cluster is not past that slot yet, nothing is built:
+ * the step says from which slot it is (`readyAt`), at once, and the caller asks again — a signer's
+ * call is never held up waiting for a slot.
+ */
 async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
   const tables: AddressesByLookupTableAddress = {};
-  for (const table of [
+  const through = [
     ...plan.lookupTables,
     ...(plan.table?.address === undefined ? [] : [plan.table.address]),
-  ]) {
-    let held = await tableState(ctx, table);
-    if (held === undefined) {
-      throw new CliError(`lookup table ${table} is not on the cluster: is it closed?`);
-    }
-    // Addresses a table takes in slot N are usable from slot N + 1.
-    for (let attempt = 0; ; attempt++) {
-      const slot = await ask(ctx.url, "the slot", () =>
-        ctx.rpc.getSlot({ commitment: "confirmed" }).send(),
-      );
-      if (slot > held.lastExtendedSlot) break;
-      if (attempt >= TABLE_WARMUP.tries) {
-        return {
-          name: "cook",
-          transactions: [],
-          plan,
-          overview: overview(plan, "cook"),
-          notes: [],
-          wait: `lookup table ${table} comes into use after slot ${held.lastExtendedSlot}: ask again`,
-        };
+  ];
+  if (through.length > 0) {
+    const [held, slot] = await Promise.all([
+      Promise.all(through.map((table) => tableState(ctx, table))),
+      ask(ctx.url, "the slot", () => ctx.rpc.getSlot({ commitment: "confirmed" }).send()),
+    ]);
+    let late: { table: Address; readyAt: bigint } | undefined;
+    for (const [index, table] of through.entries()) {
+      const state = held[index];
+      if (state === undefined) {
+        throw new CliError(`lookup table ${table} is not on the cluster: is it closed?`);
       }
-      await new Promise((resolve) => setTimeout(resolve, TABLE_WARMUP.delayMs));
-      held = (await tableState(ctx, table)) ?? held;
+      // Addresses a table takes in slot N are usable from slot N + 1.
+      if (state.lastExtendedSlot >= slot && state.lastExtendedSlot + 1n > (late?.readyAt ?? 0n)) {
+        late = { table, readyAt: state.lastExtendedSlot + 1n };
+      }
+      tables[table] = [...state.addresses];
     }
-    tables[table] = [...held.addresses];
+    if (late !== undefined) {
+      return {
+        name: "cook",
+        transactions: [],
+        plan,
+        overview: overview(plan, "cook"),
+        notes: [],
+        readyAt: late.readyAt,
+        wait:
+          `not ready yet: lookup table ${late.table} is usable from slot ${late.readyAt} ` +
+          `(now ${slot}); ask again`,
+      };
+    }
   }
   const fee =
     ctx.fee ??
@@ -1202,15 +1269,22 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
 }
 
 /** The close of the code buffer, or, with none open, the end. */
-async function closeStep(plan: SvmPlan, ctx: StepContext, open: boolean): Promise<PlanStep> {
+async function closeStep(
+  plan: SvmPlan,
+  ctx: StepContext,
+  open: boolean,
+  said: readonly string[] = [],
+): Promise<PlanStep> {
   const buffer = await planBuffer(plan);
-  const notes =
-    plan.table?.address === undefined
+  const notes = [
+    ...said,
+    ...(plan.table?.address === undefined
       ? []
       : [
           `lookup table ${plan.table.address} stays for a later cook naming the same accounts ` +
             `(--lookup-table ${plan.table.address}); sauce reclaim closes it`,
-        ];
+        ]),
+  ];
   if (buffer === undefined || !open) {
     return { name: "done", transactions: [], plan, overview: overview(plan, "done"), notes };
   }
@@ -1234,11 +1308,18 @@ async function closeStep(plan: SvmPlan, ctx: StepContext, open: boolean): Promis
 
 /** How many of the owner's transactions a landed-cook search reads, at most, before it gives up. */
 const HISTORY_MOST = 500;
+/** A page of the owner's signatures, as the endpoint lists them, newest first. */
+const HISTORY_PAGE = 100;
+/** How many of a page's transactions the search reads at once. */
+const HISTORY_BATCH = 10;
 
 /**
  * Whether the cook handed out landed: a transaction of the owner's, since the slot the cook was
  * built at, on the cook's blockhash, that cooks. Landed — succeeded or failed — it cannot land
- * again. An endpoint that cannot say refuses the step rather than risk a second cook.
+ * again. The owner's transactions are read a batch at a time, newest first, and none from before
+ * that slot, which cannot be the cook. An endpoint that cannot say — a page it does not list, a
+ * transaction it lists and does not return, more of them than the search reads — refuses the step
+ * rather than risk a second cook.
  */
 async function cookLanded(
   ctx: StepContext,
@@ -1246,42 +1327,71 @@ async function cookLanded(
   handed: CookHandedOut,
 ): Promise<SvmPlan["cooked"] | undefined> {
   let before: Signature | undefined;
-  for (let read = 0; read < HISTORY_MOST;) {
+  let read = 0;
+  let unread: string | undefined;
+  for (;;) {
     const page = await ask(ctx.url, "the owner's transactions since the cook was handed out", () =>
       ctx.rpc
-        .getSignaturesForAddress(owner, { limit: 100, ...(before === undefined ? {} : { before }) })
+        .getSignaturesForAddress(owner, {
+          limit: HISTORY_PAGE,
+          ...(before === undefined ? {} : { before }),
+        })
         .send(),
     );
-    for (const entry of page) {
-      if (BigInt(entry.slot) < handed.slot) return undefined;
-      read += 1;
-      const response = await ask(ctx.url, `transaction ${entry.signature}`, () =>
-        ctx.rpc
-          .getTransaction(entry.signature as Signature, {
-            commitment: "confirmed",
-            encoding: "base64",
-            maxSupportedTransactionVersion: 0,
-          })
-          .send(),
+    const since = page.filter((entry) => BigInt(entry.slot) >= handed.slot);
+    const reading = since.slice(0, HISTORY_MOST - read);
+    for (let at = 0; at < reading.length; at += HISTORY_BATCH) {
+      const found = await Promise.all(
+        reading.slice(at, at + HISTORY_BATCH).map(async (entry) => {
+          const response = await ask(ctx.url, `transaction ${entry.signature}`, () =>
+            ctx.rpc
+              .getTransaction(entry.signature as Signature, {
+                commitment: "confirmed",
+                encoding: "base64",
+                maxSupportedTransactionVersion: 0,
+              })
+              .send(),
+          );
+          if (response === null) {
+            unread ??= entry.signature;
+
+            return undefined;
+          }
+          const transaction = getTransactionDecoder().decode(
+            new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
+          );
+          const { lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
+            transaction.messageBytes,
+          ) as { lifetimeToken: string };
+
+          return lifetimeToken === handed.blockhash && isCook(transaction)
+            ? { ok: (response.meta?.err ?? null) === null, signature: entry.signature }
+            : undefined;
+        }),
       );
-      if (response === null) continue;
-      const transaction = getTransactionDecoder().decode(
-        new Uint8Array(getBase64Encoder().encode(response.transaction[0])),
-      );
-      const { lifetimeToken } = getCompiledTransactionMessageDecoder().decode(
-        transaction.messageBytes,
-      ) as { lifetimeToken: string };
-      if (lifetimeToken === handed.blockhash && isCook(transaction)) {
-        return { ok: (response.meta?.err ?? null) === null, signature: entry.signature };
-      }
+      const cook = found.find((each) => each !== undefined);
+      if (cook !== undefined) return cook;
     }
-    if (page.length < 100) return undefined;
+    read += reading.length;
+    if (reading.length < since.length) {
+      throw new CliError(
+        `${owner} sent more than ${HISTORY_MOST} transactions since the cook was handed out, too ` +
+          "many to look through for it: give the cook's signature if it was sent, or close",
+      );
+    }
+    // The page reaches before the cook was handed out, or the owner's history ends.
+    if (since.length < page.length || page.length < HISTORY_PAGE) break;
     before = page.at(-1)!.signature as Signature;
   }
-  throw new CliError(
-    `${owner} sent more than ${HISTORY_MOST} transactions since the cook was handed out, too many ` +
-      "to look through for it: give the cook's signature if it was sent, or close",
-  );
+  if (unread !== undefined) {
+    throw new CliError(
+      `the endpoint lists ${unread} among ${owner}'s transactions, and does not return it: ` +
+        "whether the cook handed out landed cannot be told. Ask again, give the cook's signature " +
+        "if it was sent, or close",
+    );
+  }
+
+  return undefined;
 }
 
 /** The associated-token-account program, which creates a holder's token account for a mint. */

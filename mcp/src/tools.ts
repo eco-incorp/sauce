@@ -1901,7 +1901,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "list, through a lookup table; a token account or a Pot to create first — comes as a " +
         "plan: { step, plan, transactions: [{ what, transaction, feePayer }], cursor } for its " +
         "first step, every transaction base64 for the owner to sign on one blockhash, sent in " +
-        "order by sauce_send with the cursor, which returns the next step. Nothing needs a " +
+        "order by sauce_send with the cursor, which returns the next step; a step with nothing " +
+        "to sign says why in `wait` (a lookup table in use only from the next slot), and " +
+        "sauce_send with the cursor alone builds it then. Nothing needs a " +
         "fresh keypair: the owner signs and pays every transaction. `notes` say what must be " +
         "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,

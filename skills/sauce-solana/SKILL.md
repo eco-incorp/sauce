@@ -336,7 +336,10 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   transaction; none needs a fresh keypair. A transaction broadcast another way is confirmed with
   `--signature <signature>`, so the plan knows how its cook went (a cook it handed out is never
   built again while it can still land, nor once it has). `--close` gives up on the cook and closes
-  the buffer, once a cook handed out can no longer land.
+  the buffer, once a cook handed out can no longer land. A step with nothing to sign says why in
+  `wait`; a cook through a lookup table extended a moment ago is one, the table in use from the
+  next slot, about half a second on: the cursor alone, sent again, builds the cook (`sauce run`
+  waits for it itself).
 - **Rent left open.** A code buffer a plan never closed, and the lookup tables cooks keep for the
   next cook naming the same accounts, hold the owner's rent.
   `sauce reclaim --chain solana --owner <pubkey>` lists them with that rent and prints the
