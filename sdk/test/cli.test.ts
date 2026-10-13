@@ -245,6 +245,17 @@ describe("sauce (no command)", () => {
     );
     expect((await sauce("--version")).stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
   });
+
+  it("prints its version for -v, -V and `version` too, and its help says so", async () => {
+    for (const spelling of ["-v", "-V", "version"]) {
+      const run = await sauce(spelling);
+      expect(run.code).toBe(0);
+      expect(run.stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
+    }
+    for (const spelling of ["-h", "--help"]) {
+      expect((await sauce(spelling)).stdout).toMatch(/--version \(-v\)/);
+    }
+  });
 });
 
 describe("a program file that is a command: a leading #! line", () => {
