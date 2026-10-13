@@ -22,6 +22,8 @@ import { recorded, startForkNode, type ForkMode } from "./state.js";
 
 export { TestChain, DEFAULT_POT_SALT } from "./chain.js";
 export type { CookOptions, CookResult, TestAccount } from "./chain.js";
+// What a `CookResult`'s `transfers` and `effects` hold, for a signature over them.
+export type { Effects, Movement } from "./sdk.js";
 export { CookReverted } from "./program.js";
 export type { CompiledProgram, ProgramInput, Value } from "./program.js";
 export type { ForkMode } from "./state.js";
