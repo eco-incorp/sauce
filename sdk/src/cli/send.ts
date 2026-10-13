@@ -250,6 +250,44 @@ async function broadcastEvm(client: PublicClient, tx: SignedEvm): Promise<void> 
   }
 }
 
+/** How long a transaction the chain has, pending, is waited for: viem's own receipt wait. */
+const PENDING_MOST_MS = 180_000;
+
+/**
+ * Waits until `hash`, which the chain had, is mined — or says it is gone: dropped from the mempool,
+ * or reorged out, it never gets a receipt. Missing twice in a row, so an endpoint whose backends
+ * disagree for a moment does not make it so.
+ */
+async function minedOrGone(client: PublicClient, hash: Hex, what: string): Promise<void> {
+  const deadline = Date.now() + PENDING_MOST_MS;
+  let missing = 0;
+  for (;;) {
+    const receipt = await client.getTransactionReceipt({ hash }).then(
+      () => true,
+      () => false,
+    );
+    if (receipt) return;
+    const there = await client.getTransaction({ hash }).then(
+      () => true,
+      () => false,
+    );
+    missing = there ? 0 : missing + 1;
+    if (missing >= 2) {
+      throw new CliError(
+        `${what} ${hash} was seen, then not found: reorged or dropped, and it was not sent again. ` +
+          "Sign it anew (its nonce may be free again) and send that",
+      );
+    }
+    if (Date.now() > deadline) {
+      throw new CliError(
+        `${what} ${hash} is still pending after ${PENDING_MOST_MS / 60_000} minutes; it was not ` +
+          "sent again. Send it later to read it back, or look it up on the explorer",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+}
+
 async function sendEvm(input: SendInput): Promise<SentEntry[]> {
   const signed = await Promise.all(
     input.transactions.map((raw, index) => signedEvm(raw, `transaction ${index + 1}`)),
@@ -302,6 +340,22 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
         sent.push({
           what,
           hash: "",
+          status: "failed",
+          reason: (error as Error).message,
+          lines: [],
+          json: {},
+        });
+        break;
+      }
+    } else {
+      // Read back, not simulated: one the chain then loses never gets a receipt to wait for.
+      try {
+        await minedOrGone(client, tx.hash, what);
+      } catch (error) {
+        if (sent.length === 0) throw error;
+        sent.push({
+          what,
+          hash: tx.hash,
           status: "failed",
           reason: (error as Error).message,
           lines: [],
