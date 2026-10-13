@@ -253,13 +253,21 @@ async function broadcastEvm(client: PublicClient, tx: SignedEvm): Promise<void> 
 /** How long a transaction the chain has, pending, is waited for: viem's own receipt wait. */
 const PENDING_MOST_MS = 180_000;
 
+const span = (ms: number): string =>
+  ms % 60_000 === 0 ? `${ms / 60_000} minutes` : `${ms / 1000} seconds`;
+
 /**
  * Waits until `hash`, which the chain had, is mined — or says it is gone: dropped from the mempool,
  * or reorged out, it never gets a receipt. Missing twice in a row, so an endpoint whose backends
- * disagree for a moment does not make it so.
+ * disagree for a moment does not make it so. Polled every `pollMs`, for at most `mostMs`.
  */
-async function minedOrGone(client: PublicClient, hash: Hex, what: string): Promise<void> {
-  const deadline = Date.now() + PENDING_MOST_MS;
+export async function minedOrGone(
+  client: PublicClient,
+  hash: Hex,
+  what: string,
+  { pollMs = 1_000, mostMs = PENDING_MOST_MS }: { pollMs?: number; mostMs?: number } = {},
+): Promise<void> {
+  const deadline = Date.now() + mostMs;
   let missing = 0;
   for (;;) {
     const receipt = await client.getTransactionReceipt({ hash }).then(
@@ -280,11 +288,11 @@ async function minedOrGone(client: PublicClient, hash: Hex, what: string): Promi
     }
     if (Date.now() > deadline) {
       throw new CliError(
-        `${what} ${hash} is still pending after ${PENDING_MOST_MS / 60_000} minutes; it was not ` +
-          "sent again. Send it later to read it back, or look it up on the explorer",
+        `${what} ${hash} is still pending after ${span(mostMs)}; it was not sent again. Send it ` +
+          "later to read it back, or look it up on the explorer",
       );
     }
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
 }
 
