@@ -18,7 +18,15 @@ import { encodeFunctionData, type Address } from "viem";
 import { fork, local, type TestChain } from "../../src/testing/index.js";
 import { rpc, startAnvil } from "../../src/testing/node.js";
 import { startForkNode } from "../../src/testing/state.js";
-import { anvilMissing, program, uniswapV3Pool, type V3Pool } from "./support.js";
+import {
+  anvilMissing,
+  children,
+  fakeAnvil,
+  gone,
+  program,
+  uniswapV3Pool,
+  type V3Pool,
+} from "./support.js";
 
 /**
  * A swap of `pool`'s input token from account 0's Pot on `chain`, in what the chain itself reports
@@ -333,6 +341,38 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
       }
     } finally {
       await upstream.stop();
+    }
+  });
+
+  it("stops its node and its recorder when the node fails it once started", async () => {
+    // A node that answers as a chain does until it is asked anything else.
+    const fake = fakeAnvil(`
+      require("node:http").createServer((request, response) => {
+        let body = "";
+        request.on("data", (chunk) => (body += chunk));
+        request.on("end", () => {
+          const { id, method } = JSON.parse(body);
+          response.end(JSON.stringify(method === "eth_chainId"
+            ? { jsonrpc: "2.0", id, result: "0x2105" }
+            : { jsonrpc: "2.0", id, error: { code: -32000, message: "this node fails" } }));
+        });
+      }).listen(port, "127.0.0.1");
+    `);
+    const state = join(fake.dir, "failed.json.gz");
+    const before = new Set(children().map(({ pid }) => pid));
+    try {
+      await assert.rejects(
+        fork("base", { block: 1, state, rpcUrl: "http://127.0.0.1:9", anvil: fake.path }),
+        /this node fails/,
+      );
+      const left = children().filter(({ pid }) => !before.has(pid));
+      for (const { pid } of left) assert.ok(await gone(pid), `pid ${pid} still runs`);
+      assert.equal(existsSync(state), false);
+    } finally {
+      for (const { pid } of children().filter(({ pid }) => !before.has(pid))) {
+        process.kill(pid, "SIGKILL");
+      }
+      rmSync(fake.dir, { recursive: true, force: true });
     }
   });
 

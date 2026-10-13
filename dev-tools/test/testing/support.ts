@@ -2,9 +2,10 @@
  * What the testing kit's own suites share. NOT a `.test.ts`.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createWalletClient,
@@ -141,4 +142,45 @@ export async function uniswapV3Pool(chain: TestChain, funded = 10n ** 21n): Prom
   await write(tokenIn, token.abi, "mint", [owner.pot, funded]);
 
   return { pool, tokenIn, tokenOut, funded };
+}
+
+/**
+ * An executable that stands in for anvil, `source` run by Node as CommonJS: `startAnvil` spawns it
+ * as `<path> --port <port> --silent ...args`. It lives in a directory of its own, where it may write.
+ */
+export function fakeAnvil(source: string): { readonly path: string; readonly dir: string } {
+  const dir = mkdtempSync(join(tmpdir(), "sauce-testing-fake-anvil-"));
+  const path = join(dir, "anvil");
+  writeFileSync(
+    path,
+    `#!${process.execPath}\nconst port = Number(process.argv[process.argv.indexOf("--port") + 1]);\n${source}\n`,
+    { mode: 0o755 },
+  );
+
+  return { path, dir };
+}
+
+/** The processes this one started that still run, but the `ps` that lists them. */
+export function children(): { readonly pid: number; readonly command: string }[] {
+  return execFileSync("ps", ["-A", "-o", "pid=,ppid=,command="], { encoding: "utf8" })
+    .split("\n")
+    .flatMap((line) => {
+      const found = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
+
+      return found !== null && Number(found[2]) === process.pid && !found[3]!.startsWith("ps ")
+        ? [{ pid: Number(found[1]), command: found[3]! }]
+        : [];
+    });
+}
+
+/** Whether process `pid` is gone, or goes within `ms`. */
+export async function gone(pid: number, ms = 5_000): Promise<boolean> {
+  for (const end = Date.now() + ms; ; await new Promise((ok) => setTimeout(ok, 50))) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+    if (Date.now() > end) return false;
+  }
 }
