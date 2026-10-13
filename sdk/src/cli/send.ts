@@ -285,7 +285,7 @@ async function sendEvm(input: SendInput): Promise<SentEntry[]> {
       if (tx.gas !== undefined && tx.gas < rehearsal.gas) {
         sent.push(
           refused(
-            `it is signed with a gas limit of ${tx.gas}, and the rehearsal used ${rehearsal.gas}: ` +
+            `it is signed with a gas limit of ${tx.gas}, and the simulation used ${rehearsal.gas}: ` +
               "it would run out of gas. Sign it again with a higher limit",
           ),
         );
