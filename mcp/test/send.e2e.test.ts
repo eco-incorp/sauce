@@ -145,6 +145,11 @@ describe(
         program,
       )) as { ok: boolean; chain: string; sent: Array<Record<string, unknown>> };
       assert.equal(signedWith.length, 2);
+      // Each a limit a transaction can run in, past the 21000 any transaction costs.
+      assert.ok(
+        signedWith.every((gas) => gas > 21_000n),
+        String(signedWith),
+      );
 
       assert.equal(sent.ok, true);
       assert.equal(sent.chain, "ethereum");

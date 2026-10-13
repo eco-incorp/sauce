@@ -234,6 +234,10 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
       value: BigInt(cook.value),
     });
     const first = await nonce();
+    const paid = [
+      await ethereum.balanceOf(usdc, RECIPIENT),
+      await ethereum.balanceOf(usdt, RECIPIENT),
+    ];
     const run = await sauce(
       ...["send", await sign(deploy, first, BigInt(deploy.gas!))],
       ...[await sign(cook, first + 1, ownEstimate), "--rpc-url", ethereum.rpcUrl, "--json"],
@@ -252,6 +256,12 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
       new RegExp(`signed with a gas limit of ${ownEstimate}, and the simulation used`),
     );
     expect(await nonce()).toBe(first + 1);
+    // The cook never went out: nothing reached the recipient, and the Pot holds what it was given.
+    expect([
+      await ethereum.balanceOf(usdc, RECIPIENT),
+      await ethereum.balanceOf(usdt, RECIPIENT),
+    ]).toEqual(paid);
+    expect(await ethereum.balanceOf(usdc, pot)).toBe(FUNDED);
   }, 120_000);
 
   it("refuses a cook signed short of gas, and sends it signed again with room", async () => {

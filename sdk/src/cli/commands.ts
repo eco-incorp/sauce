@@ -755,19 +755,20 @@ const withRoom = (gas: bigint): bigint => (gas * 13n) / 10n;
  * The gas to sign a plan's Pot deployment and cook with: the two simulated together, the cook on the
  * Pot the deployment leaves, from `owner`. A signer's own estimate of the cook, taken while the Pot
  * has no code, prices a call to an empty address. Each with room (`withRoom`); with a note saying
- * so, or why the cook has none.
+ * so, or why the cook has none. `simulateWith` is the rehearsal, given by a test.
  */
-async function planGas(
+export async function planGas(
   client: PublicClient,
   target: Extract<PotInput, { readonly owner: Address }>,
   cook: TxRequest,
+  simulateWith: typeof rehearse = rehearse,
 ): Promise<{ deploy?: bigint; cook?: bigint; note: string }> {
   const roomless =
     "sign the cook with a gas limit that has room, or once the deployment has landed: a " +
     "signer's own estimate, taken while the Pot has no code, is far too low";
   let rehearsal;
   try {
-    rehearsal = await rehearse(client, {
+    rehearsal = await simulateWith(client, {
       owner: target.owner,
       pot: cook.to,
       kitchen: kitchenAddress(),
