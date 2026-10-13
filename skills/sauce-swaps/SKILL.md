@@ -37,19 +37,20 @@ Every function takes its arguments in one order — the pool, the two tokens, th
 own facts, then the floor and the recipient — and returns the amount of `tokenOut` the recipient
 received:
 
-| Function      | Arguments                                                                                                       | Reached through  |
-| ------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                                  | the pair         |
-| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                       | the Pot's Router |
-| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient`       | the Pot's Router |
-| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                                    | the pool         |
-| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                                 | the Vault        |
-| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                                   | the pool         |
-| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                          | the pair         |
-| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the WooPPV2      |
-| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the Pot's Router |
-| `infinityCL`  | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
-| `infinityBin` | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient`                    | the Pot's Router |
+| Function          | Arguments                                                                                                       | Reached through  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `uniswapV2`       | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                                  | the pair         |
+| `uniswapV3`       | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                       | the Pot's Router |
+| `uniswapV3Capped` | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, gasCap, minOut, recipient`                               | the Pot's Router |
+| `uniswapV4`       | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient`       | the Pot's Router |
+| `curve`           | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                                    | the pool         |
+| `balancerV2`      | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                                 | the Vault        |
+| `dodoV2`          | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                                   | the pool         |
+| `traderJoeLB`     | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                          | the pair         |
+| `woofi`           | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the WooPPV2      |
+| `maverickV2`      | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the Pot's Router |
+| `infinityCL`      | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
+| `infinityBin`     | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient`                    | the Pot's Router |
 
 - **`amountIn`** is what the Pot pays. **Every swap is exact input.**
 - **`minOut`** is the least the swap may deliver; below it the whole program reverts. `0` sets no
@@ -59,12 +60,16 @@ received:
   2500 for PancakeSwap V2). `uniswapV4` takes the pool key's `fee`, `tickSpacing` and `hooks`, and
   builds the key from `tokenIn` and `tokenOut` in sort order. `uint256Indices` picks a Curve
   CryptoSwap pool's `uint256` coin indices over a StableSwap pool's `int128` ones.
+- `uniswapV3Capped` is `uniswapV3` with the pool's call held to `gasCap` gas (`0` is none), through
+  the Router's `swapV3Capped`: for a pool whose plugin burns the gas it is given (Base QuickSwap V4
+  and Hydrex V4), capped below the plugin's threshold so the swap keeps its fixed cost and output.
+  The cap is measured per plugin; one too low for the swap reverts, and `tryUniswapV3Capped` skips.
 
 Each venue has a `try` form — `tryUniswapV2`, `tryCurve`, `tryBalancerV2`, `tryDodoV2`,
-`tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
-`tryInfinityBin` — that takes the same arguments as the function it names and returns `0`, having
-moved nothing, instead of reverting when the swap cannot be made. A swap that ran returns at least
-1, so `0` always means nothing moved:
+`tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`, `tryUniswapV3Capped`, `tryUniswapV4`,
+`tryMaverickV2`, `tryInfinityCL`, `tryInfinityBin` — that takes the same arguments as the function
+it names and returns `0`, having moved nothing, instead of reverting when the swap cannot be made. A
+swap that ran returns at least 1, so `0` always means nothing moved:
 
 - the forms of the venues paid first check the pool's own view before anything moves (the V2
   reserves, LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote`, WooPPV2's `query`), or

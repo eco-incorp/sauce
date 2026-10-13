@@ -11,10 +11,15 @@
  *   3. The same pools through `tryUniswapV3`: the paid swap delivers exactly what `uniswapV3` does,
  *      and each refusal above — an unanswered callback, `InputExceedsAuthorized`, a codeless pool, a
  *      pool for another pair — returns 0 with the Pot and the pool untouched and the cook landed.
+ *   4. A pool whose plugin spends the gas it is given, through `uniswapV3Capped` and
+ *      `tryUniswapV3Capped`: under a cap below the plugin's threshold the swap pays what `uniswapV3`
+ *      pays at its fixed cost; a cap of 0 is none; a cap too low for the swap reverts the plain form
+ *      and is a skip, with nothing moved and no allowance, for the try form.
  *
  * The pool is v12's own `test/mocks/MockV3Pool.sol` (copied into `fixtures/`, built by forge from
- * the same tree as the Router): Uniswap V3's `swap` selector, a settable callback selector, and a
- * knob that inflates what it asks to be paid.
+ * the same tree as the Router): Uniswap V3's `swap` selector, a settable callback selector, a
+ * knob that inflates what it asks to be paid, and one that makes it a plugin that burns the gas it
+ * is handed once it holds `threshold` (`setElasticPlugin`, after Base QuickSwap V4 / Hydrex V4).
  */
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -85,6 +90,7 @@ const walletClient = createWalletClient({ account: OWNER, transport });
 const erc20 = parseAbi([
   "function mint(address to, uint256 amount)",
   "function balanceOf(address account) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
 ]);
 
 /** Sends from `from`, resolving to the receipt's status rather than throwing on a revert. */
@@ -440,6 +446,150 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
         const { to, data } = trySwapCall(at, 1n);
         expect(await sendAs(OWNER, to, data)).toBe("reverted");
       });
+    });
+  });
+
+  describe("a pool whose plugin spends the gas it is given, through swapV3Capped", () => {
+    const AMOUNT_IN = 1_000n;
+    const RATE = 2n * 10n ** 18n;
+    const OUT = (AMOUNT_IN * RATE) / 10n ** 18n;
+    // Base QuickSwap V4 / Hydrex V4: an arbitrage after the swap once the pool's call holds about
+    // 1.17M gas, burning up to 5M of it.
+    const THRESHOLD = 1_000_000n;
+    const PLUGIN_BURN = 5_000_000n;
+    let token0: Address;
+    let token1: Address;
+    let elastic: Address;
+
+    const balance = (token: Address, holder: Address): Promise<bigint> =>
+      publicClient.readContract({
+        abi: erc20,
+        address: token,
+        args: [holder],
+        functionName: "balanceOf",
+      });
+
+    /** Cooks `source`'s route call on the Pot; the receipt's status and gas. */
+    const cook = async (source: string): Promise<{ status: string; gasUsed: bigint }> => {
+      const { calls } = compileSauceRoute("base", source, { engine: sauce.engine, pot: sauce.pot });
+      const hash = await walletClient.sendTransaction({
+        account: OWNER,
+        chain: null,
+        data: calls[0]!.data,
+        gas: GAS_LIMIT,
+        to: sauce.pot,
+      });
+      const { status, gasUsed } = await publicClient.waitForTransactionReceipt({ hash });
+
+      return { status, gasUsed };
+    };
+
+    /** A program swapping token0 -> token1 on the elastic pool through `call`, which must return
+     *  `expected` when given. */
+    const program = (call: string, expected?: bigint): string =>
+      [
+        `import { uniswapV3, uniswapV3Capped, tryUniswapV3Capped } from "@sauce/router";`,
+        "function main() {",
+        `  const got = ${call};`,
+        expected === undefined ? "" : `  require(got == ${expected}n);`,
+        "}",
+      ].join("\n");
+    const args = (): string =>
+      `${BigInt(elastic)}n, ${BigInt(token0)}n, ${BigInt(token1)}n, ${AMOUNT_IN}n, 0n`;
+    const plainSwap = (): string => program(`uniswapV3(${args()}, 0n, ctx.self())`);
+    const cappedSwap = (gasCap: bigint): string =>
+      program(`uniswapV3Capped(${args()}, ${gasCap}n, 0n, ctx.self())`);
+    const tryCapped = (gasCap: bigint, expected: bigint): string =>
+      program(`tryUniswapV3Capped(${args()}, ${gasCap}n, 0n, ctx.self())`, expected);
+
+    beforeAll(async () => {
+      const [a, b] = [await deploy(MOCK_ERC20.creationCode), await deploy(MOCK_ERC20.creationCode)];
+      [token0, token1] = BigInt(a) < BigInt(b) ? [a, b] : [b, a];
+      await sendAs(
+        OWNER,
+        token0,
+        encodeFunctionData({ abi: erc20, args: [sauce.pot, 10n ** 24n], functionName: "mint" }),
+      );
+      elastic = await deploy(
+        `${MOCK_V3_POOL.creationCode}${encodeAbiParameters(
+          [{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "uint256" }],
+          [token0, token1, 3000, RATE],
+        ).slice(2)}` as Hex,
+      );
+      await sendAs(
+        OWNER,
+        token1,
+        encodeFunctionData({ abi: erc20, args: [elastic, 10n ** 24n], functionName: "mint" }),
+      );
+      expect(
+        await sendAs(
+          OWNER,
+          elastic,
+          encodeFunctionData({
+            abi: MOCK_V3_POOL.abi,
+            functionName: "setElasticPlugin",
+            args: [THRESHOLD, PLUGIN_BURN],
+          }),
+        ),
+      ).toBe("success");
+    });
+
+    it("below the plugin's threshold, pays what uniswapV3 pays at the swap's fixed cost", async () => {
+      const potOut = await balance(token1, sauce.pot);
+      const plain = await cook(plainSwap());
+      expect(plain.status).toBe("success");
+      expect(await balance(token1, sauce.pot)).toBe(potOut + OUT);
+      // Uncapped, the plugin burns its cap.
+      expect(plain.gasUsed).toBeGreaterThan(PLUGIN_BURN);
+
+      const capped = await cook(cappedSwap(400_000n));
+      expect(capped.status).toBe("success");
+      expect(await balance(token1, sauce.pot)).toBe(potOut + 2n * OUT);
+      expect(capped.gasUsed).toBeLessThan(THRESHOLD);
+    });
+
+    it("takes a cap of 0 as none, the same as uniswapV3", async () => {
+      const potOut = await balance(token1, sauce.pot);
+      const uncapped = await cook(cappedSwap(0n));
+      expect(uncapped.status).toBe("success");
+      expect(await balance(token1, sauce.pot)).toBe(potOut + OUT);
+      expect(uncapped.gasUsed).toBeGreaterThan(PLUGIN_BURN);
+    });
+
+    it("tryUniswapV3Capped delivers what uniswapV3 does under a cap that holds the swap", async () => {
+      const [potIn, potOut] = [await balance(token0, sauce.pot), await balance(token1, sauce.pot)];
+      const capped = await cook(tryCapped(400_000n, OUT));
+      expect(capped.status).toBe("success");
+      expect(capped.gasUsed).toBeLessThan(THRESHOLD);
+      expect(await balance(token0, sauce.pot)).toBe(potIn - AMOUNT_IN);
+      expect(await balance(token1, sauce.pot)).toBe(potOut + OUT);
+    });
+
+    it("a cap too low for the swap reverts uniswapV3Capped, and is a skip for tryUniswapV3Capped with nothing moved", async () => {
+      const [potIn, potOut, poolIn] = [
+        await balance(token0, sauce.pot),
+        await balance(token1, sauce.pot),
+        await balance(token0, elastic),
+      ];
+      expect((await cook(cappedSwap(20_000n))).status).toBe("reverted");
+      expect((await cook(tryCapped(20_000n, 0n))).status).toBe("success");
+      expect(await balance(token0, sauce.pot)).toBe(potIn);
+      expect(await balance(token1, sauce.pot)).toBe(potOut);
+      expect(await balance(token0, elastic)).toBe(poolIn);
+      const allowance = (spender: Address) =>
+        publicClient.readContract({
+          abi: erc20,
+          address: token0,
+          args: [sauce.pot, spender],
+          functionName: "allowance",
+        });
+      expect(await allowance(elastic)).toBe(0n);
+      expect(await allowance(sauce.router)).toBe(0n);
+    });
+
+    it("PLANTED: requiring a different return makes the same cook revert, so each cell's verdict is real", async () => {
+      expect((await cook(tryCapped(20_000n, 1n))).status).toBe("reverted");
+      expect((await cook(tryCapped(400_000n, OUT + 1n))).status).toBe("reverted");
     });
   });
 });

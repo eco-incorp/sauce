@@ -42,14 +42,14 @@
 //   - catching the pool's failure where the pool pulls the input and enforces the floor itself —
 //     `tryCurve` and `tryBalancerV2`, which also reset the approval to zero;
 //   - catching the Router's call where the Router pays the pool from inside it — `tryUniswapV3`,
-//     `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin`. The generation-4 Router
-//     takes no floor, so these hold a swap that ran to the floor afterwards — `minOut`, and at least
-//     1 — and revert below it: a swap that took input and delivered nothing (an input the pool rounds
-//     away, a hook that keeps it) cannot be undone, so it never reads as skipped. A swap that ran and
-//     moved nothing either way (a pool with no liquidity in range) is a skip: the Router's own
-//     `amountInUsed`, what it paid out of the Pot, tells the two apart. With no price limit, an
-//     empty concentrated-liquidity pool (V3, V4, Infinity CL) costs a full tick walk, millions of
-//     gas, before it is skipped; pass a `sqrtPriceLimitX96` to bound it.
+//     `tryUniswapV3Capped`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin`.
+//     The generation-4 Router takes no floor, so these hold a swap that ran to the floor afterwards
+//     — `minOut`, and at least 1 — and revert below it: a swap that took input and delivered
+//     nothing (an input the pool rounds away, a hook that keeps it) cannot be undone, so it never
+//     reads as skipped. A swap that ran and moved nothing either way (a pool with no liquidity in
+//     range) is a skip: the Router's own `amountInUsed`, what it paid out of the Pot, tells the two
+//     apart. With no price limit, an empty concentrated-liquidity pool (V3, V4, Infinity CL) costs a
+//     full tick walk, millions of gas, before it is skipped; pass a `sqrtPriceLimitX96` to bound it.
 //
 // ORIENTATION is checked from the arguments while the program runs, so a direction cannot be
 // stated backwards. A Uniswap V2 pair's direction IS the sort order of `tokenIn` and `tokenOut`
@@ -634,6 +634,96 @@ export function tryUniswapV3(
   }
   const out = balanceOf(tokenOut, recipient) - before;
   // Ran and moved nothing either way (no liquidity in range): a skip, not a swap below the floor.
+  if (paid == 0n && out == 0n) {
+    return 0n;
+  }
+  let floor = minOut;
+  if (floor == 0n) {
+    floor = 1n;
+  }
+  require(out >= floor);
+  return out;
+}
+
+// `uniswapV3` with the pool's `swap` called under `gasCap` gas, through the Router's `swapV3Capped`;
+// `gasCap` `0n` is no cap. The swap, its callback and the pool's hooks share that gas. It is for a
+// pool whose plugin spends the gas it is given: Base's QuickSwap V4 and Hydrex V4 (Algebra Integral)
+// plugins run an arbitrage after a swap once the pool's call holds about 1.17M gas, and burn what they
+// are handed when it is short of their need. Capped below that threshold the plugin skips it and the
+// swap pays the same output at its fixed cost. The cap is the caller's, measured per plugin: below
+// the plugin's threshold and above the swap's own need. A cap too low for the swap reverts the
+// program; `tryUniswapV3Capped` skips it instead. Needs a Router that has `swapV3Capped`.
+export function uniswapV3Capped(
+  pool: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  sqrtPriceLimitX96: Uint256,
+  gasCap: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  require(amountIn >> 255n == 0n);
+  require(tokenIn != tokenOut);
+  const token0 = UniswapV3Pool.at(pool).token0();
+  const token1 = UniswapV3Pool.at(pool).token1();
+  require((tokenIn == token0 && tokenOut == token1) || (tokenIn == token1 && tokenOut == token0));
+  const [paid, out] = SauceRouter.at(ctx.self()).swapV3Capped(
+    pool,
+    tokenIn,
+    tokenIn < tokenOut,
+    amountIn,
+    sqrtPriceLimitX96,
+    recipient,
+    gasCap,
+  );
+  require(out >= minOut);
+  return out;
+}
+
+// `uniswapV3Capped`, or nothing, exactly as `tryUniswapV3` is `uniswapV3`'s: `0n` with nothing moved
+// when the pool has no code or is not this pair's pool, or when its swap fails — a cap too low for
+// the swap among them: the pool runs out of gas inside the call that is caught, and the Router pays
+// it only from inside that call and approves nothing, so nothing moved and no allowance is left. A
+// swap that ran is held to the floor — `minOut`, and at least 1 — or the program reverts, unless it
+// moved nothing at all.
+export function tryUniswapV3Capped(
+  pool: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: Uint256,
+  sqrtPriceLimitX96: Uint256,
+  gasCap: Uint256,
+  minOut: Uint256,
+  recipient: Address,
+): Uint256 {
+  if (amountIn == 0n || amountIn >> 255n != 0n || tokenIn == tokenOut || ctx.codeSize(pool) == 0n) {
+    return 0n;
+  }
+  const token0 = UniswapV3Pool.at(pool)
+    .token0()
+    .catch(() => {
+      return 0n;
+    });
+  const token1 = UniswapV3Pool.at(pool)
+    .token1()
+    .catch(() => {
+      return 0n;
+    });
+  if ((tokenIn != token0 || tokenOut != token1) && (tokenIn != token1 || tokenOut != token0)) {
+    return 0n;
+  }
+  const before = balanceOf(tokenOut, recipient);
+  // As in `tryUniswapV3`: what the Router paid, or the largest uint256 when the call failed.
+  const paid = SauceRouterPaid.at(ctx.self())
+    .swapV3Capped(pool, tokenIn, tokenIn < tokenOut, amountIn, sqrtPriceLimitX96, recipient, gasCap)
+    .catch(() => {
+      return 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    });
+  if (paid == 115792089237316195423570985008687907853269984665640564039457584007913129639935n) {
+    return 0n;
+  }
+  const out = balanceOf(tokenOut, recipient) - before;
   if (paid == 0n && out == 0n) {
     return 0n;
   }

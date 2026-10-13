@@ -180,7 +180,7 @@ describe("@sauce/router: every function compiles from run-time arguments", () =>
 });
 
 describe("@sauce/router: the exports are the documented API", () => {
-  it("exports exactly the eleven venues and their eleven `try` forms", () => {
+  it("exports exactly the eleven venues, the gas-capped V3 swap, and a `try` form of each", () => {
     const exported = [...routerSource().matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
     expect(exported.sort()).toEqual(Object.keys(FUNCTIONS).sort());
     expect(Object.keys(FUNCTIONS).sort()).toEqual(
@@ -201,10 +201,12 @@ describe("@sauce/router: the exports are the documented API", () => {
         "tryTraderJoeLB",
         "tryUniswapV2",
         "tryUniswapV3",
+        "tryUniswapV3Capped",
         "tryUniswapV4",
         "tryWoofi",
         "uniswapV2",
         "uniswapV3",
+        "uniswapV3Capped",
         "uniswapV4",
         "woofi",
       ].sort(),
@@ -262,6 +264,7 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
     const ours = fragments("sauce-router.abi.json");
     expect(ours.map((f) => f.name)).toEqual([
       "swapV3",
+      "swapV3Capped",
       "swapV4",
       "swapMaverickV2",
       "swapInfinityBin",
@@ -290,6 +293,28 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
       expect(plain(fn)).toEqual(plain({ ...theirs, outputs: theirs.outputs.slice(0, 1) }));
       expect(fn.outputs.map((o) => o.name)).toEqual(["amountInUsed"]);
       expect(toFunctionSelector(fn)).toBe(toFunctionSelector(theirs));
+    }
+  });
+
+  // `swapV3Capped(address,address,bool,uint256,uint160,address,uint256)` is reached from the two
+  // capped forms only, and they reach no `swapV3`: every other function, `uniswapV3` and
+  // `tryUniswapV3` included, compiles exactly as it did and runs on a Router without the method.
+  it("reaches the Router's swapV3Capped from the capped forms only", () => {
+    const selector = (name: string): string =>
+      toFunctionSelector(fragments("sauce-router.abi.json").find((f) => f.name === name)!).slice(2);
+    expect(selector("swapV3Capped")).toBe("b7b71123");
+    expect(selector("swapV3")).toBe("cc58aa32");
+    for (const name of Object.keys(FUNCTIONS)) {
+      const code = hex(compileStdRouter(programCalling(name)).bytecode);
+      const capped = name === "uniswapV3Capped" || name === "tryUniswapV3Capped";
+      expect({ name, swapV3Capped: code.includes("b7b71123") }).toEqual({
+        name,
+        swapV3Capped: capped,
+      });
+      if (capped)
+        expect({ name, swapV3: code.includes("cc58aa32") }).toEqual({ name, swapV3: false });
+      if (name === "uniswapV3" || name === "tryUniswapV3")
+        expect(code.includes("cc58aa32")).toBe(true);
     }
   });
 
