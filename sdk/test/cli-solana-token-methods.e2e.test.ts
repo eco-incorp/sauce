@@ -552,6 +552,25 @@ describeSvm("the token methods on Solana: every account derived by the command",
     expect(tokenAmount(harness, potUsdc)).toBe(potBefore);
   }, 120_000);
 
+  it("--account names a program-derived address by its program and seeds, an argument among them", async () => {
+    const file = program(
+      "derived",
+      "function main(found: Account, salt: Uint256): Address {\n  return found.address;\n}\n",
+    );
+    // The Pot is the Kitchen's address for "pot", its owner and a 32-byte salt: here the salt is
+    // main's argument, written as a u128 seed twice over (16 bytes each).
+    const out = json(
+      await simulate(
+        file,
+        ...["--account", `found=pda:${KITCHEN}:"pot",owner,u128:@salt,u128:@salt`],
+        ...["--args", "0"],
+      ),
+    );
+    expect(out).toMatchObject({ ok: true });
+    // An Address main returns is read back as the key it is, in base58.
+    expect(out.returned).toBe(pot);
+  }, 120_000);
+
   it("creates a Token-2022 recipient's missing account under Token-2022, and pays it by transferChecked", async () => {
     const file = program(
       "pay-pyusd",

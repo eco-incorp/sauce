@@ -347,7 +347,8 @@ const COOK = {
         "Pot, signed for by the Kitchen), `owner`, `pot:USDC` or `owner:USDC` (that holder's " +
         "associated account for a token, by symbol or mint), `@to:USDC` (that of main's " +
         "argument `to`), `mint:USDC` (the mint), `program:USDC` (its token program) or " +
-        "`slot:@pool:USDC.vaultA` (a pool's account, read from the pool). " +
+        "`slot:@pool:USDC.vaultA` (a pool's account, read from the pool), " +
+        '`pda:<program>:"seed",@to,u64:7` (an address the program derives for those seeds). ' +
         "sauce_compile's manifest lists them; one with a `derive` (an account the token methods " +
         "added, such as USDC.transfer(to, amount)'s) is filled by itself, and named here only to " +
         "replace it.",

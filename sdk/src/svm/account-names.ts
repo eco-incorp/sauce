@@ -18,6 +18,14 @@
  *                        pool (base58, or `@<param>`) paying the token: `program`, `pool`, `config`,
  *                        `vaultA`, `vaultB`, `extra`, `ticks0`, `ticks1`, `ticks2`, read from the
  *                        pool's own state through `load` (`svm/pool-slot.ts`)
+ *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
+ *                        comma-separated, each one of:
+ *                          "text", or a bare word that is none of the below: its UTF-8 bytes
+ *                          pot | owner | self | @<param> | <base58>: that key's 32 bytes
+ *                          mint:<token>: the mint's key
+ *                          u8:<n> | u16:<n> | u32:<n> | u64:<n> | u128:<n>: the integer `n` (or
+ *                          `@<param>`, main's integer argument), little-endian, in that many bits
+ *                          0x<hex>: those bytes
  *
  * A token is a symbol the chain registers (`USDC`, a stock's `TSLAx`, matched without regard to
  * case), a mint's base58 address, or `@<param>`, a mint given as main's argument. A registered
@@ -26,7 +34,13 @@
  * The derivation is the ADDRESS the transaction attaches; what a program does with the account is
  * its own to check (the token methods check each holder's account on chain).
  */
-import { address, isAddress, type Address } from "@solana/kit";
+import {
+  address,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+  isAddress,
+  type Address,
+} from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
@@ -50,6 +64,8 @@ export interface SvmAccountNameContext {
   readonly via?: "kitchen" | "engine";
   /** main's `Address` arguments, by parameter name, as keys. */
   readonly args?: Readonly<Record<string, Address>>;
+  /** main's integer arguments, by parameter name: what a `u64:@<param>` seed takes. */
+  readonly integers?: Readonly<Record<string, bigint>>;
   /**
    * An unregistered mint's token program, read from the cluster. Without it, a name that needs an
    * unregistered mint's program is refused: nothing assumes one.
@@ -92,6 +108,14 @@ type Token =
   | { readonly kind: "address"; readonly key: string }
   | { readonly kind: "arg"; readonly param: string };
 
+/** One seed of a program-derived address. */
+type Seed =
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "key"; readonly holder: Holder }
+  | { readonly kind: "mint"; readonly token: Token }
+  | { readonly kind: "integer"; readonly bits: number; readonly value: bigint | string }
+  | { readonly kind: "bytes"; readonly hex: string };
+
 type Parsed =
   | { readonly kind: "holder"; readonly holder: Holder }
   | { readonly kind: "account"; readonly holder: Holder; readonly token: Token }
@@ -101,6 +125,12 @@ type Parsed =
       readonly pool: Holder;
       readonly token: Token;
       readonly part: SvmSlotPart;
+    }
+  | {
+      readonly kind: "pda";
+      readonly program: Holder;
+      readonly seeds: readonly Seed[];
+      readonly text: string;
     };
 
 const PARAM = /^@([A-Za-z_$][A-Za-z0-9_$]*)$/;
@@ -135,10 +165,68 @@ function parseSlot(value: string): Parsed | undefined {
   return { kind: "slot", pool, token, part };
 }
 
+const INTEGER = /^u(8|16|32|64|128):(?:(\d+)|@([A-Za-z_$][A-Za-z0-9_$]*))$/;
+const WORD = /^[A-Za-z0-9_.-]+$/;
+
+function parseSeed(text: string): Seed | undefined {
+  if (/^"[^"]*"$/.test(text)) return { kind: "text", text: text.slice(1, -1) };
+  const holder = parseHolder(text);
+  if (holder !== undefined) return { kind: "key", holder };
+  if (text.startsWith("mint:")) {
+    const token = parseToken(text.slice("mint:".length));
+    return token === undefined ? undefined : { kind: "mint", token };
+  }
+  const integer = INTEGER.exec(text);
+  if (integer !== null) {
+    return {
+      kind: "integer",
+      bits: Number(integer[1]),
+      value: integer[2] === undefined ? integer[3]! : BigInt(integer[2]),
+    };
+  }
+  if (/^0x(?:[0-9a-fA-F]{2})*$/.test(text)) return { kind: "bytes", hex: text.slice(2) };
+
+  return WORD.test(text) && !/^u\d+:/.test(text) ? { kind: "text", text } : undefined;
+}
+
+/** `a,"b,c",d` split at the commas outside quotes. */
+function seedTexts(text: string): string[] {
+  const parts: string[] = [];
+  let quoted = false;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '"') quoted = !quoted;
+    else if (text[i] === "," && !quoted) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+
+  return parts;
+}
+
+function parsePda(value: string): Parsed | undefined {
+  const rest = value.slice("pda:".length);
+  const at = rest.indexOf(":");
+  if (at <= 0) return undefined;
+  const program = parseHolder(rest.slice(0, at));
+  if (program === undefined || (program.kind !== "address" && program.kind !== "arg")) {
+    return undefined;
+  }
+  const text = rest.slice(at + 1);
+  if (text === "") return undefined;
+  const seeds = seedTexts(text).map(parseSeed);
+  if (seeds.some((seed) => seed === undefined)) return undefined;
+
+  return { kind: "pda", program, seeds: seeds as Seed[], text };
+}
+
 function parse(value: string): Parsed | undefined {
   const holder = parseHolder(value);
   if (holder !== undefined) return { kind: "holder", holder };
   if (value.startsWith("slot:")) return parseSlot(value);
+  if (value.startsWith("pda:")) return parsePda(value);
   const at = value.indexOf(":");
   if (at <= 0) return undefined;
   const head = value.slice(0, at);
@@ -279,8 +367,8 @@ export async function resolveSvmAccountName(
     throw new SvmAccountNameError(
       `'${value}' is not an address, pot, owner, self, @<argument>, or a token's account: ` +
         "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
-        "owner's, @to:USDC main's argument to's, mint:USDC the mint and program:USDC its token " +
-        "program",
+        "owner's, @to:USDC main's argument to's, mint:USDC the mint, program:USDC its token " +
+        'program, and pda:<program>:"seed",@to,u64:7 an address a program derives',
     );
   }
   if (parsed.kind === "holder") {
@@ -307,6 +395,7 @@ export async function resolveSvmAccountName(
 
   const rows = svmTokenRows(ctx.chain);
   if (parsed.kind === "slot") return resolveSlot(parsed, ctx, rows);
+  if (parsed.kind === "pda") return resolvePda(parsed, ctx, rows);
   const tokenText = value.slice(value.indexOf(":") + 1);
   const whose = value.slice(0, value.indexOf(":"));
   const { mint, row, what } = mintOf(parsed.token, whose, ctx, rows);
@@ -381,4 +470,78 @@ async function resolveSlot(
   ][index]!;
 
   return { value, label: `pool ${pool}'s ${parsed.part}, paying ${what}`, kind: "address" };
+}
+
+/** main's integer argument `param`. */
+function integerArgument(param: string, ctx: SvmAccountNameContext): bigint {
+  const value = ctx.integers?.[param];
+  if (value === undefined) {
+    throw new SvmAccountNameError(
+      `the account is derived from main's argument \`${param}\`, which was not given: pass ` +
+        "main's arguments",
+    );
+  }
+
+  return value;
+}
+
+/** A program-derived address, its seeds made from the cook and main's arguments. */
+async function resolvePda(
+  parsed: Extract<Parsed, { kind: "pda" }>,
+  ctx: SvmAccountNameContext,
+  rows: readonly SvmTokenRow[],
+): Promise<ResolvedSvmAccountName> {
+  const encoder = getAddressEncoder();
+  const keyOf = (holder: Holder): Address => {
+    switch (holder.kind) {
+      case "pot":
+        return ctx.pot;
+      case "owner":
+        return ctx.owner;
+      case "self":
+        return ctx.via === "engine" ? ctx.owner : ctx.pot;
+      case "arg":
+        return argument(holder.param, ctx);
+      case "address":
+        return address(holder.key);
+    }
+  };
+  const program = keyOf(parsed.program);
+  const seeds = parsed.seeds.map((seed): Uint8Array => {
+    switch (seed.kind) {
+      case "text":
+        return new TextEncoder().encode(seed.text);
+      case "key":
+        return new Uint8Array(encoder.encode(keyOf(seed.holder)));
+      case "mint":
+        return new Uint8Array(encoder.encode(mintOf(seed.token, "mint", ctx, rows).mint));
+      case "bytes":
+        return Uint8Array.from(seed.hex.match(/../g) ?? [], (byte) => parseInt(byte, 16));
+      case "integer": {
+        const value =
+          typeof seed.value === "bigint" ? seed.value : integerArgument(seed.value, ctx);
+        const width = seed.bits / 8;
+        if (value >= 1n << BigInt(seed.bits)) {
+          throw new SvmAccountNameError(
+            `seed u${seed.bits}:${value} does not fit ${width} byte${width === 1 ? "" : "s"}`,
+          );
+        }
+        return Uint8Array.from({ length: width }, (_, i) =>
+          Number((value >> BigInt(8 * i)) & 0xffn),
+        );
+      }
+    }
+  });
+  const long = seeds.findIndex((seed) => seed.length > 32);
+  if (long >= 0) {
+    throw new SvmAccountNameError(
+      `seed ${long + 1} is ${seeds[long]!.length} bytes; a seed is at most 32`,
+    );
+  }
+  if (seeds.length > 16) {
+    throw new SvmAccountNameError(`${seeds.length} seeds; an address derives from at most 16`);
+  }
+  const [value] = await getProgramDerivedAddress({ programAddress: program, seeds });
+
+  return { value, label: `the address ${program} derives for ${parsed.text}`, kind: "address" };
 }

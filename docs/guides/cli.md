@@ -1358,7 +1358,10 @@ language, extended:
   base58 key, and the token is a symbol, a base58 mint, or `@mint` for `main`'s argument `mint`;
 - `slot:<pool>:<token>.<part>`: one of the nine accounts a venue's swap takes for a pool paying the
   token (`program`, `pool`, `config`, `vaultA`, `vaultB`, `extra`, `ticks0` to `ticks2`), read from
-  the pool on the cluster: what a venue's namespace (`OrcaWhirlpool.swap(pool, …)`) adds.
+  the pool on the cluster: what a venue's namespace (`OrcaWhirlpool.swap(pool, …)`) adds;
+- `pda:<program>:<seeds>`: the address a program derives for its seeds, comma-separated. A seed is
+  `"text"` or a bare word, a key (`pot`, `owner`, `self`, `@to`, base58), `mint:USDC`, an integer
+  (`u8:7` to `u128:7`, or `u64:@index` from an argument) or hex bytes after `0x`.
 
 `simulate`, `run` and `tx` derive each such slot from the owner, the Pot and `main`'s arguments,
 and an `--account` for one of them replaces its derivation. `run` creates a recipient's missing
