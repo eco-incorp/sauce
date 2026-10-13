@@ -252,7 +252,9 @@ for (const [, name, args] of svmExports.filter((m) => !limit.has(m[1]!)))
     `${name}'s arguments`,
   );
 // What a program carries: one venue's function, or all nine through trySwap.
-const block = /```sauce chain=solana\n([\s\S]*?)```/.exec(solana)![1]!;
+const block = [...solana.matchAll(/```sauce chain=solana\n([\s\S]*?)```/g)]
+  .map((match) => match[1]!)
+  .find((code) => code.includes('from "@sauce/router"'))!;
 const one = routes.compileSauceProgram("solana", block).bytecode.length;
 const all = routes.compileSauceProgram("solana", block.replaceAll("orcaWhirlpool", "trySwap"))
   .bytecode.length;
@@ -263,6 +265,39 @@ check(
   `one venue's function is ${one} bytes of program, trySwap ${all}`,
 );
 console.log(`@sauce/router on Solana: ${named.join(", ")}; ${one} and ${all} bytes`);
+
+// A venue by its namespace: the skill names every venue `sauce globals --chain solana` lists, and
+// the example compiles to that venue's own function, never trySwap, its pool's nine accounts and the
+// Pot's added to main with how each is derived.
+const namespaces = routes.sourceGlobals("solana").venues.map((venue) => venue.namespace);
+for (const namespace of namespaces)
+  check(solana.includes(`\`${namespace}\``), `the skill names ${namespace}`);
+const example = routes.compileSauceProgram(
+  "solana",
+  readFileSync(new URL("./solana-swap.sauce.ts", import.meta.url), "utf8"),
+);
+check(
+  example.source.includes("__sauce_tryOrcaWhirlpool(") && !example.source.includes("trySwap("),
+  "OrcaWhirlpool.trySwap compiles to tryOrcaWhirlpool",
+);
+const derived = example.derivedAccounts ?? {};
+for (const part of ["program", "pool", "vaultA", "ticks2"])
+  check(
+    Object.values(derived).includes(`slot:@pool:USDC.${part}`),
+    `the pool's ${part} is derived`,
+  );
+check(
+  derived.potWSOL === "self:WSOL" && derived.toWSOL === "@to:WSOL",
+  "what is bought lands in the Pot's WSOL account, and goes on to to's",
+);
+check(solana.includes("`slot:@pool:USDC.vaultA`"), "the skill shows a slot derivation");
+check(
+  example.entryParams.map((param) => param.name).join() === "pool,to,amountIn,maxPrice,minOut",
+  "the example's arguments are its own; the accounts are none of them",
+);
+console.log(
+  `Solana venues by namespace: ${namespaces.join(", ")}; the example ${example.bytecode.length} bytes`,
+);
 console.log(
   `@sauce/router exact input on Solana: ${venues.length} venues in four forms, ${instructionOnly.join(", ")}`,
 );

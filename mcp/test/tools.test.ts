@@ -260,6 +260,79 @@ describe("sauce_globals", () => {
     assert.ok(!symbols.has("USDC"), "the stocks alone");
   });
 
+  it("lists Solana's venue namespaces, and compiles a swap at one with its accounts derived", async () => {
+    const listed = ok(await mcp.call("sauce_globals", { chain: "solana", protocols: true })) as {
+      venues: Array<{ namespace: string; program: string; methods: string[] }>;
+    };
+    assert.deepEqual(
+      listed.venues.map((venue) => venue.namespace),
+      [
+        "RaydiumClmm",
+        "PancakeswapClmm",
+        "Byreal",
+        "StabbleClmm",
+        "OrcaWhirlpool",
+        "Cropper",
+        "Defituna",
+        "Crema",
+        "Phoenix",
+      ],
+    );
+    assert.equal(
+      listed.venues.find((venue) => venue.namespace === "OrcaWhirlpool")!.program,
+      "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+    );
+    const compiled = ok(
+      await mcp.call("sauce_compile", {
+        source:
+          "function main(pool: Address, amountIn: Uint256): Uint256 {\n" +
+          "  return OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, 1, 1);\n}\n",
+        chain: "solana",
+      }),
+    );
+    const manifest = compiled.manifest as { accounts: Array<{ name: string; derive?: string }> };
+    assert.equal(
+      manifest.accounts.find((slot) => slot.name === "poolVaultA")?.derive,
+      "slot:@pool:USDC.vaultA",
+    );
+  });
+
+  it("lists the accounts a program on Solana writes where it uses them, and compiles one", async () => {
+    const { tools } = await mcp.client.listTools();
+    const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
+    assert.match(description, /`accounts`: Solana\.pda\(program, \[seeds\]\)/);
+    const listed = ok(await mcp.call("sauce_globals", { chain: "solana" })) as {
+      accounts: Array<{ expression: string; account: string; derive: string }>;
+    };
+    assert.deepEqual(
+      listed.accounts.find((one) => one.expression === "Solana.pda(program, [seeds])"),
+      {
+        expression: "Solana.pda(program, [seeds])",
+        account: "the address program derives for the seeds",
+        derive: "pda:<program>:<seeds>",
+      },
+    );
+    assert.equal(
+      (ok(await mcp.call("sauce_globals", { chain: "base" })) as { accounts?: unknown }).accounts,
+      undefined,
+    );
+    const compiled = ok(
+      await mcp.call("sauce_compile", {
+        source:
+          "function main(program: Address, owner: Address): Uint256 {\n" +
+          '  return Solana.pda(program, ["state", owner]).writable().dataLen;\n}\n',
+        chain: "solana",
+      }),
+    );
+    const manifest = compiled.manifest as {
+      accounts: Array<{ name: string; requires: string; derive?: string }>;
+    };
+    assert.deepEqual(
+      manifest.accounts.map(({ name, requires, derive }) => ({ name, requires, derive })),
+      [{ name: "statePda", requires: "writable", derive: 'pda:@program:"state",@owner' }],
+    );
+  });
+
   it("lists, finds and pages Solana's stock mints, each a Token-2022 mint with its issuer", async () => {
     const { tools } = await mcp.client.listTools();
     const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
@@ -645,6 +718,30 @@ describe("sauce_compile", () => {
       manifest.accounts.filter((entry) => entry.kind === "slot").map((entry) => entry.name),
       ["tokenProgram", "source", "destination", "authority"],
     );
+  });
+
+  it("lists the accounts the token methods add on Solana, each with how the cook derives it", async () => {
+    const out = ok(
+      await mcp.call("sauce_compile", {
+        source: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+        chain: "solana",
+        args: [SOLANA_OWNER, "400"],
+      }),
+    );
+    const manifest = out.manifest as {
+      accounts: Array<{ name?: string; kind: string; derive?: string }>;
+    };
+    assert.deepEqual(
+      manifest.accounts.map((entry) => [entry.name, entry.derive]),
+      [
+        ["tokenProgram", "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"],
+        ["pot", "self"],
+        ["potUSDC", "self:USDC"],
+        ["toUSDC", "@to:USDC"],
+      ],
+    );
+    // Sized with every derived account, none assumed: the cook needs no accounts input.
+    assert.deepEqual((out.cook as { assumed: string[] }).assumed, []);
   });
 
   it("takes a Solana key define in base58, as the sauce command does", async () => {

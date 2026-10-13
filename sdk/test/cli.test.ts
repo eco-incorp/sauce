@@ -720,6 +720,14 @@ describe("sauce compile", () => {
     const pot = (await sized("--account", "pot=pot", "--args", "5")).cook!;
     expect(pot.assumed).toEqual(["tokenProgram", "source", "dest"]);
     expect(pot.size).toBeLessThan(distinct.size);
+    // `system` is the System Program, and no holder of a token account.
+    const holder = await sauce(
+      ...["compile", program, "--chain", "solana", "--json", "--account", "dest=system:USDC"],
+    );
+    expect(holder.code).toBe(2);
+    expect(holder.stderr).toContain(
+      "--account dest=system:USDC: system is the System Program, which holds no token account",
+    );
     // Past the limit: said on stderr, and that `run` stages it.
     const large = file(
       "large.sauce.ts",

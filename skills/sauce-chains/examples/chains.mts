@@ -3,9 +3,9 @@
 // address the compile resolves, the one the chain's reference file records and the one the
 // compiled program carries, and `chainId` is the chain's id. A name the chain lacks is refused with
 // the words the skill quotes; a chain-qualified contract is that chain's address, called or not,
-// and a chain-qualified token is refused. Then payout-solana.sauce.ts: its accounts in order with their
-// roles, its arguments, USDC an SPL Token mint and TSLAx a Token-2022 mint whose decimals the program
-// passes. Last, the Sauce deployment: references/deployments.json holds the addresses the SDK builds
+// and a chain-qualified token is refused. Then payout-solana.sauce.ts: the accounts compiling adds
+// to main and how each is derived, its arguments, USDC an SPL Token mint moved by transfer and TSLAx
+// a Token-2022 mint moved by transferChecked with its decimals. Last, the Sauce deployment: references/deployments.json holds the addresses the SDK builds
 // every cook with, under the keys the skill's table names, and each chain's file points at it.
 // Offline: nothing is sent.
 //
@@ -154,22 +154,38 @@ quoted(
   "'USDC' is not a known protocol or family alias",
 );
 
-// payout-solana.sauce.ts: every account is a slot, in order, with its role; the scalars are the
-// arguments; the symbols are Solana's mints.
+// payout-solana.sauce.ts: written as on an EVM chain, it names no account. Compiling adds each one
+// its calls move through to main, with how it is derived: both token programs, the Pot, the Pot's
+// and the recipient's token accounts and TSLAx's mint, which its checked write takes. The scalars
+// are main's own arguments; the symbols are Solana's mints.
 const payoutSource = read("./payout-solana.sauce.ts");
 const payout = routes.compileSauceProgram("solana", payoutSource);
 const slots = (payout.manifest?.accounts ?? []).map((a) =>
   a.kind === "slot" ? `${a.name}:${a.requires}` : "remaining",
 );
 check(
-  slots.join() ===
-    "pot:readonly_signer,usdcProgram:readonly,potUsdc:writable,toUsdc:writable," +
-      "tslaxProgram:readonly,tslaxMint:readonly,potTslax:writable,toTslax:writable",
-  `manifest order and roles: ${slots}`,
+  JSON.stringify(payout.derivedAccounts) ===
+    JSON.stringify({
+      potUSDC: "self:USDC",
+      pot: "self",
+      tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      recipientUSDC: "@recipient:USDC",
+      recipientTSLAx: "@recipient:TSLAx",
+      token2022Program: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      mintTSLAx: "mint:TSLAx",
+      potTSLAx: "self:TSLAx",
+    }),
+  `the accounts added and their derivations: ${JSON.stringify(payout.derivedAccounts)}`,
 );
 check(
-  payout.entryParams.map((param) => param.name).join() === "cash,shares",
-  "the arguments are the scalar parameters",
+  payout.entryParams.map((param) => param.name).join() === "recipient,cash,shares",
+  "the arguments are main's own parameters",
+);
+// USDC moves by SPL Token's transfer, TSLAx by the checked write with its decimals.
+check(payout.source.includes("__sauce_transfer(USDC,"), "USDC moves by transfer");
+check(
+  /__sauce_transferChecked\(TSLAx,[^;]*, 8\);/.test(payout.source),
+  "TSLAx moves by transferChecked, given its decimals",
 );
 const mints = routes.sourceGlobals("solana").tokens;
 const usdc = mints.find((one) => one.symbol === "USDC")!;
@@ -182,10 +198,6 @@ check(
 check(
   usdc.decimals === 6 && tslax.decimals === 8 && tslax.stock !== undefined,
   "USDC has 6 decimals, and TSLAx, a stock, 8",
-);
-check(
-  /transferChecked\(TSLAx,[^)]*, 8\)/.test(payoutSource),
-  "transferChecked is given TSLAx's decimals",
 );
 for (const mint of [usdc, tslax]) {
   check(
