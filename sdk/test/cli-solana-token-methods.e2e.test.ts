@@ -810,6 +810,8 @@ describeSvm("the token methods on Solana: every account derived by the command",
     );
     const out = json(await simulate(file, "--args", KITCHEN, "0"));
     expect(out).toMatchObject({ ok: true });
-    expect(Number(out.returned)).toBe(harness.svm.getAccount(pot).data.length);
+    const potAccount = harness.svm.getAccount(pot);
+    if (!potAccount.exists) throw new Error("the Pot was created before the suite");
+    expect(Number(out.returned)).toBe(potAccount.data.length);
   }, 120_000);
 });
