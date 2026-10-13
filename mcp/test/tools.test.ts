@@ -647,6 +647,30 @@ describe("sauce_compile", () => {
     );
   });
 
+  it("lists the accounts the token methods add on Solana, each with how the cook derives it", async () => {
+    const out = ok(
+      await mcp.call("sauce_compile", {
+        source: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+        chain: "solana",
+        args: [SOLANA_OWNER, "400"],
+      }),
+    );
+    const manifest = out.manifest as {
+      accounts: Array<{ name?: string; kind: string; derive?: string }>;
+    };
+    assert.deepEqual(
+      manifest.accounts.map((entry) => [entry.name, entry.derive]),
+      [
+        ["tokenProgram", "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"],
+        ["pot", "self"],
+        ["potUSDC", "self:USDC"],
+        ["toUSDC", "@to:USDC"],
+      ],
+    );
+    // Sized with every derived account, none assumed: the cook needs no accounts input.
+    assert.deepEqual((out.cook as { assumed: string[] }).assumed, []);
+  });
+
   it("takes a Solana key define in base58, as the sauce command does", async () => {
     const base58 = ok(
       await mcp.call("sauce_compile", {
