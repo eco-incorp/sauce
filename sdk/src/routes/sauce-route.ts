@@ -641,7 +641,7 @@ function compileForChain(
   // symbols) and the `Token(addr)` global wrapper (always — it takes an arbitrary address, not a
   // registry symbol). Both lower a WRITE to `@sauce/token`'s SafeERC20 function and a READ to the
   // typed `IERC20.at(...)` binding, so their imports are collected across both and injected ONCE
-  // (the SDK serves both modules itself); on svm either is the same EVM-only error.
+  // (the SDK serves both modules itself). On svm both spellings are `svm-token-rewrite.ts`'s.
   const writes = new Set<SafeWrite>();
   let erc20 = false;
   let tokenRewrote = false;

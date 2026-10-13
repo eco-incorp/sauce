@@ -827,12 +827,13 @@ function renderGlobals(data) {
   if (globals.tokens.some((entry) => entry.chain.kind === "svm")) {
     tokens.push(
       "",
-      "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
-      "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token",
-      "methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana",
-      "file in `sauce-chains`; a program for devnet takes its mint as an `Address` parameter of",
-      "`main`. That file also names each mint's token program: legacy SPL Token, or Token-2022, whose",
-      "mints a program moves with the checked writes (`sauce-solana`).",
+      "On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token",
+      "accounts are added to `main` and derived when the cook is built (`sauce-solana`), and the",
+      "symbol alone is the mint's 32-byte key, a value for the `@sauce/token` functions",
+      "(`balanceOf(USDC, account)`). Devnet's mints, which differ, are in the Solana file in",
+      "`sauce-chains`; a program for devnet takes its mint as an `Address` parameter of `main`",
+      "(`Token(mint)`). That file also names each mint's token program: legacy SPL Token, or",
+      "Token-2022, whose mints move by the checked writes.",
     );
   }
   tokens.push(
@@ -1770,10 +1771,11 @@ function renderTokens(data, globalsSkill) {
     "same token is a property of the chain's export, `Base.USDC`, with its `address`, `decimals` and",
     "`symbol`. Amounts are integers in the token's smallest units: nothing scales them by decimals.",
     "",
-    "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
-    "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token methods",
-    "(`USDC.transfer(...)`) are EVM-only. Each Solana mint's token program is legacy SPL Token or",
-    "Token-2022, whose mints a program moves with the checked writes.",
+    "On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token",
+    "accounts are added to `main` and derived when the cook is built, and the symbol alone is the",
+    "mint's 32-byte key, a value for the `@sauce/token` functions (`balanceOf(USDC, account)`). Each",
+    "Solana mint's token program is legacy SPL Token or Token-2022, whose mints move by the checked",
+    "writes.",
     "",
     "| Chain | Tokens | Tokenized stocks |",
     "| --- | --- | --- |",

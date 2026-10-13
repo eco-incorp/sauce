@@ -6,7 +6,7 @@
  *
  * - **tokens**: `token-registry.ts`'s rows for the chain, the symbols `<Sym>.transfer(...)` and a
  *   bare `USDC` resolve. On Solana they are the cluster's mints: a bare `USDC` is the mint's 32-byte
- *   key, and the token syntax is EVM-only.
+ *   key, and the token syntax adds the accounts it moves through to `main`.
  * - **protocols**: every `<Protocol>[.<Contract>]` reference the protocol-accessor rewrite resolves
  *   on the chain — through `resolveProtocolContract`, the rewrite's own resolver, not a copy of its
  *   rules — with each contract's address and vendored methods. A family alias (`Uniswap` for

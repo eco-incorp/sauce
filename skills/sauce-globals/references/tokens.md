@@ -21,12 +21,13 @@ and amounts are in its smallest units (its decimals). Their addresses are in the
 - **Berachain** (`berachain`, [addresses](../../sauce-chains/references/berachain.md)): `USDT0` (6)
 - **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `PYUSD` (6), `USDC` (6), `USDT` (6), `WSOL` (9); and 1799 tokenized stocks ([stocks](stocks.md))
 
-On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
-(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token
-methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana
-file in `sauce-chains`; a program for devnet takes its mint as an `Address` parameter of
-`main`. That file also names each mint's token program: legacy SPL Token, or Token-2022, whose
-mints a program moves with the checked writes (`sauce-solana`).
+On Solana the token methods are the same (`USDC.transfer(to, amount)`): each call's token
+accounts are added to `main` and derived when the cook is built (`sauce-solana`), and the
+symbol alone is the mint's 32-byte key, a value for the `@sauce/token` functions
+(`balanceOf(USDC, account)`). Devnet's mints, which differ, are in the Solana file in
+`sauce-chains`; a program for devnet takes its mint as an `Address` parameter of `main`
+(`Token(mint)`). That file also names each mint's token program: legacy SPL Token, or
+Token-2022, whose mints move by the checked writes.
 
 ## Token functions
 
