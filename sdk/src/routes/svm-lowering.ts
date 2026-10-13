@@ -64,6 +64,8 @@ export type Holder =
 interface MainParam {
   readonly kind: "address" | "account" | "other";
   readonly writable: boolean;
+  /** The annotation's type name (`Uint256`, `Address`, `Account`), where it is one name. */
+  readonly type?: string;
 }
 
 interface Slot {
@@ -155,6 +157,7 @@ function mainParams(main: AstNode): ReadonlyMap<string, MainParam> {
     params.set(nameOf(param), {
       kind: type === "Address" ? "address" : type === "Account" ? "account" : "other",
       writable: roles.includes("Writable"),
+      ...(type === undefined ? {} : { type }),
     });
   }
 
@@ -438,27 +441,27 @@ export class SvmLowering {
   }
 
   /** The token program that owns the mint. */
-  tokenProgram(token: TokenRef): string {
+  tokenProgram(token: TokenRef, role: { writable?: boolean; signer?: boolean } = {}): string {
     if (token.row?.tokenProgram === TOKEN_PROGRAM_ID) {
-      return this.account(TOKEN_PROGRAM_ID, "tokenProgram", {});
+      return this.account(TOKEN_PROGRAM_ID, "tokenProgram", role);
     }
     if (token.row?.tokenProgram === TOKEN_2022_PROGRAM_ID) {
-      return this.account(TOKEN_2022_PROGRAM_ID, "token2022Program", {});
+      return this.account(TOKEN_2022_PROGRAM_ID, "token2022Program", role);
     }
 
     return this.account(
       `program:${token.name}`,
       token.param === undefined ? `program${token.stem}` : `${token.param}Program`,
-      {},
+      role,
     );
   }
 
   /** The mint's own account. */
-  mintAccount(token: TokenRef): string {
+  mintAccount(token: TokenRef, role: { writable?: boolean; signer?: boolean } = {}): string {
     return this.account(
       `mint:${token.name}`,
       token.param === undefined ? `mint${token.stem}` : `${token.param}Account`,
-      {},
+      role,
     );
   }
 

@@ -47,8 +47,12 @@ describe("svm account names", () => {
     });
   });
 
-  it("an address is itself, and @<param> main's argument", async () => {
+  it("an address is itself, @<param> main's argument, and system the System Program", async () => {
     expect(await resolveSvmAccountName(TO, ctx())).toEqual({ value: TO, kind: "address" });
+    expect(await resolveSvmAccountName("system", ctx())).toEqual({
+      value: "11111111111111111111111111111111",
+      kind: "address",
+    });
     expect(await resolveSvmAccountName("@to", ctx())).toEqual({
       value: TO,
       label: "main's argument to",
@@ -206,6 +210,7 @@ describe("svm account names", () => {
     for (const name of [
       "pot",
       "self",
+      "system",
       "@to",
       TO,
       "self:USDC",
@@ -224,6 +229,7 @@ describe("svm account names", () => {
       "@1x",
       "pot:US-DC",
       "self:USDC:x",
+      "system:USDC",
       "pda:",
       `pda:${TO}`,
       "pda:x:y",

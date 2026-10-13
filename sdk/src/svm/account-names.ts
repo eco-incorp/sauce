@@ -7,6 +7,7 @@
  *   self                 the authority the program acts with: the Pot, cooked through the Kitchen;
  *                        the owner, cooked directly on the engine (`via: "engine"`)
  *   <base58>             that address
+ *   system               the System program
  *   @<param>             the key given as main's argument `<param>`
  *   <holder>:<token>     the holder's associated token account for the mint, under the token
  *                        program that owns the mint; a holder is `pot`, `owner`, `self`, `@<param>`
@@ -222,7 +223,12 @@ function parsePda(value: string): Parsed | undefined {
   return { kind: "pda", program, seeds: seeds as Seed[], text };
 }
 
+/** The System program, which `system` names. */
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+
 function parse(value: string): Parsed | undefined {
+  if (value === "system")
+    return { kind: "holder", holder: { kind: "address", key: SYSTEM_PROGRAM } };
   const holder = parseHolder(value);
   if (holder !== undefined) return { kind: "holder", holder };
   if (value.startsWith("slot:")) return parseSlot(value);

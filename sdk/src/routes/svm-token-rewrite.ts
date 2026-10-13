@@ -72,6 +72,7 @@ import {
   type TokenRef,
 } from "./svm-lowering.js";
 import { collectVenueMethods, isVenueNamespace } from "./svm-venue-methods.js";
+import { ACCOUNT_EXPRESSION_ROOT, collectAccountExpressions } from "./svm-account-expressions.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 const TOKEN_LIBRARY = "@sauce/token";
@@ -104,7 +105,8 @@ const METHOD_PARAMS: Readonly<Record<string, readonly string[]>> = {
 export type SvmTokenRewriteResult = SvmLoweringResult;
 
 /**
- * Lowers a program's token syntax and venue namespaces for Solana, adding the accounts they need to
+ * Lowers a program's token syntax, venue namespaces and account expressions for Solana, adding the
+ * accounts they need to
  * `main`. `tokens` is the chain's symbol to mint key map (the registry's, with any symbol the caller
  * gave its own mint), and `rows` the registry's mints, whose programs and decimals pick each write.
  */
@@ -117,13 +119,17 @@ export function rewriteSvmTokenSyntax(
   // The scan stops at the first it meets; a mention in a comment only costs the parse.
   if (
     !source.includes(TOKEN_FACTORY_NAME) &&
-    !namesAny(source, (name) => tokens.has(name) || isVenueNamespace(name))
+    !namesAny(
+      source,
+      (name) => tokens.has(name) || isVenueNamespace(name) || name === ACCOUNT_EXPRESSION_ROOT,
+    )
   ) {
     return { source, rewrote: false, derived: {} };
   }
   const lowering = new SvmLowering(source, tokens, rows);
   collectTokenMethods(lowering);
   collectVenueMethods(lowering);
+  collectAccountExpressions(lowering);
 
   return lowering.finish();
 }
