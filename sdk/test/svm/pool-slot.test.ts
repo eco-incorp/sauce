@@ -67,6 +67,52 @@ describe("svmPoolSlot", () => {
     const nowhere = address("11111111111111111111111111111112") as Address;
     await expect(svmPoolSlot(load, nowhere, USDC)).rejects.toThrow("has no account");
   });
+
+  it.each([
+    ["raydium-clmm-sol-usdc", "Raydium CLMM pool"],
+    ["orca-whirlpool-sol-usdc", "Orca Whirlpools pool"],
+    ["cropper-sol-usdc", "Cropper pool"],
+    ["defituna-sol-usdc", "DefiTuna pool"],
+    ["crema-sol-usdc", "Crema pool"],
+    ["phoenix-sol-usdc", "Phoenix market"],
+  ])(
+    "%s: an account of the venue's program that is not a pool is refused before anything else is read",
+    async (name, what) => {
+      const p = pool(name);
+      const forged = new Uint8Array(BYTES.get(p.pool)!);
+      forged[0] ^= 0xff;
+      const read: Address[] = [];
+      const forgedLoad: OwnedAccountLoader = async (at) => {
+        read.push(at);
+        return at === p.pool ? { data: forged, owner: p.program } : load(at);
+      };
+      await expect(svmPoolSlot(forgedLoad, p.pool, USDC)).rejects.toThrow(
+        `${p.pool} is not a ${what}: its account is another of the program's`,
+      );
+      expect(read).toEqual([p.pool]);
+    },
+  );
+
+  it("reads a Raydium-layout pool's tick arrays that hold nothing together, not one by one", async () => {
+    const p = pool("raydium-clmm-sol-usdc");
+    // No array marked: the slot is the three nearest its price that exist.
+    const unmarked = new Uint8Array(BYTES.get(p.pool)!);
+    unmarked.fill(0, 904, 904 + 128);
+    let inFlight = 0;
+    let most = 0;
+    const slow: OwnedAccountLoader = async (at) => {
+      if (at === p.pool) return { data: unmarked, owner: p.program };
+      inFlight++;
+      most = Math.max(most, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+      return load(at);
+    };
+    const slot = await svmPoolSlot(slow, p.pool, USDC);
+    expect(most).toBeGreaterThan(1);
+    for (const tick of slot.ticks) expect(BYTES.has(tick)).toBe(true);
+    expect(new Set(slot.ticks).size).toBe(3);
+  });
 });
 
 describe("slot:<pool>:<token>.<part>, the account-name form", () => {
@@ -94,6 +140,56 @@ describe("slot:<pool>:<token>.<part>, the account-name form", () => {
       (await resolveSvmAccountName("slot:@pool:WSOL.ticks0", ctx({ args: { pool: p.pool } })))
         .value,
     ).toBe((key(WSOL) < key(USDC) ? p.payA : p.payB)[0]);
+  });
+
+  it("reads the pool once a cook, however many of its nine accounts the cook names", async () => {
+    const p = pool("orca-whirlpool-sol-usdc");
+    let reads = 0;
+    const counting: OwnedAccountLoader = async (at) => {
+      if (at === p.pool) reads++;
+      return load(at);
+    };
+    // What reading the slot once reads of the pool.
+    await svmPoolSlot(counting, p.pool, USDC);
+    const once = reads;
+    reads = 0;
+    const slots = new Map();
+    await Promise.all(
+      SVM_SLOT_PARTS.map((part) =>
+        resolveSvmAccountName(`slot:${p.pool}:USDC.${part}`, ctx({ load: counting, slots })),
+      ),
+    );
+    expect(reads).toBe(once);
+  });
+
+  it("reads the pool again for the next cook: a price that moved moves its tick arrays", async () => {
+    const p = pool("raydium-clmm-sol-usdc");
+    let data = new Uint8Array(BYTES.get(p.pool)!);
+    const moving: OwnedAccountLoader = async (at) =>
+      at === p.pool ? { data, owner: p.program } : load(at);
+    const before = await resolveSvmAccountName(`slot:${p.pool}:USDC.ticks0`, ctx({ load: moving }));
+    // The pool's tick moved by spans until its first tick array paying USDC is another.
+    const span = 60 * new DataView(data.buffer).getUint16(235, true);
+    const tick = new DataView(data.buffer).getInt32(269, true);
+    let moved: Address | undefined;
+    for (let spans = 1; moved === undefined && spans <= 8; spans++) {
+      const next = new Uint8Array(BYTES.get(p.pool)!);
+      new DataView(next.buffer).setInt32(269, tick + spans * span, true);
+      const fresh = await svmPoolSlot(
+        async (at) => (at === p.pool ? { data: next, owner: p.program } : load(at)),
+        p.pool,
+        USDC,
+      );
+      if (fresh.ticks[0] !== before.value) {
+        data = next;
+        moved = fresh.ticks[0];
+      }
+    }
+    expect(moved).toBeDefined();
+    // The same loader, a later cook: the slot is read from the pool as it is now.
+    expect(
+      (await resolveSvmAccountName(`slot:${p.pool}:USDC.ticks0`, ctx({ load: moving }))).value,
+    ).toBe(moved);
   });
 
   it("refuses with no loader, and a pool whose slot cannot be read", async () => {
