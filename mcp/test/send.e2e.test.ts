@@ -489,6 +489,12 @@ describe(
       // This plan's table, and the one the plan before it kept for later cooks.
       assert.equal(found.lookupTables.length, 2);
       assert.ok(found.lookupTables.every((table) => table.state === "active"));
+      // keepTables leaves the tables for later cooks: only the buffer's close.
+      const buffersOnly = await reclaim({ keepTables: true });
+      assert.deepEqual(
+        buffersOnly.transactions.map((tx) => tx.what),
+        [`closing code buffer ${found.buffers[0]!.codeBuffer}`],
+      );
       const sent = ok(
         await mcp.call("sauce_send", {
           transactions: await sign(found as unknown as PlanStep),

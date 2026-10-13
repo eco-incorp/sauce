@@ -10,7 +10,9 @@
  * `sauce send`, the buffer's rent comes back. The table then waits out its cooldown, named with the
  * slot it closes from, and closes after it. With the owner's keypair, `reclaim --yes` leaves a
  * handed-out cook's buffer alone, so the cook lands, then closes it; without --yes and no terminal,
- * it sends nothing.
+ * it sends nothing. An endpoint that will not scan the lookup-table program finds no table, and
+ * says so, and a table named with --lookup-table is found all the same. A close the cluster
+ * refuses leaves the others to go.
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
@@ -32,6 +34,9 @@ import {
   type KeyPairSigner,
 } from "@solana/kit";
 
+import { ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS } from "@solana-program/address-lookup-table";
+
+import { decodeCursor, readPlanTx } from "../src/cli/svm-plan.js";
 import { v12SvmEngineProgramId } from "../src/deployments/index.js";
 import { jsonOf, sauce, sauceWith } from "./cli-anvil.js";
 import {
@@ -131,6 +136,30 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
         ...["--rpc-url", RPC_URL, "--json"],
       ),
     ) as unknown as Listing;
+  /** Runs `run` with the endpoint answering a `method` request that `when` picks with `answer`. */
+  const answering = async <T>(
+    method: string,
+    when: (params: unknown[]) => boolean,
+    answer: Record<string, unknown>,
+    run: () => Promise<T>,
+  ): Promise<T> => {
+    const shimmed = globalThis.fetch;
+    globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+      if (String(input) === RPC_URL && init?.body !== undefined) {
+        const asked = JSON.parse(init.body) as { id: unknown; method: string; params: unknown[] };
+        if (asked.method === method && when(asked.params)) {
+          return Response.json({ jsonrpc: "2.0", id: asked.id, ...answer });
+        }
+      }
+
+      return shimmed(input as string, init as RequestInit);
+    }) as typeof fetch;
+    try {
+      return await run();
+    } finally {
+      globalThis.fetch = shimmed;
+    }
+  };
   /** Past the slot each of `found`'s buffers and tables in use is free from. */
   const warpPast = (found: Listing): void => {
     const free = [...found.buffers, ...found.lookupTables].flatMap((one) =>
@@ -290,5 +319,82 @@ describeSvm("sauce reclaim: a Solana owner's leftover code buffers and lookup ta
     const left = await listing();
     expect(left.buffers).toHaveLength(0);
     expect(left.lookupTables.map((table) => table.state)).toEqual(["active"]);
+  }, 300_000);
+
+  it("finds no table where the endpoint will not scan for them, says so, and finds one named", async () => {
+    const cook = await abandonedSetup("unscanned");
+    const table = decodeCursor(cook.cursor).table!.address!;
+    warpPast(await listing());
+    const noScan = <T>(run: () => Promise<T>) =>
+      answering(
+        "getProgramAccounts",
+        (params) => params[0] === ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS,
+        { error: { code: -32603, message: "this endpoint does not scan that program" } },
+        run,
+      );
+    const argv = [
+      ...["reclaim", "--chain", "solana", "--owner", owner.signer.address],
+      ...["--rpc-url", RPC_URL, "--json"],
+    ];
+    const unscanned = await noScan(() => sauce(...argv));
+    expect((jsonOf(unscanned) as unknown as Listing).lookupTables).toEqual([]);
+    expect(unscanned.stderr).toMatch(
+      /the endpoint did not scan the lookup-table program, so no table was found: name one with --lookup-table <address>/,
+    );
+    // Named, it is found all the same, and no scan is missed.
+    const named = await noScan(() => sauce(...argv, "--lookup-table", table));
+    const found = jsonOf(named) as unknown as Listing;
+    expect(found.lookupTables).toEqual([
+      expect.objectContaining({ address: table, state: "active" }),
+    ]);
+    expect(found.transactions.map((tx) => tx.what)).toContain(`deactivating lookup table ${table}`);
+    expect(named.stderr).not.toMatch(/did not scan/);
+  }, 300_000);
+
+  it("sends every close but one the cluster refuses, and says which", async () => {
+    await abandonedSetup("refused-close");
+    warpPast(await listing());
+    const run = await answering(
+      "simulateTransaction",
+      (params) =>
+        readPlanTx(getTransactionDecoder().decode(getBase64Encoder().encode(String(params[0]))))
+          ?.what === "closing the code buffer",
+      {
+        result: {
+          context: { slot: 1 },
+          value: {
+            err: { InstructionError: [0, { Custom: 1 }] },
+            logs: ["Program log: refused here"],
+            accounts: null,
+            unitsConsumed: 0,
+            returnData: null,
+          },
+        },
+      },
+      () =>
+        sauce(
+          ...["reclaim", "--chain", "solana", "--keypair", owner.path, "--yes"],
+          ...["--rpc-url", RPC_URL, "--json"],
+        ),
+    );
+    expect(run.code).toBe(1);
+    const out = JSON.parse(run.stdout) as {
+      buffers: Listing["buffers"];
+      sent: Array<{ what: string; status: string; reason?: string }>;
+    };
+    const [refused, ...rest] = out.sent;
+    expect(refused!.what).toMatch(/^closing code buffers? /);
+    expect(refused).toMatchObject({
+      status: "failed",
+      reason: expect.stringMatching(/^not sent: /),
+    });
+    // The tables' deactivations went all the same.
+    expect(rest.length).toBeGreaterThan(0);
+    expect(
+      rest.every((one) => one.status === "success" && one.what.startsWith("deactivating")),
+    ).toBe(true);
+    for (const buffer of out.buffers) {
+      expect(harness.svm.getAccount(address(buffer.codeBuffer)).exists).toBe(true);
+    }
   }, 300_000);
 });
