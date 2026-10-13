@@ -12,7 +12,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { gunzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { encodeFunctionData, type Address } from "viem";
 
 import { fork, local, type TestChain } from "../../src/testing/index.js";
@@ -97,6 +97,55 @@ async function nodeOf(url: string) {
       ),
     ),
   };
+}
+
+/**
+ * A node recorded into `dir` by `startForkNode`, from an upstream at an Ethereum block of 2024, which
+ * a fork runs as Cancun (anvil infers the hardfork from the block it forks, and runs its own default
+ * from a file): dev account 0 has sent two transactions, so its nonce is 2 and the pinned block used
+ * gas. Returns the state file, where it is pinned, and the recording node as `nodeOf` saw it.
+ */
+async function recordNode(dir: string) {
+  const genesis = join(dir, "upstream.json");
+  writeFileSync(
+    genesis,
+    JSON.stringify({
+      config: { chainId: 1 },
+      number: `0x${(20_000_000).toString(16)}`,
+      timestamp: `0x${(1_717_000_000).toString(16)}`,
+      gasLimit: `0x${(36_000_000).toString(16)}`,
+      baseFeePerGas: "0x1dcd65000",
+      difficulty: "0x0",
+      alloc: {},
+    }),
+  );
+  const upstream = await startAnvil([
+    "--init",
+    genesis,
+    "--chain-id",
+    "1",
+    "--gas-limit",
+    "36000000",
+  ]);
+  try {
+    const [sender] = (await rpc(upstream.url, "eth_accounts")) as string[];
+    for (const value of ["0x1", "0x2"]) {
+      await rpc(upstream.url, "eth_sendTransaction", [{ from: sender, to: sender, value }]);
+    }
+    const pinned = (await rpc(upstream.url, "eth_getBlockByNumber", ["latest", false])) as {
+      number: string;
+      baseFeePerGas: string;
+    };
+    const at = { chainId: 1, block: Number(pinned.number), blockInterval: 12 } as const;
+    const state = join(dir, "node.json.gz");
+    const recording = await startForkNode({ ...at, mode: "record", rpcUrl: upstream.url, state });
+    const recorded = await nodeOf(recording.url);
+    await recording.stop();
+
+    return { state, at, recorded, sender: sender!, pinnedBaseFee: BigInt(pinned.baseFeePerGas) };
+  } finally {
+    await upstream.stop();
+  }
 }
 
 describe("fork() records, then replays", { skip: anvilMissing() }, () => {
@@ -186,44 +235,9 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
   });
 
   it("replays on the node it recorded on: hardfork, gas limit, base fee, dev nonces", async () => {
-    // An Ethereum block from 2024, which a fork runs as Cancun: anvil infers the hardfork from the
-    // block it forks, and runs its own default from a file.
     const dir = mkdtempSync(join(tmpdir(), "sauce-testing-node-"));
-    const genesis = join(dir, "upstream.json");
-    writeFileSync(
-      genesis,
-      JSON.stringify({
-        config: { chainId: 1 },
-        number: `0x${(20_000_000).toString(16)}`,
-        timestamp: `0x${(1_717_000_000).toString(16)}`,
-        gasLimit: `0x${(36_000_000).toString(16)}`,
-        baseFeePerGas: "0x1dcd65000",
-        difficulty: "0x0",
-        alloc: {},
-      }),
-    );
-    const upstream = await startAnvil([
-      "--init",
-      genesis,
-      "--chain-id",
-      "1",
-      "--gas-limit",
-      "36000000",
-    ]);
-    const state = join(dir, "node.json.gz");
     try {
-      // Dev account 0 sends: its nonce is no longer 0, and the pinned block used gas.
-      const [sender] = (await rpc(upstream.url, "eth_accounts")) as string[];
-      for (const value of ["0x1", "0x2"]) {
-        await rpc(upstream.url, "eth_sendTransaction", [{ from: sender, to: sender, value }]);
-      }
-      const block = Number(await rpc(upstream.url, "eth_blockNumber"));
-      const at = { chainId: 1, block, blockInterval: 12 } as const;
-
-      const recording = await startForkNode({ ...at, mode: "record", rpcUrl: upstream.url, state });
-      const recorded = await nodeOf(recording.url);
-      await recording.stop();
-      await upstream.stop();
+      const { state, at, recorded, sender } = await recordNode(dir);
       assert.equal(recorded.hardFork, "Cancun");
       assert.equal(recorded.gasLimit, 36_000_000n);
       assert.deepEqual(recorded.nonces[0], [sender, 2]);
@@ -235,7 +249,39 @@ describe("fork() records, then replays", { skip: anvilMissing() }, () => {
         await replay.stop();
       }
     } finally {
-      await upstream.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replays a version 1 file at its gas limit alone, as its header says", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sauce-testing-v1-"));
+    try {
+      const { state, at, recorded, pinnedBaseFee } = await recordNode(dir);
+      // The same recording as a kit before version 2 wrote it: nothing of the node in its header.
+      const file = JSON.parse(gunzipSync(readFileSync(state)).toString()) as {
+        sauce: Record<string, unknown>;
+      };
+      const { chainId, block, timestamp, blockInterval } = file.sauce;
+      file.sauce = { version: 1, chainId, block, timestamp, blockInterval };
+      writeFileSync(state, gzipSync(JSON.stringify(file)));
+
+      const replay = await startForkNode({ ...at, mode: "replay", state });
+      try {
+        const replayed = await nodeOf(replay.url);
+        // The gas limit its genesis records, and nothing else of the recorded node: anvil's own
+        // hardfork, the pinned block's base fee carried forward, every dev account at nonce 0.
+        assert.equal(replayed.gasLimit, recorded.gasLimit);
+        assert.notEqual(replayed.hardFork, recorded.hardFork);
+        assert.equal(replayed.baseFee, pinnedBaseFee);
+        assert.notEqual(replayed.baseFee, recorded.baseFee);
+        assert.deepEqual(
+          replayed.nonces,
+          recorded.nonces.map(([account]) => [account, 0]),
+        );
+      } finally {
+        await replay.stop();
+      }
+    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
