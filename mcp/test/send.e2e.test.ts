@@ -297,6 +297,12 @@ const WIDE = [
   "",
 ].join("\n");
 
+interface PlanStep {
+  readonly step: string;
+  readonly transactions?: ReadonlyArray<{ what: string; transaction: string }>;
+  readonly cursor?: string;
+}
+
 describe(
   "a staged Solana cook as a plan, through the tools alone",
   { skip: !svmArtifactsPresent },
@@ -312,6 +318,18 @@ describe(
       Array.from({ length: WIDE_ACCOUNTS }, (_, i) => [`a${i}`, randomAddress()]),
     );
     const PASSWORD = `throwaway-${process.pid}-${Date.now()}`;
+
+    const sign = (step: PlanStep): Promise<string[]> =>
+      Promise.all(
+        (step.transactions ?? []).map(async ({ transaction }) =>
+          getBase64EncodedWireTransaction(
+            await signTransaction(
+              [owner.keyPair],
+              getTransactionDecoder().decode(getBase64Encoder().encode(transaction)),
+            ),
+          ),
+        ),
+      );
 
     before(async () => {
       harness = await startEngine(
