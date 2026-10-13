@@ -436,3 +436,40 @@ describe("the search for a cook handed out, past its blockhash", () => {
     );
   });
 });
+
+describe("the setup a plan still needs", () => {
+  it("checks the Pot and every token account in one read", async () => {
+    const accounts = [key(20), key(21), key(22)].map((at, index) => ({
+      address: at as Address,
+      holder: OWNER,
+      mint: MINT,
+      program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address,
+      label: `account ${index}`,
+    }));
+    const calls: string[] = [];
+    const rpc = endpoint(
+      {
+        getMultipleAccounts: (keys: never) => ({
+          context: { slot: 1n },
+          value: (keys as string[]).map((at) =>
+            at === accounts[0]!.address
+              ? { data: ["", "base64"], executable: false, lamports: 1n, owner: MINT, space: 0n }
+              : null,
+          ),
+        }),
+      },
+      calls,
+    );
+    const step = await nextStep(plan({ pot: "setup", tokenAccounts: accounts }), context(rpc));
+    expect(calls).toEqual(["getMultipleAccounts"]);
+    expect(step.name).toBe("setup");
+    expect(step.transactions.map((tx) => tx.what)).toEqual([
+      "creating the Pot",
+      "creating the token accounts",
+    ]);
+    expect(step.transactions[1]!.accounts!.map((one) => one.label)).toEqual([
+      "account 1",
+      "account 2",
+    ]);
+  });
+});
