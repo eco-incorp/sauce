@@ -1,6 +1,6 @@
 ---
 name: sauce-examples
-description: A cookbook of complete Sauce programs, each run against real contracts before it ships — buying a tokenized stock under a price cap, a dollar-cost-averaging tick, a stop-loss and take-profit on Chainlink's price, an Aave V3 health-factor guard, lending idle USDC above a reserve, a weighted USDC payroll, a two-token rebalance, a read-only price survey run with sauce simulate, a cross-chain cascade that repays a loan on Base from Ethereum and sends the change back, and a Token-2022 stock payment on Solana — on Ethereum, Base and Solana; and an index of every example in the other skills, with the chains it is checked on and the sauce command that runs it. Use when the user says "show me an example", "sample Sauce program", "how do I write X in Sauce", or wants a complete program for a task such as buying a stock, DCA, a limit or stop order, a lending position, payroll, rebalancing, reading prices, a cross-chain intent or a Solana token payment.
+description: A cookbook of complete Sauce programs, each run against real contracts before it ships — buying a tokenized stock under a price cap, a dollar-cost-averaging tick, a stop-loss and take-profit on Chainlink's price, an Aave V3 health-factor guard, lending idle USDC above a reserve, a weighted USDC payroll, a two-token rebalance, a read-only price survey run with sauce simulate, and a Token-2022 stock payment on Solana — on Ethereum, Base and Solana; and an index of every example in the other skills, with the chains it is checked on and the sauce command that runs it. Use when the user says "show me an example", "sample Sauce program", "how do I write X in Sauce", or wants a complete program for a task such as buying a stock, DCA, a limit or stop order, a lending position, payroll, rebalancing, reading prices or a Solana token payment.
 ---
 
 # Sauce examples
@@ -15,8 +15,8 @@ fill in. The examples in the other skills follow, each beside the skill that tea
 A program names no chain: `--chain` picks one, and the chains listed are the ones it is checked on.
 Each program's first comment lines say what it does, give the `sauce` command that runs it with
 every `main` parameter named, say what each parameter is and its units, and show one run on a
-supported chain with real values. Inputs are `main(...)` parameters passed with `--args`, an
-intent file's included (`sauce-script`). Tokens and contracts are named, never
+supported chain with real values. Inputs are `main(...)` parameters passed with `--args`
+(`sauce-script`). Tokens and contracts are named, never
 written as addresses: `USDC`, `SPCXon`, `UniswapV3.Factory`, `AaveV3.Pool`, `Chainlink.EthUsdFeed`.
 
 For the initial release, Sauce supports transactions on Ethereum, Base and Solana. A chain marked
@@ -39,8 +39,8 @@ names alone ([../sauce-globals/references/tokens.md](../sauce-globals/references
 ## Cookbook
 
 Every program here is run, not only compiled, before the package ships: each EVM program through
-`sauce simulate` and `sauce run` on Ethereum's or Base's state, against the real pools, oracle,
-lending pool and intent contracts there, with its results held to those contracts' own quotes and
+`sauce simulate` and `sauce run` on Ethereum's or Base's state, against the real pools, oracle
+and lending pool there, with its results held to those contracts' own quotes and
 accounts; the Solana program through `sauce run` against the released engine, with `TSLAx`'s mint
 as Solana holds it.
 
@@ -101,6 +101,7 @@ Solana's accounts are `sauce-solana`.
 | [`../sauce-swaps/examples/swaps.mts`](../sauce-swaps/examples/swaps.mts)                                                                         | the guarded leg on two chains, `@sauce/router`'s functions, the Router's entry points, price parameters and callbacks, and the Solana functions, their arguments and size                                                                            | `sauce-swaps`                   |
 | [`../sauce-distributed-swap/examples/distributed-swap.mts`](../sauce-distributed-swap/examples/distributed-swap.mts)                             | the distributed swap for Base: its code in the skill, its typed reads, venues and lookups, V4 ids as `Uint256`, `maxPrice` and its limits, per-pool limits, `minTokens` and `maxAvgPrice`, each command's arguments, the cooks                       | `sauce-distributed-swap`        |
 | [`../sauce-solana-distributed-swap/examples/solana-distributed-swap.mts`](../sauce-solana-distributed-swap/examples/solana-distributed-swap.mts) | the Solana distributed swap: its code in the skill, each venue's program id and `@sauce/router` function against the SDK's, the pool offsets the library reads, its 46 accounts, `maxPrice`, `minTokens`, `maxAvgPrice` and the simulation's average | `sauce-solana-distributed-swap` |
+| [`../sauce-intents/examples/intents.mts`](../sauce-intents/examples/intents.mts)                                                                 | an intent built by hand: its hash against the formula, read back from its IntentPublished log, its vault, the shared Pot, each step's call and chain, and every selector and topic the contract reference gives                                      | `sauce-intents`                 |
 | [`../sauce-solana/examples/solana.mts`](../sauce-solana/examples/solana.mts)                                                                     | the Solana programs' manifests and arguments, the mints' token programs, and the client's `rpcUrl` requirement                                                                                                                                       | `sauce-solana`                  |
 | [`../sauce-typescript/examples/cook.mts`](../sauce-typescript/examples/cook.mts)                                                                 | owner, Pot, deploy call, a program compiled with its arguments, the cook transaction, and the packaged Solana binaries                                                                                                                               | `sauce-typescript`              |
 | [`../sauce-typescript/examples/compiler.mts`](../sauce-typescript/examples/compiler.mts)                                                         | raw compilation, ABI-v1 and compact-v1 arguments, `@sauce/token` through the package's resolvers                                                                                                                                                     | `sauce-typescript`              |

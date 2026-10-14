@@ -93,9 +93,8 @@ command that runs it, with `--chain <chain>` and `--args` naming every `main` pa
 (`--args <tokenIn> <tokenOut> <amountIn>`); one line per parameter with its type, its meaning and
 its units, in smallest units (`5000000000` is 5,000 USDC, which has 6 decimals; an array or a
 record is passed as JSON); and one concrete invocation on a supported chain with real values,
-addresses taken from the registry and the developer's own inputs left as `<placeholders>`. An
-intent file is written the same way: its inputs are `main` parameters too. `sauce-script` shows
-one.
+addresses taken from the registry and the developer's own inputs left as `<placeholders>`.
+`sauce-script` shows one.
 
 ## Supported chains
 
@@ -342,9 +341,23 @@ pools by their factory's key, so one document serves every chain that has its na
 - **Holds** [references/actions.md](../sauce-actions/references/actions.md), every action and
   field, generated from the document's JSON Schema; its examples swap by a pool's key, and swap
   then supply to Aave.
-- **Load it** when the steps are fixed or produced as data by a service. A condition, a loop, a
-  best venue or an intent needs SauceScript (`sauce-script`).
+- **Load it** when the steps are fixed or produced as data by a service. A condition, a loop or a
+  best venue needs SauceScript (`sauce-script`).
 - **Asked as:** "Our backend emits swap-then-supply steps as JSON. How do we run them?"
+
+### `sauce-intents`
+
+Eco intents that already exist, whoever published them: what an intent is (destination, route,
+reward, hash, vault), and every step after its publication, a `sauce intent` command or an MCP
+tool each — read it back from its transaction, see where it stands, fill it as a solver
+(simulated, then sent), prove, claim, refund, or cancel for an earlier refund; an intent to Solana,
+and the shared destination Pot.
+
+- **Holds** a reference of the intent contract's functions, events and errors, and a runner that
+  pins an intent's hash, its vault and each step's call.
+- **Load it** when there is an intent hash or a publishing transaction, or the user acts as a
+  solver. A program does not open an intent.
+- **Asked as:** "My intent to Base was never filled. How do I get the reward back?"
 
 ### `sauce-solana`
 
@@ -380,8 +393,8 @@ policies, arguments to `main`, and the MCP tool for each command.
 
 The package from application code: compiling a program for a chain as `sauce compile` does,
 encoding `main`'s arguments, the owner's Pot and its cook, the raw compiler and compact arguments,
-the protocol registry, JSON action programs, settlement verification, the Solana client, intents
-and cascades, and compiling in a browser.
+the protocol registry, JSON action programs, settlement verification, the Solana client, the
+calls that act on an intent that exists, and compiling in a browser.
 
 - **Holds** runners that build a cook offline, run the raw compiler, compile an action program
   and verify a settlement; it is the one skill that points into the package's own guides.

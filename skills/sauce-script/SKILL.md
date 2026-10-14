@@ -1,6 +1,6 @@
 ---
 name: sauce-script
-description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...), whose parameters are every input a program takes, intent files included, and a file of top-level statements for a program with no inputs), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
+description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...), whose parameters are every input a program takes, and a file of top-level statements for a program with no inputs), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
 ---
 
 # Writing SauceScript
@@ -141,8 +141,8 @@ compiled and simulated (`sauce-chains`).
 
 ## Compiling for a chain
 
-Compiling a file for a chain lowers the names the chain supplies (`sauce-globals`), the token
-syntax and the intents the file opens; everything else reaches the compiler as written. A program
+Compiling a file for a chain lowers the names the chain supplies (`sauce-globals`) and the token
+syntax; everything else reaches the compiler as written. A program
 for a chain is the language of [references/builtins.md](references/builtins.md), with nothing
 removed:
 
@@ -230,8 +230,8 @@ Every call comes from the Pot, so `ctx.self()` there, or a call that credits its
 output in the Pot: it is the owner's, but not in their wallet, and only another cook moves it.
 Ask the user whether it should end in their wallet or stay in the Pot, and write it that way, the
 wallet a `main` parameter. In a cook on the user's own Pot, `ctx.msgSender()` is its owner, the
-wallet that sent the cook; in an intent's body it is not (the body runs on a Pot the intent's
-solvers share), so there the wallet is always a parameter:
+wallet that sent the cook; in a program an intent's route runs it is not (that runs on a Pot every
+intent's solver shares), so there the wallet is always a parameter:
 
 ```sauce chain=base,ethereum
 // Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
@@ -306,15 +306,15 @@ Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...o
 The full list, with what each rejection says, is section 14 of
 [references/builtins.md](references/builtins.md).
 
-| Rejected                                                                                                          | Write instead                                                                                |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`                                                    | `if` chains, arrays, inline object types, plain functions                                    |
-| `try`/`catch`, `throw new Error(...)`                                                                             | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
-| arrow functions and nested functions, except the intent syntax `Chain(() => { ... })` and `.catch(() => { ... })` | top-level function declarations                                                              |
-| template literals, comparing bytes with `==`                                                                      | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
-| `as` casts, default parameters, spread, object destructuring                                                      | explicit values and field access                                                             |
-| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                        | `new Array(n)` and an index; `if`; `**`                                                      |
-| a method on a literal: ``hex`a9059cbb`.concat(d)``                                                                | bind it first: ``const selector = hex`a9059cbb`; selector.concat(d)``                        |
+| Rejected                                                             | Write instead                                                                                |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`       | `if` chains, arrays, inline object types, plain functions                                    |
+| `try`/`catch`, `throw new Error(...)`                                | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
+| arrow functions and nested functions, except `.catch(() => { ... })` | top-level function declarations                                                              |
+| template literals, comparing bytes with `==`                         | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
+| `as` casts, default parameters, spread, object destructuring         | explicit values and field access                                                             |
+| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`           | `new Array(n)` and an index; `if`; `**`                                                      |
+| a method on a literal: ``hex`a9059cbb`.concat(d)``                   | bind it first: ``const selector = hex`a9059cbb`; selector.concat(d)``                        |
 
 ```sauce fails
 function main(x: Uint256): Uint256 {

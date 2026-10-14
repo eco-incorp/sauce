@@ -716,6 +716,7 @@ const DOCS_FOR_SKILL = {
     "the distributed swap on Solana",
     "guides/solana-distributed-swap.md",
   ],
+  "sauce-intents": ["intents", "guides/intents.md"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],
   "sauce-actions": ["actions", "guides/actions.md"],

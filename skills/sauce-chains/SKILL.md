@@ -100,9 +100,8 @@ the address as a `main` parameter.
 Ethereum, `Base.UniswapV3.Factory` is the address Base's factory has on Base: a value, nothing
 more. The program still runs on Ethereum, so calling it (`Base.UniswapV3.Factory.getPool(…)`)
 calls that address on Ethereum, where it is some other contract or none, and the compile does not
-stop it. Use a qualified name to pass an address across chains: as an argument of a bridge message,
-or inside an intent whose body runs on another chain and must name a contract back on this one.
-Never call one.
+stop it. Use a qualified name to pass an address across chains, as an argument of a bridge message
+that must name a contract back on this one. Never call one.
 
 ```sauce chain=ethereum
 // Base's factory, as an address to hand to something that acts on Base. Not a contract to call
