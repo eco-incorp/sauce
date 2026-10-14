@@ -627,9 +627,13 @@ and is served over HTTP as over stdio.
 
 A Pot with no code yet needs no step of its own: `sauce_tx` returns its deployment as the first
 entry of `transactions` (marked `deploysPot`), with a note, then the cook. Send them in that order:
-any account may send the first, only the owner the second. Sign the cook with a gas limit that has
-room, or once the deployment has landed: an estimate taken while the Pot has no code prices a call
-to an empty address, and `sauce_send` refuses the cook for it. `sauce_wallet_send` sends such a
+any account may send the first, only the owner the second. Each comes with `gas`, the limit to sign
+it with: the cook's is estimated as if the deployment had landed (the two simulated together), with
+30% room, where a signer's own estimate, taken while the Pot has no code, is far too low; where the
+endpoint does not report the deployment's apart, the deployment carries none, as a signer estimates
+it right. A cook
+that would revert after the deployment (a Pot not funded yet) comes with no `gas`, and a note
+saying why: fund the Pot and call `sauce_tx` again. `sauce_wallet_send` sends such a
 plan whole, simulating both together and holding them to the wallet's policy before it sends
 either. On Solana the same transaction creates the Pot ahead of the cook (`createsPot`).
 
