@@ -3,7 +3,7 @@
 // ./logger (LOG_DIR per case), for replay-all.mjs to time on any compiler build:
 //   SAUCE_COMPILER_PKG=./logger SAUCE_COMPILER_REAL=<pkg> \
 //     node --import ./register.mjs record-targets.mjs <sdk-tree> <out dir>
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 const [tree, out] = process.argv.slice(2);
@@ -19,7 +19,9 @@ const options = {
   },
 };
 const trivial = "function main(): Uint256 { return 1; }";
-const file = (path) => readFileSync(join(tree, path), "utf8");
+// A program the tree no longer has (the intent files of an earlier tree) is left out.
+const file = (path) =>
+  existsSync(join(tree, path)) ? readFileSync(join(tree, path), "utf8") : undefined;
 const cases = [
   ["trivial@base", "base", trivial],
   ["trivial@ethereum", "ethereum", trivial],
@@ -36,7 +38,7 @@ const cases = [
     "base",
     file("skills/sauce-distributed-swap/examples/distributed-swap.sauce.ts"),
   ],
-];
+].filter(([, , text]) => text !== undefined);
 for (const [name, chain, text] of cases) {
   process.env.LOG_DIR = join(out, name);
   const program = compileSauceProgram(chain, text, options);
