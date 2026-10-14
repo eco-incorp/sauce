@@ -146,7 +146,7 @@ describe("with no endpoint", () => {
       [
         "sauce_intent_fill",
         { intent: record, dryRun: true },
-        /Rehearsing a fill needs an RPC endpoint for base \(chain id 8453\)/,
+        /Simulating a fill needs an RPC endpoint for base \(chain id 8453\)/,
       ],
     ];
     for (const [tool, args, message] of expected) {

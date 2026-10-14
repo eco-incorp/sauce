@@ -104,7 +104,7 @@ The destination side is a solver's: `fulfillTx(intent, { claimant })` is
 Portal for the route's tokens, which it pulls from the solver first (one per token, the entries
 summed). Both require an EVM destination. The route they carry is `evmRouteTuple(route)`, the value
 `routeHash` is taken over, so the Portal's hash check agrees with `hashIntent`. [`sauce intent
-fill`](../guides/cli.md#rehearsing-the-fill-sauce-intent-fill) rehearses them on the destination
+fill`](../guides/cli.md#simulating-the-fill-sauce-intent-fill) simulates them on the destination
 with no key, and with `--send` sends them.
 
 After the fill, the same module builds the rest of an intent's life, each as a request you send: `fulfillAndProveTx(intent, { claimant, prover, sourceDomain, data, fee })` (the fill and its proof in one, `route.nativeAmount + fee` as its value) and `proveTx(intents, { prover, sourceDomain, data, fee })` on the destination, with `hyperlaneProverData({ sourceProver })` the Hyperlane prover's `data` and `proverFeeCall(...)` its fee; `withdrawTx`, `batchWithdrawTx` and `refundTx` on the source, taking `{ portal }`; `cancelTx` and `cancelAndProveTx` on a destination Portal that has `cancel`, after the route's deadline. The reads that decide them are `rewardStatusCall` (one of `REWARD_STATUSES`), `fulfillmentCall` (what the destination recorded: a claimant, `CANCELLED_CLAIMANT_BYTES32`, or zero), `provenIntentCall` (the source prover's claimant and destination) and `proofTypeCall`. [After the fill](../guides/cli.md#after-the-fill-prove-claim-refund-cancel) explains when each applies.

@@ -62,9 +62,9 @@ describe("toolTerms", () => {
     for (const command of ["sauce fill", "sauce intent fill"]) {
       assert.equal(
         toolTerms(
-          `This rehearses publishing on arbitrum only. \`${command}\` with the same file and flags, and the destination's endpoint, rehearses that.`,
+          `This simulates publishing on arbitrum only. \`${command}\` with the same file and flags, and the destination's endpoint, simulates that.`,
         ),
-        "This rehearses publishing on arbitrum only. sauce_intent_fill with the same inputs, and the destination's endpoint, rehearses that.",
+        "This simulates publishing on arbitrum only. sauce_intent_fill with the same inputs, and the destination's endpoint, simulates that.",
       );
     }
     // An intent's commands, grouped under `sauce intent`.

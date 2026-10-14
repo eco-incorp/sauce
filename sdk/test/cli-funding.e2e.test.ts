@@ -644,8 +644,8 @@ describeEvm(
         expect(done.code).toBe(0);
         expect(done.stderr).toContain(
           "--fund without a key: pulling USDC needs the owner's signature (--keystore or " +
-            "--private-key), so the pulls are not rehearsed; the Pot is credited what they would " +
-            "bring, for this rehearsal only",
+            "--private-key), so the pulls are not simulated; the Pot is credited what they would " +
+            "bring, for this simulation only",
         );
         const out = JSON.parse(done.stdout) as { transfers: { from: Address; amount: string }[] };
         expect(out.transfers).toEqual([
@@ -746,7 +746,7 @@ describeEvm(
         );
         expect(notes(done)).toBe(
           "USDC: the Pot may not pull it yet: sauce run asks to approve it first (--yes " +
-            "approves it), and the rehearsal runs that approval before the cook\n",
+            "approves it), and the simulation runs that approval before the cook\n",
         );
         expect(await allowance(usdc, pot)).toBe(0n);
       }, 60_000);
@@ -763,7 +763,7 @@ describeEvm(
           ["cook", null],
         ]);
         expect(notes(done)).toBe(
-          "USDC: sauce run transfers it to the Pot first, and the rehearsal runs that transfer " +
+          "USDC: sauce run transfers it to the Pot first, and the simulation runs that transfer " +
             "before the cook\n",
         );
         expect([await balance(usdc, OWNER.address), await balance(usdc, RECIPIENT)]).toEqual([
@@ -791,11 +791,11 @@ describeEvm(
 
       it("with a key, runs the Permit2 approval sauce run would ask for first, and says so", async () => {
         const { key, account } = await freshSigner(usdc);
-        const signerPot = v12PredictPot(account.address, potSalt("rehearsed")) as Address;
+        const signerPot = v12PredictPot(account.address, potSalt("simulated")) as Address;
         const rehearse = (...flags: string[]) =>
           sauce(
             ...["simulate", program, "--rpc-url", local.rpcUrl, "--private-key", key],
-            ...["--salt", "rehearsed", "--fund", "USDC:2", ...flags],
+            ...["--salt", "simulated", "--fund", "USDC:2", ...flags],
             ...["--args", usdc, RECIPIENT, "2000000"],
           ).then(record);
         const done = await rehearse("--json");
@@ -825,7 +825,7 @@ describeEvm(
         );
         expect(notes(done)).toContain(
           `USDC: Permit2 (${permit2}) may not move your tokens yet: sauce run asks to approve it ` +
-            "first (--yes approves it), and the rehearsal runs that approval before the cook",
+            "first (--yes approves it), and the simulation runs that approval before the cook",
         );
         // A rehearsal: nothing landed.
         expect(await allowanceOf(usdc, account.address, permit2)).toBe(0n);

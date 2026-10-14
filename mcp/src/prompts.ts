@@ -59,7 +59,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
       title: "Write, compile and run a Sauce program",
       description:
         "Walks an agent through a Sauce program for a task, end to end with this server's " +
-        "tools: read the skills, look up the chain's names, compile, rehearse, and build the " +
+        "tools: read the skills, look up the chain's names, compile, simulate, and build the " +
         "unsigned Pot deployment and cook for the user to sign.",
       argsSchema: {
         task: z.string().min(1).max(4000).describe("What the program should do, in plain words."),
@@ -67,7 +67,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
       },
     },
     ({ task, chain }): GetPromptResult => ({
-      description: "Write, compile, rehearse and build a Sauce program",
+      description: "Write, compile, simulate and build a Sauce program",
       messages: [
         {
           role: "user",
@@ -84,7 +84,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   rather than writing addresses. (A fixed sequence of protocol operations can be an",
               "   actions document in JSON instead: sauce_actions, and the sauce-actions skill.)",
               "2. sauce_compile until the program compiles; read any error and fix the line it names.",
-              "3. sauce_simulate, to rehearse the cook from the Pot's owner: check what it moved (or",
+              "3. sauce_simulate, to simulate the cook from the Pot's owner: check what it moved (or",
               "   why it reverts) before going on.",
               "4. sauce_pot for the owner's Pot: its address and what it holds. Its deployment needs",
               "   no step of its own: sauce_tx plans it first when the Pot has no code yet.",

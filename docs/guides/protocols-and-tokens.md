@@ -322,4 +322,4 @@ Route rewriting rejects missing methods, ambiguous aliases and missing deploymen
 
 To call a contract outside the registry, supply an ABI binding through `compile.contracts` or a resolved ABI import, then call `Binding.at(address).method(...)` in source. See [compiler integration](../api/compiler.md).
 
-The token and EVM protocol rewrites apply to EVM routes. Solana uses account parameters and venue adapters, covered in the [Solana guide](solana.md).
+The protocol rewrites apply to EVM routes. The token methods compile on Solana too, where the SDK adds the token accounts each call moves through to `main` and the cook derives them; every other Solana account is an account parameter, and venues are adapters, all covered in the [Solana guide](solana.md).

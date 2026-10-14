@@ -1,6 +1,6 @@
 ---
 name: sauce-swaps
-description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin, and a try form of each), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, PancakeSwap Infinity CL and bin pools, the guard that stops a leg from stranding input, and on Solana a function per price-limited venue (Raydium CLMM, Orca, Phoenix and six more) and trySwap for any. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
+description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, infinityCL, infinityBin, and a try form of each), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, PancakeSwap Infinity CL and bin pools, the guard that stops a leg from stranding input, and on Solana a namespace per price-limited venue (OrcaWhirlpool.swap(pool, …), accounts derived; Raydium CLMM, Phoenix and six more) and trySwap for any. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
 ---
 
 # Swaps with `@sauce/router`
@@ -207,7 +207,7 @@ The library checks `minOut`; what is left is the input a price limit left unspen
    which on an owner's Pot may hold more of it for other uses.
 
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
-Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):
+Simulate it, then run it, with the input in the Pot (or pulled in with `--fund`):
 
 ```sh
 sauce simulate swap-leg.sauce.ts --chain base --owner <address> \
@@ -223,6 +223,62 @@ request for that chain (`sauce-chains`).
 For several venues under one price limit, use `sauce-distributed-swap`.
 
 ## On Solana
+
+### A venue by its namespace
+
+A program that knows its pool calls the venue by its namespace, as a program on an EVM chain calls a
+protocol, and is given no accounts:
+
+```sauce chain=solana
+function main(
+  pool: Address,
+  to: Address,
+  amountIn: Uint256,
+  maxPrice: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const got = OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+  if (got > 0) WSOL.transfer(to, got);
+  return got;
+}
+```
+
+```sh
+sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
+  --args <pool> <recipient> 100000000 200000000000000000 400000000
+```
+
+- **The namespaces** are `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`,
+  `OrcaWhirlpool`, `Cropper`, `Defituna`, `Crema` and `Phoenix`. Each has two methods:
+  - `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`, which returns what arrived;
+  - `trySwap(…)`, which takes the same arguments and returns `0` where `swap` reverts.
+
+  `sauce globals --chain solana` lists them.
+
+- **One venue's function.** Each call compiles to that venue's function below (`orcaWhirlpool`,
+  `tryOrcaWhirlpool`), never `trySwap`, which carries all nine. It keeps every check of the
+  function: the venue's program, the pool's owner, the pair, `minOut`. A pool of another venue
+  reverts on chain (`not an Orca whirlpool`).
+- **The pool and both tokens are known when the cook is built.** Each one can be:
+  - a parameter of `main` declared `Address`;
+  - a 32-byte key written out;
+  - a registered symbol (a token).
+
+  The pool's nine accounts are read from the pool on the cluster for the token paid. The trader's
+  are the Pot's: the authority, its account for `tokenIn`, the two mints, the token programs and the
+  memo program. All of them are added to `main`, and `sauce compile --json` shows how each is
+  derived (`slot:@pool:USDC.vaultA`, `self:USDC`). A pool no price-limit venue owns is refused
+  before the cook.
+
+- **What is bought lands in the Pot's own account for `tokenOut`.** Crema and Phoenix pay nowhere
+  else. `sauce run` creates that account when it is missing, asking first or with `--yes`. Forward
+  what arrived with the token methods (`WSOL.transfer(to, got)`).
+- **Finding a pool.** `sauce pools --chain solana USDC WSOL` lists a pair's pools at each venue,
+  deepest first, each with its `maxPrice` (its price, fee included).
+
+[examples/solana-swap.sauce.ts](examples/solana-swap.sauce.ts) is the program above.
+
+### The functions
 
 On Solana `@sauce/router` is one function per venue whose swap stops at a price limit and leaves
 the rest of the input: `tryRaydiumClmm`, `tryPancakeswapClmm`, `tryByreal`, `tryStabbleClmm`,
@@ -384,4 +440,5 @@ Jupiter Perpetuals' JLP mint, swap with more, so they have only their `Cpi` and 
 
 [examples/swaps.mts](examples/swaps.mts) compiles the leg and pins the library's functions, the
 Router's entry points, their price parameters and the callbacks above against what the package
-serves.
+serves. [examples/solana-swap.sauce.ts](examples/solana-swap.sauce.ts) buys WSOL at an Orca
+whirlpool by its namespace and forwards it.

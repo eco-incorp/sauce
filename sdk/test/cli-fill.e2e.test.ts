@@ -92,7 +92,7 @@ const ARBITRUM_USDC = address(registryTokenAddress(requireChain("arbitrum"), "US
 const transfer = (to: Address, amount: bigint): Hex =>
   encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [to, amount] });
 
-describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", () => {
+describeEvm("sauce intent fill: a solver's fill, simulated on the destination", () => {
   let base: LocalChain;
   let work: string;
   let store: string;
@@ -365,7 +365,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     const run = await fill(direct(computed));
     expect(run.code).toBe(1);
     expect(run.stderr).toContain(
-      `the solver delivers ${computed}, and the rehearsal cannot give it a balance: no storage ` +
+      `the solver delivers ${computed}, and the simulation cannot give it a balance: no storage ` +
         `slot of ${computed} holds the balance its balanceOf reports`,
     );
     expect(run.stderr).toContain("Pass --solver <an address that holds it>.");

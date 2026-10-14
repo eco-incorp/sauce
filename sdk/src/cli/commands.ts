@@ -65,10 +65,11 @@ import {
 } from "./approvals.js";
 import { linkLines, txLinks } from "./links.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
+import { rehearse } from "./rehearse.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
-import { svmCookSize } from "./solana.js";
+import { svmCookSize, svmPayload } from "./solana.js";
 import type { Funding } from "./funding.js";
 import { previewRefusal, requireSupported, type PreviewChainRefusal } from "./support.js";
 
@@ -101,7 +102,7 @@ export interface CommandOutput {
 export function revertedFirst(output: CommandOutput): CommandOutput {
   if (output.json.ok !== false) return output;
   const error =
-    typeof output.json.reason === "string" ? output.json.reason : "the rehearsal failed";
+    typeof output.json.reason === "string" ? output.json.reason : "the simulation failed";
 
   return {
     ...output,
@@ -297,7 +298,9 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
   const payload =
     input.args === undefined && program.entryParams.length > 0
       ? undefined
-      : hexToBytes(payloadOf(program, input.args));
+      : input.chain.kind === "svm"
+        ? svmPayload(program, input.args)
+        : hexToBytes(payloadOf(program, input.args));
   const cook =
     input.chain.kind === "svm" && payload !== undefined
       ? await svmCookSize(
@@ -305,6 +308,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           program.manifest ?? { accounts: [] },
           input.accounts ?? {},
           input.via,
+          program.derivedAccounts,
         )
       : undefined;
   const notes = [
@@ -317,7 +321,8 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       ? []
       : [
           `the cook is a ${cook.size}-byte transaction, past Solana's ${cook.limit}: \`sauce run\` ` +
-            "stages the program in a code buffer first; `sauce simulate` and `sauce tx` cannot",
+            "stages the program in a code buffer first, `sauce simulate` simulates it staged, and " +
+            "`sauce tx` prints the plan of transactions that stages it, for a signer",
         ]),
   ];
 
@@ -343,9 +348,28 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       contracts: collected.contracts(),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
-      ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+      ...(program.manifest === undefined ? {} : { manifest: manifestJson(program) }),
     },
     ...(notes.length === 0 ? {} : { notes }),
+  };
+}
+
+/**
+ * The program's account manifest as `--json` prints it: each slot with how it is derived, where the
+ * SDK added it to the program (`derive`, an `--account` value: `self:USDC`, `@to:USDC`), so a
+ * reader sees which accounts a cook fills by itself and which it must be given.
+ */
+export function manifestJson(program: CompiledSauceProgram): unknown {
+  const manifest = program.manifest!;
+  const derived = program.derivedAccounts ?? {};
+
+  return {
+    ...manifest,
+    accounts: manifest.accounts.map((entry) =>
+      entry.kind === "slot" && Object.hasOwn(derived, entry.name)
+        ? { ...entry, derive: derived[entry.name] }
+        : entry,
+    ),
   };
 }
 
@@ -363,7 +387,7 @@ export type ArgsInput =
  * tuple parameter, which takes JSON (`[1, 2]`, `{"amount": 1}`); `--args-json` values are taken as
  * parsed. `encodeEntryArguments` then checks every one against its declared type.
  */
-function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryValue[] {
+export function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryValue[] {
   if (args.from === "--args-json") return args.values as EntryValue[];
 
   return args.values.map((raw, index) => {
@@ -654,6 +678,75 @@ export function valueOf(
   return value;
 }
 
+/** The room a suggested gas limit leaves over what the simulation used or estimated: refunds, the
+ *  63/64 a call forwards, and a chain that moved on since. */
+const withRoom = (gas: bigint): bigint => (gas * 13n) / 10n;
+
+/**
+ * The gas to sign a plan's Pot deployment and cook with: the two simulated together, the cook on the
+ * Pot the deployment leaves, from `owner`. A signer's own estimate of the cook, taken while the Pot
+ * has no code, prices a call to an empty address. Each with room (`withRoom`); with a note saying
+ * so, or why the cook has none. `simulateWith` is the rehearsal, given by a test.
+ */
+export async function planGas(
+  client: PublicClient,
+  target: Extract<PotInput, { readonly owner: Address }>,
+  cook: TxRequest,
+  simulateWith: typeof rehearse = rehearse,
+): Promise<{ deploy?: bigint; cook?: bigint; note: string }> {
+  const roomless =
+    "sign the cook with a gas limit that has room, or once the deployment has landed: a " +
+    "signer's own estimate, taken while the Pot has no code, is far too low";
+  let rehearsal;
+  try {
+    rehearsal = await simulateWith(client, {
+      owner: target.owner,
+      pot: cook.to,
+      kitchen: kitchenAddress(),
+      deploy: { salt: target.salt },
+      cook,
+      overrides: [],
+    });
+  } catch (error) {
+    // The plan stands without it: an endpoint that cannot simulate the two together.
+    return {
+      note:
+        `the endpoint could not simulate the cook after the deployment ` +
+        `(${(error as { shortMessage?: string }).shortMessage ?? (error as Error).message.split("\n")[0]}): ` +
+        roomless,
+    };
+  }
+  if (!rehearsal.ok) {
+    return {
+      note:
+        rehearsal.stage === "deploy"
+          ? `the Pot's deployment would revert (${rehearsal.reason}), so no gas is suggested`
+          : `the cook is given no gas: simulated after the deployment, on the chain as it is, it ` +
+            `would revert (${rehearsal.reason}). Fund the Pot first (its address takes tokens ` +
+            `before it is deployed) and build it again for its gas, or ${roomless}`,
+    };
+  }
+  if (rehearsal.gas === undefined) {
+    return { note: `the endpoint could not estimate the cook after the deployment: ${roomless}` };
+  }
+  const gas = withRoom(rehearsal.gas);
+
+  return {
+    ...(rehearsal.deployGas === undefined ? {} : { deploy: withRoom(rehearsal.deployGas) }),
+    cook: gas,
+    note:
+      `each transaction's gas is a limit to sign it with: the cook's, ${gas}, is estimated as if ` +
+      `the deployment had landed (${rehearsal.gas} ${rehearsal.gasKind}, simulated after it), with ` +
+      "30% room. A signer's own estimate of the cook, taken while the Pot has no code, is far " +
+      "too low" +
+      // Not the deployment's: it calls the Kitchen, which has code, so a signer estimates it right.
+      (rehearsal.deployGas === undefined
+        ? ". The deployment carries no gas: the endpoint did not report it apart, and a signer's " +
+          "own estimate of it is right, as the Kitchen it calls has code"
+        : ""),
+  };
+}
+
 export interface TxInput extends CookInput {
   /** An endpoint, when given: it reads the fee and checks the Pot. */
   readonly rpcUrl?: string;
@@ -706,13 +799,28 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
     )) ?? []),
   ];
   if (setup.length > 0) {
-    const steps = setup.map((step) => step.planned);
+    // A plan that deploys the Pot, then cooks: the cook's gas, as if the deployment had landed.
+    const gas =
+      deployFirst && setup.length === 1 && client !== undefined && "owner" in target
+        ? await planGas(client, target, { to: cook.pot, data: cook.data, value })
+        : undefined;
+    const steps = setup.map((step, index) =>
+      index === 0 && gas?.deploy !== undefined
+        ? { ...step.planned, gas: gas.deploy.toString() }
+        : step.planned,
+    );
     const json = {
       chainId: input.chain.id,
       pot: cook.pot,
       transactions: [
         ...steps,
-        { what: `cook on Pot ${cook.pot}`, to: cook.pot, data: cook.data, value: value.toString() },
+        {
+          what: `cook on Pot ${cook.pot}`,
+          to: cook.pot,
+          data: cook.data,
+          value: value.toString(),
+          ...(gas?.cook === undefined ? {} : { gas: gas.cook.toString() }),
+        },
       ],
     };
 
@@ -737,6 +845,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...setup
           .slice(deployFirst ? 1 : 0)
           .map((step) => `${step.reason}: ${step.planned.what} comes first.`),
+        ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
         from,
       ],
     };

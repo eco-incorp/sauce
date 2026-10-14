@@ -15,7 +15,7 @@ first: every page below uses the three words.
 on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
 
 For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**. Every
-other chain is a preview chain, where a program compiles and rehearses but the `sauce` command and
+other chain is a preview chain, where a program compiles and simulates but the `sauce` command and
 the MCP server build no transaction; [Chains](reference/chains.md) has the policy, every chain, and
 how to request one.
 
@@ -44,7 +44,7 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 - [Builders](guides/builders-and-actions.md): generate programs from structured data.
 - [Solana](guides/solana.md): plan accounts, stage code and execute on Solana.
 - [Verification](guides/verification.md): check what a settlement payload contains.
-- [The sauce command](guides/cli.md): compile, rehearse and run from a terminal, with agent
+- [The sauce command](guides/cli.md): compile, simulate and run from a terminal, with agent
   wallets and their policies.
 - [The MCP server](guides/mcp.md): give a coding agent Sauce's tools.
 - [Agent skills](guides/skills.md): install the skills that teach a coding agent to write and run

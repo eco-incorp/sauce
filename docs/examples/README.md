@@ -8,18 +8,19 @@ build transaction data without sending anything. Repeated-digit addresses and ro
 fixtures, not configuration. The RPC helpers are typechecked here and read chain state only when your
 application calls them.
 
-| Example                                                        | Shows                                                                                                                         |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it — written in SauceScript               |
-| [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)` |
-| [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                |
-| [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program — token symbols, a pool by key — compiled for two chains, and with a runtime amount      |
-| [router-swap.sauce.ts](router-swap.sauce.ts)                   | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript                       |
-| [router-swap.ts](router-swap.ts)                               | Compiling that program for Ethereum and appending its floor as `main`'s argument                                              |
-| [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                               |
-| [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                |
-| [evm-execution.ts](evm-execution.ts)                           | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                        |
-| [pot-router.ts](pot-router.ts)                                 | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                            |
+| Example                                                        | Shows                                                                                                                                                                                        |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it — written in SauceScript                                                                              |
+| [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)`                                                                |
+| [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                                                                               |
+| [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program — token symbols, a pool by key — compiled for two chains, and with a runtime amount                                                                     |
+| [router-swap.sauce.ts](router-swap.sauce.ts)                   | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript                                                                                      |
+| [router-swap.ts](router-swap.ts)                               | Compiling that program for Ethereum and appending its floor as `main`'s argument                                                                                                             |
+| [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                                                                                              |
+| [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                                                                               |
+| [evm-execution.ts](evm-execution.ts)                           | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                                                                                       |
+| [pot-router.ts](pot-router.ts)                                 | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                                                                                           |
+| [mcp-external-signer.ts](mcp-external-signer.ts)               | The MCP server with a signer it never sees: `sauce_tx` builds, your signer (a KMS, a hardware wallet) signs, `sauce_send` broadcasts and reports — a Solana plan's every step, by its cursor |
 
 ## Run an example in your project
 
@@ -38,6 +39,10 @@ node dist/example.js
 ```
 
 For `evm-execution.ts`, `pot-router.ts`, `router-route.ts`, `router-swap.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's encoding helpers and RPC interfaces.
+
+`mcp-external-signer.ts` takes your MCP client's tool call and your signer, and imports nothing:
+`mcp/test/send.e2e.test.ts` runs it against the server on a local chain, signing with a throwaway
+key.
 
 CI typechecks and runs each of them, and asserts the encoded output including a nonzero cook-fee
 budget. Each SauceScript program is also executed in CI, through the released engine. The RPC

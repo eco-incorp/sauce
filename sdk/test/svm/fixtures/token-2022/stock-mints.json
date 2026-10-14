@@ -1,5 +1,5 @@
 {
-  "$comment": "Two tokenized-stock mints as Solana mainnet-beta held them at slot 452422187 (read with getMultipleAccounts, finalized, 2026-10-01): the extension sets every xStocks and every Ondo Global Markets mint then carried (MetadataPointer, TokenMetadata, ScaledUiAmount, Pausable, DefaultAccountState initialized, ConfidentialTransferMint, TransferHook with no program, and PermanentDelegate on the xStocks). Read by test/std/token/svm-token-2022.e2e.test.ts, which plants each image unchanged but for its mint authority.",
+  "$comment": "Tokenized-stock mints as Solana mainnet-beta held them, read with getMultipleAccounts, finalized. TSLAx and TSLAon at slot 452422187 (2026-10-01): the extension sets every xStocks and every Ondo Global Markets mint then carried (MetadataPointer, TokenMetadata, ScaledUiAmount, Pausable, DefaultAccountState initialized, ConfidentialTransferMint, TransferHook with no program, and PermanentDelegate on the xStocks). SPACEX, PreStocks' SpaceX token, at the slot its entry records (2026-10-12, by scripts/capture-stock-mints.mjs): the same set with PermanentDelegate, plus a TransferFeeConfig of two schedules (50 basis points from epoch 1032, 100 from 1039, no maximum) and ConfidentialTransferFeeConfig. Read by test/std/token/svm-token-2022.e2e.test.ts and test/cli-solana-token-methods.e2e.test.ts, which plant each image unchanged but for its mint authority.",
   "slot": 452422187,
   "mints": {
     "TSLAx": {
@@ -36,6 +36,27 @@
         "tokenMetadata"
       ],
       "dataBase64": "AQAAAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mZw35uHQAAAAJAQEAAAA7iU3CRLV7yVzMKBHpxpAv2aPlYPWrmnLpZakLVu4ErgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARkAOACAzfld7U0jcJRDV66slYIE48ubbpJiLJ6AUboIH15/ZgAAAAAAAPA/x3qtagAAAAAAAAAAAADwPxIAQACAzfld7U0jcJRDV66slYIE48ubbpJiLJ6AUboIH15/ZgTGmdLJyoB92auFZHWE4hlJ3ob6Il8qYrcMCOvZmXpaGgAhAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mAAYAAQABBABBAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgBAAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATAKsAgM35Xe1NI3CUQ1eurJWCBOPLm26SYiyegFG6CB9ef2YExpnSycqAfdmrhWR1hOIZSd6G+iJfKmK3DAjr2Zl6WhYAAABUZXNsYSAoT25kbyBUb2tlbml6ZWQpBgAAAFRTTEFvbj8AAABodHRwczovL2FwcC5vbmRvLmZpbmFuY2UvYXBpL3YyL2Fzc2V0cy9UU0xBb24vc29sX21ldGFkYXRhLmpzb24AAAAA"
+    },
+    "SPACEX": {
+      "issuer": "PreStocks",
+      "mint": "PreANxuXjsy2pvisWWMNB6YaJNzr7681wJJr2rHsfTh",
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "space": 902,
+      "decimals": 9,
+      "extensions": [
+        "permanentDelegate",
+        "defaultAccountState",
+        "transferFeeConfig",
+        "confidentialTransferMint",
+        "confidentialTransferFeeConfig",
+        "transferHook",
+        "scaledUiAmountConfig",
+        "metadataPointer",
+        "pausableConfig",
+        "tokenMetadata"
+      ],
+      "slot": 456278827,
+      "dataBase64": "AQAAAAeNqqeCA9d7yCO5aGPaTYZRxkP8EOtsvluXh+BW2kvdejY/hfMHAAAJAQEAAAAHjaqnggPXe8gjuWhj2k2GUcZD/BDrbL5bl4fgVtpL3QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQwAIAAHjaqnggPXe8gjuWhj2k2GUcZD/BDrbL5bl4fgVtpL3QYAAQABAQBsAAeNqqeCA9d7yCO5aGPaTYZRxkP8EOtsvluXh+BW2kvdB42qp4ID13vII7loY9pNhlHGQ/wQ62y+W5eH4FbaS9322VQAAAAAAAgEAAAAAAAA//////////8yAA8EAAAAAAAA//////////9kAAQAQQAHjaqnggPXe8gjuWhj2k2GUcZD/BDrbL5bl4fgVtpL3QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAgQAHjaqnggPXe8gjuWhj2k2GUcZD/BDrbL5bl4fgVtpL3WCB1W7kKtMQ71vIPL1tXp2iAcSHa5u7/uxMhIjGhw5jAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAEAAB42qp4ID13vII7loY9pNhlHGQ/wQ62y+W5eH4FbaS90AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABkAOAAHjaqnggPXe8gjuWhj2k2GUcZD/BDrbL5bl4fgVtpL3QAAAAAAAPA/SOgoagAAAAAAAAAAAAAUQBIAQAAHjaqnggPXe8gjuWhj2k2GUcZD/BDrbL5bl4fgVtpL3QXa6CAVZgkz9ml9yPMoqUt1jvw88eGSXB87EByFX6WUGgAhAAeNqqeCA9d7yCO5aGPaTYZRxkP8EOtsvluXh+BW2kvdABMAkAAHjaqnggPXe8gjuWhj2k2GUcZD/BDrbL5bl4fgVtpL3QXa6CAVZgkz9ml9yPMoqUt1jvw88eGSXB87EByFX6WUEAAAAFNwYWNlWCBQcmVTdG9ja3MGAAAAU1BBQ0VYKgAAAGh0dHBzOi8vcHJlc3RvY2tzLmNvbS9tZXRhZGF0YS9zcGFjZXguanNvbgAAAAA="
     }
   }
 }

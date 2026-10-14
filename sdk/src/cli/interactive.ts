@@ -112,7 +112,7 @@ async function menu(
       ok === undefined ? "" : ok ? "" : ` (not now: ${why})`;
     const choices: Array<{ label: string; value: Action }> = [
       { label: "status", value: "status" },
-      { label: `fill, rehearsed${mark(can?.fill.ok, can?.fill.why)}`, value: "fill" },
+      { label: `fill, simulated${mark(can?.fill.ok, can?.fill.why)}`, value: "fill" },
       ...(context.account === undefined
         ? []
         : [

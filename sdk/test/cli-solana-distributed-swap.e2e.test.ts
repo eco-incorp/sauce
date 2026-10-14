@@ -275,7 +275,7 @@ describeSvm(
       expect(second.createTokenAccounts).toBeUndefined();
     }, 300_000);
 
-    it("simulates it in a local copy of its accounts, and refuses to print it as one transaction", async () => {
+    it("simulates it in a local copy of its accounts, and prints it as a plan of steps", async () => {
       restoreVenues(harness.svm);
       await potAccount(USDC, budget);
       await potAccount(WSOL, 0n);
@@ -320,10 +320,26 @@ describeSvm(
       expect(guarded.code).toBe(0);
       expect((JSON.parse(guarded.stdout) as { asExpected: boolean }).asExpected).toBe(true);
 
+      // Too large for one transaction, and naming too many accounts to list: `sauce tx` plans it,
+      // its first step staging the program and creating the lookup table the cook goes through.
       const tx = await sauce(...argv("tx"));
-      expect(tx.code).toBe(1);
-      expect(tx.stderr).toContain("sauce run");
-      expect(tx.stderr).toContain("--lookup-table");
+      expect(tx.code).toBe(0);
+      const planned = JSON.parse(tx.stdout) as {
+        step: string;
+        transactions: Array<{ what: string }>;
+        cursor: string;
+      };
+      expect(planned.step).toBe("setup");
+      const steps = planned.transactions.map((one) => one.what);
+      expect(steps).toEqual(
+        expect.arrayContaining([
+          "creating the code buffer",
+          "finalizing the code buffer",
+          "creating the lookup table",
+          "extending the lookup table",
+        ]),
+      );
+      expect(tx.stderr).toContain("sauce send");
 
       // An owner that cannot pay, such as a pool, is refused by name before anything runs.
       const orca = pool("orca-whirlpool-sol-usdc").pool;

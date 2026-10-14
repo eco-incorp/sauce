@@ -15,7 +15,7 @@ look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=
 or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each preview chain's
 page links its own.
 
-On a preview chain the `sauce` command and the MCP server still rehearse and read:
+On a preview chain the `sauce` command and the MCP server still simulate and read:
 `sauce simulate`, `sauce intent fill` without `--send`, and every read. What they refuse there,
 before any endpoint is reached or any key is read, is building or sending a transaction;
 [the command's](../guides/cli.md#supported-and-preview-chains) and

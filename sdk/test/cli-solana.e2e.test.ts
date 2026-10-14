@@ -987,13 +987,13 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
   }, 60_000);
 
   it("`sauce simulate` creates a missing Pot in the same transaction as the cook, sending nothing", async () => {
-    const salt = hexToBytes(potSalt("rehearsed"));
+    const salt = hexToBytes(potSalt("simulated"));
     const pot = await potOf(salt);
     const { flags } = accountsFor(pot, 1_000n);
     const before = rpc.sent.length;
     const run = await sauce(
       ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
-      ...["--salt", "rehearsed", "--rpc-url", RPC_URL, ...flags, "--args", "400"],
+      ...["--salt", "simulated", "--rpc-url", RPC_URL, ...flags, "--args", "400"],
     );
     expect(run.stderr).toBe("");
     expect(run.code).toBe(0);
@@ -1334,21 +1334,28 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     });
     const { codeBuffer } = out.staged as { codeBuffer: Address };
     expect(harness.svm.getAccount(codeBuffer).exists).toBe(false);
-    // Too large for a single unsigned transaction: it says by how much, and that `sauce run`
-    // stages it.
+    // Too large for a single unsigned transaction: `sauce tx` plans it, its first step everything the
+    // cook needs on the cluster — the missing Pot, the buffer, the program in chunks, finalized —
+    // for the owner to sign, and a cursor `sauce send` takes on from.
     const program = compileSauceProgram("solana", readFileSync(big, "utf8"), {}).bytecode.length;
-    const refused = await sauce(
-      ...["tx", big, "--owner", owner.signer.address, "--salt", "absent"],
-      ...["--rpc-url", RPC_URL],
-    );
-    expect(refused.code).toBe(1);
-    expect(refused.stderr).toMatch(
-      new RegExp(
-        `the payload \\(the program, with no arguments\\) is ${program} bytes, so its cook is ` +
-          "a (\\d+)-byte transaction, (\\d+) past Solana's 1232\\. .* Shrink the payload by at " +
-          "least \\2 bytes to fit, or let `sauce run` stage it",
+    const planned = json(
+      await sauce(
+        ...["tx", big, "--owner", owner.signer.address, "--salt", "absent"],
+        ...["--rpc-url", RPC_URL],
       ),
-    );
+    ) as { step: string; transactions: Array<{ what: string; feePayer: string }>; cursor: string };
+    expect(planned.step).toBe("setup");
+    expect(planned.cursor).toMatch(/^sauce-plan-1\./);
+    expect(planned.transactions.map((tx) => tx.what)).toEqual([
+      "creating the Pot",
+      "creating the code buffer",
+      ...Array.from(
+        { length: Math.ceil(program / 900) },
+        (_, index) => `writing bytes ${index * 900}… of the program`,
+      ),
+      "finalizing the code buffer",
+    ]);
+    expect(planned.transactions.every((tx) => tx.feePayer === owner.signer.address)).toBe(true);
     // A simulation stages it in a local copy of the accounts, the missing Pot created there first.
     const rehearsed = await sauce(
       ...["simulate", big, "--owner", owner.signer.address, "--salt", "absent"],
@@ -1517,6 +1524,16 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const closed = /The code buffer (\w+) was closed again\./.exec(run.stderr);
     expect(closed).not.toBeNull();
     expect(harness.svm.getAccount(address(closed![1]!)).exists).toBe(false);
+  }, 120_000);
+
+  it("stages a program past one step's transactions, the setup sent in steps", async () => {
+    const out = json(await runVault("run", blobProgram("huge.sauce.ts", 31_000), "--json")) as {
+      cook: { status: string };
+      staged: { codeBuffer: Address; transactions: string[] };
+    };
+    expect(out.cook.status).toBe("success");
+    expect(out.staged.transactions.length).toBeGreaterThan(32);
+    expect(harness.svm.getAccount(out.staged.codeBuffer).exists).toBe(false);
   }, 120_000);
 
   it("closes the code buffer of a staged cook whose rehearsal fails", async () => {
@@ -1827,7 +1844,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
   });
 
   // Last: the cooks it sends would shift the counts of sent transactions the tests above read.
-  it("runs the sauce-chains Solana payout as its header says: USDC by transfer, TSLAx by transferChecked", async () => {
+  it("runs the sauce-chains Solana payout as its header says: no --account, USDC by transfer, TSLAx by transferChecked", async () => {
     const salt = "payout";
     const pot = await potOf(hexToBytes(potSalt(salt)));
     const rows = svmTokenRows(requireChain("solana"));
@@ -1846,15 +1863,14 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       programAddress: TOKEN_2022_PROGRAM,
       space: BigInt(image.length),
     });
-    // The Pot's accounts where pot:USDC and pot:TSLAx find them, and the recipient's.
-    const [potUsdc] = await findAssociatedTokenPda({
-      owner: pot,
-      mint: usdc,
-      tokenProgram: TOKEN_PROGRAM_ADDRESS,
-    });
+    // The Pot's accounts where the derivations find them; the recipient has none yet, which the
+    // run creates before the cook.
+    const ataOf = async (holder: Address, mint: Address, tokenProgram: Address) =>
+      (await findAssociatedTokenPda({ owner: holder, mint, tokenProgram }))[0];
+    const potUsdc = await ataOf(pot, usdc, TOKEN_PROGRAM_ADDRESS);
     setTokenAccount(harness, potUsdc, usdc, pot, 3_000_000n);
     const recipient = randomAddress();
-    const toUsdc = setTokenAccount(harness, randomAddress(), usdc, recipient, 0n);
+    const toUsdc = await ataOf(recipient, usdc, TOKEN_PROGRAM_ADDRESS);
     const tslaxAccount = async (holder: Address, amount: bigint) => {
       const [account] = await findAssociatedTokenPda({
         owner: holder,
@@ -1883,7 +1899,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       return account;
     };
     const potTslax = await tslaxAccount(pot, 100_000_000n);
-    const toTslax = await tslaxAccount(recipient, 0n);
+    const toTslax = await ataOf(recipient, tslax, TOKEN_2022_PROGRAM);
 
     // The example line of the program's header, as written: its placeholders filled in, and the
     // endpoint, the Pot's salt and the approval to create the Pot added.
@@ -1902,17 +1918,14 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       .slice(first, last + 1)
       .map((one) => one.replace(/\\$/, ""))
       .join(" ");
-    const filled: Record<string, string> = {
-      "<keypair>": owner.path,
-      "<the recipient's USDC account>": toUsdc,
-      "<the recipient's TSLAx account>": toTslax,
-    };
+    const filled: Record<string, string> = { "<keypair>": owner.path, "<recipient>": recipient };
     const argv = line
       .match(/[^\s<]*<[^>]*>|\S+/g)!
       .slice(1)
       .map((word) => word.replace(/<[^>]*>/, (placeholder) => filled[placeholder] ?? placeholder));
     expect(argv.slice(0, 2)).toEqual(["run", "payout-solana.sauce.ts"]);
     expect(argv.join(" ")).not.toContain("<");
+    expect(argv).not.toContain("--account");
     argv[1] = file;
     const at = argv.indexOf("--args");
     const run = json(
@@ -1929,15 +1942,12 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(tokenAmount(harness, toTslax)).toBe(50_000_000n);
 
     // Past one transaction: a rehearsal stages it in a local copy, and moves what the run moved.
-    const accounts = argv
-      .slice(2, at)
-      .filter((word, i, all) => word === "--account" || all[i - 1] === "--account");
     const rehearsed = await sauce(
       ...["simulate", file, "--chain", "solana", "--owner", owner.signer.address],
-      ...["--salt", salt, "--rpc-url", RPC_URL, ...accounts, ...argv.slice(at)],
+      ...["--salt", salt, "--rpc-url", RPC_URL, ...argv.slice(at)],
     );
     expect(rehearsed.code).toBe(0);
-    expect(rehearsed.stdout).toContain("Rehearsed in a local copy (LiteSVM)");
+    expect(rehearsed.stdout).toContain("Simulated in a local copy (LiteSVM)");
     expect(rehearsed.stdout).toMatch(/1 USDC/);
   }, 120_000);
 });

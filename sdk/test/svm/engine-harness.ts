@@ -110,7 +110,17 @@ export const svmArtifactsPresent = [ENGINE_SO, KITCHEN_SO, KITCHEN_IDL_JSON].eve
   (path) => path !== undefined && existsSync(path),
 );
 
-export const describeSvm = svmArtifactsPresent ? describe : describe.skip;
+/** jest's `describe`, as the suites call it. */
+type Describe = ((name: string, suite: () => void) => void) & {
+  readonly skip: (name: string, suite: () => void) => void;
+};
+// Read off globalThis: jest declares `describe`, and a suite on the node test runner (the MCP
+// server's) imports this harness too, where no such global exists, and gates on
+// `svmArtifactsPresent` itself.
+const jestDescribe = (globalThis as { describe?: Describe }).describe;
+export const describeSvm = (
+  jestDescribe === undefined ? undefined : svmArtifactsPresent ? jestDescribe : jestDescribe.skip
+) as Describe;
 
 // Kept as a name because suites reference it; it is the same engine as ENGINE_SO now that there is
 // only one.

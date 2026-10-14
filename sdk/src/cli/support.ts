@@ -285,7 +285,7 @@ export function previewRefusal(
     `${action} is refused: it involves ${named}, ${preview.length === 1 ? "a preview chain" : "preview chains"}. ` +
       `For the initial release, the sauce command and its MCP server build and send transactions ` +
       `only on ${supportedChainNames()}. On a preview chain a program still compiles, and ` +
-      "simulate and dry runs rehearse it.",
+      "simulate and dry runs still run it.",
     ...requests.map(
       ({ name, request }) =>
         `To ask for ${name}: add your use case to its request if there is one ` +

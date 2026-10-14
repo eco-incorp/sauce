@@ -1,6 +1,6 @@
 ---
 name: sauce-actions
-description: Write a Sauce program as a JSON actions document instead of SauceScript — swaps, bridges, wraps, staking, lending and token moves as data, tokens by registry symbol, protocol contracts by namespace and pools by their factory's key, one document for every chain that has its names — then compile, rehearse and send it with the sauce actions command and the program commands. Use when the job is a fixed sequence of protocol operations, when a service or another language produces the steps as data, when the user asks for an action program, actions JSON or an actions document, or when a document must be checked against a schema before it runs.
+description: Write a Sauce program as a JSON actions document instead of SauceScript — swaps, bridges, wraps, staking, lending and token moves as data, tokens by registry symbol, protocol contracts by namespace and pools by their factory's key, one document for every chain that has its names — then compile, simulate and send it with the sauce actions command and the program commands. Use when the job is a fixed sequence of protocol operations, when a service or another language produces the steps as data, when the user asks for an action program, actions JSON or an actions document, or when a document must be checked against a schema before it runs.
 ---
 
 # Write an actions document
@@ -129,7 +129,7 @@ the Pot's behalf. [examples/swap-by-key.json](examples/swap-by-key.json) is the 
 `amountOutMin` is fixed when the document is written, so set it from a quote for the amount you will
 pass.
 
-## Compile, rehearse, send
+## Compile, simulate, send
 
 `sauce actions` prints the SauceScript the document lowers to on a chain, `main`'s parameters and
 the bytecode; `--json` adds the document as parsed, the chain, and what `sauce compile --json`

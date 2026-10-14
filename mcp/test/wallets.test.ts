@@ -11,8 +11,10 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
+import { encodeCursor } from "../../sdk/dist/cli/svm-plan.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
+import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES, WALLET_UNSIGNED } from "../src/tools.js";
 import { WALLET_TOOL_NAMES } from "../src/wallets.js";
@@ -30,7 +32,7 @@ describe("a server without wallets", () => {
   it("has no wallet tool, and says nothing here signs", async () => {
     const { tools } = await mcp.client.listTools();
     assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
-    assert.match(mcp.client.getInstructions() ?? "", /NOTHING HERE SIGNS OR SENDS/);
+    assert.match(mcp.client.getInstructions() ?? "", /NOTHING HERE SIGNS\./);
     assert.ok(tools.every((tool) => !(tool.description ?? "").includes("sauce_wallet_send")));
   });
 });
@@ -59,6 +61,70 @@ describe("a server whose password is too short to create a wallet with", () => {
   });
 });
 
+describe("a server whose password does not open its wallet, given a Solana plan", () => {
+  let dir: string;
+  let mcp: Connected;
+  let wallet: string;
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-plan-"));
+    const store = new WalletStore(join(dir, "wallets"));
+    wallet = (await store.create("sol", "solana", `opens-${process.pid}-${Date.now()}`)).info
+      .address;
+    mcp = await connect(undefined, undefined, {
+      store,
+      password: "not-the-password",
+      source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
+    });
+  });
+  after(async () => {
+    await mcp.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A plan's cursor, its owner `owner`. */
+  const cursorFor = (owner: string) =>
+    encodeCursor({
+      owner: owner as never,
+      salt: `0x${"11".repeat(32)}`,
+      via: "kitchen",
+      tail: [],
+      lookupTables: [],
+      pot: "there",
+      tokenAccounts: [],
+      payload: new Uint8Array([1, 2, 3]),
+      labels: [],
+    });
+
+  it("refuses another owner's plan by name before it unlocks the wallet or reads a chain", async () => {
+    const other = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi";
+    const message = failed(
+      await mcp.call("sauce_wallet_send", {
+        wallet: "sol",
+        transaction: { cursor: cursorFor(other) },
+        rpcUrl: "http://127.0.0.1:9/",
+      }),
+    );
+    assert.match(
+      message,
+      new RegExp(
+        `the plan is ${other}'s: only that key signs its transactions, and wallet sol is ${wallet}`,
+      ),
+    );
+    assert.doesNotMatch(message, /password/i);
+    // Its own plan goes on to the unlock, which this password does not open.
+    assert.doesNotMatch(
+      failed(
+        await mcp.call("sauce_wallet_send", {
+          wallet: "sol",
+          transaction: { cursor: cursorFor(wallet) },
+          rpcUrl: "http://127.0.0.1:9/",
+        }),
+      ),
+      /the plan is/,
+    );
+  });
+});
+
 describe("a server with wallets", () => {
   let dir: string;
   let mcp: Connected;
@@ -80,7 +146,13 @@ describe("a server with wallets", () => {
     const { tools } = await mcp.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
-      [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...WALLET_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+      [
+        ...TOOL_NAMES,
+        ...INTENT_TOOL_NAMES,
+        ...SEND_TOOL_NAMES,
+        ...WALLET_TOOL_NAMES,
+        ...SKILL_TOOL_NAMES,
+      ],
     );
     for (const tool of tools) {
       for (const field of Object.keys(tool.inputSchema.properties ?? {})) {

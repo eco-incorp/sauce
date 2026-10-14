@@ -197,8 +197,8 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
           : `Tokens (${listed.length})`;
     text.push(
       "",
-      `${what}: the symbol is the mint's 32-byte key, a value for the @sauce/token functions: ` +
-        "balanceOf(USDC, account)",
+      `${what}: USDC.transfer(to, amount), USDC.balanceOf(ctx.self()); the symbol alone is the ` +
+        "mint's 32-byte key, a value for the @sauce/token functions: balanceOf(USDC, account)",
       ...listed.map((token) => `  ${line(token)}`),
       ...(search === undefined && input.stocks !== true && stocks.length > 0
         ? [
@@ -212,8 +212,9 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
             "  On devnet a mint differs: take it as an Address argument of main, and pass its key:",
             ...devnetListed.map((token) => `    ${line(token)}`),
           ]),
-      "  Any other mint: an Address argument of main, passed as its base58 key. Token accounts",
-      "  are Account parameters; USDC.transfer(…) and the other token methods are EVM-only.",
+      "  Any other mint: Token(mint), with mint an Address argument of main, passed as its base58",
+      "  key. A token method's accounts are added to main and derived when the cook is built, so",
+      "  its holders are known then: ctx.self() (the Pot), an Address argument of main, or a key.",
     );
   } else if (showTokens) {
     const what =
@@ -241,7 +242,17 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     text.push("  Any other token: Token(0x…).transfer(…)");
   }
   if (showProtocols && svm) {
-    text.push("", "Protocols: none. Protocol namespaces are EVM contracts.");
+    const width = Math.max(0, ...globals.venues.map((venue) => venue.namespace.length));
+    text.push(
+      "",
+      `Venues (${globals.venues.length}): <Venue>.swap(pool, tokenIn, tokenOut, amountIn, ` +
+        "maxPrice, minOut), and trySwap(…), which returns 0 where swap reverts; the pool's " +
+        "accounts, and the Pot's, are derived when the cook is built",
+      ...globals.venues.map(
+        (venue) => `  ${venue.namespace.padEnd(width)}  ${venue.program}  (${venue.name})`,
+      ),
+      "Protocols: none. Protocol namespaces are EVM contracts.",
+    );
   } else if (showProtocols) {
     text.push(
       "",
@@ -256,6 +267,18 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
         "program gives: <Namespace>.<Interface>(<address>).<method>(…)",
       ...globals.interfaces.map(
         (bound) => `  ${bound.namespace}.${bound.name}  (${bound.protocolName})`,
+      ),
+    );
+  }
+  if (all && svm) {
+    const width = Math.max(0, ...globals.accounts.map((one) => one.expression.length));
+    text.push(
+      "",
+      `Accounts (${globals.accounts.length}): written where a program uses them, each added to ` +
+        "main, derived when the cook is built and checked on chain; read-only unless " +
+        ".writable() or .signer() gives it that role",
+      ...globals.accounts.map(
+        (one) => `  ${one.expression.padEnd(width)}  ${one.account}: ${one.derive}`,
       ),
     );
   }
@@ -286,7 +309,11 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
         : {}),
       // The interfaces asked for: every one beside the namespaces, or --protocol's own.
       ...(showProtocols
-        ? { protocols: globals.protocols, interfaces: globals.interfaces }
+        ? {
+            protocols: globals.protocols,
+            interfaces: globals.interfaces,
+            ...(svm ? { venues: globals.venues } : {}),
+          }
         : named !== undefined && named.interfaces.length > 0
           ? { interfaces: named.interfaces }
           : {}),
@@ -297,6 +324,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
               Object.entries(globals.defines).map(([name, value]) => [name, defineValue(value)]),
             ),
             modules: globals.modules,
+            ...(svm ? { accounts: globals.accounts } : {}),
           }
         : {}),
     },

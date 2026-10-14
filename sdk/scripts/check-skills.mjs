@@ -1095,12 +1095,13 @@ async function runUsage(where, file, argv, chain, header = false) {
     headerProblems(where, file, problems);
   }
   if (target === "svm") {
-    const slots = (manifest?.accounts ?? []).filter((a) => a.kind === "slot").map((a) => a.name);
-    if (
-      ["run", "simulate", "tx"].includes(name) &&
-      !accountsFile &&
-      slots.join() !== accounts.join()
-    )
+    // A slot the token methods added is derived by the command (its `derive`), so a usage line
+    // names only the others, in order; naming a derived one replaces its derivation.
+    const all = (manifest?.accounts ?? []).filter((a) => a.kind === "slot");
+    const derived = new Set(all.filter((a) => a.derive !== undefined).map((a) => a.name));
+    const slots = all.filter((a) => !derived.has(a.name)).map((a) => a.name);
+    const named = accounts.filter((account) => !derived.has(account));
+    if (["run", "simulate", "tx"].includes(name) && !accountsFile && slots.join() !== named.join())
       fail(where, `names --account ${accounts.join(", ")}, but main takes ${slots.join(", ")}`);
     return;
   }

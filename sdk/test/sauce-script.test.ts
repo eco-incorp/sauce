@@ -292,6 +292,15 @@ describe("SauceScript in an editor", () => {
         'import { uniswapV9 } from "@sauce/router";\nfunction main() { uniswapV9(); }\n',
         [2305, 2724],
       ],
+      // Solana's accounts, and a token's, as a program for it writes them.
+      ["systemProgram", "function main() { const p = Solana.systemProgramm; }\n", missing],
+      ["pda", "function main() { const p = Solana.pda(ctx.self()); }\n", [2554]],
+      [
+        "writable",
+        "function main() { const a = USDC.accountOf(ctx.self()).writeable(); }\n",
+        missing,
+      ],
+      ["accountOf", "function main() { const a = USDC.accountOf(); }\n", [2554]],
     ];
     for (const [name, body, codes] of cases) {
       const files = program(name, body);

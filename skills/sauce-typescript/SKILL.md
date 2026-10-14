@@ -153,7 +153,15 @@ a recorded address, not proof of live code on the chain.
   `resolveSvmToken(load, mint)` reads a mint through an owned-account loader and returns its token
   program (by the mint's owner), decimals and extensions, and why a checked transfer of it would be
   refused; `svmTokenAccount(token, owner)` derives a holder's account under that program, and
-  `svmTokenReceived`/`svmTokenToSend` net a Token-2022 transfer fee exactly, either way. Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
+  `svmTokenReceived`/`svmTokenToSend` net a Token-2022 transfer fee exactly, either way. A program
+  compiled with the token methods (`USDC.transfer(to, amount)`), or writing an account where it uses
+  it (`Solana.pda(program, ["state", owner])`), carries `derivedAccounts`: each slot the SDK added
+  to `main`, by name, with its derivation as an `--account` value (`self:USDC`, `@to:USDC`,
+  `pda:@program:"state",@owner`); `routes.sourceGlobals("solana").accounts` lists the expressions. `resolveSvmAccountName(derivation, { chain, owner, pot, via, args, programOf })`
+  resolves one to the address the cook's `AccountResolution` takes (`pot` and `owner` keep their
+  signing roles), as `sauce run` does; a venue namespace's `slot:@pool:USDC.<part>` needs `load`, an
+  owner-aware account loader, from which `svmPoolSlot(load, pool, payMint)` reads the pool's nine
+  accounts (the same `sauce pools` lists). Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
   pool configs, quote source and swap CPIs over an account loader you supply. For a local validator
   or LiteSVM, `svmEnginePath()`, `svmKitchenPath()` and `svmKitchenIdlPath()` from
   `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the packaged programs; the program

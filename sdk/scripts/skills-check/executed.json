@@ -29,6 +29,9 @@
     "sauce-examples/examples/supply-idle.sauce.ts": [
       "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
+    "sauce-solana/examples/pay.sauce.ts": ["sdk/test/cli-solana-token-methods.e2e.test.ts"],
+    "sauce-solana/examples/wrap.sauce.ts": ["sdk/test/cli-solana-token-methods.e2e.test.ts"],
+    "sauce-swaps/examples/solana-swap.sauce.ts": ["sdk/test/cli-solana-venues.e2e.test.ts"],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"

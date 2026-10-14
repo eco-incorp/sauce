@@ -4,14 +4,62 @@
 // per-chain deployment, and the Sauce compiler its own language subset and target capabilities.
 
 /**
- * ERC-20 calls in compiled source. Addresses are Sauce scalars. The writes have SafeERC20 semantics
- * and return nothing: each reverts the program unless the token accepted it.
+ * A token's methods in compiled source. Addresses are Sauce scalars. The writes return nothing: each
+ * reverts the program unless the token accepted it — on an EVM chain with SafeERC20 semantics, on
+ * Solana through the mint's token program, the accounts each moves through added to main.
  */
 export interface SauceTokenSource {
   transfer(to: bigint, amount: bigint): void;
   approve(spender: bigint, amount: bigint): void;
   transferFrom(from: bigint, to: bigint, amount: bigint): void;
   balanceOf(owner: bigint): bigint;
+  /** Solana: the holder's associated account for the token, under the mint's token program. */
+  accountOf(holder: bigint): SauceSolanaAccount;
+  /** Solana: the token's mint. */
+  readonly mint: SauceSolanaAccount;
+  /** Solana: the token program that owns the mint, SPL Token or Token-2022. */
+  readonly tokenProgram: SauceSolanaAccount;
+}
+
+/**
+ * An account a program compiled for Solana writes where it uses it (`Solana.pda(…)`,
+ * `USDC.accountOf(holder)`): added to main as a parameter and derived as the cook is built, so what
+ * it is made of is known then. Read-only unless `.writable()` or `.signer()` gives it that role.
+ */
+export interface SauceSolanaAccountFields {
+  readonly address: bigint;
+  readonly owner: bigint;
+  readonly dataLen: bigint;
+  writable(): SauceSolanaAccount;
+  signer(): SauceSolanaAccount;
+}
+export type SauceSolanaAccount = bigint & SauceSolanaAccountFields;
+
+/** The accounts a program compiled for Solana names on `Solana`. */
+export interface SauceSolanaAccounts {
+  /** The address `program` derives for the seeds: strings, keys, symbols, an integer's `.toBytesLe(n)`. */
+  pda(program: bigint, seeds: readonly (string | bigint | SauceBytes)[]): SauceSolanaAccount;
+  /** The account at a key. */
+  account(key: bigint): SauceSolanaAccount;
+  /** The authority the program acts with: the Pot, or the signer when cooked directly. */
+  readonly self: SauceSolanaAccount;
+  /** The Pot's owner, who signs the cook. */
+  readonly owner: SauceSolanaAccount;
+  readonly systemProgram: SauceSolanaAccount;
+  readonly tokenProgram: SauceSolanaAccount;
+  readonly token2022Program: SauceSolanaAccount;
+  readonly associatedTokenProgram: SauceSolanaAccount;
+  readonly memoProgram: SauceSolanaAccount;
+}
+
+/**
+ * A Solana venue's swap at one pool, in a program compiled for Solana: the pool and both tokens are
+ * known when the cook is built, which reads the pool's accounts from it; what arrives lands in the
+ * Pot's own account for the token bought. `swap` reverts where `trySwap` returns 0.
+ */
+export interface SauceSvmVenueSource {
+  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
+  trySwap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
 }
 
 /** A collection returned by Sauce, whose length is a Sauce scalar. */
@@ -4277,86 +4325,95 @@ declare global {
   const bNIU: bigint & SauceTokenSource;
   const bNVDA: bigint & SauceTokenSource;
   const bTSLA: bigint & SauceTokenSource;
-  const AMC_US: bigint;
-  const AMD_US: bigint;
-  const ANDURIL: bigint;
-  const ANTHROPIC: bigint;
-  const ARM_US: bigint;
-  const BABA_US: bigint;
-  const BA_US: bigint;
-  const BB_US: bigint;
-  const BE_US: bigint;
-  const BOT_US: bigint;
-  const BROS_US: bigint;
-  const BULL_US: bigint;
-  const COPX_US: bigint;
-  const COST_US: bigint;
-  const CRWV_US: bigint;
-  const CYPH_US: bigint;
-  const DELL_US: bigint;
-  const DJT_US: bigint;
-  const DKNG_US: bigint;
-  const DNUT_US: bigint;
-  const DRAM_US: bigint;
-  const EWY_US: bigint;
-  const FIGUREAI: bigint;
-  const FLWS_US: bigint;
-  const FLY_US: bigint;
-  const FWDI_US: bigint;
-  const GPRO_US: bigint;
-  const GRND_US: bigint;
-  const HIMS_US: bigint;
-  const HOOD_US: bigint;
-  const HTZ_US: bigint;
-  const IBM_US: bigint;
-  const INTC_US: bigint;
-  const IONQ_US: bigint;
-  const IREN_US: bigint;
-  const JNJ_US: bigint;
-  const KALSHI: bigint;
-  const LLY_US: bigint;
-  const LMT_US: bigint;
-  const LULU_US: bigint;
-  const LUV_US: bigint;
-  const MGM_US: bigint;
-  const MRNA_US: bigint;
-  const MRVL_US: bigint;
-  const MSTR_US: bigint;
-  const MU_US: bigint;
-  const NBIS_US: bigint;
-  const NEURALINK: bigint;
-  const NFLX_US: bigint;
-  const NKE_US: bigint;
-  const NOK_US: bigint;
-  const NVDA_US: bigint;
-  const OPENAI: bigint;
-  const PFE_US: bigint;
-  const POLYMARKET: bigint;
-  const PTN_US: bigint;
-  const PYUSD: bigint;
-  const QUBT_US: bigint;
-  const RBLX_US: bigint;
-  const RDDT_US: bigint;
-  const RIVN_US: bigint;
-  const RKLB_US: bigint;
-  const RUM_US: bigint;
-  const SCHH_US: bigint;
-  const SHOP_US: bigint;
-  const SKHY_US: bigint;
-  const SNAP_US: bigint;
-  const SNDK_US: bigint;
-  const SPACEX: bigint;
-  const SPCX_US: bigint;
-  const SPHR_US: bigint;
-  const SQQQ_US: bigint;
-  const TTWO_US: bigint;
-  const UPS_US: bigint;
-  const URA_US: bigint;
-  const USO_US: bigint;
-  const WEN_US: bigint;
-  const WSOL: bigint;
-  const WULF_US: bigint;
-  const XAI: bigint;
+  const AMC_US: bigint & SauceTokenSource;
+  const AMD_US: bigint & SauceTokenSource;
+  const ANDURIL: bigint & SauceTokenSource;
+  const ANTHROPIC: bigint & SauceTokenSource;
+  const ARM_US: bigint & SauceTokenSource;
+  const BABA_US: bigint & SauceTokenSource;
+  const BA_US: bigint & SauceTokenSource;
+  const BB_US: bigint & SauceTokenSource;
+  const BE_US: bigint & SauceTokenSource;
+  const BOT_US: bigint & SauceTokenSource;
+  const BROS_US: bigint & SauceTokenSource;
+  const BULL_US: bigint & SauceTokenSource;
+  const COPX_US: bigint & SauceTokenSource;
+  const COST_US: bigint & SauceTokenSource;
+  const CRWV_US: bigint & SauceTokenSource;
+  const CYPH_US: bigint & SauceTokenSource;
+  const DELL_US: bigint & SauceTokenSource;
+  const DJT_US: bigint & SauceTokenSource;
+  const DKNG_US: bigint & SauceTokenSource;
+  const DNUT_US: bigint & SauceTokenSource;
+  const DRAM_US: bigint & SauceTokenSource;
+  const EWY_US: bigint & SauceTokenSource;
+  const FIGUREAI: bigint & SauceTokenSource;
+  const FLWS_US: bigint & SauceTokenSource;
+  const FLY_US: bigint & SauceTokenSource;
+  const FWDI_US: bigint & SauceTokenSource;
+  const GPRO_US: bigint & SauceTokenSource;
+  const GRND_US: bigint & SauceTokenSource;
+  const HIMS_US: bigint & SauceTokenSource;
+  const HOOD_US: bigint & SauceTokenSource;
+  const HTZ_US: bigint & SauceTokenSource;
+  const IBM_US: bigint & SauceTokenSource;
+  const INTC_US: bigint & SauceTokenSource;
+  const IONQ_US: bigint & SauceTokenSource;
+  const IREN_US: bigint & SauceTokenSource;
+  const JNJ_US: bigint & SauceTokenSource;
+  const KALSHI: bigint & SauceTokenSource;
+  const LLY_US: bigint & SauceTokenSource;
+  const LMT_US: bigint & SauceTokenSource;
+  const LULU_US: bigint & SauceTokenSource;
+  const LUV_US: bigint & SauceTokenSource;
+  const MGM_US: bigint & SauceTokenSource;
+  const MRNA_US: bigint & SauceTokenSource;
+  const MRVL_US: bigint & SauceTokenSource;
+  const MSTR_US: bigint & SauceTokenSource;
+  const MU_US: bigint & SauceTokenSource;
+  const NBIS_US: bigint & SauceTokenSource;
+  const NEURALINK: bigint & SauceTokenSource;
+  const NFLX_US: bigint & SauceTokenSource;
+  const NKE_US: bigint & SauceTokenSource;
+  const NOK_US: bigint & SauceTokenSource;
+  const NVDA_US: bigint & SauceTokenSource;
+  const OPENAI: bigint & SauceTokenSource;
+  const PFE_US: bigint & SauceTokenSource;
+  const POLYMARKET: bigint & SauceTokenSource;
+  const PTN_US: bigint & SauceTokenSource;
+  const PYUSD: bigint & SauceTokenSource;
+  const QUBT_US: bigint & SauceTokenSource;
+  const RBLX_US: bigint & SauceTokenSource;
+  const RDDT_US: bigint & SauceTokenSource;
+  const RIVN_US: bigint & SauceTokenSource;
+  const RKLB_US: bigint & SauceTokenSource;
+  const RUM_US: bigint & SauceTokenSource;
+  const SCHH_US: bigint & SauceTokenSource;
+  const SHOP_US: bigint & SauceTokenSource;
+  const SKHY_US: bigint & SauceTokenSource;
+  const SNAP_US: bigint & SauceTokenSource;
+  const SNDK_US: bigint & SauceTokenSource;
+  const SPACEX: bigint & SauceTokenSource;
+  const SPCX_US: bigint & SauceTokenSource;
+  const SPHR_US: bigint & SauceTokenSource;
+  const SQQQ_US: bigint & SauceTokenSource;
+  const TTWO_US: bigint & SauceTokenSource;
+  const UPS_US: bigint & SauceTokenSource;
+  const URA_US: bigint & SauceTokenSource;
+  const USO_US: bigint & SauceTokenSource;
+  const WEN_US: bigint & SauceTokenSource;
+  const WSOL: bigint & SauceTokenSource;
+  const WULF_US: bigint & SauceTokenSource;
+  const XAI: bigint & SauceTokenSource;
+  const RaydiumClmm: SauceSvmVenueSource;
+  const PancakeswapClmm: SauceSvmVenueSource;
+  const Byreal: SauceSvmVenueSource;
+  const StabbleClmm: SauceSvmVenueSource;
+  const OrcaWhirlpool: SauceSvmVenueSource;
+  const Cropper: SauceSvmVenueSource;
+  const Defituna: SauceSvmVenueSource;
+  const Crema: SauceSvmVenueSource;
+  const Phoenix: SauceSvmVenueSource;
   /** The id of the chain the program is compiled for. */
   const chainId: bigint;
   const CHAIN_ID: bigint;

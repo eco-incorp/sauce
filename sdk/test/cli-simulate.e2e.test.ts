@@ -285,12 +285,12 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     );
     const cookGas = /gas used (\d+) for the cook/.exec(lines[0]!)![1];
     expect(run.stdout).toMatch(
-      /^Rehearsed with eth_simulateV1 on the state of block \d+; nothing was signed or sent:$/m,
+      /^Simulated with eth_simulateV1 on the state of block \d+; nothing was signed or sent:$/m,
     );
     expect(run.stdout).toMatch(
       new RegExp(
         `^ {2}1\\. Kitchen\\.deployPot\\(${OWNER}, 0x${"00".repeat(32)}\\), gas used \\d+: ` +
-          `Pot ${pot} is not deployed on ethereum yet, so the rehearsal deploys it first`,
+          `Pot ${pot} is not deployed on ethereum yet, so the simulation deploys it first`,
         "m",
       ),
     );

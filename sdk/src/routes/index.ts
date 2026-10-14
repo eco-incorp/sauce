@@ -118,7 +118,9 @@ export type {
   SourceModule,
   SourceNamespace,
   SourceToken,
+  SourceVenue,
 } from "./source-globals.js";
+export type { SvmAccountExpression } from "./svm-account-expressions.js";
 export { rewriteTokenMembers, REWRITABLE_METHODS, tokenImportLines } from "./token-rewrite.js";
 export type { SafeWrite, TokenImports, TokenRewriteResult, TokenSymbols } from "./token-rewrite.js";
 export {
