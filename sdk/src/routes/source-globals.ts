@@ -15,8 +15,7 @@
  *   on the chain — through `resolveProtocolContract`, the rewrite's own resolver, not a copy of its
  *   rules — with each contract's address and vendored methods. A family alias (`Uniswap` for
  *   `UniswapV4`) lists the contracts it names unambiguously.
- * - **chains**: the chain names a program opens an intent with (`Arbitrum(() => { … })`) or
- *   qualifies an accessor by (`Base.Uniswap.UniversalRouter`).
+ * - **chains**: the chain names a program qualifies an accessor by (`Base.Uniswap.UniversalRouter`).
  * - **defines**: `chainDefines(chain)`, verbatim — the scalars every program on the chain reads.
  * - **modules**: `chainAmbient(chain)`'s modules and the functions each exports for the chain's
  *   target, read from the SDK's embedded copy of their source.

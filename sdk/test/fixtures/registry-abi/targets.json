@@ -409,8 +409,8 @@
       "PortalABI": {
         "roles": ["Portal"],
         "required": {
-          "publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "routes/portal.ts publishTx, the transaction that publishes an intent whose vault was paid directly — the SDK's default way to fund one, from a wallet (sauce publish) or a Pot",
-          "intentVaultAddress(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "the program a Pot runs to fund an intent it opens (routes/intent-sugar.ts), which reads the vault it pays from the Portal in the same cook, and sauce publish's cross-check of the SDK's offline vault prediction"
+          "publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "routes/portal.ts publishTx, the transaction that publishes an intent whose vault was paid directly — the default funding of intentSourceTxs, which a wallet sends",
+          "intentVaultAddress(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "routes/portal.ts intentVaultAddressCall: the vault a wallet pays, checked against the SDK's offline prediction before intentSourceTxs builds the transfers, and the vault sauce intent status and import read (cli/lifecycle.ts)"
         }
       },
       "ProverABI": {

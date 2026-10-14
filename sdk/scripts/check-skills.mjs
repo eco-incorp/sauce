@@ -1042,25 +1042,12 @@ async function runUsage(where, file, argv, chain, header = false) {
     if (flag === "--accounts") {
       accountsFile = true;
       i++;
-    } else if (flag === "--intent-execution-fee" && value === "auto") {
-      // `auto` reads the destination's Kitchen fee through --config; offline there is no endpoint,
-      // and the fee changes only the cook's value, so the run takes 0.
-      kept.push(flag, "0");
-      i++;
-    } else if (/^--intent-/.test(flag)) {
-      kept.push(flag, fill(value));
-      i++;
     } else if (flag === "--account") {
       accounts.push(value.split("=")[0]);
       i++;
     } else if (flag === "--compact-args") kept.push(flag);
     else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
-  if (/\.reward\(/.test(read(file)) && !kept.includes("--intent-deadline"))
-    fail(
-      where,
-      "opens an intent, so its usage line must give --intent-deadline and --intent-creator",
-    );
   const compiled = await compileJson(file, chain, kept);
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
