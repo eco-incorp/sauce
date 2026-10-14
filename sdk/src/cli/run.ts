@@ -1153,14 +1153,23 @@ const API: FlagSpecs = {
   "api-key-file": { type: "string", value: "<path>", help: "…and send the key in this file" },
 };
 
-/** The flags every lifecycle command takes. */
 /** An intent command's signer: an EVM one, since the Portal it drives is an EVM contract. */
 const EVM_SIGNER: FlagSpecs = Object.fromEntries(
   Object.entries(SIGNER).filter(([name]) => name !== "keypair"),
 );
 
+/** An intent's source chain, which a lifecycle verb holds each hash it is given to. */
+const SOURCE_CHAIN: FlagSpecs = {
+  chain: {
+    type: "string",
+    value: "<slug|id>",
+    help: "The intents' source chain (the reward's), checked against each one's",
+  },
+};
+
+/** The flags every lifecycle command takes. */
 const LIFECYCLE: FlagSpecs = {
-  ...PROGRAM,
+  ...SOURCE_CHAIN,
   ...ENDPOINT,
   ...EVM_SIGNER,
   keypair: {
@@ -1763,7 +1772,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   status: {
     usage: "sauce intent status <intent-hash…>",
     summary: "Where intents stand on both chains, and what can be done next",
-    flags: { ...PROGRAM, ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
+    flags: { ...SOURCE_CHAIN, ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "Reads each intent on its source chain (the reward's status, what its vault holds, the",
       "proof its prover records) and its destination (whether the Portal recorded a fill or a",
