@@ -853,7 +853,7 @@ const result = (output: ToolOutput, scrub: (text: string) => string): CallToolRe
 };
 
 /** Reads nothing, writes nothing: the result follows from the arguments. */
-const PURE: ToolAnnotations = {
+export const PURE: ToolAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
   idempotentHint: true,

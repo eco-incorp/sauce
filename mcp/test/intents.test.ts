@@ -189,3 +189,35 @@ describe("sauce_intent_fill", () => {
     );
   });
 });
+
+describe("sauce_intent_publish", () => {
+  it("refuses whatever it is given: opening an intent is coming soon", async () => {
+    const said =
+      "sauce_intent_publish: opening an intent is coming soon. It will be written " +
+      "`<Chain>.hop({ send, receive, refundee }).then(() => { … })`; until then, the intent " +
+      "tools act on intents that already exist: sauce_intent_import, sauce_intent_status, " +
+      "sauce_intent_fill, sauce_intent_prove, sauce_intent_claim, sauce_intent_refund and " +
+      "sauce_intent_cancel.";
+    for (const args of [
+      {},
+      { source: "Base(() => {}).reward({ tokens: [] });", chain: "ethereum", dryRun: true },
+    ]) {
+      assert.equal(failed(await mcp.call("sauce_intent_publish", args)), said);
+    }
+    const { tools } = await mcp.client.listTools();
+    const publish = tools.find((tool) => tool.name === "sauce_intent_publish");
+    assert.match(publish!.description!, /^Coming soon: opening an intent/);
+    assert.equal(publish!.annotations?.readOnlyHint, true);
+  });
+
+  it("a program that opens an intent meets the same refusal in every tool that compiles", async () => {
+    const source =
+      "function main(to: Address, amount: Uint256) {\n" +
+      "  Ethereum.hop({ send: { token: USDC, amount }, refundee: to }).then(() => {});\n" +
+      "}\n";
+    assert.match(
+      failed(await mcp.call("sauce_compile", { source, chain: "base" })),
+      /^[^]*`Ethereum\.hop\(…\)` at line 2: opening an intent is coming soon\. It will be written /,
+    );
+  });
+});

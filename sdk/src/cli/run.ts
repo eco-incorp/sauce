@@ -18,6 +18,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { HOP_SYNTAX, IntentsComingSoonError } from "../routes/coming-soon.js";
 import {
   addressDefines,
   CliError,
@@ -1389,6 +1390,9 @@ interface Command {
   readonly details: string;
   /** A flag that ends the options: every word after it is passed to `run` as `trailing`. */
   readonly trailing?: string;
+  /** Refuses whatever it is given, `--help` aside, before any flag is read: a verb that is coming
+   *  soon, so a command line written for what it once did meets its refusal, not a flag error. */
+  readonly refusesAll?: true;
   /** The output to print, or `undefined` when the command already wrote it (`--out`). */
   readonly run: (
     args: ParsedArgs,
@@ -1410,7 +1414,29 @@ const SUPPORTED_ONLY = (what: string): string[] => [
   ),
 ];
 
+/** What `sauce intent` does for an intent that already exists: its refusal's "until then". */
+const EXISTING_INTENTS_CLI =
+  "`sauce intent` acts on intents that already exist: import, status, fill, prove, claim, refund " +
+  "and cancel";
+
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
+  publish: {
+    usage: "sauce intent publish",
+    summary: "Coming soon: open an intent, from a program",
+    flags: { ...HELP },
+    refusesAll: true,
+    details: [
+      "Opening an intent is coming soon. A program will open one with",
+      `${HOP_SYNTAX}.`,
+      "Until then this verb refuses whatever it is given, and exits 1. The other verbs act on",
+      "intents that already exist: `sauce intent import <tx-hash> --chain <source>` stores one",
+      "from the transaction that published it, and `fill`, `prove`, `claim`, `refund`, `cancel`",
+      "and `status` take its hash.",
+    ].join("\n"),
+    run: () => {
+      throw new IntentsComingSoonError("sauce intent publish", EXISTING_INTENTS_CLI);
+    },
+  },
   fill: {
     usage: [
       "sauce intent fill <intent-hash> [options]",
@@ -4005,6 +4031,9 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
   let check: UpdateCheck | undefined;
 
   try {
+    if (command.refusesAll === true && !named.rest.some((word) => /^-(-help|h)$/.test(word))) {
+      await command.run({ values: {}, positionals: named.rest }, io, undefined);
+    }
     const { flags, trailing } = splitArgv(named.rest, command);
     const args = parseFlags(flags, ANY_FLAG);
     if (lead === 0 && !NO_NOTICE.has(label) && !updateCheckOff(args.values, io.readText)) {
@@ -4039,7 +4068,10 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
       return 2;
     }
     const message = error instanceof Error ? error.message : String(error);
-    io.stderr(`sauce ${label}: ${message}\n`);
+    // A refusal that names the command itself (`IntentsComingSoonError`) is printed as it is.
+    io.stderr(
+      message.startsWith(`sauce ${label}: `) ? `${message}\n` : `sauce ${label}: ${message}\n`,
+    );
 
     return 1;
   } finally {

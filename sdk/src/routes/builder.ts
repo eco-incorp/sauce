@@ -1,12 +1,14 @@
 /**
  * Chain-global surface machinery: every canonical chain export is a namespace carrying `.chain`
- * (its registry record).
+ * (its registry record). Calling one, or its `.route`, opened an intent; opening an intent is coming
+ * soon (`coming-soon.ts`), so each refuses with that.
  *
  * `ChainRef`/`CanonicalChain` come straight from `../chains/canonical.js` (which additionally
  * accepts `bigint`), re-exported below so the public name survives at this import path.
  */
 import type { CanonicalChain, ChainRef, ChainSlug } from "../chains/canonical.js";
 import { canonicalChains } from "../chains/canonical.js";
+import { chainCallComingSoon } from "./coming-soon.js";
 
 export type { ChainRef };
 
@@ -20,10 +22,26 @@ export type PascalOf<S extends string> = S extends `${infer H}-${infer T}`
   ? `${Capitalize<H>}${PascalOf<T>}`
   : Capitalize<S>;
 
-/** A chain export: `.chain`. */
-export interface ChainGlobal {
+/** Calling a chain export, or its `.route`: what opened an intent. */
+export interface ChainRoute {
+  /**
+   * @deprecated Opening an intent is coming soon, written
+   *   `<Chain>.hop({ send, receive, refundee }).then(() => { … })`. Throws
+   *   `IntentsComingSoonError`.
+   */
+  (...args: unknown[]): never;
+}
+
+/** A chain export: `.chain`. Calling it, or `.route`, throws `IntentsComingSoonError`. */
+export interface ChainGlobal extends ChainRoute {
   /** The registry record this export was generated from (or resolved via `chain(ref)`). */
   readonly chain: CanonicalChain;
+  /**
+   * @deprecated Opening an intent is coming soon, written
+   *   `<Chain>.hop({ send, receive, refundee }).then(() => { … })`. Throws
+   *   `IntentsComingSoonError`.
+   */
+  readonly route: ChainRoute;
 }
 
 /** One generated `ChainGlobal` per canonical chain slug, PascalCase-keyed. */
@@ -45,15 +63,22 @@ const FUNCTION_INTRINSICS: ReadonlySet<string> = new Set([
   "toString",
   "constructor",
   "chain",
+  "route",
 ]);
 
 /**
  * Builds the `ChainGlobal` for `chain` -- what a generated export (`Base`) or `chain(ref)` returns:
- * `chain`, enumerable, so `Object.keys(chainAccessors.Base)` is exactly `["chain"]`.
+ * `chain`, enumerable, so `Object.keys(chainAccessors.Base)` is exactly `["chain"]`, and an ARROW
+ * function (no own `prototype`) whose call, like its non-enumerable `route`, refuses.
  */
 export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
-  return Object.defineProperties({} as ChainGlobal, {
+  const name = pascalOfSlug(chain.slug);
+  const route: ChainRoute = () => chainCallComingSoon(name, "route");
+  const call = (() => chainCallComingSoon(name)) as unknown as ChainGlobal;
+
+  return Object.defineProperties(call, {
     chain: { value: chain, enumerable: true, configurable: false, writable: false },
+    route: { value: route, enumerable: false, configurable: false, writable: false },
   });
 }
 

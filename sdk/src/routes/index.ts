@@ -1,6 +1,7 @@
 /**
  * eco-routes cross-chain intents — one chain accessor per canonical chain, generated from
- * `../chains/canonical.js`: `.chain`.
+ * `../chains/canonical.js`: `.chain`. Calling one, or its `.route`, opened an intent, and so did
+ * `openRoute`; opening an intent is coming soon, and each refuses with `IntentsComingSoonError`.
  *
  * The composed accessors (`.chain` and the native contract tree) are named exports of the package
  * root; `chainAccessors` below is the BARE record, carrying `.chain` alone.
@@ -10,7 +11,8 @@ export type { PascalOf } from "./accessors.js";
 
 export { createChainGlobals, makeChainGlobal } from "./builder.js";
 export { composedChainGlobal, composedChainGlobals } from "./composed.js";
-export type { ChainGlobal, ChainGlobals, ChainRef } from "./builder.js";
+export type { ChainGlobal, ChainGlobals, ChainRef, ChainRoute } from "./builder.js";
+export { IntentsComingSoonError, openRoute } from "./coming-soon.js";
 
 export { assembleIntent } from "./intent.js";
 

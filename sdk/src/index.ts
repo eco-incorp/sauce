@@ -38,6 +38,7 @@ export { destinationExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
 export { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
 export { destinationPot } from "./routes/intent-pot.js";
+export { IntentsComingSoonError } from "./routes/coming-soon.js";
 export {
   MAX_SQRT_PRICE_X96,
   MIN_SQRT_PRICE_X96,

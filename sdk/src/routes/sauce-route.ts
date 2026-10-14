@@ -36,6 +36,7 @@ import { rewriteAvailability } from "./available.js";
 import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
+import { refuseIntentSyntax } from "./coming-soon.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import { bindEntryArguments, mainParams, type EntryParam, type EntryValue } from "./entry.js";
 import type { AddressInput, CallInput } from "./types.js";
@@ -201,6 +202,7 @@ export function compileScopedRoute(
   options: SauceCompileOptions,
   scope: RouteScope,
 ): CompiledSauceRoute {
+  refuseIntentSyntax(sauce, chainAccessorNames());
   const { chain, compiled, source, derivedAccounts } = compileForChain(
     destination,
     sauce,
@@ -300,6 +302,8 @@ export function compileSauceProgram(
   options: SauceProgramOptions = {},
 ): CompiledSauceProgram {
   const resolved = requireChain(chain);
+  // Before `main`'s arguments are bound into it, so a refusal names the line as written.
+  refuseIntentSyntax(source, chainAccessorNames());
   const { args, ...given } = options;
   const bound = args === undefined ? undefined : bindEntryArguments(source, args);
   const taken = Object.keys(bound?.constants ?? {}).find((name) =>

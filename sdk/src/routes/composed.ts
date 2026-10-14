@@ -1,7 +1,8 @@
 /**
  * The composed chain accessor -- `Base` as the SDK hands it out: `.chain`, the lazy contract
  * namespace tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`Base.USDC`) and, for
- * an `svm`-kind chain, the svm venue accessor tree.
+ * an `svm`-kind chain, the svm venue accessor tree. Calling it, or its `.route`, opened an intent:
+ * both refuse, opening an intent being coming soon (`coming-soon.ts`).
  *
  * One shape, two delivery paths: the generated NAMED EXPORTS
  * (`./chain-exports.generated.ts`, what `import { Base }` resolves) and the
@@ -22,12 +23,13 @@ import { venues as svmVenueAccessors } from "../svm/accessors.js";
 // The chain's registry tokens (`Base.USDC` -> `{ address, decimals, symbol, chain }`), the rows a
 // compiled program's `USDC` resolves to on the same chain.
 import { registryTokens } from "./token-registry.js";
+import { chainCallComingSoon } from "./coming-soon.js";
 
 /** What `chainAccessors[name]` is, in the shape this module consumes it. */
-type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain };
+type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain; route: unknown };
 
-/** Names a contract/venue namespace key must never take: an object's own intrinsics, and the names
- *  of functions, which an accessor once was and a reader may still expect it to answer. */
+/** Names a contract/venue namespace key must never take: a function's own intrinsics, since the
+ *  accessor is one (a call that refuses), and what any object answers. */
 const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
   "length",
   "name",
@@ -42,13 +44,14 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Composes one chain accessor: a FRESH object with `chain`, the lazy contract-namespace tree
+ * Composes one chain accessor: a FRESH arrow function whose call refuses, with `chain`, `route`
+ * (non-enumerable, refusing too), the lazy contract-namespace tree
  * (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, for an `svm`-kind
  * chain only, the svm venue accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
  * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's memoising GETTERS stay lazy —
  * spread would invoke every one of them eagerly at composition time. `origin` itself is never
- * mutated. Throws on a name collision — a protocol, family, token or venue name literally "chain" or
- * an intrinsic like "call"/"bind", or two of them sharing a name (a token symbol that is also a
+ * mutated. Throws on a name collision — a protocol, family, token or venue name literally "chain",
+ * "route" or an intrinsic like "call"/"bind", or two of them sharing a name (a token symbol that is also a
  * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key throw. The
  * `kind === "svm"` gate is registry-derived (from `../chains/canonical.js`'s own
  * `CanonicalChain.kind`), not a hardcoded chain name -- a second SVM chain added to
@@ -72,19 +75,20 @@ function composeChainGlobal(name: string, origin: ChainOrigin): object {
 
   const merged: PropertyDescriptorMap = {
     chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
+    route: { value: origin.route, enumerable: false, configurable: false, writable: false },
   };
   for (const source of sources) {
     for (const key of Object.keys(source)) {
       if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
         throw new Error(
           `routes/composed: '${key}' collides with another name on the '${name}' accessor ` +
-            "(its chain, an intrinsic, or a protocol, token or venue of the same name)",
+            "(its chain or route, an intrinsic, or a protocol, token or venue of the same name)",
         );
       }
     }
     Object.assign(merged, source);
   }
-  return Object.defineProperties({}, merged);
+  return Object.defineProperties(() => chainCallComingSoon(name), merged);
 }
 
 const memo = new Map<string, object>();

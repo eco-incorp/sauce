@@ -22,6 +22,7 @@ import {
 } from "../../sdk/dist/chains/canonical.js";
 import { encodeCompactArguments } from "../../sdk/dist/compact-arguments.js";
 import { compileSauceProgram } from "../../sdk/dist/routes/index.js";
+import { EXISTING_INTENTS_TS, IntentsComingSoonError } from "../../sdk/dist/routes/coming-soon.js";
 
 import type { ActionContracts } from "./abis.js";
 import { compileEvm } from "./compile.js";
@@ -271,4 +272,15 @@ export function compiled(
       return bytecode.length + 4 + index * (1 + width) + 1;
     },
   };
+}
+
+/**
+ * Opened the program as the route of an intent. Opening an intent is coming soon.
+ *
+ * @deprecated Opening an intent is coming soon, written
+ *   `<Chain>.hop({ send, receive, refundee }).then(() => { … })`. Throws
+ *   `IntentsComingSoonError`.
+ */
+export function programIntent(..._args: unknown[]): never {
+  throw new IntentsComingSoonError("`programIntent(…)`", EXISTING_INTENTS_TS);
 }

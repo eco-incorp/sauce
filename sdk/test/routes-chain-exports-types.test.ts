@@ -97,14 +97,15 @@ describe("chain accessors: the names resolve through an import, and only through
     expect(diagnostics).toHaveLength(0);
   });
 
-  it("negative control: the removed Base(body).reward(...) form does not typecheck", () => {
+  it("negative control: calling a chain is typed `never`, so the removed Base(body).reward(...) form does not typecheck", () => {
     const diagnostics = typecheckProbe(`
       import { Base } from ${ROOT};
-      const x: unknown = Base("function main() { return 1n; }", {});
-      const y: unknown = Base.route;
+      Base("function main() { return 1n; }", {}).reward({ tokens: [] });
+      Base.route("function main() { return 1n; }").reward({ tokens: [] });
       export {};
     `);
-    expect(diagnostics.length).toBeGreaterThanOrEqual(2);
+    // TS2339: \`reward\` does not exist on type 'never' — the call's type, since it always throws.
+    expect(diagnostics.map((d) => d.code)).toEqual([2339, 2339]);
   });
 
   // --- the native contract-accessor tree rides on the SAME import ---

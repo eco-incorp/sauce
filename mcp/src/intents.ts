@@ -23,6 +23,7 @@ import {
   buildRefund,
   fillCommand,
   importIntents,
+  IntentsComingSoonError,
   INTENT_SCHEMA,
   intentOf,
   intentStatus,
@@ -43,6 +44,7 @@ import {
   endpointsByChain,
   fromCommand,
   LIMITS,
+  PURE,
   READS_CHAIN,
   refusable,
   RPC_URLS,
@@ -56,6 +58,7 @@ import {
 
 /** The intent tools, in the order `tools/list` gives them: the order of an intent's life. */
 export const INTENT_TOOL_NAMES = [
+  "sauce_intent_publish",
   "sauce_intent_import",
   "sauce_intent_status",
   "sauce_intent_fill",
@@ -360,6 +363,12 @@ const PLAN_OUTPUT = {
   ),
 };
 
+/** What the intent tools do for an intent that already exists: the refusal's "until then". */
+const EXISTING_INTENTS_MCP =
+  "the intent tools act on intents that already exist: sauce_intent_import, " +
+  "sauce_intent_status, sauce_intent_fill, sauce_intent_prove, sauce_intent_claim, " +
+  "sauce_intent_refund and sauce_intent_cancel";
+
 const NOT_YET =
   "A step that cannot be taken yet is a result, not an error: ready false and `why` (the " +
   "state that stops it, and when it can).";
@@ -367,6 +376,27 @@ const NOT_YET =
 export function registerIntentTools(server: McpServer, context: ToolContext): void {
   const { endpoints: serverEndpoints } = context;
   const tool = toolRegistrar(server, context);
+
+  // Opening an intent is coming soon: the tool that did it says so, whatever it is given, and
+  // names the tools that act on an intent that already exists.
+  tool(
+    "sauce_intent_publish",
+    {
+      title: "Open an intent (coming soon)",
+      description:
+        "Coming soon: opening an intent, which a program will do with " +
+        "`<Chain>.hop({ send, receive, refundee }).then(() => { … })`. Until then this tool " +
+        "refuses whatever it is given, saying so. The other sauce_intent_* tools act on intents " +
+        "that already exist: sauce_intent_import reads one back from the transaction that " +
+        "published it.",
+      input: {},
+      output: {},
+      annotations: PURE,
+    },
+    () => {
+      throw new IntentsComingSoonError("sauce_intent_publish", EXISTING_INTENTS_MCP);
+    },
+  );
 
   tool(
     "sauce_intent_import",

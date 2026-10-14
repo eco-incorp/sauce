@@ -1,8 +1,8 @@
 /**
  * The one place this server reaches into the SDK: the `sauce` command's own modules, as the SDK's
  * build emits them. Every tool calls the function the matching `sauce` command calls — compile,
- * tx, simulate, pot, globals, inspect, verify, publish — with the same inputs, so the two front
- * ends cannot drift. Nothing here is reimplemented.
+ * tx, simulate, pot, globals, inspect, verify — with the same inputs, so the two front ends cannot
+ * drift. Nothing here is reimplemented.
  *
  * By relative path into `sdk/dist`, the one spelling that resolves in the repository and in the
  * published tarball, where `mcp/dist` and `sdk/dist` are siblings (as `actions` reaches the SDK).
@@ -83,6 +83,7 @@ export {
   type IntentRecord,
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
+export { IntentsComingSoonError } from "../../sdk/dist/routes/coming-soon.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
 export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";

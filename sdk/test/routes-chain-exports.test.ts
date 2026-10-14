@@ -10,7 +10,15 @@
  * tree on an svm chain) and an untouched `globalThis`.
  */
 import * as sauce from "../src/index.js";
-import { Base, Ethereum, Solana, Token, chain, canonicalChains } from "../src/index.js";
+import {
+  Base,
+  Ethereum,
+  IntentsComingSoonError,
+  Solana,
+  Token,
+  chain,
+  canonicalChains,
+} from "../src/index.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { requireChain } from "../src/chains/canonical.js";
 import {
@@ -43,9 +51,21 @@ describe("chain accessors: one named export per canonical chain", () => {
     expect(g.Token).toBeUndefined();
   });
 
-  it("the export is a namespace, not a function", () => {
-    expect(typeof Base).toBe("object");
+  it("the export is a namespace whose call, and `.route`, refuse: opening an intent is coming soon", () => {
     expect(Base.chain).toBe(chainAccessors.Base.chain);
+    expect(() => Base("function main() {}")).toThrow(IntentsComingSoonError);
+    expect(() => Base("function main() {}")).toThrow(
+      /^`Base\(…\)`: opening an intent is coming soon\. It will be written /,
+    );
+    expect(() => Solana.route("function main() {}")).toThrow(
+      /^`Solana\.route\(…\)`: opening an intent is coming soon\./,
+    );
+    expect(() => chain("arbitrum")()).toThrow(/^`Arbitrum\(…\)`: opening an intent/);
+    // `route` refuses but is no name of the namespace: what it lists is its chain, contracts and
+    // tokens, as before.
+    expect(Object.getOwnPropertyDescriptor(Base, "route")?.enumerable).toBe(false);
+    expect(Object.keys(Base)).not.toContain("route");
+    expect(Object.keys(Base)[0]).toBe("chain");
   });
 
   it("carries the native contract accessor tree, with the family alias resolving to the SAME accessor", () => {
