@@ -7,9 +7,12 @@ import { canonicalChains } from "../src/chains/canonical.js";
 import { chain, chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 
 describe("routes: a chain accessor is a namespace", () => {
-  it("its own keys are exactly ['chain'], and it is not callable", () => {
-    expect(typeof chainAccessors.Base).toBe("object");
+  it("its own keys are exactly ['chain'], and calling it, or .route, refuses", () => {
     expect(Object.keys(chainAccessors.Base)).toEqual(["chain"]);
+    expect(() => chainAccessors.Base()).toThrow(/^`Base\(…\)`: opening an intent is coming soon/);
+    expect(() => chainAccessors.Base.route()).toThrow(
+      /^`Base\.route\(…\)`: opening an intent is coming soon/,
+    );
   });
 
   it("chain('eth')/chain(8453)/chain('BNB Chain') resolve", () => {

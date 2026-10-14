@@ -74,6 +74,9 @@ describe("composedChainGlobal: a namespace that collides with the accessor is re
     const { compose } = composeWith("Planted");
     const composed = compose() as Record<string, unknown>;
     expect(composed.Planted).toEqual({ contract: "planted" });
-    expect(typeof composed).toBe("object");
+    // A namespace whose call refuses: opening an intent is coming soon.
+    expect(() => (composed as unknown as () => unknown)()).toThrow(
+      /opening an intent is coming soon/,
+    );
   });
 });
