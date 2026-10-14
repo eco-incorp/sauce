@@ -411,7 +411,8 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       ? []
       : [
           `the cook is a ${cook.size}-byte transaction, past Solana's ${cook.limit}: \`sauce run\` ` +
-            "stages the program in a code buffer first; `sauce simulate` and `sauce tx` cannot",
+            "stages the program in a code buffer first, `sauce simulate` simulates it staged, and " +
+            "`sauce tx` prints the plan of transactions that stages it, for a signer",
         ]),
   ];
 

@@ -5,13 +5,32 @@
  * contract creation, and a Solana transaction whose signatures are not all there (none, fewer than
  * its message's signers, or not its fee payer's), each refused by name before anything is read.
  * And the wait for a transaction read back: mined, gone (missing twice in a row, not once), or still
- * pending when the wait runs out.
+ * pending when the wait runs out. And a plan's next step that cannot be built once something was
+ * sent: what was sent stands, with the cursor to ask again; with nothing sent, the failure is the
+ * answer.
  */
+import {
+  AccountRole,
+  address,
+  appendTransactionMessageInstruction,
+  compileTransaction,
+  createTransactionMessage,
+  getBase58Decoder,
+  getBase64EncodedWireTransaction,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  type Address as SvmAddress,
+  type Blockhash,
+} from "@solana/kit";
 import { serializeTransaction, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { minedOrGone, sendCommand, signedChain } from "../src/cli/send.js";
+import { decodeCursor, encodeCursor, type SvmPlan } from "../src/cli/svm-plan.js";
+import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../src/svm/index.js";
 
 /** A throwaway signer: the signatures are real, the key is the test's alone. */
 const signer = privateKeyToAccount(`0x${"42".repeat(32)}`);
@@ -31,15 +50,17 @@ const signed = (chainId: number): Promise<Hex> =>
 
 describe("the chain a send is for", () => {
   it("is the chain each EVM transaction was signed for", async () => {
-    expect(signedChain([await signed(8453), await signed(8453)]).slug).toBe("base");
+    expect(signedChain({ transactions: [await signed(8453), await signed(8453)] }).slug).toBe(
+      "base",
+    );
   });
 
   it("refuses transactions signed for different chains in one call", async () => {
     const [ethereum, base] = [await signed(1), await signed(8453)];
-    expect(() => signedChain([ethereum, base])).toThrow(
+    expect(() => signedChain({ transactions: [ethereum, base] })).toThrow(
       /the transactions are for base, not ethereum: send each chain's in a call of its own/,
     );
-    expect(() => signedChain([base], requireChain("ethereum"))).toThrow(
+    expect(() => signedChain({ transactions: [base] }, requireChain("ethereum"))).toThrow(
       /the transactions are for base, not ethereum/,
     );
   });
@@ -53,17 +74,21 @@ describe("the chain a send is for", () => {
       gas: 21_000n,
       gasPrice: 1n,
     });
-    expect(() => signedChain([legacy])).toThrow(/names no chain/);
-    expect(signedChain([legacy], requireChain("base")).slug).toBe("base");
+    expect(() => signedChain({ transactions: [legacy] })).toThrow(/names no chain/);
+    expect(signedChain({ transactions: [legacy] }, requireChain("base")).slug).toBe("base");
   });
 
   it("is Solana for a base64 wire transaction, and refuses what is neither", () => {
-    expect(signedChain(["AQABAgM="]).slug).toBe("solana");
-    expect(() => signedChain(["not a transaction!"])).toThrow(/is not a signed transaction/);
+    expect(signedChain({ transactions: ["AQABAgM="] }).slug).toBe("solana");
+    expect(() => signedChain({ transactions: ["not a transaction!"] })).toThrow(
+      /is not a signed transaction/,
+    );
     expect(() =>
-      signedChain([serializeTransaction({ chainId: 1, type: "eip1559", to: RECIPIENT })]),
+      signedChain({
+        transactions: [serializeTransaction({ chainId: 1, type: "eip1559", to: RECIPIENT })],
+      }),
     ).not.toThrow();
-    expect(() => signedChain([])).toThrow(/missing the signed transactions/);
+    expect(() => signedChain({ transactions: [] })).toThrow(/missing the signed transactions/);
   });
 });
 
@@ -197,5 +222,166 @@ describe("the wait for a transaction read back", () => {
     ).rejects.toThrow(
       new RegExp(`the cook ${HASH} is still pending after 0.02 seconds; it was not sent again`),
     );
+  });
+});
+
+describe("a plan's next step that cannot be built once something was sent", () => {
+  const URL = "http://endpoint.invalid/secret-key";
+  const key = (fill: number, bytes = 32): string =>
+    getBase58Decoder().decode(new Uint8Array(bytes).fill(fill));
+  const OWNER = key(7) as SvmAddress;
+  const SIGNATURE = key(5, 64);
+  /** A plan whose cook was handed out: its next step reads the block height first. */
+  const plan: SvmPlan = {
+    owner: OWNER,
+    salt: `0x${"11".repeat(32)}`,
+    via: "kitchen",
+    tail: [],
+    lookupTables: [],
+    pot: "there",
+    tokenAccounts: [],
+    payload: new Uint8Array([1, 2, 3]),
+    labels: [],
+    cook: { blockhash: key(10), lastValidBlockHeight: 100n, slot: 1_000n },
+  };
+  /** A transaction of the owner's, landed: a call that is not a cook, or a cook on `pot`. */
+  const ownerTransaction = (pot?: SvmAddress): string =>
+    getBase64EncodedWireTransaction(
+      compileTransaction(
+        pipe(
+          createTransactionMessage({ version: 0 }),
+          (message) => setTransactionMessageFeePayer(OWNER, message),
+          (message) =>
+            setTransactionMessageLifetimeUsingBlockhash(
+              { blockhash: key(11) as Blockhash, lastValidBlockHeight: 1n },
+              message,
+            ),
+          (message) =>
+            appendTransactionMessageInstruction(
+              pot === undefined
+                ? {
+                    programAddress: address("11111111111111111111111111111111"),
+                    data: new Uint8Array([2, 0, 0, 0]),
+                  }
+                : {
+                    programAddress: address(v12SvmKitchenProgramId()),
+                    // The Kitchen's cook names the Pot third.
+                    accounts: [
+                      { address: OWNER, role: AccountRole.WRITABLE_SIGNER },
+                      { address: key(12) as SvmAddress, role: AccountRole.READONLY },
+                      { address: pot, role: AccountRole.WRITABLE },
+                    ],
+                    data: new Uint8Array([...KITCHEN_DISCRIMINATORS.cook, ...new Uint8Array(40)]),
+                  },
+              message,
+            ),
+        ),
+      ),
+    );
+  const landed = ownerTransaction();
+  const answers: Record<string, unknown> = {
+    getSignatureStatuses: {
+      context: { slot: 1_001 },
+      value: [{ slot: 1_001, confirmations: null, err: null, confirmationStatus: "confirmed" }],
+    },
+    getTransaction: {
+      slot: 1_001,
+      blockTime: null,
+      transaction: [landed, "base64"],
+      meta: { err: null, fee: 5_000, logMessages: [], computeUnitsConsumed: 150 },
+    },
+  };
+  const original = globalThis.fetch;
+  beforeAll(() => {
+    // The endpoint answers the confirmation and the read back, and fails what the next step asks.
+    globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+      if (String(input) !== URL) return original(input as string, init as RequestInit);
+      const { id, method } = JSON.parse(init!.body!) as { id: unknown; method: string };
+
+      return method in answers
+        ? Response.json({ jsonrpc: "2.0", id, result: answers[method] })
+        : Response.json({
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32603, message: `${method} is down at ${URL}` },
+          });
+    }) as typeof fetch;
+  });
+  afterAll(() => {
+    globalThis.fetch = original;
+  });
+  const solana = requireChain("solana");
+
+  it("keeps what was sent, and hands back the cursor to ask again", async () => {
+    const output = await sendCommand({
+      chain: solana,
+      rpcUrl: URL,
+      transactions: [],
+      signatures: [SIGNATURE],
+      cursor: encodeCursor(plan),
+    });
+    const json = output.json as {
+      ok: boolean;
+      sent: Array<{ hash: string; status: string }>;
+      next: { step: string; cursor: string; notes: string[] };
+    };
+    expect(json.ok).toBe(true);
+    expect(json.sent.map((one) => [one.hash, one.status])).toEqual([[SIGNATURE, "success"]]);
+    expect(json.next.step).toBe("unknown");
+    expect(decodeCursor(json.next.cursor)).toEqual(plan);
+    expect(json.next.notes).toEqual([
+      "the next step could not be built: reading the block height failed: JSON-RPC error: " +
+        "Internal JSON-RPC error (getBlockHeight is down at <RPC_URL>); send the cursor alone to " +
+        "ask again",
+    ]);
+    expect(output.notes).toEqual(json.next.notes);
+    expect(JSON.stringify(output)).not.toContain(URL);
+  });
+
+  it("fails as the next step does, with nothing sent", async () => {
+    const asked = sendCommand({
+      chain: solana,
+      rpcUrl: URL,
+      transactions: [],
+      cursor: encodeCursor(plan),
+    });
+    await expect(asked).rejects.toThrow(
+      "reading the block height failed: JSON-RPC error: Internal JSON-RPC error (getBlockHeight " +
+        "is down at <RPC_URL>)",
+    );
+  });
+
+  const confirm = async (transaction: string, carried: SvmPlan) => {
+    answers.getTransaction = {
+      slot: 1_001,
+      blockTime: null,
+      transaction: [transaction, "base64"],
+      meta: { err: null, fee: 5_000, logMessages: [], computeUnitsConsumed: 150 },
+    };
+    const output = await sendCommand({
+      chain: solana,
+      rpcUrl: URL,
+      transactions: [],
+      signatures: [SIGNATURE],
+      cursor: encodeCursor(carried),
+    });
+
+    return (output.json as { next: { step: string; cursor?: string } }).next;
+  };
+  const { cook: _, ...fresh } = plan;
+  const pot = async () =>
+    (await derivePotPda(address(v12SvmKitchenProgramId()), OWNER, new Uint8Array(32).fill(0x11)))
+      .address;
+
+  it("learns how its own cook went from the cook's signature", async () => {
+    const next = await confirm(ownerTransaction(await pot()), fresh);
+    // It ran: nothing is left to build or close.
+    expect(next.step).toBe("done");
+  });
+
+  it("learns nothing from a cook on another Pot, given beside its cursor", async () => {
+    const next = await confirm(ownerTransaction(key(13) as SvmAddress), fresh);
+    expect(next.step).toBe("unknown");
+    expect(decodeCursor(next.cursor!).cooked).toBeUndefined();
   });
 });

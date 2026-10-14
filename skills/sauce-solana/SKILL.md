@@ -520,8 +520,38 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 ```
 
 - A program too large for one transaction is staged through the Kitchen by `sauce run`, and
-  simulated by `sauce simulate` in a local copy; `sauce tx` refuses it, naming how many bytes the
-  payload (the program and its arguments) must shrink by to fit.
+  simulated by `sauce simulate` in a local copy. For any other signer, `sauce tx` prints it as a
+  plan of steps: the setup (the Pot and the token accounts the cook names, where missing; the
+  program staged in a code buffer; a lookup table, where the accounts do not fit), the cook, then
+  the code buffer's close. A step is `{ step, plan, transactions, cursor }`, each transaction
+  `{ what, transaction, feePayer }`, base64 for the owner to sign, all on one blockhash that
+  expires in about a minute; `sauce send <signed>… --cursor <cursor>` sends them in order and
+  returns `next`, the step after, built fresh from what the cluster shows, with its own cursor,
+  until `next.step` is `done` (a setup of more than 32 transactions comes in several steps). What
+  did not land is built again, so a signer slow enough to let a blockhash expire
+  re-signs only what is left: the cursor alone builds that step. The owner signs and pays every
+  transaction; none needs a fresh keypair. A transaction broadcast another way is confirmed with
+  `--signature <signature>`, so the plan knows how its cook went (a cook it handed out is never
+  built again while it can still land, nor once it has). `--close` gives up on the cook and closes
+  the buffer, once a cook handed out can no longer land. A step with nothing to sign says why in
+  `wait`; a cook through a lookup table extended a moment ago is one, the table in use from the
+  next slot, about half a second on: the cursor alone, sent again, builds the cook (`sauce run`
+  waits for it itself). A cook its simulation says would fail is not built, so none is handed out
+  to land and fail: the step says why in `fails`, with the simulation's `logs` (`sauce tx` exits
+  1), and once what it needs is there (a funded Pot, an account it names) the cursor alone
+  simulates it again.
+- **Rent left open.** A code buffer a plan never closed, and the lookup tables cooks keep for the
+  next cook naming the same accounts, hold the owner's rent.
+  `sauce reclaim --chain solana --owner <pubkey>` lists them with that rent and prints the
+  transactions that close them, unsigned (the tool `sauce_reclaim`); with `--keypair <keypair>` it
+  sends them. A buffer closes at
+  once; a table is deactivated first and closed about 512 slots later (run it again then; the
+  listing names the slot), serving cooks until then and none after, so `--keep-tables` leaves the
+  tables. Nothing in use is closed: a buffer or an active table a transaction named in the last
+  300 slots is listed in use, with the slot it can close from, as a cook built for it may still
+  land; `--keep <cursor>` keeps a plan still under way whole, however long its cook waits. A run
+  takes 32 code buffers and 24 lookup tables at most, the tables it can act on first, and says how
+  many remain (`remaining`) for the next run.
 - **Accounts past one transaction go through a lookup table.** Each account a transaction lists
   costs 32 bytes, and one taken through an address lookup table one byte. `sauce run` creates a
   table holding a staged cook's accounts when they do not fit, from the signer, which pays its

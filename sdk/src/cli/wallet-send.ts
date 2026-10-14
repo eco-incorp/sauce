@@ -13,21 +13,42 @@
  * rehearses it as signed and refuses it if it would fail, as `sauce intent fill --send` does.
  */
 import {
+  address,
+  createSolanaRpc,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
+  type KeyPairSigner,
 } from "@solana/kit";
-import { getAddress, isAddress, toFunctionSelector, type Address, type Hex } from "viem";
+import {
+  bytesToHex,
+  getAddress,
+  isAddress,
+  toFunctionSelector,
+  type Address,
+  type Hex,
+} from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { fetchExecutionFee, MAX_POT_LEN } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, revertReason, sendAndWait, simulate, type TxRequest } from "./chain.js";
 import { txLinks } from "./links.js";
-import { measureEvm, noPolicyNote, rehearsePlan, type SendGuard } from "./policy.js";
+import { measureEvm, noPolicyNote, rehearsePlan, type Measured, type SendGuard } from "./policy.js";
 import { cookReport } from "./receipt.js";
-import { sendPlannedSvm } from "./solana.js";
+import { decodeReturned } from "./returned.js";
+import { sendPlannedSvm, sendPlanTx, type SvmSent } from "./solana.js";
+import {
+  decodeCursor,
+  encodeCursor,
+  isCook,
+  nextStep,
+  transactionsAhead,
+  type SvmPlan,
+} from "./svm-plan.js";
 import { HOT_WALLET } from "./wallet-commands.js";
-import type { Unlocked } from "./wallets.js";
+import type { Unlocked, WalletInfo } from "./wallets.js";
 
 /** One transaction of a plan, as another step built it. */
 export type PlannedTx =
@@ -201,6 +222,10 @@ interface SentEntry {
   readonly leftInPot?: ReadonlyArray<Record<string, unknown>>;
   readonly moves?: unknown;
   readonly summary?: readonly string[];
+  /** A Solana cook's: what `main` returned, as hex, and read as the type it declares. */
+  readonly returns?: string;
+  readonly returnType?: string;
+  readonly returned?: unknown;
 }
 
 /** `cook(address,bytes)`: a transaction that runs a program on the Pot it is sent to. */
@@ -356,6 +381,346 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
   }
 
   return sent;
+}
+
+/** The cursor of a Solana plan `value` carries — `sauce_tx`'s, or a send's `next` — if it is one. */
+export function plannedCursor(value: unknown): string | undefined {
+  let parsed = value;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return undefined;
+    }
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+  const fields = parsed as { cursor?: unknown; next?: { cursor?: unknown } | null };
+  const found = fields.cursor ?? fields.next?.cursor;
+
+  return typeof found === "string" ? found : undefined;
+}
+
+/** One transaction of a plan's step as a tool handed it out: base64, for the owner to sign. */
+export interface HandedOutTx {
+  readonly what: string;
+  readonly transaction: string;
+}
+
+/** The step's transactions `value` hands out — `sauce_tx`'s `transaction` or `transactions`, or a
+ *  send's `next.transactions` — as they were built. */
+export function plannedHandedOut(value: unknown): HandedOutTx[] {
+  let parsed = value;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const fields = parsed as {
+    transaction?: unknown;
+    transactions?: unknown;
+    next?: { transactions?: unknown } | null;
+  };
+  if (typeof fields.transaction === "string") {
+    return [{ what: "the cook", transaction: fields.transaction }];
+  }
+  const list = Array.isArray(fields.transactions)
+    ? fields.transactions
+    : Array.isArray(fields.next?.transactions)
+      ? fields.next.transactions
+      : [];
+
+  return (list as unknown[]).flatMap((entry) => {
+    const one = entry as { what?: unknown; transaction?: unknown } | null;
+
+    return one !== null && typeof one === "object" && typeof one.transaction === "string"
+      ? [
+          {
+            what: typeof one.what === "string" ? one.what : "a transaction",
+            transaction: one.transaction,
+          },
+        ]
+      : [];
+  });
+}
+
+/** A Solana transaction's base fee, per signature: every plan transaction carries one. */
+const SIGNATURE_FEE = 5_000n;
+/** An SPL token account's bytes, and a lookup table's header and each address in it. */
+const TOKEN_ACCOUNT_LEN = 165n;
+const TABLE_HEADER_LEN = 56n;
+/** A code buffer's metadata account. */
+const CODE_BUFFER_LEN = 91n;
+
+/**
+ * What each transaction `plan` has still to send takes out of the owner's lamports, as far as it can
+ * be known before any is sent: the rent of what it creates (the Pot, token accounts, the code buffer
+ * and its code account, the lookup table and each address added to it), each transaction's fee, and
+ * the cook's execution fee. What the cook's program moves cannot be known until its setup is on the
+ * cluster: it is measured when the cook is sent.
+ */
+async function planOutflows(
+  plan: SvmPlan,
+  ctx: { readonly rpc: ReturnType<typeof createSolanaRpc>; readonly url: string },
+  owner: KeyPairSigner,
+  chain: CanonicalChain,
+): Promise<Measured[]> {
+  const step = { ...ctx, signer: owner };
+  const ahead = await transactionsAhead(plan, step);
+  const [base, one] = await Promise.all([
+    ctx.rpc.getMinimumBalanceForRentExemption(0n).send(),
+    ctx.rpc.getMinimumBalanceForRentExemption(1n).send(),
+  ]);
+  const rent = (bytes: bigint): bigint => BigInt(base) + bytes * (BigInt(one) - BigInt(base));
+  const fee = ahead.some((tx) => tx.kind === "cook")
+    ? await fetchExecutionFee(ctx.rpc, address(v12SvmKitchenProgramId()))
+    : 0n;
+  const kitchen = v12SvmKitchenProgramId();
+  let tableBytes = TABLE_HEADER_LEN;
+
+  return ahead.map((tx): Measured => {
+    const programs = [
+      ...new Set(
+        tx.instructions
+          .map((instruction) => instruction.programAddress as string)
+          .filter((program) => program !== "ComputeBudget111111111111111111111111111111"),
+      ),
+    ];
+    let lamports = SIGNATURE_FEE;
+    if (tx.kind === "pot") lamports += rent(BigInt(MAX_POT_LEN));
+    if (tx.kind === "accounts") {
+      lamports += BigInt(tx.accounts?.length ?? 0) * rent(TOKEN_ACCOUNT_LEN);
+    }
+    if (tx.kind === "buffer" && tx.what === "creating the code buffer") {
+      lamports += rent(CODE_BUFFER_LEN) + rent(BigInt(plan.staged?.length ?? 0));
+    }
+    if (tx.kind === "table") {
+      if (tx.what === "creating the lookup table") lamports += rent(TABLE_HEADER_LEN);
+      else {
+        // An extend pays the rent of the addresses it adds, the bytes of its data past the u32 tag
+        // and the u64 count: 32 each, as the table holds them.
+        const data = tx.instructions[0]?.data ?? new Uint8Array();
+        const added = BigInt(Math.max(0, data.length - 12));
+        lamports += rent(tableBytes + added) - rent(tableBytes);
+        tableBytes += added;
+      }
+    }
+    if (tx.kind === "cook") {
+      lamports += fee + (tx.createsPot === true ? rent(BigInt(MAX_POT_LEN)) : 0n);
+    }
+
+    return {
+      chain,
+      to: tx.kind === "cook" || tx.kind === "close" ? [kitchen] : programs,
+      native: { token: "native", symbol: "SOL", decimals: 9, amount: lamports },
+      tokens: [],
+      approvals: [],
+      unmeasured: {},
+    };
+  });
+}
+
+/**
+ * The plan a cursor carries, for the wallet `wallet` to send: refused, before anything else is read
+ * from it or the wallet is unlocked, unless the wallet is the plan's owner — the one key that signs
+ * and pays every transaction of the plan.
+ */
+export function planFor(cursor: string, wallet: WalletInfo): SvmPlan {
+  const plan = decodeCursor(cursor);
+  if (plan.owner !== wallet.address) {
+    throw new UsageError(
+      `the plan is ${plan.owner}'s: only that key signs its transactions, and wallet ` +
+        `${wallet.name} is ${wallet.address}. Send it from the wallet at ${plan.owner}, or have ` +
+        "that key sign each step and send it with sauce_send",
+    );
+  }
+
+  return plan;
+}
+
+/** How many times a plan's step waits, a second each, for the cluster to catch up. */
+const PLAN_WAITS = 10;
+
+/**
+ * Sends a Solana plan from a wallet, step by step (`svm-plan.ts`): each step built from what the
+ * cluster shows, each transaction built on a fresh blockhash, signed by the wallet, rehearsed and
+ * held to its policy as it is sent (`solana.ts#sendPlanTx`), until the plan is done. A cook that
+ * would fail is not sent, and the code buffer the plan staged is closed again. A cook a tool
+ * already handed out (`handedOut`, with the plan remembering it) is the one sent: built again, it
+ * could land twice. Once a cook goes out, the plan remembers it before anything can fail, and a
+ * failure after that returns the cursor rather than lose it.
+ */
+export async function sendSvmPlan(input: {
+  readonly wallet: Unlocked;
+  readonly guard: SendGuard;
+  readonly chain: CanonicalChain;
+  readonly cursor: string;
+  readonly rpcUrl: string;
+  readonly handedOut?: readonly HandedOutTx[];
+}): Promise<{ readonly json: Record<string, unknown>; readonly notes: string[] }> {
+  const { wallet, guard, chain } = input;
+  if (chain.kind !== "svm") throw new UsageError("a plan's cursor is a Solana plan's");
+  if (wallet.kind !== "solana") {
+    throw new UsageError(`wallet ${wallet.info.name} is an EVM wallet, and the plan is Solana's`);
+  }
+  let plan = planFor(input.cursor, wallet.info);
+  guard.gate(chain);
+  const ctx = { rpc: createSolanaRpc(input.rpcUrl), url: input.rpcUrl, signer: wallet.signer };
+  // The whole plan held to the wallet's policy before any of it is sent, as far as it can be
+  // measured now; each transaction is measured again, and reserved in the ledger, as it is sent.
+  if (guard.policy !== undefined) {
+    await guard.preflight(await planOutflows(plan, ctx, wallet.signer, chain));
+  }
+  const sent: SentEntry[] = [];
+  const said: string[] = [];
+  let done = false;
+  const entryOf = (what: string, result: SvmSent, cook: boolean): SentEntry => {
+    const returns =
+      cook && result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
+    const returned =
+      returns === undefined || plan.returnType === undefined
+        ? undefined
+        : (decodeReturned(plan.returnType, returns, chain) ?? null);
+
+    return {
+      what,
+      hash: result.signature,
+      status: result.ok ? "success" : "failed",
+      ...(result.slot === undefined ? {} : { blockNumber: result.slot.toString() }),
+      ...(result.fee === undefined ? {} : { fee: result.fee.toString() }),
+      ...(result.reason === undefined ? {} : { reason: result.reason }),
+      ...(returns === undefined ? {} : { returns }),
+      ...(returned === undefined ? {} : { returnType: plan.returnType, returned }),
+    };
+  };
+  // The cook the plan handed out, sent as it was built: a fresh one could land beside it.
+  const handed = (input.handedOut ?? []).map((tx) => ({
+    ...tx,
+    cook: isCook(
+      getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(tx.transaction))),
+    ),
+  }));
+  if (plan.cook !== undefined && plan.cooked === undefined && handed.some((tx) => tx.cook)) {
+    for (const tx of handed) {
+      let result: SvmSent;
+      try {
+        result = await sendPlannedSvm(input.rpcUrl, wallet.signer, {
+          feePayer: wallet.signer.address,
+          transaction: tx.transaction,
+          what: tx.what,
+        });
+      } catch (error) {
+        // Refused before it went out (expired, say): the plan, from the cluster, says what next.
+        said.push(
+          `${tx.what}, as handed out, was not sent: ${(error as Error).message.split("\n")[0]}`,
+        );
+        break;
+      }
+      sent.push(entryOf(tx.what, result, tx.cook));
+      if (tx.cook) plan = { ...plan, cooked: { ok: result.ok, signature: result.signature } };
+      else if (!result.ok) break;
+    }
+  }
+  for (let waits = 0; ;) {
+    const step = await nextStep(plan, ctx);
+    if (step.name === "done") {
+      done = true;
+      said.push(...step.notes);
+      break;
+    }
+    if (step.wait !== undefined) {
+      if (++waits > PLAN_WAITS) {
+        said.push(step.wait);
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      continue;
+    }
+    // A cook that would fail is not sent: the plan gives it up, and closes what it staged.
+    const giving =
+      step.fails === undefined ? undefined : await nextStep(plan, ctx, { close: true });
+    if (step.fails !== undefined) {
+      said.push(`the cook would fail, so it was not sent: ${step.fails.reason}`);
+    }
+    let stopped = giving !== undefined;
+    let next = step.plan;
+    for (const tx of (giving ?? step).transactions) {
+      let result: SvmSent;
+      let out = false;
+      try {
+        // A cook is remembered as handed out the moment it can land, before it goes.
+        result = await sendPlanTx(
+          ctx,
+          tx,
+          tx.kind === "cook"
+            ? (lifetime) => {
+                out = true;
+                next = { ...next, cook: lifetime };
+              }
+            : undefined,
+        );
+      } catch (error) {
+        const message = (error as Error).message.split("\n")[0]!;
+        if (out) {
+          said.push(
+            `the cook went out, and how it went is not known: ${message}; send the cursor ` +
+              "again to learn it (a cook is never sent twice)",
+          );
+        } else if (sent.length === 0) {
+          throw error;
+        }
+        // Once one is sent, a refusal of the next is part of the result, not the whole of it.
+        sent.push({ what: tx.what, hash: "", status: "failed", reason: message });
+        stopped = true;
+        break;
+      }
+      sent.push(entryOf(tx.what, result, tx.kind === "cook"));
+      if (tx.kind === "cook") {
+        next = { ...next, cooked: { ok: result.ok, signature: result.signature } };
+      } else if (!result.ok) {
+        stopped = true;
+        break;
+      }
+    }
+    plan = next;
+    if (stopped) break;
+  }
+  const failed = sent.find((entry) => entry.status !== "success");
+  const landed = sent.filter((entry) => entry.hash !== "").length;
+
+  return {
+    json: {
+      wallet: wallet.info.name,
+      from: wallet.info.address,
+      chain: chain.slug,
+      chainId: chain.id,
+      ok: done && failed === undefined && !said.some((note) => note.startsWith("the cook would")),
+      sent: sent.map((entry) =>
+        entry.hash === "" ? entry : { ...entry, ...txLinks(chain, entry.hash) },
+      ),
+      ...(done ? {} : { cursor: encodeCursor(plan) }),
+      policy: guard.policy?.path ?? null,
+    },
+    notes: [
+      ...(guard.policy === undefined ? [noPolicyNote(wallet.info)] : guard.policy.notes),
+      ...said,
+      ...(failed === undefined
+        ? []
+        : [
+            `${failed.what} did not succeed${failed.reason === undefined ? "" : `: ${failed.reason}`}; ` +
+              `the plan stopped there (${landed} sent)`,
+          ]),
+      ...(done
+        ? []
+        : [
+            "the plan is not done: send `cursor` again to carry on from what the cluster shows, " +
+              "or with close to give up on the cook and close its code buffer",
+          ]),
+      HOT_WALLET,
+    ],
+  };
 }
 
 /** The fee payer a Solana wire transaction names: its first account. */

@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
+import { encodeCursor } from "../../sdk/dist/cli/svm-plan.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SEND_TOOL_NAMES } from "../src/send.js";
@@ -56,6 +57,70 @@ describe("a server whose password is too short to create a wallet with", () => {
     assert.match(
       failed(await mcp.call("sauce_wallet_create", { name: "agent" })),
       /a wallet's password is 8 characters at least/,
+    );
+  });
+});
+
+describe("a server whose password does not open its wallet, given a Solana plan", () => {
+  let dir: string;
+  let mcp: Connected;
+  let wallet: string;
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-plan-"));
+    const store = new WalletStore(join(dir, "wallets"));
+    wallet = (await store.create("sol", "solana", `opens-${process.pid}-${Date.now()}`)).info
+      .address;
+    mcp = await connect(undefined, undefined, {
+      store,
+      password: "not-the-password",
+      source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
+    });
+  });
+  after(async () => {
+    await mcp.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A plan's cursor, its owner `owner`. */
+  const cursorFor = (owner: string) =>
+    encodeCursor({
+      owner: owner as never,
+      salt: `0x${"11".repeat(32)}`,
+      via: "kitchen",
+      tail: [],
+      lookupTables: [],
+      pot: "there",
+      tokenAccounts: [],
+      payload: new Uint8Array([1, 2, 3]),
+      labels: [],
+    });
+
+  it("refuses another owner's plan by name before it unlocks the wallet or reads a chain", async () => {
+    const other = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi";
+    const message = failed(
+      await mcp.call("sauce_wallet_send", {
+        wallet: "sol",
+        transaction: { cursor: cursorFor(other) },
+        rpcUrl: "http://127.0.0.1:9/",
+      }),
+    );
+    assert.match(
+      message,
+      new RegExp(
+        `the plan is ${other}'s: only that key signs its transactions, and wallet sol is ${wallet}`,
+      ),
+    );
+    assert.doesNotMatch(message, /password/i);
+    // Its own plan goes on to the unlock, which this password does not open.
+    assert.doesNotMatch(
+      failed(
+        await mcp.call("sauce_wallet_send", {
+          wallet: "sol",
+          transaction: { cursor: cursorFor(wallet) },
+          rpcUrl: "http://127.0.0.1:9/",
+        }),
+      ),
+      /the plan is/,
     );
   });
 });

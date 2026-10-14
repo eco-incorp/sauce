@@ -34,6 +34,7 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 | `sauce run`      | Compiles, simulates, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
 | `sauce send`     | Broadcasts transactions signed elsewhere, waits for them, reports what they did   |
+| `sauce reclaim`  | Lists the code buffers and lookup tables a Solana owner left open; closes them    |
 | `sauce intent`   | Publishes, fills, proves, claims, refunds and cancels intents (`sauce-intents`)   |
 | `sauce wallet`   | Creates, lists and imports the wallets `--wallet` signs with                      |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
@@ -400,7 +401,11 @@ no code, is far too low, and `send` refuses a cook signed short of gas. A Solana
 within about a minute of being built, or never: one signed later is refused, to build and sign
 again. One the chain already has is read back, not sent again; one it had, pending, then lost
 (dropped or reorged out) is reported gone, to sign anew. A Solana transaction missing a signature,
-its fee payer's or any its message names, is refused by name.
+its fee payer's or any its message names, is refused by name. A Solana cook needing more than one
+transaction (a program staged in a code buffer, a lookup table, a Pot to create first) comes from
+`sauce tx` as a plan: its first step's transactions and a `cursor`;
+`sauce send <signed>… --cursor <cursor>` sends them and prints `next`, the step after, until
+`next.step` is `done` (`sauce-solana` has the steps).
 
 ## Arguments to `main`
 

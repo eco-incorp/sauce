@@ -1,6 +1,7 @@
 /**
  * The Solana cook tools' `via` and `maxExecutionFee`, against a JSON-RPC endpoint that answers only
- * what building a cook asks: the Kitchen's fee config, a Pot that does not exist, and a blockhash.
+ * what building a cook asks: the Kitchen's fee config, a Pot that does not exist, a blockhash, and
+ * the token accounts a cook names, there or not as each test chooses.
  * The fee the endpoint holds is the test's, so each refusal and each fee returned is one it chose.
  * Building and signing nothing else, these need no engine: what runs the cook is the SDK's own
  * suites' business (`sdk/test/cli-solana.e2e.test.ts`, `sdk/test/svm/direct-engine.e2e.test.ts`).
@@ -53,6 +54,8 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
   let url: string;
   let mcp: Connected;
   const asked: string[] = [];
+  /** Whether the token accounts a cook names are on the cluster. */
+  let tokenAccountsThere = true;
 
   before(async () => {
     assert.equal(CONFIG.readBigUInt64LE(8), FEE);
@@ -68,22 +71,38 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
         const result =
           call.method === "getLatestBlockhash"
             ? { context, value: { blockhash: BLOCKHASH, lastValidBlockHeight: 1_000 } }
-            : call.method === "getAccountInfo"
+            : call.method === "getMultipleAccounts"
               ? {
                   context,
-                  value:
-                    asked.filter((method) => method === "getAccountInfo").length === 1
+                  value: (call.params[0] as unknown[]).map(() =>
+                    tokenAccountsThere
                       ? {
-                          data: [CONFIG.toString("base64"), "base64"],
+                          data: [Buffer.alloc(165).toString("base64"), "base64"],
                           executable: false,
-                          lamports: 1_000_000,
-                          owner: KITCHEN,
+                          lamports: 2_039_280,
+                          owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
                           rentEpoch: 0,
-                          space: 16,
+                          space: 165,
                         }
                       : null,
+                  ),
                 }
-              : null;
+              : call.method === "getAccountInfo"
+                ? {
+                    context,
+                    value:
+                      asked.filter((method) => method === "getAccountInfo").length === 1
+                        ? {
+                            data: [CONFIG.toString("base64"), "base64"],
+                            executable: false,
+                            lamports: 1_000_000,
+                            owner: KITCHEN,
+                            rentEpoch: 0,
+                            space: 16,
+                          }
+                        : null,
+                  }
+                : null;
         response.setHeader("content-type", "application/json");
         response.end(JSON.stringify({ jsonrpc: "2.0", id: call.id, result }));
       });
@@ -204,6 +223,33 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
       ),
       /takes 2 arguments/,
     );
+  });
+
+  it("creates a token account the token methods name that is not there yet, first", async () => {
+    const to = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+    asked.length = 0;
+    tokenAccountsThere = false;
+    try {
+      const out = ok(
+        await mcp.call("sauce_tx", {
+          source:
+            "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+          chain: "solana",
+          owner: OWNER,
+          args: [to, "400"],
+          rpcUrl: url,
+        }),
+      ) as { step: string; transactions: Array<{ what: string }>; transaction?: string };
+      // The plan's setup, the owner paying the rent; the cook comes in the step after.
+      assert.equal(out.transaction, undefined);
+      assert.equal(out.step, "setup");
+      assert.deepEqual(
+        out.transactions.map((tx) => tx.what),
+        ["creating the token accounts"],
+      );
+    } finally {
+      tokenAccountsThere = true;
+    }
   });
 
   it("fills every account the program writes where it uses it: a pda from its seeds and args", async () => {

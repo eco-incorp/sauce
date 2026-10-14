@@ -22,8 +22,10 @@ const rentExempt = (size) => (128n + BigInt(size)) * 5080n;
  * Serves `accounts` (address -> { owner, data }) beside the Rent sysvar, the fee config at
  * `feeConfig` (when given) charging `fee` lamports, and a clock at `slot`. A scan
  * (`getProgramAccounts`) of a program in `refuseScans` is always refused, and the first
- * `rateLimitScans` scans of any program are, as a rate-limited endpoint refuses them. Resolves to { url, methods, close }: `methods` counts what was asked, and an unknown
- * method is answered with an error naming it.
+ * `rateLimitScans` scans of any program are, as a rate-limited endpoint refuses them; a scan of a
+ * program in `scans` (program -> [{ pubkey, data }]) finds those accounts, whatever its filters.
+ * Resolves to { url, methods, close }: `methods` counts what was asked, and an unknown method — a
+ * transaction history, say — is answered with an error naming it.
  */
 export async function solanaRpcStub({
   feeConfig,
@@ -33,8 +35,9 @@ export async function solanaRpcStub({
   slot = 1_000n,
   refuseScans = [],
   rateLimitScans = 0,
+  scans = {},
 } = {}) {
-  let scans = 0;
+  let scanned = 0;
   const held = new Map(Object.entries(accounts));
   const discriminator = createHash("sha256").update("account:ExecutionFeeConfig").digest();
   const feeData = Buffer.alloc(16);
@@ -69,8 +72,12 @@ export async function solanaRpcStub({
         return { context, value: info(params[0]) };
       case "getProgramAccounts":
         if (refuseScans.includes(params[0])) throw new Error("scans of this program are refused");
-        if (++scans <= rateLimitScans) throw new Error("too many requests: rate limited");
-        return [];
+        if (++scanned <= rateLimitScans) throw new Error("too many requests: rate limited");
+        return (scans[params[0]] ?? []).map(({ pubkey, data }) => {
+          held.set(pubkey, { owner: params[0], data });
+
+          return { pubkey, account: info(pubkey) };
+        });
       case "getBalance":
         return { context, value: 0 };
       case "getSlot":
