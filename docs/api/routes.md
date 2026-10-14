@@ -16,14 +16,23 @@ There is no `/routes` subpath. The public types are members of the namespace: `r
 
 ## Chain entry points
 
-| Entry point                  | Result                                        |
-| ---------------------------- | --------------------------------------------- |
-| `routes.chain(ref)`          | The chain accessor (`.chain`) for a reference |
-| `routes.chainAccessors.Base` | Explicit access to the bare chain accessor    |
+| Entry point                                       | Result                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `routes.chain(ref)`                               | The chain accessor (`.chain`) for a reference                            |
+| `routes.chainAccessors.Base`                      | Explicit access to the bare chain accessor                               |
+| `Base(…)`, `Base.route(…)`, `routes.openRoute(…)` | Throw `IntentsComingSoonError`: opening an intent is coming soon (below) |
 
 Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record.
 
-`Base` and every other chain are **named exports of the package root**: a namespace, not a function; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`) and the chain's registry tokens (`Base.USDC`), described in the [contracts reference](contracts.md); `routes.chainAccessors.Base` is the bare accessor without them. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
+`Base` and every other chain are **named exports of the package root**: a namespace; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`) and the chain's registry tokens (`Base.USDC`), described in the [contracts reference](contracts.md); `routes.chainAccessors.Base` is the bare accessor without them. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
+
+Calling a chain (`Base(…)`) or its `.route(…)`, and `routes.openRoute(…)`, opened an intent whose
+route ran a program. Opening an intent is [coming soon](../guides/intents.md), written
+`<Chain>.hop({ send, receive, refundee }).then(() => { … })` in a program, so each throws
+`IntentsComingSoonError` (exported from the package root; its `site` names the call), typed
+`never`. So does compiling a program that writes `<Chain>.hop(…)`, or the earlier
+`<Chain>(() => { … })`, at the line it is on. The Portal's calls below act on an intent that
+already exists.
 
 ## Compile a program
 

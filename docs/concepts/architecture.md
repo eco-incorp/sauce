@@ -103,8 +103,9 @@ larger program through the Kitchen before executing it. See the [Solana guide](.
 An Eco intent offers a route — calls, and a program among them — to be executed on another chain,
 in exchange for a reward escrowed on this one. A solver fulfills the destination, and the route's
 program runs there on the shared Pot. A cascade of intents is a chain of separate executions, not
-one call stack spanning chains. [Routes](../api/routes.md) covers the intent records, the Portal's
-calls and the hashes.
+one call stack spanning chains. Opening an intent from a program is
+[coming soon](../guides/intents.md); [Routes](../api/routes.md) covers the intent records, the
+Portal's calls and the hashes that act on one that exists.
 
 ## Versions travel with artifacts
 

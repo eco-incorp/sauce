@@ -7,7 +7,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.`                            | Chain accessors (`Base`, `Solana`, …); `routes`, `token`, `deposit`, `contracts`, `svmVenues`; protocol and chain queries; `sqrtPriceX96FromPrice`/`priceFromSqrtPriceX96`; `ready` |
 | `/compiler`                    | `compile`, `ready`, compiler types, the compact codec, and `resolveSdkModule`/`resolveSdkPackage`                                                                                   |
-| `/actions`                     | JSON action programs by names and pool keys: validation, compilation for a chain, and intents; the JSON Schema is `/actions/action-program.schema.json`                             |
+| `/actions`                     | JSON action programs by names and pool keys: validation and compilation for a chain; the JSON Schema is `/actions/action-program.schema.json`                                       |
 | `/protocols/*`                 | One protocol's `protocolInfo`, `deployments`, ABI exports, and named SauceScript templates                                                                                          |
 | `/chains`                      | Canonical chain identities and EVM chain metadata                                                                                                                                   |
 | `/deployments`                 | Sauce engine/Kitchen addresses ([Deployments](../reference/deployments.md) lists them), Pot derivation inputs, and which engine runs which compiler's programs                      |
@@ -47,7 +47,7 @@ are on the chain export in TypeScript (`Base.USDC`, `Base.Uniswap`). See
 - [Compiler](compiler.md): direct compilation, result metadata, compact argument encoding.
 - [`@sauce/router`](router.md): the SauceScript swap library a program imports — one function per
   venue.
-- [Routes](routes.md): compile options, intent construction, nested execution, and submission helpers.
+- [Routes](routes.md): compile options, the chain entry points, intent records and the Portal's calls.
 - [Contracts and tokens](contracts.md): every protocol namespace and token, in a program and in TypeScript, and running a call through viem.
 - [Coverage](coverage.md): distinguish catalog entries, callable descriptors, and available deployments.
 - [Chains](../reference/chains.md), [protocols](../reference/protocols.md) and

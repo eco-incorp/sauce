@@ -63,6 +63,7 @@ Send the resulting calldata to the Pot from its owner, with the Kitchen's execut
 | `compileProgram(program, options?)` | Compiles standalone for `options.chain` (else the program's `chainId`): bytecode, source, and a payload for [runtime amounts](#runtime-amounts) |
 | `quoteAction(action, options?)`     | Builds the `eth_call` that [prices a swap](#quotes-and-split-swaps)                                                                             |
 | `compileSplitSwap(splitSwap)`       | Compiles a swap [split across venues](#quotes-and-split-swaps) by on-chain quotes                                                               |
+| `programIntent(program, options?)`  | Opened a program as an intent; throws `IntentsComingSoonError`, opening an intent being [coming soon](intents.md)                               |
 
 `compileProgram` validates the program too, so a typed program that skipped `parseProgram` is held to the same rules — and they check every name it uses on the chain they compile for.
 

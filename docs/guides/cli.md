@@ -940,23 +940,35 @@ the transaction that published it (`sauce intent import`), then simulates and se
 after: the fill on the destination, its proof, the claim or the refund. Each verb takes the
 intent's hash and reads both chains:
 
-| Verb                  | What it does                                                              |
-| --------------------- | ------------------------------------------------------------------------- |
-| `sauce intent fill`   | Simulate a solver's fill on the destination; with `--send`, send it       |
-| `sauce intent prove`  | Send the proof of a filled (or cancelled) intent, paying the prover's fee |
-| `sauce intent claim`  | Withdraw a proven intent's reward to its claimant, on the source          |
-| `sauce intent refund` | Return an unearned reward to its creator, once the Portal allows it       |
-| `sauce intent cancel` | Cancel an unfilled intent after its fill deadline, for an earlier refund  |
-| `sauce intent status` | Where an intent stands on both chains, and what can be done next          |
-| `sauce intent list`   | Every intent the store keeps                                              |
-| `sauce intent show`   | One stored intent: its route, reward, deadlines and events                |
-| `sauce intent import` | Store the intents a transaction published, rebuilt from its logs          |
-| `sauce intent`        | At a terminal: pick a stored intent and act on it                         |
+| Verb                   | What it does                                                              |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `sauce intent publish` | Coming soon: opening an intent, from a program; refused today             |
+| `sauce intent fill`    | Simulate a solver's fill on the destination; with `--send`, send it       |
+| `sauce intent prove`   | Send the proof of a filled (or cancelled) intent, paying the prover's fee |
+| `sauce intent claim`   | Withdraw a proven intent's reward to its claimant, on the source          |
+| `sauce intent refund`  | Return an unearned reward to its creator, once the Portal allows it       |
+| `sauce intent cancel`  | Cancel an unfilled intent after its fill deadline, for an earlier refund  |
+| `sauce intent status`  | Where an intent stands on both chains, and what can be done next          |
+| `sauce intent list`    | Every intent the store keeps                                              |
+| `sauce intent show`    | One stored intent: its route, reward, deadlines and events                |
+| `sauce intent import`  | Store the intents a transaction published, rebuilt from its logs          |
+| `sauce intent`         | At a terminal: pick a stored intent and act on it                         |
 
 Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
 destination Portal's Executor with salt zero, which every intent through that Portal shares. No
 solver can fill the intent until that Pot is deployed; `sauce pot --deploy --chain <destination>
 --owner <Executor>` deploys it, and any account may send that.
+
+Opening an intent is [coming soon](intents.md), written
+`<Chain>.hop({ send, receive, refundee }).then(() => { … })` in a program. Until then
+`sauce intent publish` refuses whatever it is given, and exits 1:
+
+```text
+sauce intent publish: opening an intent is coming soon. It will be written `<Chain>.hop({ send, receive, refundee }).then(() => { … })`; until then, `sauce intent` acts on intents that already exist: import, status, fill, prove, claim, refund and cancel.
+```
+
+A program that writes `<Chain>.hop(…)`, or the earlier `<Chain>(() => { … })`, is refused the
+same way by every command that compiles it, at the line it is on.
 
 ### Simulating the fill: `sauce intent fill`
 

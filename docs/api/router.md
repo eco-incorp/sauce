@@ -29,7 +29,7 @@ function main(minOut: Uint256) {
 }
 ```
 
-The SDK carries the library and serves it to every compile it makes — a route body, an intent, an
+The SDK carries the library and serves it to every compile it makes — a program, a route body, an
 [action program](../guides/actions.md) — so an import is all a program needs. [router-swap.ts](../examples/router-swap.ts)
 compiles this one.
 

@@ -7,9 +7,9 @@ program lands or none of it does.
 `@eco-incorp/sauce` is the developer package for that runtime: the compiler, the chain and protocol
 knowledge a program needs, and the builders that turn a program into a transaction.
 
-On top of the runtime sits a second layer — **routes**. A route packages a program as an Eco intent:
-an offer to have that program executed on another chain, with a reward escrowed here for whoever
-executes it there. Cross-chain execution is this layer, not the runtime.
+Cross-chain execution is a layer on top, not the runtime: an Eco intent offers a program to be run
+on another chain, with a reward escrowed here for whoever runs it there. Opening one from a program
+is [coming soon](docs/guides/intents.md); the package already acts on intents that exist.
 
 ```sh
 npm install @eco-incorp/sauce
@@ -107,6 +107,29 @@ What you did not have to do:
 [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
+## Cross-chain intents: coming soon
+
+A program will open an intent by hopping to the chain where the rest of it runs:
+
+```js
+function main(recipient: Address, refundTo: Address, amount: Uint256, reward: Uint256) {
+  Ethereum.hop({
+    send: { token: USDC, amount: reward },
+    receive: { token: USDC, amount },
+    refundee: refundTo,
+  }).then(() => {
+    USDC.transfer(recipient, amount); // runs on Ethereum, when a solver fills the intent
+  });
+}
+```
+
+`send` is the reward, escrowed here; `receive` what a solver delivers on Ethereum for the body to
+spend; `refundee` who may take back a reward nobody earned. Until it ships, a program that writes
+it, `sauce intent publish` and the TypeScript calls that opened an intent before refuse with a
+message saying so. An intent that already exists is filled, proven, claimed, refunded or cancelled
+with `sauce intent`, the MCP server's intent tools, or the SDK's Portal helpers:
+[Cross-chain intents](docs/guides/intents.md).
+
 ## Agent wallets
 
 An agent with no wallet can make one, through the `sauce` command or the local MCP server, and
@@ -132,6 +155,8 @@ coin and per token. These are hot wallets: keep small balances in them.
 - [Documentation](docs/README.md): every guide and reference page, one line each.
 - [Quick start](docs/guides/quick-start.md): compile a first program, offline.
 - [The sauce command](docs/guides/cli.md): compile, simulate and run from a terminal.
+- [Cross-chain intents](docs/guides/intents.md): how a program will open one, and acting on the
+  ones that exist.
 - [Agent skills](docs/guides/skills.md): the skills that teach a coding agent to write and run
   programs, beside [the MCP server](docs/guides/mcp.md).
 - [Chains](docs/reference/chains.md), [protocols](docs/reference/protocols.md) and

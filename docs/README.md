@@ -11,8 +11,10 @@ that runs one program on a Pot, every step or none. The **Kitchen** is the contr
 Pots and sets the fee each cook pays. Read [Kitchen, Pot and cook](concepts/kitchen-pot-cook.md)
 first: every page below uses the three words.
 
-**Routes** are the layer above: a route packages a program as an Eco intent, so it can be executed
-on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
+**Intents** are the layer above: an Eco intent offers a program to be executed on another chain in
+exchange for a reward escrowed on this one. Opening one from a program is coming soon; filling,
+proving, claiming, refunding and cancelling the ones that exist work today
+([Cross-chain intents](guides/intents.md)).
 
 For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**. Every
 other chain is a preview chain, where a program compiles and simulates but the `sauce` command and
@@ -44,6 +46,8 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 - [Builders](guides/builders-and-actions.md): generate programs from structured data.
 - [Solana](guides/solana.md): plan accounts, stage code and execute on Solana.
 - [Verification](guides/verification.md): check what a settlement payload contains.
+- [Cross-chain intents](guides/intents.md): how a program will open one, coming soon, and acting
+  on the intents that exist.
 - [The sauce command](guides/cli.md): compile, simulate and run from a terminal, with agent
   wallets and their policies.
 - [The MCP server](guides/mcp.md): give a coding agent Sauce's tools.

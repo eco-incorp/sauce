@@ -77,3 +77,9 @@ Solana account manifest, with no chain's names resolved for you.
 [compile-program.ts](../examples/compile-program.ts) compiles a typed entry point and appends compact
 arguments. [Compiling programs](compiling.md) explains module resolution and how the raw compiler
 differs from `compileSauceProgram`.
+
+## Next: another chain
+
+A program that continues on another chain, by opening an Eco intent there, is
+[coming soon](intents.md), written `<Chain>.hop({ send, receive, refundee }).then(() => { … })`.
+That page also covers acting on an intent that already exists.
