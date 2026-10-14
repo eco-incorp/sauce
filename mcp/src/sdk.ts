@@ -90,6 +90,8 @@ export {
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
+export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
+export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export {
   CHAIN_SUPPORT_ISSUES_URL,
@@ -106,8 +108,12 @@ export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
 export {
   checkPlan,
   planChain,
+  plannedCursor,
+  plannedHandedOut,
+  planFor,
   plannedTransactions,
   sendPlan,
+  sendSvmPlan,
 } from "../../sdk/dist/cli/wallet-send.js";
 export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
 export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";

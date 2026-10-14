@@ -496,9 +496,12 @@ a trailing `n`, the same in base units.
      --accounts accounts.json --args 1000000000 120000000000000000 8333333334 119750000000000000
    ```
 
-`sauce tx` prints one unsigned transaction, and this cook is several: the staging, the table and
-the cook. A signer other than the `sauce` command sends the same sequence, which the package's
-TypeScript client builds ([the API reference](../api/README.md)).
+For a signer other than the `sauce` command, `sauce tx` prints this cook as a plan of steps: the
+setup (a token account the cook names that is missing, the program staged in a code buffer, the
+lookup table), the cook, then the buffer's close. Each step's transactions are for the owner to
+sign, all on one blockhash; `sauce send <signed>… --cursor <cursor>` sends them in order and
+returns the next step, built fresh from what the cluster shows, with its own cursor. Whatever
+expires before it lands is built again, and nothing needs a key but the owner's.
 
 **Reading a simulation.** `sauce simulate` prints what `main` returned, by name, how it simulated,
 and what moved. **A simulation counts only when it succeeds and `bought` is above 0**: anything

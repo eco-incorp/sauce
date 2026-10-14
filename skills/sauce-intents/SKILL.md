@@ -128,7 +128,9 @@ sauce intent import <tx-hash> --chain <source>
   `refund` returns the reward when the Portal allows it, and says from when otherwise; `cancel`
   cancels after the route's deadline, refusing where either Portal lacks the cancellation support
   described above.
-- Without a signer, each prints its transactions unsigned, for a wallet to send in order.
+- Without a signer, each prints its transactions unsigned, for a wallet to send in order; signed
+  by any signer, `sauce send <signed>…` (the tool `sauce_send`) broadcasts them in order and
+  reports each.
 - `sauce intent` alone, at a terminal, lists the stored intents with where each stands, and runs
   these on the one picked.
 

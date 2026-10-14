@@ -23,6 +23,7 @@ import {
   requireSupported,
 } from "../src/cli/support.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import { privateKeyToAccount } from "viem/accounts";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const OWNER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
@@ -271,6 +272,26 @@ describe("refused on a preview chain, before any network call", () => {
     expectRefused(
       await sauce("pot", "--chain", "arbitrum", "--owner", OWNER, "--format", "cast"),
       "arbitrum",
+    );
+    expect(recorded()).toEqual([]);
+  });
+
+  it("sauce send, by the chain each transaction is signed for", async () => {
+    const { config, recorded } = await endpoints(10);
+    const signed = await privateKeyToAccount(OWNER_KEY).signTransaction({
+      chainId: 10,
+      type: "eip1559",
+      to: RECIPIENT,
+      value: 0n,
+      nonce: 0,
+      gas: 21_000n,
+      maxFeePerGas: 1n,
+      maxPriorityFeePerGas: 1n,
+    });
+    expectRefused(
+      await sauce("send", signed, "--config", config),
+      "optimism",
+      /^sauce send: sending is refused/,
     );
     expect(recorded()).toEqual([]);
   });

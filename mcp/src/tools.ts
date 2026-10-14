@@ -84,6 +84,8 @@ import {
   type ProgramInput,
   publishCommand,
   readPoolAt,
+  reclaimCommand,
+  TABLES_PER_RUN,
   registeredBalances,
   requireSupported,
   resolvePriceTokens,
@@ -118,6 +120,10 @@ export const LIMITS = {
   hex: 1024 * 1024,
   /** Entries of a list or map: defines, arguments, accounts, balances. */
   entries: 64,
+  /** Characters of a plan's cursor: a staged program at its largest, compressed, in base64. */
+  cursor: 4 * 1024 * 1024,
+  /** Plans named at once, by their cursors. */
+  plans: 8,
 } as const;
 
 // ---------------------------------------------------------------------------------------------
@@ -134,7 +140,7 @@ export const chainRef = z
 /** An integer as a JSON number (exact to 2^53) or as a decimal or 0x-hex string. */
 const integer = z.union([z.string().min(1).max(80), z.number().int().nonnegative()]);
 
-const RPC_URL = z
+export const RPC_URL = z
   .string()
   .min(1)
   .max(2048)
@@ -926,8 +932,8 @@ export const fromCommand = (output: CommandOutput): ToolOutput => ({
   notes: output.notes,
 });
 
-/** Fields that hold a program's or a file's own text, never reworded. */
-const VERBATIM = new Set(["source", "text"]);
+/** Fields that hold a program's or a file's own text, or a plan's cursor, never reworded. */
+const VERBATIM = new Set(["source", "text", "cursor"]);
 
 /** `value` with every string passed through `scrub`, and put in the tools' words (`terms.ts`)
  *  unless it is a program's own text. */
@@ -1088,6 +1094,7 @@ export const TOOL_NAMES = [
   "sauce_actions",
   "sauce_tx",
   "sauce_pot",
+  "sauce_reclaim",
   "sauce_simulate",
   "sauce_intent_publish",
   "sauce_inspect",
@@ -1894,12 +1901,24 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "plus any native the program spends — give it, or an endpoint to read the fee from, " +
         "which also says whether the Pot is deployed. When the endpoint shows the Pot has no " +
         "code yet, it returns { chainId, pot, transactions } instead: first Kitchen.deployPot " +
-        "(marked deploysPot; any account may send it), then the cook — send them in order, or " +
-        "pass the whole result to a wallet that sends a plan. On Solana it returns { chain, " +
-        "via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction }: the Kitchen cook " +
-        "(or, via engine, the engine's own paid cook, with no Pot) as a base64 transaction for " +
-        "the owner to sign, which needs an endpoint (its blockhash and the fee); a Pot not " +
-        "created yet is created by the same transaction (createsPot). `notes` say what must be " +
+        "(marked deploysPot; any account may send it), then the cook — sign them in order " +
+        "(the cook with room in its gas limit, or once the deployment landed) and send them " +
+        "with sauce_send. On Solana, which needs an endpoint (the blockhash and the fee), it " +
+        "returns { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction, " +
+        "cursor }: the Kitchen cook (or, via engine, the engine's own paid cook, with no Pot) " +
+        "as a base64 transaction for the owner to sign; a Pot not created yet is created by " +
+        "the same transaction (createsPot). A cook that needs more than one transaction — a " +
+        "program too large for one, staged in a code buffer; accounts past one transaction's " +
+        "list, through a lookup table; a token account or a Pot to create first — comes as a " +
+        "plan: { step, plan, transactions: [{ what, transaction, feePayer }], cursor } for its " +
+        "first step, every transaction base64 for the owner to sign on one blockhash, sent in " +
+        "order by sauce_send with the cursor, which returns the next step; a step with nothing " +
+        "to sign says why in `wait` (a lookup table in use only from the next slot), and " +
+        "sauce_send with the cursor alone builds it then. A Solana cook its simulation says " +
+        "would fail is not built: the result is an error carrying `fails` and the simulation's " +
+        "`logs`, and its cursor, which sauce_send simulates again once what the cook needs is " +
+        "there. Nothing needs a " +
+        "fresh keypair: the owner signs and pays every transaction. `notes` say what must be " +
         "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: { ...PROGRAM, ...sourceInputs(local), ...COOK },
@@ -1909,11 +1928,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         data: z.string(),
         value: z.string(),
         pot: z.string(),
-        transactions: z.array(
-          z.looseObject({ what: z.string(), to: z.string(), data: z.string(), value: z.string() }),
-        ),
+        transactions: z.array(z.looseObject({ what: z.string() })),
         createsPot: z.boolean(),
         transaction: z.string(),
+        step: z.string(),
+        plan: z.array(z.looseObject({ step: z.string(), what: z.string(), state: z.string() })),
+        cursor: z.string(),
         sourceSha256: z.string(),
       }),
       annotations: READS_CHAIN,
@@ -1930,6 +1950,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         return {
           json: { ...output.json, sourceSha256: program.sourceSha256 },
           notes: output.notes,
+          // A cook its simulation says would fail is not built: the result says why, as an error.
+          ...(output.exitCode === undefined ? {} : { isError: true }),
         };
       }
       const chain = program.input.chain;
@@ -2067,6 +2089,89 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
         ],
       };
+    },
+  );
+
+  tool(
+    "sauce_reclaim",
+    {
+      title: "List and close a Solana owner's leftover code buffers and lookup tables",
+      description:
+        "Lists what a Solana owner has open from its cooks, and the rent it holds: the Kitchen " +
+        "code buffers a staged program ran from (a plan given up on, or never finished, leaves " +
+        "one) and the address lookup tables its accounts went through (the owner's tables " +
+        "holding the Kitchen's fee config, which every Sauce cook's table holds; lookupTables " +
+        "names tables outright, as some endpoints refuse the scan). Returns `buffers`, " +
+        "`lookupTables` (each `state`: active, deactivating with `closableFromSlot`, or " +
+        "closable), `lamports` in all, and `transactions`, base64 for the owner to sign, on one " +
+        "blockhash: each buffer's close (its rent back at once), each active table's " +
+        "deactivation, each closable table's close. A table closes in two steps a cluster keeps " +
+        "about 512 slots (three and a half minutes) apart: call again after the deactivation " +
+        "to get its close; it serves cooks until then, and none after. keepTables leaves the " +
+        "tables, for later cooks naming the same accounts. Nothing in use is closed: a buffer " +
+        "or an active table a transaction named in the last 300 slots (about two minutes) is " +
+        "listed with `inUse` and `freeFromSlot`, and left open, as a cook built for it may " +
+        "still land, and one whose history the endpoint cannot read is kept so too " +
+        "(`historyUnread`, said in a note); `keep` takes the cursors of plans still under way, " +
+        "whose buffers and " +
+        "tables stay open (`kept`) however long their cooks wait. A call takes 32 code buffers " +
+        "and 24 lookup tables at most (the tables it can act on first); `remaining` counts the " +
+        "rest, for a call once these are closed. Send the signed transactions " +
+        `with sauce_send. ${UNSIGNED} Solana only. ${SUPPORTED_ONLY}`,
+      input: {
+        chain: chainRef,
+        owner: z.string().min(32).max(64).describe("The owner: a base58 public key."),
+        lookupTables: z
+          .array(z.string().min(32).max(64))
+          .max(TABLES_PER_RUN)
+          .optional()
+          .describe(
+            `Lookup tables to close, by address, ${TABLES_PER_RUN} at most (default: the ` +
+              "owner's, scanned for).",
+          ),
+        keepTables: z
+          .boolean()
+          .optional()
+          .describe("Close the code buffers only, and leave the lookup tables."),
+        keep: z
+          .array(z.string().min(1).max(LIMITS.cursor))
+          .max(LIMITS.plans)
+          .optional()
+          .describe(
+            "Plans still under way, by the cursors sauce_tx or sauce_send returned: their code " +
+              "buffers and lookup tables are left open.",
+          ),
+        rpcUrl: RPC_URL,
+      },
+      output: refusable({
+        owner: z.string(),
+        buffers: z.array(z.looseObject({ codeBuffer: z.string() })),
+        lookupTables: z.array(z.looseObject({ address: z.string(), state: z.string() })),
+        lamports: z.string(),
+        transactions: z.array(z.looseObject({ what: z.string(), transaction: z.string() })),
+      }),
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const chain = parseChain(String(args.chain), "chain");
+      if (chain.kind !== "svm") {
+        throw new UsageError(
+          `sauce_reclaim is Solana's: a cook on ${chain.slug} leaves no code buffer or lookup ` +
+            "table open",
+        );
+      }
+      requireSupported("closing what Sauce left open", [chain]);
+      const rpcUrl = await reach.require(chain, args.rpcUrl, "Reading the owner's accounts");
+
+      return fromCommand(
+        await reclaimCommand({
+          owner: parsePubkey("owner", args.owner),
+          rpcUrl,
+          lookupTables: (args.lookupTables ?? []).map((at) => parsePubkey("lookupTables", at)),
+          ...(args.keepTables === true ? { keepTables: true } : {}),
+          ...(args.keep === undefined ? {} : { keep: args.keep }),
+        }),
+      );
     },
   );
 

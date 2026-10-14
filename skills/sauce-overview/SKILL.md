@@ -181,8 +181,9 @@ sauce run payout.sauce.ts --chain base --keystore <keystore> \
 Compiling for a chain produces the program's bytecode; running it is one transaction to the
 owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the program, paying the
 Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for
-any wallet or signer to send, with the Pot's deployment first (`transactions`) while it has no
-code; `sauce run` signs and sends it itself, deploying the Pot first if it is not there (asks, or
+any wallet or signer to sign, with the Pot's deployment first (`transactions`) while it has no
+code, and `sauce send` (the tool `sauce_send`) broadcasts what that signer signed and reports what
+it did; `sauce run` signs and sends it itself, deploying the Pot first if it is not there (asks, or
 `--yes`). Both work on a supported chain only; on a preview chain, compile and simulate.
 `sauce-cli` covers each command. A chain is read through a built-in public endpoint, or one the
 developer passes, never one from the program or the environment. Without the CLI, the same steps
@@ -386,7 +387,7 @@ on the engine.
 
 The `sauce` command, in the order a run takes it: look up names, compile, deploy the Pot, fund it,
 simulate (`sauce simulate`), print the unsigned transaction (`sauce tx`) or sign and send it
-(`sauce run`), and read it back (`sauce inspect`); endpoints and signers, agent wallets and their
+(`sauce run`), send what another signer signed (`sauce send`), and read it back (`sauce inspect`); endpoints and signers, agent wallets and their
 policies, arguments to `main`, and the MCP tool for each command.
 
 - **Holds** a table of every command, the steps of a run with their flags and units, and example

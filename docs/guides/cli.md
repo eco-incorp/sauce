@@ -17,6 +17,8 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce run`      | Compile, sign, send and wait for the cook on your Pot                             |
 | `sauce intent`   | Publish, fill, prove, claim, refund and cancel cross-chain intents                |
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
+| `sauce send`     | Broadcast transactions signed elsewhere, wait for them, and report what they did  |
+| `sauce reclaim`  | List the code buffers and lookup tables a Solana owner left open, and close them  |
 | `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
 | `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
@@ -589,6 +591,124 @@ What must be true for it to land — the Pot funded, sent from its owner — goe
 named with `--pot` and no code is not planned (its owner and salt are not known): the note names
 `sauce pot --deploy`. On Solana a Pot not created yet is created by the cook's own transaction,
 ahead of the cook (`createsPot`), when the two fit in one.
+
+### Signed elsewhere: `sauce send`
+
+A key that never touches this machine — a hardware wallet, a KMS, another wallet's tool — signs
+what `sauce tx` prints, and `sauce send` broadcasts the signed bytes, waits for each to land and
+reports what it did, as `sauce run` reports its own. It takes no key:
+
+```sh
+sauce send 0x02f8…deploy 0x02f8…cook --rpc-url <url>
+sauce send AQAB… --chain solana
+```
+
+Each operand is one signed transaction: on an EVM chain the raw `0x…` hex a signer returns (its
+chain and sender are read from it), on Solana the base64 wire transaction (every signature is
+checked against its message); `-` reads them from stdin. They go out in the order given, each
+simulated as it was signed first — an `eth_call` from its sender with its gas limit held to what
+that used, or a Solana simulation that checks the signatures — and one that would fail is not sent:
+the reason is printed, exit 1, and nothing after it goes out. Each lands before the next is
+simulated, so the cook after its Pot's deployment runs on the Pot. Sign that cook with a gas limit
+that has room, or after the deployment has landed: a gas estimate taken while the Pot has no code
+prices a call to an empty address, and `sauce send` refuses the cook for it. A transaction already
+on chain is read back, not sent again; one the chain had, pending, then lost (dropped, or reorged
+out) is reported as gone rather than waited for, to sign anew. A Solana transaction missing a
+signature — its fee payer's, or any its message names — is refused by name, before any request.
+
+For each, it prints the hash (a Solana signature), the status and what it cost, the explorer and
+trace pages, the decoded reason a failure gives, and for a cook what moved and what it left in the
+Pot; on Solana, what `main` returned. A Solana transaction lands within about a minute of being
+built, or never: one whose blockhash has expired is refused, to build and sign again.
+
+A Solana cook that needs more than one transaction — a program too large for one, staged in a
+Kitchen code buffer; accounts past one transaction's list, through a lookup table; a Pot or token
+account to create first — is a plan of three steps: the setup, the cook, then closing the code
+buffer. `sauce tx` prints the first step and the cursor the next is built from:
+
+```json
+{
+  "chain": "solana",
+  "step": "setup",
+  "plan": [
+    {
+      "step": "setup",
+      "what": "create the Pot; stage the 6447-byte program in a code buffer; create a lookup table for the cook's 41 accounts",
+      "state": "next"
+    },
+    {
+      "step": "cook",
+      "what": "the cook, through the Kitchen, from the code buffer",
+      "state": "later"
+    },
+    {
+      "step": "close",
+      "what": "close the code buffer, its rent back to the owner",
+      "state": "later"
+    }
+  ],
+  "transactions": [
+    { "what": "creating the Pot", "transaction": "AQAB…", "feePayer": "<owner>" },
+    { "what": "creating the code buffer", "transaction": "AQAB…", "feePayer": "<owner>" },
+    { "what": "writing bytes 0… of the program", "transaction": "AQAB…", "feePayer": "<owner>" }
+  ],
+  "cursor": "sauce-plan-1.…"
+}
+```
+
+The owner signs each transaction (it pays for every one, and none needs a fresh keypair), and
+`sauce send` sends them with the cursor, which prints the step after under `next`, built fresh with
+its own cursor:
+
+```sh
+sauce tx big.sauce.ts --chain solana --owner <pubkey> > step.json
+sauce send <signed>… --cursor @step.json --json > next.json
+```
+
+until `next.step` is `done`; a setup of more than 32 transactions comes in several steps. A step is
+built from what the cluster shows, so what landed is skipped
+and what did not is built again: a signer slow enough to let the blockhash expire re-signs only
+what is left, which `--cursor` alone (nothing sent) builds. A cook handed out is never built again
+while it can still land, nor once the owner's transactions show it landed; one broadcast another
+way is confirmed with `--signature <signature>`. `--close` gives up on the cook and closes the code
+buffer, once a cook handed out can no longer land. A cook through a lookup table extended a moment
+ago comes back with nothing to sign and a `wait` naming the slot the table is in use from, the
+next one, about half a second on: `--cursor` alone, sent again, builds the cook (`sauce run` waits
+for it itself). A cook its simulation says would fail is not built, so none is handed out to land
+and fail: the step says why in `fails`, with the simulation's `logs` (`sauce tx` exits 1 then), and
+once what it needs is there (a funded Pot, an account it names), `--cursor` alone simulates it
+again and builds it. A lookup table the plan created stays for the next cook naming the same accounts
+(`--lookup-table <address>`).
+
+### What a cook left open: `sauce reclaim`
+
+```sh
+sauce reclaim --chain solana --owner <pubkey>
+sauce reclaim --chain solana --keypair ~/.config/solana/id.json --yes
+```
+
+lists the Kitchen code buffers a Solana owner has open — a plan given up on, or never finished,
+leaves one; a run closes its own, and names one it could not — and the lookup tables its cooks went
+through, which a run keeps for the next cook naming the same accounts, each with the rent it holds.
+The tables are the owner's that hold the Kitchen's execution-fee config, which every Sauce cook's
+table holds; `--lookup-table <address>` names one outright, for an endpoint that refuses the scan.
+With `--owner` alone it prints the transactions that close them, unsigned, for any signer and
+`sauce send`; with the owner's key it asks, then sends them (`--yes` without asking). A buffer
+closes in one transaction, its rent back at once. A table closes in two: deactivated now, and
+closed once its deactivation slot has left the cluster's recent slot hashes, 512 slots (about three
+and a half minutes) later; the listing says the slot it closes from, and the command run again
+then closes it. It serves cooks until then, and none after: `--keep-tables` closes the buffers only.
+
+Nothing in use is closed. A buffer, or an active table, that a transaction named in the last 300
+slots (about two minutes) is listed `in use until slot <slot>` and left open, as a cook built for
+it may still land. A plan you mean to carry on with, whose cook may be handed out later than that,
+is kept whole with `--keep <cursor | @file>`, its cursor: its buffer and table stay open however
+long its cook waits. One whose transaction history the endpoint cannot read is kept as in use too
+(`historyUnread`), said in one note: nothing is closed on a guess.
+
+A run takes 32 code buffers and 24 lookup tables at most, at most 30 transactions on one blockhash,
+the tables it can close or deactivate first; an owner with more is told how many remain
+(`remaining` in the JSON), for the next run once these are closed.
 
 `--format cast` prints the same transactions as `cast send` lines instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the
@@ -1431,8 +1551,9 @@ accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the
 spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
 `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note:
 `run` creates it before the cook (asking first, or with `--yes`). An `--owner` that is
-not a wallet (a program's account, or one holding data) is refused, as it cannot pay. `tx` refuses a cook too large for one transaction, with the bytes to
-shrink the payload (the program and its arguments) by. Each account a transaction lists costs 32
+not a wallet (a program's account, or one holding data) is refused, as it cannot pay. `tx` prints
+a cook too large for one transaction as a plan of steps, for another signer to sign and `sauce send`
+to send ([Signed elsewhere](#signed-elsewhere-sauce-send)). Each account a transaction lists costs 32
 bytes, and one taken through an address lookup table one byte: `--lookup-table <address>` takes a
 cook's accounts through a table that holds them, on `run`, `simulate` and `tx`, and `run` creates
 one for a staged cook whose accounts do not fit, paid by the signer, and prints its address for the
@@ -1444,7 +1565,8 @@ the run still prints the cook and warns with the buffer's address. A failure is 
 program the logs show failing — the Kitchen's or the engine's refusals by name, and a token
 program's in the words it logged. `tx` prints the
 cook as a base64 transaction signed by no one, `{ chain, via, feePayer, pot, fee, maxExecutionFee,
-transaction }`, for the owner's wallet to sign; its blockhash expires in about a minute.
+transaction, cursor }`, for the owner's wallet to sign; its blockhash expires in about a minute —
+or, where the cook needs more than one transaction, the first step of its plan.
 
 **Through the Kitchen or direct: `--via`.** `run`, `simulate` and `tx` take
 `--via kitchen|engine` (and `compile --json` sizes either cook with it):

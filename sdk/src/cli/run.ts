@@ -116,6 +116,8 @@ import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } 
 import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { svmPoolsCommand } from "./pools-svm.js";
 import { publishCommand } from "./publish.js";
+import { reclaimCommand } from "./reclaim.js";
+import { sendCommand, signedChain } from "./send.js";
 import { simulateCommand } from "./simulate.js";
 import {
   intentDestinations,
@@ -1624,6 +1626,25 @@ function hexOperand(args: ParsedArgs, what: string): `0x${string}` {
 
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
+/** A cursor from a file: the cursor itself, or the JSON a step was printed as (its `cursor`, or its
+ *  `next.cursor`). */
+function cursorOf(text: string, flag = "--cursor"): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) return trimmed;
+  let json: { cursor?: unknown; next?: { cursor?: unknown } | null } | null;
+  try {
+    json = JSON.parse(trimmed) as typeof json;
+  } catch {
+    throw new UsageError(
+      `${flag} @file: the file holds no JSON that parses: give the cursor alone, or the JSON a ` +
+        "step was printed as",
+    );
+  }
+  const found = json?.next?.cursor ?? json?.cursor;
+  if (typeof found === "string") return found;
+  throw new UsageError(`${flag} @file: the file holds JSON with no cursor (nor next.cursor)`);
+}
+
 /** The chain `sauce pot` is for: `--chain`, required — it has no program to say. */
 const potChain = (args: ParsedArgs): CanonicalChain =>
   parseChain(requiredFlag(args, "chain", "<slug|id>"));
@@ -3023,6 +3044,228 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         },
         io,
       );
+    },
+  },
+  send: {
+    usage: [
+      "sauce send <signed transaction>… [--chain <slug|id>] [options]",
+      "sauce send [<signed transaction>…] --cursor <cursor | @file> [--signature <signature>]… [--close]",
+    ],
+    summary: "Broadcast transactions signed elsewhere, wait for them, and report what they did",
+    flags: {
+      chain: {
+        type: "string",
+        value: "<slug|id>",
+        help: "The chain they are for (default: the transactions say)",
+      },
+      cursor: {
+        type: "string",
+        value: "<cursor | @file>",
+        help: "Solana: the plan's cursor sauce tx (or the last send) gave; prints its next step",
+      },
+      signature: {
+        type: "string",
+        multiple: true,
+        value: "<signature>",
+        help: "Solana: a transaction of the plan you broadcast another way, to confirm",
+      },
+      close: {
+        type: "boolean",
+        help: "Solana, with --cursor: give up on the cook, and close the code buffer it staged",
+      },
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Sends transactions you signed with any signer — a hardware wallet, a KMS, another wallet's",
+      "tool — and never takes a key. Each operand is one SIGNED transaction: on an EVM chain the",
+      "raw 0x… hex a signer returns (its chain and sender are read from it); on Solana the base64",
+      "wire transaction, every signature checked against its message. `-` reads them from stdin,",
+      "separated by whitespace.",
+      "",
+      "They go out in the order given. Each is simulated as it was signed first — on an EVM chain",
+      "an eth_call from its sender, its gas limit held to what that used; on Solana a simulation",
+      "that checks the signatures — and one that would fail is not sent: the reason is printed",
+      "(exit 1), and nothing after it is sent. Each is confirmed before the next is simulated, so",
+      "a cook after its Pot's deployment runs on the Pot. Prints, for each, the hash (a Solana",
+      "signature), status and what it cost, the explorer and trace pages, the decoded reason a",
+      "failure gives, and for a cook what moved and what it left in the Pot; on Solana what main",
+      "returned. A Solana transaction lands within about a minute of being built, or never: one",
+      "whose blockhash has expired is refused, to build and sign again. One the chain already",
+      "has is read back, not sent again; one it had, pending, then lost (dropped or reorged out)",
+      "is reported gone, to sign anew. A Solana transaction missing a signature (its fee payer's,",
+      "or any its message names) is refused by name.",
+      "",
+      "A Solana cook too large for one transaction is a plan of steps (sauce tx prints the first,",
+      "and its cursor): the setup (the Pot, token accounts, the program staged in a code buffer, a",
+      "lookup table), the cook, then closing the code buffer. With --cursor, after sending it",
+      "prints the next step, built fresh from what the cluster shows, with the cursor for the one",
+      "after: sign its transactions and send them with that cursor, until the step is done.",
+      "Whatever did not land is built again, so a step whose blockhash expired comes back with",
+      "only what is left. --cursor alone builds the next step without sending anything; a",
+      "transaction you broadcast another way is confirmed with --signature, so the plan knows",
+      "how its cook went. A step with nothing to sign says why in its wait (a cook handed out",
+      "that can still land, or a lookup table in use only from the next slot): send the cursor",
+      "alone again for it. A cook its simulation says would fail is not built: the step says",
+      "why, with the logs, and the cursor alone, once what it needs is there, simulates it again.",
+      "--close gives up on the cook and closes the code buffer. A cursor",
+      "carries no key and no endpoint; @file reads it from a file, or from the JSON a step was",
+      "printed as.",
+      ...SUPPORTED_ONLY("Sends"),
+      "",
+      "Examples:",
+      "  sauce send 0x02f8… 0x02f8…              (sauce tx's plan: the deployment, then the cook)",
+      "  sauce send AQAB… --chain solana",
+      "  sauce send AQAB… AQAB… --cursor @step.json --json > next.json",
+    ].join("\n"),
+    run: async (args, io) => {
+      const given = args.positionals;
+      const transactions =
+        given.length === 1 && given[0] === "-"
+          ? io
+              .readStdin()
+              .split(/\s+/)
+              .filter((word) => word !== "")
+          : given;
+      if (transactions.includes("-")) {
+        throw new UsageError("`-` reads every transaction from stdin, and comes alone");
+      }
+      const cursorFlag = stringFlag(args, "cursor");
+      const cursor =
+        cursorFlag === undefined
+          ? undefined
+          : cursorFlag.startsWith("@")
+            ? cursorOf(readInput(io, cursorFlag.slice(1)))
+            : cursorFlag;
+      const signatures = repeatedFlag(args, "signature");
+      const chainFlag = stringFlag(args, "chain");
+      const input = { transactions, signatures, ...(cursor === undefined ? {} : { cursor }) };
+      const chain = signedChain(input, chainFlag === undefined ? undefined : parseChain(chainFlag));
+      // Before any endpoint is reached.
+      requireSupported("sending", [chain]);
+
+      return sendCommand({
+        ...input,
+        chain,
+        rpcUrl: requiredEndpoint(args, io, chain),
+        ...(args.values.close === true ? { close: true } : {}),
+      });
+    },
+  },
+  reclaim: {
+    usage:
+      "sauce reclaim --chain solana (--owner <pubkey> | --keypair <path> | --wallet <name>) [--lookup-table <address>]… [--keep <cursor | @file>]… [--keep-tables] [--yes]",
+    summary: "List the code buffers and lookup tables a Solana owner left open, and close them",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain: solana" },
+      owner: {
+        type: "string",
+        value: "<pubkey>",
+        help: "Whose: with no key, the closing transactions come back unsigned",
+      },
+      "lookup-table": {
+        type: "string",
+        multiple: true,
+        value: "<address>",
+        help: "A lookup table to close (default: the owner's Sauce tables, scanned for)",
+      },
+      keep: {
+        type: "string",
+        multiple: true,
+        value: "<cursor | @file>",
+        help: "A plan still under way, by its cursor: its code buffer and lookup table stay open",
+      },
+      "keep-tables": {
+        type: "boolean",
+        help: "Close the code buffers only, and leave the lookup tables for later cooks",
+      },
+      wallet: SIGNER.wallet!,
+      ...WALLETS,
+      ...PASSWORD,
+      keypair: SIGNER.keypair!,
+      yes: YES,
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Lists what a Solana owner has open from its cooks, and the rent it holds: the Kitchen code",
+      "buffers a staged program ran from (a run closes its own, unless closing it failed; a plan",
+      "given up on, or never finished, leaves one), and the address lookup tables its accounts",
+      "went through (a run keeps each for the next cook naming the same accounts). The tables are",
+      "the owner's that hold the Kitchen's execution-fee config, which every Sauce cook's table",
+      "holds; a table the owner made otherwise is left alone, and --lookup-table names tables",
+      "outright, as some endpoints refuse to scan for them.",
+      "",
+      "A buffer closes in one transaction, its rent back at once. A table closes in two: it is",
+      "deactivated now, and closed once its deactivation slot has left the cluster's recent slot",
+      "hashes, 512 slots (about three and a half minutes) later: run the command again then. It",
+      "serves cooks until then, and none after, so --keep-tables leaves them.",
+      "",
+      "Nothing in use is closed: a buffer or an active table a transaction named in the last 300",
+      "slots (about two minutes) is left open, as a cook built for it may still land, and the",
+      "listing says from which slot it can close. A plan you mean to carry on with, whose cook",
+      "may be handed out later, is kept whole with --keep and its cursor.",
+      "",
+      "A run takes 32 code buffers and 24 lookup tables at most (the tables it can close or",
+      "deactivate first), and says how many more are open: run it again once these are closed.",
+      "",
+      "With the owner's key (--keypair, or --wallet), it asks, then sends each transaction and",
+      "prints it; --yes sends without asking. With --owner alone it prints the transactions",
+      "unsigned, as JSON, for the owner to sign anywhere and send with sauce send.",
+      ...SUPPORTED_ONLY("Closes"),
+      "",
+      "Examples:",
+      "  sauce reclaim --chain solana --owner <pubkey>",
+      "  sauce reclaim --chain solana --keypair ~/.config/solana/id.json --yes",
+    ].join("\n"),
+    run: async (args, io) => {
+      const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
+      if (chain.kind !== "svm") {
+        throw new UsageError(
+          `sauce reclaim is Solana's: a cook on ${chain.slug} leaves no code buffer or lookup ` +
+            "table open",
+        );
+      }
+      const signer = hasSvmSigner(args, io) ? await keypairOf(args, io) : undefined;
+      const ownerFlag = stringFlag(args, "owner");
+      if (signer === undefined && ownerFlag === undefined) {
+        throw new UsageError("missing --owner <pubkey>, or the owner's --keypair or --wallet");
+      }
+      const owner = svmOwner(args, signer?.address);
+      // Before any endpoint is reached, when there is something to send.
+      if (signer !== undefined) requireSupported("closing what Sauce left open", [chain]);
+      const approver = approverOf(args, io);
+
+      return reclaimCommand({
+        owner,
+        rpcUrl: requiredEndpoint(args, io, chain),
+        lookupTables: repeatedFlag(args, "lookup-table").map((at) =>
+          parsePubkey("lookup-table", at),
+        ),
+        ...(args.values["keep-tables"] === true ? { keepTables: true } : {}),
+        keep: repeatedFlag(args, "keep").map((given) =>
+          given.startsWith("@") ? cursorOf(readInput(io, given.slice(1)), "--keep") : given,
+        ),
+        ...(signer === undefined
+          ? {}
+          : {
+              signer,
+              approve: async (actions) => {
+                if (!approver.auto && !approver.canAsk) throw unapproved(actions, approver.why);
+                const agreed = await approver.approve(
+                  actions.join("; "),
+                  `${actions.join("; ")}: the rent comes back to ${owner}. Send? [y/N] `,
+                );
+                if (agreed !== true) {
+                  throw new CliError(
+                    "nothing was sent: run again and answer y, or pass --yes (-y)",
+                  );
+                }
+              },
+            }),
+      });
     },
   },
   pot: {
