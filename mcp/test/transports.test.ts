@@ -265,11 +265,8 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     } finally {
       await kept.client.close();
     }
-    assert.match(kept.stderr(), new RegExp(`keeping the Pots its transactions deploy in ${pots}`));
-    assert.match(
-      kept.stderr(),
-      new RegExp(`keeping the intents its transactions touch in ${intents}`),
-    );
+    // Kept by default, so a start says nothing of it: an agent's client logs every line.
+    assert.equal(kept.stderr(), "");
 
     const none = await serve("--no-stores", "--offline");
     try {
@@ -281,7 +278,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     } finally {
       await none.client.close();
     }
-    assert.doesNotMatch(none.stderr(), /keeping the (Pots|intents)/);
+    assert.equal(none.stderr(), "");
   });
 
   it("refuses a config it cannot use before it serves anything, naming no URL", async () => {

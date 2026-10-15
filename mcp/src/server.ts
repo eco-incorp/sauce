@@ -109,19 +109,21 @@ export function instructions(
         ]
       : [
           "sauce_intent_import reads one back from its transaction and stores it.",
-          "THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE, as the command does: every intent a",
-          "transaction it sends publishes (sauce_send, sauce_wallet_send) is stored, and what one",
-          "does to an intent (filled, proving, claimed, refunded, cancelled) is recorded, read from",
-          "the Portal's own events. sauce_intent_list lists them, sauce_intent_show shows one with",
-          "its events, and every intent tool takes intentHash for an intent the store holds,",
-          "besides its `record` or txHash and its source chain.",
+          `THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE, in ${stores.intents.dir}, as the`,
+          "command does: every intent a transaction it sends publishes (sauce_send,",
+          "sauce_wallet_send) is stored, and what one does to an intent (filled, proving, claimed,",
+          "refunded, cancelled) is recorded, read from the Portal's own events. sauce_intent_list",
+          "lists them, sauce_intent_show shows one with its events, and every intent tool takes",
+          "intentHash for an intent the store holds, besides its `record` or txHash and its source",
+          "chain.",
         ]),
     "",
     ...(stores.pots === undefined
       ? []
       : [
-          "THIS SERVER KEEPS THE sauce COMMAND'S POT STORE, as the command does: every Pot a",
-          "transaction it sends deploys (sauce_send, sauce_wallet_send) is recorded there, with",
+          `THIS SERVER KEEPS THE sauce COMMAND'S POT STORE, in ${stores.pots.dir}, as the command`,
+          "does: every Pot a transaction it sends deploys (sauce_send, sauce_wallet_send) is",
+          "recorded there, with",
           "the release it was minted under. sauce_pot_list lists them; sauce_pot_import records a",
           "Pot deployed some other way, read from the chain.",
           "",
