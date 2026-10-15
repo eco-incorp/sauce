@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { request, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -22,6 +22,7 @@ import {
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
+import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
 import { NO_ENDPOINTS } from "../src/config.js";
 import { endpointUrl, serveHttp } from "../src/http.js";
 import { createSauceServer } from "../src/server.js";
@@ -45,11 +46,20 @@ const PROGRAM = "function main(): Uint256 {\n  return chainId;\n}\n";
 
 const structured = (result: unknown) => (result as CallToolResult).structuredContent!;
 
-async function exercise(client: Client): Promise<void> {
+/** Every tool a server serves: over stdio the wallet tools too, unless `--no-wallets`. */
+const toolNames = (wallets: boolean) => [
+  ...TOOL_NAMES,
+  ...INTENT_TOOL_NAMES,
+  ...SEND_TOOL_NAMES,
+  ...(wallets ? WALLET_TOOL_NAMES : []),
+  ...SKILL_TOOL_NAMES,
+];
+
+async function exercise(client: Client, wallets = false): Promise<void> {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SEND_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+    toolNames(wallets),
   );
   const compiled = structured(
     await client.callTool({ name: "sauce_compile", arguments: { source: PROGRAM, chain: "base" } }),
@@ -72,6 +82,8 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     const transport = new StdioClientTransport({
       command: BIN[0],
       args: [...BIN.slice(1), "--config", config],
+      // A home of its own: the wallets it serves by default are that home's.
+      env: { ...getDefaultEnvironment(), HOME: dir },
       cwd: dir,
       stderr: "pipe",
     });
@@ -80,7 +92,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     const client = new Client({ name: "stdio-smoke", version: "0.0.0" });
     await client.connect(transport);
     try {
-      await exercise(client);
+      await exercise(client, true);
       // Over stdio a program is read from the user's own disk, relative to where it runs.
       writeFileSync(join(dir, "program.sauce.ts"), PROGRAM);
       const byPath = structured(
@@ -119,7 +131,118 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     assert.ok(!stderr.includes(SECRET), "nor does anything the server logged");
   });
 
-  it("signs with the wallets of --wallets, unlocked by the password source it names", async () => {
+  it("serves the CLI's wallets with no flag, and creates one once the agent enables them", async () => {
+    // `claude mcp add sauce -- sauce mcp`, as the docs have it: nothing but a home.
+    const home = join(dir, "bare-home");
+    mkdirSync(home);
+    const transport = new StdioClientTransport({
+      command: BIN[0],
+      args: [...BIN.slice(1)],
+      env: { ...getDefaultEnvironment(), HOME: home },
+      cwd: dir,
+      stderr: "pipe",
+    });
+    let stderr = "";
+    transport.stderr?.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+    const client = new Client({ name: "stdio-bare-wallets", version: "0.0.0" });
+    await client.connect(transport);
+    const received: string[] = [client.getInstructions() ?? ""];
+    const wallets = join(home, ".sauce", "wallets");
+    try {
+      const { tools } = await client.listTools();
+      assert.deepEqual(
+        tools.map((tool) => tool.name),
+        toolNames(true),
+      );
+      assert.match(received[0]!, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
+      assert.match(received[0]!, /call sauce_enable_wallets once/);
+      const listed = structured(await client.callTool({ name: "sauce_wallet_list" }));
+      assert.deepEqual(listed, {
+        dir: wallets,
+        enabled: false,
+        source: null,
+        wallets: [],
+        notes: [
+          "The wallets are not enabled: sauce_enable_wallets enables them to create, import and " +
+            "sign, naming where their password comes from.",
+        ],
+      });
+      const refused = (await client.callTool({
+        name: "sauce_wallet_create",
+        arguments: { name: "agent" },
+      })) as CallToolResult;
+      assert.equal(refused.isError, true);
+      assert.match(JSON.stringify(refused), /needs the wallets enabled: call sauce_enable_wallets/);
+      const enabled = await client.callTool({
+        name: "sauce_enable_wallets",
+        arguments: { generate: true },
+      });
+      received.push(JSON.stringify(enabled));
+      const passwordFile = join(home, ".sauce", "wallets.password");
+      assert.equal(structured(enabled).passwordFile, passwordFile);
+      assert.equal(statSync(passwordFile).mode & 0o777, 0o600);
+      const created = await client.callTool({
+        name: "sauce_wallet_create",
+        arguments: { name: "agent" },
+      });
+      received.push(JSON.stringify(created));
+      assert.match(String(structured(created).address), /^0x[0-9a-fA-F]{40}$/);
+    } finally {
+      await client.close();
+    }
+    assert.match(stderr, /serving the wallets in \S+; sauce_enable_wallets enables them to sign/);
+    assert.equal(statSync(join(wallets, "agent.json")).mode & 0o777, 0o600);
+    const password = readFileSync(join(home, ".sauce", "wallets.password"), "utf8").trim();
+    assert.equal(password.length, 43);
+    for (const text of [...received, stderr]) assert.ok(!text.includes(password));
+  });
+
+  it("reads the variable the agent names from its own environment, which the client passes", async () => {
+    const password = `throwaway-${process.pid}-${Date.now()}`;
+    const wallets = join(dir, "agent-env-wallets");
+    const transport = new StdioClientTransport({
+      command: BIN[0],
+      args: [...BIN.slice(1), "--wallets", wallets],
+      env: { ...getDefaultEnvironment(), SAUCE_TEST_WALLET_PASSWORD: password },
+      cwd: dir,
+      stderr: "pipe",
+    });
+    const client = new Client({ name: "stdio-agent-env", version: "0.0.0" });
+    await client.connect(transport);
+    const received: string[] = [client.getInstructions() ?? ""];
+    try {
+      const unset = await client.callTool({
+        name: "sauce_enable_wallets",
+        arguments: { env: "SAUCE_TEST_UNSET_VARIABLE" },
+      });
+      received.push(JSON.stringify(unset));
+      assert.match(
+        JSON.stringify(unset),
+        /env SAUCE_TEST_UNSET_VARIABLE: the variable is not set in this server's environment/,
+      );
+      const enabled = await client.callTool({
+        name: "sauce_enable_wallets",
+        arguments: { env: "SAUCE_TEST_WALLET_PASSWORD" },
+      });
+      received.push(JSON.stringify(enabled));
+      assert.equal(structured(enabled).source, "env SAUCE_TEST_WALLET_PASSWORD");
+      const created = await client.callTool({
+        name: "sauce_wallet_create",
+        arguments: { name: "agent" },
+      });
+      received.push(JSON.stringify(created));
+      const { bytes } = decryptKeystoreBytes(
+        readFileSync(join(wallets, "agent.json"), "utf8"),
+        password,
+      );
+      assert.equal(bytes.length, 32);
+    } finally {
+      await client.close();
+    }
+    for (const text of received) assert.ok(!text.includes(password));
+  });
+
+  it("signs with the wallets the password source it was started with enables", async () => {
     // A throwaway password, passed as an MCP client's config passes one from an agent's .env.
     const password = `throwaway-${process.pid}-${Date.now()}`;
     const wallets = join(dir, "wallets");
@@ -142,13 +265,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       const { tools } = await client.listTools();
       assert.deepEqual(
         tools.map((tool) => tool.name),
-        [
-          ...TOOL_NAMES,
-          ...INTENT_TOOL_NAMES,
-          ...SEND_TOOL_NAMES,
-          ...WALLET_TOOL_NAMES,
-          ...SKILL_TOOL_NAMES,
-        ],
+        toolNames(true),
       );
       assert.match(received[0]!, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
       assert.match(received[0]!, /--password-env SAUCE_TEST_WALLET_PASSWORD/);
@@ -167,12 +284,31 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         ),
         [address],
       );
+      assert.equal(structured(listed).source, "--password-env SAUCE_TEST_WALLET_PASSWORD");
     } finally {
       await client.close();
     }
     assert.match(stderr, /signing with the wallets in /);
     assert.equal(statSync(join(wallets, "agent.json")).mode & 0o777, 0o600);
     for (const text of [...received, stderr]) assert.ok(!text.includes(password));
+  });
+
+  it("serves no wallet tool with --no-wallets", async () => {
+    const transport = new StdioClientTransport({
+      command: BIN[0],
+      args: [...BIN.slice(1), "--no-wallets"],
+      env: { ...getDefaultEnvironment(), HOME: dir },
+      cwd: dir,
+      stderr: "pipe",
+    });
+    const client = new Client({ name: "stdio-no-wallets", version: "0.0.0" });
+    await client.connect(transport);
+    try {
+      await exercise(client);
+      assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS\./);
+    } finally {
+      await client.close();
+    }
   });
 
   it("refuses a config it cannot use before it serves anything, naming no URL", async () => {
@@ -195,6 +331,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     assert.match(stdout, /^Serve the commands and the agent skills/);
     assert.match(stdout, /--allowed-host <name>/);
     assert.match(stdout, /--wallets \[<dir>\]/);
+    assert.match(stdout, /--no-wallets/);
     for (const [argv, message] of [
       [["--agent", "claude"], /--agent goes with sauce mcp setup/],
       [["setup", "--http", "0"], /--http is for serving, not setup/],
@@ -205,9 +342,19 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         ["--http", "0", "--wallets", "--password-env", "SAUCE_TEST_WALLET_PASSWORD"],
         /--wallets is for stdio: the HTTP server never signs/,
       ],
-      [["--password-env", "SAUCE_TEST_WALLET_PASSWORD"], /--password-env goes with --wallets/],
-      [["--wallets"], /--wallets needs its password source/],
+      [
+        ["--http", "0", "--password-env", "SAUCE_TEST_WALLET_PASSWORD"],
+        /--password-env is for stdio: the HTTP server never signs/,
+      ],
+      [["--no-wallets", "--wallets", "w"], /--wallets goes with wallets, not --no-wallets/],
+      [
+        ["--no-wallets", "--password-file", "p"],
+        /--password-file goes with wallets, not --no-wallets/,
+      ],
+      // A source given at start is read then: one that does not work stops the server.
+      [["--password-env", "SAUCE_TEST_UNSET_VARIABLE"], /the variable is not set/],
       [["setup", "--wallets"], /--wallets is for serving, not setup/],
+      [["setup", "--no-wallets"], /--no-wallets is for serving, not setup/],
     ] as const) {
       const child = spawn(BIN[0], [...BIN.slice(1), ...argv], {
         stdio: ["ignore", "ignore", "pipe"],
@@ -374,7 +521,7 @@ describe("Streamable HTTP: sauce mcp --http", () => {
     try {
       await exercise(client);
       const { tools } = await client.listTools();
-      assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
+      assert.ok(tools.every((tool) => !/wallet/.test(tool.name)));
       assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS\./);
       // Over HTTP no file is read: path is no input, and a call that gives one is refused.
       const compile = tools.find((tool) => tool.name === "sauce_compile")!;

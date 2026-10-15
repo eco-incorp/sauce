@@ -131,6 +131,9 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [command("sauce (?:intent )?(publish|fill)"), "sauce_intent_$1"],
   [command("sauce intent (status|import|prove|claim|refund|cancel)"), "sauce_intent_$1"],
   [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price|pools)"), "sauce_$1"],
+  // A wallet's commands are its tools; `wallet new` is sauce_wallet_create.
+  [/`?sauce wallet new(?: [a-z0-9][a-z0-9_-]*)?`?/g, "sauce_wallet_create"],
+  [/`?sauce wallet (list|address|import)`?/g, "sauce_wallet_$1"],
   // The lifecycle core's refusal for a chain it has no endpoint of: the call can give one.
   [
     /needs ([\w-]+)'s endpoint \(chain id (\d+)\)/g,

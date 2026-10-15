@@ -3,6 +3,7 @@
  * received — so a suite can assert that no endpoint URL ever came back, in a result or an error.
  */
 import assert from "node:assert/strict";
+import { readFileSync, statSync } from "node:fs";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -10,8 +11,9 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "../src/config.js";
 import type { RpcGuard } from "../src/guard.js";
+import { readPassword } from "../../sdk/dist/cli/password.js";
+import type { McpWallets } from "../src/sdk.js";
 import { createSauceServer } from "../src/server.js";
-import type { WalletContext } from "../src/tools.js";
 
 export interface Connected {
   readonly client: Client;
@@ -29,7 +31,7 @@ export const endpointsFor = (urls: Record<string, string>): Endpoints =>
 export async function connect(
   endpoints: Endpoints = NO_ENDPOINTS,
   guard?: RpcGuard,
-  wallets?: WalletContext,
+  wallets?: McpWallets,
   /** As over stdio: a program may be named by `path`, read from disk. */
   local = false,
 ): Promise<Connected> {
@@ -57,6 +59,48 @@ export async function connect(
       await client.close();
       await server.close();
     },
+  };
+}
+
+/**
+ * The wallets a stdio server serves, as `sauce mcp` hands them over: `dir`, enabled at start with
+ * `start` (as `--password-env SAUCE_TEST_WALLET_PASSWORD` would), else waiting for
+ * `sauce_enable_wallets`, whose sources are read as the command reads them — the environment
+ * being `env`, never the process's.
+ */
+export function walletsAt(
+  dir: string,
+  options: { readonly start?: string; readonly env?: Record<string, string> } = {},
+): McpWallets {
+  const env = options.env ?? {};
+
+  return {
+    dir,
+    dirNamed: true,
+    ...(options.start === undefined
+      ? {}
+      : {
+          start: {
+            password: options.start,
+            source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
+          },
+        }),
+    read: (source) =>
+      readPassword(
+        source,
+        {
+          readEnv: (name) => env[name],
+          readText: (path) => readFileSync(path, "utf8"),
+          fileMode: (path) => statSync(path).mode,
+          capture: () => {
+            throw new Error("a tool never names a command");
+          },
+          promptPassword: () => {
+            throw new Error("a tool never prompts");
+          },
+        },
+        { what: "the wallets", creating: true, by: "tool" },
+      ),
   };
 }
 

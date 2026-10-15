@@ -162,7 +162,7 @@ export function installedAt(
  * one holding the runtime root (`~/.sauce`), each resolved through symlinks, belongs to this user
  * and can be written by no one else — and `dir` itself is open to no one else at all (0700, as an
  * install creates it), so no folder inside it that someone loosened can be reached either. What it loads runs in a process that may hold a wallet's
- * password (`sauce mcp --wallets`), so it must be the user's alone, as the password file and a
+ * password (`sauce mcp`, its wallets enabled), so it must be the user's alone, as the password file and a
  * wallet's policy must be. A folder not there yet is passed over: an install creates it 0700.
  * Windows has no owner or mode to read this way, and is not checked.
  */

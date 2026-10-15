@@ -25,6 +25,7 @@ import { callFiles, DEFAULT_FILE, diskProgram } from "./files.js";
 import type { RpcGuard } from "./guard.js";
 import { callReach, type Reach } from "./reach.js";
 import { toolTerms } from "./terms.js";
+import type { WalletSession } from "./wallets.js";
 import {
   actionsCommand,
   actionsProgram,
@@ -104,7 +105,6 @@ import {
   txCommand,
   UsageError,
   verifyCommand,
-  type WalletStore,
   withoutShebang,
 } from "./sdk.js";
 
@@ -1052,7 +1052,7 @@ export const SUPPORTED_ONLY =
   "chain and a prefilled new one, and the title, body and comment to post. Offer the user that " +
   "request; compile and simulate work on every chain.";
 
-/** That sentence on a server with wallets (`sauce mcp --wallets`). */
+/** That sentence on a server with wallets (over stdio, unless `--no-wallets`). */
 export const WALLET_UNSIGNED =
   "Nothing is signed or sent here: pass the result to sauce_wallet_send to send it from one of " +
   "this server's wallets, or sign it with any other wallet.";
@@ -1068,17 +1068,8 @@ export interface ToolContext {
   /** Over stdio: the caller is the server's own user, so a program may be named by `path` and
    *  read from disk. Never over HTTP. */
   readonly local?: boolean;
-  /** Over stdio with `--wallets`: the wallets the server signs with. Never over HTTP. */
-  readonly wallets?: WalletContext;
-}
-
-/** The wallet directory a stdio server was started with, and the password its wallets open with. */
-export interface WalletContext {
-  readonly store: WalletStore;
-  /** Read once at start from the source the server was given; never an input, never returned. */
-  readonly password: string;
-  /** That source, as the instructions name it. */
-  readonly source: string;
+  /** Over stdio, unless `--no-wallets`: the wallets the server serves. Never over HTTP. */
+  readonly wallets?: WalletSession;
 }
 
 /** How many tokens `sauce_globals` returns at a time. */

@@ -15,11 +15,14 @@
  * wait for it.
  *
  * It reads a chain through a caller's `rpcUrl`, else `--config`'s entry for the chain, else the
- * built-in public endpoints the command hands it. Over stdio, `--wallets [dir]` with a password
- * source (as `sauce wallet` takes one, never a prompt: stdin is the protocol's) lets it sign, with
- * the wallets of that directory alone: the password is read here, once, before the server starts,
- * and never reaches a tool's input or result. Without `--wallets`, and always over HTTP, it holds
- * no key and every transaction it builds comes back unsigned.
+ * built-in public endpoints the command hands it. Over stdio it serves the wallet tools by default,
+ * on the CLI's own wallet directory (`--wallets <dir>` names another, `--no-wallets` serves none):
+ * listing them needs no password, and signing needs the wallets ENABLED — by a password source
+ * given here (as `sauce wallet` takes one, never a prompt: stdin is the protocol's), read once
+ * before the server starts, or else by the agent's `sauce_enable_wallets`, which names a source
+ * (never the password) that this command reads for it (`McpWallets.read`), so the environment is
+ * still read in one place only. No password reaches a tool's input or result. Over HTTP it holds no
+ * key and serves no wallet tool: every transaction it builds comes back unsigned.
  *
  * It prints no update notice — over stdio its stdout is the protocol — but notes a newer version in
  * the first tool result of its life instead, and `sauce_skills` returns it as `latest`, from the
@@ -36,7 +39,13 @@ import {
 } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 import { MCP_EXTRA, provide, useRuntime } from "./optional.js";
-import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
+import {
+  describeSource,
+  passwordSource,
+  readPassword,
+  type PasswordIo,
+  type PasswordSource,
+} from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { updateCheckOff, updateNote, type UpdateCheck } from "./update-check.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
@@ -58,7 +67,7 @@ export interface McpServeOptions {
   readonly allowPrivateRpc: boolean;
   /** Where the server says what it is doing: stderr, never stdout, which stdio's protocol owns. */
   readonly log: (text: string) => void;
-  /** `--wallets`, over stdio only: the wallets its tools create, list and send from. */
+  /** Over stdio, unless `--no-wallets`: the wallets its tools list, create, import and send from. */
   readonly wallets?: McpWallets;
   /**
    * The update check's note on a newer version, or `undefined`, from its cache as it is when asked
@@ -71,13 +80,27 @@ export interface McpServeOptions {
   readonly newerVersion?: () => string | undefined;
 }
 
-/** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
+/** The wallet directory the stdio server serves, and what enables its wallets to sign. */
 export interface McpWallets {
+  /** `--wallets <dir>`, else the CLI's own, `~/.sauce/wallets`. */
   readonly dir: string;
-  /** Read once, from the source the server was started with; a registered secret. */
-  readonly password: string;
-  /** That source, as the instructions name it: `--password-env SAUCE_WALLET_PASSWORD`. */
-  readonly source: string;
+  /** Whether `--wallets <dir>` named it: then it is the operator's, and stays. */
+  readonly dirNamed: boolean;
+  /**
+   * The password source the server was started with, read once, before anything is served: the
+   * wallets are enabled from the start. Absent without one: `sauce_enable_wallets` enables them.
+   */
+  readonly start?: {
+    /** A registered secret. */
+    readonly password: string;
+    /** That source, as the instructions name it: `--password-env SAUCE_WALLET_PASSWORD`. */
+    readonly source: string;
+  };
+  /**
+   * Reads the password a source `sauce_enable_wallets` names gives (never a command: that is the
+   * operator's alone), its messages naming it by the tool's inputs; registered as a secret.
+   */
+  readonly read: (source: PasswordSource) => Promise<string>;
 }
 
 /** `sauce mcp setup`, as given. */
@@ -133,8 +156,9 @@ export const MCP_FLAGS: FlagSpecs = {
   },
   wallets: {
     ...WALLETS.wallets!,
-    help: "Over stdio: sign with the wallets in this directory (default ~/.sauce/wallets)",
+    help: "Over stdio: the wallet directory its wallet tools serve (default ~/.sauce/wallets)",
   },
+  "no-wallets": { type: "boolean", help: "Over stdio: serve no wallet tools; nothing signs" },
   ...PASSWORD,
   agent: {
     type: "string",
@@ -175,6 +199,7 @@ const SERVE_ONLY = [
   "max-body",
   "allow-private-rpc",
   "wallets",
+  "no-wallets",
   "password-env",
   "password-file",
   "password-command",
@@ -251,9 +276,9 @@ export async function mcpCommand(
 }
 
 /**
- * `--wallets` and its password source, the password read now — before anything is served — so a
- * source that does not work stops the server at start. Over HTTP there are no wallets: the HTTP
- * server never signs.
+ * The wallets the stdio server serves — unless `--no-wallets` — and, given a password source, the
+ * password that enables them, read now, before anything is served, so a source that does not work
+ * stops the server at start. Over HTTP there are no wallets: the HTTP server never signs.
  */
 async function walletsOf(
   args: ParsedArgs,
@@ -262,29 +287,47 @@ async function walletsOf(
 ): Promise<McpWallets | undefined> {
   const dir = stringFlag(args, "wallets");
   const given = PASSWORDS.find((flag) => args.values[flag] !== undefined);
-  if (dir === undefined) {
-    if (given !== undefined) throw new UsageError(`--${given} goes with --wallets`);
+  const named = dir !== undefined ? "--wallets" : given === undefined ? undefined : `--${given}`;
+  if (args.values["no-wallets"] === true) {
+    if (named !== undefined) throw new UsageError(`${named} goes with wallets, not --no-wallets`);
 
     return undefined;
   }
   if (http) {
-    throw new UsageError(
-      "--wallets is for stdio: the HTTP server never signs, and serves no wallet tools",
-    );
+    if (named !== undefined) {
+      throw new UsageError(
+        `${named} is for stdio: the HTTP server never signs, and serves no wallet tools`,
+      );
+    }
+
+    return undefined;
   }
   const source = passwordSource({
     env: stringFlag(args, "password-env"),
     file: stringFlag(args, "password-file"),
     command: stringFlag(args, "password-command"),
   });
-  if (source.from === "prompt") {
-    throw new UsageError(
-      "--wallets needs its password source, --password-env <NAME>, --password-file <path> or " +
-        "--password-command <command>: over stdio there is no terminal to ask on (stdin carries " +
-        "the protocol)",
-    );
-  }
-  const password = await readPassword(source, io, { what: "the wallets" });
+  // No source given: the wallets are listed, and the agent enables them with sauce_enable_wallets.
+  // Never the prompt: over stdio there is no terminal to ask on (stdin carries the protocol).
+  const start =
+    source.from === "prompt"
+      ? undefined
+      : {
+          password: await readPassword(source, io, { what: "the wallets" }),
+          source: describeSource(source),
+        };
 
-  return { dir: dir || defaultWalletsDir(), password, source: describeSource(source) };
+  // A bare --wallets, as the server once had to be started with, is the default directory.
+  return {
+    dir: dir || defaultWalletsDir(),
+    dirNamed: dir !== undefined && dir !== "",
+    ...(start === undefined ? {} : { start }),
+    read: async (chosen) => {
+      if (chosen.from === "command" || chosen.from === "prompt") {
+        throw new UsageError("a password command is the operator's: --password-command at start");
+      }
+
+      return readPassword(chosen, io, { what: "the wallets", creating: true, by: "tool" });
+    },
+  };
 }

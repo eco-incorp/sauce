@@ -5,9 +5,11 @@
  *
  * NODE-ONLY, and reached by nothing browser-facing. It reads no environment variable: it reads a
  * chain through the `--config` file's endpoint for it, else the built-in public endpoints the
- * `sauce` command hands it (`McpServeOptions.publicRpcs`). It holds no key unless it serves stdio
- * with `--wallets`, whose password the `sauce` command has already read from the source it was
- * given; then its wallet tools sign with those wallets alone. Over HTTP it never signs. A newer
+ * `sauce` command hands it (`McpServeOptions.publicRpcs`). Over stdio it serves the wallet tools
+ * (unless `--no-wallets`): they sign with the wallets of one directory alone, once enabled — by the
+ * password the `sauce` command read at start from the source it was given, or by the source an
+ * agent names to `sauce_enable_wallets`, which that command reads for it. Over HTTP it never
+ * signs. A newer
  * version the `sauce` command's update check has seen is noted once, in the process's first tool
  * result (`update-note.ts`).
  */
@@ -18,13 +20,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "./config.js";
 import { createRpcGuard } from "./guard.js";
 import { DEFAULT_MAX_BODY, endpointUrl, isLoopback, serveHttp } from "./http.js";
-import {
-  UsageError,
-  WalletStore,
-  type McpEntry,
-  type McpServeOptions,
-  type McpSetupOptions,
-} from "./sdk.js";
+import { UsageError, type McpEntry, type McpServeOptions, type McpSetupOptions } from "./sdk.js";
 import { createSauceServer, packageInfo } from "./server.js";
 import { parseSetupAgents, setupLines, setupProject } from "./setup.js";
 import { once } from "./update-note.js";
@@ -74,14 +70,7 @@ async function serve(options: McpServeOptions): Promise<void> {
     }
     // Over stdio the caller is the server's own user, on the same machine: its endpoints, local
     // nodes included, are used as given. A message past the bound closes the connection.
-    const wallets =
-      options.wallets === undefined
-        ? undefined
-        : {
-            store: new WalletStore(options.wallets.dir),
-            password: options.wallets.password,
-            source: options.wallets.source,
-          };
+    const { wallets } = options;
     // Its caller's own files: a program may be named by path.
     await createSauceServer({
       endpoints,
@@ -90,7 +79,12 @@ async function serve(options: McpServeOptions): Promise<void> {
       ...update,
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     if (wallets !== undefined) {
-      options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
+      options.log(
+        wallets.start === undefined
+          ? `sauce mcp: serving the wallets in ${wallets.dir}; sauce_enable_wallets enables ` +
+              "them to sign\n"
+          : `sauce mcp: signing with the wallets in ${wallets.dir}\n`,
+      );
     }
 
     return;

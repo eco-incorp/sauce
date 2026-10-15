@@ -1,7 +1,7 @@
 /**
  * The Sauce MCP server: the `sauce` command's read-only tools, `sauce_send` for what the caller
- * signed, the agent skills as resources, and two task prompts — and, over stdio with `--wallets`,
- * the wallet tools. One server per connection
+ * signed, the agent skills as resources, and two task prompts — and, over stdio unless started
+ * with `--no-wallets`, the wallet tools. One server per connection
  * — over stdio, one for the process; over Streamable HTTP, one per request, stateless, and never
  * with wallets.
  */
@@ -11,16 +11,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { Endpoints } from "./config.js";
 import type { RpcGuard } from "./guard.js";
-import { CHAIN_SUPPORT_NEW_ISSUE_URL, supportedChainNames } from "./sdk.js";
 import { registerPrompts } from "./prompts.js";
 import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.js";
 import { registerSendTools } from "./send.js";
 import { registerSkillTools } from "./skilltools.js";
 import { COMMAND_TOOLS, flagInputLines } from "./terms.js";
 import { registerIntentTools } from "./intents.js";
-import { registerTools, type WalletContext } from "./tools.js";
+import { CHAIN_SUPPORT_NEW_ISSUE_URL, supportedChainNames, type McpWallets } from "./sdk.js";
+import { registerTools } from "./tools.js";
 import { noteResults } from "./update-note.js";
-import { registerWalletTools } from "./wallets.js";
+import { registerWalletTools, WalletSession } from "./wallets.js";
 
 let manifest: { readonly name: string; readonly version: string } | undefined;
 
@@ -36,7 +36,7 @@ export function packageInfo(): { readonly name: string; readonly version: string
 }
 
 /** What the server tells a client about itself when it connects. */
-export function instructions(endpoints: Endpoints, wallets?: WalletContext, local = false): string {
+export function instructions(endpoints: Endpoints, wallets?: WalletSession, local = false): string {
   const { name } = packageInfo();
 
   return [
@@ -102,15 +102,32 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext, loca
           "it did. Never ask anyone for a private key or a seed phrase: no tool takes one.",
         ]
       : [
-          "THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY, unlocked by the password",
-          `source it was started with (${wallets.source}). sauce_wallet_list names them;`,
-          "sauce_wallet_create makes one (evm, or solana) and returns its address, never its key.",
-          "Build a transaction for the wallet's address (owner, or from), simulate it",
-          "(sauce_simulate), then pass the building tool's whole result to sauce_wallet_send, which",
-          "simulates it again, holds it to the wallet's policy, signs and sends it. Every other",
-          "transaction still comes back unsigned: signed by any other signer, sauce_send sends it.",
-          "These are hot wallets: keep small balances in them. Never ask anyone for a private key,",
-          "a seed phrase or the password: no tool takes or returns one.",
+          "THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY (the sauce command's",
+          "own, shared with it). sauce_wallet_list names them and sauce_wallet_address gives one's",
+          "address, with no password.",
+          ...(wallets.source === undefined
+            ? [
+                "To create (sauce_wallet_create), import (sauce_wallet_import, a key file by its",
+                "path) or send, the wallets must be enabled first: call sauce_enable_wallets once,",
+                "naming where their password comes from, never the password — { env: NAME }, a",
+                "variable the client's configuration passes to this server; { file: path }, a file",
+                "only its owner can read; { dotenv: path, variable: NAME }, an entry of such a .env",
+                "file; or { generate: true }, a new random password written to a new file beside",
+                "the wallet directory. Ask the user which; with nothing set up, { generate: true },",
+                "and tell the user where the file is. It holds for the life of the server.",
+              ]
+            : [
+                `They are enabled by the password source the server was started with (${wallets.source}):`,
+                "sauce_wallet_create makes one (evm, or solana), and sauce_wallet_import imports a",
+                "key file by its path.",
+              ]),
+          "Each returns the wallet's address, never its key. Build a transaction for the wallet's",
+          "address (owner, or from), simulate it (sauce_simulate), then pass the building tool's",
+          "whole result to sauce_wallet_send, which simulates it again, holds it to the wallet's",
+          "policy, signs and sends it. Every other transaction still comes back unsigned: signed by",
+          "any other signer, sauce_send sends it. These are hot wallets: keep small balances in",
+          "them. Never ask anyone for a private key, a seed phrase or the password: no tool takes",
+          "or returns one.",
         ]),
     "",
     `CHAINS. This release builds transactions only on ${supportedChainNames()}. Every other`,
@@ -148,8 +165,8 @@ export interface SauceServerOptions {
   /** Over stdio: the caller is the server's own user, so a program may be named by `path`, read
    *  from disk. Never given with `guard` (HTTP). */
   readonly local?: boolean;
-  /** Over stdio with `--wallets`: the wallets it signs with. Never given with `guard` (HTTP). */
-  readonly wallets?: WalletContext;
+  /** Over stdio, unless `--no-wallets`: the wallets it serves. Never given with `guard` (HTTP). */
+  readonly wallets?: McpWallets;
   /** The skills directory; the package's own by default. */
   readonly skillsDir?: string;
   /** A newer version's note, asked after each tool result and added to it when it says something:
@@ -167,11 +184,13 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
   if (options.local === true && options.guard !== undefined) {
     throw new Error("internal: a server reads files over stdio only, and the guard is HTTP's");
   }
+  // The wallets' state for the life of this server: over stdio, the process's.
+  const wallets = options.wallets === undefined ? undefined : new WalletSession(options.wallets);
   const server = new McpServer(
     { name: "sauce", title: `Sauce (${name})`, version },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: instructions(options.endpoints, options.wallets, options.local === true),
+      instructions: instructions(options.endpoints, wallets, options.local === true),
     },
   );
   if (options.updateNote !== undefined) noteResults(server, options.updateNote);
@@ -179,13 +198,12 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
     endpoints: options.endpoints,
     ...(options.guard === undefined ? {} : { guard: options.guard }),
     ...(options.local === true ? { local: true } : {}),
-    ...(options.wallets === undefined ? {} : { wallets: options.wallets }),
+    ...(wallets === undefined ? {} : { wallets }),
   };
   registerTools(server, tools);
   registerIntentTools(server, tools);
   registerSendTools(server, tools);
-  if (options.wallets !== undefined)
-    registerWalletTools(server, { ...tools, wallets: options.wallets });
+  if (wallets !== undefined) registerWalletTools(server, { ...tools, wallets });
   registerSkillTools(server, options.skillsDir, options.newerVersion);
   registerResources(server, options.skillsDir);
   registerPrompts(server, options.skillsDir);
