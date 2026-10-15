@@ -16,12 +16,14 @@
  *    counted only when the Portal that emitted it is the intent's own on that side: the
  *    destination's for a fill, a proof or a cancellation, the source's for a claim or a refund.
  *  - On Solana, a transaction that succeeded: the Portal's `fulfill`, `prove` and `cancel`
- *    instructions it carries, each counted only when the program is the intent's destination
- *    Portal, with the Hyperlane message its Mailbox logged.
+ *    instructions it carries or a program of it invoked, each counted only when the program is the
+ *    intent's destination Portal, with the Hyperlane message its Mailbox logged. An intent's hash
+ *    commits to its chains and its route's Portal, so it needs no cluster of its own.
  *
  * An intent the store neither holds nor knows is left alone: its record is not in the logs.
  */
 import {
+  getBase58Encoder,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
@@ -240,11 +242,26 @@ function keepSvm(store: IntentStore, landed: Extract<Landed, { kind: "svm" }>): 
       readonly data?: Uint8Array;
     }>;
   };
+  const accounts = [
+    ...message.staticAccounts,
+    ...(landed.loaded?.writable ?? []),
+    ...(landed.loaded?.readonly ?? []),
+  ];
+  // Its own instructions, and those a program invoked: a fill another program makes through the
+  // Portal is the Portal's fill all the same.
+  const invoked = [
+    ...message.instructions,
+    ...(landed.inner ?? []).flatMap((group) =>
+      group.instructions.map((instruction) => ({
+        programAddressIndex: instruction.programIdIndex,
+        data: new Uint8Array(getBase58Encoder().encode(instruction.data)),
+      })),
+    ),
+  ];
   const chain = requireChain("solana");
   const happened = new Map<string, Happened>();
-  for (const instruction of message.instructions) {
-    // A program is never loaded through a lookup table: it is one of the message's own accounts.
-    const program = message.staticAccounts[instruction.programAddressIndex];
+  for (const instruction of invoked) {
+    const program = accounts[instruction.programAddressIndex];
     const acted = portalInstruction(instruction.data ?? new Uint8Array());
     if (program === undefined || acted === undefined) continue;
     for (const hash of acted.hashes) {

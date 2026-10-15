@@ -26,7 +26,7 @@ import type { Sent } from "./chain.js";
 import { keepIntents } from "./intent-keep.js";
 import type { IntentRecord } from "./lifecycle.js";
 import type { PotStore } from "./pot-store.js";
-import { keepPots } from "./pots.js";
+import { keepPots, type InnerInstructions } from "./pots.js";
 import type { SvmSent } from "./solana.js";
 import type { IntentStore } from "./store.js";
 
@@ -50,6 +50,8 @@ export type Landed =
         readonly writable: readonly string[];
         readonly readonly: readonly string[];
       };
+      /** The instructions its programs invoked, as the node reports them. */
+      readonly inner?: InnerInstructions;
     };
 
 /** The stores a scope keeps, each in the command's own directory; one absent is not kept. */

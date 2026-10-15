@@ -36,6 +36,7 @@ import {
 } from "./sdk.js";
 import {
   chainRef,
+  intentsKept,
   LIMITS,
   potsKept,
   refusable,
@@ -195,6 +196,7 @@ export function registerWalletTools(
         "to read and report; and on a transaction that deployed a Pot, `pots`: each Pot as the " +
         "sauce command records it (chain, address, owner, salt, kind, Kitchen, the engine and " +
         `compiler release it was minted under, the deploying transaction), ${potsKept(context)}. ` +
+        intentsKept(context) +
         "Build the transactions for the wallet's address: as `owner` or " +
         "`from` in the tool that builds them. Needs the chain's endpoint (rpcUrl, or the " +
         "server's). What it sends is spent: simulate with sauce_simulate first. It sends only on " +

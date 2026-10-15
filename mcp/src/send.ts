@@ -19,6 +19,7 @@ import {
 } from "./sdk.js";
 import {
   chainRef,
+  intentsKept,
   LIMITS,
   potsKept,
   refusable,
@@ -73,6 +74,7 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "(main's value, hex); and on a transaction that deployed a Pot, `pots`: each Pot as the " +
         "sauce command records it (chain, address, owner, salt, kind, Kitchen, the engine and " +
         `compiler release it was minted under, the deploying transaction), ${potsKept(context)}. ` +
+        intentsKept(context) +
         "A Solana transaction lands within about a minute of being built, " +
         "or never: one whose blockhash expired is refused, to build and sign again. A Solana " +
         "cook too large " +

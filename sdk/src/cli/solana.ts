@@ -578,6 +578,10 @@ export async function svmLanded(
     meta?.loadedAddresses === undefined || meta.loadedAddresses === null
       ? undefined
       : meta.loadedAddresses;
+  const inner =
+    meta?.innerInstructions === undefined || meta.innerInstructions === null
+      ? undefined
+      : (meta.innerInstructions as InnerInstructions);
   // What it created, kept as it lands. A record that cannot be made never fails a transaction
   // that landed; the scope says so.
   const pots =
@@ -587,9 +591,7 @@ export async function svmLanded(
           chain: requireChain("solana"),
           transaction: response.transaction[0],
           ...(loaded === undefined ? {} : { loaded }),
-          ...(meta?.innerInstructions === undefined || meta.innerInstructions === null
-            ? {}
-            : { inner: meta.innerInstructions as InnerInstructions }),
+          ...(inner === undefined ? {} : { inner }),
           signature,
           slot,
           ok: err === null,
@@ -623,6 +625,7 @@ export async function svmLanded(
       ? {}
       : { transaction: response.transaction[0] }),
     ...(loaded === undefined ? {} : { loaded }),
+    ...(inner === undefined ? {} : { inner }),
   });
 
   return landed;

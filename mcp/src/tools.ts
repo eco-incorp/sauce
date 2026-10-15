@@ -1103,6 +1103,15 @@ export const potsKept = (context: ToolContext): string =>
     : "which this server also records in the sauce command's Pot store, as the command does " +
       "(sauce_pot_list lists them)";
 
+/** What a send's description says becomes of what its transactions do to intents: recorded by a
+ *  server that keeps the intent store, else nothing. */
+export const intentsKept = (context: ToolContext): string =>
+  context.stores?.intents === undefined
+    ? ""
+    : "What each does to an intent (publishing it, a fill, a proof, a claim, a refund, a " +
+      "cancellation) this server records in the sauce command's intent store, as the command " +
+      "does (sauce_intent_list lists them). ";
+
 /** How many tokens `sauce_globals` returns at a time. */
 const TOKEN_PAGE = 200;
 
