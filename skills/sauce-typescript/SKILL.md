@@ -186,8 +186,8 @@ rpcUrl })` forks a chain at a pinned block on a local anvil — replaying `state
   committed beside the tests, with no endpoint; recording it through `rpcUrl` when it is missing —
   and `local()` starts an empty chain. Either has the released Kitchen and engine (the chain's own,
   or deployed), and test accounts each with a Pot (`account(i).pot`). `fund(holder, { USDC: "100" })`
-  writes a balance, `run(file, { args })` sends a cook and `simulate` rehearses one: what `main`
-  returned (`returned`), each token's movement (`delta(holder, "WETH")`), or `CookReverted` with the
+  writes a balance, `run(file, { args })` sends a cook and `simulate` runs one without sending it: what
+  `main`  returned (`returned`), each token's movement (`delta(holder, "WETH")`), or `CookReverted` with the
   program's `require` message. `snapshot()`/`revert()` isolate tests. Write the tests with
   `node:test`. Reference: `node_modules/@eco-incorp/sauce/docs/guides/testing.md`.
 - **Nested intents** are written in the program: a body that opens the next intent with

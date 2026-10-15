@@ -173,7 +173,7 @@ What `run` reports is the transaction it mined: `returned` and a revert's reason
 node's trace of that transaction, so a program reading the block number or the time returns what
 it read in its own block. Only the gas is estimated first, for the block the cook is mined in, and a
 cook is sent even when the estimate reverts. A reverted cook is mined like any other transaction: it moves nothing, but it
-takes a block and a nonce. `simulate` is the rehearsal.
+takes a block and a nonce. `simulate` runs the same cook first and sends nothing.
 
 ## Funding
 
