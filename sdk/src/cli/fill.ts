@@ -55,7 +55,8 @@ import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
-import { assumeTokenBalance, mergeOverrides } from "./assume.js";
+import { mergeOverrides } from "../evm/balance-slot.js";
+import { assumeTokenBalance } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
 import {
   compileProgram,
@@ -76,7 +77,7 @@ import {
   labelled,
   nativeSymbol,
   type Effects,
-} from "./effects.js";
+} from "../evm/effects.js";
 import {
   dispatchedMessages,
   intentRecord,

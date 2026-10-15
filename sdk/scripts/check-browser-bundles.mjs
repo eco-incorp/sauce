@@ -42,8 +42,8 @@ const packageRoot = realpathSync(argument("--package-root", REPO));
 const consumer = realpathSync(argument("--consumer", packageRoot));
 
 /** Subpaths that need Node by design: `svm/engine-artifacts` hands a local LiteSVM harness file
- *  paths to the packaged `.so` binaries. */
-const NODE_ONLY = new Set(["./svm/engine-artifacts"]);
+ *  paths to the packaged `.so` binaries, and `testing` runs chains on a local anvil for tests. */
+const NODE_ONLY = new Set(["./svm/engine-artifacts", "./testing"]);
 
 /** Node-only globals the package's own modules must not name. */
 const NODE_GLOBALS = ["Buffer", "process", "global", "__dirname", "__filename", "setImmediate"];

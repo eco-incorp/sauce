@@ -74,7 +74,7 @@ import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState, type TxRequest } from "./chain.js";
 import { txLinks } from "./links.js";
 import { kitchenAddress } from "./commands.js";
-import { formatAmount, tokenInfo, type TokenInfo } from "./effects.js";
+import { formatAmount, tokenInfo, type TokenInfo } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
 import {
   planSvmFill,

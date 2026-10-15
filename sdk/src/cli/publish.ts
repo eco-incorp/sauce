@@ -56,7 +56,8 @@ import {
 } from "../routes/portal.js";
 import { parseSauce } from "../routes/parse.js";
 import { CliError, UsageError } from "./args.js";
-import { assumeTokenBalance, mergeOverrides } from "./assume.js";
+import { mergeOverrides } from "../evm/balance-slot.js";
+import { assumeTokenBalance } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent, type TxRequest } from "./chain.js";
 import { linkLines, txLinks } from "./links.js";
 import {
@@ -68,7 +69,7 @@ import {
   type CommandOutput,
   type ProgramInput,
 } from "./commands.js";
-import { nativeSymbol, tokenInfo } from "./effects.js";
+import { nativeSymbol, tokenInfo } from "../evm/effects.js";
 import { baseUnits, type FundRequest } from "./funding.js";
 import { intentDestinations, requireSupported } from "./support.js";
 

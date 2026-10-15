@@ -25,7 +25,7 @@ import {
   leftInPotLines,
   nativeSymbol,
   type Effects,
-} from "./effects.js";
+} from "../evm/effects.js";
 
 /** What a transaction cost its sender, in wei. */
 export interface Cost {

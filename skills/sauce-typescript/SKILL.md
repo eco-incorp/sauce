@@ -181,6 +181,15 @@ a recorded address, not proof of live code on the chain.
   `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
   own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
   `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
+- **Testing** (`/testing`, Node only, Foundry's `anvil` on `PATH`): `fork(chain, { block, state,
+rpcUrl })` forks a chain at a pinned block on a local anvil — replaying `state`, a recorded file
+  committed beside the tests, with no endpoint; recording it through `rpcUrl` when it is missing —
+  and `local()` starts an empty chain. Either has the released Kitchen and engine (the chain's own,
+  or deployed), and test accounts each with a Pot (`account(i).pot`). `fund(holder, { USDC: "100" })`
+  writes a balance, `run(file, { args })` sends a cook and `simulate` runs one without sending
+  it: what `main` returned (`returned`), each token's movement (`delta(holder, "WETH")`), or
+  `CookReverted` with the program's `require` message. `snapshot()`/`revert()` isolate tests. Write
+  the tests with `node:test`. Reference: `node_modules/@eco-incorp/sauce/docs/guides/testing.md`.
 - **Nested intents** are written in the program: a body that opens the next intent with
   `Chain(() => { ... }).reward({ ... })` (`sauce-intents`, Cascades). In a typed closure,
   `Base(() => { ... Ethereum(() => { ... }).reward({ ... }) }, options)`, the inner chain is the

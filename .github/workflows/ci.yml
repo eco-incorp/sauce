@@ -223,6 +223,11 @@ jobs:
       - name: Dev Tools — typecheck
         run: pnpm --filter './dev-tools' typecheck
 
+      # The testing kit (`@eco-incorp/sauce/testing`) ships from dev-tools/dist, which the packed
+      # check at the end installs.
+      - name: Dev Tools — build
+        run: pnpm --filter './dev-tools' build
+
       # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
       # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
       # the README's route example, a raw compact compile, the settle recipe, two builders and an

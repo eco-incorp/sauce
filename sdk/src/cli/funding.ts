@@ -48,7 +48,7 @@ import { blankLiterals } from "../routes/rs-compile.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { sendAndWait, type Sent, type TxRequest } from "./chain.js";
-import { wordsOf } from "./effects.js";
+import { wordsOf } from "../evm/effects.js";
 import type { Approver } from "./commands.js";
 
 export const FUND_MODES = ["permit2", "permit", "allowance", "transfer"] as const;

@@ -43,6 +43,7 @@ import {
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { deriveExecutionFeeConfigPda, fetchAlt } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, landed, reasonOf, simulate, type Sent } from "./chain.js";
@@ -51,7 +52,6 @@ import { linkLines, txLinks } from "./links.js";
 import { guardOf, type Reservation } from "./policy.js";
 import { cookReport, costJson, costLine, costOf } from "./receipt.js";
 import { failureReason, sendAndConfirm, svmLanded, svmReader, type SvmSent } from "./solana.js";
-import { decodeReturned, returnedLine } from "./returned.js";
 import { requireSupported } from "./support.js";
 import {
   decodeCursor,

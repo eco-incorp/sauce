@@ -41,7 +41,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
-    // `no-explicit-any` OFF for these five files, and nowhere else. Every remaining `any` in them
+    // `no-explicit-any` OFF for these four files, and nowhere else. Every remaining `any` in them
     // is an external-library escape, not a shortcut — checked one by one:
     //
     //   dev-tools/src/sync-price.ts (16)  viem's `ReadContractParameters` marks `authorizationList`
@@ -50,7 +50,6 @@ export default tseslint.config(
     //     'authorizationList' is missing". A viem bump or one shared typed wrapper is the real fix.
     //   actions/src/to-quote.ts (3)  `encodeAbiParameters` values against a runtime-assembled
     //     tuple ABI.
-    //   dev-tools/test/e2e.test.ts (1)  `hardhat_setCode`, absent from viem's method union.
     //   sdk/test/svm/cpi-probe.test.ts (1), sdk/test/svm/venues/woofi.test.ts (1)  partial litesvm
     //     account/loader stubs standing in for a full fixture.
     //
@@ -58,7 +57,6 @@ export default tseslint.config(
     // — cannot quietly gain one, and so each escape stays attributable to a named cause.
     files: [
       "dev-tools/src/sync-price.ts",
-      "dev-tools/test/e2e.test.ts",
       "actions/src/to-quote.ts",
       "sdk/test/svm/cpi-probe.test.ts",
       "sdk/test/svm/venues/woofi.test.ts",

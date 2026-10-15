@@ -32,7 +32,7 @@ import { proverFeeCall } from "../routes/portal.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, parseChain, UsageError } from "./args.js";
 import { connect, kitchenFee } from "./chain.js";
-import { nativeSymbol, tokenInfo } from "./effects.js";
+import { nativeSymbol, tokenInfo } from "../evm/effects.js";
 import { proverPlan } from "./lifecycle.js";
 import { askChoice, askText, missingFlags, type Ask } from "./prompt.js";
 import { isSupportedChain, requireSupported } from "./support.js";

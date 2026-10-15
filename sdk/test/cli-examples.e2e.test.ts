@@ -42,7 +42,7 @@ import {
   type Hex,
 } from "viem";
 
-import { shortAddress } from "../src/cli/effects.js";
+import { shortAddress } from "../src/evm/effects.js";
 import { v12KitchenAddress } from "../src/deployments/index.js";
 import { v12PredictPot } from "../src/deployments/pot.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";

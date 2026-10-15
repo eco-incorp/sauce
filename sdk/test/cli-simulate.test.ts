@@ -23,9 +23,10 @@ import {
 } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { assumeTokenBalance, findBalanceSlot, mergeOverrides } from "../src/cli/assume.js";
+import { assumeTokenBalance, findBalanceSlot } from "../src/cli/assume.js";
+import { mergeOverrides } from "../src/evm/balance-slot.js";
 import { revertReason } from "../src/cli/chain.js";
-import { effectLines, effectsJson, effectsOf, flowLines, type RawLog } from "../src/cli/effects.js";
+import { effectLines, effectsJson, effectsOf, flowLines, type RawLog } from "../src/evm/effects.js";
 import { POT_ROUTER_SLOT } from "../src/cli/rehearse.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";

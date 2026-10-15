@@ -38,9 +38,9 @@ import {
 
 import { sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import { CliError } from "./args.js";
-import { mergeOverrides } from "./assume.js";
+import { mergeOverrides } from "../evm/balance-slot.js";
 import { revertReason, type TxRequest } from "./chain.js";
-import type { RawLog } from "./effects.js";
+import type { RawLog } from "../evm/effects.js";
 
 export type RehearsalPath = "eth_simulateV1" | "eth_call";
 

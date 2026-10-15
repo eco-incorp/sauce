@@ -89,13 +89,13 @@ function packageOf(specifier: string): string | undefined {
   return first!.startsWith("@") ? `${first}/${second}` : first;
 }
 
+/** A workspace's build, `<workspace>/dist/`, as its source, `<workspace>/src/`. */
+const sourceOf = (file: string) => file.replace(/^(sdk|actions|dev-tools)\/dist\//, "$1/src/");
+
 /** The source file a relative specifier names; the built `sdk/dist` is its `sdk/src`. */
 function resolveRelative(from: string, specifier: string): string | undefined {
   if (/\.json$/.test(specifier)) return undefined; // data: artifacts, ABIs
-  const target = relative(REPO, join(REPO, dirname(from), specifier)).replace(
-    /^(sdk|actions)\/dist\//,
-    "$1/src/",
-  );
+  const target = sourceOf(relative(REPO, join(REPO, dirname(from), specifier)));
   const candidates = [target.replace(/\.js$/, ".ts"), target, `${target}.ts`, `${target}/index.ts`];
   const found = candidates.find(
     (each) => /\.(ts|js|cjs)$/.test(each) && existsSync(join(REPO, each)),
@@ -139,7 +139,7 @@ function exportEntries(): string[] {
   return Object.values(ROOT.exports).flatMap((value) => {
     const target = typeof value === "string" ? value : value.default;
     if (target === undefined || !/\.js$/.test(target)) return []; // types, assets, JSON
-    const source = target.replace(/^\.\//, "").replace(/^(sdk|actions)\/dist\//, "$1/src/");
+    const source = sourceOf(target.replace(/^\.\//, ""));
     if (!source.includes("*")) return [source.replace(/\.js$/, ".ts")];
     const [before, after] = source.split("*") as [string, string];
     const listed = execFileSync(
@@ -155,12 +155,14 @@ function exportEntries(): string[] {
   });
 }
 
-/** Every module the package ships as code: the SDK (the `sauce` command too), actions, the MCP server. */
+/** Every module the package ships as code: the SDK (the `sauce` command too), actions, the MCP
+ *  server, the testing kit. */
 function shippedModules(): string[] {
-  const listed = execFileSync("git", ["ls-files", "--", "sdk/src", "actions/src", "mcp/src"], {
-    cwd: REPO,
-    encoding: "utf8",
-  });
+  const listed = execFileSync(
+    "git",
+    ["ls-files", "--", "sdk/src", "actions/src", "mcp/src", "dev-tools/src/testing"],
+    { cwd: REPO, encoding: "utf8" },
+  );
 
   return [
     ...listed
@@ -284,12 +286,14 @@ describe("the package's dependencies", () => {
 
   it("every package an export loads is a dependency, and no export reaches the command", () => {
     const entries = exportEntries();
-    // A move cannot leave this passing over nothing: the root, the compiler, a protocol, actions.
+    // A move cannot leave this passing over nothing: the root, the compiler, a protocol, actions,
+    // the testing kit.
     for (const entry of [
       "sdk/src/index.ts",
       "sdk/src/compiler.ts",
       "sdk/src/protocols/uniswap-v3/index.ts",
       "actions/src/index.ts",
+      "dev-tools/src/testing/index.ts",
     ]) {
       expect(entries).toContain(entry);
     }

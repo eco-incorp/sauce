@@ -77,7 +77,7 @@ regenerates `sdk/runtime/`.
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents; `sauce actions` lowers them                                  |
 | `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's building tools (and, over stdio, wallets), the agent skills   |
-| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
+| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | `/testing` (from `dev-tools/dist/testing`)                                                                                                            | The testing kit (`src/testing`); the dev harness: local node scripts, compile helpers, SVM Kitchen runner |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
 which may still carry older copies of these packages. The packages here are **siblings, not
@@ -88,18 +88,20 @@ generations**: `dev-tools` is a dev harness, not a legacy `sdk`.
 Use Node.js **24 or newer**, matching the Solana dependencies and CI.
 
 Run from the repo root. `build` is `pnpm -r --filter './sdk' --filter './actions' --filter
-'./mcp' build`, and **`actions` and `mcp` read the SDK's `dist/`**: `actions/src/registry.ts` and
+'./mcp' --filter './dev-tools' build`, and **`actions`, `mcp` and `dev-tools` read the SDK's
+`dist/`**: `actions/src/registry.ts` and
 `compose.ts` import `../../sdk/dist/...` by relative path, the one spelling that resolves both in the repo and in the
 published tarball (where `actions/dist` and `sdk/dist` are siblings; the workspace name
 `@eco-incorp/sauce-source` is not published). `mcp/src/sdk.ts` does the same, the one module
-through which the MCP server reaches the SDK. So build the SDK before typechecking, building or
+through which the MCP server reaches the SDK, and so does `dev-tools/src/testing/sdk.ts` for the
+testing kit. So build the SDK before typechecking, building or
 testing `actions` or `mcp`. `pnpm build` orders them — both declare `@eco-incorp/sauce-source` as a
 workspace devDependency for exactly that — and CI builds the SDK first. The compiler is an ordinary
 npm dependency, already built; nothing in this repo builds it.
 
 ```sh
 pnpm install
-pnpm build          # sdk + actions + mcp
+pnpm build          # sdk + actions + mcp + dev-tools (the testing kit)
 pnpm typecheck      # all workspaces, their tests included (jest and tsx check no types)
 pnpm test           # all workspaces
 pnpm lint           # eslint, whole repo
@@ -329,7 +331,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   self-reference. Do not reintroduce the old deploy/read/etch flow. Some tests accept the old
   `SAUCE_RUST_V12_RUNTIME` variable as a fallback name, but the current input is creation code.
   Released engines also enforce the Kitchen/Pot gate: use `sdk/test/evm/gated-engine.ts` (the actions
-  suites use it too), not direct engine calls. `ctx.self()` and token ownership refer to the Pot.
+  suites use it too; its deployment is `src/evm/release-stack.ts`, which the testing kit shares), not
+  direct engine calls. `ctx.self()` and token ownership refer to the Pot.
   **That harness deploys the whole stack from creation code AT ITS RELEASE ADDRESSES** — engine,
   Router, Kitchen implementation, Kitchen proxy (initialized, owned by the harness account) — by
   installing CreateX's 8-byte CREATE3 proxy child (`363d3d37363d34f0`) at each release salt's
@@ -375,10 +378,7 @@ at deploy time`) because a second source of truth rotted — six changed `.huff`
   Assets cache under `node_modules/.cache/sauce-engine-releases/<tag>/`, so a warm tree needs no
   network, and a corrupt cache is caught by re-hashing and refetched.
 - **`hnc` (the Huff compiler) is no longer needed.** The suites that compiled `v12/Runtime.huff`
-  themselves lived in the deleted `compiler/` workspace, and nothing in CI installs a Huff
-  toolchain. The one surviving caller is `dev-tools/test/e2e.test.ts`, which shells out to
-  `hnc -b engine-v12/v12/V12Compiler.huff` — that is `test:e2e`, which neither `pnpm test` nor CI
-  runs.
+  themselves lived in the deleted `compiler/` workspace, and nothing in this repository calls it.
 
 ## Architecture
 
@@ -1365,22 +1365,74 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `fixtures/StateView.sol` (v4-periphery's two reads the body makes). Change the file and that
   suite together.
 
-**`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
-developing the SDK; nothing of it ships in the package. Its `start:local`/`start:fork` scripts and
-its `sauce` npm script (`scripts/run.ts`, not the package's `sauce` bin) still depend on the retired
-`SauceRouter` deployment and `cook(bytes[])` execution path; they do not boot the released gated
-EVM stack. `compileScript` and its tests remain useful independently. Current EVM execution tests
-use `sdk/test/evm/gated-engine.ts`; current SVM local execution uses `dev-tools/src/svm-local.ts`.
+**`dev-tools/`** — the **testing kit**, published as `@eco-incorp/sauce/testing`, and the dev
+harness for developing the SDK (local node scripts, compile helpers, the SVM Kitchen runner), which
+does not ship. The kit is `src/testing/`, built by `tsconfig.build.json` (strict; only that
+directory) to `dev-tools/dist/testing`, which alone is in the root `files`; `recorder.mjs` is copied
+beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY`) and EVM-only,
+needs anvil on `PATH`, and reads no environment: the RPC, block and state file are arguments.
+`fork(chain, { block, state, rpcUrl, mode })` replays a recorded state file, records one, or forks
+live (`state.ts`): record and replay are `actions/tests/mainnet.ts`' mechanism generalized — a
+recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv),
+`--no-storage-caching` for anvil (no RPC cache, read or written), dev accounts' code cleared, the
+genesis written
+with the pinned block's own header in a gzipped `{ sauce: {...}, genesis }` file that must not
+mention the RPC. A replay runs on the node its recording ran on: what anvil's `--init` does not take
+from a genesis is in the header (version 2) and set again — the gas limit
+and the hardfork (which a fork infers from the block: Ethereum at 20M forks as Cancun) as flags,
+and the next block's base fee and the dev accounts' nonces once the node is up. `record.test.ts`
+holds a Uniswap V3 swap recorded and replayed to the same transaction hash, gas, balances, base
+fees and block spacing. Block hashes and PREVRANDAO are not reproduced. A version 1 file, recorded
+before, replays at its genesis's gas limit alone (`test/testing/state/base.json.gz` is one, until it
+is recorded again). `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
+release or deploys it at the release addresses through `sdk/src/evm/release-stack.ts#deployReleaseStack`
+— the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too; it reads no file, so
+each caller passes the artifacts (the kit from `sdk/dist/artifacts`). `chain.ts`'s `TestChain` funds through `sdk/src/evm/balance-slot.ts` (the slot
+finder `--assume-balance` uses, moved out of `cli/` so the kit never imports the command), compiles
+through `compileSauceProgram` afresh on every call (a program is its whole import graph, so
+nothing is kept), decodes returns with `routes/returned.ts` by `main`'s declared type (a string stays
+a string) and effects with `evm/effects.ts` (both moved out of `cli/` for the same reason). `run`
+reports the transaction it mined: only the gas is estimated first (the block's limit when that
+reverts, so the cook is sent anyway), for the pending block, and `returned` or the revert comes
+from `debug_traceTransaction` of that transaction, never from a rehearsal on the block before; a
+revert that carries no reason takes the failure of the call it passed on (a Pot passes on the
+engine's out-of-gas as an empty revert, so the trace's top frame alone says only "reverted");
+`simulate` is the rehearsal. A Sauce `require`'s revert data is the message's own bytes, not
+`Error(string)`; `program.ts#reasonOf` reads both, and a called contract's `Error`/`Panic` comes
+back through the cook unchanged. `node.ts` starts anvil as `sdk/test/anvil-process.ts` does (a
+copy: the published kit cannot import a test, nor `sdk/src` hold `node:child_process`): a port that
+already answers is refused, naming its holder, and a node is handed back only once its own anvil
+answers, and only when the process listening on its port is that anvil (another can take the port
+between `freePort()` and the bind). Every process the kit starts is stopped when the process that
+started it exits or is ended by SIGINT, SIGTERM or SIGHUP (`stopWithProcess`). `node.ts` (anvil) and `state.ts` (the recorder) are the only shipped modules beside the
+command's that start a process, which `no-embedded-rpc.test.ts` lists;
+`optional-dependencies.test.ts` walks `/testing`'s graph with the other exports. The kit's suites
+(`test/testing/`, node:test) are `node.test.ts`, `program.test.ts` (no chain), `local.test.ts`,
+`record.test.ts` (records from an anvil on the machine, then replays with it stopped) and Base
+replayed from `test/testing/state/base.json.gz`; record that again as the actions suites do
+(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). The package script gives each test
+and hook `--test-timeout`, as the guide tells consumers to.
+The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
+The consumer guide is `docs/guides/testing.md`.
+
+`start:local`/`start:fork` start anvil (a fork keeps its chain id; an empty node takes Base's, since
+the `sauce` command refuses an unknown one) and run `scripts/deploy.ts`, which sets the stack up
+through the kit's `setUpStack`, mints anvil's first account a Pot under the default salt and clears
+an EIP-7702 delegation a fork carries on that account (Base has one, and it breaks permit and
+Permit2 signatures). The result is `dev-tools/.deployment.json`, which `stop` and `sync-price` read;
+programs run there with the `sauce` command (`--rpc-url`). `src/runner.ts#compileScript` is the raw
+compiler with defines and appended arguments, kept for its tests. `dev-tools` typechecks with
+`strictNullChecks` (viem's types need it) and the kit with full `strict`. Current SVM local
+execution uses `dev-tools/src/svm-local.ts`. The retired `SauceRouter` harness (Hardhat, its
+`test:e2e`, `sync-artifacts` into `dev-tools/artifacts`, the `pnpm sauce` runner) is gone: the kit
+and `sauce run` replace it.
 
 ## The swap Router
 
-Lives in the **private engine repo**, not here, but recipes target it (its `Router` artifact is what
-`cook()` runs against). Recipes import the minimal `ISauceRouter` ABI from `dev-tools/artifacts/` —
-gitignored build output, copied from `sdk/src/artifacts/` by
-`pnpm --filter './dev-tools' sync-artifacts`, so it does not exist until that has run. **There is no
-`SauceRouter` artifact any more**: it came from the engine repo's Solidity tree and no v12 release
-publishes it, which is what blocks `dev-tools/scripts/deploy.ts` and `dev-tools/test/e2e.test.ts`
-(see their headers).
+Lives in the **private engine repo**, not here, but programs target it (its `Router` artifact is
+what a Pot's swaps call back through). Its ABIs are synced into `sdk/{src,dist}/artifacts`
+(`Router`, `ISauceRouter`). **There is no `SauceRouter` artifact any more**: it came from the engine
+repo's Solidity tree and no v12 release publishes it.
 
 **Generation 4 (Kitchen 1.2.0)** has one exact-input method per callback venue family:
 `swapV3`, `swapV4`, `swapMaverickV2`, `swapInfinityCL`, `swapInfinityBin`. All take unsigned

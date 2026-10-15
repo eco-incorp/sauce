@@ -31,13 +31,13 @@ import {
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { decodeReturned } from "../routes/returned.js";
 import { fetchExecutionFee, MAX_POT_LEN } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, revertReason, sendAndWait, simulate, type TxRequest } from "./chain.js";
 import { txLinks } from "./links.js";
 import { measureEvm, noPolicyNote, rehearsePlan, type Measured, type SendGuard } from "./policy.js";
 import { cookReport } from "./receipt.js";
-import { decodeReturned } from "./returned.js";
 import { sendPlannedSvm, sendPlanTx, type SvmSent } from "./solana.js";
 import {
   decodeCursor,

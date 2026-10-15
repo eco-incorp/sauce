@@ -30,6 +30,10 @@
       "default": "./actions/dist/index.js"
     },
     "./actions/action-program.schema.json": "./actions/action-program.schema.json",
+    "./testing": {
+      "types": "./dev-tools/dist/testing/index.d.ts",
+      "default": "./dev-tools/dist/testing/index.js"
+    },
     "./protocols/*": {
       "types": "./sdk/dist/protocols/*/index.d.ts",
       "default": "./sdk/dist/protocols/*/index.js"
@@ -89,6 +93,7 @@
     "sdk/runtime",
     "actions/dist",
     "mcp/dist",
+    "dev-tools/dist/testing",
     "actions/action-program.schema.json",
     "sdk/src/protocols",
     "skills",
@@ -99,7 +104,7 @@
     "docs:check": "node docs/scripts/check-docs.mjs",
     "skills:check": "node sdk/scripts/check-skills.mjs",
     "check:browser": "node sdk/scripts/check-browser-bundles.mjs && node sdk/scripts/check-browser-compile.mjs",
-    "build": "pnpm -r --filter './sdk' --filter './actions' --filter './mcp' build",
+    "build": "pnpm -r --filter './sdk' --filter './actions' --filter './mcp' --filter './dev-tools' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "eslint .",
@@ -144,7 +149,6 @@
     "esbuild": "0.28.0",
     "eslint": "10.10.0",
     "globals": "16.5.0",
-    "hardhat": "^2.22.0",
     "litesvm": "1.2.1",
     "playwright-core": "1.63.0",
     "prettier": "3.9.6",

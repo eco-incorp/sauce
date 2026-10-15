@@ -14,7 +14,7 @@ import { formatEther, type Address, type Hex, type PublicClient } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { CliError } from "./args.js";
 import type { Sent, TxRequest } from "./chain.js";
-import { nativeSymbol } from "./effects.js";
+import { nativeSymbol } from "../evm/effects.js";
 
 /** Asks a yes/no question at the terminal; `undefined` when there is no terminal to ask on. */
 export type Confirm = (question: string) => Promise<boolean | undefined>;
