@@ -1082,6 +1082,14 @@ export interface ToolContext {
   readonly stores?: LocalStores;
 }
 
+/** What a send's description says becomes of the Pot records its result carries: kept by a server
+ *  that keeps the Pot store, else the caller's to keep. */
+export const potsKept = (context: ToolContext): string =>
+  context.stores?.pots === undefined
+    ? "to keep: this server keeps none"
+    : "which this server also records in the sauce command's Pot store, as the command does " +
+      "(sauce_pot_list lists them)";
+
 /** How many tokens `sauce_globals` returns at a time. */
 const TOKEN_PAGE = 200;
 

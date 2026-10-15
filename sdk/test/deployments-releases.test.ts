@@ -10,6 +10,7 @@
 import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { address } from "@solana/kit";
 import type { Address, Hex } from "viem";
 
@@ -122,6 +123,38 @@ describe("the release table", () => {
       if (seen !== undefined) expect(pin.potInitCodeHash).toBe(seen);
       hashOf.set(pin.version, pin.potInitCodeHash!);
     }
+  });
+
+  it("holds every row's Kitchen and Pot init-code hash to its release's addresses.json, where cached", () => {
+    // The sync checks the installed row's against its release; an older row's release is checked
+    // here wherever a sync (or `--report`) left it in the cache.
+    const cache = join(dirname(fileURLToPath(import.meta.url)), "../../node_modules/.cache");
+    let checked = 0;
+    for (const row of V12_RELEASE_SETS) {
+      const pin = row["kitchen-evm"];
+      const tag = join(cache, "sauce-engine-releases", `kitchen-evm-v${pin.version}`);
+      const path = [join(tag, "addresses.json"), join(tag, ".report", "addresses.json")].find(
+        (candidate) => existsSync(candidate),
+      );
+      if (path === undefined) continue;
+      const published = JSON.parse(readFileSync(path, "utf8")) as {
+        version: string;
+        contracts: { kitchen: { address: string } };
+        pot: { initCodeHash: string };
+      };
+      expect([pin.version, published.version]).toEqual([pin.version, pin.version]);
+      expect([pin.version, pin.kitchen?.toLowerCase()]).toEqual([
+        pin.version,
+        published.contracts.kitchen.address.toLowerCase(),
+      ]);
+      expect([pin.version, pin.potInitCodeHash]).toEqual([
+        pin.version,
+        published.pot.initCodeHash.toLowerCase(),
+      ]);
+      checked++;
+    }
+    // The installed row's release is always there: the sync fetched it.
+    expect(checked).toBeGreaterThan(0);
   });
 
   it("refuses a compiler no row pairs with", () => {

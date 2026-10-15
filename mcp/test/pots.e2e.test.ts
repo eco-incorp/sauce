@@ -116,6 +116,11 @@ describe("a local server keeping the Pot store", { skip: RUNTIME_HEX_PATH === un
         tools.filter((tool) => tool.name.startsWith("sauce_pot_")).map((tool) => tool.name),
         [...POT_TOOL_NAMES],
       );
+      // A send says what this server does with the records: it keeps them.
+      assert.match(
+        tools.find((tool) => tool.name === "sauce_send")!.description ?? "",
+        /which this server also records in the sauce command's Pot store/,
+      );
       assert.deepEqual(ok(await mcp.call("sauce_pot_list")), { store: store.dir, pots: [] });
 
       const { pot, signed } = await signedDeployment(mcp.call, "local");
@@ -190,6 +195,10 @@ describe("a local server keeping the Pot store", { skip: RUNTIME_HEX_PATH === un
     try {
       const { tools } = await mcp.client.listTools();
       assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_pot_")));
+      assert.match(
+        tools.find((tool) => tool.name === "sauce_send")!.description ?? "",
+        /to keep: this server keeps none/,
+      );
       const { pot, signed } = await signedDeployment(mcp.call, "unkept");
       const out = ok(await mcp.call("sauce_send", { transactions: [signed] })) as {
         sent: Array<{ pots?: PotRecord[] }>;

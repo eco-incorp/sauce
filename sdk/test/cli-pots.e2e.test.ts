@@ -113,6 +113,9 @@ describeEvm("the Pots the sauce command deploys, recorded", () => {
       deployment: {
         tx: out.deployPot.hash,
         block: out.deployPot.blockNumber,
+        // Its block's own hash, which a fork's block at the same height does not have.
+        blockHash: (await base.publicClient.getTransactionReceipt({ hash: out.deployPot.hash }))
+          .blockHash,
         from: DEPLOYING.address,
       },
       sdk: expect.any(String),

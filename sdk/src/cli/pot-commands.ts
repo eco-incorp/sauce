@@ -4,12 +4,13 @@
  * `pots.ts`'s.
  */
 import { createSolanaRpc, type Address as SvmAddress } from "@solana/kit";
-import type { Address, Hex } from "viem";
+import type { Address } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { connect } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
-import type { PotRecord, PotStore } from "./pot-store.js";
+import type { PotImportTarget } from "./inputs.js";
+import { MAINNET_CLUSTER, type PotRecord, type PotStore } from "./pot-store.js";
 import { importEvmOwnerPots, importEvmPot, importSvmPot } from "./pots.js";
 
 /** A record's release, as a reader reads it: `compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0)`. */
@@ -22,9 +23,15 @@ const releaseText = (record: PotRecord): string => {
     .join(", ")})`;
 };
 
+/** The chain a record is on, and on Solana a cluster other than mainnet's: `solana (devnet)`. */
+const onChain = (record: PotRecord): string =>
+  record.cluster === undefined || record.cluster === MAINNET_CLUSTER
+    ? record.chain
+    : `${record.chain} (${record.cluster})`;
+
 /** One Pot, as `sauce pot list` prints it. */
 const potLines = (record: PotRecord): string[] => [
-  `${record.chain}  ${record.pot}  ${record.kind}`,
+  `${onChain(record)}  ${record.pot}  ${record.kind}`,
   `  owner ${record.owner}, salt ${record.salt}`,
   `  ${releaseText(record)}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
   record.deployment === undefined
@@ -63,15 +70,10 @@ export function potListCommand(
   };
 }
 
-export interface PotImportInput {
+export interface PotImportInput extends PotImportTarget {
   readonly store: PotStore;
   readonly chain: CanonicalChain;
   readonly rpcUrl: string;
-  /** The Pot itself (an EVM chain). */
-  readonly pot?: Address;
-  /** Or its owner, with `salt`: every release's Pot of theirs at that salt. */
-  readonly owner?: string;
-  readonly salt: Hex;
 }
 
 /** `sauce pot import`: records Pots deployed elsewhere — one by its address, or an owner's by salt. */
@@ -88,6 +90,7 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
 
             return value === null ? undefined : value.owner;
           },
+          genesis: async () => String(await rpc.getGenesisHash().send()),
         },
         chain,
         input.owner as SvmAddress,
@@ -108,9 +111,12 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
       }
     }
   }
+  // An import has no deployment, so it is a Pot's first record or nothing new.
   const saved = found.map((record) => ({ record, saved: input.store.save(record) }));
-  const pots = saved.map(({ record, saved }) =>
-    saved === "created" ? record : (input.store.get(record.chainId, record.pot) ?? record),
+  const pots = saved.flatMap(({ record, saved }) =>
+    saved === "created"
+      ? [record]
+      : input.store.recordsOf(record.chainId, record.pot, record.cluster),
   );
 
   return {
@@ -118,9 +124,9 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
     json: { store: input.store.dir, pots },
     notes: saved.map(({ record, saved }) =>
       saved === "created"
-        ? `recorded Pot ${record.pot} on ${chain.slug} in ${input.store.dir}`
-        : `Pot ${record.pot} on ${chain.slug} was already recorded in ${input.store.dir}; the ` +
-          "record is kept as it was",
+        ? `recorded Pot ${record.pot} on ${onChain(record)} in ${input.store.dir}`
+        : `Pot ${record.pot} on ${onChain(record)} was already recorded in ${input.store.dir}; ` +
+          "the record is kept as it was",
     ),
   };
 }

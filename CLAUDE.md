@@ -968,7 +968,11 @@ are; the calldata is `routes/portal.ts`'s. `intent-commands.ts` adds the signer,
 it imports only Node's modules, so `cli-store.test.ts` runs it in child processes).
 `pot-store.ts` is the Pot store beside it, `~/.sauce/pots` (`--pots <dir>`): one owner-only
 `<chainId>/<pot>.json` per Pot, linked into place once, the same mechanics and the same
-child-process test (`cli-pot-store.test.ts`). Its records are not written by the commands: the two
+child-process test (`cli-pot-store.test.ts`). A Pot's identity is its chain id AND, on Solana, its
+cluster (by genesis hash, `pots.ts#clusterOf`; filed as `<chainId>-<cluster>` off mainnet), since
+the Kitchen's id, and so a Pot's address, is the same on every cluster. A second deployment of one
+Pot address (a fork with the chain's id, or a Solana Pot closed and created again) is kept beside
+the first as `<pot>@<tx>.json` and said, never dropped; an EVM record keeps its block's hash. Its records are not written by the commands: the two
 places every send lands, `chain.ts#landed` and `solana.ts#svmLanded`, read what a transaction
 deployed from the chain (the Kitchen's `PotDeployed` in a receipt that succeeded, its `create_pot`
 in a Solana transaction that succeeded; `pots.ts`, which tells each Pot's release from its address
