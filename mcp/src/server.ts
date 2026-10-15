@@ -11,6 +11,8 @@
 import { readFileSync } from "node:fs";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { JSONRPCMessage, MessageExtraInfo } from "@modelcontextprotocol/sdk/types.js";
 
 import type { Endpoints } from "./config.js";
 import type { RpcGuard } from "./guard.js";
@@ -232,6 +234,37 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
   registerSkillTools(server, options.skillsDir, options.newerVersion);
   registerResources(server, options.skillsDir);
   registerPrompts(server, options.skillsDir);
+  // Whatever transport it is connected to, a call that omits its arguments is a call with none.
+  const connect = server.connect.bind(server);
+  server.connect = async (transport) => {
+    await connect(transport);
+    argumentsDefaulted(transport);
+  };
 
   return server;
+}
+
+/**
+ * Gives every `tools/call` `transport` delivers that omits `arguments` the arguments `{}`. The spec
+ * lets a client leave them out of a call with none to pass, and clients do; but the MCP SDK checks
+ * a call's arguments against the tool's input schema as given, so a tool whose inputs are all
+ * optional would refuse it as `undefined` where `{}` succeeds. It wraps the handler the server has
+ * just installed on the transport, before the transport delivers anything (a transport delivers a
+ * message from an I/O callback, or a request it is handed after the server connects), through the
+ * transport's own `onmessage`, which a transport may forward to another inside it.
+ */
+function argumentsDefaulted(transport: Transport): void {
+  const handle = transport.onmessage;
+  if (handle === undefined) return;
+  transport.onmessage = (message: JSONRPCMessage, extra?: MessageExtraInfo) =>
+    handle(defaulted(message), extra);
+}
+
+/** `message`, a `tools/call` with no `arguments` given `{}`; any other as it is. */
+function defaulted(message: JSONRPCMessage): JSONRPCMessage {
+  if (!("method" in message) || message.method !== "tools/call") return message;
+  const params = (message as { params?: Record<string, unknown> }).params;
+  if (params === undefined || params.arguments !== undefined) return message;
+
+  return { ...message, params: { ...params, arguments: {} } } as JSONRPCMessage;
 }
