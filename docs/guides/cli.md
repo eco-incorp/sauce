@@ -19,7 +19,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
 | `sauce send`     | Broadcast transactions signed elsewhere, wait for them, and report what they did  |
 | `sauce reclaim`  | List the code buffers and lookup tables a Solana owner left open, and close them  |
-| `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
+| `sauce pot`      | Predict a Pot's address, deploy it, and list the Pots you deployed                |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
 | `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
 | `sauce pools`    | List a pair's price-limit pools on a chain, deepest first, with their prices      |
@@ -552,6 +552,51 @@ sauce pot --chain base --owner 0xYou
 `run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
 and one that names someone else is refused. `simulate`, `tx` and plain `pot` have no signer and
 take `--owner` (or, for `simulate` and `tx`, `--pot <address>`, of a deployed Pot).
+
+### The Pots you deployed: `sauce pot list`
+
+Every Pot a command deploys is recorded in a store, `~/.sauce/pots` (`--pots <dir>` for another),
+once the chain shows it deployed. That covers `pot --deploy`, a `run` that deploys its Pot before
+its first cook (or, on Solana, creates it in the cook's own transaction), a deployment signed
+elsewhere and broadcast with `sauce send`, and a fill that deploys the Pot an intent cooks on. The
+record comes from the chain: the Kitchen's `PotDeployed` event in a receipt that succeeded, or its
+`create_pot` in a Solana transaction that succeeded. So a run whose cook fails after its Pot
+deployed still records the Pot. `sauce tx` sends nothing, and records nothing.
+
+A record holds the chain, the Pot's address, its owner and salt, and its kind: `private`,
+`private-fixed-router` (minted with its Router fixed) or `shared` (no owner; anyone may cook it).
+It also holds the Kitchen and the release the Pot was minted under: on an EVM chain the Pot
+init-code hash its address derives from, the engine whose gate accepts it, and the compiler, engine
+and Kitchen versions of that release; on Solana the engine program its creation named. Last come
+the transaction that deployed it (hash, block or slot, sender), the version of `sauce` that recorded
+it, and when. The release is told from the Pot's address, under every Kitchen and init-code hash
+this `sauce` knows, not from the release it pins today. A Pot minted before a Kitchen upgrade keeps
+the release that minted it. One file per Pot, `<chain id>/<pot>.json`, readable only by you, is
+written once and never changed. No key or endpoint is written there.
+
+```sh
+sauce pot list
+sauce pot list --chain base --owner 0xYou --json
+```
+
+`sauce pot list` reads no chain: `sauce pot --chain <chain> --owner <owner>` says whether a Pot is
+still there.
+
+`sauce pot import` records a Pot this machine did not deploy, read from the chain. Give it by
+address on an EVM chain: its owner, salt and Kitchen are read off it, and its kind and release
+told from its address. An address no known release mints is refused. Or give it by owner and
+salt: every known release's Pot of that owner and salt that has code is recorded. A Solana Pot
+holds nothing that names its owner, so there it is found by owner and salt only, its engine the
+program that owns the account. A Pot already recorded keeps its record.
+
+```sh
+sauce pot import --chain base --pot 0x…
+sauce pot import --chain base --owner 0xYou --salt treasury
+sauce pot import --chain solana --owner <pubkey>
+```
+
+The MCP server keeps no store. Its tools that send (`sauce_send`, `sauce_wallet_send`) return the
+same record, as `pots` on each transaction that deployed one, for the client to keep.
 
 ### For a wallet: `sauce tx`
 

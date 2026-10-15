@@ -29,7 +29,7 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 | `sauce globals`  | The tokens, protocol contracts, chains and functions a program on a chain can use |
 | `sauce compile`  | Compiles a file for a chain; prints its bytecode, or with `--json` what it takes  |
 | `sauce actions`  | Lowers a JSON actions document for a chain; prints its SauceScript and bytecode   |
-| `sauce pot`      | Prints the owner's Pot address and its deploy transaction; deploys it             |
+| `sauce pot`      | Prints the owner's Pot address and deploy transaction; deploys it; lists yours    |
 | `sauce simulate` | Simulates the cook from the Pot's owner, with no key: gas, or why it reverts      |
 | `sauce run`      | Compiles, simulates, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
@@ -286,6 +286,16 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    `sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys the signer's
    Pot by hand. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an
    exact salt); use the same salt in every later command.
+
+   Every Pot a command deploys (`pot --deploy`, a run that deploys it first, `sauce send` of a
+   signed deployment) is recorded on this machine once the chain shows it deployed, in
+   `.sauce/pots` in the user's home (`--pots <dir>` for another). `sauce pot list` prints each with
+   its owner, salt and kind, the engine and compiler it pairs with, and the transaction that
+   deployed it (`--chain`, `--owner` and `--json` narrow and shape it). It reads no chain. A Pot
+   deployed elsewhere is recorded from the chain with `sauce pot import --chain base --pot <pot>`,
+   or by owner and salt (`sauce pot import --chain solana --owner <owner> --salt <label>`, the
+   only way on Solana). `sauce tx` sends nothing, so it records nothing.
+
 5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
    pass `--fund USDC:100`, 100 whole USDC (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer into the Pot in the same cook; `--sweep` returns what is
    left. `--fund-mode` picks how:

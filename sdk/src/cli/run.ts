@@ -466,7 +466,7 @@ const POTS: FlagSpecs = {
   pots: {
     type: "string",
     value: "<dir>",
-    help: "The Pot store, which records every Pot the command deploys (default: ~/.sauce/pots)",
+    help: "The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)",
   },
 };
 
@@ -3460,7 +3460,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "~/.sauce/pots) once the chain shows it deployed: its chain, owner, salt and kind, the",
       "Kitchen and the release it was minted under (the engine, and the compiler whose programs",
       "it runs), and the transaction that deployed it. sauce tx sends nothing, so it records",
-      "nothing. Verbs (`sauce pot <verb> --help` for each):",
+      "nothing.",
+      "",
+      "Verbs (`sauce pot <verb> --help` for each):",
       ...Object.entries(POT_VERBS).map(
         ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
       ),
