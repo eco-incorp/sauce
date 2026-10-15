@@ -407,6 +407,7 @@ const sentJson = (sent: SentTx) =>
         ...(sent.svm.computeUnits === undefined
           ? {}
           : { computeUnits: sent.svm.computeUnits.toString() }),
+        ...(sent.svm.pots === undefined ? {} : { pots: sent.svm.pots }),
       }
     : {
         ...sent.tx,
@@ -416,6 +417,7 @@ const sentJson = (sent: SentTx) =>
         block: sent.result.blockNumber.toString(),
         gasUsed: sent.result.gasUsed.toString(),
         ...(costOfSent(sent) === undefined ? {} : { cost: costJson(costOfSent(sent)!) }),
+        ...(sent.result.pots === undefined ? {} : { pots: sent.result.pots }),
       };
 
 const moveText = (move: VaultMove): string =>

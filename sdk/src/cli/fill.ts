@@ -950,6 +950,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
           ...(result.receipt === undefined
             ? {}
             : { cost: costJson(costOf(result.receipt, step.value)) }),
+          ...(result.pots === undefined ? {} : { pots: result.pots }),
         })),
         fulfilled:
           entry.recordedClaimant === undefined ? null : { claimant: entry.recordedClaimant },

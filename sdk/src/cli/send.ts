@@ -539,6 +539,7 @@ async function evmEntry(
       from: tx.from,
       blockNumber: result.blockNumber.toString(),
       gasUsed: result.gasUsed.toString(),
+      ...(result.pots === undefined ? {} : { pots: result.pots }),
       ...(cost === undefined ? {} : { cost: costJson(cost) }),
       ...(cook === undefined
         ? {}
@@ -828,6 +829,7 @@ function svmEntry(
       ...(result.computeUnits === undefined
         ? {}
         : { computeUnits: result.computeUnits.toString() }),
+      ...(result.pots === undefined ? {} : { pots: result.pots }),
       ...(returns === undefined ? {} : { returns }),
       ...(returned === undefined ? {} : { returnType, returned }),
       ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),

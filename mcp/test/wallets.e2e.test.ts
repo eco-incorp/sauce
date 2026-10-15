@@ -132,6 +132,12 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     const receipt = await base.publicClient.getTransactionReceipt({ hash });
     assert.equal(getAddress(receipt.from), wallet);
     assert.notEqual(await base.publicClient.getCode({ address: pot }), undefined);
+    // The Pot it deployed, as the sauce command records it, for the caller to keep.
+    const pots = (sent.sent[0] as { pots?: Array<Record<string, unknown>> }).pots;
+    assert.deepEqual(
+      pots?.map((one) => [one.pot, one.owner, one.chain, one.origin]),
+      [[pot, wallet, "base", "deployed"]],
+    );
     assert.ok(
       ((sent as { notes?: string[] }).notes ?? []).some((note) => /no limits are set/.test(note)),
     );

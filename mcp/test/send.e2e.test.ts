@@ -164,6 +164,20 @@ describe(
         ["success", "success"],
       );
       assert.match(String(sent.sent[0]!.what), /deployPot/);
+      // The Pot it deployed, as the sauce command records it, for the caller to keep: the server
+      // keeps no store.
+      const [deployed, ...more] = sent.sent[0]!.pots as Array<Record<string, unknown>>;
+      assert.deepEqual(more, []);
+      assert.deepEqual(
+        [deployed!.pot, deployed!.owner, deployed!.chain, deployed!.kind, deployed!.origin],
+        [planned.pot, signer.address, "ethereum", "private", "deployed"],
+      );
+      assert.deepEqual(deployed!.deployment, {
+        tx: sent.sent[0]!.hash,
+        block: sent.sent[0]!.blockNumber,
+        from: signer.address,
+      });
+      assert.equal(sent.sent[1]!.pots, undefined);
       assert.equal(sent.sent[1]!.what, `cook on Pot ${planned.pot}`);
       assert.ok(Array.isArray(sent.sent[1]!.moves));
       assert.equal(await local.balanceOf(usdc, RECIPIENT), AMOUNT);

@@ -37,6 +37,7 @@ import { CliError, UsageError } from "./args.js";
 import { connect, revertReason, sendAndWait, simulate, type TxRequest } from "./chain.js";
 import { txLinks } from "./links.js";
 import { measureEvm, noPolicyNote, rehearsePlan, type Measured, type SendGuard } from "./policy.js";
+import type { PotRecord } from "./pot-store.js";
 import { cookReport } from "./receipt.js";
 import { sendPlannedSvm, sendPlanTx, type SvmSent } from "./solana.js";
 import {
@@ -226,6 +227,8 @@ interface SentEntry {
   readonly returns?: string;
   readonly returnType?: string;
   readonly returned?: unknown;
+  /** The Pots it deployed, as the `sauce` command records them, for the caller to keep. */
+  readonly pots?: readonly PotRecord[];
 }
 
 /** `cook(address,bytes)`: a transaction that runs a program on the Pot it is sent to. */
@@ -369,6 +372,7 @@ async function sendEvm(input: PlanInput): Promise<SentEntry[]> {
       blockNumber: result.blockNumber.toString(),
       gasUsed: result.gasUsed.toString(),
       ...(result.reason === undefined ? {} : { reason: result.reason }),
+      ...(result.pots === undefined ? {} : { pots: result.pots }),
       ...(report === undefined
         ? {}
         : {
@@ -591,6 +595,7 @@ export async function sendSvmPlan(input: {
       ...(result.slot === undefined ? {} : { blockNumber: result.slot.toString() }),
       ...(result.fee === undefined ? {} : { fee: result.fee.toString() }),
       ...(result.reason === undefined ? {} : { reason: result.reason }),
+      ...(result.pots === undefined ? {} : { pots: result.pots }),
       ...(returns === undefined ? {} : { returns }),
       ...(returned === undefined ? {} : { returnType: plan.returnType, returned }),
     };
@@ -769,6 +774,7 @@ async function sendSvm(input: PlanInput): Promise<SentEntry[]> {
       ...(result.slot === undefined ? {} : { blockNumber: result.slot.toString() }),
       ...(result.fee === undefined ? {} : { fee: result.fee.toString() }),
       ...(result.reason === undefined ? {} : { reason: result.reason }),
+      ...(result.pots === undefined ? {} : { pots: result.pots }),
     });
     if (!result.ok) break;
   }

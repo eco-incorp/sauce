@@ -988,6 +988,7 @@ const sentJson = (sent: Sent, chain: CanonicalChain): Record<string, unknown> =>
   gasUsed: sent.gasUsed.toString(),
   blockNumber: sent.blockNumber.toString(),
   ...(sent.reason === undefined ? {} : { reason: sent.reason }),
+  ...(sent.pots === undefined ? {} : { pots: sent.pots }),
 });
 
 export { unapproved, type Approver, type Confirm } from "./approvals.js";

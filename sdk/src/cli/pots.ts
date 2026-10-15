@@ -1,0 +1,564 @@
+/**
+ * The Pots the `sauce` command deploys, read from the chain: which a landed transaction deployed,
+ * which release minted each, the Pots `sauce pot import` finds, and what `sauce pot list` prints.
+ *
+ * A record comes from the chain's own evidence, never from what the command meant to send: on an
+ * EVM chain the `PotDeployed(owner, salt, pot)` the released Kitchen emits in a receipt that
+ * succeeded, on Solana the Kitchen's `create_pot` in a transaction that succeeded (`create_pot` is
+ * not idempotent, so one that succeeded created the Pot). So the two places every send lands —
+ * `chain.ts#landed` and `solana.ts#svmLanded` — find them, whatever sent the transaction: `sauce
+ * pot --deploy`, a run that deploys its Pot first, `sauce send`, a fill that deploys an intent Pot,
+ * a cook whose program calls the Kitchen.
+ *
+ * Which release minted an EVM Pot is told from its address: `CREATE2(kitchen, gate salt, hash)`
+ * under each Kitchen and Pot init-code hash `deployments/releases.json` records, with the gate salt
+ * of each kind of Pot (`keccak256(abi.encode(owner, salt))`, and `…, true)` for a fixed Router or a
+ * Shared Pot). Offline: the release the SDK pins today does not decide it. A Solana Pot is the
+ * Kitchen's PDA under every release; its engine is the program its creation named.
+ *
+ * The command keeps them (`pot-store.ts`) through a recorder `run.ts` scopes to the command it runs
+ * ({@link recordingPots}): each record is written the moment its transaction lands, so a command
+ * that fails after deploying a Pot still keeps it. Nothing else records: the MCP server returns the
+ * records in its results and keeps no store.
+ */
+import { AsyncLocalStorage } from "node:async_hooks";
+import { readFileSync } from "node:fs";
+
+import {
+  getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
+  getTransactionDecoder,
+  type Address as SvmAddress,
+} from "@solana/kit";
+import {
+  bytesToHex,
+  encodeAbiParameters,
+  getAddress,
+  getCreate2Address,
+  hexToBytes,
+  keccak256,
+  toEventSelector,
+  zeroAddress,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
+
+import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
+import {
+  sdkCompilerVersion,
+  V12_RELEASE_SETS,
+  v12SvmKitchenProgramId,
+  type V12ReleaseSet,
+} from "../deployments/index.js";
+import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
+import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../svm/kitchen.js";
+import { POT_SCHEMA, type PotKind, type PotRecord, type PotStore } from "./pot-store.js";
+
+/** The package's version, from the manifest three levels above `sdk/{src,dist}/cli`. */
+const sdkVersion = (): string =>
+  (
+    JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as {
+      version: string;
+    }
+  ).version;
+
+// ---------------------------------------------------------------------------------------------
+// Which release minted a Pot
+// ---------------------------------------------------------------------------------------------
+
+/** One Kitchen and the init-code hash its Pots are minted under, with every release set that
+ *  minted them: the SDK's own first, then the newest. */
+interface PotFamily {
+  readonly kitchen: Address;
+  readonly potInitCodeHash: Hex;
+  readonly sets: readonly V12ReleaseSet[];
+}
+
+/** The release sets, the SDK's own first and then the newest: the one a Pot is recorded under
+ *  when several share its Kitchen and hash. */
+const preferred = (): V12ReleaseSet[] => {
+  const own = sdkCompilerVersion();
+
+  return [...V12_RELEASE_SETS]
+    .reverse()
+    .sort((a, b) => +(b.compiler === own) - +(a.compiler === own));
+};
+
+/** Every Kitchen and Pot init-code hash a known release mints under. */
+function potFamilies(): PotFamily[] {
+  const families = new Map<
+    string,
+    { kitchen: Address; potInitCodeHash: Hex; sets: V12ReleaseSet[] }
+  >();
+  for (const set of preferred()) {
+    const { kitchen, potInitCodeHash } = set["kitchen-evm"];
+    if (kitchen === null || potInitCodeHash === null) continue;
+    const key = `${kitchen.toLowerCase()}:${potInitCodeHash.toLowerCase()}`;
+    const family = families.get(key) ?? {
+      kitchen: getAddress(kitchen),
+      potInitCodeHash: potInitCodeHash.toLowerCase() as Hex,
+      sets: [],
+    };
+    family.sets.push(set);
+    families.set(key, family);
+  }
+
+  return [...families.values()];
+}
+
+/** The salt a Pot of `kind` is CREATE2 under (`Kitchen._salt`, which `Pot.gateSalt` mirrors). */
+const gateSalt = (owner: Address, salt: Hex, routerFixed: boolean): Hex =>
+  keccak256(
+    routerFixed
+      ? encodeAbiParameters(
+          [{ type: "address" }, { type: "bytes32" }, { type: "bool" }],
+          [owner, salt, true],
+        )
+      : encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [owner, salt]),
+  );
+
+const kindOf = (owner: Address, routerFixed: boolean): PotKind =>
+  !routerFixed ? "private" : owner === zeroAddress ? "shared" : "private-fixed-router";
+
+/** Every Pot the Kitchen of `family` could mint for (owner, salt): one of each kind. */
+function candidates(
+  family: Pick<PotFamily, "kitchen" | "potInitCodeHash">,
+  owner: Address,
+  salt: Hex,
+): Array<{ readonly pot: Address; readonly kind: PotKind }> {
+  // A Private Pot has an owner, a Shared one none; either may have its Router fixed.
+  const fixed = owner === zeroAddress ? [true] : [false, true];
+
+  return fixed.map((routerFixed) => ({
+    pot: getCreate2Address({
+      from: family.kitchen,
+      salt: gateSalt(owner, salt, routerFixed),
+      bytecodeHash: family.potInitCodeHash,
+    }),
+    kind: kindOf(owner, routerFixed),
+  }));
+}
+
+/**
+ * The release that minted `pot`, Kitchen `kitchen`'s for (`owner`, `salt`), and its kind: the
+ * family whose CREATE2 lands on it. `undefined` when no release the SDK knows does.
+ */
+export function evmPotRelease(input: {
+  readonly kitchen: Address;
+  readonly owner: Address;
+  readonly salt: Hex;
+  readonly pot: Address;
+}): { readonly family: PotFamily; readonly kind: PotKind } | undefined {
+  const owner = getAddress(input.owner);
+  const pot = getAddress(input.pot);
+  for (const family of potFamilies()) {
+    if (family.kitchen !== getAddress(input.kitchen)) continue;
+    const found = candidates(family, owner, input.salt).find((one) => one.pot === pot);
+    if (found !== undefined) return { family, kind: found.kind };
+  }
+
+  return undefined;
+}
+
+/** The EVM part of a release set, as a record names it. */
+const evmRelease = (set: V12ReleaseSet): Record<string, string> => ({
+  compiler: set.compiler,
+  "v12-evm": set["v12-evm"].version,
+  "kitchen-evm": set["kitchen-evm"].version,
+});
+
+/** The Solana part of a release set, as a record names it. */
+const svmRelease = (set: V12ReleaseSet): Record<string, string> => ({
+  compiler: set.compiler,
+  "v12-svm": set["v12-svm"].version,
+  "kitchen-svm": set["kitchen-svm"].version,
+});
+
+/** The release set whose Solana engine is `engine`, the SDK's own first. */
+const svmSetOf = (engine: string): V12ReleaseSet | undefined =>
+  preferred().find((set) => set["v12-svm"].engine === engine);
+
+/** What every record shares. */
+const base = (chain: CanonicalChain, origin: PotRecord["origin"]) => ({
+  schema: POT_SCHEMA,
+  chain: chain.slug,
+  chainId: chain.id,
+  origin,
+});
+
+/** An EVM Pot's record, its release told from its address (`readHash` reads the Kitchen's own
+ *  hash when no known release minted it). */
+async function evmRecord(input: {
+  readonly chain: CanonicalChain;
+  readonly kitchen: Address;
+  readonly owner: Address;
+  readonly salt: Hex;
+  readonly pot: Address;
+  readonly origin: PotRecord["origin"];
+  readonly deployment?: PotRecord["deployment"];
+  readonly readHash: () => Promise<Hex | undefined>;
+  readonly readKind: (hash: Hex) => Promise<PotKind | undefined>;
+}): Promise<PotRecord> {
+  const known = evmPotRelease(input);
+  const set = known?.family.sets[0];
+  const hash = known?.family.potInitCodeHash ?? (await input.readHash());
+  const kind =
+    known?.kind ?? (hash === undefined ? undefined : await input.readKind(hash)) ?? "private";
+  const engine = set?.["v12-evm"].engine;
+
+  return {
+    ...base(input.chain, input.origin),
+    pot: getAddress(input.pot),
+    owner: getAddress(input.owner),
+    salt: input.salt.toLowerCase(),
+    kind,
+    kitchen: getAddress(input.kitchen),
+    ...(hash === undefined ? {} : { potInitCodeHash: hash }),
+    ...(engine === undefined || engine === null ? {} : { engine: getAddress(engine) }),
+    ...(set === undefined ? {} : { release: evmRelease(set) }),
+    sdk: sdkVersion(),
+    ...(input.deployment === undefined ? {} : { deployment: input.deployment }),
+    recordedAt: new Date().toISOString(),
+  };
+}
+
+/** The kind of the Pot at `pot` of Kitchen `kitchen` minted under `hash`: whichever CREATE2 lands
+ *  on it. */
+const kindUnder = (kitchen: Address, owner: Address, salt: Hex, pot: Address, hash: Hex) =>
+  candidates({ kitchen, potInitCodeHash: hash }, owner, salt).find(
+    (one) => one.pot === getAddress(pot),
+  )?.kind;
+
+// ---------------------------------------------------------------------------------------------
+// What a landed transaction deployed
+// ---------------------------------------------------------------------------------------------
+
+const POT_DEPLOYED = toEventSelector("PotDeployed(address,bytes32,address)");
+
+/** Every Kitchen a known release mints from. */
+const kitchens = (): Set<Address> => new Set(potFamilies().map((family) => family.kitchen));
+
+/**
+ * The Pots a landed EVM transaction deployed: one record per `PotDeployed` a known Kitchen emitted
+ * in it. None for one that reverted. `client` is the endpoint that served its receipt.
+ */
+export async function evmPotsDeployed(
+  client: PublicClient,
+  sent: {
+    readonly hash: Hex;
+    readonly status: "success" | "reverted";
+    readonly blockNumber: bigint;
+    readonly logs: ReadonlyArray<{
+      readonly address: Address;
+      readonly topics: readonly Hex[];
+      readonly data: Hex;
+    }>;
+  },
+  from: Address,
+): Promise<PotRecord[]> {
+  if (sent.status !== "success") return [];
+  const known = kitchens();
+  const deployed = sent.logs.filter(
+    (log) =>
+      log.topics[0]?.toLowerCase() === POT_DEPLOYED &&
+      log.topics.length === 3 &&
+      known.has(getAddress(log.address)),
+  );
+  if (deployed.length === 0) return [];
+  const chainId = await client.getChainId();
+  const chain = resolveChain(chainId);
+  if (chain === undefined) throw new Error(`chain ${chainId} is not one the SDK knows`);
+
+  return Promise.all(
+    deployed.map((log) => {
+      const kitchen = getAddress(log.address);
+      const owner = getAddress(`0x${log.topics[1]!.slice(26)}`);
+      const salt = log.topics[2]!;
+      const pot = getAddress(`0x${log.data.slice(26, 66)}`);
+
+      return evmRecord({
+        chain,
+        kitchen,
+        owner,
+        salt,
+        pot,
+        origin: "deployed",
+        deployment: { tx: sent.hash, block: sent.blockNumber.toString(), from: getAddress(from) },
+        // A Kitchen upgraded past the releases the SDK knows: its own hash, as it was then.
+        readHash: () =>
+          client
+            .readContract({
+              address: kitchen,
+              abi: v12KitchenAbi,
+              functionName: "potInitCodeHash",
+              blockNumber: sent.blockNumber,
+            })
+            .then(
+              (hash) => hash.toLowerCase() as Hex,
+              () => undefined,
+            ),
+        readKind: async (hash) => kindUnder(kitchen, owner, salt, pot, hash),
+      });
+    }),
+  );
+}
+
+/** One instruction of a compiled Solana message. */
+interface CompiledInstruction {
+  readonly programAddressIndex: number;
+  readonly accountIndices?: readonly number[];
+  readonly data?: Uint8Array;
+}
+
+/**
+ * The Pots a landed Solana transaction created: one record per top-level `create_pot` of the
+ * Kitchen in it, its accounts (owner, engine program, Pot) read through the message's static
+ * accounts and those its lookup tables loaded (`loaded`, as the node reports them). None for one
+ * that failed.
+ */
+export function svmPotsCreated(input: {
+  readonly chain: CanonicalChain;
+  /** The transaction, base64, as `getTransaction` returns it. */
+  readonly transaction: string;
+  readonly loaded?: { readonly writable: readonly string[]; readonly readonly: readonly string[] };
+  readonly signature: string;
+  readonly slot: bigint;
+  readonly ok: boolean;
+}): PotRecord[] {
+  if (!input.ok) return [];
+  const decoded = getTransactionDecoder().decode(
+    new Uint8Array(getBase64Encoder().encode(input.transaction)),
+  );
+  const message = getCompiledTransactionMessageDecoder().decode(decoded.messageBytes) as {
+    readonly staticAccounts: readonly string[];
+    readonly instructions: readonly CompiledInstruction[];
+  };
+  const accounts = [
+    ...message.staticAccounts,
+    ...(input.loaded?.writable ?? []),
+    ...(input.loaded?.readonly ?? []),
+  ];
+  const kitchen = v12SvmKitchenProgramId();
+  const head = KITCHEN_DISCRIMINATORS.createPot;
+
+  return message.instructions.flatMap((instruction) => {
+    const data = instruction.data ?? new Uint8Array();
+    const at = (index: number) => accounts[instruction.accountIndices?.[index] ?? -1];
+    const [owner, engine, pot] = [at(0), at(1), at(2)];
+    if (
+      accounts[instruction.programAddressIndex] !== kitchen ||
+      data.length < 40 ||
+      !head.every((byte, index) => data[index] === byte) ||
+      owner === undefined ||
+      engine === undefined ||
+      pot === undefined
+    ) {
+      return [];
+    }
+
+    return [
+      svmRecord({
+        chain: input.chain,
+        owner,
+        salt: bytesToHex(data.slice(8, 40)),
+        pot,
+        engine,
+        origin: "deployed",
+        deployment: {
+          tx: input.signature,
+          block: input.slot.toString(),
+          from: message.staticAccounts[0]!,
+        },
+      }),
+    ];
+  });
+}
+
+/** A Solana Pot's record: the release of the engine it was created for, when one is known. */
+function svmRecord(input: {
+  readonly chain: CanonicalChain;
+  readonly owner: string;
+  readonly salt: Hex;
+  readonly pot: string;
+  readonly engine: string;
+  readonly origin: PotRecord["origin"];
+  readonly deployment?: PotRecord["deployment"];
+}): PotRecord {
+  const set = svmSetOf(input.engine);
+
+  return {
+    ...base(input.chain, input.origin),
+    pot: input.pot,
+    owner: input.owner,
+    salt: input.salt.toLowerCase(),
+    kind: "private",
+    kitchen: v12SvmKitchenProgramId(),
+    engine: input.engine,
+    ...(set === undefined ? {} : { release: svmRelease(set) }),
+    sdk: sdkVersion(),
+    ...(input.deployment === undefined ? {} : { deployment: input.deployment }),
+    recordedAt: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Keeping them
+// ---------------------------------------------------------------------------------------------
+
+/** What keeps the Pots a command deploys, as each transaction lands. */
+export interface PotRecorder {
+  /** Pots a transaction deployed. */
+  readonly record: (pots: readonly PotRecord[]) => void;
+  /** A transaction that deployed a Pot whose record could not be made: why. */
+  readonly missed: (tx: string, reason: string) => void;
+}
+
+const recorders = new AsyncLocalStorage<PotRecorder>();
+
+/** Runs `run` with `recorder` keeping every Pot a transaction it sends deploys. */
+export const recordingPots = <T>(recorder: PotRecorder, run: () => Promise<T>): Promise<T> =>
+  recorders.run(recorder, run);
+
+/** Hands `pots` to the command's recorder, if it keeps any. */
+export function potsLanded(pots: readonly PotRecord[]): void {
+  if (pots.length > 0) recorders.getStore()?.record(pots);
+}
+
+/** Tells the command's recorder that `tx` deployed a Pot it has no record of, and why. */
+export function potsMissed(tx: string, reason: string): void {
+  recorders.getStore()?.missed(tx, reason);
+}
+
+/** The recorder that keeps Pots in `store`, saying so (and what it could not keep) on `notify`. */
+export function storeRecorder(store: PotStore, notify: (line: string) => void): PotRecorder {
+  return {
+    record: (pots) => {
+      for (const pot of pots) {
+        try {
+          const saved = store.save(pot);
+          notify(
+            saved === "created"
+              ? `recorded Pot ${pot.pot} on ${pot.chain} in ${store.dir}`
+              : `Pot ${pot.pot} on ${pot.chain} was already recorded in ${store.dir}`,
+          );
+        } catch (error) {
+          notify(
+            `warning: Pot ${pot.pot} on ${pot.chain} was deployed, but not recorded in ` +
+              `${store.dir}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+    },
+    missed: (tx, reason) =>
+      notify(`warning: ${tx} deployed a Pot, but it was not recorded in ${store.dir}: ${reason}`),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pots deployed elsewhere: `sauce pot import`
+// ---------------------------------------------------------------------------------------------
+
+/** What every release says of where Pots come from, for a refusal. */
+const knownReleases = (): string =>
+  potFamilies()
+    .map(
+      (family) =>
+        `kitchen-evm ${[...new Set(family.sets.map((set) => set["kitchen-evm"].version))].join(", ")}`,
+    )
+    .join("; ");
+
+const hasCode = async (client: PublicClient, address: Address): Promise<boolean> => {
+  const code = await client.getCode({ address });
+
+  return code !== undefined && code !== "0x";
+};
+
+/** The Pot at `pot` on `chain`, read off the Pot itself (its owner, salt and Kitchen) and told its
+ *  release from its address. Refused when nothing is there, or no known release minted it. */
+export async function importEvmPot(
+  client: PublicClient,
+  chain: CanonicalChain,
+  pot: Address,
+): Promise<PotRecord> {
+  if (!(await hasCode(client, pot))) {
+    throw new Error(`${pot} has no code on ${chain.slug}: no Pot is deployed there`);
+  }
+  const read = <T>(functionName: "owner" | "userSalt" | "kitchen") =>
+    client
+      .readContract({ address: pot, abi: v12PotAbi, functionName })
+      .then((value) => value as T)
+      .catch(() => {
+        throw new Error(`${pot} on ${chain.slug} is not a Pot: it has no ${functionName}()`);
+      });
+  const [owner, salt, kitchen] = await Promise.all([
+    read<Address>("owner"),
+    read<Hex>("userSalt"),
+    read<Address>("kitchen"),
+  ]);
+  if (evmPotRelease({ kitchen, owner, salt, pot }) === undefined) {
+    throw new Error(
+      `${pot} on ${chain.slug} says it is Kitchen ${kitchen}'s, for owner ${owner} and salt ` +
+        `${salt}, but no release this sauce knows minted it there (${knownReleases()}): it is not ` +
+        "recorded. A newer sauce may know its release",
+    );
+  }
+
+  return evmRecord({
+    chain,
+    kitchen,
+    owner,
+    salt,
+    pot,
+    origin: "imported",
+    readHash: async () => undefined,
+    readKind: async () => undefined,
+  });
+}
+
+/** The Pots `owner` has at `salt` on `chain`, one per release and kind whose address has code. */
+export async function importEvmOwnerPots(
+  client: PublicClient,
+  chain: CanonicalChain,
+  owner: Address,
+  salt: Hex,
+): Promise<PotRecord[]> {
+  const found = await Promise.all(
+    potFamilies().flatMap((family) =>
+      candidates(family, getAddress(owner), salt).map(async ({ pot }) =>
+        (await hasCode(client, pot)) ? importEvmPot(client, chain, pot) : undefined,
+      ),
+    ),
+  );
+
+  return found.filter((record): record is PotRecord => record !== undefined);
+}
+
+/** The minimal Solana reads an import makes. */
+export interface SvmAccountReader {
+  /** The account's owning program, or `undefined` when it does not exist. */
+  readonly ownerOf: (address: SvmAddress) => Promise<string | undefined>;
+}
+
+/**
+ * `owner`'s Pot at `salt` on Solana: the Kitchen's PDA, which must exist. Its engine is the program
+ * that owns it (`create_pot` hands the account to the engine it names).
+ */
+export async function importSvmPot(
+  reader: SvmAccountReader,
+  chain: CanonicalChain,
+  owner: SvmAddress,
+  salt: Hex,
+): Promise<PotRecord> {
+  const { address: pot } = await derivePotPda(
+    v12SvmKitchenProgramId() as SvmAddress,
+    owner,
+    hexToBytes(salt),
+  );
+  const engine = await reader.ownerOf(pot);
+  if (engine === undefined) {
+    throw new Error(`${owner} has no Pot at salt ${salt} on ${chain.slug}: ${pot} does not exist`);
+  }
+
+  return svmRecord({ chain, owner, salt, pot, engine, origin: "imported" });
+}
