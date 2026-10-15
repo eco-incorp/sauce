@@ -566,14 +566,20 @@ when the cook leaves anything in the Pot: tell the user.
 
 The tools sign nothing, so `sauce run` has none: the user signs what they return, with any
 signer, and `sauce_send` broadcasts the signed transactions (`sauce send`), waits for each and
-returns what it did. The one exception is a server started over stdio with `--wallets` and a
-password source (`--password-env <NAME>`, given from the client's config): it sends from its own
-wallets. `sauce_wallet_create` makes one
-(`sauce wallet new`), `sauce_wallet_list` names them, and `sauce_wallet_send` simulates what another
-tool returned, holds it to the wallet's policy, signs and sends it: `sauce run` from a wallet. Each
-transaction it sent comes back with its hash, `explorer` and `trace` to give the user, and a cook
-with `moves`, `leftInPot` and `summary`, the lines `sauce run` prints.
-Over HTTP, nothing signs.
+returns what it did. The exception is the server run on the user's machine over stdio: it serves
+the `sauce wallet` directory's wallets as tools. `sauce_wallet_list` and `sauce_wallet_address`
+name them with no password. Creating (`sauce_wallet_create`, `sauce wallet new`), importing a key
+file by its path (`sauce_wallet_import`) and sending need the wallets enabled: once per server,
+`sauce_enable_wallets` names where their password comes from, never the password — `{ env: NAME }`
+(a variable the client's configuration passes to the server), `{ file: path }` (a file only the
+user can read), `{ dotenv: path, variable: NAME }` (an entry of such a `.env` file) or
+`{ generate: true }` (a new random password the server writes to a new file beside the wallet
+directory; tell the user where it is). Ask the user which; a server started with
+`--password-env <NAME>` has them enabled already (`sauce_wallet_list` says `enabled`).
+`sauce_wallet_send` simulates what another tool returned, holds it to the wallet's policy, signs
+and sends it: `sauce run` from a wallet. Each transaction it sent comes back with its hash,
+`explorer` and `trace` to give the user, and a cook with `moves`, `leftInPot` and `summary`, the
+lines `sauce run` prints. Over HTTP, nothing signs.
 
 ## Rules
 

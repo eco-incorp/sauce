@@ -192,8 +192,11 @@ command-line argument or a tool input, and it never reaches the model's context:
 sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
 sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
-sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
 ```
+
+The local MCP server serves the same wallets with no flag. An agent enables them with
+`sauce_enable_wallets`, naming the password's source, never the password: a variable, a file, an
+entry of a `.env` file, or a new random password the server writes to a file of its own.
 
 An EVM wallet is a standard keystore that `cast wallet` and geth read too. A policy file beside a
 wallet limits what it sends, per transaction and per day, by chain, by recipient, in the native
