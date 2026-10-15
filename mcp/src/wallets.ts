@@ -37,6 +37,7 @@ import {
 import {
   chainRef,
   LIMITS,
+  potsKept,
   refusable,
   toolRegistrar,
   type ToolContext,
@@ -193,8 +194,8 @@ export function registerWalletTools(
         "Pot holds after it of what it moved, not in the wallet) and `summary`, the same as lines " +
         "to read and report; and on a transaction that deployed a Pot, `pots`: each Pot as the " +
         "sauce command records it (chain, address, owner, salt, kind, Kitchen, the engine and " +
-        "compiler release it was minted under, the deploying transaction), to keep: this server " +
-        "keeps none. Build the transactions for the wallet's address: as `owner` or " +
+        `compiler release it was minted under, the deploying transaction), ${potsKept(context)}. ` +
+        "Build the transactions for the wallet's address: as `owner` or " +
         "`from` in the tool that builds them. Needs the chain's endpoint (rpcUrl, or the " +
         "server's). What it sends is spent: simulate with sauce_simulate first. It sends only on " +
         `${supportedChainNames()}, the chains this release supports; on any other it is refused ` +
