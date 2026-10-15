@@ -263,6 +263,92 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(refund.stdout).toContain("the vault holds nothing to refund");
   }, 240_000);
 
+  it("keeps what sauce send lands: a publish and a claim signed elsewhere", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const start = await now(base);
+    /** `txs` signed by `account` as an external signer would, then broadcast by `sauce send`. */
+    const sendSigned = async (
+      local: LocalChain,
+      account: typeof OWNER,
+      txs: ReadonlyArray<{ to: Address; data: Hex; value: string }>,
+    ) => {
+      const fees = await local.publicClient.estimateFeesPerGas();
+      const first = await local.publicClient.getTransactionCount({ address: account.address });
+      const signed = await Promise.all(
+        txs.map((tx, index) =>
+          account.signTransaction({
+            chainId: local.chain.id,
+            type: "eip1559",
+            to: tx.to,
+            data: tx.data,
+            value: BigInt(tx.value),
+            nonce: first + index,
+            gas: 1_000_000n,
+            maxFeePerGas: fees.maxFeePerGas * 2n,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+          }),
+        ),
+      );
+
+      return sauce("send", ...signed, "--config", config, "--store", store, "--json");
+    };
+    const events = (hash: Hex) =>
+      readFileSync(join(store, hash, "events.jsonl"), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { event: string; tx: Hex; from: Address });
+
+    // Built unsigned, signed by the creator's own signer, sent: the store has it from the logs.
+    const built = jsonOf(
+      await sauce(
+        ...["intent", "publish", file, ...intentFlags(start + 3800n, start + 7400n)],
+        ...["--rpc-url", ethereum.rpcUrl, "--from", OWNER.address, "--format", "json"],
+        ...["--store", store],
+      ),
+    );
+    const [intent] = built.intents as Array<{
+      intentHash: Hex;
+      transactions: Array<{ to: Address; data: Hex; value: string }>;
+    }>;
+    const hash = intent!.intentHash;
+    expect(existsSync(join(store, hash))).toBe(false);
+    const published = await sendSigned(ethereum, OWNER, intent!.transactions);
+    expect(published.code).toBe(0);
+    expect(published.stderr).toContain(`stored intent ${hash} in ${store}`);
+    expect(events(hash).map((each) => each.event)).toEqual(["published", "funded"]);
+    expect(events(hash)[0]!.from).toBe(OWNER.address);
+
+    // Filled and proven by the command, the proof carried.
+    const filled = await lifecycle(
+      "fill",
+      hash,
+      store,
+      ...["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
+    );
+    expect(filled.code).toBe(0);
+    const [sent] = (JSON.parse(filled.stdout) as { intents: Array<Record<string, unknown>> })
+      .intents;
+    const fulfill = (sent!.transactions as Array<{ hash: Hex }>)[1]!.hash;
+    expect(await relay(base, baseMailbox, fulfill, ethereum, ethereumMailbox)).toBe(1);
+
+    // The claim printed unsigned, signed elsewhere, sent: claimed, from its IntentWithdrawn.
+    const unsigned = jsonOf(await lifecycle("claim", hash, store, "--json")) as {
+      transactions: Array<{ to: Address; data: Hex; value: string }>;
+    };
+    const claimed = await sendSigned(ethereum, SOLVER, unsigned.transactions);
+    expect(claimed.code).toBe(0);
+    expect(claimed.stderr).toContain(`intent ${hash}: claimed, recorded in ${store}`);
+    const recorded = events(hash);
+    expect(recorded.map((each) => each.event)).toEqual([
+      "published",
+      "funded",
+      "filled",
+      "proving",
+      "claimed",
+    ]);
+    expect(recorded.at(-1)!.from).toBe(SOLVER.address);
+  }, 240_000);
+
   it("an intent built in TypeScript with only its own values: published, filled, proven, claimed", async () => {
     // What the caller passes is theirs: the deadlines, the creator, the amounts, and the fee read
     // from Base's Kitchen. The Portals, the prover, the Pot, the engine and the native amount the

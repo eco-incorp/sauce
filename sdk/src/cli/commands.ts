@@ -1001,8 +1001,6 @@ export interface RunInput extends CookInput, ChainAccess {
   readonly setup?: (reach: SetupReach) => Promise<readonly SetupStep[]>;
   /** Another chain's endpoint, as the command finds it, for what `setup` reads and sends there. */
   readonly endpointOf?: EndpointOf;
-  /** Called with the cook once it is sent, for what it published (the store); returns notes. */
-  readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
 
 /** `sauce run`: compile, sign, send and wait — deploying the Pot first once it is agreed to. */
@@ -1077,8 +1075,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
-  const stored = input.onSent === undefined ? [] : await input.onSent(sent);
-  const notes = [...(funding?.notes ?? []), ...stored];
+  const notes = [...(funding?.notes ?? [])];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
   const report =

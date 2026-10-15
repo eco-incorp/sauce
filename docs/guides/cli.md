@@ -1287,14 +1287,17 @@ and from when.
 
 ### The store, and picking one: `sauce intent`
 
-Every intent `sauce intent publish`, `sauce run` and the `sauce intent` verbs touch is kept in a
-store, `~/.sauce/intents` (`--store <dir>` for another), so later commands name it by hash: one
-directory per intent hash, holding `intent.json`, the full intent — route, reward, chains, Portal,
-hashes, vault — written once and never changed, and `events.jsonl`, one line appended per thing that
-happened to it (`published`, `funded`, `imported`, `filled`, `proving`, `claimed`, `refunded`,
-`cancelled`), with its chain, transaction, block and time. Nothing is read and written back, so two
-commands at once cannot tear it, and where an intent stands is never stored: it is read from the
-chains each time. No key or endpoint is written there.
+Every intent `sauce intent publish`, `sauce run`, `sauce send` and the `sauce intent` verbs touch
+is kept in a store, `~/.sauce/intents` (`--store <dir>` for another), so later commands name it by
+hash: one directory per intent hash, holding `intent.json`, the full intent — route, reward, chains,
+Portal, hashes, vault — written once and never changed, and `events.jsonl`, one line appended per
+thing that happened to it (`published`, `funded`, `imported`, `filled`, `proving`, `claimed`,
+`refunded`, `cancelled`), with its chain, transaction, block and time. Each event is read from the
+transaction as it lands — the Portal's own events, or on Solana its instructions — so a transaction
+signed elsewhere and sent with `sauce send` is recorded as one the command signed. Nothing is read
+and written back, so two commands at once cannot tear it, and where an intent stands is never
+stored: it is read from the chains each time. No key or endpoint is written there. The local MCP
+server (`sauce mcp` over stdio) keeps the same store.
 
 `sauce intent import <tx hash> --chain <source>` stores the intents a
 transaction published — someone else's, say — rebuilt from its `IntentPublished` logs, each checked

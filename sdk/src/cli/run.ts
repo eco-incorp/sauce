@@ -44,7 +44,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
+import { chainServedBy, connect, connectAt, endpointFor } from "./chain.js";
 import {
   type Approver,
   type ArgsInput,
@@ -79,7 +79,6 @@ import {
   listCommand,
   proveCommand,
   refundCommand,
-  rememberPublished,
   showCommand,
   storedTargets,
   type LifecycleContext,
@@ -92,7 +91,7 @@ import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { potImportCommand, potListCommand } from "./pot-commands.js";
 import { PotStore } from "./pot-store.js";
-import { keeping } from "./keep.js";
+import { keeping, keepsAny, type LocalStores } from "./keep.js";
 import { globalsCommand } from "./globals.js";
 import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
@@ -1191,23 +1190,6 @@ async function endpointLookup(
   return (chain) => (chain.id === served.id ? rpcUrl : sharedEndpoint(args, io, chain));
 }
 
-/** Records what a sent transaction published in the store, with a note per intent stored. */
-const storing =
-  (args: ParsedArgs, io: CliIo, chain: CanonicalChain, rpcUrl: string) =>
-  async (sent: Sent): Promise<readonly string[]> => {
-    const store = storeOf(args, io);
-    try {
-      const records = await rememberPublished(store, chain, rpcUrl, sent);
-
-      return records.map((record) => `stored intent ${record.intentHash} in ${store.dir}`);
-    } catch (error) {
-      return [
-        `warning: ${sent.hash} was sent, but what it published was not stored in ${store.dir}: ` +
-          (error instanceof Error ? error.message : String(error)),
-      ];
-    }
-  };
-
 /** What every lifecycle command shares: the store, the endpoints, the signer and the approvals. */
 async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleContext> {
   const endpoint = await endpointLookup(args, io);
@@ -1426,7 +1408,6 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
       dryRun: false,
       rpcUrl,
       account,
-      onSent: storing(args, io, created.source, rpcUrl),
     },
     io,
   );
@@ -1862,7 +1843,6 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
           ...(rpcUrl === undefined ? {} : { rpcUrl }),
           ...(account === undefined ? {} : { account }),
           ...(from === undefined ? {} : { from: parseAddress("from", from) }),
-          ...(rpcUrl === undefined ? {} : { onSent: storing(args, io, program.chain, rpcUrl) }),
         },
         io,
       );
@@ -2087,9 +2067,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         ...(solver === undefined ? {} : { solver: parseAddress("solver", solver) }),
         ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),
         ...(args.values["no-prove"] === true ? { prove: false } : {}),
-        ...(account === undefined
-          ? {}
-          : { send: { account, approver: approverOf(args, io), store } }),
+        ...(account === undefined ? {} : { send: { account, approver: approverOf(args, io) } }),
       });
     },
   },
@@ -3044,7 +3022,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           endpointOf: (chain) => sharedEndpoint(args, io, chain),
           account,
           approver: approverOf(args, io),
-          onSent: storing(args, io, input.chain, rpcUrl),
         },
         io,
       );
@@ -3219,6 +3196,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       },
       ...ENDPOINT,
       ...POTS,
+      store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
     },
@@ -3257,6 +3235,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "--close gives up on the cook and closes the code buffer. A cursor",
       "carries no key and no endpoint; @file reads it from a file, or from the JSON a step was",
       "printed as.",
+      "",
+      "What landed is kept as the other commands keep it: a Pot one deployed in the Pot store,",
+      "and in the intent store (--store, default ~/.sauce/intents) every intent one published",
+      "and what one did to an intent the store holds (filled, proving, claimed, refunded,",
+      "cancelled), read from the Portal's own events.",
       ...SUPPORTED_ONLY("Sends"),
       "",
       "Examples:",
@@ -4675,15 +4658,20 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
       if (args.values.offline !== true) await io.publicRpcs?.ready();
     }
     // What the command's transactions do is kept as each lands (`keep.ts`): every Pot one
-    // deploys. `sauce mcp` keeps its own, a tool call at a time, over stdio only.
+    // deploys, every intent one publishes and what one does to an intent. `sauce mcp` keeps its
+    // own, a tool call at a time, over stdio only.
     const potsDir = label === "mcp" ? undefined : (stringFlag(args, "pots") ?? io.potsDir);
+    const stores: LocalStores =
+      label === "mcp"
+        ? {}
+        : {
+            ...(potsDir === undefined ? {} : { pots: new PotStore(potsDir) }),
+            intents: storeOf(args, io),
+          };
     const run = async () => command.run(args, io, trailing);
-    const output = await (potsDir === undefined
-      ? run()
-      : keeping(
-          { stores: { pots: new PotStore(potsDir) }, say: (line) => io.stderr(`${line}\n`) },
-          run,
-        ));
+    const output = await (keepsAny(stores)
+      ? keeping({ stores, say: (line) => io.stderr(`${line}\n`) }, run)
+      : run());
     if (output === undefined) return 0;
     for (const note of output.notes ?? []) io.stderr(`${note}\n`);
     io.stdout(`${render(command, output, args)}\n`);

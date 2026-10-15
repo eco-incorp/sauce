@@ -178,7 +178,6 @@ function run(action: Action, target: Target, context: LifecycleContext): Promise
               send: {
                 account: context.account,
                 approver: context.approver,
-                store: context.store,
               },
             }
           : {}),

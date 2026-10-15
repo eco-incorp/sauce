@@ -5,8 +5,11 @@
  *
  * Each is a layer over `lifecycle.ts`, which reads the chains and builds the transactions as plain
  * values (what `sauce mcp` returns unsigned): this adds where the intent comes from (a file, or a
- * hash the store holds), the signer and the approval of what it spends, sending, and the store.
- * Given no signer, a command prints the transactions it would send, unsigned, for a wallet.
+ * hash the store holds), the signer and the approval of what it spends, and sending. Given no
+ * signer, a command prints the transactions it would send, unsigned, for a wallet. What a sent
+ * transaction did is recorded in the store as it lands, from the chain's own events
+ * (`intent-keep.ts`, through `keep.ts`): each command tells the store which intents it acts on
+ * (`keep.ts#knowIntents`), so one it does not hold yet is recorded too.
  */
 import type { KeyPairSigner } from "@solana/kit";
 import { formatUnits, getAddress, type Address, type Hex } from "viem";
@@ -45,7 +48,6 @@ import {
   intentOf,
   intentRecord,
   intentStatus,
-  publishedIntents,
   txRequest,
   type Ability,
   type AnyTxJson,
@@ -58,7 +60,8 @@ import {
 import { isSvmTx, type SvmTxJson } from "./lifecycle-svm.js";
 import { sendPlannedSvm, type SvmSent } from "./solana.js";
 import { SOLANA_HYPERLANE } from "../svm/portal.js";
-import type { IntentStore, StoreEvent, StoreEventName, StoredIntent } from "./store.js";
+import { knowIntents } from "./keep.js";
+import type { IntentStore, StoredIntent } from "./store.js";
 
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 
@@ -172,11 +175,6 @@ function onEvm(sent: SentTx | undefined): Extract<SentTx, { result: Sent }> {
   return sent;
 }
 
-/** The hash (on Solana the signature) of a sent transaction, and the block (slot) it landed in. */
-const sentHash = (sent: SentTx): string => ("svm" in sent ? sent.svm.signature : sent.result.hash);
-const sentBlock = (sent: SentTx): string =>
-  "svm" in sent ? (sent.svm.slot ?? 0n).toString() : sent.result.blockNumber.toString();
-
 /** The Hyperlane messages a sent transaction dispatched: from an EVM Mailbox's `DispatchId`
  *  events, or Solana's Mailbox's log line. */
 function messagesOf(sent: SentTx): Array<{ readonly mailbox: string; readonly id: Hex }> {
@@ -190,11 +188,14 @@ function messagesOf(sent: SentTx): Array<{ readonly mailbox: string; readonly id
 }
 
 /** Sends `transactions` in order, each rehearsed first and refused if it would fail: an EVM one
- *  from the signer (`sendAndWait`), a Solana one signed by `--keypair` (`sendPlannedSvm`). */
+ *  from the signer (`sendAndWait`), a Solana one signed by `--keypair` (`sendPlannedSvm`). What
+ *  each does to `records` is recorded as it lands (`keep.ts`). */
 async function sendAll(
   transactions: readonly AnyTxJson[],
   context: LifecycleContext,
+  records: readonly IntentRecord[],
 ): Promise<SentTx[]> {
+  knowIntents(records);
   const sent: SentTx[] = [];
   for (const tx of transactions) {
     const chain = requireChain(tx.chainId);
@@ -322,33 +323,6 @@ function svmFrom(chain: CanonicalChain, context: LifecycleContext): { readonly f
   }
 
   return { from: context.svmSigner.address };
-}
-
-/** Records `event` for every intent of `targets`, saving each record first. */
-function remember(
-  context: LifecycleContext,
-  records: readonly IntentRecord[],
-  event: StoreEventName,
-  sent: SentTx,
-  extra: Partial<StoreEvent> = {},
-): void {
-  for (const record of records) {
-    context.store.save(record);
-    context.store.append(record.intentHash, {
-      event,
-      chain: sent.tx.chain,
-      chainId: sent.tx.chainId,
-      tx: sentHash(sent),
-      block: sentBlock(sent),
-      time: iso(sent.time),
-      ...("svm" in sent
-        ? { from: sent.tx.feePayer }
-        : context.account === undefined
-          ? {}
-          : { from: context.account.address }),
-      ...extra,
-    });
-  }
 }
 
 /** What a sent transaction moved, decoded from its logs. */
@@ -486,11 +460,9 @@ export async function proveCommand(
       buildProve(records, endpoints, { cancelledIn, ...payer }),
     ),
     context,
+    records,
   );
   const messages = messagesOf(sent!);
-  for (const message of messages)
-    remember(context, records, "proving", sent!, { message: message.id });
-  if (messages.length === 0) remember(context, records, "proving", sent!);
   const source = records[0]!.source.chain;
 
   return {
@@ -539,11 +511,7 @@ export async function claimCommand(
     };
   }
   if (context.account === undefined) return unsigned(plan.transactions, "claim");
-  const sent = onEvm((await sendAll(plan.transactions, context))[0]);
-  const claimed = records.filter((record) =>
-    plan.claims.some((claim) => claim.intentHash === record.intentHash),
-  );
-  remember(context, claimed, "claimed", sent);
+  const sent = onEvm((await sendAll(plan.transactions, context, records))[0]);
   const effects = await moved(context, sent, [
     [getAddress(records[0]!.source.portal), "Portal"],
     ...plan.claims.map((claim) => [claim.vault, "the intent's vault"] as const),
@@ -598,8 +566,7 @@ export async function refundCommand(
       });
       continue;
     }
-    const sent = onEvm((await sendAll(plan.transactions, context))[0]);
-    remember(context, [target.record], "refunded", sent);
+    const sent = onEvm((await sendAll(plan.transactions, context, [target.record]))[0]);
     const effects = await moved(context, sent, [
       [getAddress(target.record.source.portal), "Portal"],
       [plan.vault, "the intent's vault"],
@@ -673,12 +640,9 @@ export async function cancelCommand(
         buildCancel(target.record, endpoints, { prove: options.prove, ...payer }),
       ),
       context,
+      [target.record],
     );
-    remember(context, [target.record], "cancelled", sent!);
     const messages = messagesOf(sent!);
-    for (const message of messages) {
-      remember(context, [target.record], "proving", sent!, { message: message.id });
-    }
     texts.push(
       ...sentLines(sent!),
       `Cancelled ${target.record.intentHash} on ${target.record.destination.chain}: no solver can fill it now.`,
@@ -929,8 +893,10 @@ export async function importCommand(
     { [String(ref.chain.id)]: url },
   );
   const lines: string[] = [];
+  const stored: Array<"created" | "exists"> = [];
   for (const published of intents) {
     const created = context.store.save(published.record);
+    stored.push(created);
     const base = {
       chain: ref.chain.slug,
       chainId: ref.chain.id,
@@ -952,34 +918,9 @@ export async function importCommand(
 
   return {
     text: lines.join("\n"),
-    json: { store: context.store.dir, intents: intents.map((entry) => ({ ...entry })) },
+    json: {
+      store: context.store.dir,
+      intents: intents.map((entry, index) => ({ ...entry, stored: stored[index] })),
+    },
   };
-}
-
-/** Records the intents a sent transaction published (`publish`, `run`) in the store. */
-export async function rememberPublished(
-  store: IntentStore,
-  chain: CanonicalChain,
-  rpcUrl: string,
-  sent: Sent,
-): Promise<IntentRecord[]> {
-  if (sent.status !== "success") return [];
-  const intents = await publishedIntents(await connect(rpcUrl, chain), chain, sent.logs, {
-    txHash: sent.hash,
-    blockNumber: sent.blockNumber,
-  });
-  for (const published of intents) {
-    store.save(published.record);
-    const base = {
-      chain: chain.slug,
-      chainId: chain.id,
-      tx: published.txHash,
-      block: published.block,
-      time: iso(published.time),
-    };
-    store.append(published.record.intentHash, { event: "published", ...base });
-    if (published.funded) store.append(published.record.intentHash, { event: "funded", ...base });
-  }
-
-  return intents.map((entry) => entry.record);
 }
