@@ -242,6 +242,11 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         await kept.client.callTool({ name: "sauce_pot_list", arguments: { chain: "base" } }),
       );
       assert.deepEqual(listed, { store: pots, pots: [record] });
+      // A call that omits its arguments, as a client leaves them out of a call with none to pass:
+      // every input is optional, so it is the call with none.
+      const bare = (await kept.client.callTool({ name: "sauce_pot_list" })) as CallToolResult;
+      assert.notEqual(bare.isError, true, JSON.stringify(bare.content));
+      assert.deepEqual(structured(bare), { store: pots, pots: [record] });
     } finally {
       await kept.client.close();
     }
