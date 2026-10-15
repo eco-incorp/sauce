@@ -111,8 +111,9 @@ export function instructions(
     ...(stores.pots === undefined
       ? []
       : [
-          "THIS SERVER KEEPS THE sauce COMMAND'S POT STORE, as the command does: every Pot a",
-          "transaction it sends deploys (sauce_send, sauce_wallet_send) is recorded there, with",
+          `THIS SERVER KEEPS THE sauce COMMAND'S POT STORE, in ${stores.pots.dir}, as the command`,
+          "does: every Pot a transaction it sends deploys (sauce_send, sauce_wallet_send) is",
+          "recorded there, with",
           "the release it was minted under. sauce_pot_list lists them; sauce_pot_import records a",
           "Pot deployed some other way, read from the chain.",
           "",

@@ -1455,10 +1455,13 @@ try {
       return response.json();
     };
     assert.equal((await post(mcpRequests[0])).result.serverInfo.name, "sauce");
+    // The same tools, but for the Pot store's, which a server keeps over stdio only (by default).
+    const stdioOnly = ["sauce_pot_list", "sauce_pot_import"];
+    for (const tool of stdioOnly) assert.ok(toolNames.includes(tool), `stdio lists ${tool}`);
     assert.deepEqual(
       (await post(mcpRequests[2])).result.tools.map((tool) => tool.name),
-      toolNames,
-      "the same tools over HTTP as over stdio",
+      toolNames.filter((tool) => !stdioOnly.includes(tool)),
+      "the same tools over HTTP as over stdio, but for the stores' kept over stdio only",
     );
   } finally {
     await stopServer(http);
