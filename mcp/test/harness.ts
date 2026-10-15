@@ -65,7 +65,7 @@ export async function connect(
 /**
  * The wallets a stdio server serves, as `sauce mcp` hands them over: `dir`, enabled at start with
  * `start` (as `--password-env SAUCE_TEST_WALLET_PASSWORD` would), else waiting for
- * `sauce_enable_wallets`, whose sources are read as the command reads them — the environment
+ * `sauce_wallet_enable`, whose sources are read as the command reads them — the environment
  * being `env`, never the process's.
  */
 export function walletsAt(

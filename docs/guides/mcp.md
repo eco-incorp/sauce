@@ -318,7 +318,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_send`           | `sauce send`           | Signed transactions (EVM raw `0x…` hex, Solana base64) simulated as signed, broadcast in order and confirmed: `ok`, and in `sent` each one's `hash` (a Solana signature), `status`, `explorer` and `trace`, fee or gas, the decoded `reason`, and for a cook what moved, `leftInPot` and on Solana `returns`; `pots`, the record of each Pot a transaction deployed, for you to keep; with a plan's `cursor`, `next`, its next step built fresh     |
 | `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                                                                                                                                                              |
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                                                                                                                                                               |
-| `sauce_enable_wallets` | —                      | Over stdio: the wallets enabled for the server's life by the password source it names (`env`, `file`, `dotenv` and `variable`, or `generate`), never the password: `dir`, `source`, the `wallets` there, and with `generate` the new `passwordFile`                                                                                                                                                                                                 |
+| `sauce_wallet_enable`  | —                      | Over stdio: the wallets enabled for the server's life by the password source it names (`env`, `file`, `dotenv` and `variable`, or `generate`), never the password: `dir`, `source`, the `wallets` there, and with `generate` the new `passwordFile`                                                                                                                                                                                                 |
 | `sauce_wallet_create`  | `sauce wallet new`     | Over stdio, once the wallets are enabled: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                                                                                                                                                     |
 | `sauce_wallet_import`  | `sauce wallet import`  | Over stdio, once the wallets are enabled: the key in a file given by its `path` (a keystore, a Solana keypair file or a hex key), as a new wallet: its `name`, `kind`, `address` and `policy`, never its key                                                                                                                                                                                                                                        |
 | `sauce_wallet_list`    | `sauce wallet list`    | Over stdio, with no password: the wallet `dir`, whether the wallets are `enabled` and by which `source`, and each wallet's name, kind, address and policy                                                                                                                                                                                                                                                                                           |
@@ -722,7 +722,7 @@ a wallet, importing one and sending from one need the wallets **enabled** by the
 password. The password itself is never a tool's input and never in a result, so it stays out of
 the model's context. A source enables them in one of two ways.
 
-**The agent enables them**, with `sauce_enable_wallets`, once per server. It names where the
+**The agent enables them**, with `sauce_wallet_enable`, once per server. It names where the
 password comes from, never the password, in one of four ways:
 
 | Input                                                   | The password                                                                                                                                |
@@ -742,14 +742,14 @@ same wallets again. A shell command is never a source the agent names: that is t
 alone, below.
 
 The password stays in the server's memory, never on disk, for the life of the process. Calling
-`sauce_enable_wallets` again replaces the source, so a wrong first choice needs no restart. `dir`
+`sauce_wallet_enable` again replaces the source, so a wrong first choice needs no restart. `dir`
 names another wallet directory, unless the server was started with one.
 
 **The operator enables them** when the server starts, with the source of their password, as
 `sauce wallet` takes one: `--password-env <NAME>`, `--password-file <path>` or
 `--password-command "<command>"`. There is no prompt: over stdio, stdin is the protocol's. The
 server reads the password once, before it serves anything, so a source that does not work stops
-it at start. That source is the operator's: `sauce_enable_wallets` does not replace it. The
+it at start. That source is the operator's: `sauce_wallet_enable` does not replace it. The
 agent's password lives in its `.env` or its secret store, and the client's configuration passes it
 to the server in the entry's `env` block, by reference, never by value:
 
@@ -769,11 +769,11 @@ to the server in the entry's `env` block, by reference, never by value:
 Each client fills that reference its own way: Claude Code expands `${SAUCE_WALLET_PASSWORD}` from
 the environment it runs in, and VS Code also reads an `envFile` (the project's `.env`). Keep the
 `.env` out of git. The same `env` block, without the flag, gives the agent a variable to name to
-`sauce_enable_wallets`.
+`sauce_wallet_enable`.
 
 The wallet tools, besides every other tool:
 
-- `sauce_enable_wallets` enables them, as above.
+- `sauce_wallet_enable` enables them, as above.
 - `sauce_wallet_list` returns the wallet directory, whether the wallets are `enabled` and by which
   `source`, and each wallet with its kind, address and policy. `sauce_wallet_address` `{ name }`
   returns one. Neither needs a password.
@@ -800,7 +800,7 @@ The wallet tools, besides every other tool:
   `leftInPot`, and `summary`, the lines `sauce run` prints.
 
 Before the wallets are enabled, creating, importing and sending are refused, the refusal naming
-`sauce_enable_wallets` and its four sources. So an agent goes: `sauce_enable_wallets` (asking the
+`sauce_wallet_enable` and its four sources. So an agent goes: `sauce_wallet_enable` (asking the
 user where the password should come from), `sauce_wallet_create`, fund the address, build with the
 wallet's address as `owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), simulate
 with `sauce_simulate`, and pass the building tool's result to `sauce_wallet_send`. Each tool that
@@ -810,7 +810,7 @@ export tool: `sauce wallet export` shows a key only at a terminal.
 These are hot wallets: keep small balances in them, and give each a policy. Wallet sends hold to
 the [supported chains](#supported-and-preview-chains) too. Over HTTP there are no wallets:
 `--wallets` and the password flags are refused, and neither the wallet tools nor
-`sauce_enable_wallets` is registered.
+`sauce_wallet_enable` is registered.
 
 ## Skills, documents and prompts
 

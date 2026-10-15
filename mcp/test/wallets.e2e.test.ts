@@ -318,11 +318,11 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
       );
     };
     try {
-      ok(await agent.call("sauce_enable_wallets", { env: "SAUCE_TEST_AGENT" }));
+      ok(await agent.call("sauce_wallet_enable", { env: "SAUCE_TEST_AGENT" }));
       const byEnv = ok(await agent.call("sauce_wallet_create", { name: "by-env" }));
       await deployFrom("by-env", String(byEnv.address));
 
-      ok(await agent.call("sauce_enable_wallets", { file }));
+      ok(await agent.call("sauce_wallet_enable", { file }));
       const byFile = ok(await agent.call("sauce_wallet_create", { name: "by-file" }));
       await deployFrom("by-file", String(byFile.address));
       // The source before is gone: its wallet no longer opens.
@@ -336,14 +336,14 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
         /the keystore password is wrong/,
       );
 
-      ok(await agent.call("sauce_enable_wallets", { dotenv }));
+      ok(await agent.call("sauce_wallet_enable", { dotenv }));
       const imported = ok(
         await agent.call("sauce_wallet_import", { name: "imported", path: keyFile }),
       );
       assert.equal(imported.address, privateKeyToAccount(rawKey).address);
       await deployFrom("imported", String(imported.address));
 
-      const generated = ok(await agent.call("sauce_enable_wallets", { generate: true }));
+      const generated = ok(await agent.call("sauce_wallet_enable", { generate: true }));
       const byGenerate = ok(await agent.call("sauce_wallet_create", { name: "by-generate" }));
       await deployFrom("by-generate", String(byGenerate.address));
       const generatedPassword = readFileSync(String(generated.passwordFile), "utf8").trim();

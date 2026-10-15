@@ -8,7 +8,7 @@
  * `sauce` command hands it (`McpServeOptions.publicRpcs`). Over stdio it serves the wallet tools
  * (unless `--no-wallets`): they sign with the wallets of one directory alone, once enabled — by the
  * password the `sauce` command read at start from the source it was given, or by the source an
- * agent names to `sauce_enable_wallets`, which that command reads for it. Over HTTP it never
+ * agent names to `sauce_wallet_enable`, which that command reads for it. Over HTTP it never
  * signs. A newer
  * version the `sauce` command's update check has seen is noted once, in the process's first tool
  * result (`update-note.ts`).
@@ -81,7 +81,7 @@ async function serve(options: McpServeOptions): Promise<void> {
     if (wallets !== undefined) {
       options.log(
         wallets.start === undefined
-          ? `sauce mcp: serving the wallets in ${wallets.dir}; sauce_enable_wallets enables ` +
+          ? `sauce mcp: serving the wallets in ${wallets.dir}; sauce_wallet_enable enables ` +
               "them to sign\n"
           : `sauce mcp: signing with the wallets in ${wallets.dir}\n`,
       );

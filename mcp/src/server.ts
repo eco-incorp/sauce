@@ -108,7 +108,7 @@ export function instructions(endpoints: Endpoints, wallets?: WalletSession, loca
           ...(wallets.source === undefined
             ? [
                 "To create (sauce_wallet_create), import (sauce_wallet_import, a key file by its",
-                "path) or send, the wallets must be enabled first: call sauce_enable_wallets once,",
+                "path) or send, the wallets must be enabled first: call sauce_wallet_enable once,",
                 "naming where their password comes from, never the password — { env: NAME }, a",
                 "variable the client's configuration passes to this server; { file: path }, a file",
                 "only its owner can read; { dotenv: path, variable: NAME }, an entry of such a .env",

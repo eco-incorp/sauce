@@ -14,7 +14,7 @@
  *    password, or part of it.
  *  - otherwise a hidden prompt at the terminal, asked twice when a wallet is being created.
  *
- * The local MCP server's `sauce_enable_wallets` names a source too — never the password itself —
+ * The local MCP server's `sauce_wallet_enable` names a source too — never the password itself —
  * spelt as its inputs are (`env NAME`, `file <path>`), and never a command: a command the model
  * chose would be a shell for it. It may also name one entry of a `.env` file, which is held to the
  * password file's rule, and every file it names must be a regular one, so a pipe or a device can
@@ -32,10 +32,10 @@ export type PasswordSource =
   | { readonly from: "file"; readonly path: string }
   | { readonly from: "command"; readonly command: string }
   | { readonly from: "prompt" }
-  /** `sauce_enable_wallets` only: the entry `name` of the `.env` file at `path`. */
+  /** `sauce_wallet_enable` only: the entry `name` of the `.env` file at `path`. */
   | { readonly from: "dotenv"; readonly path: string; readonly name: string };
 
-/** Who named a source: a flag of the command line, or the MCP server's `sauce_enable_wallets`. */
+/** Who named a source: a flag of the command line, or the MCP server's `sauce_wallet_enable`. */
 export type SourceNamer = "flag" | "tool";
 
 /** The password flags, as given. */
@@ -105,7 +105,7 @@ export function passwordSource(flags: PasswordFlags): PasswordSource {
 
 /**
  * How a source is named in a message: its flag and the variable or file, never a value — or, for
- * a source `sauce_enable_wallets` named, its inputs.
+ * a source `sauce_wallet_enable` named, its inputs.
  */
 export function describeSource(source: PasswordSource, by: SourceNamer = "flag"): string {
   const flag = by === "flag";

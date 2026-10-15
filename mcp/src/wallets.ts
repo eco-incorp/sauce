@@ -8,7 +8,7 @@
  *
  * Listing the wallets, and naming one's address, need no password: each file names its address in
  * the clear. Creating, importing and sending need the wallets ENABLED, by the password source the
- * server was started with (`sdk/src/cli/mcp.ts` read it then) or else by `sauce_enable_wallets`,
+ * server was started with (`sdk/src/cli/mcp.ts` read it then) or else by `sauce_wallet_enable`,
  * which names a source — a variable of the server's environment, a file only its owner can read,
  * an entry of such a `.env` file, or a new random password written to a new file — and never the
  * password, nor a command (a command the model chose would be a shell for it). The `sauce` command
@@ -59,7 +59,7 @@ import { chainRef, LIMITS, refusable, toolRegistrar, type ToolContext } from "./
 
 /** The wallet tools, in the order `tools/list` gives them. */
 export const WALLET_TOOL_NAMES = [
-  "sauce_enable_wallets",
+  "sauce_wallet_enable",
   "sauce_wallet_create",
   "sauce_wallet_import",
   "sauce_wallet_list",
@@ -67,13 +67,13 @@ export const WALLET_TOOL_NAMES = [
   "sauce_wallet_send",
 ] as const;
 
-/** The `.env` entry `sauce_enable_wallets { dotenv }` reads when told no other: the docs' name. */
+/** The `.env` entry `sauce_wallet_enable { dotenv }` reads when told no other: the docs' name. */
 export const DOTENV_VARIABLE = "SAUCE_WALLET_PASSWORD";
 
 /** The largest key file an import reads: a keystore is about half a kilobyte. */
 const KEY_FILE_MAX = 64 * 1024;
 
-/** The four ways `sauce_enable_wallets` names a password's source, as its refusals spell them. */
+/** The four ways `sauce_wallet_enable` names a password's source, as its refusals spell them. */
 const SOURCES =
   "{ env: \"<NAME>\" } (a variable of this server's environment, which the client's " +
   'configuration passes), { file: "<path>" } (a file only its owner can read), { dotenv: ' +
@@ -111,12 +111,12 @@ const SENDS: ToolAnnotations = {
 
 /**
  * The wallets a stdio server serves, and — once they are enabled — the password they open with:
- * the one the server was started with, or the one `sauce_enable_wallets` named the source of. One
+ * the one the server was started with, or the one `sauce_wallet_enable` named the source of. One
  * per server, and over stdio one server per process; held in memory, never written anywhere.
  */
 export class WalletSession {
   readonly options: McpWallets;
-  /** The wallet directory: the server's, or the one `sauce_enable_wallets` named. */
+  /** The wallet directory: the server's, or the one `sauce_wallet_enable` named. */
   store: WalletStore;
   private enabled: { readonly password: string; readonly source: string } | undefined;
 
@@ -140,7 +140,7 @@ export class WalletSession {
   password(doing: string): string {
     if (this.enabled === undefined) {
       throw new UsageError(
-        `${doing} needs the wallets enabled: call sauce_enable_wallets once, naming where their ` +
+        `${doing} needs the wallets enabled: call sauce_wallet_enable once, naming where their ` +
           `password comes from, never the password itself: ${SOURCES}. Ask the user which; ` +
           "sauce_wallet_list and sauce_wallet_address need none",
       );
@@ -265,7 +265,7 @@ export function registerWalletTools(
   const session = context.wallets;
 
   tool(
-    "sauce_enable_wallets",
+    "sauce_wallet_enable",
     {
       title: "Enable the wallets",
       description:
@@ -420,7 +420,7 @@ export function registerWalletTools(
       title: "Create a wallet",
       description:
         "Creates a wallet with a fresh key in this server's wallet directory, encrypted under " +
-        "the password the wallets are enabled with (sauce_enable_wallets, unless the server was " +
+        "the password the wallets are enabled with (sauce_wallet_enable, unless the server was " +
         "started with one), and returns its name, kind and address — never its key. kind evm " +
         "(the default) signs on EVM chains, solana on Solana. A name is never reused: an " +
         "existing wallet is never overwritten. Fund the address before sending from it. It is " +
@@ -469,7 +469,7 @@ export function registerWalletTools(
         "with, and keeps it), a Solana keypair file (solana-keygen's JSON array of 64 bytes, or " +
         "its base58), or an EVM private key in hex. The file must be a regular file only its " +
         "owner can read (chmod 600), and is left as it is. The key is encrypted under the " +
-        "wallets' password (sauce_enable_wallets) and never returned: the result is the " +
+        "wallets' password (sauce_wallet_enable) and never returned: the result is the " +
         "wallet's name, kind and address. `sauce wallet import`, over MCP.",
       input: {
         name: z
@@ -542,7 +542,7 @@ export function registerWalletTools(
       description:
         "Lists this server's wallets: each one's name, kind (evm or solana), address, and the " +
         "policy that limits what it sends (null: no limits), with the wallet directory and " +
-        "whether the wallets are enabled to create, import and sign (sauce_enable_wallets), " +
+        "whether the wallets are enabled to create, import and sign (sauce_wallet_enable), " +
         "and by which source. Needs no password. Use an address as `from` or `owner` in the " +
         "other tools, and the name in sauce_wallet_send. Reads no chain.",
       input: {},
@@ -569,7 +569,7 @@ export function registerWalletTools(
           ...warnings,
           ...(source === undefined
             ? [
-                "The wallets are not enabled: sauce_enable_wallets enables them to create, " +
+                "The wallets are not enabled: sauce_wallet_enable enables them to create, " +
                   "import and sign, naming where their password comes from.",
               ]
             : []),
@@ -608,7 +608,7 @@ export function registerWalletTools(
         "sauce_actions (with owner), sauce_intent_publish, sauce_intent_fill, sauce_intent_prove, " +
         "sauce_intent_claim, sauce_intent_refund, sauce_intent_cancel — or one transaction ({ to, " +
         "data, value }, or a Solana { transaction }), or a list. Needs the wallets enabled " +
-        "(sauce_enable_wallets). First it simulates them: on an " +
+        "(sauce_wallet_enable). First it simulates them: on an " +
         "EVM chain all together in one eth_simulateV1 block from the wallet, on Solana each as " +
         "signed; it refuses, sending nothing, if any would revert, and refuses what the wallet's " +
         "policy does not allow, naming the limit. Then it sends each in order, simulating it " +

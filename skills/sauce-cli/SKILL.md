@@ -570,7 +570,7 @@ returns what it did. The exception is the server run on the user's machine over 
 the `sauce wallet` directory's wallets as tools. `sauce_wallet_list` and `sauce_wallet_address`
 name them with no password. Creating (`sauce_wallet_create`, `sauce wallet new`), importing a key
 file by its path (`sauce_wallet_import`) and sending need the wallets enabled: once per server,
-`sauce_enable_wallets` names where their password comes from, never the password — `{ env: NAME }`
+`sauce_wallet_enable` names where their password comes from, never the password — `{ env: NAME }`
 (a variable the client's configuration passes to the server), `{ file: path }` (a file only the
 user can read), `{ dotenv: path, variable: NAME }` (an entry of such a `.env` file) or
 `{ generate: true }` (a new random password the server writes to a new file beside the wallet

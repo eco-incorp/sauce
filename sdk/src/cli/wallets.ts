@@ -61,7 +61,7 @@ export const defaultWalletsDir = (): string => join(homedir(), ".sauce", "wallet
 
 /**
  * Where the local MCP server writes the password it generates for a wallet directory when told
- * where not (`sauce_enable_wallets { generate: true }`): beside the directory, never in it, so a
+ * where not (`sauce_wallet_enable { generate: true }`): beside the directory, never in it, so a
  * copy of the directory never carries it — `~/.sauce/wallets.password` for the default.
  */
 export const generatedPasswordFile = (dir: string): string => `${resolve(dir)}.password`;

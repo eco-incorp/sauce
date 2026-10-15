@@ -195,7 +195,7 @@ sauce run pay.sauce.ts --chain base \
 ```
 
 The local MCP server serves the same wallets with no flag. An agent enables them with
-`sauce_enable_wallets`, naming the password's source, never the password: a variable, a file, an
+`sauce_wallet_enable`, naming the password's source, never the password: a variable, a file, an
 entry of a `.env` file, or a new random password the server writes to a file of its own.
 
 An EVM wallet is a standard keystore that `cast wallet` and geth read too. A policy file beside a

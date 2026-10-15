@@ -155,7 +155,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         toolNames(true),
       );
       assert.match(received[0]!, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
-      assert.match(received[0]!, /call sauce_enable_wallets once/);
+      assert.match(received[0]!, /call sauce_wallet_enable once/);
       const listed = structured(await client.callTool({ name: "sauce_wallet_list" }));
       assert.deepEqual(listed, {
         dir: wallets,
@@ -163,7 +163,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         source: null,
         wallets: [],
         notes: [
-          "The wallets are not enabled: sauce_enable_wallets enables them to create, import and " +
+          "The wallets are not enabled: sauce_wallet_enable enables them to create, import and " +
             "sign, naming where their password comes from.",
         ],
       });
@@ -172,9 +172,9 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         arguments: { name: "agent" },
       })) as CallToolResult;
       assert.equal(refused.isError, true);
-      assert.match(JSON.stringify(refused), /needs the wallets enabled: call sauce_enable_wallets/);
+      assert.match(JSON.stringify(refused), /needs the wallets enabled: call sauce_wallet_enable/);
       const enabled = await client.callTool({
-        name: "sauce_enable_wallets",
+        name: "sauce_wallet_enable",
         arguments: { generate: true },
       });
       received.push(JSON.stringify(enabled));
@@ -190,7 +190,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     } finally {
       await client.close();
     }
-    assert.match(stderr, /serving the wallets in \S+; sauce_enable_wallets enables them to sign/);
+    assert.match(stderr, /serving the wallets in \S+; sauce_wallet_enable enables them to sign/);
     assert.equal(statSync(join(wallets, "agent.json")).mode & 0o777, 0o600);
     const password = readFileSync(join(home, ".sauce", "wallets.password"), "utf8").trim();
     assert.equal(password.length, 43);
@@ -212,7 +212,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     const received: string[] = [client.getInstructions() ?? ""];
     try {
       const unset = await client.callTool({
-        name: "sauce_enable_wallets",
+        name: "sauce_wallet_enable",
         arguments: { env: "SAUCE_TEST_UNSET_VARIABLE" },
       });
       received.push(JSON.stringify(unset));
@@ -221,7 +221,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         /env SAUCE_TEST_UNSET_VARIABLE: the variable is not set in this server's environment/,
       );
       const enabled = await client.callTool({
-        name: "sauce_enable_wallets",
+        name: "sauce_wallet_enable",
         arguments: { env: "SAUCE_TEST_WALLET_PASSWORD" },
       });
       received.push(JSON.stringify(enabled));

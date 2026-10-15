@@ -1152,15 +1152,15 @@ is an error) and refused when others may write it.
 **The MCP server's wallets.** `sauce mcp` over stdio serves the wallet tools by DEFAULT, on the
 CLI's own directory (`--wallets <dir>` names another; a bare `--wallets`, as the server once had to
 be started with, is the default; `--no-wallets` serves none), always REGISTERED rather than added
-when enabled (not every client handles `tools/list_changed`): `sauce_enable_wallets`,
+when enabled (not every client handles `tools/list_changed`): `sauce_wallet_enable`,
 `sauce_wallet_create`, `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`,
 `sauce_wallet_send` (`create` is `sauce wallet new`'s twin; the names predate the parity). List and
 address need no password. Create, import and send need the wallets ENABLED, else they refuse naming
-`sauce_enable_wallets` and its four sources. A password flag at start (`--password-env|-file|
+`sauce_wallet_enable` and its four sources. A password flag at start (`--password-env|-file|
 -command`, no longer needing `--wallets`) enables them: `sdk/src/cli/mcp.ts` reads it once, before
 the server loads, from a source that is not the prompt (stdin is the protocol's), and passes it as
 `McpServeOptions.wallets.start`; that source is the operator's, and the tool refuses to replace it.
-Otherwise the agent calls `sauce_enable_wallets` with a SOURCE, never a value: `env` (a variable of
+Otherwise the agent calls `sauce_wallet_enable` with a SOURCE, never a value: `env` (a variable of
 the server's environment, read through `McpWallets.read`, a closure over the CLI's `PasswordIo`, so
 `DELIBERATE_ENV_READ` stays the one read), `file` and `dotenv` + `variable` (`password.ts`, by
 `"tool"`: owner-only and a REGULAR file, `dotenvEntry` reading as dotenv does), or `generate`

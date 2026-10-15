@@ -2,7 +2,7 @@
  * The wallet tools in process, with no endpoint: registered only on a server given wallets (which
  * `sauce mcp` over stdio is, unless `--no-wallets`), listing with no password, refusing to create,
  * import or send until the wallets are enabled — by the server's start, or by the source an agent
- * names to `sauce_enable_wallets`, each of which is read here — never taking or returning a key or
+ * names to `sauce_wallet_enable`, each of which is read here — never taking or returning a key or
  * a password, and refusing what `sauce_wallet_send` cannot send before it reaches any chain.
  * Sending on a chain is `wallets.e2e.test.ts`. Every password and key here is thrown away.
  */
@@ -187,7 +187,7 @@ describe("a server with wallets", () => {
     assert.equal(byName.get("sauce_wallet_list")?.annotations?.readOnlyHint, true);
     assert.equal(byName.get("sauce_wallet_create")?.annotations?.destructiveHint, false);
     assert.equal(byName.get("sauce_wallet_address")?.annotations?.readOnlyHint, true);
-    assert.equal(byName.get("sauce_enable_wallets")?.annotations?.destructiveHint, false);
+    assert.equal(byName.get("sauce_wallet_enable")?.annotations?.destructiveHint, false);
     // Every tool that builds a transaction says it can be sent from a wallet here.
     for (const name of ["sauce_tx", "sauce_pot", "sauce_intent_fill", "sauce_intent_claim"]) {
       assert.ok(byName.get(name)?.description?.includes(WALLET_UNSIGNED), name);
@@ -254,7 +254,7 @@ describe("a server with wallets", () => {
       /no wallet nobody in .*: sauce_wallet_list names them, and sauce_wallet_create creates one/,
     );
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { generate: true })),
+      failed(await mcp.call("sauce_wallet_enable", { generate: true })),
       /the wallets are enabled already, by the password source this server was started with \(--password-env SAUCE_TEST_WALLET_PASSWORD\): it is its operator's to change/,
     );
   });
@@ -365,7 +365,7 @@ describe("a server whose wallets the agent enables", () => {
   it("lists and names the wallets before they are enabled, and refuses to create, import or send", async () => {
     const instructions = mcp.client.getInstructions() ?? "";
     assert.match(instructions, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
-    assert.match(instructions, /call sauce_enable_wallets once/);
+    assert.match(instructions, /call sauce_wallet_enable once/);
     assert.match(instructions, /\{ generate: true \}/);
     const listed = ok(await mcp.call("sauce_wallet_list"));
     assert.deepEqual([listed.dir, listed.enabled, listed.source], [wallets, false, null]);
@@ -376,7 +376,7 @@ describe("a server whose wallets the agent enables", () => {
     assert.match(String((listed.notes as string[])[0]), /The wallets are not enabled/);
     assert.equal(ok(await mcp.call("sauce_wallet_address", { name: "made" })).address, made);
     const refusal =
-      /needs the wallets enabled: call sauce_enable_wallets once, naming where their password comes from, never the password itself: \{ env: "<NAME>" \}.*\{ file: "<path>" \}.*\{ dotenv: "<path>", variable: "<NAME>" \}.*\{ generate: true \}/;
+      /needs the wallets enabled: call sauce_wallet_enable once, naming where their password comes from, never the password itself: \{ env: "<NAME>" \}.*\{ file: "<path>" \}.*\{ dotenv: "<path>", variable: "<NAME>" \}.*\{ generate: true \}/;
     assert.match(failed(await mcp.call("sauce_wallet_create", { name: "agent" })), refusal);
     const key = join(dir, "key.hex");
     writeFileSync(key, `${generatePrivateKey()}\n`, { mode: 0o600 });
@@ -405,22 +405,22 @@ describe("a server whose wallets the agent enables", () => {
       ],
       [{ env: "hunter2 is the value" }, /env takes the NAME of an environment variable/],
     ] as const) {
-      assert.match(failed(await mcp.call("sauce_enable_wallets", args)), message);
+      assert.match(failed(await mcp.call("sauce_wallet_enable", args)), message);
     }
     // A field it does not have is refused by its schema: there is no password, and no command.
     for (const field of ["password", "command", "passwordCommand", "value"]) {
-      const result = await mcp.call("sauce_enable_wallets", { [field]: "x" });
+      const result = await mcp.call("sauce_wallet_enable", { [field]: "x" });
       assert.equal(result.isError, true, field);
     }
     // A value given where a name goes is never repeated.
     const leaked = "not-a-name value 9f8e7d";
-    assert.ok(!failed(await mcp.call("sauce_enable_wallets", { env: leaked })).includes(leaked));
+    assert.ok(!failed(await mcp.call("sauce_wallet_enable", { env: leaked })).includes(leaked));
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { env: "SAUCE_TEST_UNSET" })),
+      failed(await mcp.call("sauce_wallet_enable", { env: "SAUCE_TEST_UNSET" })),
       /env SAUCE_TEST_UNSET: the variable is not set in this server's environment \(the client's configuration passes it/,
     );
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { env: "SAUCE_TEST_SHORT" })),
+      failed(await mcp.call("sauce_wallet_enable", { env: "SAUCE_TEST_SHORT" })),
       /env SAUCE_TEST_SHORT gives a password of under 8 characters/,
     );
     assert.ok(mcp.received.every((text) => !text.includes(leaked)));
@@ -430,7 +430,7 @@ describe("a server whose wallets the agent enables", () => {
 
   it("enables with a variable of the server's environment, then creates", async () => {
     const enabled = ok(
-      await mcp.call("sauce_enable_wallets", { env: "SAUCE_TEST_WALLET_PASSWORD" }),
+      await mcp.call("sauce_wallet_enable", { env: "SAUCE_TEST_WALLET_PASSWORD" }),
     );
     assert.deepEqual(
       [enabled.dir, enabled.enabled, enabled.source, enabled.wallets],
@@ -450,7 +450,7 @@ describe("a server whose wallets the agent enables", () => {
     const file = join(dir, "wallet-password");
     writeFileSync(file, `${fromFile}\n`, { mode: 0o644 });
     chmodSync(file, 0o644);
-    const shared = failed(await mcp.call("sauce_enable_wallets", { file }));
+    const shared = failed(await mcp.call("sauce_wallet_enable", { file }));
     assert.match(
       shared,
       new RegExp(
@@ -459,15 +459,15 @@ describe("a server whose wallets the agent enables", () => {
       ),
     );
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { file: dir })),
+      failed(await mcp.call("sauce_wallet_enable", { file: dir })),
       new RegExp(`file ${dir} is not a regular file`),
     );
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { file: join(dir, "absent") })),
+      failed(await mcp.call("sauce_wallet_enable", { file: join(dir, "absent") })),
       /absent: no such file/,
     );
     chmodSync(file, 0o600);
-    const enabled = ok(await mcp.call("sauce_enable_wallets", { file }));
+    const enabled = ok(await mcp.call("sauce_wallet_enable", { file }));
     assert.equal(enabled.source, `file ${file}`);
     assert.ok(
       (enabled.notes as string[]).includes(
@@ -495,22 +495,22 @@ describe("a server whose wallets the agent enables", () => {
       { mode: 0o600 },
     );
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { dotenv, variable: "SAUCE_TEST_ABSENT" })),
+      failed(await mcp.call("sauce_wallet_enable", { dotenv, variable: "SAUCE_TEST_ABSENT" })),
       new RegExp(
         `dotenv ${dotenv}, variable SAUCE_TEST_ABSENT: the file has no SAUCE_TEST_ABSENT entry`,
       ),
     );
-    const enabled = ok(await mcp.call("sauce_enable_wallets", { dotenv }));
+    const enabled = ok(await mcp.call("sauce_wallet_enable", { dotenv }));
     assert.equal(enabled.source, `dotenv ${dotenv}, variable ${DOTENV_VARIABLE}`);
     ok(await mcp.call("sauce_wallet_create", { name: "by-dotenv" }));
     decryptKeystoreBytes(readFileSync(join(wallets, "by-dotenv.json"), "utf8"), fromDotenv);
     const single = ok(
-      await mcp.call("sauce_enable_wallets", { dotenv, variable: "SAUCE_TEST_SINGLE" }),
+      await mcp.call("sauce_wallet_enable", { dotenv, variable: "SAUCE_TEST_SINGLE" }),
     );
     assert.equal(single.enabled, true);
     chmodSync(dotenv, 0o640);
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { dotenv })),
+      failed(await mcp.call("sauce_wallet_enable", { dotenv })),
       /can be read or written by others \(mode 640\)/,
     );
     for (const text of mcp.received) {
@@ -521,7 +521,7 @@ describe("a server whose wallets the agent enables", () => {
   });
 
   it("generates a password into a new file beside the wallet directory, never over one", async () => {
-    const generated = ok(await mcp.call("sauce_enable_wallets", { generate: true }));
+    const generated = ok(await mcp.call("sauce_wallet_enable", { generate: true }));
     const passwordFile = `${wallets}.password`;
     assert.equal(generated.passwordFile, passwordFile);
     assert.equal(generated.source, `file ${passwordFile}`);
@@ -537,22 +537,22 @@ describe("a server whose wallets the agent enables", () => {
     decryptKeystoreBytes(readFileSync(join(wallets, "by-generate.json"), "utf8"), password);
     // Never over a file, and never in the wallet directory.
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { generate: true })),
+      failed(await mcp.call("sauce_wallet_enable", { generate: true })),
       /exists: a password file is never overwritten/,
     );
     assert.equal(readFileSync(passwordFile, "utf8").trim(), password);
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { generate: join(wallets, "pw") })),
+      failed(await mcp.call("sauce_wallet_enable", { generate: join(wallets, "pw") })),
       /is in the wallet directory: a password file goes beside it, never in it/,
     );
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { generate: join(dir, "absent", "pw") })),
+      failed(await mcp.call("sauce_wallet_enable", { generate: join(dir, "absent", "pw") })),
       /does not exist: a password file goes in a directory that does/,
     );
     // A path the agent names, in a git work tree: written, and noted.
     const repo = join(dir, "repo");
     mkdirSync(join(repo, ".git"), { recursive: true });
-    const inRepo = ok(await mcp.call("sauce_enable_wallets", { generate: join(repo, "pw") }));
+    const inRepo = ok(await mcp.call("sauce_wallet_enable", { generate: join(repo, "pw") }));
     assert.ok(
       (inRepo.notes as string[]).some((note) =>
         note.includes(`is inside the git work tree ${repo}: keep it out of the repository`),
@@ -566,7 +566,7 @@ describe("a server whose wallets the agent enables", () => {
 
   it("keeps the operator's wallet directory", async () => {
     assert.match(
-      failed(await mcp.call("sauce_enable_wallets", { generate: true, dir: join(dir, "other") })),
+      failed(await mcp.call("sauce_wallet_enable", { generate: true, dir: join(dir, "other") })),
       /this server was started with the wallet directory .* \(--wallets\): it is its operator's to change/,
     );
   });
@@ -587,9 +587,9 @@ describe("a server whose wallet directory is the default, enabled with another",
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("serves the directory sauce_enable_wallets names from then on", async () => {
+  it("serves the directory sauce_wallet_enable names from then on", async () => {
     const other = join(dir, "other");
-    const enabled = ok(await mcp.call("sauce_enable_wallets", { generate: true, dir: other }));
+    const enabled = ok(await mcp.call("sauce_wallet_enable", { generate: true, dir: other }));
     assert.deepEqual([enabled.dir, enabled.passwordFile], [other, `${other}.password`]);
     ok(await mcp.call("sauce_wallet_create", { name: "agent" }));
     const listed = ok(await mcp.call("sauce_wallet_list"));

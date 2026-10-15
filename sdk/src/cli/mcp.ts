@@ -19,7 +19,7 @@
  * on the CLI's own wallet directory (`--wallets <dir>` names another, `--no-wallets` serves none):
  * listing them needs no password, and signing needs the wallets ENABLED — by a password source
  * given here (as `sauce wallet` takes one, never a prompt: stdin is the protocol's), read once
- * before the server starts, or else by the agent's `sauce_enable_wallets`, which names a source
+ * before the server starts, or else by the agent's `sauce_wallet_enable`, which names a source
  * (never the password) that this command reads for it (`McpWallets.read`), so the environment is
  * still read in one place only. No password reaches a tool's input or result. Over HTTP it holds no
  * key and serves no wallet tool: every transaction it builds comes back unsigned.
@@ -88,7 +88,7 @@ export interface McpWallets {
   readonly dirNamed: boolean;
   /**
    * The password source the server was started with, read once, before anything is served: the
-   * wallets are enabled from the start. Absent without one: `sauce_enable_wallets` enables them.
+   * wallets are enabled from the start. Absent without one: `sauce_wallet_enable` enables them.
    */
   readonly start?: {
     /** A registered secret. */
@@ -97,7 +97,7 @@ export interface McpWallets {
     readonly source: string;
   };
   /**
-   * Reads the password a source `sauce_enable_wallets` names gives (never a command: that is the
+   * Reads the password a source `sauce_wallet_enable` names gives (never a command: that is the
    * operator's alone), its messages naming it by the tool's inputs; registered as a secret.
    */
   readonly read: (source: PasswordSource) => Promise<string>;
@@ -307,7 +307,7 @@ async function walletsOf(
     file: stringFlag(args, "password-file"),
     command: stringFlag(args, "password-command"),
   });
-  // No source given: the wallets are listed, and the agent enables them with sauce_enable_wallets.
+  // No source given: the wallets are listed, and the agent enables them with sauce_wallet_enable.
   // Never the prompt: over stdio there is no terminal to ask on (stdin carries the protocol).
   const start =
     source.from === "prompt"

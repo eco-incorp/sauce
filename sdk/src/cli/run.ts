@@ -4328,7 +4328,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "sauce_wallet_import and sauce_wallet_send work once the wallets are enabled. A password",
       "source given here enables them, read once at start: the variable an MCP client's config",
       "passes from the agent's .env, a file, or a command. Without one, the agent enables them",
-      "with sauce_enable_wallets, naming where the password comes from (a variable of the",
+      "with sauce_wallet_enable, naming where the password comes from (a variable of the",
       "server's environment, a file only you can read, an entry of such a .env file, or a new",
       "random one it writes to a file), never the password itself and never a command. No tool",
       "takes or returns a password or a key. sauce_wallet_send simulates what it is given and",
