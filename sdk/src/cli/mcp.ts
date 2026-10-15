@@ -16,13 +16,19 @@
  *
  * It reads a chain through a caller's `rpcUrl`, else `--config`'s entry for the chain, else the
  * built-in public endpoints the command hands it. Over stdio it serves the wallet tools by default,
- * on the CLI's own wallet directory (`--wallets <dir>` names another, `--no-wallets` serves none):
+ * on the CLI's own wallet directory, one of its stores (`--wallets <dir>` names another,
+ * `--no-wallets` serves none):
  * listing them needs no password, and signing needs the wallets ENABLED — by a password source
  * given here (as `sauce wallet` takes one, never a prompt: stdin is the protocol's), read once
  * before the server starts, or else by the agent's `sauce_wallet_enable`, which names a source
  * (never the password) that this command reads for it (`McpWallets.read`), so the environment is
  * still read in one place only. No password reaches a tool's input or result. Over HTTP it holds no
  * key and serves no wallet tool: every transaction it builds comes back unsigned.
+ *
+ * Over stdio it is the command for an agent that has no shell, so it keeps the command's stores
+ * ({@link McpStores}) as the command does, in the same directories, BY DEFAULT: every Pot a tool's
+ * transaction deploys is recorded where `sauce pot list` reads it. `--pots <dir>` names another
+ * directory, and `--no-stores` keeps none. Over HTTP it keeps nothing.
  *
  * It prints no update notice — over stdio its stdout is the protocol — but notes a newer version in
  * the first tool result of its life instead, and `sauce_skills` returns it as `latest`, from the
@@ -67,8 +73,8 @@ export interface McpServeOptions {
   readonly allowPrivateRpc: boolean;
   /** Where the server says what it is doing: stderr, never stdout, which stdio's protocol owns. */
   readonly log: (text: string) => void;
-  /** Over stdio, unless `--no-wallets`: the wallets its tools list, create, import and send from. */
-  readonly wallets?: McpWallets;
+  /** Over stdio, unless `--no-stores`: the command's stores the server keeps. Never over HTTP. */
+  readonly stores?: McpStores;
   /**
    * The update check's note on a newer version, or `undefined`, from its cache as it is when asked
    * (`update-check.ts`). The server asks once, for the first tool result of its life. Absent with
@@ -78,6 +84,21 @@ export interface McpServeOptions {
   /** The newer version the update check's cache names, or `undefined`, as it is when asked:
    *  `sauce_skills` returns it as `latest`. Absent when `updateNote` is. */
   readonly newerVersion?: () => string | undefined;
+}
+
+/**
+ * The `sauce` command's stores a LOCAL server keeps, as the command keeps them, each in the
+ * directory the command keeps it in (`--pots`, `--wallets` for another): the server's caller is the
+ * user of this machine, and an agent that reaches Sauce only through it keeps what the command
+ * would. On by default over stdio; `--no-stores` keeps none. One absent is not kept.
+ */
+export interface McpStores {
+  /** The Pot store (`pot-store.ts`): every Pot a tool's transaction deploys is recorded there, and
+   *  `sauce_pot_list` and `sauce_pot_import` read and write it. */
+  readonly pots?: string;
+  /** The wallet directory (`wallets.ts`), which the wallet tools serve; `--no-wallets` alone keeps
+   *  the other stores. */
+  readonly wallets?: McpWallets;
 }
 
 /** The wallet directory the stdio server serves, and what enables its wallets to sign. */
@@ -160,6 +181,15 @@ export const MCP_FLAGS: FlagSpecs = {
   },
   "no-wallets": { type: "boolean", help: "Over stdio: serve no wallet tools; nothing signs" },
   ...PASSWORD,
+  pots: {
+    type: "string",
+    value: "<dir>",
+    help: "Over stdio: keep the Pot store here (default ~/.sauce/pots, as sauce pot list reads)",
+  },
+  "no-stores": {
+    type: "boolean",
+    help: "Over stdio: keep none of the command's stores (by default it keeps them, as sauce does)",
+  },
   agent: {
     type: "string",
     multiple: true,
@@ -203,6 +233,8 @@ const SERVE_ONLY = [
   "password-env",
   "password-file",
   "password-command",
+  "pots",
+  "no-stores",
 ] as const;
 const PASSWORDS = ["password-env", "password-file", "password-command"] as const;
 const SETUP_ONLY = ["agent", "dir", "force"] as const;
@@ -214,6 +246,10 @@ export async function mcpCommand(
     readonly stderr: (text: string) => void;
     readonly publicRpcs?: PublicEndpoints | undefined;
     readonly updateCheck?: UpdateCheck | undefined;
+    /** The command's own Pot store (`CliIo.potsDir`): the executable's `~/.sauce/pots`. */
+    readonly potsDir?: string | undefined;
+    /** The command's own wallet directory, where a test names one (`CliIo.walletsDir`). */
+    readonly walletsDir?: string | undefined;
   } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
@@ -244,7 +280,7 @@ export async function mcpCommand(
   const http = stringFlag(args, "http");
   const host = stringFlag(args, "host");
   const maxBody = stringFlag(args, "max-body");
-  const wallets = await walletsOf(args, io, http !== undefined);
+  const stores = await storesOf(args, io, http !== undefined);
   const check = updateCheckOff(args.values, io.readText) ? undefined : io.updateCheck;
   // Asked now as well, so a cache a day old is refreshed before the first tool call reads it.
   check?.latest();
@@ -259,7 +295,7 @@ export async function mcpCommand(
     ...(maxBody === undefined ? {} : { maxBody }),
     allowPrivateRpc: args.values["allow-private-rpc"] === true,
     log: io.stderr,
-    ...(wallets === undefined ? {} : { wallets }),
+    ...(stores === undefined ? {} : { stores }),
     ...(check === undefined
       ? {}
       : {
@@ -276,20 +312,22 @@ export async function mcpCommand(
 }
 
 /**
- * The wallets the stdio server serves — unless `--no-wallets` — and, given a password source, the
- * password that enables them, read now, before anything is served, so a source that does not work
- * stops the server at start. Over HTTP there are no wallets: the HTTP server never signs.
+ * The wallets the stdio server serves — unless `--no-wallets` or `--no-stores` — and, given a
+ * password source, the password that enables them, read now, before anything is served, so a
+ * source that does not work stops the server at start. Over HTTP there are no wallets: the HTTP
+ * server never signs.
  */
 async function walletsOf(
   args: ParsedArgs,
-  io: PasswordIo,
+  io: PasswordIo & { readonly walletsDir?: string | undefined },
   http: boolean,
 ): Promise<McpWallets | undefined> {
   const dir = stringFlag(args, "wallets");
   const given = PASSWORDS.find((flag) => args.values[flag] !== undefined);
   const named = dir !== undefined ? "--wallets" : given === undefined ? undefined : `--${given}`;
-  if (args.values["no-wallets"] === true) {
-    if (named !== undefined) throw new UsageError(`${named} goes with wallets, not --no-wallets`);
+  const off = (["no-wallets", "no-stores"] as const).find((flag) => args.values[flag] === true);
+  if (off !== undefined) {
+    if (named !== undefined) throw new UsageError(`${named} goes with wallets, not --${off}`);
 
     return undefined;
   }
@@ -319,7 +357,7 @@ async function walletsOf(
 
   // A bare --wallets, as the server once had to be started with, is the default directory.
   return {
-    dir: dir || defaultWalletsDir(),
+    dir: dir || io.walletsDir || defaultWalletsDir(),
     dirNamed: dir !== undefined && dir !== "",
     ...(start === undefined ? {} : { start }),
     read: async (chosen) => {
@@ -330,4 +368,42 @@ async function walletsOf(
       return readPassword(chosen, io, { what: "the wallets", creating: true, by: "tool" });
     },
   };
+}
+
+/**
+ * The command's stores the server keeps: over stdio, each where the command keeps it unless
+ * `--pots` or `--wallets` says otherwise, or none with `--no-stores` (`--no-wallets` leaves out the
+ * wallets alone); over HTTP, none.
+ */
+async function storesOf(
+  args: ParsedArgs,
+  io: PasswordIo & {
+    readonly potsDir?: string | undefined;
+    readonly walletsDir?: string | undefined;
+  },
+  http: boolean,
+): Promise<McpStores | undefined> {
+  const pots = stringFlag(args, "pots");
+  const none = args.values["no-stores"] === true;
+  if (http) {
+    if (pots !== undefined || none) {
+      throw new UsageError(
+        `--${pots === undefined ? "no-stores" : "pots"} is for stdio: the HTTP server keeps nothing`,
+      );
+    }
+    // Refuses a wallet flag: the HTTP server never signs.
+    await walletsOf(args, io, http);
+
+    return undefined;
+  }
+  if (none && pots !== undefined) throw new UsageError("give --pots or --no-stores, not both");
+  const wallets = await walletsOf(args, io, http);
+  if (none) return undefined;
+  const dir = pots ?? io.potsDir;
+  const stores: McpStores = {
+    ...(dir === undefined ? {} : { pots: dir }),
+    ...(wallets === undefined ? {} : { wallets }),
+  };
+
+  return Object.keys(stores).length === 0 ? undefined : stores;
 }

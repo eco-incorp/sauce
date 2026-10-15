@@ -120,8 +120,9 @@ import {
 import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { guardOf } from "./policy.js";
+import { keepLanded } from "./keep.js";
 import type { PotRecord } from "./pot-store.js";
-import { potsLanded, svmPotsCreated } from "./pots.js";
+import { svmPotsCreated } from "./pots.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
@@ -519,8 +520,9 @@ export async function sendAndConfirm(
 
 /**
  * Polls until `signature` is confirmed (or a minute passes) and reads it back: whether it failed
- * and why, its logs, units, fee and what the engine returned — and hands the Pots it created to the
- * command's recorder (`pots.ts`). `seen` is told whether it succeeded first.
+ * and why, its logs, units, fee and what the engine returned, and the Pots it created (`pots.ts`) —
+ * and hands it to the stores the command keeps (`keep.ts`). `seen` is told whether it succeeded
+ * first.
  */
 export async function svmLanded(
   rpc: Rpc,
@@ -555,22 +557,23 @@ export async function svmLanded(
   const logs = meta?.logMessages ?? [];
   // The engine's own: the node's return data where the engine set it last, else its log line.
   const returned = meta?.returnData?.programId === engine() ? returnData : engineReturn(logs);
+  const loaded =
+    meta?.loadedAddresses === undefined || meta.loadedAddresses === null
+      ? undefined
+      : meta.loadedAddresses;
   const pots =
     response === null || response === undefined
       ? []
       : svmPotsCreated({
           chain: requireChain("solana"),
           transaction: response.transaction[0],
-          ...(meta?.loadedAddresses === undefined || meta.loadedAddresses === null
-            ? {}
-            : { loaded: meta.loadedAddresses }),
+          ...(loaded === undefined ? {} : { loaded }),
           signature,
           slot,
           ok: err === null,
         });
-  potsLanded(pots);
 
-  return {
+  const landed: SvmSent = {
     signature,
     ok: err === null,
     ...(err === null ? {} : { reason: failureReason(err, logs, returnData) }),
@@ -583,6 +586,16 @@ export async function svmLanded(
     ...(returned === undefined ? {} : { returnData: returned }),
     ...(pots.length === 0 ? {} : { pots }),
   };
+  await keepLanded({
+    kind: "svm",
+    sent: landed,
+    ...(response === null || response === undefined
+      ? {}
+      : { transaction: response.transaction[0] }),
+    ...(loaded === undefined ? {} : { loaded }),
+  });
+
+  return landed;
 }
 
 /**

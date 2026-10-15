@@ -16,12 +16,10 @@
  * Shared Pot). Offline: the release the SDK pins today does not decide it. A Solana Pot is the
  * Kitchen's PDA under every release; its engine is the program its creation named.
  *
- * The command keeps them (`pot-store.ts`) through a recorder `run.ts` scopes to the command it runs
- * ({@link recordingPots}): each record is written the moment its transaction lands, so a command
- * that fails after deploying a Pot still keeps it. Nothing else records: the MCP server returns the
- * records in its results and keeps no store.
+ * Every landed transaction carries its records (`Sent.pots`, `SvmSent.pots`), which every JSON that
+ * reports it includes. Where a scope keeps the Pot store (`keep.ts`: the command, and the local MCP
+ * server), {@link keepPots} writes them as they land.
  */
-import { AsyncLocalStorage } from "node:async_hooks";
 import { readFileSync } from "node:fs";
 
 import {
@@ -56,6 +54,7 @@ import {
 } from "../deployments/index.js";
 import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
 import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../svm/kitchen.js";
+import type { Landed } from "./keep.js";
 import { POT_SCHEMA, type PotKind, type PotRecord, type PotStore } from "./pot-store.js";
 
 /** The package's version, from the manifest three levels above `sdk/{src,dist}/cli`. */
@@ -438,53 +437,24 @@ function svmRecord(input: {
 // Keeping them
 // ---------------------------------------------------------------------------------------------
 
-/** What keeps the Pots a command deploys, as each transaction lands. */
-export interface PotRecorder {
-  /** Pots a transaction deployed. */
-  readonly record: (pots: readonly PotRecord[]) => void;
-  /** A transaction that deployed a Pot whose record could not be made: why. */
-  readonly missed: (tx: string, reason: string) => void;
-}
-
-const recorders = new AsyncLocalStorage<PotRecorder>();
-
-/** Runs `run` with `recorder` keeping every Pot a transaction it sends deploys. */
-export const recordingPots = <T>(recorder: PotRecorder, run: () => Promise<T>): Promise<T> =>
-  recorders.run(recorder, run);
-
-/** Hands `pots` to the command's recorder, if it keeps any. */
-export function potsLanded(pots: readonly PotRecord[]): void {
-  if (pots.length > 0) recorders.getStore()?.record(pots);
-}
-
-/** Tells the command's recorder that `tx` deployed a Pot it has no record of, and why. */
-export function potsMissed(tx: string, reason: string): void {
-  recorders.getStore()?.missed(tx, reason);
-}
-
-/** The recorder that keeps Pots in `store`, saying so (and what it could not keep) on `notify`. */
-export function storeRecorder(store: PotStore, notify: (line: string) => void): PotRecorder {
-  return {
-    record: (pots) => {
-      for (const pot of pots) {
-        try {
-          const saved = store.save(pot);
-          notify(
-            saved === "created"
-              ? `recorded Pot ${pot.pot} on ${pot.chain} in ${store.dir}`
-              : `Pot ${pot.pot} on ${pot.chain} was already recorded in ${store.dir}`,
-          );
-        } catch (error) {
-          notify(
-            `warning: Pot ${pot.pot} on ${pot.chain} was deployed, but not recorded in ` +
-              `${store.dir}: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      }
-    },
-    missed: (tx, reason) =>
-      notify(`warning: ${tx} deployed a Pot, but it was not recorded in ${store.dir}: ${reason}`),
-  };
+/**
+ * The Pot store's part of what a scope keeps (`keep.ts`): every Pot `landed` deployed, written to
+ * `store` the moment its transaction lands — so a command that fails after deploying a Pot still
+ * keeps it — with a line for each.
+ */
+export function keepPots(store: PotStore, landed: Landed): string[] {
+  return (landed.sent.pots ?? []).map((pot) => {
+    try {
+      return store.save(pot) === "created"
+        ? `recorded Pot ${pot.pot} on ${pot.chain} in ${store.dir}`
+        : `Pot ${pot.pot} on ${pot.chain} was already recorded in ${store.dir}`;
+    } catch (error) {
+      return (
+        `warning: Pot ${pot.pot} on ${pot.chain} was deployed, but not recorded in ${store.dir}: ` +
+        (error instanceof Error ? error.message : String(error))
+      );
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------------------------

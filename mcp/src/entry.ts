@@ -5,11 +5,12 @@
  *
  * NODE-ONLY, and reached by nothing browser-facing. It reads no environment variable: it reads a
  * chain through the `--config` file's endpoint for it, else the built-in public endpoints the
- * `sauce` command hands it (`McpServeOptions.publicRpcs`). Over stdio it serves the wallet tools
- * (unless `--no-wallets`): they sign with the wallets of one directory alone, once enabled — by the
- * password the `sauce` command read at start from the source it was given, or by the source an
- * agent names to `sauce_wallet_enable`, which that command reads for it. Over HTTP it never
- * signs. A newer
+ * `sauce` command hands it (`McpServeOptions.publicRpcs`). Over stdio it keeps the `sauce`
+ * command's stores in the directories the command names (`McpServeOptions.stores`: the Pot store
+ * and the wallet directory, by default), and serves the wallet tools: they sign with the wallets
+ * of that directory alone, once enabled — by the password the `sauce` command read at start from
+ * the source it was given, or by the source an agent names to `sauce_wallet_enable`, which that
+ * command reads for it. Over HTTP it never signs and keeps nothing. A newer
  * version the `sauce` command's update check has seen is noted once, in the process's first tool
  * result (`update-note.ts`).
  */
@@ -20,7 +21,15 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "./config.js";
 import { createRpcGuard } from "./guard.js";
 import { DEFAULT_MAX_BODY, endpointUrl, isLoopback, serveHttp } from "./http.js";
-import { UsageError, type McpEntry, type McpServeOptions, type McpSetupOptions } from "./sdk.js";
+import {
+  keepsAny,
+  PotStore,
+  UsageError,
+  type LocalStores,
+  type McpEntry,
+  type McpServeOptions,
+  type McpSetupOptions,
+} from "./sdk.js";
 import { createSauceServer, packageInfo } from "./server.js";
 import { parseSetupAgents, setupLines, setupProject } from "./setup.js";
 import { once } from "./update-note.js";
@@ -70,12 +79,17 @@ async function serve(options: McpServeOptions): Promise<void> {
     }
     // Over stdio the caller is the server's own user, on the same machine: its endpoints, local
     // nodes included, are used as given. A message past the bound closes the connection.
-    const { wallets } = options;
+    const wallets = options.stores?.wallets;
+    // The command's stores, kept as the command keeps them: its caller is the user of this machine.
+    const stores: LocalStores = {
+      ...(options.stores?.pots === undefined ? {} : { pots: new PotStore(options.stores.pots) }),
+    };
     // Its caller's own files: a program may be named by path.
     await createSauceServer({
       endpoints,
       local: true,
       ...(wallets === undefined ? {} : { wallets }),
+      ...(keepsAny(stores) ? { stores } : {}),
       ...update,
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     if (wallets !== undefined) {
@@ -86,12 +100,18 @@ async function serve(options: McpServeOptions): Promise<void> {
           : `sauce mcp: signing with the wallets in ${wallets.dir}\n`,
       );
     }
+    if (stores.pots !== undefined) {
+      options.log(`sauce mcp: keeping the Pots its transactions deploy in ${stores.pots.dir}\n`);
+    }
 
     return;
   }
-  // The HTTP server never signs: it is not given the wallets at all.
-  if (options.wallets !== undefined) {
+  // The HTTP server never signs, and keeps nothing: it is given neither wallets nor stores.
+  if (options.stores?.wallets !== undefined) {
     throw new UsageError("--wallets is for stdio: the HTTP server never signs");
+  }
+  if (options.stores !== undefined) {
+    throw new UsageError("--pots is for stdio: the HTTP server keeps nothing");
   }
   const port = wholeNumber("http", options.http, 0, 65_535);
   const host = options.host ?? "127.0.0.1";

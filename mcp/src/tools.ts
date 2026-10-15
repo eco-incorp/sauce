@@ -55,7 +55,10 @@ import {
   inspectFile,
   intentRecord,
   type IntentRecord,
+  keeping,
+  keepsAny,
   kitchenFee,
+  type LocalStores,
   MAX_V4_KEYS,
   parseAccounts,
   parseAddress,
@@ -278,7 +281,7 @@ function sourceInputs(local: boolean): {
   ) as { source: z.ZodOptional<typeof PROGRAM.source>; path: z.ZodOptional<typeof PATH> };
 }
 
-const POT = {
+export const POT = {
   owner: z
     .string()
     .max(64)
@@ -1068,8 +1071,15 @@ export interface ToolContext {
   /** Over stdio: the caller is the server's own user, so a program may be named by `path` and
    *  read from disk. Never over HTTP. */
   readonly local?: boolean;
-  /** Over stdio, unless `--no-wallets`: the wallets the server serves. Never over HTTP. */
+  /** Over stdio, unless `--no-wallets` or `--no-stores`: the wallets the server serves. Never
+   *  over HTTP. */
   readonly wallets?: WalletSession;
+  /**
+   * Over stdio: the `sauce` command's stores the server keeps (`keep.ts`), as the command does.
+   * Each tool call is a scope of them, so what its transactions do is kept as each lands, and said
+   * in its notes. Never over HTTP.
+   */
+  readonly stores?: LocalStores;
 }
 
 /** How many tokens `sauce_globals` returns at a time. */
@@ -1111,7 +1121,7 @@ export type ToolRegistrar = <Input extends z.ZodRawShape, Output extends z.ZodRa
  * released after.
  */
 export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegistrar {
-  const { endpoints, guard } = context;
+  const { endpoints, guard, stores } = context;
 
   return (name, config, run) => {
     // A tool that builds a transaction, on a server that can send it: the result says how.
@@ -1132,13 +1142,24 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       },
       async (args: unknown) => {
         const reach = callReach(endpoints, guard);
+        // What the call's transactions did that the server keeps, as each landed: said in its
+        // result whether it succeeded or not, as the command says it whatever its exit.
+        const kept: string[] = [];
+        const call = async () => run(args as never, reach);
         try {
-          const output = withPublicNotes(await run(args as never, reach), reach);
+          const output = withPublicNotes(
+            await (stores === undefined || !keepsAny(stores)
+              ? call()
+              : keeping({ stores, say: (line) => kept.push(line) }, call)),
+            reach,
+          );
+          const keptOutput =
+            kept.length === 0 ? output : { ...output, notes: [...(output.notes ?? []), ...kept] };
 
           return result(
             sendable && (args as { dryRun?: unknown }).dryRun !== true
-              ? withSendNote(output)
-              : output,
+              ? withSendNote(keptOutput)
+              : keptOutput,
             reach.scrub,
           );
         } catch (error) {
@@ -1148,7 +1169,12 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
 
           return {
             isError: true,
-            content: [{ type: "text", text: [errorText(error, reach.scrub), ...said].join("\n") }],
+            content: [
+              {
+                type: "text",
+                text: [errorText(error, reach.scrub), ...said, ...kept.map(reach.scrub)].join("\n"),
+              },
+            ],
           };
         } finally {
           reach.release();

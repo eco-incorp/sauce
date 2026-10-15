@@ -1,9 +1,10 @@
 /**
  * The Sauce MCP server: the `sauce` command's read-only tools, `sauce_send` for what the caller
- * signed, the agent skills as resources, and two task prompts — and, over stdio unless started
- * with `--no-wallets`, the wallet tools. One server per connection
- * — over stdio, one for the process; over Streamable HTTP, one per request, stateless, and never
- * with wallets.
+ * signed, the agent skills as resources, and two task prompts — and, over stdio, the wallet tools
+ * (unless `--no-wallets`) and, with the command's stores (on by default), what keeps them: every
+ * Pot a tool's transaction deploys is recorded, and `sauce_pot_list` and `sauce_pot_import` read
+ * the store. One server per connection — over stdio, one for the process; over Streamable HTTP,
+ * one per request, stateless, and never with wallets or stores.
  */
 import { readFileSync } from "node:fs";
 
@@ -11,13 +12,19 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { Endpoints } from "./config.js";
 import type { RpcGuard } from "./guard.js";
+import { registerPotTools } from "./pots.js";
 import { registerPrompts } from "./prompts.js";
 import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.js";
 import { registerSendTools } from "./send.js";
 import { registerSkillTools } from "./skilltools.js";
 import { COMMAND_TOOLS, flagInputLines } from "./terms.js";
 import { registerIntentTools } from "./intents.js";
-import { CHAIN_SUPPORT_NEW_ISSUE_URL, supportedChainNames, type McpWallets } from "./sdk.js";
+import {
+  CHAIN_SUPPORT_NEW_ISSUE_URL,
+  supportedChainNames,
+  type LocalStores,
+  type McpWallets,
+} from "./sdk.js";
 import { registerTools } from "./tools.js";
 import { noteResults } from "./update-note.js";
 import { registerWalletTools, WalletSession } from "./wallets.js";
@@ -36,7 +43,12 @@ export function packageInfo(): { readonly name: string; readonly version: string
 }
 
 /** What the server tells a client about itself when it connects. */
-export function instructions(endpoints: Endpoints, wallets?: WalletSession, local = false): string {
+export function instructions(
+  endpoints: Endpoints,
+  wallets?: WalletSession,
+  local = false,
+  stores: LocalStores = {},
+): string {
   const { name } = packageInfo();
 
   return [
@@ -94,6 +106,15 @@ export function instructions(endpoints: Endpoints, wallets?: WalletSession, loca
     "the intent's `record` (sauce_intent_publish and sauce_intent_import return it), or txHash",
     "and its source chain.",
     "",
+    ...(stores.pots === undefined
+      ? []
+      : [
+          "THIS SERVER KEEPS THE sauce COMMAND'S POT STORE, as the command does: every Pot a",
+          "transaction it sends deploys (sauce_send, sauce_wallet_send) is recorded there, with",
+          "the release it was minted under. sauce_pot_list lists them; sauce_pot_import records a",
+          "Pot deployed some other way, read from the chain.",
+          "",
+        ]),
     ...(wallets === undefined
       ? [
           "NOTHING HERE SIGNS. Every transaction comes back unsigned, for the user to sign with",
@@ -165,8 +186,12 @@ export interface SauceServerOptions {
   /** Over stdio: the caller is the server's own user, so a program may be named by `path`, read
    *  from disk. Never given with `guard` (HTTP). */
   readonly local?: boolean;
-  /** Over stdio, unless `--no-wallets`: the wallets it serves. Never given with `guard` (HTTP). */
+  /** Over stdio, unless `--no-wallets` or `--no-stores`: the wallets it serves. Never given with
+   *  `guard` (HTTP). */
   readonly wallets?: McpWallets;
+  /** Over stdio: the `sauce` command's stores it keeps, as the command does. Never given with
+   *  `guard` (HTTP). */
+  readonly stores?: LocalStores;
   /** The skills directory; the package's own by default. */
   readonly skillsDir?: string;
   /** A newer version's note, asked after each tool result and added to it when it says something:
@@ -184,13 +209,21 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
   if (options.local === true && options.guard !== undefined) {
     throw new Error("internal: a server reads files over stdio only, and the guard is HTTP's");
   }
+  if (options.stores !== undefined && options.guard !== undefined) {
+    throw new Error("internal: a server keeps stores over stdio only, and the guard is HTTP's");
+  }
   // The wallets' state for the life of this server: over stdio, the process's.
   const wallets = options.wallets === undefined ? undefined : new WalletSession(options.wallets);
   const server = new McpServer(
     { name: "sauce", title: `Sauce (${name})`, version },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: instructions(options.endpoints, wallets, options.local === true),
+      instructions: instructions(
+        options.endpoints,
+        wallets,
+        options.local === true,
+        options.stores,
+      ),
     },
   );
   if (options.updateNote !== undefined) noteResults(server, options.updateNote);
@@ -199,11 +232,13 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
     ...(options.guard === undefined ? {} : { guard: options.guard }),
     ...(options.local === true ? { local: true } : {}),
     ...(wallets === undefined ? {} : { wallets }),
+    ...(options.stores === undefined ? {} : { stores: options.stores }),
   };
   registerTools(server, tools);
   registerIntentTools(server, tools);
   registerSendTools(server, tools);
   if (wallets !== undefined) registerWalletTools(server, { ...tools, wallets });
+  if (options.stores?.pots !== undefined) registerPotTools(server, tools, options.stores.pots);
   registerSkillTools(server, options.skillsDir, options.newerVersion);
   registerResources(server, options.skillsDir);
   registerPrompts(server, options.skillsDir);
