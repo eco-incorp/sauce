@@ -180,7 +180,7 @@ describe("@sauce/router: every function compiles from run-time arguments", () =>
 });
 
 describe("@sauce/router: the exports are the documented API", () => {
-  it("exports exactly the eleven venues and their eleven `try` forms", () => {
+  it("exports exactly the eleven venues, the gas-capped V3 swap, and a `try` form of each", () => {
     const exported = [...routerSource().matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
     expect(exported.sort()).toEqual(Object.keys(FUNCTIONS).sort());
     expect(Object.keys(FUNCTIONS).sort()).toEqual(
@@ -201,10 +201,12 @@ describe("@sauce/router: the exports are the documented API", () => {
         "tryTraderJoeLB",
         "tryUniswapV2",
         "tryUniswapV3",
+        "tryUniswapV3Capped",
         "tryUniswapV4",
         "tryWoofi",
         "uniswapV2",
         "uniswapV3",
+        "uniswapV3Capped",
         "uniswapV4",
         "woofi",
       ].sort(),
@@ -290,6 +292,19 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
       expect(plain(fn)).toEqual(plain({ ...theirs, outputs: theirs.outputs.slice(0, 1) }));
       expect(fn.outputs.map((o) => o.name)).toEqual(["amountInUsed"]);
       expect(toFunctionSelector(fn)).toBe(toFunctionSelector(theirs));
+    }
+  });
+
+  // The capped forms reach the same `swapV3` as `uniswapV3` and `tryUniswapV3`: their cap is the
+  // call's own gas (`.gas(gasCap)`, an operand the engine passes to the EVM call), not a Router method.
+  it("reaches the Router's swapV3 from the capped forms too, with no method of their own", () => {
+    const swapV3 = toFunctionSelector(
+      fragments("sauce-router.abi.json").find((f) => f.name === "swapV3")!,
+    ).slice(2);
+    expect(swapV3).toBe("cc58aa32");
+    for (const name of ["uniswapV3", "tryUniswapV3", "uniswapV3Capped", "tryUniswapV3Capped"]) {
+      const code = hex(compileStdRouter(programCalling(name)).bytecode);
+      expect({ name, swapV3: code.includes(swapV3) }).toEqual({ name, swapV3: true });
     }
   });
 

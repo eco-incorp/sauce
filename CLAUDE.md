@@ -629,7 +629,9 @@ with no option. It has two arms and, like `@sauce/token`, no neutral `router.js`
 both targets, so a function one arm lacks fails at its import, naming it ("`woofi` is not exported
 by module" on Solana). The EVM arm (`router.evm.js`) is THE one implementation of a swap at its eleven venues: one exported function
 per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2`, `traderJoeLB`,
-`woofi`, `maverickV2`, `infinityCL`, `infinityBin`), every argument a RUN-TIME value, in one order —
+`woofi`, `maverickV2`, `infinityCL`, `infinityBin`), plus `uniswapV3Capped` (`uniswapV3` with its
+Router call held to a gas cap, `.gas(gasCap)`, for a plugin that burns the gas it is given), every
+argument a RUN-TIME value, in one order —
 `venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
 the recipient received; plus a `try` form of each that returns `0n` having moved nothing, while a
 swap that ran returns at least 1, so a `0n` ALWAYS means nothing moved (sauce-recipes' EcoSwap
@@ -637,8 +639,8 @@ executor drops a venue that returns 0 and re-offers its input). Three mechanisms
 anything moves (`tryUniswapV2` the reserves, `tryTraderJoeLB` `getSwapOut`, `tryDodoV2`
 `querySellBase`/`querySellQuote`, `tryWoofi` WooPPV2's `query` — never its `tryQuery`, which prices
 past the reserve), a caught pool call that resets its approval (`tryCurve`, `tryBalancerV2`), or a
-caught Router call (`tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
-`tryInfinityBin`). The generation-4 Router takes no floor, so a caught Router call that ran is held
+caught Router call (`tryUniswapV3`, `tryUniswapV3Capped`, `tryUniswapV4`, `tryMaverickV2`,
+`tryInfinityCL`, `tryInfinityBin`). The generation-4 Router takes no floor, so a caught Router call that ran is held
 afterwards to `minOut` and at least 1 and reverts below it (an input the pool keeps as its fee
 cannot be undone), except that one that moved nothing either way — the Router's `amountInUsed` and
 the recipient's `tokenOut` gain both 0, a pool with no liquidity in range — returns `0n`. The

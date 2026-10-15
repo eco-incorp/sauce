@@ -48,23 +48,24 @@ venue's own facts, then the floor and the recipient — and returns the amount r
 venue(pool, tokenIn, tokenOut, amountIn, ...facts, minOut, recipient): Uint256
 ```
 
-| Function      | Arguments                                                                                                       | Reached through  |
-| ------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                                  | the pair         |
-| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                       | the Pot's Router |
-| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient`       | the Pot's Router |
-| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                                    | the pool         |
-| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                                 | the Vault        |
-| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                                   | the pool         |
-| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                          | the pair         |
-| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the WooPPV2      |
-| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the Pot's Router |
-| `infinityCL`  | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
-| `infinityBin` | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient`                    | the Pot's Router |
+| Function          | Arguments                                                                                                       | Reached through  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `uniswapV2`       | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                                  | the pair         |
+| `uniswapV3`       | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                       | the Pot's Router |
+| `uniswapV3Capped` | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, gasCap, minOut, recipient`                               | the Pot's Router |
+| `uniswapV4`       | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient`       | the Pot's Router |
+| `curve`           | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                                    | the pool         |
+| `balancerV2`      | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                                 | the Vault        |
+| `dodoV2`          | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                                   | the pool         |
+| `traderJoeLB`     | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                          | the pair         |
+| `woofi`           | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the WooPPV2      |
+| `maverickV2`      | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the Pot's Router |
+| `infinityCL`      | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
+| `infinityBin`     | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient`                    | the Pot's Router |
 
 and a `try` form of each, with the same arguments as the function it names: `tryUniswapV2`,
 `tryCurve`, `tryBalancerV2`, `tryDodoV2`, `tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`,
-`tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` — see
+`tryUniswapV3Capped`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` — see
 [what a swap may not do](#what-a-swap-may-not-do).
 
 Addresses are `Address`, amounts and the other numbers `Uint256`, and `uint256Indices` a `bool`.
@@ -135,8 +136,8 @@ ways:
   check did not foresee still reverts;
 - `tryCurve` and `tryBalancerV2` catch the pool's failure and reset the approval to zero: the pool
   pulls the input and enforces the floor, at least 1, inside the call that is caught;
-- `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` catch the
-  Router's call, inside which the Router pays the pool. A pool that has no code, is not the named
+- `tryUniswapV3`, `tryUniswapV3Capped`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and
+  `tryInfinityBin` catch the Router's call, inside which the Router pays the pool. A pool that has no code, is not the named
   pair's (V3, Maverick), or whose swap the pool or the Router refuses (a key no pool has, a price
   limit behind the pool's price) is skipped. The generation-4 Router takes no floor, so a swap that
   ran is held to one afterwards: what the recipient's `tokenOut` balance gained (its native balance
@@ -160,6 +161,17 @@ other than the quote, and below the floor it reverts.
   V2; 1,000,000 or more reverts. An input past the reserve's `uint112` width reverts at the pair.
 - **Uniswap V3** sends `amountIn` positive, the pool's exact-input sign. A non-zero
   `sqrtPriceLimitX96` stops the swap at that price.
+- **Uniswap V3 under a gas cap** (`uniswapV3Capped`) is `uniswapV3` with its Router call given at
+  most `gasCap` gas (`.gas(gasCap)`): the pool's `swap`, its callback and its hooks never spend
+  more. `0` is no cap. It is for a pool whose plugin spends the gas it is given: Base's QuickSwap V4
+  and Hydrex V4 (Algebra Integral) plugins run an arbitrage after a swap once the pool's call holds
+  about 1.17M gas, and burn what they are handed when it is short of their need, so the cook's gas
+  grows with its limit. Capped below the plugin's threshold, the swap pays the same output at its
+  fixed cost: a one-swap cook of 5,000 USDC on those pools costs 340,985 and 374,058 gas at any
+  limit, against up to 1.6M and 1.7M uncapped. The cap is yours, measured per plugin: below its
+  threshold and above the swap's own need. One too low for the swap reverts the program, and
+  `tryUniswapV3Capped` skips it with nothing moved. It needs no Router method: the cap is the call's
+  own gas, which an engine that takes the callee's gas as an operand (v12-evm 1.3.0) passes through.
 - **Uniswap V4**'s pool key is `tokenIn` and `tokenOut` in sort order — native ETH is the zero
   address, which sorts first and which the Pot pays from its own balance — with the pool's `fee`,
   `tickSpacing` and `hooks`. Pass unsigned `amountIn`; the generation-4 Router handles V4's negative

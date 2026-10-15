@@ -101,6 +101,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   tryDodoV2: `tryDodoV2(${POOL}, ${A}, ${B}, amount, ${B}, ${A}, minOut, ctx.self())`,
   tryWoofi: `tryWoofi(${POOL}, ${A}, ${B}, amount, minOut, ctx.self())`,
   tryUniswapV3: `tryUniswapV3(${POOL}, ${A}, ${B}, amount, 0n, minOut, ctx.self())`,
+  uniswapV3Capped: `uniswapV3Capped(${POOL}, ${A}, ${B}, amount, 0n, 400000n, minOut, ctx.self())`,
+  tryUniswapV3Capped: `tryUniswapV3Capped(${POOL}, ${A}, ${B}, amount, 0n, 400000n, minOut, ctx.self())`,
   tryUniswapV4: `tryUniswapV4(${POOL}, 0n, ${B}, amount, 500n, 10n, 0n, 0n, minOut, ctx.self())`,
   tryMaverickV2: `tryMaverickV2(${POOL}, ${A}, ${B}, amount, minOut, ctx.self())`,
   infinityCL: `infinityCL(${VAULT}, ${A}, ${B}, amount, ${POOL}, 500n, ${PARAMETERS}, 0n, 0n, minOut, ctx.self())`,
