@@ -10,14 +10,11 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
 
 import {
-  parseAddress,
   parseChain,
-  parsePubkey,
-  parseSalt,
   potImportCommand,
+  potImportTarget,
   potListCommand,
-  UsageError,
-  type CanonicalChain,
+  potOwner,
   type PotStore,
 } from "./sdk.js";
 import { chainRef, POT, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
@@ -50,12 +47,6 @@ const OWNER = z
   .max(64)
   .describe("A Pot's owner: a 0x address on an EVM chain, a base58 public key on Solana.");
 
-/** An owner as its chain spells it; with no chain, as it is written. */
-const ownerOn = (chain: CanonicalChain | undefined, raw: string): string =>
-  chain?.kind === "svm" || (chain === undefined && !raw.startsWith("0x"))
-    ? parsePubkey("owner", raw)
-    : parseAddress("owner", raw);
-
 export function registerPotTools(server: McpServer, context: ToolContext, store: PotStore): void {
   const tool = toolRegistrar(server, context);
 
@@ -83,7 +74,7 @@ export function registerPotTools(server: McpServer, context: ToolContext, store:
       const chain = args.chain === undefined ? undefined : parseChain(String(args.chain), "chain");
       const output = potListCommand(store, {
         ...(chain === undefined ? {} : { chain }),
-        ...(args.owner === undefined ? {} : { owner: ownerOn(chain, args.owner) }),
+        ...(args.owner === undefined ? {} : { owner: potOwner(chain, args.owner) }),
       });
 
       return { json: output.json, notes: output.notes };
@@ -115,24 +106,13 @@ export function registerPotTools(server: McpServer, context: ToolContext, store:
     },
     async (args, reach) => {
       const chain = parseChain(String(args.chain), "chain");
-      if ((args.pot === undefined) === (args.owner === undefined)) {
-        throw new UsageError("give the Pot (pot) or its owner (owner), one of them");
-      }
-      if (args.pot !== undefined && chain.kind === "svm") {
-        throw new UsageError(
-          "a Solana Pot holds nothing that names its owner: give owner (and its salt) instead of pot",
-        );
-      }
-      if (args.pot !== undefined && (args.salt !== undefined || args.saltHex !== undefined)) {
-        throw new UsageError("pot names the Pot, whose salt is read off it: give no salt");
-      }
+      // The rules `sauce pot import` holds its flags to, its inputs named alike.
+      const target = potImportTarget(chain, args);
       const output = await potImportCommand({
         store,
         chain,
         rpcUrl: await reach.require(chain, args.rpcUrl, "reading the Pot"),
-        ...(args.pot === undefined ? {} : { pot: parseAddress("pot", args.pot) }),
-        ...(args.owner === undefined ? {} : { owner: ownerOn(chain, args.owner) }),
-        salt: parseSalt(args.salt, args.saltHex).salt,
+        ...target,
       });
 
       return { json: output.json, notes: output.notes };

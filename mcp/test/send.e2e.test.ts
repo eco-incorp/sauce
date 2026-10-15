@@ -175,6 +175,9 @@ describe(
       assert.deepEqual(deployed!.deployment, {
         tx: sent.sent[0]!.hash,
         block: sent.sent[0]!.blockNumber,
+        blockHash: (
+          await local.publicClient.getTransactionReceipt({ hash: sent.sent[0]!.hash as Hex })
+        ).blockHash,
         from: signer.address,
       });
       assert.equal(sent.sent[1]!.pots, undefined);

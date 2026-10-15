@@ -80,6 +80,7 @@ import {
   tokenAmount,
   type EngineHarness,
 } from "./svm/engine-harness.js";
+import { SHIM_GENESIS_HASH } from "./svm/rpc-shim.js";
 
 /** TSLAx, Backed's tokenized Tesla, as mainnet holds it (`svm/fixtures/token-2022/stock-mints.json`). */
 const TSLAX_IMAGE = (
@@ -264,6 +265,9 @@ function shim(harness: EngineHarness): {
           context,
           value: Number(harness.svm.getBalance(address(params[0] as string)) ?? 0n),
         });
+      // A local bank is no public cluster: a Pot created on it is recorded as this one's.
+      case "getGenesisHash":
+        return answer(id, SHIM_GENESIS_HASH);
       // The clock, which a rehearsal in a local copy sets its own to.
       case "getSlot":
         return answer(id, Number(harness.svm.getClock().slot));
@@ -1269,6 +1273,8 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       schema: "sauce.pot/1",
       chain: "solana",
       chainId: requireChain("solana").id,
+      // A local bank, by its genesis hash: never recorded as mainnet's.
+      cluster: SHIM_GENESIS_HASH,
       pot,
       owner: owner.signer.address,
       salt: potSalt(salt),
@@ -1291,7 +1297,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       ...["--rpc-url", RPC_URL, "--keypair", owner.path],
     );
     const createPot = json(created).createPot as { signature: string; pots: unknown[] };
-    expect(created.stderr).toContain(`recorded Pot ${alone} on solana in ${pots}`);
+    expect(created.stderr).toContain(
+      `recorded Pot ${alone} on solana (${SHIM_GENESIS_HASH}) in ${pots}`,
+    );
     const record = {
       ...expected(alone, "recorded"),
       origin: "deployed",
@@ -1309,7 +1317,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     ];
     const first = await recorded(...cook);
     expect(first.code).toBe(0);
-    expect(first.stderr).toContain(`recorded Pot ${inCook} on solana in ${pots}`);
+    expect(first.stderr).toContain(
+      `recorded Pot ${inCook} on solana (${SHIM_GENESIS_HASH}) in ${pots}`,
+    );
     expect(stored().find((one) => one.pot === inCook)).toMatchObject({
       ...expected(inCook, "cooked"),
       origin: "deployed",
@@ -1340,6 +1350,29 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     );
     expect(byAddress.code).toBe(2);
     expect(byAddress.stderr).toContain("a Solana Pot holds nothing that names its owner");
+    // Lamports sent to a Pot's address before any Pot: the System Program's account, no Pot.
+    const prefunded = await potOf(hexToBytes(potSalt("prefunded")));
+    harness.svm.airdrop(prefunded, lamports(1_000_000n));
+    const before = stored();
+    const notPot = await recorded(
+      ...["pot", "import", "--chain", "solana", "--owner", owner.signer.address],
+      ...["--salt", "prefunded", "--rpc-url", RPC_URL],
+    );
+    expect(notPot.code).toBe(1);
+    expect(notPot.stderr).toMatch(/is owned by 1{32}, which no release this sauce knows names/);
+    expect(stored()).toEqual(before);
+
+    // A cluster whose genesis hash cannot be read (an endpoint not asked before): the Pot is
+    // created all the same, and said not to be recorded, never failing what was sent.
+    rpc.faults.throwOn = "getGenesisHash";
+    const unread = await recorded(
+      ...["pot", "--deploy", "--chain", "solana", "--salt", "unread"],
+      ...["--rpc-url", "http://127.0.0.1:65534/", "--keypair", owner.path],
+    );
+    expect(unread.code).toBe(0);
+    expect(unread.stderr).toMatch(/warning: \w+ created a Pot, whose record could not be made: /);
+    expect(harness.svm.getAccount(await potOf(hexToBytes(potSalt("unread")))).exists).toBe(true);
+    expect(stored()).toEqual(before);
   }, 120_000);
 
   it("asks before creating a Pot whose creation does not fit in the cook's transaction; -y creates it", async () => {

@@ -50,6 +50,8 @@ export {
   bindMainArguments,
   definesReach,
   fundingFor,
+  potImportTarget,
+  potOwner,
   potTarget,
   programChain,
   withoutShebang,

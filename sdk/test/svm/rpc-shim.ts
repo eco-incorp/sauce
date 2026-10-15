@@ -92,6 +92,9 @@ interface Landed {
   readonly transaction: Transaction;
 }
 
+/** The genesis hash the shim answers: its own, a local bank's, which names no public cluster. */
+export const SHIM_GENESIS_HASH = "LocaLSVMgenesis1111111111111111111111111111";
+
 export interface SolanaShim {
   readonly url: string;
   /** Every transaction sent, in order, decoded. */
@@ -238,6 +241,9 @@ export function solanaShim(
 
         return answer(id, found);
       }
+      // A local bank is no public cluster: a Pot created on it is recorded as this one's.
+      case "getGenesisHash":
+        return answer(id, SHIM_GENESIS_HASH);
       case "getSlot": {
         // No commitment is the server's default, finalized (which a client leaves out).
         const commitment = (params[0] as { commitment?: string } | undefined)?.commitment;

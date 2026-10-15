@@ -563,16 +563,23 @@ record comes from the chain: the Kitchen's `PotDeployed` event in a receipt that
 `create_pot` in a Solana transaction that succeeded. So a run whose cook fails after its Pot
 deployed still records the Pot. `sauce tx` sends nothing, and records nothing.
 
-A record holds the chain, the Pot's address, its owner and salt, and its kind: `private`,
+A record holds the chain (on Solana with its cluster, told by its genesis hash: `mainnet-beta`,
+`devnet`, `testnet`, or the hash of any other, so a devnet Pot is never recorded as mainnet's, though
+its address is the same), the Pot's address, its owner and salt, and its kind: `private`,
 `private-fixed-router` (minted with its Router fixed) or `shared` (no owner; anyone may cook it).
 It also holds the Kitchen and the release the Pot was minted under: on an EVM chain the Pot
 init-code hash its address derives from, the engine whose gate accepts it, and the compiler, engine
 and Kitchen versions of that release; on Solana the engine program its creation named. Last come
-the transaction that deployed it (hash, block or slot, sender), the version of `sauce` that recorded
+the transaction that deployed it (hash, block or slot, the block's hash on an EVM chain, sender), the version of `sauce` that recorded
 it, and when. The release is told from the Pot's address, under every Kitchen and init-code hash
 this `sauce` knows, not from the release it pins today. A Pot minted before a Kitchen upgrade keeps
-the release that minted it. One file per Pot, `<chain id>/<pot>.json`, readable only by you, is
-written once and never changed. No key or endpoint is written there.
+the release that minted it. One file per Pot, `<chain id>/<pot>.json` (a Solana cluster other than
+mainnet's after the id: `1399811149-devnet`), readable only by you, is written once and never
+changed. A second deployment of the same Pot address is kept beside the first, as
+`<pot>@<tx>.json`, with a warning: one of them landed on a fork or another network with the same
+chain id, or the Pot was closed and created again on Solana. `sauce pot list` shows both. An
+import refuses an address that holds no Pot: on Solana, an account there that no released engine
+owns. No key or endpoint is written there.
 
 ```sh
 sauce pot list

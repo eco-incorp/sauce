@@ -625,7 +625,11 @@ export async function landed(
     await caughtUp(client, receipt.blockNumber);
     // What it deployed, kept as it lands: whatever the command does next, the Pot is there. A
     // record that cannot be made never fails a transaction that landed; the scope says so.
-    const pots = await evmPotsDeployed(client, sent, from).catch((error: unknown) => {
+    const pots = await evmPotsDeployed(
+      client,
+      { ...sent, blockHash: receipt.blockHash },
+      from,
+    ).catch((error: unknown) => {
       sayKept(
         `warning: ${hash} deployed a Pot, whose record could not be made: ` +
           ((error as { shortMessage?: string }).shortMessage ??

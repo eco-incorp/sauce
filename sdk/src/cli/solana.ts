@@ -120,9 +120,9 @@ import {
 import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { guardOf } from "./policy.js";
-import { keepLanded } from "./keep.js";
+import { keepLanded, sayKept } from "./keep.js";
 import type { PotRecord } from "./pot-store.js";
-import { svmPotsCreated } from "./pots.js";
+import { svmPotsCreated, type InnerInstructions } from "./pots.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
@@ -518,6 +518,23 @@ export async function sendAndConfirm(
   );
 }
 
+/** Each endpoint's cluster, by its genesis hash: asked once per process. */
+const geneses = new Map<string, Promise<string>>();
+
+/** The genesis hash of the cluster `url` serves, which names the cluster a Pot is created on. */
+function genesisOf(rpc: Rpc, url: string): Promise<string> {
+  const known = geneses.get(url);
+  if (known !== undefined) return known;
+  const asked = ask(url, "the cluster's genesis hash", () => rpc.getGenesisHash().send()).then(
+    (hash) => String(hash),
+  );
+  // A failure is asked again next time, not remembered.
+  asked.catch(() => geneses.delete(url));
+  geneses.set(url, asked);
+
+  return asked;
+}
+
 /**
  * Polls until `signature` is confirmed (or a minute passes) and reads it back: whether it failed
  * and why, its logs, units, fee and what the engine returned, and the Pots it created (`pots.ts`) —
@@ -561,16 +578,29 @@ export async function svmLanded(
     meta?.loadedAddresses === undefined || meta.loadedAddresses === null
       ? undefined
       : meta.loadedAddresses;
+  // What it created, kept as it lands. A record that cannot be made never fails a transaction
+  // that landed; the scope says so.
   const pots =
     response === null || response === undefined
       ? []
-      : svmPotsCreated({
+      : await svmPotsCreated({
           chain: requireChain("solana"),
           transaction: response.transaction[0],
           ...(loaded === undefined ? {} : { loaded }),
+          ...(meta?.innerInstructions === undefined || meta.innerInstructions === null
+            ? {}
+            : { inner: meta.innerInstructions as InnerInstructions }),
           signature,
           slot,
           ok: err === null,
+          genesis: () => genesisOf(rpc, url),
+        }).catch((error: unknown) => {
+          sayKept(
+            `warning: ${signature} created a Pot, whose record could not be made: ` +
+              (error instanceof Error ? error.message : String(error)),
+          );
+
+          return [];
         });
 
   const landed: SvmSent = {
