@@ -99,6 +99,29 @@ describe("the release table", () => {
     }
     expect(set["v12-evm"].engine?.toLowerCase()).toBe(v12EngineAddress().toLowerCase());
     expect(set["v12-svm"].engine).toBe(v12SvmEngineProgramId());
+    // The Kitchen and Pot init-code hash the row records are the synced release's own.
+    const { pot } = v12DeployedAddresses().evm;
+    expect(set["kitchen-evm"].kitchen?.toLowerCase()).toBe(pot.deployer.toLowerCase());
+    expect(set["kitchen-evm"].potInitCodeHash?.toLowerCase()).toBe(pot.initCodeHash.toLowerCase());
+  });
+
+  it("names the Kitchen and the Pot init-code hash of every kitchen-evm release, the same in every row", () => {
+    const hashOf = new Map<string, string>();
+    for (const row of V12_RELEASE_SETS) {
+      const pin = row["kitchen-evm"];
+      expect([row.compiler, pin.kitchen]).toEqual([
+        row.compiler,
+        expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
+      ]);
+      expect([row.compiler, pin.potInitCodeHash]).toEqual([
+        row.compiler,
+        expect.stringMatching(/^0x[0-9a-f]{64}$/),
+      ]);
+      // A release mints under one hash, whichever row names it.
+      const seen = hashOf.get(pin.version);
+      if (seen !== undefined) expect(pin.potInitCodeHash).toBe(seen);
+      hashOf.set(pin.version, pin.potInitCodeHash!);
+    }
   });
 
   it("refuses a compiler no row pairs with", () => {
