@@ -14,10 +14,11 @@ one unit less than sent, so paying one into a pool that checks what it received 
 one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and
 not in a local copy of the chain.
 
-On Solana each is a Token-2022 mint: the symbol is the mint's 32-byte key, a value for the
-`@sauce/token` functions (`balanceOf(TSLAx, account)`), and a program moves one with the checked
-writes (`transferChecked`), which take the mint, its token program and its decimals. Amounts are
-raw: the issuer's multiplier, which a wallet shows them times, does not apply to them. A mint
+On Solana each is a Token-2022 mint with the same token methods (`TSLAx.transfer(to, amount)`),
+which lower to the checked writes (`transferChecked`, with the mint, its token program and its
+decimals), and its symbol alone is the mint's 32-byte key, a value for the `@sauce/token`
+functions (`balanceOf(TSLAx, account)`). Amounts are raw: the issuer's multiplier, which a
+wallet shows them times, does not apply to them. A mint
 marked with a transfer fee (PreStocks') keeps part of every transfer, so the recipient gets less
 than was sent: measure the balance change. The rest is in the skill's
 [Tokenized stocks](../SKILL.md#tokenized-stocks).

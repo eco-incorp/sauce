@@ -12,7 +12,11 @@ import { after, before, describe, it } from "node:test";
 
 import { decodeFunctionData, getAddress, type Hex } from "viem";
 
-import { v12EngineAddress, v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
+import {
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12SvmKitchenProgramId,
+} from "../../sdk/dist/deployments/index.js";
 import { potSalt, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import { v12PotAbi } from "../../sdk/dist/evm/engine.js";
 import {
@@ -22,6 +26,7 @@ import {
   settlePayload,
 } from "../../sdk/dist/verify/index.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
+import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { FLAG_INPUTS, flagInputLines, LISTED_FLAG_INPUTS } from "../src/terms.js";
@@ -76,18 +81,20 @@ after(async () => {
 });
 
 describe("the tool list", () => {
-  it("is every tool, each with an input and an output schema and read-only annotations", async () => {
+  it("is every tool, each with an input and an output schema, read-only but for sending", async () => {
     const { tools } = await mcp.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
-      [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+      [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SEND_TOOL_NAMES, ...SKILL_TOOL_NAMES],
     );
     for (const tool of tools) {
       assert.equal(tool.inputSchema.type, "object", `${tool.name} takes an object`);
       assert.equal(tool.outputSchema?.type, "object", `${tool.name} declares its output`);
       assert.ok((tool.description ?? "").length > 80, `${tool.name} says what it does`);
-      assert.equal(tool.annotations?.readOnlyHint, true, `${tool.name} is read-only`);
-      assert.equal(tool.annotations?.destructiveHint, false);
+      // The one tool that writes to a chain broadcasts what its caller signed.
+      const sends = (SEND_TOOL_NAMES as readonly string[]).includes(tool.name);
+      assert.equal(tool.annotations?.readOnlyHint, !sends, `${tool.name} is read-only`);
+      assert.equal(tool.annotations?.destructiveHint, sends);
       // No tool takes a key, under any name.
       const fields = Object.keys(tool.inputSchema.properties ?? {});
       for (const field of fields) {
@@ -98,7 +105,7 @@ describe("the tool list", () => {
 
   it("tells a client what the server is, that it never signs, and where the skills are", () => {
     const instructions = mcp.client.getInstructions() ?? "";
-    assert.match(instructions, /NOTHING HERE SIGNS OR SENDS/);
+    assert.match(instructions, /NOTHING HERE SIGNS\./);
     assert.match(instructions, /sauce:\/\/skills\/index/);
     assert.match(instructions, /has no endpoint of its own/);
     assert.match(instructions, /rpcUrl/);
@@ -118,6 +125,8 @@ describe("the sauce command's flags as the tools' inputs", () => {
       ["simulate"],
       ["run"],
       ["tx"],
+      ["send"],
+      ["reclaim"],
       ["pot"],
       ["globals"],
       ["price"],
@@ -258,6 +267,79 @@ describe("sauce_globals", () => {
     assert.equal(last.page.next, undefined);
     const symbols = new Set(first.tokens.map((token) => token.symbol));
     assert.ok(!symbols.has("USDC"), "the stocks alone");
+  });
+
+  it("lists Solana's venue namespaces, and compiles a swap at one with its accounts derived", async () => {
+    const listed = ok(await mcp.call("sauce_globals", { chain: "solana", protocols: true })) as {
+      venues: Array<{ namespace: string; program: string; methods: string[] }>;
+    };
+    assert.deepEqual(
+      listed.venues.map((venue) => venue.namespace),
+      [
+        "RaydiumClmm",
+        "PancakeswapClmm",
+        "Byreal",
+        "StabbleClmm",
+        "OrcaWhirlpool",
+        "Cropper",
+        "Defituna",
+        "Crema",
+        "Phoenix",
+      ],
+    );
+    assert.equal(
+      listed.venues.find((venue) => venue.namespace === "OrcaWhirlpool")!.program,
+      "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+    );
+    const compiled = ok(
+      await mcp.call("sauce_compile", {
+        source:
+          "function main(pool: Address, amountIn: Uint256): Uint256 {\n" +
+          "  return OrcaWhirlpool.trySwap(pool, USDC, WSOL, amountIn, 1, 1);\n}\n",
+        chain: "solana",
+      }),
+    );
+    const manifest = compiled.manifest as { accounts: Array<{ name: string; derive?: string }> };
+    assert.equal(
+      manifest.accounts.find((slot) => slot.name === "poolVaultA")?.derive,
+      "slot:@pool:USDC.vaultA",
+    );
+  });
+
+  it("lists the accounts a program on Solana writes where it uses them, and compiles one", async () => {
+    const { tools } = await mcp.client.listTools();
+    const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
+    assert.match(description, /`accounts`: Solana\.pda\(program, \[seeds\]\)/);
+    const listed = ok(await mcp.call("sauce_globals", { chain: "solana" })) as {
+      accounts: Array<{ expression: string; account: string; derive: string }>;
+    };
+    assert.deepEqual(
+      listed.accounts.find((one) => one.expression === "Solana.pda(program, [seeds])"),
+      {
+        expression: "Solana.pda(program, [seeds])",
+        account: "the address program derives for the seeds",
+        derive: "pda:<program>:<seeds>",
+      },
+    );
+    assert.equal(
+      (ok(await mcp.call("sauce_globals", { chain: "base" })) as { accounts?: unknown }).accounts,
+      undefined,
+    );
+    const compiled = ok(
+      await mcp.call("sauce_compile", {
+        source:
+          "function main(program: Address, owner: Address): Uint256 {\n" +
+          '  return Solana.pda(program, ["state", owner]).writable().dataLen;\n}\n',
+        chain: "solana",
+      }),
+    );
+    const manifest = compiled.manifest as {
+      accounts: Array<{ name: string; requires: string; derive?: string }>;
+    };
+    assert.deepEqual(
+      manifest.accounts.map(({ name, requires, derive }) => ({ name, requires, derive })),
+      [{ name: "statePda", requires: "writable", derive: 'pda:@program:"state",@owner' }],
+    );
   });
 
   it("lists, finds and pages Solana's stock mints, each a Token-2022 mint with its issuer", async () => {
@@ -645,6 +727,30 @@ describe("sauce_compile", () => {
       manifest.accounts.filter((entry) => entry.kind === "slot").map((entry) => entry.name),
       ["tokenProgram", "source", "destination", "authority"],
     );
+  });
+
+  it("lists the accounts the token methods add on Solana, each with how the cook derives it", async () => {
+    const out = ok(
+      await mcp.call("sauce_compile", {
+        source: "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n",
+        chain: "solana",
+        args: [SOLANA_OWNER, "400"],
+      }),
+    );
+    const manifest = out.manifest as {
+      accounts: Array<{ name?: string; kind: string; derive?: string }>;
+    };
+    assert.deepEqual(
+      manifest.accounts.map((entry) => [entry.name, entry.derive]),
+      [
+        ["tokenProgram", "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"],
+        ["pot", "self"],
+        ["potUSDC", "self:USDC"],
+        ["toUSDC", "@to:USDC"],
+      ],
+    );
+    // Sized with every derived account, none assumed: the cook needs no accounts input.
+    assert.deepEqual((out.cook as { assumed: string[] }).assumed, []);
   });
 
   it("takes a Solana key define in base58, as the sauce command does", async () => {
@@ -1054,7 +1160,58 @@ describe("sauce_tx", () => {
     const potless = failed(
       await mcp.call("sauce_tx", { source: PAY, chain: "base", value: 0, args: [RECIPIENT, 1] }),
     );
-    assert.match(potless, /give owner \(.*to rehearse, any address will do\) or pot/);
+    assert.match(potless, /give owner \(.*to simulate, any address will do\) or pot/);
+  });
+});
+
+describe("sauce_reclaim", () => {
+  it("refuses a chain that is not Solana, saying why, before any endpoint is asked", async () => {
+    const message = failed(
+      await mcp.call("sauce_reclaim", {
+        chain: "base",
+        owner: "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+        rpcUrl: "https://127.0.0.1:9/",
+      }),
+    );
+    assert.match(
+      message,
+      /sauce_reclaim is Solana's: a cook on base leaves no code buffer or lookup table open/,
+    );
+  });
+  it("keeps what it cannot read the history of as in use, closes none of it, and says so", async () => {
+    // An endpoint that finds one code buffer of the owner's, and answers no history.
+    const owner = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi";
+    const stub = await solanaRpcStub({
+      scans: {
+        [v12SvmKitchenProgramId()]: [
+          { pubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", data: Buffer.alloc(91) },
+        ],
+      },
+    });
+    try {
+      const out = ok(
+        await mcp.call("sauce_reclaim", { chain: "solana", owner, rpcUrl: stub.url }),
+      ) as {
+        buffers: Array<{ inUse?: boolean; historyUnread?: boolean }>;
+        transactions: unknown[];
+        notes: string[];
+      };
+      assert.equal(out.buffers.length, 1);
+      assert.equal(out.buffers[0]!.inUse, true);
+      assert.equal(out.buffers[0]!.historyUnread, true);
+      assert.deepEqual(out.transactions, []);
+      assert.ok(
+        out.notes.some((note) =>
+          /^the history of 2 accounts \(1 code buffer\) could not be read: .+; it is kept as in use, and none is closed/.test(
+            note,
+          ),
+        ),
+        JSON.stringify(out.notes),
+      );
+      assert.ok(!JSON.stringify(out).includes(stub.url));
+    } finally {
+      await stub.close();
+    }
   });
 });
 

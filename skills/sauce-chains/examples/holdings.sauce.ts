@@ -1,7 +1,7 @@
 // What the Pot holds on the chain this file is compiled for, and that chain's USDC/WETH Uniswap V3
 // pool at `fee`. The file names no chain and no address: compiled with `--chain`, `USDC`, `WETH`
 // and `bCSPX` (Backed's tokenized S&P 500 fund) are that chain's tokens and `UniswapV3.Factory`
-// its factory, and a chain without one of them refuses to compile it. `sauce simulate` rehearses
+// its factory, and a chain without one of them refuses to compile it. `sauce simulate` runs
 // the cook, sends nothing and prints what `main` returns; `sauce compile --json` lists what each
 // name resolved to.
 //

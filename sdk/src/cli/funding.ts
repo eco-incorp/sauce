@@ -330,7 +330,7 @@ async function forceApprove(
 ): Promise<Array<{ what: string; sent: Sent }>> {
   const sent: Array<{ what: string; sent: Sent }> = [];
   const approve = async (value: bigint): Promise<void> => {
-    const answer = await read(`a rehearsal of ${funded.request.label}.approve`, () =>
+    const answer = await read(`a simulation of ${funded.request.label}.approve`, () =>
       input.client.call({
         account: input.account!.address,
         to: funded.token,
@@ -511,8 +511,8 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     // bring instead (state overrides, `simulateCommand`), and keeps the sweep.
     notes.push(
       `--fund without a key: pulling ${tokens.map((t) => t.request.label).join(", ")} needs the ` +
-        "owner's signature (--keystore or --private-key), so the pulls are not rehearsed; the Pot " +
-        "is credited what they would bring, for this rehearsal only",
+        "owner's signature (--keystore or --private-key), so the pulls are not simulated; the Pot " +
+        "is credited what they would bring, for this simulation only",
     );
     const sweeps = input.sweep ? sweepLines(tokens, native, owner, imports) : [];
 
@@ -549,7 +549,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
           beforeCook.push(...approvalsBefore(funded, permit2, maxUint256, allowed, what));
           notes.push(
             `${funded.request.label}: Permit2 (${permit2}) may not move your tokens yet: sauce run ` +
-              "asks to approve it first (--yes approves it), and the rehearsal runs that " +
+              "asks to approve it first (--yes approves it), and the simulation runs that " +
               "approval before the cook",
           );
         } else {
@@ -649,7 +649,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
           beforeCook.push(...approvalsBefore(funded, input.pot, funded.amount, allowed, what));
           notes.push(
             `${funded.request.label}: the Pot may not pull it yet: sauce run asks to approve it ` +
-              "first (--yes approves it), and the rehearsal runs that approval before the " +
+              "first (--yes approves it), and the simulation runs that approval before the " +
               "cook",
           );
         } else {
@@ -692,12 +692,12 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
           tx: { to: funded.token, data, value: 0n },
         });
         notes.push(
-          `${funded.request.label}: sauce run transfers it to the Pot first, and the rehearsal ` +
+          `${funded.request.label}: sauce run transfers it to the Pot first, and the simulation ` +
             "runs that transfer before the cook",
         );
         continue;
       }
-      const answer = await read(`a rehearsal of ${funded.request.label}.transfer`, () =>
+      const answer = await read(`a simulation of ${funded.request.label}.transfer`, () =>
         input.client.call({ account: owner, to: funded.token, data }),
       );
       refuseFalse(funded.request.label, "transfer", answer.data);

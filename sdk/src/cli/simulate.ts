@@ -184,7 +184,7 @@ function routeLines(
       ? []
       : [
           `Kitchen.deployPot(${owner}, ${deploy.salt})${gas(rehearsal.ok ? rehearsal.deployGas : undefined)}: ` +
-            `Pot ${pot} is not deployed on ${chain} yet, so the rehearsal deploys it first, as ` +
+            `Pot ${pot} is not deployed on ${chain} yet, so the simulation deploys it first, as ` +
             "sauce run does (asking, or with --yes) and sauce tx plans. Any account may send it; " +
             "the Pot is the owner's either way." +
             (rehearsal.path === "eth_call"
@@ -201,7 +201,7 @@ function routeLines(
   ];
 
   return [
-    `Rehearsed with ${rehearsal.path} on the state of block ${block}` +
+    `Simulated with ${rehearsal.path} on the state of block ${block}` +
       (rehearsal.fallback === undefined ? "" : ` (${rehearsal.fallback})`) +
       (signed
         ? "; the owner's key signed the pulls, and nothing was sent:"
@@ -230,7 +230,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   if (!state.deployed && !("owner" in target)) {
     throw new CliError(
       `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it is: ` +
-        "give its --owner (and --salt) instead, and the rehearsal deploys it first",
+        "give its --owner (and --salt) instead, and the simulation deploys it first",
     );
   }
   const owner = state.deployed ? state.owner! : (target as { readonly owner: Address }).owner;
@@ -321,7 +321,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
     assumed.length === 0
       ? []
       : [
-          "Assumed for this rehearsal only, by state override:",
+          "Assumed for this simulation only, by state override:",
           ...assumed.map(
             (balance) =>
               `  ${balance.role} holds ${amountText(balance)}: ${balance.because}` +

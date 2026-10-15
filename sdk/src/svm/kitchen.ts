@@ -64,6 +64,10 @@ const DISCRIMINATOR = {
   writeCodeBuffer: new Uint8Array([205, 152, 182, 5, 148, 70, 20, 25]),
 } as const;
 
+/** Each Kitchen instruction's discriminator, by name: what tells an instruction read back what it is. */
+export const KITCHEN_DISCRIMINATORS: Readonly<Record<keyof typeof DISCRIMINATOR, Uint8Array>> =
+  DISCRIMINATOR;
+
 /** The kitchen's own `#[constant]`s, from the same IDL. */
 export const CODE_BUFFER_SEED = "buffer";
 export const CODE_SEED = "code";

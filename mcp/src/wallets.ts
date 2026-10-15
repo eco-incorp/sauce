@@ -23,9 +23,13 @@ import {
   openWallet,
   parseChain,
   planChain,
+  plannedCursor,
+  plannedHandedOut,
+  planFor,
   plannedTransactions,
   readPolicy,
   sendPlan,
+  sendSvmPlan,
   supportedChainNames,
   UsageError,
   walletName,
@@ -174,13 +178,14 @@ export function registerWalletTools(
       title: "Send transactions from a wallet",
       description:
         "Signs and sends, from one of this server's wallets, the transactions another tool built " +
-        "unsigned: pass that tool's whole result as `transaction` — sauce_tx, sauce_pot, " +
+        "unsigned: pass that tool's whole result as `transaction` — sauce_tx (a Solana plan " +
+        "too, sent step by step from its cursor, each step built fresh), sauce_pot, " +
         "sauce_actions (with owner), sauce_intent_publish, sauce_intent_fill, sauce_intent_prove, " +
         "sauce_intent_claim, sauce_intent_refund, sauce_intent_cancel — or one transaction ({ to, " +
-        "data, value }, or a Solana { transaction }), or a list. First it rehearses them: on an " +
+        "data, value }, or a Solana { transaction }), or a list. First it simulates them: on an " +
         "EVM chain all together in one eth_simulateV1 block from the wallet, on Solana each as " +
         "signed; it refuses, sending nothing, if any would revert, and refuses what the wallet's " +
-        "policy does not allow, naming the limit. Then it sends each in order, rehearsing it " +
+        "policy does not allow, naming the limit. Then it sends each in order, simulating it " +
         "again, and stops at the first that does not succeed. Returns each one's hash (a Solana " +
         "signature) and status, with `explorer` and `trace` (Phalcon: calls and balance changes) " +
         "beside it, links to give the user to open in a browser, never to fetch; and for an EVM " +
@@ -188,7 +193,7 @@ export function registerWalletTools(
         "Pot holds after it of what it moved, not in the wallet) and `summary`, the same as lines " +
         "to read and report. Build the transactions for the wallet's address: as `owner` or " +
         "`from` in the tool that builds them. Needs the chain's endpoint (rpcUrl, or the " +
-        "server's). What it sends is spent: rehearse with sauce_simulate first. It sends only on " +
+        "server's). What it sends is spent: simulate with sauce_simulate first. It sends only on " +
         `${supportedChainNames()}, the chains this release supports; on any other it is refused ` +
         "before any endpoint is reached, with `refused` saying how to request the chain.",
       input: {
@@ -232,6 +237,29 @@ export function registerWalletTools(
       annotations: SENDS,
     },
     async (args, reach) => {
+      // A Solana plan (sauce_tx's, or sauce_send's `next`): every step, from its cursor.
+      const cursor = plannedCursor(args.transaction);
+      if (cursor !== undefined) {
+        // The plan's owner, held to the wallet before the wallet is unlocked or anything is read.
+        planFor(cursor, store.info(walletName(args.wallet)));
+        const chain =
+          args.chain === undefined
+            ? parseChain("solana", "chain")
+            : parseChain(String(args.chain), "chain");
+        const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
+        guard.gate(chain);
+        const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");
+        const sent = await sendSvmPlan({
+          wallet: unlocked,
+          guard,
+          chain,
+          cursor,
+          rpcUrl,
+          handedOut: plannedHandedOut(args.transaction),
+        });
+
+        return { json: sent.json, notes: sent.notes };
+      }
       const transactions = plannedTransactions(args.transaction);
       const chain = planChain(
         transactions,

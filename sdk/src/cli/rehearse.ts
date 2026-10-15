@@ -328,7 +328,7 @@ async function placePot(
   if ((await read("router")) !== router || (await read("owner")) !== getAddress(input.owner)) {
     throw new CliError(
       `the endpoint serves neither eth_simulateV1 nor state overrides on eth_call, so it cannot ` +
-        `rehearse a cook on a Pot that is not deployed: use an endpoint that serves either, or deploy ` +
+        `simulate a cook on a Pot that is not deployed: use an endpoint that serves either, or deploy ` +
         "the Pot first",
     );
   }
@@ -349,7 +349,7 @@ async function viaEthCall(
       ? []
       : [
           `the endpoint does not serve eth_simulateV1, so what sauce run sends before the cook ` +
-            `(${unrun.join("; ")}) is not rehearsed: the cook runs without it`,
+            `(${unrun.join("; ")}) is not simulated: the cook runs without it`,
         ];
   let overrides = input.overrides;
   if (input.deploy !== undefined) {

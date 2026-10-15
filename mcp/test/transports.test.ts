@@ -26,6 +26,7 @@ import { NO_ENDPOINTS } from "../src/config.js";
 import { endpointUrl, serveHttp } from "../src/http.js";
 import { createSauceServer } from "../src/server.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
+import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES } from "../src/tools.js";
 import { WALLET_TOOL_NAMES } from "../src/wallets.js";
@@ -48,7 +49,7 @@ async function exercise(client: Client): Promise<void> {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+    [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SEND_TOOL_NAMES, ...SKILL_TOOL_NAMES],
   );
   const compiled = structured(
     await client.callTool({ name: "sauce_compile", arguments: { source: PROGRAM, chain: "base" } }),
@@ -141,7 +142,13 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       const { tools } = await client.listTools();
       assert.deepEqual(
         tools.map((tool) => tool.name),
-        [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...WALLET_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+        [
+          ...TOOL_NAMES,
+          ...INTENT_TOOL_NAMES,
+          ...SEND_TOOL_NAMES,
+          ...WALLET_TOOL_NAMES,
+          ...SKILL_TOOL_NAMES,
+        ],
       );
       assert.match(received[0]!, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
       assert.match(received[0]!, /--password-env SAUCE_TEST_WALLET_PASSWORD/);
@@ -368,7 +375,7 @@ describe("Streamable HTTP: sauce mcp --http", () => {
       await exercise(client);
       const { tools } = await client.listTools();
       assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
-      assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS OR SENDS/);
+      assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS\./);
       // Over HTTP no file is read: path is no input, and a call that gives one is refused.
       const compile = tools.find((tool) => tool.name === "sauce_compile")!;
       assert.ok(!("path" in (compile.inputSchema.properties ?? {})));

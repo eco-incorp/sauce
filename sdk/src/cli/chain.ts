@@ -84,7 +84,7 @@ export function endpointFor(
 }
 
 /** viem's one-line reason for a failed request, never its details, which repeat the URL. */
-const reasonOf = (error: unknown): string =>
+export const reasonOf = (error: unknown): string =>
   (error as { shortMessage?: string }).shortMessage ?? "the request failed";
 
 async function request<T>(what: string, read: () => Promise<T>): Promise<T> {
@@ -581,11 +581,27 @@ export async function sendAndWait(
     reservation?.released("sending failed");
     throw new CliError(`sending failed: ${reasonOf(error)}`);
   }
+  return landed(client, hash, account.address, tx, (status) =>
+    status === "success" ? reservation?.sent(hash) : reservation?.released(`${hash} reverted`),
+  );
+}
+
+/**
+ * Waits for the receipt of `hash`, sent from `from` as `tx`, and reads it as {@link sendAndWait}
+ * reports it: what it emitted and cost, and, reverted, why — replayed at the block before it. Once
+ * it succeeded, waits until the endpoint's latest state has it. `seen` is told its status first.
+ */
+export async function landed(
+  client: PublicClient,
+  hash: Hex,
+  from: Address,
+  tx: { readonly to?: Address | undefined; readonly data: Hex; readonly value: bigint },
+  seen?: (status: "success" | "reverted") => void,
+): Promise<Sent> {
   const receipt = await request(`the receipt of ${hash}`, () =>
     client.waitForTransactionReceipt({ hash }),
   );
-  if (receipt.status === "success") reservation?.sent(hash);
-  else reservation?.released(`${hash} reverted`);
+  seen?.(receipt.status);
   const sent = {
     hash,
     status: receipt.status,
@@ -604,7 +620,7 @@ export async function sendAndWait(
     return sent;
   }
   const replay = await client
-    .call({ account: account.address, ...tx, blockNumber: receipt.blockNumber - 1n })
+    .call({ account: from, ...tx, blockNumber: receipt.blockNumber - 1n })
     .then(
       () => "it succeeds when replayed, so the state it ran on changed",
       (error: unknown) => revertReason(error),

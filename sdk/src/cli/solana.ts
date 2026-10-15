@@ -12,7 +12,7 @@
  * flags, and a keypair file as the signer. A keypair is read from the path given, never from the
  * environment, and its bytes are dropped once the signer holds the key.
  */
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import {
@@ -39,9 +39,7 @@ import {
   type Instruction,
   type KeyPairSigner,
   type Signature,
-  type SignatureBytes,
   type Transaction,
-  type TransactionPartialSigner,
   type TransactionSigner,
 } from "@solana/kit";
 import type { AccountManifest } from "sauce-compiler";
@@ -60,9 +58,19 @@ import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
+  isSvmAccountName,
+  resolveSvmAccountName,
+  SvmAccountNameError,
+  SYSTEM_HOLDER,
+  type ResolvedSvmAccountName,
+  type SvmMintProgramOf,
+} from "../svm/account-names.js";
+import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
+import type { SvmSlot } from "../svm/pool-slot.js";
+import type { OwnedAccountLoader } from "../svm/venues/types.js";
+import {
   type AccountResolution,
   buildAtaPrepend,
-  buildCloseCodeBufferInstruction,
   buildComputeBudgetPrepend,
   buildCookAndPayFromAccountPinnedInstruction,
   buildCookAndPayInstruction,
@@ -86,7 +94,6 @@ import {
   engineFaultName,
   fetchAlt,
   GROWTH_STEP,
-  lookupTableBatches,
   MAX_POT_LEN,
   resolveAccounts,
   resolveTokenProgramByOwner,
@@ -99,6 +106,7 @@ import {
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
   type Approver,
+  argumentValues,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
@@ -127,6 +135,22 @@ import {
   writableAccounts,
 } from "./svm-effects.js";
 import { linkLines, txLinks } from "./links.js";
+import {
+  buildPlanTx,
+  encodeCursor,
+  newSvmPlan,
+  nextStep,
+  planBuffer,
+  signableStep,
+  tableAddresses,
+  unsignedSigner,
+  type CookHandedOut,
+  type PlanStep,
+  type PlanTokenAccount,
+  type PlanTx,
+  type StepContext,
+  type SvmPlan,
+} from "./svm-plan.js";
 
 /** The released programs, from the release record the SDK ships. */
 const kitchen = (): Address => address(v12SvmKitchenProgramId());
@@ -179,16 +203,6 @@ export async function loadKeypair(path: string, files: CliFiles): Promise<KeyPai
   } finally {
     bytes.fill(0);
   }
-}
-
-/** A signer that signs nothing: an all-zero signature, which a simulation (`sigVerify: false`)
- *  ignores and a wallet replaces. What `simulate` and `tx` build with, having no key. */
-function unsignedSigner(owner: Address): TransactionPartialSigner {
-  return {
-    address: owner,
-    signTransactions: async (transactions) =>
-      transactions.map(() => ({ [owner]: new Uint8Array(64) as SignatureBytes })),
-  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -440,9 +454,14 @@ export interface SvmSent {
   readonly slot?: bigint;
   /** The fee it paid, in lamports, where the node said. */
   readonly fee?: bigint;
+  /** What the engine returned, where it ran and the node said: a program's `main`'s value. */
+  readonly returnData?: Uint8Array;
 }
 
-/** Polls until `signature` is confirmed (or a minute passes); its error, or null, and its slot. */
+/**
+ * Polls until `signature` is confirmed (or a minute passes); its error, or null, and its slot. The
+ * cluster's history is searched too, so one that landed long ago is found.
+ */
 async function confirmed(
   rpc: Rpc,
   url: string,
@@ -450,7 +469,7 @@ async function confirmed(
 ): Promise<{ err: unknown; slot: bigint }> {
   for (let tries = 0; tries < 120; tries++) {
     const { value } = await ask(url, "the transaction's status", () =>
-      rpc.getSignatureStatuses([signature as Signature]).send(),
+      rpc.getSignatureStatuses([signature as Signature], { searchTransactionHistory: true }).send(),
     );
     const status = value[0];
     if (status !== null && status !== undefined && status.confirmationStatus !== "processed") {
@@ -465,7 +484,11 @@ async function confirmed(
  * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). From a wallet
  * (`--wallet`), the fee payer's, it is held to the wallet's policy first (`policy.ts`).
  */
-async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): Promise<SvmSent> {
+export async function sendAndConfirm(
+  rpc: Rpc,
+  url: string,
+  transaction: Transaction,
+): Promise<SvmSent> {
   const signature = getSignatureFromTransaction(transaction);
   const payer = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
     .staticAccounts[0];
@@ -484,10 +507,26 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
     reservation?.released("sending failed");
     throw error;
   }
+
+  return svmLanded(rpc, url, signature, (ok) =>
+    ok ? reservation?.sent(signature) : reservation?.released(`${signature} failed`),
+  );
+}
+
+/**
+ * Polls until `signature` is confirmed (or a minute passes) and reads it back: whether it failed
+ * and why, its logs, units, fee and what the engine returned. `seen` is told whether it succeeded
+ * first.
+ */
+export async function svmLanded(
+  rpc: Rpc,
+  url: string,
+  signature: Signature,
+  seen?: (ok: boolean) => void,
+): Promise<SvmSent> {
   // The status is the verdict: it is what confirmed, and it carries the error.
   const { err: statusErr, slot } = await confirmed(rpc, url, signature);
-  if (statusErr === null) reservation?.sent(signature);
-  else reservation?.released(`${signature} failed`);
+  seen?.(statusErr === null);
   // The transaction itself — its logs, units and return data — can lag its status on a node.
   let response;
   for (let tries = 0; ; tries++) {
@@ -510,6 +549,8 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
       : new Uint8Array(getBase64Encoder().encode(meta.returnData.data[0]));
   const err = statusErr ?? meta?.err ?? null;
   const logs = meta?.logMessages ?? [];
+  // The engine's own: the node's return data where the engine set it last, else its log line.
+  const returned = meta?.returnData?.programId === engine() ? returnData : engineReturn(logs);
 
   return {
     signature,
@@ -521,6 +562,7 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
     logs,
     slot,
     ...(meta?.fee === undefined ? {} : { fee: BigInt(meta.fee) }),
+    ...(returned === undefined ? {} : { returnData: returned }),
   };
 }
 
@@ -597,17 +639,13 @@ async function sendInstructions(
 // Accounts, the Pot, the cook
 // ---------------------------------------------------------------------------------------------
 
-/**
- * A value that names an account by its token: `pot:<token>` or `owner:<token>`, that one's
- * associated token account for the mint; `mint:<token>`, the mint itself; `program:<token>`, the
- * token program that owns the mint. The token is a registered symbol (`USDC`, or a stock's, which
- * can carry a "_": `NVDA_US`) or a mint's base58 address.
- */
-const TOKEN_NAMED = /^(pot|owner|mint|program):([A-Za-z0-9_]+)$/;
 /** The System program, which owns every wallet. */
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
 
-/** `--account name=<pubkey | pot | owner | pot:<token> | owner:<token> | mint:<token> | program:<token>>`, parsed. */
+/**
+ * `--account name=<value>`, parsed: an address, `pot`, `owner`, `self`, `@<argument>`, or a token's
+ * account (`pot:USDC`, `@to:USDC`, `mint:USDC`, `program:USDC`) — `svm/account-names.ts`'s language.
+ */
 export function parseAccounts(raws: readonly string[]): Record<string, string> {
   const accounts: Record<string, string> = {};
   for (const raw of raws) {
@@ -620,11 +658,14 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
       );
     }
     if (Object.hasOwn(accounts, name)) throw new UsageError(`--account: ${name} given twice`);
-    if (value !== "pot" && value !== "owner" && !isAddress(value) && !TOKEN_NAMED.test(value)) {
+    if (value.startsWith("system:"))
+      throw new UsageError(`--account ${name}=${SYSTEM_HOLDER(value)}`);
+    if (!isSvmAccountName(value)) {
       throw new UsageError(
-        `--account ${name}: '${value}' is not an address, pot, owner, or a token's account: ` +
+        `--account ${name}: '${value}' is not an address, pot, owner, system, or a token's account: ` +
           "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
-          "owner's, mint:USDC the mint and program:USDC its token program",
+          "owner's, @to:USDC that of main's argument to, mint:USDC the mint, program:USDC its " +
+          'token program, and pda:<program>:"seed",@to,u64:7 an address a program derives',
       );
     }
     accounts[name] = value;
@@ -633,12 +674,12 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
   return accounts;
 }
 
-/** One `<whose>:<token>` resolved: the account, what it is for a person, and which kind it is. */
-interface TokenAccountNamed {
+/** One account named by what it is, resolved: the account, what it is for a person, which kind. */
+export interface TokenAccountNamed {
   readonly address: Address;
   readonly label: string;
   /** A holder's token account, which a transfer can bring into being, or the mint or its program. */
-  readonly kind: "account" | "mint" | "program";
+  readonly kind: "account" | "mint" | "program" | "address";
   /** A holder's token account's mint, holder and token program. */
   readonly account?: {
     readonly mint: Address;
@@ -648,7 +689,7 @@ interface TokenAccountNamed {
 }
 
 /** The token program that owns a mint the registry does not record, read from the cluster. */
-export type MintProgramOf = (mint: Address) => Promise<Address>;
+export type MintProgramOf = SvmMintProgramOf;
 
 /**
  * A mint's token program read from the account's owner on the cluster `rpcUrl` serves: legacy SPL
@@ -665,17 +706,64 @@ const mintProgramOn =
       return value === null ? null : value.owner;
     });
 
-/** The name a person reads for a token program. */
-const programName = (program: Address): string =>
-  program === TOKEN_2022_PROGRAM_ID ? "Token-2022" : "SPL Token";
+/**
+ * main's `Address` arguments, by name, as keys, and its `Uint256` ones as integers: what an account
+ * derived from one (`@to:USDC`, a seed `u64:@index`) is derived from. None before the arguments are
+ * given.
+ */
+export function svmKeyArguments(
+  program: CompiledSauceProgram,
+  args: ArgsInput | undefined,
+): { readonly keys: Record<string, Address>; readonly integers: Record<string, bigint> } {
+  const keys: Record<string, Address> = {};
+  const integers: Record<string, bigint> = {};
+  if (args === undefined) return { keys, integers };
+  let values: readonly unknown[];
+  try {
+    values = argumentValues(program.entryParams, args);
+  } catch {
+    // A malformed argument is reported where the payload is encoded, in its own words.
+    return { keys, integers };
+  }
+  program.entryParams.forEach((param, index) => {
+    const value = values[index];
+    if (param.type === "Uint256") {
+      if (
+        (typeof value === "string" && /^(0x[0-9a-fA-F]+|\d+)$/.test(value)) ||
+        typeof value === "number" ||
+        typeof value === "bigint"
+      ) {
+        integers[param.name] = BigInt(value);
+      }
+      return;
+    }
+    if (param.type !== "Address" || typeof value !== "string") return;
+    if (isAddress(value)) keys[param.name] = address(value);
+    else if (/^0x[0-9a-fA-F]{64}$/.test(value)) {
+      keys[param.name] = getBase58Decoder().decode(hexToBytes(value as Hex)) as Address;
+    }
+  });
+
+  return { keys, integers };
+}
 
 /**
- * Each `--account` value that names an account by its token as that account: `pot:USDC` and
- * `owner:<mint>` the associated token account of the Pot (or the owner) for the mint, under the
- * token program that owns the mint; `mint:USDC` the mint; `program:USDC` that token program — the
- * accounts `@sauce/token`'s writes take. A symbol is one of the cluster's registered mints, whose
- * row records its program; any other mint is given by its base58 address, and its program is read
- * with `programOf`. Every other value is left as it is.
+ * Every account the cook attaches, by slot: what `--account` names, over the derivations the SDK
+ * wrote for the accounts it added to the program (`derivedAccounts`, for the token methods), so a
+ * program written with `USDC.transfer(to, amount)` needs no `--account`.
+ */
+export const svmAccountsWanted = (
+  program: Pick<CompiledSauceProgram, "derivedAccounts">,
+  given: Readonly<Record<string, string>>,
+): Record<string, string> => ({ ...program.derivedAccounts, ...given });
+
+/**
+ * Each `--account` value resolved (`svm/account-names.ts`): `pot` and `owner` as they are (and
+ * `self` as one of them), `pot:USDC`, `owner:<mint>` and `@to:USDC` the holder's associated token
+ * account for the mint, under the token program that owns the mint; `mint:USDC` the mint;
+ * `program:USDC` that token program; `@to` main's argument `to` — the accounts `@sauce/token`'s
+ * writes take. A symbol is one of the cluster's registered mints, whose row records its program;
+ * any other mint is given by its base58 address, and its program is read with `programOf`.
  */
 export async function resolveTokenAccounts(
   given: Readonly<Record<string, string>>,
@@ -683,73 +771,56 @@ export async function resolveTokenAccounts(
   pot: Address,
   chain: CanonicalChain,
   via: "kitchen" | "engine" = "kitchen",
-  programOf: MintProgramOf = async () => TOKEN_PROGRAM_ID,
+  programOf?: MintProgramOf,
+  args: {
+    readonly keys?: Readonly<Record<string, Address>>;
+    readonly integers?: Readonly<Record<string, bigint>>;
+  } = {},
+  derived: ReadonlySet<string> = new Set(),
+  load?: OwnedAccountLoader,
 ): Promise<{
   readonly accounts: Record<string, string>;
   readonly named: ReadonlyMap<string, TokenAccountNamed>;
 }> {
   const accounts: Record<string, string> = {};
   const named = new Map<string, TokenAccountNamed>();
-  const rows = svmTokenRows(chain);
+  // This cook's pool slots, each read once for its nine names and never kept for another cook.
+  const slots = new Map<string, Promise<SvmSlot>>();
   for (const [name, value] of Object.entries(given)) {
-    const match = TOKEN_NAMED.exec(value);
-    if (match === null) {
-      accounts[name] = value;
-      continue;
-    }
-    const [, whose, token] = match as unknown as [
-      string,
-      "pot" | "owner" | "mint" | "program",
-      string,
-    ];
-    if (whose === "pot" && via === "engine") {
-      throw new UsageError(
-        `--account ${name}=${value}: --via engine cooks with no Pot, so there is no Pot's token ` +
-          `account to pass: give the account the program reads by its address (owner:${token} ` +
-          "for the owner's), or cook through the Kitchen",
-      );
-    }
-    // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
-    const row = rows.find((candidate) => candidate.symbol.toUpperCase() === token.toUpperCase());
-    if (row === undefined && !isAddress(token)) {
-      // The cluster's other mints by name, its tokenized stocks by count: there are over a thousand.
-      const listed = rows.filter((candidate) => candidate.stock === undefined);
-      const stocks = rows.length - listed.length;
-      throw new UsageError(
-        `--account ${name}=${value}: ${token} is not a mint ${chain.slug} registers ` +
-          `(${listed.map((candidate) => candidate.symbol).join(", ") || "none"}` +
-          (stocks > 0
-            ? `, and ${stocks} stock tokens: sauce globals --chain ${chain.slug} --stocks`
-            : "") +
-          `): give the mint's base58 address, ${whose}:<mint>`,
-      );
-    }
-    const mint = address(row?.mint ?? token);
-    const what = row?.symbol ?? `mint ${mint}`;
-    if (whose === "mint") {
-      accounts[name] = mint;
-      named.set(name, { address: mint, label: `the ${what} mint`, kind: "mint" });
-      continue;
-    }
-    const tokenProgram = row?.tokenProgram ?? (await programOf(mint));
-    if (whose === "program") {
-      accounts[name] = tokenProgram;
-      named.set(name, {
-        address: tokenProgram,
-        label: `${what}'s token program, ${programName(tokenProgram)}`,
-        kind: "program",
+    let resolved: ResolvedSvmAccountName;
+    try {
+      resolved = await resolveSvmAccountName(value, {
+        chain,
+        owner,
+        pot,
+        via,
+        args: args.keys ?? {},
+        integers: args.integers ?? {},
+        ...(programOf === undefined ? {} : { programOf }),
+        ...(load === undefined ? {} : { load, slots }),
       });
-      continue;
+    } catch (error) {
+      if (error instanceof SvmAccountNameError) {
+        throw new UsageError(
+          derived.has(name)
+            ? `the account ${name} (${value}): ${error.message}`
+            : `--account ${name}=${value}: ${error.message}`,
+        );
+      }
+      throw error;
     }
-    const holder = whose === "pot" ? pot : owner;
-    const account = await svmTokenAccount({ mint, tokenProgram }, holder);
-    accounts[name] = account;
-    named.set(name, {
-      address: account,
-      label: `${whose === "pot" ? "the Pot" : "the owner"}'s ${what} account`,
-      kind: "account",
-      account: { mint, holder, program: tokenProgram },
-    });
+    accounts[name] = resolved.value;
+    if (resolved.label !== undefined && resolved.value !== "pot" && resolved.value !== "owner") {
+      named.set(name, {
+        address: resolved.value,
+        label: resolved.label,
+        kind:
+          resolved.kind === "account" || resolved.kind === "mint" || resolved.kind === "program"
+            ? resolved.kind
+            : "address",
+        ...(resolved.account === undefined ? {} : { account: resolved.account }),
+      });
+    }
   }
 
   return { accounts, named };
@@ -901,7 +972,12 @@ async function accountLabels(
  * fails, and SVM guards fail with no message, so this says which. A token account the Pot or the
  * owner has not had created yet says how one comes to be.
  */
-async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]): Promise<string[]> {
+async function missingAccounts(
+  rpc: Rpc,
+  url: string,
+  given: Prepared["given"],
+  derived: ReadonlySet<string> = new Set(),
+): Promise<string[]> {
   const named = Object.entries(given.accounts).filter(
     ([, value]) => value !== "pot" && value !== "owner",
   );
@@ -912,9 +988,16 @@ async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]):
   return named.flatMap(([name, value], index) => {
     if (there[index]) return [];
     const token = given.named.get(name);
+    // An account the token methods added, which `sauce run` creates before the cook.
+    if (derived.has(name) && token?.kind === "account") {
+      return [
+        `the account ${name}: ${value} does not exist on solana (${token.label}: nothing has ` +
+          "created it yet; `sauce run` creates it before the cook, asking first, or with --yes)",
+      ];
+    }
 
     return [
-      `--account ${name}: ${value} does not exist on solana` +
+      `${slotLabel(name, derived)}: ${value} does not exist on solana` +
         (token === undefined
           ? ""
           : token.kind !== "account"
@@ -925,6 +1008,10 @@ async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]):
     ];
   });
 }
+
+/** How a note names a slot: by the `--account` that gave it, or as an account the SDK derived. */
+const slotLabel = (name: string, derived: ReadonlySet<string>): string =>
+  derived.has(name) ? `the account ${name}` : `--account ${name}`;
 
 /** The `sauce pot` that creates `target`'s Pot. */
 const createHint = (target: SvmTarget): string =>
@@ -988,7 +1075,7 @@ function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
  * 32-byte word, a public key, where the EVM's ABI encoding keeps 20 bytes: each is encoded as that
  * word, from base58 (or 32 bytes of hex).
  */
-function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined): Uint8Array {
+export function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined): Uint8Array {
   const keyed = program.entryParams.some((param) => /\bAddress\b/.test(param.type));
   if (keyed && program.entryEncoding === "compact-v1") {
     throw new UsageError(
@@ -1121,6 +1208,8 @@ interface Prepared {
   readonly manifest: AccountManifest;
   /** `--account`'s values with every `pot:<token>` resolved to its account. */
   readonly given: Awaited<ReturnType<typeof resolveTokenAccounts>>;
+  /** The slots the token methods added that no `--account` gave: the command derived each. */
+  readonly derived: ReadonlySet<string>;
   /** `--lookup-table`'s tables, each with the addresses it holds now. */
   readonly lookupTables: AddressesByLookupTableAddress;
 }
@@ -1165,13 +1254,23 @@ async function prepare(
   const manifest = program.manifest ?? { accounts: [] };
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
+  // The slots the token methods added that no `--account` gave: the command derives each.
+  const derived = new Set(
+    Object.keys(program.derivedAccounts ?? {}).filter(
+      (name) => !Object.hasOwn(input.accounts, name),
+    ),
+  );
   const given = await resolveTokenAccounts(
-    input.accounts,
+    svmAccountsWanted(program, input.accounts),
     input.owner,
     pot,
     input.chain,
     via,
     mintProgramOn(rpc, input.rpcUrl),
+    svmKeyArguments(program, input.args),
+    derived,
+    // A pool's slot (`slot:…`, the venue namespaces') is read from the pool on the cluster.
+    coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc)),
   );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
@@ -1193,15 +1292,21 @@ async function prepare(
   });
   const lookupTables = await lookupTablesOf(rpc, input.rpcUrl, input.lookupTables ?? []);
 
-  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest, given, lookupTables };
+  return {
+    rpc,
+    via,
+    pot,
+    fee,
+    program,
+    bytecode,
+    client,
+    accounts,
+    manifest,
+    given,
+    derived,
+    lookupTables,
+  };
 }
-
-/** A staged cook's options: directly to the engine it is pinned to the staged bytes' digest. */
-const stagedPin = (
-  prepared: Prepared,
-  staged: { readonly sha256: Uint8Array },
-): { expectedSha256?: Uint8Array } =>
-  prepared.via === "engine" ? { expectedSha256: staged.sha256 } : {};
 
 /** What a direct cook is called in what a command prints. */
 const DIRECT_COOK = "the engine's direct cook (cookAndPay)";
@@ -1252,18 +1357,37 @@ export interface SvmCookSize {
 export async function svmCookSize(
   bytecode: Uint8Array,
   manifest: AccountManifest,
-  given: Readonly<Record<string, string>>,
+  accountsNamed: Readonly<Record<string, string>>,
   via: CookVia = "kitchen",
+  derived: Readonly<Record<string, string>> = {},
 ): Promise<SvmCookSize> {
   const owner = placeholderKey(0);
   const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
   const pot = await potOf(target);
+  const chain = requireChain("solana");
+  // The accounts the SDK added to the program, as each is derived where it can be with no cluster
+  // and no arguments (`self` is the Pot, a program id is itself); one derived from an argument is a
+  // distinct account of its own, as it is in a real cook.
+  const given: Record<string, string> = { ...accountsNamed };
+  for (const [name, value] of Object.entries(derived)) {
+    if (Object.hasOwn(given, name)) continue;
+    try {
+      given[name] = (await resolveSvmAccountName(value, { chain, owner, pot, via })).value;
+    } catch {
+      // Measured with a placeholder, below.
+    }
+  }
   // A token account (`pot:USDC`) is a distinct account of its own, as it is in a real cook. With no
   // cluster, an unregistered mint's program is taken as legacy SPL Token: a key is a key to the size.
-  const accountsGiven = (await resolveTokenAccounts(given, owner, pot, requireChain("solana")))
-    .accounts;
+  // Sizing only: with no cluster, an unregistered mint's program is taken as SPL Token's, since a
+  // key is a key to the size. A cook never assumes one (`resolveSvmAccountName` fails closed).
+  const accountsGiven = (
+    await resolveTokenAccounts(given, owner, pot, chain, via, async () => TOKEN_PROGRAM_ID)
+  ).accounts;
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
-  const assumed = slots.filter((slot) => !Object.hasOwn(given, slot.name)).map((s) => s.name);
+  const assumed = slots
+    .filter((slot) => !Object.hasOwn(given, slot.name) && !Object.hasOwn(derived, slot.name))
+    .map((s) => s.name);
   const named: AccountManifest = { accounts: slots };
   const signer = unsignedSigner(owner);
   // The accounts given, as a cook resolves them; every other slot a distinct account, which signs
@@ -1329,37 +1453,6 @@ export async function svmCookSize(
   };
 }
 
-/** The payload a cook carries — the program, and the arguments appended to it — in bytes. */
-const payloadSize = (prepared: Prepared): string => {
-  const program = prepared.program.bytecode.length;
-  const payload = prepared.bytecode.length;
-
-  return payload === program
-    ? `the payload (the program, with no arguments) is ${payload} bytes`
-    : `the payload (the program's ${program} bytes and its arguments' ${payload - program}) is ` +
-        `${payload} bytes`;
-};
-
-/** A cook too large for one transaction, for `what` (a simulation, an unsigned transaction). */
-const tooLarge = (prepared: Prepared, size: number, what: string): CliError => {
-  const over = size - TRANSACTION_SIZE_LIMIT;
-
-  const tables = Object.keys(prepared.lookupTables).length > 0;
-
-  return new CliError(
-    `${payloadSize(prepared)}, so its cook is a ${size}-byte transaction, ${over} past Solana's ` +
-      `${TRANSACTION_SIZE_LIMIT}. A cook that large runs from a code buffer the program is staged ` +
-      `into first, in transactions the owner signs and sends, which ${what} cannot do. Shrink the ` +
-      `payload by at least ${over} bytes to fit, or let \`sauce run\` stage it (with the owner's ` +
-      "--keypair; it rehearses the staged cook before sending it)." +
-      (tables
-        ? ""
-        : " Its accounts cost 32 bytes each listed in the transaction and one through an address " +
-          "lookup table: --lookup-table <address> takes them through one, which `sauce run` " +
-          "creates when they do not fit."),
-  );
-};
-
 const simulated = (result: SimulateExecuteResult): string =>
   failureReason(result.err, result.logs, result.revert?.payload);
 
@@ -1384,7 +1477,7 @@ async function ownerShort(
       `${input.owner} holds ${held.value} lamports, and the cook takes ${needed}: ` +
       (creating ? `${rent} in rent for the Pot, ` : "") +
       `the execution fee of ${prepared.fee} and the transaction's. Solana's simulateTransaction ` +
-      "takes no balance overrides, so the owner must hold them for a rehearsal too"
+      "takes no balance overrides, so the owner must hold them for a simulation too"
     );
   } catch {
     return undefined;
@@ -1454,7 +1547,12 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
       : undefined;
   // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
   const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
-  const missing = await missingAccounts(prepared.rpc, input.rpcUrl, prepared.given);
+  const missing = await missingAccounts(
+    prepared.rpc,
+    input.rpcUrl,
+    prepared.given,
+    prepared.derived,
+  );
   // What main returned: the engine's return data, read as the type main declares.
   const returns = result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
   const returnType = mainReturnType(input.text);
@@ -1486,7 +1584,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
     logs: result.logs,
   };
   const how = [
-    "Rehearsed with simulateTransaction, signatures unchecked; nothing was signed or sent:",
+    "Simulated with simulateTransaction, signatures unchecked; nothing was signed or sent:",
     ...(created
       ? []
       : [
@@ -1649,8 +1747,9 @@ async function stagedRehearsal(
       0n,
     );
     notes.push(
-      `--account ${name}: ${token.label}, ${token.address}, does not exist on solana; the copy made ` +
-        "it empty, and `sauce run` creates it before the cook (asking first, or with --yes)",
+      `${slotLabel(name, prepared.derived)}: ${token.label}, ${token.address}, does not exist on ` +
+        "solana; the copy made it empty, and `sauce run` creates it before the cook (asking " +
+        "first, or with --yes)",
     );
   }
   const holder = direct ? owner : prepared.pot;
@@ -1775,7 +1874,7 @@ async function stagedRehearsal(
     logs,
   };
   const how = [
-    `Rehearsed in a local copy (LiteSVM) of the ${fork.loaded} accounts the cook names, read from ` +
+    `Simulated in a local copy (LiteSVM) of the ${fork.loaded} accounts the cook names, read from ` +
       `solana at slot ${fork.slot}, with the released engine and Kitchen: ` +
       (fitsOne
         ? "a cluster's simulation takes no balance to assume."
@@ -1830,23 +1929,57 @@ async function stagedRehearsal(
   };
 }
 
-/** `sauce tx` on Solana: the cook as an unsigned, serialized transaction for a wallet. */
+/** The plan for the cook `prepared` builds (`svm-plan.ts`): its accounts, its Pot, and the token
+ *  accounts it names, which the plan creates where the cluster does not have them. */
+async function planOf(prepared: Prepared, input: SvmCookInput): Promise<SvmPlan> {
+  const potMissing =
+    prepared.via === "kitchen" &&
+    !(await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
+  const tokenAccounts: PlanTokenAccount[] = [];
+  for (const token of prepared.given.named.values()) {
+    if (token.account === undefined || tokenAccounts.some((one) => one.address === token.address))
+      continue;
+    tokenAccounts.push({ address: token.address, ...token.account, label: token.label });
+  }
+  const returnType = mainReturnType(input.text);
+
+  return newSvmPlan({
+    owner: input.owner,
+    salt: input.salt,
+    via: prepared.via,
+    ...(input.maxExecutionFee === undefined ? {} : { maxExecutionFee: input.maxExecutionFee }),
+    payload: prepared.bytecode,
+    tail: resolveAccounts(prepared.manifest, prepared.accounts, input.owner).map((meta) => ({
+      address: meta.address,
+      role: meta.role,
+    })),
+    lookupTables: prepared.lookupTables,
+    potMissing,
+    tokenAccounts,
+    ...(returnType === undefined ? {} : { returnType }),
+    labels: await accountLabels(input, prepared.pot, prepared.given),
+  });
+}
+
+/**
+ * `sauce tx` on Solana: the cook as an unsigned, serialized transaction for a wallet — or, where it
+ * needs more than one transaction (a program staged in a code buffer, a lookup table, a Pot or a
+ * token account to create first), the plan's first step, and the cursor `sauce send` takes to send
+ * it and build the next one fresh.
+ */
 export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promise<CommandOutput> {
   requireSupported("building the cook transaction", [input.chain]);
-  const prepared = await prepare(input, files, unsignedSigner(input.owner));
+  const signer = unsignedSigner(input.owner);
+  const prepared = await prepare(input, files, signer);
   const direct = prepared.via === "engine";
-  const size = await fits(prepared);
-  if (!size.fits) throw tooLarge(prepared, size.size, "one unsigned transaction");
-  const deployed = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
-  // A missing Pot is created by the same transaction, ahead of the cook, where the two fit in one.
-  const createPot = deployed ? [] : [createPotInstruction(input, prepared.pot)];
-  const createInCook = createPot.length > 0 && (await fits(prepared, createPot)).fits;
-  const transaction = await prepared.client.cookTransaction(
-    prepared.bytecode,
-    prepared.manifest,
-    prepared.accounts,
-    { ...(createInCook ? { prepends: createPot } : {}), ...tablesOption(prepared.lookupTables) },
-  );
+  const plan = await planOf(prepared, input);
+  const ctx: StepContext = { rpc: prepared.rpc, url: input.rpcUrl, signer, fee: prepared.fee };
+  const step = await nextStep(plan, ctx);
+  const built = await signableStep(step, ctx);
+  const cursor = encodeCursor(built.plan);
+  // One transaction, the cook alone: the shape a wallet takes, as it always was.
+  const single = step.name === "cook" && built.transactions.length === 1;
+  const createsPot = step.transactions.some((tx) => tx.createsPot === true);
   const json = {
     chain: "solana",
     via: prepared.via,
@@ -1854,221 +1987,61 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     ...(direct ? {} : { pot: prepared.pot }),
     fee: prepared.fee.toString(),
     maxExecutionFee: prepared.fee.toString(),
-    ...(direct ? {} : { createsPot: createInCook }),
-    transaction: getBase64EncodedWireTransaction(transaction),
+    ...(single
+      ? { ...(direct ? {} : { createsPot }), transaction: built.transactions[0]!.transaction }
+      : { step: step.name, transactions: built.transactions }),
+    plan: step.overview,
+    ...(built.lastValidBlockHeight === undefined
+      ? {}
+      : { expiresAtBlockHeight: built.lastValidBlockHeight.toString() }),
+    ...(step.fails === undefined ? {} : { fails: step.fails.reason, logs: step.fails.logs }),
+    ...(step.wait === undefined ? {} : { wait: step.wait }),
+    cursor,
   };
+  const potNote = direct
+    ? `${DIRECT_COOK}: no Kitchen and no Pot. ${input.owner} is the authority ` +
+      "the program acts with, so the accounts it spends from are the signer's own."
+    : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
+      (plan.pot === "there"
+        ? "It is created. Fund its accounts with what the program spends."
+        : plan.pot === "inline"
+          ? "It isn't created yet: this transaction creates it (the Kitchen's create_pot, the " +
+            "owner paying its rent) ahead of the cook."
+          : "It isn't created yet: the setup creates it first (the Kitchen's create_pot, the " +
+            "owner paying its rent).");
 
   return {
     text: JSON.stringify(json, null, 2),
     json,
     notes: [
-      direct
-        ? `${DIRECT_COOK}: no Kitchen and no Pot. ${input.owner} is the authority ` +
-          "the program acts with, so the accounts it spends from are the signer's own."
-        : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
-          (deployed
-            ? "It is created. Fund its accounts with what the program spends."
-            : createInCook
-              ? "It isn't created yet: this transaction creates it (the Kitchen's create_pot, " +
-                "the owner paying its rent) ahead of the cook."
-              : `It isn't created yet, and its creation does not fit in the cook's transaction: ` +
-                `create it first (${createHint(input)}).`),
-      `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
-        `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
-        "expires in about a minute.",
+      potNote,
+      ...step.notes,
+      single
+        ? `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
+          `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
+          "expires in about a minute. `sauce send <signed> --cursor <cursor>` sends it and reads " +
+          "back what main returned."
+        : step.fails !== undefined
+          ? `Simulated now, the cook would fail: ${step.fails.reason}, so no cook was built and ` +
+            "none is handed out. Fix what it needs (fund the Pot, create an account it names), " +
+            "then `sauce send --cursor <cursor>` simulates it again and builds it; `--close` gives " +
+            "up on it."
+          : step.wait !== undefined
+            ? `Nothing to sign yet: ${step.wait}. \`sauce send --cursor <cursor>\` builds the ` +
+              `${step.name} step then.`
+            : `This is the plan's ${step.name} step: ${built.transactions.length} transactions, base64 ` +
+              `and signed by no one, on one blockhash that expires in about a minute. ${input.owner} ` +
+              "signs each and pays for it; `sauce send <signed>… --cursor <cursor>` sends them in " +
+              "order and builds the next step fresh (" +
+              step.overview
+                .filter((stage) => stage.state === "later")
+                .map((stage) => stage.what)
+                .join(", then ") +
+              "). Whatever expires before it lands is built again, from what the cluster shows.",
     ],
+    // No cook to sign: what the command is for, it could not give.
+    ...(step.fails === undefined ? {} : { exitCode: 1 }),
   };
-}
-
-interface Staged {
-  readonly codeBuffer: Address;
-  readonly code: Address;
-  readonly sha256: Uint8Array;
-  readonly sent: readonly SvmSent[];
-}
-
-/**
- * Closes a code buffer, returning its rent. Never throws: a failure is the reason it stays open,
- * which the caller reports with the buffer's address.
- */
-async function closeBuffer(
-  rpc: Rpc,
-  url: string,
-  signer: TransactionSigner,
-  buffer: { readonly codeBuffer: Address; readonly code: Address },
-): Promise<{ sent?: SvmSent; open?: string }> {
-  try {
-    const sent = await sendInstructions(
-      rpc,
-      url,
-      signer,
-      [
-        buildCloseCodeBufferInstruction({
-          kitchen: kitchen(),
-          owner: signer.address,
-          codeBuffer: buffer.codeBuffer,
-          code: buffer.code,
-        }),
-      ],
-      "closing the code buffer",
-    );
-    if (sent.ok) return { sent };
-
-    return {
-      sent,
-      open: `the code buffer ${buffer.codeBuffer} is still open (closing it failed in ${sent.signature}: ${sent.reason}); its rent stays there until it is closed`,
-    };
-  } catch (error) {
-    return {
-      open: `the code buffer ${buffer.codeBuffer} is still open (closing it failed: ${(error as Error).message.split("\n")[0]}); its rent stays there until it is closed`,
-    };
-  }
-}
-
-/**
- * Stages `bytecode` in a fresh code buffer: create, grow, write in chunks, finalize. A failure
- * after the buffer exists closes it again, and says so — or names it, when that fails too.
- */
-async function stage(
-  rpc: Rpc,
-  url: string,
-  signer: TransactionSigner,
-  bytecode: Uint8Array,
-): Promise<Staged> {
-  const nonce = randomBytes(8).readBigUInt64LE(0);
-  const { address: codeBuffer } = await deriveCodeBufferPda(kitchen(), signer.address, nonce);
-  const { address: code } = await deriveCodePda(kitchen(), codeBuffer);
-  const accounts = { kitchen: kitchen(), owner: signer.address, codeBuffer, code };
-  const sent: SvmSent[] = [];
-  const step = async (instructions: readonly Instruction[], what: string): Promise<void> => {
-    const result = await sendInstructions(rpc, url, signer, instructions, what);
-    sent.push(result);
-    if (!result.ok) {
-      throw new CliError(`${what} failed in ${result.signature}: ${result.reason}`);
-    }
-  };
-  const grows = Math.ceil(bytecode.length / GROWTH_STEP) - 1;
-  try {
-    await step(
-      [
-        buildCreateCodeBufferInstruction({ ...accounts, nonce, capacity: bytecode.length }),
-        ...Array.from({ length: grows }, () => buildGrowCodeBufferInstruction(accounts)),
-      ],
-      "creating the code buffer",
-    );
-  } catch (error) {
-    throw new CliError(`staging the program failed: ${(error as Error).message}`);
-  }
-  const sha256 = new Uint8Array(createHash("sha256").update(bytecode).digest());
-  try {
-    // A write carries its chunk plus ~200 bytes of signature, header and accounts.
-    const CHUNK = 900;
-    for (let offset = 0; offset < bytecode.length; offset += CHUNK) {
-      await step(
-        [
-          buildWriteCodeBufferInstruction({
-            ...accounts,
-            offset,
-            chunk: bytecode.subarray(offset, offset + CHUNK),
-          }),
-        ],
-        `writing bytes ${offset}… of the program`,
-      );
-    }
-    await step(
-      [
-        buildFinalizeCodeBufferInstruction({
-          ...accounts,
-          len: bytecode.length,
-          expectedSha256: sha256,
-        }),
-      ],
-      "finalizing the code buffer",
-    );
-  } catch (error) {
-    const closed = await closeBuffer(rpc, url, signer, { codeBuffer, code });
-    throw new CliError(
-      `staging the program failed: ${(error as Error).message}\n` +
-        (closed.open ?? `The code buffer ${codeBuffer} was closed again.`),
-    );
-  }
-
-  return { codeBuffer, code, sha256, sent };
-}
-
-/** A lookup table a run created for its cook's accounts. */
-interface CreatedTable {
-  readonly address: Address;
-  readonly count: number;
-  readonly sent: readonly SvmSent[];
-  readonly tables: AddressesByLookupTableAddress;
-}
-
-/**
- * The accounts of `transaction` a lookup table may hold: every account its message lists, less the
- * signers and the programs its instructions call, which a transaction must list itself.
- */
-function tableAddresses(transaction: Transaction): Address[] {
-  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
-    header: { numSignerAccounts: number };
-    staticAccounts: readonly Address[];
-    instructions: readonly { programAddressIndex: number }[];
-  };
-  const called = new Set(
-    message.instructions.map((instruction) => instruction.programAddressIndex),
-  );
-
-  return message.staticAccounts.filter(
-    (_, index) => index >= message.header.numSignerAccounts && !called.has(index),
-  );
-}
-
-/**
- * Creates an address lookup table holding the accounts of `transaction` (a cook built without
- * one), from `signer`, which pays its rent and is its authority, and waits until it can be used: the
- * slot after its last extend. What it holds stays on the cluster, for the next cook naming them.
- */
-async function createLookupTable(
-  rpc: Rpc,
-  url: string,
-  signer: TransactionSigner,
-  transaction: Transaction,
-): Promise<CreatedTable> {
-  const addresses = tableAddresses(transaction);
-  const recentSlot = await ask(url, "the finalized slot", () =>
-    rpc.getSlot({ commitment: "finalized" }).send(),
-  );
-  const { lookupTableAddress, batches } = await lookupTableBatches({
-    payer: signer,
-    authority: signer,
-    recentSlot,
-    addresses,
-  });
-  const sent: SvmSent[] = [];
-  for (const [index, batch] of batches.entries()) {
-    const what = index === 0 ? "creating the lookup table" : "extending the lookup table";
-    const result = await sendInstructions(rpc, url, signer, batch, what);
-    sent.push(result);
-    if (!result.ok) throw new CliError(`${what} failed in ${result.signature}: ${result.reason}`);
-  }
-  // Addresses a table takes in slot N are usable from slot N + 1.
-  const tip = () => ask(url, "the slot", () => rpc.getSlot({ commitment: "confirmed" }).send());
-  const extended = sent.at(-1)?.slot ?? (await tip());
-  const deadline = Date.now() + 30_000;
-  while ((await tip()) <= extended) {
-    if (Date.now() > deadline) {
-      throw new CliError(
-        `lookup table ${lookupTableAddress} is not usable 30 seconds after its last extend, in ` +
-          `slot ${extended}: the cluster has not moved past it`,
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, 400));
-  }
-  const tables = await ask(url, `lookup table ${lookupTableAddress}`, () =>
-    fetchAlt(rpc, lookupTableAddress),
-  );
-
-  return { address: lookupTableAddress, count: addresses.length, sent, tables };
 }
 
 export interface SvmRunInput extends SvmCookInput {
@@ -2096,52 +2069,92 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
 });
 
 /**
- * Creates the Pot, missing, in a transaction of its own once the user agrees — where its creation
- * does not fit in the cook's own transaction (`svmRunCommand`); what was sent.
+ * Builds a plan's transaction for `ctx.signer` on a fresh blockhash, signs it, rehearses it and
+ * sends it, failing with the logs if the rehearsal fails: how this process sends every step.
+ * `sending` is told the blockhash's lifetime once the rehearsal passed, before it goes out: from
+ * then on, it can land.
  */
-async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<SvmSent> {
-  // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
-  // before anything is sent.
-  await approveAll(input.approver, [
-    {
-      action: `create Pot ${pot}`,
-      reason: `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the cook's transaction`,
-      offer: "Deploy it now",
-      estimate: "its rent paid by you",
-      byHand: `create it yourself with ${createHint(input)}`,
-    },
-  ]);
-  const created = await sendInstructions(
-    rpc,
-    input.rpcUrl,
-    input.signer,
-    [createPotInstruction(input, pot)],
-    "creating the Pot",
+export async function sendPlanTx(
+  ctx: StepContext,
+  tx: PlanTx,
+  sending?: (lifetime: CookHandedOut) => void,
+): Promise<SvmSent> {
+  const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
+    ctx.rpc.getLatestBlockhash().send(),
   );
-  if (!created.ok) throw new CliError(sentLine("creating the Pot", created));
-  await awaitAccount(rpc, input.rpcUrl, pot, "the Pot");
+  const transaction = await buildPlanTx(tx, ctx, latestBlockhash);
+  const { value } = await ask(ctx.url, `a simulation of ${tx.what}`, () =>
+    ctx.rpc
+      .simulateTransaction(getBase64EncodedWireTransaction(transaction), {
+        encoding: "base64",
+        replaceRecentBlockhash: true,
+      })
+      .send(),
+  );
+  if (value.err !== null) {
+    const logs = value.logs ?? [];
+    throw new CliError(
+      `${tx.what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
+    );
+  }
+  sending?.({
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    slot: BigInt(context.slot),
+  });
 
-  return created;
+  return sendAndConfirm(ctx.rpc, ctx.url, transaction);
 }
 
 /**
- * The Pot's and the owner's token accounts the cook names (`pot:USDC`, `owner:WSOL`) that solana
- * does not have yet, created by the owner before the cook, idempotently, as the rehearsal's copy
- * made them empty: a program paying into an account that does not exist fails. Asked for as the
- * Pot's creation is: their rent comes from the owner.
+ * Gives up on `plan`'s cook and closes its code buffer, returning its rent. Never throws: a failure
+ * is the reason it stays open, which the caller reports with the buffer's address.
  */
-async function ensureTokenAccounts(
-  input: SvmRunInput,
-  prepared: Prepared,
-): Promise<{ sent: SvmSent; made: string[] } | undefined> {
-  const missing: TokenAccountNamed[] = [];
-  for (const token of prepared.given.named.values()) {
-    if (token.account === undefined || missing.some((one) => one.address === token.address))
-      continue;
-    if (!(await exists(prepared.rpc, input.rpcUrl, token.address, token.label)))
-      missing.push(token);
+async function closePlanBuffer(
+  plan: SvmPlan,
+  ctx: StepContext,
+): Promise<{ sent?: SvmSent; open?: string }> {
+  const buffer = await planBuffer(plan);
+  try {
+    const step = await nextStep(plan, ctx, { close: true });
+    const tx = step.transactions[0];
+    if (tx === undefined) return {};
+    const sent = await sendPlanTx(ctx, tx);
+    if (sent.ok) return { sent };
+
+    return {
+      sent,
+      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed in ${sent.signature}: ${sent.reason}); its rent stays there until it is closed: sauce reclaim --chain solana closes it`,
+    };
+  } catch (error) {
+    return {
+      open: `the code buffer ${buffer?.codeBuffer} is still open (closing it failed: ${(error as Error).message.split("\n")[0]}); its rent stays there until it is closed: sauce reclaim --chain solana closes it`,
+    };
   }
-  if (missing.length === 0) return undefined;
+}
+
+/** How long a run waits for a lookup table its setup just extended to come into use: the slot
+ *  after, usually well inside the first try. */
+const TABLE_WARMUP = { tries: 30, delayMs: 500 };
+
+/** What a run asks before it creates a Pot that does not fit in the cook's own transaction. */
+const potApproval = (input: SvmRunInput, pot: Address) => ({
+  action: `create Pot ${pot}`,
+  reason: `Your Pot ${pot} on solana isn't deployed yet, and its creation does not fit in the cook's transaction`,
+  offer: "Deploy it now",
+  estimate: "its rent paid by you",
+  byHand: `create it yourself with ${createHint(input)}`,
+});
+
+/**
+ * Asks for the token accounts the cook names that solana does not have yet, as the Pot's creation
+ * is asked for: their rent comes from the owner. A program paying into an account that does not
+ * exist fails.
+ */
+async function approveTokenAccounts(
+  input: SvmRunInput,
+  missing: readonly PlanTokenAccount[],
+): Promise<string[]> {
   const made = missing.map((token) => `${token.label}, ${token.address}`);
   const actions = made.map((one) => `create ${one}`);
   if (!input.approver.auto && !input.approver.canAsk) throw unapproved(actions, input.approver.why);
@@ -2157,12 +2170,53 @@ async function ensureTokenAccounts(
         "--yes (-y) to create them before the cook",
     );
   }
+
+  return made;
+}
+
+/**
+ * The token accounts a cook names that solana does not have yet — the Pot's and the owner's
+ * (`pot:USDC`), and a holder's the token methods derived (`@to:USDC`, a recipient's) — each with
+ * the idempotent associated-token-account instruction that creates it, `payer` paying the rent. The
+ * one list both `sauce run`'s step before the cook and a step plan an external signer sends create:
+ * a program paying into an account that does not exist fails, and a simulation's local copy makes
+ * each empty.
+ */
+export async function svmTokenAccountsToCreate(
+  rpc: Rpc,
+  url: string,
+  named: ReadonlyMap<string, TokenAccountNamed>,
+  payer: TransactionSigner,
+): Promise<{
+  readonly accounts: readonly { readonly label: string; readonly address: Address }[];
+  readonly instructions: readonly Instruction[];
+}> {
+  const wanted: TokenAccountNamed[] = [];
+  for (const token of named.values()) {
+    if (token.account !== undefined && !wanted.some((one) => one.address === token.address)) {
+      wanted.push(token);
+    }
+  }
+  // Read together, a hundred to a request: one round however many the cook names.
+  const held: boolean[] = [];
+  for (let at = 0; at < wanted.length; at += 100) {
+    const { value } = await ask(url, "the token accounts", () =>
+      rpc
+        .getMultipleAccounts(
+          wanted.slice(at, at + 100).map((token) => token.address),
+          { encoding: "base64" },
+        )
+        .send(),
+    );
+    held.push(...value.map((account) => account !== null && account !== undefined));
+  }
+  const missing = wanted.filter((_, index) => !held[index]);
   const instructions = await Promise.all(
     missing.map(
       async (token) =>
         (
           await buildAtaPrepend({
-            payer: input.signer,
+            payer,
             owner: token.account!.holder,
             mint: token.account!.mint,
             tokenProgram: token.account!.program,
@@ -2170,139 +2224,161 @@ async function ensureTokenAccounts(
         ).instruction,
     ),
   );
-  const sent = await sendInstructions(
-    prepared.rpc,
-    input.rpcUrl,
-    input.signer,
-    instructions,
-    "creating the token accounts",
-  );
-  if (!sent.ok) throw new CliError(sentLine("creating the token accounts", sent));
 
-  return { sent, made };
+  return {
+    accounts: missing.map((token) => ({ label: token.label, address: token.address })),
+    instructions,
+  };
 }
 
-/** `sauce run` on Solana: compile, create the Pot if agreed, stage if needed, cook, confirm. */
+/**
+ * `sauce run` on Solana: compile, then the plan's steps (`svm-plan.ts`), each transaction built on
+ * a fresh blockhash and signed with the keypair: what the cook needs created first (asked for), the
+ * program staged where it does not fit one transaction, a lookup table for its accounts, the cook,
+ * and the code buffer's close.
+ */
 export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promise<CommandOutput> {
   requireSupported("sending the cook", [input.chain]);
   const prepared = await prepare(input, files, input.signer);
   const direct = prepared.via === "engine";
-  // Directly to the engine the program runs as no Pot: there is none to create. A missing Pot is
-  // created in the cook's own transaction, ahead of it, where the two fit in one: one signature,
-  // nothing to ask, and no Pot is left behind if the cook fails. Else it is created first, asked.
-  const potThere = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
-  const createPot = potThere ? [] : [createPotInstruction(input, prepared.pot)];
-  const createInCook = createPot.length > 0 && (await fits(prepared, createPot)).fits;
-  const created =
-    potThere || createInCook ? undefined : await ensurePot(input, prepared.rpc, prepared.pot);
-  const prepends = createInCook ? createPot : [];
-  const accountsMade = await ensureTokenAccounts(input, prepared);
-  const size = await fits(prepared);
-  // The cook's rehearsal failing: `computeUnitLimit: "auto"` simulates first, and its failure
-  // carries the reason — read again, with the logs, to report it.
-  const wouldFail = async (
-    error: unknown,
-    staged?: Staged,
-    tables: AddressesByLookupTableAddress = prepared.lookupTables,
-  ): Promise<never> => {
-    const logs = await rehearsalLogs(prepared, staged, tables);
-    const closed =
-      staged === undefined
-        ? undefined
-        : await closeBuffer(prepared.rpc, input.rpcUrl, input.signer, staged);
-    throw new CliError(
-      `the cook would fail, so it was not sent: ${logs.reason ?? (error as Error).message}` +
-        (logs.lines.length === 0
-          ? ""
-          : `\nProgram logs:\n${logs.lines.map((l) => `  ${l}`).join("\n")}`) +
-        (closed === undefined
-          ? ""
-          : `\n${closed.open ?? `The code buffer ${staged!.codeBuffer} was closed again.`}`),
-    );
+  const ctx: StepContext = {
+    rpc: prepared.rpc,
+    url: input.rpcUrl,
+    signer: input.signer,
+    fee: prepared.fee,
   };
-  let staged: Staged | undefined;
-  let table: CreatedTable | undefined;
-  let transaction: Transaction;
-  if (size.fits) {
+  let plan = await planOf(prepared, input);
+  const buffer = await planBuffer(plan);
+  let created: SvmSent | undefined;
+  let accountsMade: { sent: SvmSent; made: string[] } | undefined;
+  const staged: SvmSent[] = [];
+  const tabled: SvmSent[] = [];
+  // Once the buffer is there, a run that stops closes it again, and says whether it did; a lookup
+  // table it created stays, and is named.
+  const closedAgain = async (): Promise<string> =>
+    (buffer === undefined || staged.length === 0
+      ? ""
+      : `\n${(await closePlanBuffer(plan, ctx)).open ?? `The code buffer ${buffer.codeBuffer} was closed again.`}`) +
+    (tabled.length === 0 || plan.table?.address === undefined
+      ? ""
+      : `\nLookup table ${plan.table.address} stays: sauce reclaim --chain solana closes it.`);
+  // The step after, read from the cluster: a failure to read it is a stop like any other.
+  const after = async (): Promise<PlanStep> => {
     try {
-      transaction = await prepared.client.cookTransaction(
-        prepared.bytecode,
-        prepared.manifest,
-        prepared.accounts,
-        { computeUnitLimit: "auto", prepends, ...tablesOption(prepared.lookupTables) },
-      );
+      return await nextStep(plan, ctx);
     } catch (error) {
-      return wouldFail(error);
+      throw new CliError(`${(error as Error).message}${await closedAgain()}`);
     }
-  } else {
-    staged = await stage(prepared.rpc, input.rpcUrl, input.signer, prepared.bytecode);
-    // The staged cook carries no program, only its accounts: past one transaction still, they go
-    // through a lookup table, which the run creates when none was given.
-    const unsized = await prepared.client.stagedCookTransaction(
-      staged.codeBuffer,
-      prepared.manifest,
-      prepared.accounts,
-      {
-        computeUnitLimit: 1_400_000,
-        ...stagedPin(prepared, staged),
-        ...tablesOption(prepared.lookupTables),
-      },
-    );
-    if (getTransactionSize(unsized) > TRANSACTION_SIZE_LIMIT) {
+  };
+
+  let step = await nextStep(plan, ctx);
+  while (step.name === "setup") {
+    // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
+    // before anything is sent.
+    if (step.transactions.some((tx) => tx.kind === "pot")) {
+      await approveAll(input.approver, [potApproval(input, prepared.pot)]);
+    }
+    const accounts = step.transactions.find((tx) => tx.kind === "accounts")?.accounts;
+    const made = accounts === undefined ? undefined : await approveTokenAccounts(input, accounts);
+    plan = step.plan;
+    for (const tx of step.transactions) {
+      const staging = tx.kind === "buffer" || tx.kind === "write" || tx.kind === "finalize";
+      let sent: SvmSent;
       try {
-        if ((input.lookupTables ?? []).length > 0) {
-          throw new CliError(
-            `the staged cook is a ${getTransactionSize(unsized)}-byte transaction even through ` +
-              `the lookup tables given, past Solana's ${TRANSACTION_SIZE_LIMIT}: give a table ` +
-              "holding every account the cook names, or none and the run creates one",
-          );
-        }
-        table = await createLookupTable(prepared.rpc, input.rpcUrl, input.signer, unsized);
+        sent = await sendPlanTx(ctx, tx);
       } catch (error) {
-        const closed = await closeBuffer(prepared.rpc, input.rpcUrl, input.signer, staged);
         throw new CliError(
-          `${(error as Error).message}\n${closed.open ?? `The code buffer ${staged.codeBuffer} was closed again.`}`,
+          `${staging ? "staging the program failed: " : ""}${(error as Error).message}${await closedAgain()}`,
         );
       }
+      if (staging) staged.push(sent);
+      if (tx.kind === "table") tabled.push(sent);
+      if (!sent.ok) {
+        throw new CliError(
+          tx.kind === "pot" || tx.kind === "accounts"
+            ? sentLine(tx.what, sent)
+            : `${staging ? "staging the program failed: " : ""}${tx.what} failed in ` +
+                `${sent.signature}: ${sent.reason}${await closedAgain()}`,
+        );
+      }
+      if (tx.kind === "pot") {
+        created = sent;
+        await awaitAccount(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
+      }
+      if (tx.kind === "accounts") accountsMade = { sent, made: made ?? [] };
     }
-    const tables = table?.tables ?? prepared.lookupTables;
-    try {
-      transaction = await prepared.client.stagedCookTransaction(
-        staged.codeBuffer,
-        prepared.manifest,
-        prepared.accounts,
-        { computeUnitLimit: "auto", ...stagedPin(prepared, staged), ...tablesOption(tables) },
-      );
-    } catch (error) {
-      return wouldFail(error, staged, tables);
-    }
+    step = await after();
   }
+  // A lookup table the setup just extended is in use from the next slot: a run, the owner's own
+  // process, waits for it, a little.
+  for (let tries = 0; step.readyAt !== undefined && tries < TABLE_WARMUP.tries; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, TABLE_WARMUP.delayMs));
+    step = await after();
+  }
+  if (step.wait !== undefined) throw new CliError(`${step.wait}${await closedAgain()}`);
+  if (step.fails !== undefined) {
+    throw new CliError(
+      `the cook would fail, so it was not sent: ${step.fails.reason}` +
+        (step.fails.logs.length === 0
+          ? ""
+          : `\nProgram logs:\n${step.fails.logs.map((l) => `  ${l}`).join("\n")}`) +
+        (await closedAgain()),
+    );
+  }
+  const cookTx = step.transactions[0];
+  if (step.name !== "cook" || cookTx === undefined) {
+    throw new CliError(
+      `the plan's step after its setup is ${step.name}, not the cook${await closedAgain()}`,
+    );
+  }
+  if (step.unrehearsed === true) {
+    throw new CliError(
+      `the endpoint did not simulate the cook, so it was not sent${await closedAgain()}`,
+    );
+  }
+  plan = step.plan;
+  const createInCook = cookTx.createsPot === true;
+  const { value: latestBlockhash } = await ask(input.rpcUrl, "the latest blockhash", () =>
+    prepared.rpc.getLatestBlockhash().send(),
+  );
+  const transaction = await buildPlanTx(cookTx, ctx, latestBlockhash);
   // What the cook moves: every account it may write, read before it is sent and once it lands.
-  const tracked = writableAccounts(transaction, table?.tables ?? prepared.lookupTables);
+  const tracked = writableAccounts(transaction, cookTx.lookupTables ?? {});
   const before = await accountsNow(prepared.rpc, tracked).catch(() => undefined);
-  const cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
-  const after =
+  let cook: SvmSent;
+  try {
+    cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
+  } catch (error) {
+    // Sent, perhaps: the cook may still land, so the buffer it runs from stays.
+    throw new CliError(
+      `${(error as Error).message}` +
+        (buffer === undefined
+          ? ""
+          : `\nThe code buffer ${buffer.codeBuffer} stays open, as the cook may still land: ` +
+            "sauce reclaim --chain solana closes it once it has."),
+    );
+  }
+  const landedAs =
     cook.ok && before !== undefined
       ? await accountsNow(prepared.rpc, tracked).catch(() => undefined)
       : undefined;
   const moved =
-    before === undefined || after === undefined
+    before === undefined || landedAs === undefined
       ? undefined
       : await movedBy(
           prepared.rpc,
           input.chain,
           tracked,
           before,
-          after,
+          landedAs,
           await accountLabels(input, prepared.pot, prepared.given),
           input.owner,
         );
   const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
+  plan = { ...plan, cooked: { ok: cook.ok, signature: cook.signature } };
   // The cook has landed (or failed) by now: whatever happens to the buffer, it is reported.
-  const closed =
-    staged === undefined
-      ? undefined
-      : await closeBuffer(prepared.rpc, input.rpcUrl, input.signer, staged);
+  const closed = buffer === undefined ? undefined : await closePlanBuffer(plan, ctx);
+  const table = plan.table?.address;
 
   return {
     text: [
@@ -2317,20 +2393,18 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       ...(accountsMade === undefined
         ? []
         : sentLines(`created ${accountsMade.made.join("; ")} in`, accountsMade.sent)),
-      ...(staged === undefined
+      ...(staged.length === 0
+        ? []
+        : [`staged the ${prepared.bytecode.length}-byte program in ${staged.length} transactions`]),
+      ...(table === undefined || tabled.length === 0
         ? []
         : [
-            `staged the ${prepared.bytecode.length}-byte program in ${staged.sent.length} transactions`,
-          ]),
-      ...(table === undefined
-        ? []
-        : [
-            `created lookup table ${table.address} holding the cook's ${table.count} accounts in ` +
-              `${table.sent.length} transactions; a later cook naming them reuses it with ` +
-              `--lookup-table ${table.address}`,
+            `created lookup table ${table} holding the cook's ${plan.table!.addresses.length} ` +
+              `accounts in ${tabled.length} transactions; a later cook naming them reuses it with ` +
+              `--lookup-table ${table}, and sauce reclaim closes it once none will`,
           ]),
       ...sentLines(direct ? "cook (direct to the engine)" : "cook", cook),
-      ...(cook.ok ? [`execution fee: ${prepared.fee} lamports`] : []),
+      ...(cook.ok ? [`execution fee: ${step.fee ?? prepared.fee} lamports`] : []),
       ...(left === undefined ? [] : svmLeftInPotLines(left, "your wallet")),
       ...(moved === undefined ? [] : svmMovedLines(moved)),
       ...(cook.ok ? [] : ["Program logs:", ...cook.logs.map((line) => `  ${line}`)]),
@@ -2344,8 +2418,8 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       via: prepared.via,
       owner: input.owner,
       ...(direct ? {} : { pot: prepared.pot }),
-      fee: prepared.fee.toString(),
-      maxExecutionFee: prepared.fee.toString(),
+      fee: (step.fee ?? prepared.fee).toString(),
+      maxExecutionFee: (step.fee ?? prepared.fee).toString(),
       ...(created === undefined ? {} : { createPot: sentJson(created) }),
       ...(createInCook
         ? { createPot: { inCook: true, ...(cook.ok ? {} : { undone: true }) } }
@@ -2353,22 +2427,22 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       ...(accountsMade === undefined
         ? {}
         : { createTokenAccounts: { ...sentJson(accountsMade.sent), accounts: accountsMade.made } }),
-      ...(staged === undefined
+      ...(buffer === undefined
         ? {}
         : {
             staged: {
-              codeBuffer: staged.codeBuffer,
-              sha256: bytesToHex(staged.sha256),
-              transactions: staged.sent.map((step) => step.signature),
+              codeBuffer: buffer.codeBuffer,
+              sha256: bytesToHex(plan.staged!.sha256),
+              transactions: staged.map((one) => one.signature),
             },
           }),
-      ...(table === undefined
+      ...(table === undefined || tabled.length === 0
         ? {}
         : {
             lookupTable: {
-              address: table.address,
-              accounts: table.count,
-              transactions: table.sent.map((step) => step.signature),
+              address: table,
+              accounts: plan.table!.addresses.length,
+              transactions: tabled.map((one) => one.signature),
             },
           }),
       ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
@@ -2378,31 +2452,6 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     },
     ...(cook.ok ? {} : { exitCode: 1 }),
   };
-}
-
-/** The reason and logs of the cook's rehearsal, for a run that stops before sending. */
-async function rehearsalLogs(
-  prepared: Prepared,
-  staged: { readonly codeBuffer: Address; readonly sha256: Uint8Array } | undefined,
-  tables: AddressesByLookupTableAddress = prepared.lookupTables,
-): Promise<{ reason?: string; lines: readonly string[] }> {
-  try {
-    const result =
-      staged === undefined
-        ? await prepared.client.simulate(prepared.bytecode, prepared.manifest, prepared.accounts, {
-            ...tablesOption(tables),
-          })
-        : await prepared.client.simulateStaged(
-            staged.codeBuffer,
-            prepared.manifest,
-            prepared.accounts,
-            { ...stagedPin(prepared, staged), ...tablesOption(tables) },
-          );
-
-    return result.ok ? { lines: result.logs } : { reason: simulated(result), lines: result.logs };
-  } catch {
-    return { lines: [] };
-  }
 }
 
 // ---------------------------------------------------------------------------------------------

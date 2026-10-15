@@ -1,6 +1,6 @@
 ---
 name: sauce-chains
-description: How a Sauce program's names resolve per chain, and each chain's facts from the registries. One file compiled for Ethereum and for Base gets each chain's own USDC, WETH, tokenized stocks, protocol contracts (UniswapV3.Factory) and chainId; a name the chain lacks is refused at compile; Base.UniswapV3.Factory is only Base's address, to pass across chains, never to call; tokens are never qualified. Writing for an EVM chain versus Solana (Account parameters, token accounts, transferChecked for Token-2022, --account). Which chains take transactions (Ethereum, Base, Solana; the rest are preview chains) and how to request one. Per chain, its id, slug, native coin, intents, CCTP domain, tokens and every protocol with its address; the Sauce engine, Kitchen and intent Pot, the same everywhere, in one file. Use when the user asks what is on a chain, needs an address, picks a chain, writes one program for several chains or for Solana, a name fails to compile on one chain, or a transaction is refused on a preview chain.
+description: How a Sauce program's names resolve per chain, and each chain's facts from the registries. One file compiled for Ethereum and for Base gets each chain's own USDC, WETH, tokenized stocks, protocol contracts (UniswapV3.Factory) and chainId; a name the chain lacks is refused at compile; Base.UniswapV3.Factory is only Base's address, to pass across chains, never to call; tokens are never qualified. Writing for an EVM chain versus Solana (the same token methods, their accounts derived; Token-2022). Which chains take transactions (Ethereum, Base, Solana; the rest are preview chains) and how to request one. Per chain, its id, slug, native coin, intents, CCTP domain, tokens and every protocol with its address; the Sauce engine, Kitchen and intent Pot, the same everywhere, in one file. Use when the user asks what is on a chain, needs an address, picks a chain, writes one program for several chains or for Solana, a name fails to compile on one chain, or a transaction is refused on a preview chain.
 ---
 
 # Chains
@@ -120,74 +120,66 @@ function main(): Address {
 
 ## EVM chains and Solana
 
-The same names, written for the target's account model:
+The same names, and the same token methods, written for the target's account model:
 
-|                     | An EVM chain                             | Solana                                                                       |
-| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
-| A token symbol      | the token's address                      | the mint's 32-byte key                                                       |
-| Who holds a balance | an address: `USDC.balanceOf(ctx.self())` | a token account the program is given: `balanceOf(USDC, potUsdc)`             |
-| Accounts            | none declared                            | every account is an `Account` parameter of `main`, attached with `--account` |
-| A transfer          | `USDC.transfer(recipient, amount)`       | `transfer(USDC, usdcProgram, potUsdc, toUsdc, pot, amount)`, SPL Token mints |
-| A Token-2022 mint   | no such thing                            | `transferChecked(TSLAx, tslaxProgram, potTslax, tslaxMint, toTslax, pot, …)` |
-| Protocol namespaces | yes                                      | none: a program calls another program with `svm.call`                        |
-| `ctx.self()`        | the Pot                                  | the engine program; the Pot is an `Account` parameter                        |
+|                     | An EVM chain                             | Solana                                                                                |
+| ------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| A token symbol      | the token's address                      | the mint's 32-byte key                                                                |
+| Who holds a balance | an address: `USDC.balanceOf(ctx.self())` | a token account; `USDC.balanceOf(ctx.self())` reads the Pot's                         |
+| A transfer          | `USDC.transfer(recipient, amount)`       | the same; compiling adds the accounts it moves through to `main`, derived and checked |
+| A Token-2022 mint   | no such thing                            | the same methods; they lower to `transferChecked` with the mint's decimals            |
+| Other accounts      | none declared                            | every account is an `Account` parameter of `main`, attached with `--account`          |
+| Protocol namespaces | yes                                      | none: a program calls another program with `svm.call`                                 |
+| `ctx.self()`        | the Pot                                  | as a token's holder, the Pot; alone, the engine program                               |
 
 [examples/payout-solana.sauce.ts](examples/payout-solana.sauce.ts) pays a recipient `cash` of USDC
-and `shares` of TSLAx (Backed's tokenized Tesla) from the Pot's accounts:
+and `shares` of TSLAx (Backed's tokenized Tesla) from the Pot:
 
 ```sauce chain=solana
-function main(
-  pot: Account<Signer>,
-  usdcProgram: Account,
-  potUsdc: Account<Writable>,
-  toUsdc: Account<Writable>,
-  tslaxProgram: Account,
-  tslaxMint: Account,
-  potTslax: Account<Writable>,
-  toTslax: Account<Writable>,
-  cash: Uint256,
-  shares: Uint256
-): Uint256 {
-  require(balanceOf(USDC, potUsdc) >= cash, "not enough USDC");
-  transfer(USDC, usdcProgram, potUsdc, toUsdc, pot, cash);
-  const before = balanceOf(TSLAx, toTslax);
-  transferChecked(TSLAx, tslaxProgram, potTslax, tslaxMint, toTslax, pot, shares, 8);
-  return balanceOf(TSLAx, toTslax) - before;
+function main(recipient: Address, cash: Uint256, shares: Uint256): Uint256 {
+  require(USDC.balanceOf(ctx.self()) >= cash, "not enough USDC");
+  USDC.transfer(recipient, cash);
+  const before = TSLAx.balanceOf(recipient);
+  TSLAx.transfer(recipient, shares);
+  return TSLAx.balanceOf(recipient) - before;
 }
 ```
 
-- **Every account is a parameter.** `Account` is read-only; `Account<Writable>` and
-  `Account<Signer>` declare the role the transaction grants. Only the scalars (`cash`, `shares`)
-  are `--args`.
-- **A balance is a token account's**, read with the mint first: `balanceOf(USDC, potUsdc)`.
-- **Each mint has a token program.** USDC is an SPL Token mint, moved with `transfer`, which is SPL
-  Token's alone. TSLAx, like every tokenized stock and PYUSD on Solana, is a Token-2022 mint:
-  `transfer` refuses its accounts, and `transferChecked`, which works for both programs, takes the
-  mint's account and its decimals (8 for TSLAx; the chain's file lists each mint's). A Token-2022
-  mint may withhold a transfer fee, so the program measures what arrived.
-- **`--account` attaches each slot by name**, an address or a name the command derives: `pot` is
-  the Pot, `pot:USDC` the Pot's USDC account, `owner:USDC` the owner's, `mint:TSLAx` the mint and
-  `program:TSLAx` its token program.
+- **The accounts are added for you.** On Solana a balance belongs to a token account. Compiling
+  adds every account the calls move through to `main`: each token program, the Pot, the Pot's and
+  the recipient's token accounts, and TSLAx's mint. Each one's `derive` (`self:USDC`,
+  `@recipient:TSLAx`) says where it comes from, and the command fills it in when it builds the cook.
+  Only the scalars are `--args`.
+- **Each holder is known when the transaction is built**: `ctx.self()`, an `Address` argument of
+  `main`, or a key written out. After each transfer the program checks that the account it paid
+  belongs to `recipient`.
+- **Each mint has a token program.** USDC is an SPL Token mint. TSLAx, like every tokenized stock
+  and PYUSD on Solana, is a Token-2022 mint. Its transfer lowers to `transferChecked`, with its
+  decimals from the registry (8; the chain's file lists each mint's). A Token-2022 mint may withhold
+  a transfer fee, so the program measures what arrived.
 
 ```sh
 sauce run payout-solana.sauce.ts --chain solana --keypair <keypair> \
-  --account pot=pot --account usdcProgram=program:USDC --account potUsdc=pot:USDC \
-  --account toUsdc=<the recipient's USDC account> --account tslaxProgram=program:TSLAx \
-  --account tslaxMint=mint:TSLAx --account potTslax=pot:TSLAx \
-  --account toTslax=<the recipient's TSLAx account> --args 1000000 50000000
+  --args <recipient> 1000000 50000000
 ```
 
 Two transfers and the reads are past one Solana transaction, so `sauce run` stages the program
-before the cook, and `sauce simulate` rehearses it staged, in a local copy of its accounts;
-`sauce tx` refuses it, naming how many bytes it is over.
-`sauce-solana` has the rest: binding a slot to the Pot, transaction size, each Token-2022
-extension, and running through the Kitchen or the engine.
+before the cook, and `sauce simulate` runs it staged, in a local copy of its accounts;
+`sauce tx` prints it as a plan of steps for another signer: the staging, the cook, then the code
+buffer's close, each step's transactions sent signed with `sauce send` and its cursor.
+`sauce-solana` has the rest:
+
+- the accounts written out as `Account` parameters (`--account`), for an account the token methods
+  cannot derive;
+- binding a slot to the Pot, and transaction size;
+- each Token-2022 extension;
+- running through the Kitchen or the engine.
 
 ## Supported and preview chains
 
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
 `base`, `solana`). Every other chain is a **preview chain**: a program compiles for it and
-`sauce simulate` rehearses it there, but the `sauce` command and the MCP server build and send no
+`sauce simulate` runs it there, but the `sauce` command and the MCP server build and send no
 transaction on it (`sauce tx`, `sauce run`, `sauce pot --deploy`, `sauce intent publish` and the
 intent steps are refused, naming the supported chains and linking the chain's request).
 [references/index.md](references/index.md) has a Support column, and each chain's file says which
@@ -267,7 +259,7 @@ confirm the deployment on a chain.
    `cook(engine, program)` with `main`'s arguments appended to the program, `value` the Kitchen's
    fee plus any native the program spends. `sauce tx <file> --chain <slug> --owner <address> --args …`
    prints it as unsigned JSON, `{ chainId, to, data, value }`, for any wallet or signer, and
-   `sauce simulate` rehearses it. On a preview chain stop at compiling and simulating, and offer the
+   `sauce simulate` runs it. On a preview chain stop at compiling and simulating, and offer the
    chain-support request the refusal links.
 
 ## Common gotchas
@@ -282,8 +274,9 @@ confirm the deployment on a chain.
   compiled-for chain's Tokens table.
 - **A qualified contract is an address, not a call there.** `Base.UniswapV3.Factory` called from a
   program running on Ethereum calls Ethereum, at Base's address.
-- **Token methods are EVM only.** On Solana, `USDC.transfer(...)` does not exist: the `@sauce/token`
-  functions take the mint first and the accounts after it.
+- **A Solana holder is known before the program runs.** On Solana a token method's accounts are
+  derived when the transaction is built, so a holder computed as the program runs is refused: take
+  its token account as an `Account` parameter instead (`sauce-solana`).
 
 ## Verification checklist
 
@@ -292,7 +285,8 @@ confirm the deployment on a chain.
 - [ ] No address the registry names is written as a literal: the name resolves per chain.
 - [ ] Every address the program relies on has code on that chain.
 - [ ] Amounts are in the token's decimals on that chain.
-- [ ] On Solana, every account is a parameter, and a Token-2022 mint moves with `transferChecked`.
+- [ ] On Solana, every account the token methods do not add is a parameter, and every holder of a
+      token method is `ctx.self()`, an `Address` argument or a key written out.
 - [ ] For a transaction, the chain is supported (Ethereum, Base or Solana).
 
 ## Examples

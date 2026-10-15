@@ -10,6 +10,7 @@ import { createServer, type Server } from "node:http";
 import { after, afterEach, before, describe, it } from "node:test";
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { chainSupportRequest } from "../../sdk/dist/cli/support.js";
@@ -220,6 +221,29 @@ describe("refused on a preview chain, before the call's endpoint", () => {
   });
 });
 
+describe("sauce_send, refused by the chain its transactions are signed for", () => {
+  it("refuses a transaction signed for a preview chain before reaching an endpoint", async () => {
+    // A throwaway key: the signer is the caller's, and the tool never sees one.
+    const signer = privateKeyToAccount(`0x${"42".repeat(32)}`);
+    const signed = await signer.signTransaction({
+      chainId: 42161,
+      type: "eip1559",
+      to: RECIPIENT,
+      value: 0n,
+      nonce: 0,
+      gas: 21_000n,
+      maxFeePerGas: 1n,
+      maxPriorityFeePerGas: 1n,
+    });
+    const refusal = refused(
+      await mcp.call("sauce_send", { transactions: [signed], rpcUrl: url }),
+      "arbitrum",
+    );
+    assert.equal(refusal.action, "sending");
+    assert.deepEqual(methods, []);
+  });
+});
+
 describe("the rest of a tool's answer, with `refused` in place of its transaction", () => {
   it("sauce_pot predicts and reads a Pot on a preview chain, without its deployment", async () => {
     const predicted = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: OWNER }));
@@ -296,6 +320,6 @@ describe("still runs on a preview chain", () => {
       rpcUrl: url,
     });
     assert.doesNotMatch(textOf(simulated), /preview-chain/);
-    assert.ok(methods.length > 0, "the rehearsal reached the endpoint");
+    assert.ok(methods.length > 0, "the simulation reached the endpoint");
   });
 });

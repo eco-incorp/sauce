@@ -848,6 +848,28 @@ approve fulfils with nothing moved. `routes-nest-dynamic.e2e.test.ts` runs all o
 real Portal and Executor and PINS the gap. Any non-token statement makes the body a program, whose
 writes are SafeERC20 — that is the documented way to get the checks.
 
+**On Solana the token methods and the venue namespaces add their accounts to `main`.**
+`USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `self.USDC`, `Token(mint)` and
+`<Venue>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`/`trySwap` (the nine price-limit
+venues: `RaydiumClmm` … `Phoenix`) are lowered by `routes/svm-lowering.ts`, one engine with a
+collector per syntax (`svm-token-rewrite.ts`, `svm-venue-methods.ts`): each call becomes its library
+function (`@sauce/token`'s SVM arm; the venue's OWN `@sauce/router` function, never `trySwap`) and
+every account it takes is appended to `main` as an `Account` parameter, with how it is derived
+written as an `--account` value in `CompiledSauceProgram.derivedAccounts` (`self:USDC`,
+`@to:USDC`, `mint:USDC`, a program id, `slot:@pool:USDC.vaultA`). ONE resolver,
+`svm/account-names.ts#resolveSvmAccountName`, turns a value into an address from the cook (owner,
+Pot, `via`, main's arguments, a mint program reader that FAILS CLOSED, an account loader for a
+pool's slot, `svm/pool-slot.ts`, shared with `sauce pools`); the CLI's `prepare` fills every derived
+slot with it under `--account`, so the CLI and MCP share it. SPL Token mints take the legacy writes
+(224 bytes and an account smaller), Token-2022 mints the checked writes with the registry's
+decimals, an argument's mint the checked write with its decimals read on chain. Every holder's token
+account is checked on chain after the write (owner bytes 32–64), so a builder cannot redirect it; an
+explicit `Account` in a holder's place is paid as attached, unchecked (documented). Holders, mints
+and pools must be known at build time (`self`/`ctx.self()`, an `Address` parameter, a 32-byte key);
+anything else, a call in a helper, and a script are refused. `compileSauceRoute` refuses derived
+accounts: a route's `execution.accounts` precede the compile. Executed in
+`cli-solana-token-methods.e2e.test.ts` and `cli-solana-venues.e2e.test.ts`.
+
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
 value per canonical chain (`Base`, `Solana`, …) plus `chain` and `Token`, re-exported from the

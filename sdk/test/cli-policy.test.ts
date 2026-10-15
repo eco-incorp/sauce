@@ -382,7 +382,7 @@ describe("the guard", () => {
       ...client([]),
       getChainId: async () => requireChain("arbitrum").id,
       simulateBlocks: async () => {
-        throw new Error("a preview chain is refused before anything is rehearsed");
+        throw new Error("a preview chain is refused before anything is simulated");
       },
     } as unknown as PublicClient;
     for (const guard of [guardWallet(wallet, undefined), guarded({})]) {

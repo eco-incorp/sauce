@@ -254,7 +254,7 @@ function valueText(tx: AnyTxJson): string {
 
   return (
     `${formatUnits(BigInt(tx.value), chain.kind === "svm" ? 9 : 18)} ${nativeSymbol(chain)} on ` +
-    `${tx.chain}${isSvmTx(tx) ? " (the IGP's gas and the message accounts' rent, as rehearsed)" : ""}`
+    `${tx.chain}${isSvmTx(tx) ? " (the IGP's gas and the message accounts' rent, as simulated)" : ""}`
   );
 }
 

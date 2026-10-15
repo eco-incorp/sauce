@@ -353,7 +353,7 @@ describeEvm("sauce, sent to a chain", () => {
       // A deployed Pot: the cook alone, and what it moved, read from its logs.
       expect(ok.stdout).toMatch(
         new RegExp(
-          `^Rehearsed with eth_simulateV1 on the state of block \\d+; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}, gas used \\d+$`,
+          `^Simulated with eth_simulateV1 on the state of block \\d+; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}, gas used \\d+$`,
           "m",
         ),
       );
@@ -1025,9 +1025,9 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     );
     // The one note: the destination side is `sauce intent fill`'s.
     expect(run.stderr).toBe(
-      "This rehearses publishing on ethereum only. What the intent does runs on base, when a " +
+      "This simulates publishing on ethereum only. What the intent does runs on base, when a " +
         "solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +
-        "endpoint, rehearses that.\n",
+        "endpoint, simulates that.\n",
     );
     expect(run.code).toBe(0);
     // Each with its gas, as the text gives it.

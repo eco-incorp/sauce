@@ -245,6 +245,17 @@ describe("sauce (no command)", () => {
     );
     expect((await sauce("--version")).stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
   });
+
+  it("prints its version for -v, -V and `version` too, and its help says so", async () => {
+    for (const spelling of ["-v", "-V", "version"]) {
+      const run = await sauce(spelling);
+      expect(run.code).toBe(0);
+      expect(run.stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
+    }
+    for (const spelling of ["-h", "--help"]) {
+      expect((await sauce(spelling)).stdout).toMatch(/--version \(-v\)/);
+    }
+  });
 });
 
 describe("a program file that is a command: a leading #! line", () => {
@@ -709,6 +720,14 @@ describe("sauce compile", () => {
     const pot = (await sized("--account", "pot=pot", "--args", "5")).cook!;
     expect(pot.assumed).toEqual(["tokenProgram", "source", "dest"]);
     expect(pot.size).toBeLessThan(distinct.size);
+    // `system` is the System Program, and no holder of a token account.
+    const holder = await sauce(
+      ...["compile", program, "--chain", "solana", "--json", "--account", "dest=system:USDC"],
+    );
+    expect(holder.code).toBe(2);
+    expect(holder.stderr).toContain(
+      "--account dest=system:USDC: system is the System Program, which holds no token account",
+    );
     // Past the limit: said on stderr, and that `run` stages it.
     const large = file(
       "large.sauce.ts",
@@ -1663,7 +1682,7 @@ describe("sauce intent fill, offline", () => {
       ...NOWHERE,
     );
     expect(run.code).toBe(2);
-    expect(run.stderr).toMatch(/rehearses intents an EVM chain opens, and solana is not one/);
+    expect(run.stderr).toMatch(/simulates intents an EVM chain opens, and solana is not one/);
   });
 });
 

@@ -11,4 +11,6 @@ export declare function solanaRpcStub(options?: {
   slot?: bigint;
   refuseScans?: string[];
   rateLimitScans?: number;
+  /** What a scan of each program finds, whatever its filters. */
+  scans?: Record<string, ReadonlyArray<{ pubkey: string; data: Uint8Array }>>;
 }): Promise<SolanaRpcStub>;

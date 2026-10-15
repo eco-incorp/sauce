@@ -49,6 +49,11 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["no-prove"], input: "prove: false" },
   { flags: ["max-execution-fee"], input: "maxExecutionFee" },
   { flags: ["lookup-table"], input: "lookupTables" },
+  { flags: ["cursor"], input: "cursor" },
+  { flags: ["signature"], input: "signatures" },
+  { flags: ["close"], input: "close: true" },
+  { flags: ["keep-tables"], input: "keepTables" },
+  { flags: ["keep"], input: "keep" },
   { flags: ["via"], input: "via" },
   { flags: ["compact-args"], input: "compactArgs" },
   { flags: ["define", "defines"], input: "defines", lowLevel: true },
@@ -114,7 +119,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/`?sauce run`?(?= would)/g, "a signed run"],
   [
     command("sauce run"),
-    "a signed run (outside this server: sign and send sauce_tx's transaction)",
+    "a signed run (sign sauce_tx's transactions with any signer, then sauce_send them)",
   ],
   // fill's: --rpc-url is one destination's endpoint; the call's rpcUrls names each.
   [/so give --config, which names each destination's/g, "so give rpcUrls, which names each one"],

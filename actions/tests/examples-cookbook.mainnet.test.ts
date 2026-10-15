@@ -151,7 +151,7 @@ async function run(
 /** Simulates, then runs: `main`'s return as the rehearsal decoded it, from the state it ran on. */
 async function cook(chain: Chain, name: string, args: readonly string[]): Promise<unknown> {
   const rehearsal = await simulate(chain, name, args);
-  assert.equal(rehearsal.ok, true, `the rehearsal reverts: ${rehearsal.reason}`);
+  assert.equal(rehearsal.ok, true, `the simulation reverts: ${rehearsal.reason}`);
   await run(chain, name, args);
 
   return rehearsal.returned;
@@ -656,7 +656,7 @@ describe(
         // The rehearsal ran a block before the cook, so the two differ by that block's interest;
         // each is at the target.
         assert.equal(BigInt(guarded.before!), before.healthFactor);
-        assert.ok(BigInt(guarded.after!) >= TARGET, `rehearsed only to ${guarded.after}`);
+        assert.ok(BigInt(guarded.after!) >= TARGET, `simulated only to ${guarded.after}`);
         assert.ok(after.healthFactor >= TARGET, `restored only to ${after.healthFactor}`);
         assert.ok(after.healthFactor < TARGET + 10n ** 15n, `overshot to ${after.healthFactor}`);
         // What the cook repaid: the rehearsal's amount, and the interest of the block between.

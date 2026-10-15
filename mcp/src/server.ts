@@ -1,6 +1,7 @@
 /**
- * The Sauce MCP server: the `sauce` command's read-only tools, the agent skills as resources, and
- * two task prompts — and, over stdio with `--wallets`, the wallet tools. One server per connection
+ * The Sauce MCP server: the `sauce` command's read-only tools, `sauce_send` for what the caller
+ * signed, the agent skills as resources, and two task prompts — and, over stdio with `--wallets`,
+ * the wallet tools. One server per connection
  * — over stdio, one for the process; over Streamable HTTP, one per request, stateless, and never
  * with wallets.
  */
@@ -13,6 +14,7 @@ import type { RpcGuard } from "./guard.js";
 import { CHAIN_SUPPORT_NEW_ISSUE_URL, supportedChainNames } from "./sdk.js";
 import { registerPrompts } from "./prompts.js";
 import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.js";
+import { registerSendTools } from "./send.js";
 import { registerSkillTools } from "./skilltools.js";
 import { COMMAND_TOOLS, flagInputLines } from "./terms.js";
 import { registerIntentTools } from "./intents.js";
@@ -66,14 +68,19 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext, loca
     "   a swap's price limits (with pool, from the pool now). The distributed swap's maxPrice",
     "   and maxAvgPrice are input paid per output bought: sauce_pools' sides[].maxPrice, or",
     "   sauce_price's buy.maxPrice. minAvgPrice runs the other way round and is never a",
-    "   maxAvgPrice. Rehearse at the block sauce_pools read.",
+    "   maxAvgPrice. Simulate at the block sauce_pools read.",
     "4. sauce_pot for the owner's Pot: its address, whether it exists, the Kitchen's fee and what",
     "   the Pot holds. A Pot with no code yet needs no step of its own: sauce_tx plans its",
-    "   deployment first, and sauce_simulate rehearses it.",
-    "5. sauce_simulate: the cook rehearsed (any owner will do; nothing is signed).",
-    "6. sauce_tx for the unsigned cook, for the owner to sign. An intent fixed when it is built",
-    "   publishes from a wallet instead: sauce_intent_publish, and sauce_intent_fill with dryRun",
-    "   rehearses a solver filling it on its destination.",
+    "   deployment first, and sauce_simulate runs it before the cook.",
+    "5. sauce_simulate: the cook simulated (any owner will do; nothing is signed).",
+    "6. sauce_tx for the unsigned cook, for the owner to sign; sauce_send broadcasts it signed.",
+    "   A Solana cook of several transactions (a program staged in a code buffer, a lookup",
+    "   table) comes as a plan: sign each step's transactions and send them with its cursor;",
+    "   sauce_send returns the next step, until it is done. sauce_reclaim closes the code",
+    "   buffers and lookup tables a plan left open, returning their rent; it leaves open what",
+    "   is in use, and the plans whose cursors it is given to keep.",
+    "   An intent fixed when it is built publishes from a wallet instead: sauce_intent_publish,",
+    "   and sauce_intent_fill with dryRun simulates a solver filling it on its destination.",
     "",
     "FROM THE sauce COMMAND TO THE TOOLS. A skill or a note may name a command line:",
     ...COMMAND_TOOLS,
@@ -89,19 +96,21 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext, loca
     "",
     ...(wallets === undefined
       ? [
-          "NOTHING HERE SIGNS OR SENDS. Every transaction comes back unsigned, for the user to sign",
-          "with their own wallet; never ask anyone for a private key or a seed phrase.",
+          "NOTHING HERE SIGNS. Every transaction comes back unsigned, for the user to sign with",
+          "their own wallet or signer (a KMS, a hardware wallet, another wallet's tool); sauce_send",
+          "takes the signed transactions, broadcasts them, waits for each to land and reports what",
+          "it did. Never ask anyone for a private key or a seed phrase: no tool takes one.",
         ]
       : [
           "THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY, unlocked by the password",
           `source it was started with (${wallets.source}). sauce_wallet_list names them;`,
           "sauce_wallet_create makes one (evm, or solana) and returns its address, never its key.",
-          "Build a transaction for the wallet's address (owner, or from), rehearse it",
+          "Build a transaction for the wallet's address (owner, or from), simulate it",
           "(sauce_simulate), then pass the building tool's whole result to sauce_wallet_send, which",
-          "rehearses it again, holds it to the wallet's policy, signs and sends it. Every other",
-          "transaction still comes back unsigned. These are hot wallets: keep small balances in",
-          "them. Never ask anyone for a private key, a seed phrase or the password: no tool takes",
-          "or returns one.",
+          "simulates it again, holds it to the wallet's policy, signs and sends it. Every other",
+          "transaction still comes back unsigned: signed by any other signer, sauce_send sends it.",
+          "These are hot wallets: keep small balances in them. Never ask anyone for a private key,",
+          "a seed phrase or the password: no tool takes or returns one.",
         ]),
     "",
     `CHAINS. This release builds transactions only on ${supportedChainNames()}. Every other`,
@@ -174,6 +183,7 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
   };
   registerTools(server, tools);
   registerIntentTools(server, tools);
+  registerSendTools(server, tools);
   if (options.wallets !== undefined)
     registerWalletTools(server, { ...tools, wallets: options.wallets });
   registerSkillTools(server, options.skillsDir, options.newerVersion);
