@@ -31,7 +31,10 @@ import {
   type Address as SvmAddress,
 } from "@solana/kit";
 import {
+  BaseError,
   bytesToHex,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
   encodeAbiParameters,
   getAddress,
   getCreate2Address,
@@ -187,8 +190,8 @@ const base = (chain: CanonicalChain, origin: PotRecord["origin"]) => ({
   origin,
 });
 
-/** An EVM Pot's record, its release told from its address (`readHash` reads the Kitchen's own
- *  hash when no known release minted it). */
+/** An EVM Pot's record, its release told from its address; `unknown` reads, from the chain, the
+ *  init-code hash and kind of one no known release minted. */
 async function evmRecord(input: {
   readonly chain: CanonicalChain;
   readonly kitchen: Address;
@@ -197,14 +200,15 @@ async function evmRecord(input: {
   readonly pot: Address;
   readonly origin: PotRecord["origin"];
   readonly deployment?: PotRecord["deployment"];
-  readonly readHash: () => Promise<Hex | undefined>;
-  readonly readKind: (hash: Hex) => Promise<PotKind | undefined>;
+  readonly unknown?: () => Promise<{ readonly hash?: Hex; readonly kind?: PotKind }>;
 }): Promise<PotRecord> {
   const known = evmPotRelease(input);
+  const read = known === undefined ? await input.unknown?.() : undefined;
   const set = known?.family.sets[0];
-  const hash = known?.family.potInitCodeHash ?? (await input.readHash());
+  const hash = known?.family.potInitCodeHash ?? read?.hash;
+  // Told by neither: a Pot with no owner is a Shared one, and any other its owner's.
   const kind =
-    known?.kind ?? (hash === undefined ? undefined : await input.readKind(hash)) ?? "private";
+    known?.kind ?? read?.kind ?? kindOf(getAddress(input.owner), input.owner === zeroAddress);
   const engine = set?.["v12-evm"].engine;
 
   return {
@@ -223,12 +227,52 @@ async function evmRecord(input: {
   };
 }
 
-/** The kind of the Pot at `pot` of Kitchen `kitchen` minted under `hash`: whichever CREATE2 lands
- *  on it. */
-const kindUnder = (kitchen: Address, owner: Address, salt: Hex, pot: Address, hash: Hex) =>
-  candidates({ kitchen, potInitCodeHash: hash }, owner, salt).find(
-    (one) => one.pot === getAddress(pot),
-  )?.kind;
+/**
+ * The init-code hash and kind of `pot`, which Kitchen `kitchen` minted at `blockNumber` for
+ * (`owner`, `salt`) under a hash no known release records: the hash the Kitchen reported then, and
+ * the kind its CREATE2 or, failing that, the Pot's own `gateSalt()` gives. What cannot be read is
+ * left out.
+ */
+async function unknownRelease(
+  client: PublicClient,
+  at: {
+    readonly kitchen: Address;
+    readonly owner: Address;
+    readonly salt: Hex;
+    readonly pot: Address;
+  },
+  blockNumber: bigint,
+): Promise<{ readonly hash?: Hex; readonly kind?: PotKind }> {
+  const hash = await client
+    .readContract({
+      address: at.kitchen,
+      abi: v12KitchenAbi,
+      functionName: "potInitCodeHash",
+      blockNumber,
+    })
+    .then(
+      (read) => read.toLowerCase() as Hex,
+      () => undefined,
+    );
+  const under =
+    hash === undefined
+      ? undefined
+      : candidates({ kitchen: at.kitchen, potInitCodeHash: hash }, at.owner, at.salt).find(
+          (one) => one.pot === at.pot,
+        )?.kind;
+  if (under !== undefined) return { hash, kind: under };
+  const gate = await client
+    .readContract({ address: at.pot, abi: v12PotAbi, functionName: "gateSalt", blockNumber })
+    .catch(() => undefined);
+  const fixed = [false, true].find(
+    (routerFixed) => gateSalt(at.owner, at.salt, routerFixed) === gate,
+  );
+
+  return {
+    ...(hash === undefined ? {} : { hash }),
+    ...(fixed === undefined ? {} : { kind: kindOf(at.owner, fixed) }),
+  };
+}
 
 // ---------------------------------------------------------------------------------------------
 // What a landed transaction deployed
@@ -285,20 +329,8 @@ export async function evmPotsDeployed(
         pot,
         origin: "deployed",
         deployment: { tx: sent.hash, block: sent.blockNumber.toString(), from: getAddress(from) },
-        // A Kitchen upgraded past the releases the SDK knows: its own hash, as it was then.
-        readHash: () =>
-          client
-            .readContract({
-              address: kitchen,
-              abi: v12KitchenAbi,
-              functionName: "potInitCodeHash",
-              blockNumber: sent.blockNumber,
-            })
-            .then(
-              (hash) => hash.toLowerCase() as Hex,
-              () => undefined,
-            ),
-        readKind: async (hash) => kindUnder(kitchen, owner, salt, pot, hash),
+        // A Kitchen upgraded past the releases the SDK knows: as the chain says it was then.
+        unknown: () => unknownRelease(client, { kitchen, owner, salt, pot }, sent.blockNumber),
       });
     }),
   );
@@ -488,8 +520,23 @@ export async function importEvmPot(
     client
       .readContract({ address: pot, abi: v12PotAbi, functionName })
       .then((value) => value as T)
-      .catch(() => {
-        throw new Error(`${pot} on ${chain.slug} is not a Pot: it has no ${functionName}()`);
+      .catch((error: unknown) => {
+        // A contract with no such function answers nothing or reverts; any other failure is the
+        // endpoint's, and says so.
+        const answered =
+          error instanceof BaseError &&
+          error.walk(
+            (cause) =>
+              cause instanceof ContractFunctionZeroDataError ||
+              cause instanceof ContractFunctionRevertedError,
+          ) !== null;
+        throw new Error(
+          answered
+            ? `${pot} on ${chain.slug} is not a Pot: it has no ${functionName}()`
+            : `reading ${pot}'s ${functionName}() on ${chain.slug} failed: ` +
+                ((error as { shortMessage?: string }).shortMessage ?? "the request failed"),
+          { cause: error },
+        );
       });
   const [owner, salt, kitchen] = await Promise.all([
     read<Address>("owner"),
@@ -511,8 +558,6 @@ export async function importEvmPot(
     salt,
     pot,
     origin: "imported",
-    readHash: async () => undefined,
-    readKind: async () => undefined,
   });
 }
 

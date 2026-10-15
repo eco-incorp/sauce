@@ -88,14 +88,16 @@ const potDeployed = (kitchen: Address, owner: Address, salt: Hex, pot: Address) 
   data: pad(pot),
 });
 
-/** A client that serves the chain id, and `potInitCodeHash()` as `hash` when asked. */
-const clientOf = (chainId: number, hash?: Hex) =>
+/** A client that serves the chain id, and the Kitchen's `potInitCodeHash()` and a Pot's
+ *  `gateSalt()` where given. */
+const clientOf = (chainId: number, reads: { hash?: Hex; gate?: Hex } = {}) =>
   ({
     getChainId: async () => chainId,
     readContract: async ({ functionName }: { functionName: string }) => {
-      if (functionName !== "potInitCodeHash" || hash === undefined) throw new Error("no such read");
+      const answer = { potInitCodeHash: reads.hash, gateSalt: reads.gate }[functionName];
+      if (answer === undefined) throw new Error("no such read");
 
-      return hash;
+      return answer;
     },
   }) as unknown as PublicClient;
 
@@ -187,7 +189,7 @@ describe("the Pots a landed EVM transaction deployed", () => {
     const hash = `0x${"56".repeat(32)}` as Hex;
     const newer = potOf(KITCHEN, hash, OWNER, SALT, true);
     const [record] = await evmPotsDeployed(
-      clientOf(BASE.id, hash),
+      clientOf(BASE.id, { hash }),
       landed([potDeployed(KITCHEN, OWNER, SALT, newer)]),
       SENDER,
     );
@@ -198,6 +200,14 @@ describe("the Pots a landed EVM transaction deployed", () => {
     });
     expect(record!.release).toBeUndefined();
     expect(record!.engine).toBeUndefined();
+    // The Kitchen's hash unread: the kind from the Pot's own gate salt, and no hash recorded.
+    const [unread] = await evmPotsDeployed(
+      clientOf(BASE.id, { gate: gateSalt(OWNER, SALT, true) }),
+      landed([potDeployed(KITCHEN, OWNER, SALT, newer)]),
+      SENDER,
+    );
+    expect(unread).toMatchObject({ pot: newer, kind: "private-fixed-router" });
+    expect(unread!.potInitCodeHash).toBeUndefined();
   });
 });
 
