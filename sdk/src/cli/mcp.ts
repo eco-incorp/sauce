@@ -88,6 +88,12 @@ export interface McpStores {
   /** The Pot store (`pot-store.ts`): every Pot a tool's transaction deploys is recorded there, and
    *  `sauce_pot_list` and `sauce_pot_import` read and write it. */
   readonly pots?: string;
+  /**
+   * The stores whose directory the operator named (`--pots`). A start says where it keeps those,
+   * and nothing of a store kept by default: a client logs every line a start writes, and the
+   * server's instructions say where it keeps them.
+   */
+  readonly named?: ReadonlyArray<"pots">;
 }
 
 /** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
@@ -350,5 +356,7 @@ function storesOf(
   }
   const dir = pots ?? io.potsDir;
 
-  return dir === undefined ? undefined : { pots: dir };
+  return dir === undefined
+    ? undefined
+    : { pots: dir, ...(pots === undefined ? {} : { named: ["pots"] as const }) };
 }
