@@ -136,6 +136,9 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
     /no endpoint given: --config with both chains' endpoints shows where it stands/g,
     "no endpoint reached its chains: rpcUrls with both chains' endpoints shows where it stands",
   ],
+  // A wallet's commands are its tools; `wallet new` is sauce_wallet_create.
+  [/`?sauce wallet new(?: [a-z0-9][a-z0-9_-]*)?`?/g, "sauce_wallet_create"],
+  [/`?sauce wallet (list|address|import)`?/g, "sauce_wallet_$1"],
   // The lifecycle core's refusal for a chain it has no endpoint of: the call can give one.
   [
     /needs ([\w-]+)'s endpoint \(chain id (\d+)\)/g,

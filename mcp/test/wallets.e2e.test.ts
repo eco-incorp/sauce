@@ -11,7 +11,7 @@
  * without it in CI (the harness throws on import there).
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -31,9 +31,10 @@ import {
   type Blockhash,
 } from "@solana/kit";
 import { getAddress, parseEther, type Address, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
+import { PotStore } from "../../sdk/dist/cli/pot-store.js";
 import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
-import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import {
@@ -45,7 +46,7 @@ import {
 } from "../../sdk/test/cli-anvil.js";
 import { ecoRoutesSvm } from "../../sdk/test/svm/eco-routes-svm.js";
 import { solanaShim, type SolanaShim } from "../../sdk/test/svm/rpc-shim.js";
-import { connect, endpointsFor, failed, ok, type Connected } from "./harness.js";
+import { connect, endpointsFor, failed, ok, type Connected, walletsAt } from "./harness.js";
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const PAY = [
@@ -71,11 +72,14 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-e2e-"));
-    mcp = await connect(endpointsFor({ [String(base.chain.id)]: base.rpcUrl }), undefined, {
-      store: new WalletStore(join(dir, "wallets")),
-      password: PASSWORD,
-      source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
-    });
+    // As `sauce mcp` serves over stdio: the wallets, and the command's Pot store beside them.
+    mcp = await connect(
+      endpointsFor({ [String(base.chain.id)]: base.rpcUrl }),
+      undefined,
+      walletsAt(join(dir, "wallets"), { start: PASSWORD }),
+      false,
+      { pots: new PotStore(join(dir, "pots")) },
+    );
   });
   after(async () => {
     await mcp?.close();
@@ -137,6 +141,17 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     assert.deepEqual(
       pots?.map((one) => [one.pot, one.owner, one.chain, one.origin]),
       [[pot, wallet, "base", "deployed"]],
+    );
+    // And, the server keeping the command's Pot store, recorded there as the command records it.
+    assert.ok(
+      ((sent as { notes?: string[] }).notes ?? []).includes(
+        `recorded Pot ${pot} on base in ${join(dir, "pots")}`,
+      ),
+      JSON.stringify((sent as { notes?: string[] }).notes),
+    );
+    assert.deepEqual(
+      new PotStore(join(dir, "pots")).list().pots.map((one) => [one.pot, one.owner, one.chain]),
+      [[pot, wallet, "base"]],
     );
     assert.ok(
       ((sent as { notes?: string[] }).notes ?? []).some((note) => /no limits are set/.test(note)),
@@ -284,6 +299,80 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     assert.equal(await base.balanceOf(usdc, plannerPot), 500_000n);
   });
 
+  it("sends from wallets the agent enabled, from each source it can name", async () => {
+    const agentDir = join(dir, "agent");
+    mkdirSync(agentDir);
+    const passwords = {
+      env: `throwaway-env-${process.pid}-${Date.now()}`,
+      file: `throwaway-file-${process.pid}-${Date.now()}`,
+      dotenv: `throwaway-dotenv-${process.pid}-${Date.now()}`,
+    };
+    const file = join(agentDir, "password");
+    writeFileSync(file, `${passwords.file}\n`, { mode: 0o600 });
+    const dotenv = join(agentDir, ".env");
+    writeFileSync(dotenv, `SAUCE_WALLET_PASSWORD=${passwords.dotenv}\n`, { mode: 0o600 });
+    const rawKey = generatePrivateKey();
+    const keyFile = join(agentDir, "key.hex");
+    writeFileSync(keyFile, `${rawKey}\n`, { mode: 0o600 });
+    const agent = await connect(
+      endpointsFor({ [String(base.chain.id)]: base.rpcUrl }),
+      undefined,
+      walletsAt(join(agentDir, "wallets"), { env: { SAUCE_TEST_AGENT: passwords.env } }),
+    );
+    /** Funds `name`'s address and sends its Pot's deployment from it, as sauce_pot builds it. */
+    const deployFrom = async (name: string, address: string) => {
+      await base.send(base.deployer, getAddress(address), "0x", parseEther("1"));
+      const deployment = ok(await agent.call("sauce_pot", { chain: "base", owner: address }));
+      const sent = ok(
+        await agent.call("sauce_wallet_send", { wallet: name, transaction: deployment }),
+      ) as { ok: boolean; sent: Array<{ status: string }> };
+      assert.equal(sent.ok, true, name);
+      assert.notEqual(
+        await base.publicClient.getCode({ address: getAddress(String(deployment.pot)) }),
+        undefined,
+      );
+    };
+    try {
+      ok(await agent.call("sauce_wallet_enable", { env: "SAUCE_TEST_AGENT" }));
+      const byEnv = ok(await agent.call("sauce_wallet_create", { name: "by-env" }));
+      await deployFrom("by-env", String(byEnv.address));
+
+      ok(await agent.call("sauce_wallet_enable", { file }));
+      const byFile = ok(await agent.call("sauce_wallet_create", { name: "by-file" }));
+      await deployFrom("by-file", String(byFile.address));
+      // The source before is gone: its wallet no longer opens.
+      assert.match(
+        failed(
+          await agent.call("sauce_wallet_send", {
+            wallet: "by-env",
+            transaction: { chainId: base.chain.id, to: RECIPIENT, data: "0x", value: "0" },
+          }),
+        ),
+        /the keystore password is wrong/,
+      );
+
+      ok(await agent.call("sauce_wallet_enable", { dotenv }));
+      const imported = ok(
+        await agent.call("sauce_wallet_import", { name: "imported", path: keyFile }),
+      );
+      assert.equal(imported.address, privateKeyToAccount(rawKey).address);
+      await deployFrom("imported", String(imported.address));
+
+      const generated = ok(await agent.call("sauce_wallet_enable", { generate: true }));
+      const byGenerate = ok(await agent.call("sauce_wallet_create", { name: "by-generate" }));
+      await deployFrom("by-generate", String(byGenerate.address));
+      const generatedPassword = readFileSync(String(generated.passwordFile), "utf8").trim();
+      for (const text of agent.received) {
+        for (const password of [...Object.values(passwords), generatedPassword]) {
+          assert.ok(!text.includes(password));
+        }
+        assert.ok(!text.toLowerCase().includes(rawKey.slice(2, 34)));
+      }
+    } finally {
+      await agent.close();
+    }
+  });
+
   it("never returned the wallet's key or the password", () => {
     const { bytes } = decryptKeystoreBytes(
       readFileSync(join(dir, "wallets", "agent.json"), "utf8"),
@@ -342,11 +431,7 @@ describe("the wallet tools, sending on Solana", () => {
     shim = solanaShim(svm, SOLANA_URL);
     shim.install();
     dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-solana-"));
-    mcp = await connect(undefined, undefined, {
-      store: new WalletStore(join(dir, "wallets")),
-      password: PASSWORD,
-      source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
-    });
+    mcp = await connect(undefined, undefined, walletsAt(join(dir, "wallets"), { start: PASSWORD }));
   });
   after(async () => {
     shim?.restore();

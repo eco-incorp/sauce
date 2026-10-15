@@ -5,11 +5,12 @@
  *
  * NODE-ONLY, and reached by nothing browser-facing. It reads no environment variable: it reads a
  * chain through the `--config` file's endpoint for it, else the built-in public endpoints the
- * `sauce` command hands it (`McpServeOptions.publicRpcs`). It holds no key unless it serves stdio
- * with `--wallets`, whose password the `sauce` command has already read from the source it was
- * given; then its wallet tools sign with those wallets alone. Over stdio it keeps the `sauce`
- * command's stores in the directories the command names (`McpServeOptions.stores`: the Pot store
- * and the intent store, by default); over HTTP it never signs and keeps nothing. A newer
+ * `sauce` command hands it (`McpServeOptions.publicRpcs`). Over stdio it keeps the `sauce`
+ * command's stores in the directories the command names (`McpServeOptions.stores`: the Pot store,
+ * the intent store and the wallet directory, by default), and serves the wallet tools: they sign
+ * with the wallets of that directory alone, once enabled — by the password the `sauce` command read
+ * at start from the source it was given, or by the source an agent names to `sauce_wallet_enable`,
+ * which that command reads for it. Over HTTP it never signs and keeps nothing. A newer
  * version the `sauce` command's update check has seen is noted once, in the process's first tool
  * result (`update-note.ts`).
  */
@@ -25,7 +26,6 @@ import {
   keepsAny,
   PotStore,
   UsageError,
-  WalletStore,
   type LocalStores,
   type McpEntry,
   type McpServeOptions,
@@ -80,14 +80,7 @@ async function serve(options: McpServeOptions): Promise<void> {
     }
     // Over stdio the caller is the server's own user, on the same machine: its endpoints, local
     // nodes included, are used as given. A message past the bound closes the connection.
-    const wallets =
-      options.wallets === undefined
-        ? undefined
-        : {
-            store: new WalletStore(options.wallets.dir),
-            password: options.wallets.password,
-            source: options.wallets.source,
-          };
+    const wallets = options.stores?.wallets;
     // The command's stores, kept as the command keeps them: its caller is the user of this machine.
     const stores: LocalStores = {
       ...(options.stores?.pots === undefined ? {} : { pots: new PotStore(options.stores.pots) }),
@@ -103,8 +96,15 @@ async function serve(options: McpServeOptions): Promise<void> {
       ...(keepsAny(stores) ? { stores } : {}),
       ...update,
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
-    if (wallets !== undefined) {
-      options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
+    // A bare start says nothing: only what the operator chose is said, a password source or a
+    // wallet directory named (`McpStores.named`).
+    if (wallets?.start !== undefined) {
+      options.log(`sauce mcp: signing with the wallets in ${wallets.dir}\n`);
+    } else if (wallets !== undefined && options.stores?.named?.includes("wallets") === true) {
+      options.log(
+        `sauce mcp: serving the wallets in ${wallets.dir}; sauce_wallet_enable enables them ` +
+          "to sign\n",
+      );
     }
     // A store kept by default is not logged: a start says nothing it was not asked to (a client
     // logs every line), and the instructions say where the server keeps it. One whose directory
@@ -121,7 +121,7 @@ async function serve(options: McpServeOptions): Promise<void> {
     return;
   }
   // The HTTP server never signs, and keeps nothing: it is given neither wallets nor stores.
-  if (options.wallets !== undefined) {
+  if (options.stores?.wallets !== undefined) {
     throw new UsageError("--wallets is for stdio: the HTTP server never signs");
   }
   if (options.stores !== undefined) {

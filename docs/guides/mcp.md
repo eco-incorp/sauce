@@ -8,7 +8,8 @@ as tools and resources. The server compiles programs and action documents and li
 names. It builds unsigned transactions: the cook, the Pot's deployment, an intent's publish
 transactions and each step of its life after. It simulates a cook, takes calls apart, and
 broadcasts what the user signed with any signer (`sauce_send`), so the whole path from a program to
-a landed transaction runs through it with the key held elsewhere.
+a landed transaction runs through it with the key held elsewhere. Run on the agent's machine, it
+also keeps [wallets of its own](#agent-wallets), the `sauce` command's, and sends from them.
 
 ## Quick start
 
@@ -139,21 +140,22 @@ For the initial release the server builds transactions only on **Ethereum**, **B
 compile and simulate any protocol on it, and the tools that would return a transaction
 there return `refused` instead, with how to request the chain.
 
-**The local stdio server signs only with wallets in its wallet directory, unlocked by the password
-source it was started with; the HTTP server never signs.** Neither ever asks for a key or a
-password. Without [agent wallets](#agent-wallets), every transaction comes back unsigned, for a
-signer the user holds: a wallet, a hardware wallet, a KMS, another wallet's MCP server. That lets
-the server run anywhere: on the agent's machine over stdio, or on a host of your own over
-Streamable HTTP. What that signer signs comes back to `sauce_send`, which broadcasts it, waits for
-it to land and reports what it did ([Signing what it builds](#signing-what-it-builds)).
+**The local stdio server signs only with the wallets in its wallet directory, once they are enabled
+by a password source; the HTTP server never signs.** Neither ever asks for a key or a password.
+Without [agent wallets](#agent-wallets), every transaction comes back unsigned, for a signer the
+user holds: a wallet, a hardware wallet, a KMS, another wallet's MCP server. That lets the server
+run anywhere: on the agent's machine over stdio, or on a host of your own over Streamable HTTP.
+What that signer signs comes back to `sauce_send`, which broadcasts it, waits for it to land and
+reports what it did ([Signing what it builds](#signing-what-it-builds)).
 
 ## The command
 
 ```sh
-sauce mcp                                                  # stdio: what an agent launches
-sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
-sauce mcp --no-stores                                      # stdio, keeping nothing on disk
-sauce mcp --http 3000                                      # self-hosted, Streamable HTTP
+sauce mcp                                       # stdio: what an agent launches, with its wallets
+sauce mcp --password-env SAUCE_WALLET_PASSWORD  # stdio, its wallets enabled from the start
+sauce mcp --no-wallets                          # stdio, with no wallet: nothing signs
+sauce mcp --no-stores                           # stdio, keeping nothing on disk: no wallet, no Pot store
+sauce mcp --http 3000                           # self-hosted, Streamable HTTP
 ```
 
 `sauce mcp --help` lists every flag. The server is loaded only when `sauce mcp` runs, so no other
@@ -319,9 +321,12 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_send`           | `sauce send`           | Signed transactions (EVM raw `0x…` hex, Solana base64) simulated as signed, broadcast in order and confirmed: `ok`, and in `sent` each one's `hash` (a Solana signature), `status`, `explorer` and `trace`, fee or gas, the decoded `reason`, and for a cook what moved, `leftInPot` and on Solana `returns`; `pots`, the record of each Pot a transaction deployed, for you to keep; with a plan's `cursor`, `next`, its next step built fresh     |
 | `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                                                                                                                                                              |
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                                                                                                                                                               |
-| `sauce_wallet_create`  | `sauce wallet new`     | Over stdio with `--wallets` only: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                                                                                                                                                             |
-| `sauce_wallet_list`    | `sauce wallet list`    | Over stdio with `--wallets` only: each wallet's name, kind, address and policy                                                                                                                                                                                                                                                                                                                                                                      |
-| `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list; a Solana plan sent step by step) simulated, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, for a cook `moves`, `leftInPot` and `summary`, and `pots`, the record of each Pot a transaction deployed; or the refusal                                                                                       |
+| `sauce_wallet_enable`  | —                      | Over stdio: the wallets enabled for the server's life by the password source it names (`env`, `file`, `dotenv` and `variable`, or `generate`), never the password: `dir`, `source`, the `wallets` there, and with `generate` the new `passwordFile`                                                                                                                                                                                                 |
+| `sauce_wallet_create`  | `sauce wallet new`     | Over stdio, once the wallets are enabled: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                                                                                                                                                     |
+| `sauce_wallet_import`  | `sauce wallet import`  | Over stdio, once the wallets are enabled: the key in a file given by its `path` (a keystore, a Solana keypair file or a hex key), as a new wallet: its `name`, `kind`, `address` and `policy`, never its key                                                                                                                                                                                                                                        |
+| `sauce_wallet_list`    | `sauce wallet list`    | Over stdio, with no password: the wallet `dir`, whether the wallets are `enabled` and by which `source`, and each wallet's name, kind, address and policy                                                                                                                                                                                                                                                                                           |
+| `sauce_wallet_address` | `sauce wallet address` | Over stdio, with no password: one wallet's `name`, `kind`, `address` and `policy`                                                                                                                                                                                                                                                                                                                                                                   |
+| `sauce_wallet_send`    | —                      | Over stdio, once the wallets are enabled: another tool's result (or a transaction, or a list; a Solana plan sent step by step) simulated, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, for a cook `moves`, `leftInPot` and `summary`, and `pots`, the record of each Pot a transaction deployed; or the refusal                                                                               |
 | `sauce_pot_list`       | `sauce pot list`       | Over stdio, where the server keeps the Pot store: each recorded Pot's chain, address, owner, salt, kind, Kitchen, `release` and `engine`, and the `deployment` that made it                                                                                                                                                                                                                                                                         |
 | `sauce_pot_import`     | `sauce pot import`     | Over stdio, where the server keeps the Pot store: the Pot `pot` names (EVM), or an `owner`'s at its salt, read from the chain and recorded; the records, as `sauce_pot_list` gives them                                                                                                                                                                                                                                                             |
 
@@ -607,8 +612,8 @@ tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line a
 
 ### Signing what it builds
 
-The server's transactions are for the user's own signer, or, on a server started with
-`--wallets`, for [`sauce_wallet_send`](#agent-wallets). On an EVM chain, `sauce_tx` returns what
+The server's transactions are for the user's own signer, or, over stdio, for
+[`sauce_wallet_send`](#agent-wallets). On an EVM chain, `sauce_tx` returns what
 any wallet signs. Sign it as the Pot's owner, since `cook()` is the owner's alone.
 
 The signer hands back signed bytes, and `sauce_send` sends them. A session with a hardware wallet
@@ -717,16 +722,47 @@ open (`kept`) however long their cooks wait.
 
 ## Agent wallets
 
-Over stdio, the server can send what it builds, from wallets of its own. Start it with the wallet
-directory, `--wallets [<dir>]` (`~/.sauce/wallets` when no directory is given), and the source of
-their password, as [`sauce wallet`](cli.md#agent-wallets) takes one: `--password-env <NAME>`,
-`--password-file <path>` or `--password-command "<command>"`. There is no prompt: over stdio,
-stdin is the protocol's. The server reads the password once, before it serves anything, so a
-source that does not work stops it at start. The password is never a tool's input and never in a
-result, so it stays out of the model's context.
+Over stdio, the server sends what it builds from wallets of its own: the `sauce` command's,
+[`sauce wallet`](cli.md#agent-wallets)'s, in `~/.sauce/wallets`. The one-line install serves them,
+with nothing more to configure. `--wallets <dir>` serves another directory, and `--no-wallets`
+serves none: then nothing signs, and the wallet tools are not there. The wallet directory is one
+of the command's stores the local server keeps, so `--no-stores` leaves it out too.
 
-The agent's password lives in its `.env` or its secret store, and the client's configuration passes
-it to the server in the entry's `env` block, by reference, never by value:
+Listing the wallets needs no password: each wallet's file names its address in the clear. Creating
+a wallet, importing one and sending from one need the wallets **enabled** by the source of their
+password. The password itself is never a tool's input and never in a result, so it stays out of
+the model's context. A source enables them in one of two ways.
+
+**The agent enables them**, with `sauce_wallet_enable`, once per server. It names where the
+password comes from, never the password, in one of four ways:
+
+| Input                                                   | The password                                                                                                                                |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ env: "SAUCE_WALLET_PASSWORD" }`                      | A variable of the server's environment, which the client's configuration passes (below)                                                     |
+| `{ file: "~/.sauce/agent.password" }`                   | A file only its owner can read (`chmod 600`), its first line                                                                                |
+| `{ dotenv: ".env", variable: "SAUCE_WALLET_PASSWORD" }` | One entry of a `.env` file only its owner can read; `variable` is `SAUCE_WALLET_PASSWORD` when left out                                     |
+| `{ generate: true }`                                    | A new random password the server writes to a new file beside the wallet directory, `~/.sauce/wallets.password`, readable by its owner alone |
+
+A file it names must be a regular file that no one else can read or write: one that others can is
+refused, with the `chmod 600` that fixes it. `generate` takes a path for the new file instead of
+`true`, in a directory that exists and outside the wallet directory; it never writes over a file,
+and says so when the path is inside a git work tree. A generated password sits in that file in the
+clear, so whoever can read it and a wallet's file holds that wallet's key: keep it out of
+repositories, backups and synced folders. After a restart, `{ file: "<that path>" }` enables the
+same wallets again. A shell command is never a source the agent names: that is the operator's
+alone, below.
+
+The password stays in the server's memory, never on disk, for the life of the process. Calling
+`sauce_wallet_enable` again replaces the source, so a wrong first choice needs no restart. `dir`
+names another wallet directory, unless the server was started with one.
+
+**The operator enables them** when the server starts, with the source of their password, as
+`sauce wallet` takes one: `--password-env <NAME>`, `--password-file <path>` or
+`--password-command "<command>"`. There is no prompt: over stdio, stdin is the protocol's. The
+server reads the password once, before it serves anything, so a source that does not work stops
+it at start. That source is the operator's: `sauce_wallet_enable` does not replace it. The
+agent's password lives in its `.env` or its secret store, and the client's configuration passes it
+to the server in the entry's `env` block, by reference, never by value:
 
 ```json
 {
@@ -734,7 +770,7 @@ it to the server in the entry's `env` block, by reference, never by value:
     "sauce": {
       "type": "stdio",
       "command": "sauce",
-      "args": ["mcp", "--wallets", "--password-env", "SAUCE_WALLET_PASSWORD"],
+      "args": ["mcp", "--password-env", "SAUCE_WALLET_PASSWORD"],
       "env": { "SAUCE_WALLET_PASSWORD": "${SAUCE_WALLET_PASSWORD}" }
     }
   }
@@ -743,15 +779,24 @@ it to the server in the entry's `env` block, by reference, never by value:
 
 Each client fills that reference its own way: Claude Code expands `${SAUCE_WALLET_PASSWORD}` from
 the environment it runs in, and VS Code also reads an `envFile` (the project's `.env`). Keep the
-`.env` out of git.
+`.env` out of git. The same `env` block, without the flag, gives the agent a variable to name to
+`sauce_wallet_enable`.
 
 The wallet tools, besides every other tool:
 
+- `sauce_wallet_enable` enables them, as above.
+- `sauce_wallet_list` returns the wallet directory, whether the wallets are `enabled` and by which
+  `source`, and each wallet with its kind, address and policy. `sauce_wallet_address` `{ name }`
+  returns one. Neither needs a password.
 - `sauce_wallet_create` `{ name, kind }` makes a wallet (`kind` `evm`, the default, or `solana`),
-  encrypted under the server's password (8 characters at least, as for `sauce wallet new`), and
+  encrypted under the wallets' password (8 characters at least, as for `sauce wallet new`), and
   returns its address. Its key never leaves the wallet's file except to sign, in the server's
   process.
-- `sauce_wallet_list` names each wallet with its kind, address and policy.
+- `sauce_wallet_import` `{ name, path, kind }` makes a wallet of the key in a file on the
+  machine, as `sauce wallet import` does: a keystore (geth's, `cast`'s or another Sauce
+  wallet's, which must open with the wallets' password and keeps it), a Solana keypair file, or an
+  EVM private key in hex. The tool sees only the path. The file must be one only its owner can
+  read, and is left as it is.
 - `sauce_wallet_send` `{ wallet, transaction, chain?, rpcUrl? }` sends. `transaction` is the
   whole result of `sauce_tx`, `sauce_pot`, `sauce_actions` (with an owner), `sauce_intent_publish`
   or any `sauce_intent_*` step, or a transaction, or a list of them. It simulates them first: on an
@@ -765,15 +810,18 @@ The wallet tools, besides every other tool:
   For a cook on an EVM chain it adds what its receipt shows: `moves`, in order and by role,
   `leftInPot`, and `summary`, the lines `sauce run` prints.
 
-So an agent goes: `sauce_wallet_create`, fund the address, build with the wallet's address as
-`owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), simulate with
-`sauce_simulate`, and pass the building tool's result to `sauce_wallet_send`. Each tool that builds
-a transaction says, on a server with wallets, that `sauce_wallet_send` sends it. There is no export
-tool: `sauce wallet export` shows a key only at a terminal.
+Before the wallets are enabled, creating, importing and sending are refused, the refusal naming
+`sauce_wallet_enable` and its four sources. So an agent goes: `sauce_wallet_enable` (asking the
+user where the password should come from), `sauce_wallet_create`, fund the address, build with the
+wallet's address as `owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), simulate
+with `sauce_simulate`, and pass the building tool's result to `sauce_wallet_send`. Each tool that
+builds a transaction says, on a server with wallets, that `sauce_wallet_send` sends it. There is no
+export tool: `sauce wallet export` shows a key only at a terminal.
 
 These are hot wallets: keep small balances in them, and give each a policy. Wallet sends hold to
 the [supported chains](#supported-and-preview-chains) too. Over HTTP there are no wallets:
-`--wallets` is refused, and the wallet tools are not registered.
+`--wallets` and the password flags are refused, and neither the wallet tools nor
+`sauce_wallet_enable` is registered.
 
 ## What a local server keeps
 
@@ -795,10 +843,10 @@ own events, for an intent the store holds or one a call named by its `record` or
 store holds, as the command takes a hash.
 
 `--pots <dir>` and `--store <dir>` keep the stores in other directories. `--no-stores` keeps
-nothing: then the server writes nothing, and has none of those tools and no `intentHash`. Either
-way, each transaction in a send's result carries `pots`, the record of each Pot it deployed, for
-the client to keep. Over HTTP the server keeps nothing, and `--pots`, `--store` and `--no-stores`
-are refused there.
+nothing: then the server writes nothing, has none of those tools and no `intentHash`, and serves
+no [wallet](#agent-wallets) either. Either way, each transaction in a send's result carries `pots`,
+the record of each Pot it deployed, for the client to keep. Over HTTP the server keeps nothing, and
+`--pots`, `--store` and `--no-stores` are refused there.
 
 ## Skills, documents and prompts
 
@@ -816,7 +864,7 @@ resources:
   it.
 
 When a client connects, the server's instructions tell it five things: whether the server signs
-(only with its wallets, over stdio with `--wallets`), start from `sauce_skills`, the steps from `sauce_globals` to `sauce_tx`, which chains it builds
+(only with its wallets, over stdio, once they are enabled), start from `sauce_skills`, the steps from `sauce_globals` to `sauce_tx`, which chains it builds
 transactions on and what to do with a refusal, and how `rpcUrl` works. Two prompts walk the main tasks through the
 tools, with the skill they start from embedded:
 
@@ -836,9 +884,9 @@ A GET or DELETE is refused (405).
 
 - **No environment, and no key.** The server reads no environment variable. Its RPC endpoints are
   the `--config` file's, and the built-in public ones for a chain the file does not name; it holds
-  no key: nothing it builds is signed. `--wallets` is
-  refused over HTTP, and the wallet tools are not registered there. It keeps nothing on disk
-  either: it has no Pot store and no intent store, none of their tools, and no `intentHash`.
+  no key: nothing it builds is signed. `--wallets` and the password flags are refused over HTTP,
+  and the wallet tools are not registered there. It keeps nothing on disk either: it has no Pot
+  store and no intent store, none of their tools, and no `intentHash`.
 - **It authenticates no one.** Bound to loopback, the default, it answers only requests whose
   `Host`, and `Origin` when one is sent, is a loopback name. That keeps a web page from reaching it
   through DNS rebinding.

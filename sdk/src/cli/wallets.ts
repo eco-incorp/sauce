@@ -21,7 +21,7 @@
  * NODE-ONLY (the filesystem, `node:crypto`), like the rest of `cli/`; nothing browser-facing
  * imports it. The default directory is `~/.sauce/wallets`; `--wallets <dir>` names another.
  */
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import {
   chmodSync,
   linkSync,
@@ -33,7 +33,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import {
   createKeyPairSignerFromBytes,
@@ -58,6 +58,63 @@ import {
 
 /** Where wallets are kept unless `--wallets` says otherwise. */
 export const defaultWalletsDir = (): string => join(homedir(), ".sauce", "wallets");
+
+/**
+ * Where the local MCP server writes the password it generates for a wallet directory when told
+ * where not (`sauce_wallet_enable { generate: true }`): beside the directory, never in it, so a
+ * copy of the directory never carries it — `~/.sauce/wallets.password` for the default.
+ */
+export const generatedPasswordFile = (dir: string): string => `${resolve(dir)}.password`;
+
+/**
+ * Writes `text` to a new file at `path`, once: to a temporary file created 0600 beside it, then
+ * LINKED into place, which fails (`EEXIST`) if anything is there — never over a file that exists.
+ */
+function writeOnce(path: string, text: string): void {
+  const temporary = join(
+    dirname(path),
+    `.${basename(path)}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`,
+  );
+  writeFileSync(temporary, text, { flag: "wx", mode: 0o600 });
+  try {
+    chmodSync(temporary, 0o600);
+    linkSync(temporary, path);
+  } finally {
+    unlinkSync(temporary);
+  }
+}
+
+/**
+ * A new random password — 32 bytes, as 43 characters of base64url — written once to a new file at
+ * `path`, 0600, and never over one that exists. The directory it goes in must exist, unless
+ * `makeDirectory` (the default place's, `~/.sauce`, which is then created 0700). Registered as a
+ * secret before it is written.
+ */
+export function generatePasswordFile(path: string, makeDirectory = false): string {
+  const password = randomBytes(32).toString("base64url");
+  secret(password);
+  if (makeDirectory) mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  try {
+    writeOnce(path, `${password}\n`);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "EEXIST") {
+      throw new CliError(
+        `${path} exists: a password file is never overwritten (the password it holds enables ` +
+          `the wallets it opens with { file: "${path}" })`,
+        { cause: error },
+      );
+    }
+    if (code === "ENOENT") {
+      throw new CliError(
+        `${dirname(path)} does not exist: a password file goes in a directory that does`,
+      );
+    }
+    throw new CliError(`${path} could not be written (${code ?? "error"})`, { cause: error });
+  }
+
+  return password;
+}
 
 /** A wallet's name: lowercase letters, digits, `-` and `_`, as a file name on any system. */
 const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -285,15 +342,8 @@ export class WalletStore {
   /** Writes `text` as wallet `name`, once: never over a wallet that exists. */
   private write(name: string, text: string): string[] {
     const warnings = this.ensureDir();
-    const final = this.file(name);
-    const temporary = join(
-      this.dir,
-      `.${name}.json.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`,
-    );
-    writeFileSync(temporary, text, { flag: "wx", mode: 0o600 });
     try {
-      chmodSync(temporary, 0o600);
-      linkSync(temporary, final);
+      writeOnce(this.file(name), text);
     } catch (error) {
       if ((error as { code?: string }).code === "EEXIST") {
         throw new CliError(
@@ -302,8 +352,6 @@ export class WalletStore {
         );
       }
       throw error;
-    } finally {
-      unlinkSync(temporary);
     }
 
     return warnings;

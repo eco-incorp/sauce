@@ -1145,9 +1145,11 @@ the intent tools above). Over HTTP there are no stores, the flags are refused, a
 `createSauceServer` refuses stores beside a guard (`pots.e2e.test.ts`, `transports.test.ts`).
 
 No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
-input that looks like one), and the server reads no environment. It signs only over stdio, started
-with `--wallets [dir]` and a password source (`mcp/src/wallets.ts`, see "Agent wallets"); without
-them, and always over HTTP, it never signs. A tool reads a chain through the call's own `rpcUrl`, else the
+input that looks like one, nested fields included), and the server reads no environment. It signs
+only over stdio, where it serves the wallet tools by default (`--no-wallets` turns them off, and
+`--no-stores` with the other stores: the directory is `McpStores.wallets`), and
+only once the wallets are enabled (`mcp/src/wallets.ts`, see "Agent wallets"); over HTTP it never
+signs and serves no wallet tool. A tool reads a chain through the call's own `rpcUrl`, else the
 `--config` endpoint, else the public endpoints `sauce mcp` hands it (`Endpoints.public`, saying so in
 the result's notes), else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
 the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
@@ -1197,17 +1199,41 @@ traced native transfers, Solana from a simulation reporting its writable account
 — and holds it to the policy's `chains`, `to`, `native` and `tokens` limits, per transaction and per
 24 hours from `<name>.ledger.jsonl` (reserve, then sent or released, under a lock file). What cannot
 be measured where a limit needs it is refused. The policy file is parsed strictly (an unknown field
-is an error) and refused when others may write it. `sauce mcp --wallets` reads its password once in
-`sdk/src/cli/mcp.ts`, before the server loads, from a source that is not the prompt (stdin is the
-protocol's), and passes it in `McpServeOptions.wallets`; `--wallets` is refused with `--http`, and
-`createSauceServer` registers the wallet tools only when given wallets, which only the stdio path
-gives. `sauce_wallet_send` normalizes another tool's whole result (`plannedTransactions`, in
+is an error) and refused when others may write it.
+
+**The MCP server's wallets.** `sauce mcp` over stdio serves the wallet tools by DEFAULT, on the
+CLI's own directory (`--wallets <dir>` names another; a bare `--wallets`, as the server once had to
+be started with, is the default; `--no-wallets` serves none), always REGISTERED rather than added
+when enabled (not every client handles `tools/list_changed`): `sauce_wallet_enable`,
+`sauce_wallet_create`, `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`,
+`sauce_wallet_send` (`create` is `sauce wallet new`'s twin; the names predate the parity). List and
+address need no password. Create, import and send need the wallets ENABLED, else they refuse naming
+`sauce_wallet_enable` and its four sources. A password flag at start (`--password-env|-file|
+-command`, no longer needing `--wallets`) enables them: `sdk/src/cli/mcp.ts` reads it once, before
+the server loads, from a source that is not the prompt (stdin is the protocol's), and passes it as
+`McpServeOptions.wallets.start`; that source is the operator's, and the tool refuses to replace it.
+Otherwise the agent calls `sauce_wallet_enable` with a SOURCE, never a value: `env` (a variable of
+the server's environment, read through `McpWallets.read`, a closure over the CLI's `PasswordIo`, so
+`DELIBERATE_ENV_READ` stays the one read), `file` and `dotenv` + `variable` (`password.ts`, by
+`"tool"`: owner-only and a REGULAR file, `dotenvEntry` reading as dotenv does), or `generate`
+(`wallets.ts#generatePasswordFile`: 32 random bytes as base64url, written once 0600 by the same
+link-into-place as a wallet; `true` is `<dir>.password`, beside the directory and never in it,
+`~/.sauce/wallets.password` by default; a path inside a git work tree is noted). Never a command: a
+command the model chose would be a shell for it. The password lives in the server's
+`WalletSession`, in memory, for the process; calling the tool again replaces it.
+`sauce_wallet_import` takes a key file by PATH (the tool never sees the key; a key given as the
+path is refused unechoed), refuses one others can read, and reads it with `readImport`, so a
+keystore must open with the enabled password, as the CLI's import does. `--wallets` and the
+password flags are refused with `--http`, and `createSauceServer` registers the wallet tools only
+when given wallets, which only the stdio path gives. `sauce_wallet_send` normalizes another tool's whole result (`plannedTransactions`, in
 `wallet-send.ts`), rehearses an EVM plan in one `eth_simulateV1` block and preflights the policy
 before sending any, then sends each through `sendAndWait`; a Solana one through `sendPlannedSvm`.
 Its output schema is `refusable(...)`, like every tool the release gate can refuse. Tests: `cli-wallet.test.ts`, `cli-policy.test.ts`, `cli-wallet.e2e.test.ts`
 (anvil, released gated stack), `cli-wallet-solana.e2e.test.ts` (LiteSVM), `mcp/test/wallets.test.ts`
-and `wallets.e2e.test.ts`; `transports.test.ts` runs `sauce mcp --wallets` over stdio and checks
-the HTTP server has no wallet tool. Every password and key in them is generated and thrown away.
+and `wallets.e2e.test.ts` (each source an agent names, then a send); `transports.test.ts` runs the
+bare `sauce mcp` over stdio with a `HOME` of its own (wallet tools listed, `{ generate: true }`,
+then a wallet), an agent-named `env`, a start flag and `--no-wallets`, and checks the HTTP server
+has no wallet tool. Every password and key in them is generated and thrown away.
 
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain

@@ -24,7 +24,6 @@ import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
 import type { IntentRecord } from "../../sdk/dist/cli/lifecycle.js";
 import { IntentStore } from "../../sdk/dist/cli/store.js";
-import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import {
   fixture,
   OWNER,
@@ -41,7 +40,7 @@ import {
   relay,
 } from "../../sdk/test/eco-routes-anvil.js";
 import { NO_ENDPOINTS } from "../src/config.js";
-import { connect, ok, type Connected } from "./harness.js";
+import { connect, ok, walletsAt, type Connected } from "./harness.js";
 
 /** Anvil's fourth dev account: the solver. A public key, local only. */
 const SOLVER_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
@@ -173,11 +172,7 @@ describe(
       mcp = await connect(
         NO_ENDPOINTS,
         undefined,
-        {
-          store: new WalletStore(join(dir, "wallets")),
-          password: PASSWORD,
-          source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
-        },
+        walletsAt(join(dir, "wallets"), { start: PASSWORD }),
         true,
         { intents: store },
       );

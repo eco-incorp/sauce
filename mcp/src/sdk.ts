@@ -119,7 +119,8 @@ export {
   supportedChainNames,
   type PreviewChainRefusal,
 } from "../../sdk/dist/cli/support.js";
-export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
+export { HOT_WALLET, looksLikeKey, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
+export { describeSource, ENV_NAME, type PasswordSource } from "../../sdk/dist/cli/password.js";
 export {
   checkPlan,
   planChain,
@@ -131,7 +132,14 @@ export {
   sendSvmPlan,
 } from "../../sdk/dist/cli/wallet-send.js";
 export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
-export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";
+export {
+  generatedPasswordFile,
+  generatePasswordFile,
+  readImport,
+  walletName,
+  WalletStore,
+  type WalletKind,
+} from "../../sdk/dist/cli/wallets.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
 export { installedViem } from "../../sdk/dist/cli/init.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
