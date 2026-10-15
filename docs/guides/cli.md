@@ -595,8 +595,10 @@ sauce pot import --chain base --owner 0xYou --salt treasury
 sauce pot import --chain solana --owner <pubkey>
 ```
 
-The MCP server keeps no store. Its tools that send (`sauce_send`, `sauce_wallet_send`) return the
-same record, as `pots` on each transaction that deployed one, for the client to keep.
+The MCP server, run over stdio, keeps the same store in the same directory: a Pot its tools' sends
+deploy is recorded there, and `sauce_pot_list` and `sauce_pot_import` match these two commands
+([What a local server keeps](mcp.md#what-a-local-server-keeps)). Each send's result also carries
+`pots` on the transaction that deployed one. Over HTTP the server keeps nothing.
 
 ### For a wallet: `sauce tx`
 
