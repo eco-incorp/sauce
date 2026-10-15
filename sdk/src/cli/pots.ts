@@ -23,6 +23,7 @@
 import { readFileSync } from "node:fs";
 
 import {
+  getBase58Encoder,
   getBase64Encoder,
   getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
@@ -55,7 +56,13 @@ import {
 import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
 import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../svm/kitchen.js";
 import type { Landed } from "./keep.js";
-import { POT_SCHEMA, type PotKind, type PotRecord, type PotStore } from "./pot-store.js";
+import {
+  MAINNET_CLUSTER,
+  POT_SCHEMA,
+  type PotKind,
+  type PotRecord,
+  type PotStore,
+} from "./pot-store.js";
 
 /** The package's version, from the manifest three levels above `sdk/{src,dist}/cli`. */
 const sdkVersion = (): string =>
@@ -292,6 +299,8 @@ export async function evmPotsDeployed(
     readonly hash: Hex;
     readonly status: "success" | "reverted";
     readonly blockNumber: bigint;
+    /** The block's hash, from the receipt: what tells a fork's block from the chain's. */
+    readonly blockHash?: Hex;
     readonly logs: ReadonlyArray<{
       readonly address: Address;
       readonly topics: readonly Hex[];
@@ -327,7 +336,12 @@ export async function evmPotsDeployed(
         salt,
         pot,
         origin: "deployed",
-        deployment: { tx: sent.hash, block: sent.blockNumber.toString(), from: getAddress(from) },
+        deployment: {
+          tx: sent.hash,
+          block: sent.blockNumber.toString(),
+          ...(sent.blockHash === undefined ? {} : { blockHash: sent.blockHash }),
+          from: getAddress(from),
+        },
         // A Kitchen upgraded past the releases the SDK knows: as the chain says it was then.
         unknown: () => unknownRelease(client, { kitchen, owner, salt, pot }, sent.blockNumber),
       });
@@ -342,21 +356,46 @@ interface CompiledInstruction {
   readonly data?: Uint8Array;
 }
 
+/** The instructions a transaction's programs invoked, as `getTransaction` reports them: account
+ *  indexes into the transaction's accounts, the data in base58. */
+export type InnerInstructions = ReadonlyArray<{
+  readonly instructions: ReadonlyArray<{
+    readonly programIdIndex: number;
+    readonly accounts: readonly number[];
+    readonly data: string;
+  }>;
+}>;
+
+/** Each Solana cluster by its genesis hash, as a record names it; any other is named by the hash. */
+const CLUSTERS: Readonly<Record<string, string>> = {
+  "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d": MAINNET_CLUSTER,
+  EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG: "devnet",
+  "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY": "testnet",
+};
+
+/** The cluster a genesis hash is: `mainnet-beta`, `devnet`, `testnet`, or the hash itself. */
+export const clusterOf = (genesisHash: string): string => CLUSTERS[genesisHash] ?? genesisHash;
+
 /**
- * The Pots a landed Solana transaction created: one record per top-level `create_pot` of the
- * Kitchen in it, its accounts (owner, engine program, Pot) read through the message's static
- * accounts and those its lookup tables loaded (`loaded`, as the node reports them). None for one
- * that failed.
+ * The Pots a landed Solana transaction created: one record per `create_pot` of the Kitchen in it —
+ * an instruction of its own, or one a program invoked (`inner`, as the node reports them: the
+ * Portal creating its executor's Pot in a fill) — its accounts (owner, engine program, Pot) read
+ * through the message's static accounts and those its lookup tables loaded (`loaded`). None for
+ * one that failed. `genesis` is asked for the cluster's genesis hash only when there is one, so a
+ * devnet Pot is recorded as devnet's: the Kitchen's id, and so the Pot's address, is the same on
+ * every cluster.
  */
-export function svmPotsCreated(input: {
+export async function svmPotsCreated(input: {
   readonly chain: CanonicalChain;
   /** The transaction, base64, as `getTransaction` returns it. */
   readonly transaction: string;
   readonly loaded?: { readonly writable: readonly string[]; readonly readonly: readonly string[] };
+  readonly inner?: InnerInstructions;
   readonly signature: string;
   readonly slot: bigint;
   readonly ok: boolean;
-}): PotRecord[] {
+  readonly genesis: () => Promise<string>;
+}): Promise<PotRecord[]> {
   if (!input.ok) return [];
   const decoded = getTransactionDecoder().decode(
     new Uint8Array(getBase64Encoder().encode(input.transaction)),
@@ -370,10 +409,19 @@ export function svmPotsCreated(input: {
     ...(input.loaded?.writable ?? []),
     ...(input.loaded?.readonly ?? []),
   ];
+  const invoked: CompiledInstruction[] = [
+    ...message.instructions,
+    ...(input.inner ?? []).flatMap((group) =>
+      group.instructions.map((instruction) => ({
+        programAddressIndex: instruction.programIdIndex,
+        accountIndices: instruction.accounts,
+        data: new Uint8Array(getBase58Encoder().encode(instruction.data)),
+      })),
+    ),
+  ];
   const kitchen = v12SvmKitchenProgramId();
   const head = KITCHEN_DISCRIMINATORS.createPot;
-
-  return message.instructions.flatMap((instruction) => {
+  const created = invoked.flatMap((instruction) => {
     const data = instruction.data ?? new Uint8Array();
     const at = (index: number) => accounts[instruction.accountIndices?.[index] ?? -1];
     const [owner, engine, pot] = [at(0), at(1), at(2)];
@@ -388,27 +436,30 @@ export function svmPotsCreated(input: {
       return [];
     }
 
-    return [
-      svmRecord({
-        chain: input.chain,
-        owner,
-        salt: bytesToHex(data.slice(8, 40)),
-        pot,
-        engine,
-        origin: "deployed",
-        deployment: {
-          tx: input.signature,
-          block: input.slot.toString(),
-          from: message.staticAccounts[0]!,
-        },
-      }),
-    ];
+    return [{ owner, engine, pot, salt: bytesToHex(data.slice(8, 40)) }];
   });
+  if (created.length === 0) return [];
+  const cluster = clusterOf(await input.genesis());
+
+  return created.map((one) =>
+    svmRecord({
+      chain: input.chain,
+      cluster,
+      ...one,
+      origin: "deployed",
+      deployment: {
+        tx: input.signature,
+        block: input.slot.toString(),
+        from: message.staticAccounts[0]!,
+      },
+    }),
+  );
 }
 
 /** A Solana Pot's record: the release of the engine it was created for, when one is known. */
 function svmRecord(input: {
   readonly chain: CanonicalChain;
+  readonly cluster: string;
   readonly owner: string;
   readonly salt: Hex;
   readonly pot: string;
@@ -420,6 +471,7 @@ function svmRecord(input: {
 
   return {
     ...base(input.chain, input.origin),
+    cluster: input.cluster,
     pot: input.pot,
     owner: input.owner,
     salt: input.salt.toLowerCase(),
@@ -444,10 +496,26 @@ function svmRecord(input: {
  */
 export function keepPots(store: PotStore, landed: Landed): string[] {
   return (landed.sent.pots ?? []).map((pot) => {
+    const on = `${pot.chain}${pot.cluster === undefined || pot.cluster === MAINNET_CLUSTER ? "" : ` (${pot.cluster})`}`;
     try {
-      return store.save(pot) === "created"
-        ? `recorded Pot ${pot.pot} on ${pot.chain} in ${store.dir}`
-        : `Pot ${pot.pot} on ${pot.chain} was already recorded in ${store.dir}`;
+      const saved = store.save(pot);
+      if (saved === "created") return `recorded Pot ${pot.pot} on ${on} in ${store.dir}`;
+      if (saved === "exists") return `Pot ${pot.pot} on ${on} was already recorded in ${store.dir}`;
+      const earlier = store
+        .recordsOf(pot.chainId, pot.pot, pot.cluster)
+        .flatMap((one) =>
+          one.deployment === undefined || one.deployment.tx === pot.deployment?.tx
+            ? []
+            : [one.deployment.tx],
+        );
+
+      return (
+        `warning: Pot ${pot.pot} on ${on} was recorded already, deployed by ` +
+        `${earlier.join(" and ") || "another transaction"}; this deployment, ` +
+        `${pot.deployment?.tx}, is another, recorded beside it in ${store.dir}. One of them landed ` +
+        "on a fork or another network with the same chain id, or the Pot was closed and created " +
+        "again"
+      );
     } catch (error) {
       return (
         `warning: Pot ${pot.pot} on ${pot.chain} was deployed, but not recorded in ${store.dir}: ` +
@@ -553,11 +621,16 @@ export async function importEvmOwnerPots(
 export interface SvmAccountReader {
   /** The account's owning program, or `undefined` when it does not exist. */
   readonly ownerOf: (address: SvmAddress) => Promise<string | undefined>;
+  /** The cluster's genesis hash. */
+  readonly genesis: () => Promise<string>;
 }
 
 /**
- * `owner`'s Pot at `salt` on Solana: the Kitchen's PDA, which must exist. Its engine is the program
- * that owns it (`create_pot` hands the account to the engine it names).
+ * `owner`'s Pot at `salt` on Solana: the Kitchen's PDA, which must exist and be an engine's —
+ * `create_pot` hands the account to the engine it names, so a Pot is owned by one a release
+ * records. An account there owned by anything else (lamports sent to the address before any Pot,
+ * held by the System Program) is no Pot, and is refused: a record is never rewritten, so it would
+ * stand for the Pot for good.
  */
 export async function importSvmPot(
   reader: SvmAccountReader,
@@ -574,6 +647,21 @@ export async function importSvmPot(
   if (engine === undefined) {
     throw new Error(`${owner} has no Pot at salt ${salt} on ${chain.slug}: ${pot} does not exist`);
   }
+  if (svmSetOf(engine) === undefined) {
+    throw new Error(
+      `${pot}, ${owner}'s Pot address at salt ${salt} on ${chain.slug}, is owned by ${engine}, ` +
+        "which no release this sauce knows names as its engine: it is not a Pot, and is not " +
+        "recorded",
+    );
+  }
 
-  return svmRecord({ chain, owner, salt, pot, engine, origin: "imported" });
+  return svmRecord({
+    chain,
+    cluster: clusterOf(await reader.genesis()),
+    owner,
+    salt,
+    pot,
+    engine,
+    origin: "imported",
+  });
 }

@@ -6,7 +6,7 @@
  * arguments; both hand them here, so the rules are one set whichever front end a program comes
  * through. The messages name the CLI's flags, which the MCP tools mirror by name.
  */
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
@@ -27,6 +27,7 @@ import {
   UsageError,
 } from "./args.js";
 import type { Approver, ArgsInput, CookInput, PotInput, ProgramInput } from "./commands.js";
+import { parsePubkey } from "./solana.js";
 import {
   FUND_MODES,
   parseFund,
@@ -199,6 +200,52 @@ export function potTarget(given: PotGiven, signer?: Address): PotInput {
   return {
     owner: given.owner === undefined ? signer! : parseAddress("owner", given.owner),
     ...parseSalt(given.salt, given.saltHex),
+  };
+}
+
+/** A Pot's owner as given: a 0x address on an EVM chain, a base58 public key on Solana; with no
+ *  chain, as it is written. */
+export function potOwner(chain: CanonicalChain | undefined, raw: string): string {
+  return chain?.kind === "svm" || (chain === undefined && !raw.startsWith("0x"))
+    ? parsePubkey("owner", raw)
+    : parseAddress("owner", raw);
+}
+
+/** The Pots `sauce pot import` records: one by its address, or an owner's at its salt. */
+export interface PotImportTarget {
+  /** The Pot itself (an EVM chain). */
+  readonly pot?: Address;
+  /** Or its owner: every known release's Pot of theirs at `salt`. */
+  readonly owner?: string;
+  readonly salt: Hex;
+}
+
+/**
+ * What `sauce pot import` records on `chain`: `pot`, by address, on an EVM chain — its salt read
+ * off it, so none is given — or `owner`'s at its salt (zero by default), the only way on Solana,
+ * where a Pot holds nothing that names its owner.
+ */
+export function potImportTarget(chain: CanonicalChain, given: PotGiven): PotImportTarget {
+  if ((given.pot === undefined) === (given.owner === undefined)) {
+    throw new UsageError("give the Pot (--pot <address>) or its owner (--owner), one of them");
+  }
+  if (given.pot !== undefined && chain.kind === "svm") {
+    throw new UsageError(
+      "a Solana Pot holds nothing that names its owner: give --owner (and its --salt) instead of " +
+        "--pot",
+    );
+  }
+  if (given.pot !== undefined) {
+    if (given.salt !== undefined || given.saltHex !== undefined) {
+      throw new UsageError("--pot names the Pot, whose salt is read off it: give no --salt");
+    }
+
+    return { pot: parseAddress("pot", given.pot), salt: parseSalt(undefined, undefined).salt };
+  }
+
+  return {
+    owner: potOwner(chain, given.owner!),
+    salt: parseSalt(given.salt, given.saltHex).salt,
   };
 }
 

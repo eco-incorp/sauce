@@ -12,12 +12,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  AccountRole,
   address,
   appendTransactionMessageInstructions,
   compileTransaction,
   compressTransactionMessageUsingAddressLookupTables,
   createTransactionMessage,
+  getBase58Decoder,
   getBase64EncodedWireTransaction,
+  getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
+  getTransactionDecoder,
   pipe,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
@@ -43,7 +48,13 @@ import { potListCommand } from "../src/cli/pot-commands.js";
 import { PotStore } from "../src/cli/pot-store.js";
 import type { Sent } from "../src/cli/chain.js";
 import { keeping, keepLanded } from "../src/cli/keep.js";
-import { evmPotRelease, evmPotsDeployed, svmPotsCreated } from "../src/cli/pots.js";
+import {
+  evmPotRelease,
+  evmPotsDeployed,
+  importSvmPot,
+  keepPots,
+  svmPotsCreated,
+} from "../src/cli/pots.js";
 import {
   sdkCompilerVersion,
   V12_RELEASE_SETS,
@@ -236,70 +247,163 @@ describe("the Pots a landed Solana transaction created", () => {
   const kitchen = v12SvmKitchenProgramId() as SvmAddress;
   const engine = v12SvmEngineProgramId() as SvmAddress;
   const salt = new Uint8Array(32).fill(7);
+  const MAINNET = async () => "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+  const DEVNET = async () => "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+  const never = async (): Promise<string> => {
+    throw new Error("the genesis hash is asked only of a transaction that created a Pot");
+  };
+  const createOf = async () => {
+    const { address: pot } = await derivePotPda(kitchen, PAYER, salt);
+
+    return {
+      pot,
+      create: buildCreatePotInstruction({
+        kitchen,
+        owner: PAYER,
+        engineProgram: engine,
+        pot,
+        salt,
+        space: 0,
+      }),
+    };
+  };
+  const recordOf = (pot: SvmAddress, cluster: string) => ({
+    schema: "sauce.pot/1",
+    chain: "solana",
+    chainId: SOLANA.id,
+    origin: "deployed",
+    cluster,
+    pot,
+    owner: PAYER,
+    salt: `0x${"07".repeat(32)}`,
+    kind: "private",
+    kitchen,
+    engine,
+    release: {
+      compiler: own.compiler,
+      "v12-svm": own["v12-svm"].version,
+      "kitchen-svm": own["kitchen-svm"].version,
+    },
+    sdk: expect.any(String),
+    deployment: { tx: "sig", block: "99", from: PAYER },
+    recordedAt: expect.any(String),
+  });
 
   it("records the Kitchen's create_pot, with its engine's release, its Pot through a lookup table too", async () => {
-    const { address: pot } = await derivePotPda(kitchen, PAYER, salt);
-    const create = buildCreatePotInstruction({
-      kitchen,
-      owner: PAYER,
-      engineProgram: engine,
-      pot,
-      salt,
-      space: 0,
-    });
+    const { pot, create } = await createOf();
     for (const table of [[], [pot]] as SvmAddress[][]) {
-      const records = svmPotsCreated({
+      const records = await svmPotsCreated({
         chain: SOLANA,
         transaction: wire([create], table),
         ...(table.length === 0 ? {} : { loaded: { writable: [pot], readonly: [] } }),
         signature: "sig",
         slot: 99n,
         ok: true,
+        genesis: MAINNET,
       });
-      expect(records).toEqual([
-        {
-          schema: "sauce.pot/1",
-          chain: "solana",
-          chainId: SOLANA.id,
-          origin: "deployed",
-          pot,
-          owner: PAYER,
-          salt: `0x${"07".repeat(32)}`,
-          kind: "private",
-          kitchen,
-          engine,
-          release: {
-            compiler: own.compiler,
-            "v12-svm": own["v12-svm"].version,
-            "kitchen-svm": own["kitchen-svm"].version,
-          },
-          sdk: expect.any(String),
-          deployment: { tx: "sig", block: "99", from: PAYER },
-          recordedAt: expect.any(String),
-        },
-      ]);
+      expect(records).toEqual([recordOf(pot, "mainnet-beta")]);
     }
   });
 
-  it("records nothing of a failed transaction, or one that creates no Pot", async () => {
-    const { address: pot } = await derivePotPda(kitchen, PAYER, salt);
-    const create = buildCreatePotInstruction({
-      kitchen,
-      owner: PAYER,
-      engineProgram: engine,
-      pot,
-      salt,
-      space: 0,
-    });
-    const at = { chain: SOLANA, signature: "sig", slot: 1n };
-    expect(svmPotsCreated({ ...at, transaction: wire([create]), ok: false })).toEqual([]);
+  it("records a create_pot a program invoked, as the Portal creates its executor's Pot in a fill", async () => {
+    const { pot, create } = await createOf();
+    // An instruction of another program that takes every account the Kitchen's create_pot does,
+    // and invokes it: the node reports the Kitchen's instruction among the inner ones.
+    const portal = address("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+    const outer: Instruction = {
+      programAddress: portal,
+      accounts: [{ address: kitchen, role: AccountRole.READONLY }, ...create.accounts!],
+      data: new Uint8Array([1]),
+    };
+    const transaction = wire([outer]);
+    const keys = (
+      getCompiledTransactionMessageDecoder().decode(
+        getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(transaction)))
+          .messageBytes,
+      ) as { staticAccounts: readonly string[] }
+    ).staticAccounts;
+    const inner = [
+      {
+        index: 0,
+        instructions: [
+          {
+            programIdIndex: keys.indexOf(kitchen),
+            accounts: create.accounts!.map((meta) => keys.indexOf(meta.address)),
+            data: getBase58Decoder().decode(create.data!),
+          },
+        ],
+      },
+    ];
+    const at = { chain: SOLANA, transaction, signature: "sig", slot: 99n, ok: true };
+    expect(await svmPotsCreated({ ...at, genesis: never })).toEqual([]);
+    expect(await svmPotsCreated({ ...at, inner, genesis: MAINNET })).toEqual([
+      recordOf(pot, "mainnet-beta"),
+    ]);
+  });
+
+  it("records a devnet Pot as devnet's, filed apart from the mainnet Pot at the same address", async () => {
+    const { pot, create } = await createOf();
+    const at = {
+      chain: SOLANA,
+      transaction: wire([create]),
+      signature: "sig",
+      slot: 99n,
+      ok: true,
+    };
+    const [devnet] = await svmPotsCreated({ ...at, genesis: DEVNET });
+    const [mainnet] = await svmPotsCreated({ ...at, genesis: MAINNET });
+    expect(devnet).toEqual(recordOf(pot, "devnet"));
+    const dir = mkdtempSync(join(tmpdir(), "sauce-pots-clusters-"));
+    try {
+      const store = new PotStore(dir);
+      expect(store.save(devnet!)).toBe("created");
+      expect(store.save(mainnet!)).toBe("created");
+      expect(store.recordsOf(SOLANA.id, pot, "devnet")).toEqual([devnet]);
+      expect(store.recordsOf(SOLANA.id, pot, "mainnet-beta")).toEqual([mainnet]);
+      expect(
+        store
+          .list()
+          .pots.map((one) => one.cluster)
+          .sort(),
+      ).toEqual(["devnet", "mainnet-beta"]);
+      expect(potListCommand(store, { chain: SOLANA }).text).toContain(`solana (devnet)  ${pot}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("records nothing of a failed transaction, or one that creates no Pot, asking no cluster", async () => {
+    const { create } = await createOf();
+    const at = { chain: SOLANA, signature: "sig", slot: 1n, genesis: never };
+    expect(await svmPotsCreated({ ...at, transaction: wire([create]), ok: false })).toEqual([]);
     expect(
-      svmPotsCreated({
+      await svmPotsCreated({
         ...at,
         transaction: wire([{ ...create, data: new Uint8Array(44) }]),
         ok: true,
       }),
     ).toEqual([]);
+  });
+
+  it("imports a Pot its engine owns, and refuses an account at its address that no engine owns", async () => {
+    const { pot } = await createOf();
+    const reader = (owner: string | undefined) => ({
+      ownerOf: async (at: SvmAddress) => (at === pot ? owner : undefined),
+      genesis: DEVNET,
+    });
+    const hex = `0x${"07".repeat(32)}` as Hex;
+    expect(await importSvmPot(reader(engine), SOLANA, PAYER, hex)).toEqual({
+      ...recordOf(pot, "devnet"),
+      origin: "imported",
+      deployment: undefined,
+    });
+    // Lamports sent to the address before any Pot: the System Program's account, never a Pot.
+    await expect(
+      importSvmPot(reader("11111111111111111111111111111111"), SOLANA, PAYER, hex),
+    ).rejects.toThrow(/is owned by 1{32}, which no release this sauce knows names as its engine/);
+    await expect(importSvmPot(reader(undefined), SOLANA, PAYER, hex)).rejects.toThrow(
+      /does not exist/,
+    );
   });
 });
 
@@ -358,5 +462,48 @@ describe("the scope a command keeps its stores in", () => {
     expect(potListCommand(store, { chain: SOLANA }).text).toBe(
       `No Pots on solana in ${store.dir}.`,
     );
+  });
+
+  it("keeps another deployment of a Pot beside the first, and says so, never silently", async () => {
+    const store = new PotStore(join(dir, "twice"));
+    const pot = potOf(KITCHEN, own["kitchen-evm"].potInitCodeHash!, OWNER, SALT, false);
+    const landedBy = async (hash: Hex) => {
+      const receipt = {
+        hash,
+        status: "success" as const,
+        blockNumber: 1n,
+        gasUsed: 1n,
+        logs: [potDeployed(KITCHEN, OWNER, SALT, pot)],
+      };
+      const pots = await evmPotsDeployed(clientOf(BASE.id), receipt, SENDER);
+
+      return {
+        kind: "evm" as const,
+        client: clientOf(BASE.id),
+        sent: { ...receipt, pots } as Sent,
+        from: SENDER,
+      };
+    };
+    const first = await landedBy(TX);
+    // On the chain, then on a fork of it with the same chain id: the same Pot, another deployment.
+    const fork = await landedBy(`0x${"fe".repeat(32)}`);
+    expect(keepPots(store, first)).toEqual([`recorded Pot ${pot} on base in ${store.dir}`]);
+    expect(keepPots(store, first)).toEqual([
+      `Pot ${pot} on base was already recorded in ${store.dir}`,
+    ]);
+    expect(keepPots(store, fork)).toEqual([
+      `warning: Pot ${pot} on base was recorded already, deployed by ${TX}; this deployment, ` +
+        `0x${"fe".repeat(32)}, is another, recorded beside it in ${store.dir}. One of them ` +
+        "landed on a fork or another network with the same chain id, or the Pot was closed and " +
+        "created again",
+    ]);
+    expect(keepPots(store, fork)).toEqual([
+      `Pot ${pot} on base was already recorded in ${store.dir}`,
+    ]);
+    expect(store.recordsOf(BASE.id, pot).map((one) => one.deployment?.tx)).toEqual([
+      TX,
+      `0x${"fe".repeat(32)}`,
+    ]);
+    expect(store.list().pots).toHaveLength(2);
   });
 });

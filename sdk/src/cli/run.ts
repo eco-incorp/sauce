@@ -100,6 +100,8 @@ import {
   bindMainArguments,
   definesReach,
   fundingFor,
+  potImportTarget,
+  potOwner,
   potTarget,
   programChain,
   withoutShebang,
@@ -2477,12 +2479,6 @@ function potStoreOf(args: ParsedArgs, io: CliIo): PotStore {
   return new PotStore(dir);
 }
 
-/** A Pot's owner as given: an EVM address, or on Solana a base58 public key. */
-const ownerOn = (chain: CanonicalChain | undefined, raw: string): string =>
-  chain?.kind === "svm" || (chain === undefined && !raw.startsWith("0x"))
-    ? parsePubkey("owner", raw)
-    : parseAddress("owner", raw);
-
 const POT_VERBS: Readonly<Record<string, Command>> = {
   list: {
     usage: "sauce pot list [--chain <slug|id>] [--owner <address>] [--pots <dir>] [--json]",
@@ -2516,7 +2512,7 @@ const POT_VERBS: Readonly<Record<string, Command>> = {
 
       return potListCommand(potStoreOf(args, io), {
         ...(chain === undefined ? {} : { chain }),
-        ...(owner === undefined ? {} : { owner: ownerOn(chain, owner) }),
+        ...(owner === undefined ? {} : { owner: potOwner(chain, owner) }),
       });
     },
   },
@@ -2563,31 +2559,18 @@ const POT_VERBS: Readonly<Record<string, Command>> = {
         throw new UsageError(`unexpected argument ${args.positionals[0]}`);
       }
       const chain = potChain(args);
-      const pot = stringFlag(args, "pot");
-      const owner = stringFlag(args, "owner");
-      if ((pot === undefined) === (owner === undefined)) {
-        throw new UsageError("give the Pot (--pot <address>) or its owner (--owner), one of them");
-      }
-      if (pot !== undefined && chain.kind === "svm") {
-        throw new UsageError(
-          "a Solana Pot holds nothing that names its owner: give --owner (and its --salt) " +
-            "instead of --pot",
-        );
-      }
-      if (
-        pot !== undefined &&
-        (stringFlag(args, "salt") !== undefined || stringFlag(args, "salt-hex") !== undefined)
-      ) {
-        throw new UsageError("--pot names the Pot, whose salt is read off it: give no --salt");
-      }
+      const target = potImportTarget(chain, {
+        pot: stringFlag(args, "pot"),
+        owner: stringFlag(args, "owner"),
+        salt: stringFlag(args, "salt"),
+        saltHex: stringFlag(args, "salt-hex"),
+      });
 
       return potImportCommand({
         store: potStoreOf(args, io),
         chain,
         rpcUrl: requiredEndpoint(args, io, chain),
-        ...(pot === undefined ? {} : { pot: parseAddress("pot", pot) }),
-        ...(owner === undefined ? {} : { owner: ownerOn(chain, owner) }),
-        salt: saltOf(args).salt,
+        ...target,
       });
     },
   },
