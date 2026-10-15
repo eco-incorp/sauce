@@ -2233,11 +2233,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     flags: { ...ENDPOINT, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "The store (--store, default ~/.sauce/intents) keeps every intent `sauce intent publish`,",
-      "`sauce run`, and the intent commands touch, and those `sauce intent import` brings in:",
-      "one directory per intent hash, its intent.json written once and never changed, and",
-      "events.jsonl, one line appended per thing that happened (published, funded, filled,",
-      "proving, claimed, refunded, cancelled) with its chain, transaction, block and time. Where",
-      "an intent stands is never stored: it is read from the chains, each time (--offline: not).",
+      "`sauce run`, `sauce send` and the intent commands touch, and those `sauce intent import`",
+      "brings in (as does `sauce mcp`, over stdio): one directory per intent hash, its",
+      "intent.json written once and never changed, and events.jsonl, one line appended per",
+      "thing that happened (published, funded, filled, proving, claimed, refunded, cancelled)",
+      "with its chain, transaction, block and time, read from the Portal's own events as each",
+      "transaction lands. Where an intent stands is never stored: it is read from the chains,",
+      "each time (--offline: not).",
     ].join("\n"),
     run: async (args, io) => {
       if (args.positionals.length > 0) {
@@ -4279,7 +4281,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   mcp: {
     usage: [
-      "sauce mcp [--config <file> | --offline] [--pots <dir> | --no-stores]",
+      "sauce mcp [--config <file> | --offline] [--pots <dir>] [--store <dir> | --no-stores]",
       "sauce mcp --wallets [<dir>] (--password-env <NAME> | --password-file <path> | --password-command <command>) [--config <file>]",
       "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
       "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
@@ -4316,8 +4318,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "for an agent that reaches Sauce only through it: every Pot a tool's transaction deploys",
       "(sauce_send, sauce_wallet_send) is recorded in the Pot store (--pots, default",
       "~/.sauce/pots), which sauce_pot_list and sauce_pot_import read and write, as sauce pot list",
-      "and sauce pot import do. --no-stores keeps none. Over HTTP it keeps nothing, and has",
-      "neither tool.",
+      "and sauce pot import do; and every intent one publishes, and what one does to an intent,",
+      "in the intent store (--store, default ~/.sauce/intents), which sauce_intent_list,",
+      "sauce_intent_show and sauce_intent_import read and write, as sauce intent list, show and",
+      "import do, and every intent tool names an intent from by its hash. --no-stores keeps",
+      "none. Over HTTP it keeps nothing, and has none of those tools.",
       "",
       "Over stdio by default, what a coding agent launches. With --http, Streamable HTTP at /mcp,",
       "stateless: on 127.0.0.1 unless --host says otherwise, answering only a loopback Host or an",

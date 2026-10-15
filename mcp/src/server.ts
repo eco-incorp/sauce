@@ -3,8 +3,10 @@
  * signed, the agent skills as resources, and two task prompts — and, over stdio with `--wallets`,
  * the wallet tools, and with the command's stores (on by default) what keeps them: every Pot a
  * tool's transaction deploys is recorded, and `sauce_pot_list` and `sauce_pot_import` read the
- * store. One server per connection — over stdio, one for the process; over Streamable HTTP, one
- * per request, stateless, and never with wallets or stores.
+ * store; every intent one publishes, and what one does to an intent, is recorded, and
+ * `sauce_intent_list` and `sauce_intent_show` read that store, which every intent tool names an
+ * intent from by hash. One server per connection — over stdio, one for the process; over
+ * Streamable HTTP, one per request, stateless, and never with wallets or stores.
  */
 import { readFileSync } from "node:fs";
 
@@ -97,9 +99,21 @@ export function instructions(
     "An intent's life after it is published: sauce_intent_status says where it stands and what",
     "can happen next (`can`); sauce_intent_fill (with the solver as from), sauce_intent_prove,",
     "sauce_intent_claim, sauce_intent_refund and sauce_intent_cancel build each step unsigned;",
-    "sauce_intent_import reads one back from its transaction. This server keeps no intents: pass",
-    "the intent's `record` (sauce_intent_publish and sauce_intent_import return it), or txHash",
-    "and its source chain.",
+    ...(stores.intents === undefined
+      ? [
+          "sauce_intent_import reads one back from its transaction. This server keeps no intents:",
+          "pass the intent's `record` (sauce_intent_publish and sauce_intent_import return it), or",
+          "txHash and its source chain.",
+        ]
+      : [
+          "sauce_intent_import reads one back from its transaction and stores it.",
+          "THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE, as the command does: every intent a",
+          "transaction it sends publishes (sauce_send, sauce_wallet_send) is stored, and what one",
+          "does to an intent (filled, proving, claimed, refunded, cancelled) is recorded, read from",
+          "the Portal's own events. sauce_intent_list lists them, sauce_intent_show shows one with",
+          "its events, and every intent tool takes intentHash for an intent the store holds,",
+          "besides its `record` or txHash and its source chain.",
+        ]),
     "",
     ...(stores.pots === undefined
       ? []

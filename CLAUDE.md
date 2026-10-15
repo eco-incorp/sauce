@@ -961,7 +961,18 @@ transactions as JSON, with no key, store, prompt or environment, which the MCP s
 are; the calldata is `routes/portal.ts`'s. `intent-commands.ts` adds the signer, the approvals
 (`--auto-approve`) and the store; `store.ts` is the store under `~/.sauce/intents` (an
 `intent.json` linked into place once, an append-only `events.jsonl`, nothing read and written back;
-it imports only Node's modules, so `cli-store.test.ts` runs it in child processes).
+it imports only Node's modules, so `cli-store.test.ts` runs it in child processes). NO COMMAND
+WRITES AN EVENT ITSELF: `intent-keep.ts` is the intent store's part of `keep.ts`'s landed hook
+(beside the Pot store's), so every transaction that lands through `chain.ts#landed` or
+`solana.ts#svmLanded` in a scope keeping the store — `runCli`'s, and the local MCP server's per
+tool call — is read for what it did: `IntentPublished` (stored, with `funded`), and the Portal's
+`IntentFulfilled`, `IntentProven` (with each Hyperlane `DispatchId`), `IntentWithdrawn`,
+`IntentRefunded` and `IntentCancelled`, each counted only from the intent's own Portal on that
+side; on Solana the Portal's `fulfill`, `prove` and `cancel` instructions. That is what makes `sauce
+send`, `sauce_send` and `sauce_wallet_send` record exactly what the lifecycle commands do. An
+intent the store does not hold yet (named by a file or a record) is recorded once the command or
+tool names it with `keep.ts#knowIntents` (`IntentStore.know`, in memory only); do not add a second,
+explicit append beside the hook, which would record the event twice.
 `cli-lifecycle.e2e.test.ts` runs a whole intent on two anvils with eco-routes' own Portal and
 HyperProver (`eco-routes-anvil.ts`, immutables rewritten where the Portal, its Executor and vault
 implementation name each other); only Hyperlane's relay is mocked (`evm/fixtures/MockMailbox.sol`).
@@ -1086,9 +1097,15 @@ in `mcp/`; do not reimplement command logic there. `sauce_actions` calls `action
 `actionsCommand` (and `actionsProgram` for its cook), what `sauce actions` and the program commands
 use. The intent tools (`mcp/src/intents.ts`: `sauce_intent_import`, `sauce_intent_status`,
 `sauce_intent_fill`, `sauce_intent_prove`, `sauce_intent_claim`, `sauce_intent_refund`,
-`sauce_intent_cancel`) call `lifecycle.ts` as it is and keep no store: a call names its intent by
-its `record` (which `sauce_intent_publish` returns per intent) or by `txHash` and its source
-`chain`, and gives each chain's endpoint in `rpcUrls`. `intents.e2e.test.ts` runs a whole intent
+`sauce_intent_cancel`) call `lifecycle.ts` as it is: a call names its intent by its `record`
+(which `sauce_intent_publish` returns per intent) or by `txHash` and its source `chain`, and gives
+each chain's endpoint in `rpcUrls`. Over stdio the server keeps the command's intent store too (on
+by default, `sauce mcp --store <dir>`, `--no-stores` for none; `McpStores.intents`): every intent
+tool also takes `intentHash` from it, `sauce_intent_import` stores through `importCommand`,
+`sauce_intent_list` and `sauce_intent_show` are `listCommand` and `showCommand`, and each intent a
+call names is made known to the store, so what its transactions do lands there through the hook
+above, whichever tool sends them. Over HTTP none of that exists (`intents-store.test.ts`;
+`intents-store.e2e.test.ts` records a whole intent through `sauce_send` and `sauce_wallet_send`). `intents.e2e.test.ts` runs a whole intent
 through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/eco-routes-anvil.ts`),
 signing each unsigned transaction itself; `intents-solana.e2e.test.ts` builds a Solana fill through
 them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and lands it.

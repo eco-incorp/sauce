@@ -4,13 +4,22 @@
  * (`sdk/src/cli/lifecycle.ts`), the module `sauce intent fill|prove|claim|refund|cancel|import`
  * are a layer over. Each tool calls one of its functions and returns that function's JSON.
  *
- * Stateless. The command line keeps intents in a store under `~/.sauce`; this server keeps
- * nothing, so every call names its intent: the `record` a tool returned (sauce_intent_publish,
- * sauce_intent_import, sauce_intent_status), as the store would hold it, or the source
+ * A call names its intent by the `record` a tool returned (sauce_intent_publish,
+ * sauce_intent_import, sauce_intent_status), as the store would hold it, or by the source
  * transaction that published it (`txHash` with `chain`), whose `IntentPublished` log is read back.
  * A record is checked against its own hash before anything is built from it (`intentOf`).
+ *
+ * Over stdio the server keeps the command's intent store (`~/.sauce/intents`, `ToolContext.stores`)
+ * as the command does: a call may name an intent the store holds by its hash (`intentHash`, as
+ * `sauce intent claim <hash>` does); `sauce_intent_import` stores what it reads back, through the
+ * command's `importCommand`; `sauce_intent_list` and `sauce_intent_show` are `sauce intent list`
+ * and `show`. Every intent a call names is made known to the store (`keep.ts#knowIntents`), so
+ * when a transaction built here lands through `sauce_send` or `sauce_wallet_send`, what it did is
+ * recorded from the Portal's events, as the command records it. Over HTTP the server keeps
+ * nothing: no `intentHash`, and neither tool.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { Hex } from "viem";
 import * as z from "zod";
 
@@ -24,21 +33,29 @@ import {
   defineLabels,
   fillCommand,
   fillTargets,
+  importCommand,
   importIntents,
   INTENT_SCHEMA,
   intentOf,
   intentRecord,
   intentStatus,
+  knowIntents,
+  listCommand,
   parseAddress,
   parseChain,
   parsePubkey,
   pastDeadline,
   requireChain,
   requireSupported,
+  showCommand,
+  storedTargets,
   UsageError,
   type CanonicalChain,
   type FillTarget,
   type IntentRecord,
+  type IntentStore,
+  type LifecycleContext,
+  type Target,
 } from "./sdk.js";
 import { noEndpoint } from "./config.js";
 import {
@@ -49,6 +66,7 @@ import {
   fromCommand,
   INTENT_ARGS,
   LIMITS,
+  NO_APPROVER,
   PROGRAM,
   READS_CHAIN,
   refusable,
@@ -72,6 +90,9 @@ export const INTENT_TOOL_NAMES = [
   "sauce_intent_refund",
   "sauce_intent_cancel",
 ] as const;
+
+/** The tools of a server that keeps the intent store (over stdio), after the others. */
+export const INTENT_STORE_TOOL_NAMES = ["sauce_intent_list", "sauce_intent_show"] as const;
 
 // ---------------------------------------------------------------------------------------------
 // Naming the intent
@@ -130,6 +151,35 @@ const MANY = {
     ),
 };
 
+const INTENT_HASH = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "an intent hash: 0x and 64 hex digits");
+
+const HASH_HELP =
+  "Instead of intent or txHash: an intent this server's store holds, by its hash " +
+  "(sauce_intent_list gives them; sauce_intent_publish's and sauce_intent_import's intents are " +
+  "stored).";
+
+const ONE_HASH = INTENT_HASH.optional().describe(HASH_HELP);
+const MANY_HASHES = z
+  .union([INTENT_HASH, z.array(INTENT_HASH).min(1).max(LIMITS.entries)])
+  .optional()
+  .describe(`${HASH_HELP} Or a list of them, to act on them together.`);
+
+/**
+ * `intentHash`, on a server that keeps the intent store: one, or with `many` a list. Over HTTP the
+ * input is not there at all — typed as present all the same, since a call without it reads
+ * `undefined` either way.
+ */
+function byHash(store: IntentStore | undefined, many: false): { intentHash: typeof ONE_HASH };
+function byHash(store: IntentStore | undefined, many: true): { intentHash: typeof MANY_HASHES };
+function byHash(
+  store: IntentStore | undefined,
+  many: boolean,
+): { intentHash?: typeof ONE_HASH | typeof MANY_HASHES } {
+  if (store === undefined) return {};
+
+  return { intentHash: many ? MANY_HASHES : ONE_HASH };
+}
+
 /** `rpcUrl` (the chain the tool needs, named) and `rpcUrls` (by chain). */
 const endpointInputs = (which: string) => ({
   rpcUrl: z
@@ -150,6 +200,7 @@ const endpointInputs = (which: string) => ({
 
 interface RefArgs {
   readonly intent?: unknown;
+  readonly intentHash?: string | readonly string[] | undefined;
   readonly txHash?: string | undefined;
   readonly chain?: string | number | undefined;
   readonly index?: number | undefined;
@@ -181,6 +232,18 @@ function recordOf(value: unknown, where: string): IntentRecord {
   intentOf(record);
 
   return record;
+}
+
+/** The intent `hash` names in `store`, refused by name when it holds none. */
+function fromStore(store: IntentStore, hash: string): Target {
+  if (!store.has(hash as Hex)) {
+    throw new UsageError(
+      `no intent ${hash.toLowerCase()} in ${store.dir}: sauce_intent_import stores one from the ` +
+        "transaction that published it, or give its record (intent) or txHash with chain",
+    );
+  }
+
+  return storedTargets(store, hash as Hex)[0]!;
 }
 
 /** Which of an intent's chains a tool's `rpcUrl` is for. */
@@ -215,21 +278,38 @@ const refuseOn = (gate: Gate | undefined, records: readonly IntentRecord[]): voi
 async function located(
   args: RefArgs,
   reach: Reach,
-  options: { readonly side?: Side; readonly many: boolean; readonly gate?: Gate },
+  options: {
+    readonly side?: Side;
+    readonly many: boolean;
+    readonly gate?: Gate;
+    /** The intent store, over stdio: where `intentHash` is looked up. */
+    readonly store?: IntentStore | undefined;
+  },
 ): Promise<{ readonly records: IntentRecord[]; readonly endpoints: Record<string, string> }> {
-  if ((args.intent === undefined) === (args.txHash === undefined)) {
+  const ways = [args.intent, args.intentHash, args.txHash].filter((way) => way !== undefined);
+  if (ways.length !== 1) {
     throw new UsageError(
-      "give intent (its record, as sauce_intent_import or sauce_intent_publish returns it) or " +
-        "txHash with chain (the transaction that published it), not both",
+      "give intent (its record, as sauce_intent_import or sauce_intent_publish returns it)" +
+        (options.store === undefined ? " or " : ", intentHash (an intent the store holds) or ") +
+        "txHash with chain (the transaction that published it), " +
+        (options.store === undefined ? "not both" : "only one of them"),
     );
   }
   let given: IntentRecord[] | undefined;
-  if (args.intent !== undefined) {
+  if (args.intent !== undefined || args.intentHash !== undefined) {
     if (args.chain !== undefined || args.index !== undefined) {
       throw new UsageError("chain and index go with txHash: a record names its own chains");
     }
-    const each = Array.isArray(args.intent) ? args.intent : [args.intent];
-    given = each.map((one, at) => recordOf(one, each.length === 1 ? "intent" : `intent[${at}]`));
+    if (args.intentHash !== undefined) {
+      if (options.store === undefined) {
+        throw new UsageError("intentHash names an intent this server's store holds: it keeps none");
+      }
+      const hashes = typeof args.intentHash === "string" ? [args.intentHash] : args.intentHash;
+      given = hashes.map((hash) => fromStore(options.store!, hash).record);
+    } else {
+      const each = Array.isArray(args.intent) ? args.intent : [args.intent];
+      given = each.map((one, at) => recordOf(one, each.length === 1 ? "intent" : `intent[${at}]`));
+    }
     refuseOn(options.gate, given);
   } else if (options.gate?.side === "source" && args.chain !== undefined) {
     requireSupported(options.gate.action, [parseChain(String(args.chain), "chain")]);
@@ -273,10 +353,14 @@ async function located(
   }
   if (!options.many && records.length > 1) {
     throw new UsageError(
-      `${args.txHash} published ${records.length} intents: give index (0 to ` +
-        `${records.length - 1}), or pass the one record`,
+      args.txHash === undefined
+        ? "give one intent: this step takes one at a time"
+        : `${args.txHash} published ${records.length} intents: give index (0 to ` +
+            `${records.length - 1}), or pass the one record`,
     );
   }
+  // What a transaction built for them does is recorded as it lands, wherever it is sent from.
+  knowIntents(records);
 
   const endpoints: Record<string, string> = {};
   for (const record of records) {
@@ -368,12 +452,56 @@ const PLAN_OUTPUT = {
   ),
 };
 
+/** Writes the store on this machine, and reads a chain: what a store tool that imports does. */
+const STORES: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+/** The command's context for a store tool: the store, each chain's endpoint as the call found it,
+ *  and no one to approve anything (a store tool sends nothing). */
+const storeContext = (
+  store: IntentStore,
+  endpoints: ReadonlyMap<number, string | undefined>,
+): LifecycleContext => ({
+  store,
+  endpoint: (chain) => endpoints.get(chain.id),
+  approver: NO_APPROVER,
+});
+
+/** Each chain's endpoint for a store tool: the call's `rpcUrls`, else the server's (or the public
+ *  ones); a chain with none is not read. */
+async function chainEndpoints(
+  chains: readonly CanonicalChain[],
+  rpcUrls: Readonly<Record<string, string>> | undefined,
+  reach: Reach,
+): Promise<Map<number, string | undefined>> {
+  const byChain = await endpointsByChain(rpcUrls, reach);
+  const found = new Map<number, string | undefined>();
+  for (const chain of chains) {
+    if (!found.has(chain.id))
+      found.set(chain.id, byChain.get(chain.id) ?? (await reach.endpoint(chain, undefined)));
+  }
+
+  return found;
+}
+
+/** Both chains of each of `records`. */
+const chainsOf = (records: readonly IntentRecord[]): CanonicalChain[] =>
+  records.flatMap((record) => [
+    requireChain(record.source.chainId),
+    requireChain(record.destination.chainId),
+  ]);
+
 const NOT_YET =
   "A step that cannot be taken yet is a result, not an error: ready false and `why` (the " +
   "state that stops it, and when it can).";
 
 export function registerIntentTools(server: McpServer, context: ToolContext): void {
   const { endpoints: serverEndpoints } = context;
+  const store = context.stores?.intents;
   const tool = toolRegistrar(server, context);
 
   tool(
@@ -385,7 +513,12 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "logs: each one's full `record` (what every other sauce_intent_* tool takes as " +
         "`intent`), with its vault, block, time and whether the same transaction funded it. " +
         "Use it for an intent someone else published, or one published outside this server. " +
-        "Needs the source chain's endpoint. Reads only.",
+        "Needs the source chain's endpoint. " +
+        (store === undefined
+          ? "Reads only."
+          : "Stores each in this server's intent store, as `sauce intent import` does (`stored`: " +
+            "created, or exists when it was there already), so every intent tool then takes it " +
+            "by intentHash."),
       input: {
         txHash: ONE.txHash.unwrap().describe("The source chain transaction that published it."),
         chain: chainRef.describe("The SOURCE chain it was sent on (slug, alias or id)."),
@@ -396,8 +529,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         intents: z.array(
           z.looseObject({ record: z.looseObject({ intentHash: z.string() }), funded: z.boolean() }),
         ),
+        store: z.string().optional(),
       },
-      annotations: READS_CHAIN,
+      annotations: store === undefined ? READS_CHAIN : STORES,
     },
     async (args, reach) => {
       const source = parseChain(String(args.chain), "chain");
@@ -405,14 +539,21 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const url =
         byChain.get(source.id) ??
         (await reach.require(source, args.rpcUrl, "Reading the transaction that published it"));
-      const imported = await importIntents(
-        {
-          txHash: args.txHash as Hex,
-          chain: source.id,
-          ...(args.index === undefined ? {} : { index: args.index }),
-        },
-        { [String(source.id)]: url },
-      );
+      const ref = {
+        txHash: args.txHash as Hex,
+        chain: source.id,
+        ...(args.index === undefined ? {} : { index: args.index }),
+      };
+      if (store !== undefined) {
+        // The command's own import: the intents stored, and what it says of each.
+        const output = await importCommand(
+          { ...ref, chain: source },
+          storeContext(store, new Map([[source.id, url]])),
+        );
+
+        return fromCommand(output);
+      }
+      const imported = await importIntents(ref, { [String(source.id)]: url });
 
       return { json: { intents: imported.intents }, notes: imported.notes };
     },
@@ -433,6 +574,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "says what it could not. Use it before any other intent step. Reads only.",
       input: {
         ...ONE,
+        ...byHash(store, false),
         rpcUrls: endpointInputs("").rpcUrls,
       },
       output: {
@@ -444,7 +586,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const { records, endpoints } = await located(args, reach, { many: false });
+      const { records, endpoints } = await located(args, reach, { many: false, store });
       const record = records[0]!;
       if (Object.keys(endpoints).length === 0) {
         const [source, destination] = [record.source.chain, record.destination.chain];
@@ -499,6 +641,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
               "sent.",
           ),
         intent: MANY.intent,
+        ...byHash(store, true),
         txHash: ONE.txHash,
         index: ONE.index,
         from: z
@@ -538,11 +681,13 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const named = [args.source, args.intent, args.txHash].filter((each) => each !== undefined);
+      const named = [args.source, args.intent, args.intentHash, args.txHash].filter(
+        (each) => each !== undefined,
+      );
       if (named.length !== 1) {
         throw new UsageError(
           "name the intents one way: source (the program that opens them), intent (a record or " +
-            "a list), or txHash with chain",
+            `a list), ${store === undefined ? "" : "intentHash (the store's), "}or txHash with chain`,
         );
       }
       if (args.claimant !== undefined && !CLAIMANT.test(args.claimant)) {
@@ -572,12 +717,13 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         ({ endpoints } = await located(
           { intent: records, rpcUrl: args.rpcUrl, rpcUrls: args.rpcUrls },
           reach,
-          { side: "destination", many: true, ...(gate === undefined ? {} : { gate }) },
+          { side: "destination", many: true, store, ...(gate === undefined ? {} : { gate }) },
         ));
       } else {
         ({ records, endpoints } = await located(args, reach, {
           side: "destination",
           many: true,
+          store,
           ...(gate === undefined ? {} : { gate }),
         }));
       }
@@ -683,6 +829,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         `then says proven. ${NOT_YET} Any account may send it. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...MANY,
+        ...byHash(store, true),
         cancelledIn: z
           .record(z.string().max(80), z.string().max(30))
           .optional()
@@ -700,6 +847,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const { records, endpoints } = await located(args, reach, {
         side: "destination",
         many: true,
+        store,
         gate: { action: "building a proof", side: "destination" },
       });
       const plan = await buildProve(records, endpoints, {
@@ -722,7 +870,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "claimed, refunded, or proven cancelled (which pays no claimant) is refused or left " +
         `out, saying why. ${NOT_YET} Any account may send it: the reward goes to the claimant, ` +
         `not the sender. Needs the source chain's endpoint. ${UNSIGNED} ${SUPPORTED_ONLY}`,
-      input: { ...MANY, ...endpointInputs("The source chain") },
+      input: { ...MANY, ...byHash(store, true), ...endpointInputs("The source chain") },
       output: refusable({ ...PLAN_OUTPUT, claims: z.array(z.looseObject({})) }),
       annotations: READS_CHAIN,
     },
@@ -730,6 +878,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const { records, endpoints } = await located(args, reach, {
         side: "source",
         many: true,
+        store,
         gate: { action: "building a claim", side: "source" },
       });
 
@@ -749,7 +898,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         `one only what is left. Returns the refundee and what moves. ${NOT_YET} Any account ` +
         `may send it: the reward goes to the creator. Needs the source chain's endpoint. ${UNSIGNED} ` +
         SUPPORTED_ONLY,
-      input: { ...ONE, ...endpointInputs("The source chain") },
+      input: { ...ONE, ...byHash(store, false), ...endpointInputs("The source chain") },
       output: refusable({
         ...PLAN_OUTPUT,
         refundee: z.string(),
@@ -761,6 +910,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const { records, endpoints } = await located(args, reach, {
         side: "source",
         many: false,
+        store,
         gate: { action: "building a refund", side: "source" },
       });
 
@@ -785,6 +935,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         SUPPORTED_ONLY,
       input: {
         ...ONE,
+        ...byHash(store, false),
         prove: z
           .boolean()
           .optional()
@@ -802,6 +953,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const { records, endpoints } = await located(args, reach, {
         side: "destination",
         many: false,
+        store,
         gate: { action: "building a cancellation", side: "destination" },
       });
       const plan = await buildCancel(records[0]!, endpoints, {
@@ -814,6 +966,76 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         args.prove === true ? "the cancellation (its value pays the bridge)" : "the cancellation",
         args.from,
       );
+    },
+  );
+
+  // The store's own tools: over stdio, where the server keeps it.
+  if (store === undefined) return;
+
+  tool(
+    "sauce_intent_list",
+    {
+      title: "List the intents this server keeps",
+      description:
+        "Every intent the intent store holds: those a transaction this server sent published, " +
+        "those sauce_intent_import stored, and those the sauce command on this machine published, " +
+        "filled or imported (the same store, ~/.sauce/intents by default). Each with its hash, " +
+        "its chains, `last` (the last thing recorded of it: published, funded, imported, filled, " +
+        "proving, claimed, refunded or cancelled) and, where an endpoint reaches its chains, " +
+        "where it stands now (`state`) and what can be done next (`can`), as `sauce intent list` " +
+        "lists them. Every other intent tool takes one by its hash as intentHash. Reads the store, " +
+        "and the chains through rpcUrls, else the server's endpoints.",
+      input: { rpcUrls: endpointInputs("").rpcUrls },
+      output: {
+        store: z.string(),
+        intents: z.array(
+          z.looseObject({
+            intentHash: z.string(),
+            source: z.string(),
+            destination: z.string(),
+            last: z.string(),
+          }),
+        ),
+      },
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const records = store.list().intents.map((stored) => stored.record);
+      const endpoints = await chainEndpoints(chainsOf(records), args.rpcUrls, reach);
+
+      return fromCommand(await listCommand(storeContext(store, endpoints)));
+    },
+  );
+
+  tool(
+    "sauce_intent_show",
+    {
+      title: "One stored intent, and everything recorded of it",
+      description:
+        "The intent the store holds under intentHash: its full `record` (route, reward, deadlines, " +
+        "creator, prover, vault), every event recorded of it in `events` (published, funded, " +
+        "imported, filled, proving with its Hyperlane message, claimed, refunded, cancelled: each " +
+        "with its chain, transaction, block and time) and, where an endpoint reaches its chains, " +
+        "`status` as sauce_intent_status reads it — as `sauce intent show` shows it. Reads the " +
+        "store, and the chains through rpcUrls, else the server's endpoints.",
+      input: {
+        intentHash: INTENT_HASH.describe(
+          "The intent, by its hash: sauce_intent_list gives the ones the store holds.",
+        ),
+        rpcUrls: endpointInputs("").rpcUrls,
+      },
+      output: {
+        record: z.looseObject({ intentHash: z.string() }),
+        events: z.array(z.looseObject({ event: z.string() })),
+        status: z.looseObject({}).optional(),
+      },
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const target = fromStore(store, args.intentHash);
+      const endpoints = await chainEndpoints(chainsOf([target.record]), args.rpcUrls, reach);
+
+      return fromCommand(await showCommand(target, storeContext(store, endpoints)));
     },
   );
 }

@@ -29,7 +29,7 @@ import { NO_ENDPOINTS } from "../src/config.js";
 import { endpointUrl, serveHttp } from "../src/http.js";
 import { POT_TOOL_NAMES } from "../src/pots.js";
 import { createSauceServer } from "../src/server.js";
-import { INTENT_TOOL_NAMES } from "../src/intents.js";
+import { INTENT_STORE_TOOL_NAMES, INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES } from "../src/tools.js";
@@ -49,20 +49,21 @@ const PROGRAM = "function main(): Uint256 {\n  return chainId;\n}\n";
 
 const structured = (result: unknown) => (result as CallToolResult).structuredContent!;
 
-/** The tools a server lists: with the Pot store's over stdio, where it keeps it. */
-const toolsOf = (pots: boolean): string[] => [
+/** The tools a server lists: with the stores' over stdio, where it keeps them. */
+const toolsOf = (stores: boolean): string[] => [
   ...TOOL_NAMES,
   ...INTENT_TOOL_NAMES,
+  ...(stores ? INTENT_STORE_TOOL_NAMES : []),
   ...SEND_TOOL_NAMES,
-  ...(pots ? POT_TOOL_NAMES : []),
+  ...(stores ? POT_TOOL_NAMES : []),
   ...SKILL_TOOL_NAMES,
 ];
 
-async function exercise(client: Client, pots = false): Promise<void> {
+async function exercise(client: Client, stores = false): Promise<void> {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    toolsOf(pots),
+    toolsOf(stores),
   );
   const compiled = structured(
     await client.callTool({ name: "sauce_compile", arguments: { source: PROGRAM, chain: "base" } }),
@@ -84,7 +85,10 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     writeFileSync(config, JSON.stringify({ rpcUrls: { "8453": `http://127.0.0.1:9/${SECRET}` } }));
     const transport = new StdioClientTransport({
       command: BIN[0],
-      args: [...BIN.slice(1), "--config", config, "--pots", join(dir, "pots")],
+      args: [
+        ...BIN.slice(1),
+        ...["--config", config, "--pots", join(dir, "pots"), "--store", join(dir, "intents")],
+      ],
       cwd: dir,
       stderr: "pipe",
     });
@@ -141,7 +145,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       args: [
         ...BIN.slice(1),
         ...["--wallets", wallets, "--password-env", "SAUCE_TEST_WALLET_PASSWORD"],
-        ...["--pots", join(dir, "pots")],
+        ...["--pots", join(dir, "pots"), "--store", join(dir, "intents")],
       ],
       env: { ...getDefaultEnvironment(), SAUCE_TEST_WALLET_PASSWORD: password },
       cwd: dir,
@@ -159,6 +163,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         [
           ...TOOL_NAMES,
           ...INTENT_TOOL_NAMES,
+          ...INTENT_STORE_TOOL_NAMES,
           ...SEND_TOOL_NAMES,
           ...WALLET_TOOL_NAMES,
           ...POT_TOOL_NAMES,
@@ -190,7 +195,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     for (const text of [...received, stderr]) assert.ok(!text.includes(password));
   });
 
-  it("keeps the sauce command's Pot store by default, reading the records the command wrote; --no-stores keeps none", async () => {
+  it("keeps the sauce command's stores by default, reading the records the command wrote; --no-stores keeps none", async () => {
     // A record as `sauce pot --deploy` writes it, in the directory the command keeps.
     const pots = join(dir, "kept-pots");
     const record: PotRecord = {
@@ -227,7 +232,8 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       return { client, stderr: () => stderr };
     };
 
-    const kept = await serve("--pots", pots, "--offline");
+    const intents = join(dir, "kept-intents");
+    const kept = await serve("--pots", pots, "--store", intents, "--offline");
     try {
       const { tools } = await kept.client.listTools();
       assert.deepEqual(
@@ -242,10 +248,26 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         await kept.client.callTool({ name: "sauce_pot_list", arguments: { chain: "base" } }),
       );
       assert.deepEqual(listed, { store: pots, pots: [record] });
+      // And the intent store, where sauce intent list reads it: empty, read without a chain.
+      assert.match(
+        kept.client.getInstructions() ?? "",
+        /THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE/,
+      );
+      assert.deepEqual(
+        structured(await kept.client.callTool({ name: "sauce_intent_list", arguments: {} })),
+        {
+          store: intents,
+          intents: [],
+        },
+      );
     } finally {
       await kept.client.close();
     }
     assert.match(kept.stderr(), new RegExp(`keeping the Pots its transactions deploy in ${pots}`));
+    assert.match(
+      kept.stderr(),
+      new RegExp(`keeping the intents its transactions touch in ${intents}`),
+    );
 
     const none = await serve("--no-stores", "--offline");
     try {
@@ -257,7 +279,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     } finally {
       await none.client.close();
     }
-    assert.doesNotMatch(none.stderr(), /keeping the Pots/);
+    assert.doesNotMatch(none.stderr(), /keeping the (Pots|intents)/);
   });
 
   it("refuses a config it cannot use before it serves anything, naming no URL", async () => {
@@ -298,9 +320,15 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         ["--http", "0", "--pots", "/tmp/sauce-pots"],
         /--pots is for stdio: the HTTP server keeps nothing/,
       ],
+      [
+        ["--http", "0", "--store", "/tmp/sauce-intents"],
+        /--store is for stdio: the HTTP server keeps nothing/,
+      ],
       [["--http", "0", "--no-stores"], /--no-stores is for stdio: the HTTP server keeps nothing/],
       [["--pots", "/tmp/sauce-pots", "--no-stores"], /give --pots or --no-stores, not both/],
+      [["--store", "/tmp/sauce-intents", "--no-stores"], /give --store or --no-stores, not both/],
       [["setup", "--pots", "/tmp/sauce-pots"], /--pots is for serving, not setup/],
+      [["setup", "--store", "/tmp/sauce-intents"], /--store is for serving, not setup/],
     ] as const) {
       const child = spawn(BIN[0], [...BIN.slice(1), ...argv], {
         stdio: ["ignore", "ignore", "pipe"],

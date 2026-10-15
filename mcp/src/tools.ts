@@ -857,7 +857,12 @@ function scaled(price: string, numerator: bigint, denominator: bigint): string {
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
 /** A rehearsal's approver: it sends nothing, so there is nothing to approve and no one to ask. */
-const NO_APPROVER = { auto: false, canAsk: false, approve: async () => undefined } as const;
+/** No one to ask: what a tool would need approved is refused, never assumed. */
+export const NO_APPROVER = {
+  auto: false,
+  canAsk: false,
+  approve: async () => undefined,
+} as const;
 /** The name an actions document goes by in messages: it comes from the call, not a file. */
 const ACTIONS_FILE = "actions.json";
 /** An intent's claimant, as fulfill records it: an address, or 32 bytes. */

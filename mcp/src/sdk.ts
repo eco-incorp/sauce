@@ -55,7 +55,15 @@ export {
   withoutShebang,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
-export { keeping, keepsAny, type LocalStores } from "../../sdk/dist/cli/keep.js";
+export {
+  importCommand,
+  listCommand,
+  showCommand,
+  storedTargets,
+  type LifecycleContext,
+  type Target,
+} from "../../sdk/dist/cli/intent-commands.js";
+export { keeping, keepsAny, knowIntents, type LocalStores } from "../../sdk/dist/cli/keep.js";
 export type {
   McpEntry,
   McpServeOptions,
@@ -97,6 +105,7 @@ export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
 export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
+export { IntentStore } from "../../sdk/dist/cli/store.js";
 export {
   CHAIN_SUPPORT_ISSUES_URL,
   CHAIN_SUPPORT_NEW_ISSUE_URL,

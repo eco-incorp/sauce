@@ -307,8 +307,10 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_simulate`       | `sauce simulate`       | `ok`, then `leftInPot` (what the Pot holds after the cook of what it moved, with a note when that is anything), the `path` taken, each transaction's gas (`transactions`), what `main` returns, `moves` by role, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                               |
 | `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded`                                                                                                                                          |
 | `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill simulated: the calls and gas, what moved, or the decoded `reason`                                                                                                                                                                                                              |
-| `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block, whether it was funded, and the transaction's `explorer` and `trace` links                                                                                                                                                                                                                                                                                              |
+| `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block, whether it was funded, and the transaction's `explorer` and `trace` links; over stdio, each stored (`stored`: `created` or `exists`)                                                                                                                                                                                                                                   |
 | `sauce_intent_status`  | `sauce intent status`  | `state`, both sides as read, the deadlines, the prover, and `can`: whether fill, prove, claim, refund and cancel can happen now, why not, and from when                                                                                                                                                                                                                                                                                             |
+| `sauce_intent_list`    | `sauce intent list`    | Over stdio only: every intent the store holds, each its `intentHash`, chains, `last` (the last event recorded) and, where an endpoint reaches its chains, `state` and `can`                                                                                                                                                                                                                                                                         |
+| `sauce_intent_show`    | `sauce intent show`    | Over stdio only: one stored intent by `intentHash`: its `record`, every recorded event (chain, transaction, block, time) and `status`                                                                                                                                                                                                                                                                                                               |
 | `sauce_intent_prove`   | `sauce intent prove`   | The unsigned `Portal.prove` for one or more fills or cancellations, its bridge fee in its value                                                                                                                                                                                                                                                                                                                                                     |
 | `sauce_intent_claim`   | `sauce intent claim`   | The unsigned `withdraw` (`batchWithdraw` for several) that pays each proven intent's claimant                                                                                                                                                                                                                                                                                                                                                       |
 | `sauce_intent_refund`  | `sauce intent refund`  | The unsigned `refund` that returns the reward to its creator                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -547,11 +549,20 @@ default).
 
 ### An intent's life
 
-The server keeps no intents: each call names one, by its `record` — the JSON
-`sauce_intent_publish`, `sauce_intent_import` and `sauce_intent_status` return, checked against its
-own hash before anything is built from it — or by the transaction that published it, `txHash` with
-its source `chain` (and `index` when it published several). `sauce_intent_fill` also takes the
-program itself, with the same inputs as `sauce_intent_publish`.
+Each call names an intent by its `record` — the JSON `sauce_intent_publish`, `sauce_intent_import`
+and `sauce_intent_status` return, checked against its own hash before anything is built from it —
+or by the transaction that published it, `txHash` with its source `chain` (and `index` when it
+published several). `sauce_intent_fill` also takes the program itself, with the same inputs as
+`sauce_intent_publish`.
+
+Over stdio the server keeps the `sauce` command's intent store, as the command does: by default
+`~/.sauce/intents`, where `sauce intent list` reads it (`--store <dir>` for another, `--no-stores`
+for none). Every intent a transaction it sends publishes (`sauce_send`, `sauce_wallet_send`) is
+stored, and what one does to an intent — `filled`, `proving`, `claimed`, `refunded`, `cancelled` —
+is recorded from the Portal's own events, for an intent the store holds or a call named. So every
+intent tool also takes `intentHash`, an intent the store holds; `sauce_intent_list` and
+`sauce_intent_show` read the store, and `sauce_intent_import` stores what it reads. Over HTTP the
+server keeps no intents, and has neither the input nor the two tools.
 
 1. `sauce_intent_publish`: the creator's transactions on the source chain. Or `sauce_intent_import`
    for an intent published elsewhere.
