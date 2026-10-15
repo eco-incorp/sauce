@@ -199,7 +199,8 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     } finally {
       await client.close();
     }
-    assert.match(stderr, /serving the wallets in \S+; sauce_wallet_enable enables them to sign/);
+    // A bare start says nothing of the wallets it serves by default.
+    assert.doesNotMatch(stderr, /wallets/);
     assert.equal(statSync(join(wallets, "agent.json")).mode & 0o777, 0o600);
     const password = readFileSync(join(home, ".sauce", "wallets.password"), "utf8").trim();
     assert.equal(password.length, 43);
@@ -216,6 +217,8 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       cwd: dir,
       stderr: "pipe",
     });
+    let stderr = "";
+    transport.stderr?.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
     const client = new Client({ name: "stdio-agent-env", version: "0.0.0" });
     await client.connect(transport);
     const received: string[] = [client.getInstructions() ?? ""];
@@ -248,7 +251,9 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     } finally {
       await client.close();
     }
-    for (const text of received) assert.ok(!text.includes(password));
+    // The directory the operator named is said, and that the agent enables its wallets.
+    assert.match(stderr, /serving the wallets in \S+; sauce_wallet_enable enables them to sign/);
+    for (const text of [...received, stderr]) assert.ok(!text.includes(password));
   });
 
   it("signs with the wallets the password source it was started with enables", async () => {

@@ -92,12 +92,14 @@ async function serve(options: McpServeOptions): Promise<void> {
       ...(keepsAny(stores) ? { stores } : {}),
       ...update,
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
-    if (wallets !== undefined) {
+    // A bare start says nothing: only what the operator chose is said, a password source or a
+    // wallet directory named.
+    if (wallets?.start !== undefined) {
+      options.log(`sauce mcp: signing with the wallets in ${wallets.dir}\n`);
+    } else if (wallets?.dirNamed === true) {
       options.log(
-        wallets.start === undefined
-          ? `sauce mcp: serving the wallets in ${wallets.dir}; sauce_wallet_enable enables ` +
-              "them to sign\n"
-          : `sauce mcp: signing with the wallets in ${wallets.dir}\n`,
+        `sauce mcp: serving the wallets in ${wallets.dir}; sauce_wallet_enable enables them ` +
+          "to sign\n",
       );
     }
     if (stores.pots !== undefined) {
