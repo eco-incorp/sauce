@@ -581,6 +581,11 @@ and sends it: `sauce run` from a wallet. Each transaction it sent comes back wit
 `explorer` and `trace` to give the user, and a cook with `moves`, `leftInPot` and `summary`, the
 lines `sauce run` prints. Over HTTP, nothing signs.
 
+A server over stdio keeps the command's Pot store, on by default: a Pot a send through it deploys
+is recorded as `sauce` records one, and its result's notes say so. `sauce_pot_list` and
+`sauce_pot_import` are `sauce pot list` and `sauce pot import`. Each transaction in a send's
+result carries `pots`, the record of each Pot it deployed. Over HTTP nothing is kept.
+
 ## Rules
 
 - Never write an RPC URL, a key or a wallet's password into a tracked file, a program or a command

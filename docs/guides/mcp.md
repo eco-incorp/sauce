@@ -154,6 +154,7 @@ reports what it did ([Signing what it builds](#signing-what-it-builds)).
 sauce mcp                                       # stdio: what an agent launches, with its wallets
 sauce mcp --password-env SAUCE_WALLET_PASSWORD  # stdio, its wallets enabled from the start
 sauce mcp --no-wallets                          # stdio, with no wallet: nothing signs
+sauce mcp --no-stores                           # stdio, keeping nothing on disk: no wallet, no Pot store
 sauce mcp --http 3000                           # self-hosted, Streamable HTTP
 ```
 
@@ -324,6 +325,8 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_wallet_list`    | `sauce wallet list`    | Over stdio, with no password: the wallet `dir`, whether the wallets are `enabled` and by which `source`, and each wallet's name, kind, address and policy                                                                                                                                                                                                                                                                                           |
 | `sauce_wallet_address` | `sauce wallet address` | Over stdio, with no password: one wallet's `name`, `kind`, `address` and `policy`                                                                                                                                                                                                                                                                                                                                                                   |
 | `sauce_wallet_send`    | —                      | Over stdio, once the wallets are enabled: another tool's result (or a transaction, or a list; a Solana plan sent step by step) simulated, held to the wallet's policy, signed and sent; each one's `hash`, `status`, `explorer` and `trace`, for a cook `moves`, `leftInPot` and `summary`, and `pots`, the record of each Pot a transaction deployed; or the refusal                                                                               |
+| `sauce_pot_list`       | `sauce pot list`       | Over stdio, where the server keeps the Pot store: each recorded Pot's chain, address, owner, salt, kind, Kitchen, `release` and `engine`, and the `deployment` that made it                                                                                                                                                                                                                                                                         |
+| `sauce_pot_import`     | `sauce pot import`     | Over stdio, where the server keeps the Pot store: the Pot `pot` names (EVM), or an `owner`'s at its salt, read from the chain and recorded; the records, as `sauce_pot_list` gives them                                                                                                                                                                                                                                                             |
 
 ### The command's flags as inputs
 
@@ -813,6 +816,22 @@ the [supported chains](#supported-and-preview-chains) too. Over HTTP there are n
 `--wallets` and the password flags are refused, and neither the wallet tools nor
 `sauce_wallet_enable` is registered.
 
+## What a local server keeps
+
+Over stdio the server is the `sauce` command for an agent that has no shell, so it keeps what the
+command keeps, where the command keeps it, with no flag: the Pot store, `~/.sauce/pots`
+([The Pots you deployed](cli.md#the-pots-you-deployed-sauce-pot-list)). Every Pot a transaction it
+sends deploys (a deployment through `sauce_send` or `sauce_wallet_send`, or a cook whose program
+deploys one) is recorded once the chain shows it, exactly as the command records it, and the
+result's `notes` say so. `sauce_pot_list` lists the store, and `sauce_pot_import` records a Pot
+deployed some other way. Both read and write the same files as `sauce pot list` and
+`sauce pot import`, so the command and the server see each other's Pots.
+
+`--pots <dir>` keeps the store in another directory. `--no-stores` keeps nothing: then the server
+writes nothing, has neither tool, and serves no [wallet](#agent-wallets) either. Either way, each transaction in a send's result carries
+`pots`, the record of each Pot it deployed, for the client to keep. Over HTTP the server keeps
+nothing, and `--pots` and `--no-stores` are refused there.
+
 ## Skills, documents and prompts
 
 The [agent skills](skills.md) the package ships are the same files `sauce skills install`
@@ -850,7 +869,8 @@ A GET or DELETE is refused (405).
 - **No environment, and no key.** The server reads no environment variable. Its RPC endpoints are
   the `--config` file's, and the built-in public ones for a chain the file does not name; it holds
   no key: nothing it builds is signed. `--wallets` and the password flags are refused over HTTP,
-  and the wallet tools are not registered there.
+  and the wallet tools are not registered there. It keeps nothing on disk either: it has no Pot
+  store, and no `sauce_pot_list` or `sauce_pot_import`.
 - **It authenticates no one.** Bound to loopback, the default, it answers only requests whose
   `Host`, and `Origin` when one is sent, is a loopback name. That keeps a web page from reaching it
   through DNS rebinding.

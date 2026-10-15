@@ -222,8 +222,11 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
   Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
-  run the sync, paste the digests and engine ids it reports — a row with a `null` digest or engine id
-  is a release not out yet, and the sync refuses it and writes nothing. Then `pnpm build`: the
+  run the sync, paste the digests, engine ids and the kitchen-evm pin's `kitchen` and
+  `potInitCodeHash` it reports — a row with a `null` digest, engine id, Kitchen or hash is a release
+  not out yet, and the sync refuses it and writes nothing. The Kitchen and hash are what the `sauce`
+  command tells a Pot's release from (`cli/pots.ts`), so every row keeps its own after a newer
+  release moves the hash; the sync checks the installed row's against its `addresses.json`. Then `pnpm build`: the
   release's addresses are written in docs and skills ONLY in the generated
   `docs/reference/deployments.md` and `skills/sauce-chains/references/deployments.json` (see "One
   place per release" under "Agent skills"), so those two files are the bump's whole docs/skills
@@ -952,7 +955,8 @@ executable: `compile`, `actions`, `simulate`, `run`, `intent <verb>`, `wallet <v
 `globals`, `inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and
 (`solana.ts`) Solana. `run.ts` dispatches `intent <verb>` (`INTENT_VERBS`: publish, fill, prove,
 claim, refund, cancel, status, list, show, import; no verb at a terminal is the picker,
-`interactive.ts`) and `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export) as
+`interactive.ts`), `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export) and
+`pot <verb>` (`POT_VERBS`: list, import; `sauce pot` with no verb predicts and deploys) as
 commands of their own (`VERBS`), each with its own flags and `--help`; the skills checker reads the
 verbs from each command's `--help`. An intent's life after publishing is `lifecycle.ts`: plain-value functions
 (`intentStatus`, `buildFill`/`planFill`, `buildProve`, `buildClaim`, `buildRefund`, `buildCancel`,
@@ -962,6 +966,21 @@ are; the calldata is `routes/portal.ts`'s. `intent-commands.ts` adds the signer,
 (`--auto-approve`) and the store; `store.ts` is the store under `~/.sauce/intents` (an
 `intent.json` linked into place once, an append-only `events.jsonl`, nothing read and written back;
 it imports only Node's modules, so `cli-store.test.ts` runs it in child processes).
+`pot-store.ts` is the Pot store beside it, `~/.sauce/pots` (`--pots <dir>`): one owner-only
+`<chainId>/<pot>.json` per Pot, linked into place once, the same mechanics and the same
+child-process test (`cli-pot-store.test.ts`). Its records are not written by the commands: the two
+places every send lands, `chain.ts#landed` and `solana.ts#svmLanded`, read what a transaction
+deployed from the chain (the Kitchen's `PotDeployed` in a receipt that succeeded, its `create_pot`
+in a Solana transaction that succeeded; `pots.ts`, which tells each Pot's release from its address
+under every `releases.json` Kitchen and hash), put it on `Sent.pots`/`SvmSent.pots` (so every JSON
+that reports a sent transaction carries `pots`), and hand the transaction to `keep.ts#keepLanded`.
+That is the ONE hook every store a landed transaction feeds attaches to (`LocalStores`): it gives
+the transaction to each store of the current scope, which `runCli` sets per command and the local
+MCP server per tool call (`AsyncLocalStorage`, so scopes keep apart). Only the executable gives the
+Pot store's directory (`main.ts`'s `potsDir`, like `publicRpcs`), so a test records nothing unless
+it passes `--pots` or `CliIo.potsDir`. `sauce pot list` and `sauce pot import` (`POT_VERBS`,
+`pot-commands.ts`) read and add to it; `cli-pots.e2e.test.ts` and `cli-solana.e2e.test.ts` hold
+every path that deploys a Pot to its record.
 `cli-lifecycle.e2e.test.ts` runs a whole intent on two anvils with eco-routes' own Portal and
 HyperProver (`eco-routes-anvil.ts`, immutables rewritten where the Portal, its Executor and vault
 implementation name each other); only Hyperlane's relay is mocked (`evm/fixtures/MockMailbox.sol`).
@@ -1092,6 +1111,16 @@ its `record` (which `sauce_intent_publish` returns per intent) or by `txHash` an
 through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/eco-routes-anvil.ts`),
 signing each unsigned transaction itself; `intents-solana.e2e.test.ts` builds a Solana fill through
 them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and lands it.
+
+Over stdio the server is the command for an agent with no shell, so it keeps the command's stores
+as the command does, in the same directories, BY DEFAULT: `McpServeOptions.stores` (`McpStores`,
+built by `mcp.ts#storesOf`; `--pots <dir>` for another directory, `--no-stores` for none) becomes
+the server's `LocalStores`, which the tool registrar scopes each call over (`keep.ts`), saying what
+it kept in the call's notes. So a Pot a `sauce_send` or `sauce_wallet_send` deploys is recorded as
+`sauce` records it, and `sauce_pot_list`/`sauce_pot_import` (`mcp/src/pots.ts`, on a server that
+keeps the Pot store) call `potListCommand`/`potImportCommand`. Over HTTP there are no stores, the
+flags are refused, and `createSauceServer` refuses stores beside a guard (`pots.e2e.test.ts`,
+`transports.test.ts`).
 
 No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
 input that looks like one, nested fields included), and the server reads no environment. It signs
