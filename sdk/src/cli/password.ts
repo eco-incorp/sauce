@@ -14,6 +14,12 @@
  *    password, or part of it.
  *  - otherwise a hidden prompt at the terminal, asked twice when a wallet is being created.
  *
+ * The local MCP server's `sauce_enable_wallets` names a source too — never the password itself —
+ * spelt as its inputs are (`env NAME`, `file <path>`), and never a command: a command the model
+ * chose would be a shell for it. It may also name one entry of a `.env` file, which is held to the
+ * password file's rule, and every file it names must be a regular one, so a pipe or a device can
+ * never hold the server up.
+ *
  * The password is registered as a secret (`signer.ts#secret`) the moment it is read, before
  * anything can fail, so no message, log or result can carry it. Node-only, like all of `cli/`.
  */
@@ -25,7 +31,12 @@ export type PasswordSource =
   | { readonly from: "env"; readonly name: string }
   | { readonly from: "file"; readonly path: string }
   | { readonly from: "command"; readonly command: string }
-  | { readonly from: "prompt" };
+  | { readonly from: "prompt" }
+  /** `sauce_enable_wallets` only: the entry `name` of the `.env` file at `path`. */
+  | { readonly from: "dotenv"; readonly path: string; readonly name: string };
+
+/** Who named a source: a flag of the command line, or the MCP server's `sauce_enable_wallets`. */
+export type SourceNamer = "flag" | "tool";
 
 /** The password flags, as given. */
 export interface PasswordFlags {
@@ -59,7 +70,8 @@ export interface CapturedCommand {
 /** The shortest password a wallet is created with. */
 export const MIN_PASSWORD = 8;
 
-const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** What an environment variable's name may be: letters, digits and _, never its value. */
+export const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** The one source `flags` name, or the prompt when they name none. */
 export function passwordSource(flags: PasswordFlags): PasswordSource {
@@ -91,13 +103,19 @@ export function passwordSource(flags: PasswordFlags): PasswordSource {
   return { from: "prompt" };
 }
 
-/** How a source is named in a message: its flag and the variable or file, never a value. */
-export function describeSource(source: PasswordSource): string {
+/**
+ * How a source is named in a message: its flag and the variable or file, never a value — or, for
+ * a source `sauce_enable_wallets` named, its inputs.
+ */
+export function describeSource(source: PasswordSource, by: SourceNamer = "flag"): string {
+  const flag = by === "flag";
   switch (source.from) {
     case "env":
-      return `--password-env ${source.name}`;
+      return `${flag ? "--password-env" : "env"} ${source.name}`;
     case "file":
-      return `--password-file ${source.path}`;
+      return `${flag ? "--password-file" : "file"} ${source.path}`;
+    case "dotenv":
+      return `dotenv ${source.path}, variable ${source.name}`;
     case "command":
       // The command itself is not repeated: it may carry an argument someone would rather not see.
       return "--password-command";
@@ -112,11 +130,17 @@ const withoutNewline = (text: string): string => text.replace(/\r?\n$/, "");
 /** Whether permission bits let anyone but the owner read or write. */
 const sharedMode = (mode: number): boolean => (mode & 0o077) !== 0;
 
+/** Whether a file's mode is a regular file's (not a pipe, a device or a directory). */
+const regularFile = (mode: number): boolean => (mode & 0o170000) === 0o100000;
+
 export interface ReadPasswordOptions {
   /** What it unlocks, for the prompt: "wallet agent". */
   readonly what: string;
   /** A new wallet's: asked twice at a prompt, and held to {@link MIN_PASSWORD}. */
   readonly creating?: boolean;
+  /** Who named the source (a flag, by default): how its messages spell it. A file a tool names
+   *  must be a regular file. */
+  readonly by?: SourceNamer;
 }
 
 /** The password `source` gives, registered as a secret before anything else happens to it. */
@@ -126,12 +150,13 @@ export async function readPassword(
   options: ReadPasswordOptions,
 ): Promise<string> {
   const password = await fromSource(source, io, options);
+  const named = describeSource(source, options.by);
   if (password === "") {
-    throw new UsageError(`${describeSource(source)} gives an empty password`);
+    throw new UsageError(`${named} gives an empty password`);
   }
   if (options.creating === true && [...password].length < MIN_PASSWORD) {
     throw new UsageError(
-      `${describeSource(source)} gives a password of under ${MIN_PASSWORD} characters: a ` +
+      `${named} gives a password of under ${MIN_PASSWORD} characters: a ` +
         "wallet's password protects its key on disk, so use a longer one",
     );
   }
@@ -144,41 +169,38 @@ async function fromSource(
   io: PasswordIo,
   options: ReadPasswordOptions,
 ): Promise<string> {
+  const named = describeSource(source, options.by);
   switch (source.from) {
     case "env": {
       const value = io.readEnv(source.name);
       if (value !== undefined) secret(value);
       if (value === undefined) {
-        throw new UsageError(`--password-env ${source.name}: the variable is not set`);
+        throw new UsageError(
+          `${named}: the variable is not set` +
+            (options.by === "tool"
+              ? " in this server's environment (the client's configuration passes it, in the " +
+                "server entry's env block)"
+              : ""),
+        );
       }
 
       return value;
     }
     case "file": {
-      let mode: number | undefined;
-      try {
-        mode = io.fileMode(source.path);
-      } catch (error) {
-        throw unreadable(source.path, error);
-      }
-      if (mode !== undefined && sharedMode(mode)) {
-        throw new CliError(
-          `--password-file ${source.path} can be read or written by others (mode ` +
-            `${(mode & 0o777).toString(8).padStart(3, "0")}): a password file must be yours ` +
-            `alone. Run \`chmod 600 ${source.path}\`, then try again`,
-        );
-      }
-      let text: string;
-      try {
-        text = io.readText(source.path);
-      } catch (error) {
-        throw unreadable(source.path, error);
-      }
+      const text = readOwnFile(source.path, named, io, options.by === "tool");
       secret(text.trim());
       const password = withoutNewline(text);
       secret(password);
 
       return password;
+    }
+    case "dotenv": {
+      const value = dotenvEntry(readOwnFile(source.path, named, io, true), source.name);
+      if (value === undefined) {
+        throw new UsageError(`${named}: the file has no ${source.name} entry`);
+      }
+
+      return value;
     }
     case "command": {
       const ran = io.capture(source.command);
@@ -212,10 +234,56 @@ async function fromSource(
   }
 }
 
-function unreadable(path: string, error: unknown): CliError {
+/**
+ * The text of a file that holds a password, refused when anyone but its owner may read or write it
+ * — and, when `regular`, when it is not a regular file. Never quoted back.
+ */
+function readOwnFile(path: string, named: string, io: PasswordIo, regular: boolean): string {
+  let mode: number | undefined;
+  try {
+    mode = io.fileMode(path);
+  } catch (error) {
+    throw unreadable(named, error);
+  }
+  if (mode !== undefined && regular && !regularFile(mode)) {
+    throw new CliError(`${named} is not a regular file`);
+  }
+  if (mode !== undefined && sharedMode(mode)) {
+    throw new CliError(
+      `${named} can be read or written by others (mode ` +
+        `${(mode & 0o777).toString(8).padStart(3, "0")}): a password file must be yours ` +
+        `alone. Run \`chmod 600 ${path}\`, then try again`,
+    );
+  }
+  try {
+    return io.readText(path);
+  } catch (error) {
+    throw unreadable(named, error);
+  }
+}
+
+/**
+ * Line by line as dotenv reads a `.env` file: `NAME=value`, `export` before it allowed, a value
+ * in single, double or back quotes taken whole (`\n` in double quotes a newline) and an unquoted
+ * one up to a `#`; the last entry of a name wins. Only `name`'s value is kept, as a secret.
+ */
+export function dotenvEntry(text: string, name: string): string | undefined {
+  const line =
+    /^\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?$/gm;
+  let value: string | undefined;
+  for (const match of text.replace(/\r\n?/g, "\n").matchAll(line)) {
+    if (match[1] !== name) continue;
+    const raw = (match[2] ?? "").trim();
+    const unquoted = raw.replace(/^(['"`])([\s\S]*)\1$/, "$2");
+    value = raw.startsWith('"') ? unquoted.replace(/\\n/g, "\n").replace(/\\r/g, "\r") : unquoted;
+  }
+  if (value !== undefined) secret(value);
+
+  return value;
+}
+
+function unreadable(named: string, error: unknown): CliError {
   const code = (error as { code?: string }).code;
 
-  return new CliError(
-    `--password-file ${path}: ${code === "ENOENT" ? "no such file" : "unreadable"}`,
-  );
+  return new CliError(`${named}: ${code === "ENOENT" ? "no such file" : "unreadable"}`);
 }

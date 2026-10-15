@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -31,6 +32,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
+  dotenvEntry,
   passwordSource,
   readPassword,
   type CapturedCommand,
@@ -43,7 +45,7 @@ import {
   keystoreAddress,
   scrub,
 } from "../src/cli/signer.js";
-import { WalletStore } from "../src/cli/wallets.js";
+import { generatedPasswordFile, generatePasswordFile, WalletStore } from "../src/cli/wallets.js";
 
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
 if (!HAS_CAST && process.env.CI) {
@@ -308,6 +310,124 @@ describe("password sources", () => {
     ).rejects.toThrow(/gives a password of under 8 characters/);
     // Unlocking an existing keystore takes the password it has.
     expect(await readPassword({ from: "env", name: "X" }, short, what)).toBe("short");
+  });
+});
+
+describe("password sources an MCP tool names", () => {
+  const io = (env: Record<string, string> = {}): PasswordIo => ({
+    readEnv: (name) => env[name],
+    readText: (path) => readFileSync(path, "utf8"),
+    fileMode: (path) => statSync(path).mode,
+    capture: () => {
+      throw new Error("a tool never names a command");
+    },
+    promptPassword: async () => {
+      throw new Error("a tool never prompts");
+    },
+  });
+  const tool = { what: "the wallets", creating: true, by: "tool" } as const;
+
+  it("names each by the tool's inputs, and says where a variable comes from", async () => {
+    await expect(readPassword({ from: "env", name: "SAUCE_ABSENT" }, io(), tool)).rejects.toThrow(
+      /^env SAUCE_ABSENT: the variable is not set in this server's environment \(the client's configuration passes it, in the server entry's env block\)$/,
+    );
+    const value = password();
+    expect(
+      await readPassword({ from: "env", name: "SAUCE_PW" }, io({ SAUCE_PW: value }), tool),
+    ).toBe(value);
+    await expect(
+      readPassword({ from: "env", name: "SAUCE_PW" }, io({ SAUCE_PW: "seven77" }), tool),
+    ).rejects.toThrow(/^env SAUCE_PW gives a password of under 8 characters/);
+  });
+
+  it("reads only a regular file only its owner can read", async () => {
+    const value = password();
+    const file = join(work, "password");
+    writeFileSync(file, `${value}\n`, { mode: 0o600 });
+    expect(await readPassword({ from: "file", path: file }, io(), tool)).toBe(value);
+    chmodSync(file, 0o644);
+    await expect(readPassword({ from: "file", path: file }, io(), tool)).rejects.toThrow(
+      new RegExp(`^file ${file} can be read or written by others \\(mode 644\\)`),
+    );
+    const directory = join(work, "a-directory");
+    mkdirSync(directory, { mode: 0o700 });
+    await expect(readPassword({ from: "file", path: directory }, io(), tool)).rejects.toThrow(
+      new RegExp(`^file ${directory} is not a regular file$`),
+    );
+    // A flag's file is read as it always was, a pipe included.
+    await expect(
+      readPassword({ from: "file", path: directory }, io(), { what: "wallet test" }),
+    ).rejects.toThrow(/--password-file .*: unreadable/);
+  });
+
+  it("reads one entry of a .env file, as dotenv does, and quotes no line of it", async () => {
+    const value = password();
+    const text = [
+      "# comment",
+      "PLAIN=plain value # a comment",
+      `export QUOTED="${value} with spaces"`,
+      'ESCAPED="a\\nb"',
+      "BACK=`back`",
+      "EMPTY=",
+      "not an entry at all",
+      "  SPACED =  spaced  ",
+      "DUP=first",
+      "DUP=last",
+      "WINDOWS=crlf\r",
+    ].join("\n");
+    expect(dotenvEntry(text, "PLAIN")).toBe("plain value");
+    expect(dotenvEntry(text, "QUOTED")).toBe(`${value} with spaces`);
+    expect(dotenvEntry(text, "ESCAPED")).toBe("a\nb");
+    expect(dotenvEntry(text, "BACK")).toBe("back");
+    expect(dotenvEntry(text, "EMPTY")).toBe("");
+    expect(dotenvEntry(text, "SPACED")).toBe("spaced");
+    expect(dotenvEntry(text, "DUP")).toBe("last");
+    expect(dotenvEntry(text, "WINDOWS")).toBe("crlf");
+    expect(dotenvEntry(text, "ABSENT")).toBeUndefined();
+    // The entry read is a secret from then on.
+    expect(scrub(`it was ${value} with spaces`)).toBe("it was [redacted]");
+    const file = join(work, ".env");
+    writeFileSync(file, text, { mode: 0o600 });
+    expect(await readPassword({ from: "dotenv", path: file, name: "QUOTED" }, io(), tool)).toBe(
+      `${value} with spaces`,
+    );
+    const missing = readPassword({ from: "dotenv", path: file, name: "ABSENT" }, io(), tool);
+    await expect(missing).rejects.toThrow(
+      new RegExp(`^dotenv ${file}, variable ABSENT: the file has no ABSENT entry$`),
+    );
+    await expect(
+      readPassword({ from: "dotenv", path: file, name: "EMPTY" }, io(), tool),
+    ).rejects.toThrow(/variable EMPTY gives an empty password/);
+    chmodSync(file, 0o604);
+    await expect(
+      readPassword({ from: "dotenv", path: file, name: "QUOTED" }, io(), tool),
+    ).rejects.toThrow(/can be read or written by others \(mode 604\)/);
+  });
+});
+
+describe("a generated password file", () => {
+  it("is 43 random characters in a new file, 0600, beside the wallet directory, never over one", () => {
+    const dir = join(work, "home", ".sauce", "wallets");
+    const path = generatedPasswordFile(dir);
+    expect(path).toBe(join(work, "home", ".sauce", "wallets.password"));
+    expect(generatedPasswordFile(`${dir}/`)).toBe(path);
+    // Its directory is made only for the default place.
+    expect(() => generatePasswordFile(path)).toThrow(
+      /does not exist: a password file goes in a directory that does/,
+    );
+    const first = generatePasswordFile(path, true);
+    expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(readFileSync(path, "utf8")).toBe(`${first}\n`);
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(statSync(join(work, "home", ".sauce")).mode & 0o777).toBe(0o700);
+    expect(() => generatePasswordFile(path, true)).toThrow(
+      /wallets\.password exists: a password file is never overwritten/,
+    );
+    expect(readFileSync(path, "utf8")).toBe(`${first}\n`);
+    // No temporary file is left behind, and the password is a secret.
+    expect(readdirSync(join(work, "home", ".sauce"))).toEqual(["wallets.password"]);
+    expect(scrub(`it is ${first}`)).toBe("it is [redacted]");
+    expect(generatePasswordFile(join(work, "another"))).not.toBe(first);
   });
 });
 

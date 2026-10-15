@@ -206,8 +206,9 @@ export function walletAddressCommand(store: WalletStore, name: string): CommandO
   return { text: info.address, json: walletJson(info, policyState(info).has) };
 }
 
-/** Whether an operand is a key rather than the path of one: never taken from the command line. */
-const looksLikeKey = (operand: string): boolean =>
+/** Whether an operand is a key rather than the path of one: never taken from the command line,
+ *  nor from a tool's input. */
+export const looksLikeKey = (operand: string): boolean =>
   /^(?:0x)?[0-9a-fA-F]{64}$/.test(operand) ||
   operand.trim().startsWith("[") ||
   operand.trim().startsWith("{") ||
