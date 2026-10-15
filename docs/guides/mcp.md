@@ -715,7 +715,8 @@ open (`kept`) however long their cooks wait.
 Over stdio, the server sends what it builds from wallets of its own: the `sauce` command's,
 [`sauce wallet`](cli.md#agent-wallets)'s, in `~/.sauce/wallets`. The one-line install serves them,
 with nothing more to configure. `--wallets <dir>` serves another directory, and `--no-wallets`
-serves none: then nothing signs, and the wallet tools are not there.
+serves none: then nothing signs, and the wallet tools are not there. The wallet directory is one
+of the command's stores the local server keeps, so `--no-stores` leaves it out too.
 
 Listing the wallets needs no password: each wallet's file names its address in the clear. Creating
 a wallet, importing one and sending from one need the wallets **enabled** by the source of their

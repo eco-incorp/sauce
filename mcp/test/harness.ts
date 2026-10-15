@@ -12,7 +12,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "../src/config.js";
 import type { RpcGuard } from "../src/guard.js";
 import { readPassword } from "../../sdk/dist/cli/password.js";
-import type { McpWallets } from "../src/sdk.js";
+import type { LocalStores, McpWallets } from "../src/sdk.js";
 import { createSauceServer } from "../src/server.js";
 
 export interface Connected {
@@ -34,12 +34,15 @@ export async function connect(
   wallets?: McpWallets,
   /** As over stdio: a program may be named by `path`, read from disk. */
   local = false,
+  /** As over stdio: the `sauce` command's stores the server keeps. */
+  stores?: LocalStores,
 ): Promise<Connected> {
   const server = createSauceServer({
     endpoints,
     ...(guard === undefined ? {} : { guard }),
     ...(wallets === undefined ? {} : { wallets }),
     ...(local ? { local: true } : {}),
+    ...(stores === undefined ? {} : { stores }),
   });
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "sauce-mcp-test", version: "0.0.0" });

@@ -1095,7 +1095,8 @@ them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and
 
 No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
 input that looks like one, nested fields included), and the server reads no environment. It signs
-only over stdio, where it serves the wallet tools by default (`--no-wallets` turns them off), and
+only over stdio, where it serves the wallet tools by default (`--no-wallets` turns them off, and
+`--no-stores` with the other stores: the directory is `McpStores.wallets`), and
 only once the wallets are enabled (`mcp/src/wallets.ts`, see "Agent wallets"); over HTTP it never
 signs and serves no wallet tool. A tool reads a chain through the call's own `rpcUrl`, else the
 `--config` endpoint, else the public endpoints `sauce mcp` hands it (`Endpoints.public`, saying so in

@@ -33,6 +33,7 @@ import {
 import { getAddress, parseEther, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
+import { PotStore } from "../../sdk/dist/cli/pot-store.js";
 import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
@@ -71,10 +72,13 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-e2e-"));
+    // As `sauce mcp` serves over stdio: the wallets, and the command's Pot store beside them.
     mcp = await connect(
       endpointsFor({ [String(base.chain.id)]: base.rpcUrl }),
       undefined,
       walletsAt(join(dir, "wallets"), { start: PASSWORD }),
+      false,
+      { pots: new PotStore(join(dir, "pots")) },
     );
   });
   after(async () => {
@@ -137,6 +141,17 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     assert.deepEqual(
       pots?.map((one) => [one.pot, one.owner, one.chain, one.origin]),
       [[pot, wallet, "base", "deployed"]],
+    );
+    // And, the server keeping the command's Pot store, recorded there as the command records it.
+    assert.ok(
+      ((sent as { notes?: string[] }).notes ?? []).includes(
+        `recorded Pot ${pot} on base in ${join(dir, "pots")}`,
+      ),
+      JSON.stringify((sent as { notes?: string[] }).notes),
+    );
+    assert.deepEqual(
+      new PotStore(join(dir, "pots")).list().pots.map((one) => [one.pot, one.owner, one.chain]),
+      [[pot, wallet, "base"]],
     );
     assert.ok(
       ((sent as { notes?: string[] }).notes ?? []).some((note) => /no limits are set/.test(note)),
