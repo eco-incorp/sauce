@@ -595,8 +595,10 @@ sauce pot import --chain base --owner 0xYou --salt treasury
 sauce pot import --chain solana --owner <pubkey>
 ```
 
-The MCP server keeps no store. Its tools that send (`sauce_send`, `sauce_wallet_send`) return the
-same record, as `pots` on each transaction that deployed one, for the client to keep.
+The MCP server, run over stdio, keeps the same store in the same directory: a Pot its tools' sends
+deploy is recorded there, and `sauce_pot_list` and `sauce_pot_import` match these two commands
+([What a local server keeps](mcp.md#what-a-local-server-keeps)). Each send's result also carries
+`pots` on the transaction that deployed one. Over HTTP the server keeps nothing.
 
 ### For a wallet: `sauce tx`
 
@@ -1296,8 +1298,9 @@ thing that happened to it (`published`, `funded`, `imported`, `filled`, `proving
 transaction as it lands — the Portal's own events, or on Solana its instructions — so a transaction
 signed elsewhere and sent with `sauce send` is recorded as one the command signed. Nothing is read
 and written back, so two commands at once cannot tear it, and where an intent stands is never
-stored: it is read from the chains each time. No key or endpoint is written there. The local MCP
-server (`sauce mcp` over stdio) keeps the same store.
+stored: it is read from the chains each time. No key or endpoint is written there. The MCP
+server, run over stdio, keeps the same store
+([What a local server keeps](mcp.md#what-a-local-server-keeps)).
 
 `sauce intent import <tx hash> --chain <source>` stores the intents a
 transaction published — someone else's, say — rebuilt from its `IntentPublished` logs, each checked

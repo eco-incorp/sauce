@@ -575,6 +575,14 @@ transaction it sent comes back with its hash, `explorer` and `trace` to give the
 with `moves`, `leftInPot` and `summary`, the lines `sauce run` prints.
 Over HTTP, nothing signs.
 
+A server over stdio keeps the command's Pot store, on by default: a Pot a send through it deploys
+is recorded as `sauce` records one, and its result's notes say so. `sauce_pot_list` and
+`sauce_pot_import` are `sauce pot list` and `sauce pot import`. Each transaction in a send's
+result carries `pots`, the record of each Pot it deployed. It keeps the intent store the same way:
+what a send through it does to an intent is recorded as `sauce` records it, every intent tool takes
+`intentHash`, and `sauce_intent_list`, `sauce_intent_show` and `sauce_intent_import` are
+`sauce intent list`, `show` and `import`. Over HTTP nothing is kept.
+
 ## Rules
 
 - Never write an RPC URL, a key or a wallet's password into a tracked file, a program or a command
