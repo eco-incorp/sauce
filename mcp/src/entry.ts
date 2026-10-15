@@ -93,18 +93,21 @@ async function serve(options: McpServeOptions): Promise<void> {
       ...update,
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     // A bare start says nothing: only what the operator chose is said, a password source or a
-    // wallet directory named.
+    // wallet directory named (`McpStores.named`).
     if (wallets?.start !== undefined) {
       options.log(`sauce mcp: signing with the wallets in ${wallets.dir}\n`);
-    } else if (wallets?.dirNamed === true) {
+    } else if (wallets !== undefined && options.stores?.named?.includes("wallets") === true) {
       options.log(
         `sauce mcp: serving the wallets in ${wallets.dir}; sauce_wallet_enable enables them ` +
           "to sign\n",
       );
     }
-    // Nothing is logged of the stores: they are kept by default, and a start says nothing it is
-    // not asked to (a client logs every line). The instructions say where the Pots are kept, and
-    // each tool result says what it recorded.
+    // A store kept by default is not logged: a start says nothing it was not asked to (a client
+    // logs every line), and the instructions say where the server keeps it. One whose directory
+    // the operator named is.
+    if (stores.pots !== undefined && options.stores?.named?.includes("pots") === true) {
+      options.log(`sauce mcp: keeping the Pots its transactions deploy in ${stores.pots.dir}\n`);
+    }
 
     return;
   }

@@ -99,6 +99,12 @@ export interface McpStores {
   /** The wallet directory (`wallets.ts`), which the wallet tools serve; `--no-wallets` alone keeps
    *  the other stores. */
   readonly wallets?: McpWallets;
+  /**
+   * The stores whose directory the operator named (`--pots`, `--wallets <dir>`). A start says
+   * where it keeps those, and nothing of a store kept by default: a client logs every line a start
+   * writes, and the server's instructions say where it keeps them.
+   */
+  readonly named?: ReadonlyArray<"pots" | "wallets">;
 }
 
 /** The wallet directory the stdio server serves, and what enables its wallets to sign. */
@@ -400,10 +406,15 @@ async function storesOf(
   const wallets = await walletsOf(args, io, http);
   if (none) return undefined;
   const dir = pots ?? io.potsDir;
+  const named = [
+    ...(pots === undefined ? [] : (["pots"] as const)),
+    ...(wallets?.dirNamed === true ? (["wallets"] as const) : []),
+  ];
   const stores: McpStores = {
     ...(dir === undefined ? {} : { pots: dir }),
     ...(wallets === undefined ? {} : { wallets }),
+    ...(named.length === 0 ? {} : { named }),
   };
 
-  return Object.keys(stores).length === 0 ? undefined : stores;
+  return stores.pots === undefined && stores.wallets === undefined ? undefined : stores;
 }
