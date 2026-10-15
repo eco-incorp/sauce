@@ -94,6 +94,12 @@ export interface McpStores {
    *  to an intent, is recorded there; `sauce_intent_list`, `sauce_intent_show` and
    *  `sauce_intent_import` read and write it, and every intent tool takes an intent by its hash. */
   readonly intents?: string;
+  /**
+   * The stores whose directory the operator named (`--pots`, `--store`). A start says where it
+   * keeps those, and nothing of a store kept by default: a client logs every line a start writes,
+   * and the server's instructions say where it keeps them.
+   */
+  readonly named?: ReadonlyArray<"pots" | "intents">;
 }
 
 /** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
@@ -349,23 +355,28 @@ function storesOf(
   const pots = stringFlag(args, "pots");
   const intents = stringFlag(args, "store");
   const none = args.values["no-stores"] === true;
-  const named = pots !== undefined ? "pots" : intents !== undefined ? "store" : undefined;
+  const given = pots !== undefined ? "pots" : intents !== undefined ? "store" : undefined;
   if (http) {
-    if (named !== undefined || none) {
-      throw new UsageError(`--${named ?? "no-stores"} is for stdio: the HTTP server keeps nothing`);
+    if (given !== undefined || none) {
+      throw new UsageError(`--${given ?? "no-stores"} is for stdio: the HTTP server keeps nothing`);
     }
 
     return undefined;
   }
   if (none) {
-    if (named !== undefined) throw new UsageError(`give --${named} or --no-stores, not both`);
+    if (given !== undefined) throw new UsageError(`give --${given} or --no-stores, not both`);
 
     return undefined;
   }
   const potsDir = pots ?? io.potsDir;
+  const named = [
+    ...(pots === undefined ? [] : ["pots" as const]),
+    ...(intents === undefined ? [] : ["intents" as const]),
+  ];
 
   return {
     ...(potsDir === undefined ? {} : { pots: potsDir }),
     intents: intents ?? io.storeDir ?? defaultStoreDir(),
+    ...(named.length === 0 ? {} : { named }),
   };
 }

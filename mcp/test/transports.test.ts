@@ -217,10 +217,14 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       recordedAt: "2026-10-15T00:00:00.000Z",
     };
     new PotStore(pots).save(record);
-    const serve = async (...flags: string[]) => {
+    // The command's own default store, ~/.sauce/pots, in a home of the test's own.
+    const home = join(dir, "home");
+    new PotStore(join(home, ".sauce", "pots")).save(record);
+    const serve = async (env: Record<string, string>, ...flags: string[]) => {
       const transport = new StdioClientTransport({
         command: BIN[0],
         args: [...BIN.slice(1), ...flags],
+        env: { ...getDefaultEnvironment(), ...env },
         cwd: dir,
         stderr: "pipe",
       });
@@ -232,43 +236,65 @@ describe("stdio: sauce mcp as an agent launches it", () => {
       return { client, stderr: () => stderr };
     };
 
-    const intents = join(dir, "kept-intents");
-    const kept = await serve("--pots", pots, "--store", intents, "--offline");
+    // By default: the command's directory, and a start that says nothing of it.
+    const byDefault = await serve({ HOME: home }, "--offline");
     try {
-      const { tools } = await kept.client.listTools();
+      const { tools } = await byDefault.client.listTools();
       assert.deepEqual(
         tools.map((tool) => tool.name),
         toolsOf(true),
       );
-      assert.match(
-        kept.client.getInstructions() ?? "",
-        /THIS SERVER KEEPS THE sauce COMMAND'S POT STORE/,
+      assert.ok(
+        (byDefault.client.getInstructions() ?? "").includes(
+          `THIS SERVER KEEPS THE sauce COMMAND'S POT STORE, in ${join(home, ".sauce", "pots")}`,
+        ),
       );
+      assert.deepEqual(
+        structured(await byDefault.client.callTool({ name: "sauce_pot_list", arguments: {} })),
+        { store: join(home, ".sauce", "pots"), pots: [record] },
+      );
+      // And the intent store, ~/.sauce/intents, where sauce intent list reads it: empty.
+      assert.ok(
+        (byDefault.client.getInstructions() ?? "").includes(
+          `THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE, in ${join(home, ".sauce", "intents")}`,
+        ),
+      );
+      assert.deepEqual(structured(await byDefault.client.callTool({ name: "sauce_intent_list" })), {
+        store: join(home, ".sauce", "intents"),
+        intents: [],
+      });
+    } finally {
+      await byDefault.client.close();
+    }
+    assert.equal(byDefault.stderr(), "", "a store kept by default is not logged");
+
+    // A directory the operator names: kept there, and said.
+    const intents = join(dir, "kept-intents");
+    const named = await serve({}, "--pots", pots, "--store", intents, "--offline");
+    try {
       const listed = structured(
-        await kept.client.callTool({ name: "sauce_pot_list", arguments: { chain: "base" } }),
+        await named.client.callTool({ name: "sauce_pot_list", arguments: { chain: "base" } }),
       );
       assert.deepEqual(listed, { store: pots, pots: [record] });
       // A call that omits its arguments, as a client leaves them out of a call with none to pass:
       // every input is optional, so it is the call with none.
-      const bare = (await kept.client.callTool({ name: "sauce_pot_list" })) as CallToolResult;
+      const bare = (await named.client.callTool({ name: "sauce_pot_list" })) as CallToolResult;
       assert.notEqual(bare.isError, true, JSON.stringify(bare.content));
       assert.deepEqual(structured(bare), { store: pots, pots: [record] });
-      // And the intent store, where sauce intent list reads it: empty, read without a chain.
-      assert.match(
-        kept.client.getInstructions() ?? "",
-        /THIS SERVER KEEPS THE sauce COMMAND'S INTENT STORE/,
-      );
-      assert.deepEqual(structured(await kept.client.callTool({ name: "sauce_intent_list" })), {
+      assert.deepEqual(structured(await named.client.callTool({ name: "sauce_intent_list" })), {
         store: intents,
         intents: [],
       });
     } finally {
-      await kept.client.close();
+      await named.client.close();
     }
-    // Kept by default, so a start says nothing of it: an agent's client logs every line.
-    assert.equal(kept.stderr(), "");
+    assert.equal(
+      named.stderr(),
+      `sauce mcp: keeping the Pots its transactions deploy in ${pots}\n` +
+        `sauce mcp: keeping the intents its transactions touch in ${intents}\n`,
+    );
 
-    const none = await serve("--no-stores", "--offline");
+    const none = await serve({}, "--no-stores", "--offline");
     try {
       const { tools } = await none.client.listTools();
       assert.deepEqual(

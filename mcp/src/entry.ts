@@ -106,9 +106,17 @@ async function serve(options: McpServeOptions): Promise<void> {
     if (wallets !== undefined) {
       options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
     }
-    // Nothing is logged of the stores: they are kept by default, and a start says nothing it is
-    // not asked to (a client logs every line). The instructions say where the Pots and the intents
-    // are kept, and each tool result says what it recorded.
+    // A store kept by default is not logged: a start says nothing it was not asked to (a client
+    // logs every line), and the instructions say where the server keeps it. One whose directory
+    // the operator named is.
+    if (stores.pots !== undefined && options.stores?.named?.includes("pots") === true) {
+      options.log(`sauce mcp: keeping the Pots its transactions deploy in ${stores.pots.dir}\n`);
+    }
+    if (stores.intents !== undefined && options.stores?.named?.includes("intents") === true) {
+      options.log(
+        `sauce mcp: keeping the intents its transactions touch in ${stores.intents.dir}\n`,
+      );
+    }
 
     return;
   }
