@@ -7,7 +7,9 @@
  * chain through the `--config` file's endpoint for it, else the built-in public endpoints the
  * `sauce` command hands it (`McpServeOptions.publicRpcs`). It holds no key unless it serves stdio
  * with `--wallets`, whose password the `sauce` command has already read from the source it was
- * given; then its wallet tools sign with those wallets alone. Over HTTP it never signs. A newer
+ * given; then its wallet tools sign with those wallets alone. Over stdio it keeps the `sauce`
+ * command's stores in the directories the command names (`McpServeOptions.stores`: the Pot store,
+ * by default); over HTTP it never signs and keeps nothing. A newer
  * version the `sauce` command's update check has seen is noted once, in the process's first tool
  * result (`update-note.ts`).
  */
@@ -19,8 +21,11 @@ import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "./config.js";
 import { createRpcGuard } from "./guard.js";
 import { DEFAULT_MAX_BODY, endpointUrl, isLoopback, serveHttp } from "./http.js";
 import {
+  keepsAny,
+  PotStore,
   UsageError,
   WalletStore,
+  type LocalStores,
   type McpEntry,
   type McpServeOptions,
   type McpSetupOptions,
@@ -82,22 +87,33 @@ async function serve(options: McpServeOptions): Promise<void> {
             password: options.wallets.password,
             source: options.wallets.source,
           };
+    // The command's stores, kept as the command keeps them: its caller is the user of this machine.
+    const stores: LocalStores = {
+      ...(options.stores?.pots === undefined ? {} : { pots: new PotStore(options.stores.pots) }),
+    };
     // Its caller's own files: a program may be named by path.
     await createSauceServer({
       endpoints,
       local: true,
       ...(wallets === undefined ? {} : { wallets }),
+      ...(keepsAny(stores) ? { stores } : {}),
       ...update,
     }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     if (wallets !== undefined) {
       options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
     }
+    if (stores.pots !== undefined) {
+      options.log(`sauce mcp: keeping the Pots its transactions deploy in ${stores.pots.dir}\n`);
+    }
 
     return;
   }
-  // The HTTP server never signs: it is not given the wallets at all.
+  // The HTTP server never signs, and keeps nothing: it is given neither wallets nor stores.
   if (options.wallets !== undefined) {
     throw new UsageError("--wallets is for stdio: the HTTP server never signs");
+  }
+  if (options.stores !== undefined) {
+    throw new UsageError("--pots is for stdio: the HTTP server keeps nothing");
   }
   const port = wholeNumber("http", options.http, 0, 65_535);
   const host = options.host ?? "127.0.0.1";

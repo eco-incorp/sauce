@@ -92,7 +92,7 @@ import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { potImportCommand, potListCommand } from "./pot-commands.js";
 import { PotStore } from "./pot-store.js";
-import { recordingPots, storeRecorder } from "./pots.js";
+import { keeping } from "./keep.js";
 import { globalsCommand } from "./globals.js";
 import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
@@ -4296,7 +4296,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   mcp: {
     usage: [
-      "sauce mcp [--config <file> | --offline]",
+      "sauce mcp [--config <file> | --offline] [--pots <dir> | --no-stores]",
       "sauce mcp --wallets [<dir>] (--password-env <NAME> | --password-file <path> | --password-command <command>) [--config <file>]",
       "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
       "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
@@ -4328,6 +4328,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "file, or a command) and which no tool takes or returns. sauce_wallet_send simulates what it",
       "is given and holds it to the wallet's policy (sauce wallet --help) before it sends.",
       "The HTTP server never signs: --wallets is refused there, and it has no wallet tools.",
+      "",
+      "Over stdio it keeps this command's stores as the command does, in the same directories,",
+      "for an agent that reaches Sauce only through it: every Pot a tool's transaction deploys",
+      "(sauce_send, sauce_wallet_send) is recorded in the Pot store (--pots, default",
+      "~/.sauce/pots), which sauce_pot_list and sauce_pot_import read and write, as sauce pot list",
+      "and sauce pot import do. --no-stores keeps none. Over HTTP it keeps nothing, and has",
+      "neither tool.",
       "",
       "Over stdio by default, what a coding agent launches. With --http, Streamable HTTP at /mcp,",
       "stateless: on 127.0.0.1 unless --host says otherwise, answering only a loopback Host or an",
@@ -4667,14 +4674,14 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
       }
       if (args.values.offline !== true) await io.publicRpcs?.ready();
     }
-    // Every Pot the command deploys is recorded as its transaction lands (`pots.ts`). Not by the
-    // MCP server, which keeps no store: its results carry the records instead.
+    // What the command's transactions do is kept as each lands (`keep.ts`): every Pot one
+    // deploys. `sauce mcp` keeps its own, a tool call at a time, over stdio only.
     const potsDir = label === "mcp" ? undefined : (stringFlag(args, "pots") ?? io.potsDir);
     const run = async () => command.run(args, io, trailing);
     const output = await (potsDir === undefined
       ? run()
-      : recordingPots(
-          storeRecorder(new PotStore(potsDir), (line) => io.stderr(`${line}\n`)),
+      : keeping(
+          { stores: { pots: new PotStore(potsDir) }, say: (line) => io.stderr(`${line}\n`) },
           run,
         ));
     if (output === undefined) return 0;

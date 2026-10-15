@@ -3,7 +3,8 @@
  * from its address under every Kitchen and Pot init-code hash `releases.json` records and each kind
  * of Pot; the Pots a landed EVM transaction deployed, from the Kitchen's `PotDeployed`; those a
  * Solana transaction created, from the Kitchen's `create_pot`, its accounts loaded through a lookup
- * table too; and the recorder a command scopes, which keeps them as they land. That the real
+ * table too; and the scope a command keeps its stores in (`keep.ts`), which writes them as they
+ * land, each scope apart. That the real
  * Kitchen mints where these say is `cli-pots.e2e.test.ts`'s, on anvil.
  */
 import { mkdtempSync, rmSync } from "node:fs";
@@ -40,14 +41,9 @@ import {
 import { requireChain } from "../src/chains/canonical.js";
 import { potListCommand } from "../src/cli/pot-commands.js";
 import { PotStore } from "../src/cli/pot-store.js";
-import {
-  evmPotRelease,
-  evmPotsDeployed,
-  potsLanded,
-  recordingPots,
-  storeRecorder,
-  svmPotsCreated,
-} from "../src/cli/pots.js";
+import type { Sent } from "../src/cli/chain.js";
+import { keeping, keepLanded } from "../src/cli/keep.js";
+import { evmPotRelease, evmPotsDeployed, svmPotsCreated } from "../src/cli/pots.js";
 import {
   sdkCompilerVersion,
   V12_RELEASE_SETS,
@@ -307,47 +303,60 @@ describe("the Pots a landed Solana transaction created", () => {
   });
 });
 
-describe("the recorder a command scopes", () => {
+describe("the scope a command keeps its stores in", () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "sauce-pots-recorder-"));
+    dir = mkdtempSync(join(tmpdir(), "sauce-pots-keeping-"));
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it("keeps what lands inside its command, and nothing outside it", async () => {
-    const store = new PotStore(dir);
+  it("keeps what lands inside it, nothing outside it, and each scope apart", async () => {
+    const store = new PotStore(join(dir, "kept"));
+    const other = new PotStore(join(dir, "other"));
     const said: string[] = [];
+    const heard: string[] = [];
     const pot = potOf(KITCHEN, own["kitchen-evm"].potInitCodeHash!, OWNER, SALT, false);
-    const [record] = await evmPotsDeployed(
-      clientOf(BASE.id),
-      {
-        hash: TX,
-        status: "success",
-        blockNumber: 1n,
-        logs: [potDeployed(KITCHEN, OWNER, SALT, pot)],
-      },
-      SENDER,
-    );
-    // Outside any command: nothing keeps it.
-    potsLanded([record!]);
+    const receipt = {
+      hash: TX,
+      status: "success" as const,
+      blockNumber: 1n,
+      gasUsed: 1n,
+      logs: [potDeployed(KITCHEN, OWNER, SALT, pot)],
+    };
+    const [record] = await evmPotsDeployed(clientOf(BASE.id), receipt, SENDER);
+    const landed = {
+      kind: "evm" as const,
+      client: clientOf(BASE.id),
+      sent: { ...receipt, pots: [record!] } as Sent,
+      from: SENDER,
+    };
+    // Outside any scope: nothing keeps it.
+    await keepLanded(landed);
     expect(store.list().pots).toEqual([]);
-    await recordingPots(
-      storeRecorder(store, (line) => said.push(line)),
-      async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1));
-        potsLanded([record!]);
-        potsLanded([record!]);
-      },
-    );
+    // Two scopes at once, each its own store and its own lines.
+    await Promise.all([
+      keeping({ stores: { pots: store }, say: (line) => said.push(line) }, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        await keepLanded(landed);
+        await keepLanded(landed);
+      }),
+      keeping({ stores: {}, say: (line) => heard.push(line) }, async () => {
+        await keepLanded(landed);
+      }),
+    ]);
     expect(store.list().pots).toEqual([record]);
+    expect(other.list().pots).toEqual([]);
+    expect(heard).toEqual([]);
     expect(said).toEqual([
-      `recorded Pot ${pot} on base in ${dir}`,
-      `Pot ${pot} on base was already recorded in ${dir}`,
+      `recorded Pot ${pot} on base in ${store.dir}`,
+      `Pot ${pot} on base was already recorded in ${store.dir}`,
     ]);
     // `sauce pot list` prints it, and filters by chain and owner.
     expect(potListCommand(store, {}).json.pots).toEqual([record]);
     expect(potListCommand(store, { owner: OWNER.toLowerCase() }).json.pots).toEqual([record]);
     expect(potListCommand(store, { chain: SOLANA }).json.pots).toEqual([]);
-    expect(potListCommand(store, { chain: SOLANA }).text).toBe(`No Pots on solana in ${dir}.`);
+    expect(potListCommand(store, { chain: SOLANA }).text).toBe(
+      `No Pots on solana in ${store.dir}.`,
+    );
   });
 });

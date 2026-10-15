@@ -55,10 +55,12 @@ export {
   withoutShebang,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
+export { keeping, keepsAny, type LocalStores } from "../../sdk/dist/cli/keep.js";
 export type {
   McpEntry,
   McpServeOptions,
   McpSetupOptions,
+  McpStores,
   McpWallets,
 } from "../../sdk/dist/cli/mcp.js";
 export { MAX_V4_KEYS, parseV4Key, poolsCommand, readPoolAt } from "../../sdk/dist/cli/pools.js";
@@ -88,6 +90,8 @@ export {
   intentStatus,
   type IntentRecord,
 } from "../../sdk/dist/cli/lifecycle.js";
+export { potImportCommand, potListCommand } from "../../sdk/dist/cli/pot-commands.js";
+export { PotStore } from "../../sdk/dist/cli/pot-store.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";

@@ -21,6 +21,11 @@
  * and never reaches a tool's input or result. Without `--wallets`, and always over HTTP, it holds
  * no key and every transaction it builds comes back unsigned.
  *
+ * Over stdio it is the command for an agent that has no shell, so it keeps the command's stores
+ * ({@link McpStores}) as the command does, in the same directories, BY DEFAULT: every Pot a tool's
+ * transaction deploys is recorded where `sauce pot list` reads it. `--pots <dir>` names another
+ * directory, and `--no-stores` keeps none. Over HTTP it keeps nothing.
+ *
  * It prints no update notice — over stdio its stdout is the protocol — but notes a newer version in
  * the first tool result of its life instead, and `sauce_skills` returns it as `latest`, from the
  * same cache the command's notice reads (`update-check.ts`), refreshed the same way;
@@ -60,6 +65,8 @@ export interface McpServeOptions {
   readonly log: (text: string) => void;
   /** `--wallets`, over stdio only: the wallets its tools create, list and send from. */
   readonly wallets?: McpWallets;
+  /** Over stdio, unless `--no-stores`: the command's stores the server keeps. Never over HTTP. */
+  readonly stores?: McpStores;
   /**
    * The update check's note on a newer version, or `undefined`, from its cache as it is when asked
    * (`update-check.ts`). The server asks once, for the first tool result of its life. Absent with
@@ -69,6 +76,18 @@ export interface McpServeOptions {
   /** The newer version the update check's cache names, or `undefined`, as it is when asked:
    *  `sauce_skills` returns it as `latest`. Absent when `updateNote` is. */
   readonly newerVersion?: () => string | undefined;
+}
+
+/**
+ * The `sauce` command's stores a LOCAL server keeps, as the command keeps them, each in the
+ * directory the command keeps it in (`--pots` for another): the server's caller is the user of
+ * this machine, and an agent that reaches Sauce only through it keeps what the command would. On
+ * by default over stdio; `--no-stores` keeps none. One absent is not kept.
+ */
+export interface McpStores {
+  /** The Pot store (`pot-store.ts`): every Pot a tool's transaction deploys is recorded there, and
+   *  `sauce_pot_list` and `sauce_pot_import` read and write it. */
+  readonly pots?: string;
 }
 
 /** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
@@ -136,6 +155,15 @@ export const MCP_FLAGS: FlagSpecs = {
     help: "Over stdio: sign with the wallets in this directory (default ~/.sauce/wallets)",
   },
   ...PASSWORD,
+  pots: {
+    type: "string",
+    value: "<dir>",
+    help: "Over stdio: keep the Pot store here (default ~/.sauce/pots, as sauce pot list reads)",
+  },
+  "no-stores": {
+    type: "boolean",
+    help: "Over stdio: keep none of the command's stores (by default it keeps them, as sauce does)",
+  },
   agent: {
     type: "string",
     multiple: true,
@@ -178,6 +206,8 @@ const SERVE_ONLY = [
   "password-env",
   "password-file",
   "password-command",
+  "pots",
+  "no-stores",
 ] as const;
 const PASSWORDS = ["password-env", "password-file", "password-command"] as const;
 const SETUP_ONLY = ["agent", "dir", "force"] as const;
@@ -189,6 +219,8 @@ export async function mcpCommand(
     readonly stderr: (text: string) => void;
     readonly publicRpcs?: PublicEndpoints | undefined;
     readonly updateCheck?: UpdateCheck | undefined;
+    /** The command's own Pot store (`CliIo.potsDir`): the executable's `~/.sauce/pots`. */
+    readonly potsDir?: string | undefined;
   } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
@@ -220,6 +252,7 @@ export async function mcpCommand(
   const host = stringFlag(args, "host");
   const maxBody = stringFlag(args, "max-body");
   const wallets = await walletsOf(args, io, http !== undefined);
+  const stores = storesOf(args, io, http !== undefined);
   const check = updateCheckOff(args.values, io.readText) ? undefined : io.updateCheck;
   // Asked now as well, so a cache a day old is refreshed before the first tool call reads it.
   check?.latest();
@@ -235,6 +268,7 @@ export async function mcpCommand(
     allowPrivateRpc: args.values["allow-private-rpc"] === true,
     log: io.stderr,
     ...(wallets === undefined ? {} : { wallets }),
+    ...(stores === undefined ? {} : { stores }),
     ...(check === undefined
       ? {}
       : {
@@ -287,4 +321,34 @@ async function walletsOf(
   const password = await readPassword(source, io, { what: "the wallets" });
 
   return { dir: dir || defaultWalletsDir(), password, source: describeSource(source) };
+}
+
+/**
+ * The command's stores the server keeps: over stdio, each where the command keeps it unless
+ * `--pots` says otherwise, or none with `--no-stores`; over HTTP, none.
+ */
+function storesOf(
+  args: ParsedArgs,
+  io: { readonly potsDir?: string | undefined },
+  http: boolean,
+): McpStores | undefined {
+  const pots = stringFlag(args, "pots");
+  const none = args.values["no-stores"] === true;
+  if (http) {
+    if (pots !== undefined || none) {
+      throw new UsageError(
+        `--${pots === undefined ? "no-stores" : "pots"} is for stdio: the HTTP server keeps nothing`,
+      );
+    }
+
+    return undefined;
+  }
+  if (none) {
+    if (pots !== undefined) throw new UsageError("give --pots or --no-stores, not both");
+
+    return undefined;
+  }
+  const dir = pots ?? io.potsDir;
+
+  return dir === undefined ? undefined : { pots: dir };
 }
