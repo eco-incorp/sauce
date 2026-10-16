@@ -142,7 +142,8 @@ describe("sauce mcp, before the server loads", () => {
     const help = await sauce("mcp", "--help");
     expect(help.code).toBe(0);
     expect(help.stdout).toMatch(/\n {2}sauce mcp --http 3000\n/);
-    expect(help.stdout).toMatch(/--wallets \[<dir>\] +Over stdio: sign with the wallets/);
+    expect(help.stdout).toMatch(/--wallets \[<dir>\] +Over stdio: the wallet directory its wallet/);
+    expect(help.stdout).toMatch(/--no-wallets +Over stdio: serve no wallet tools; nothing signs/);
     // How each agent adds it, in `sauce mcp --help` and `sauce mcp setup --help` alike.
     for (const text of [help.stdout, (await sauce("mcp", "setup", "--help")).stdout]) {
       expect(text).toContain("claude mcp add sauce -- sauce mcp ");
@@ -155,10 +156,13 @@ describe("sauce mcp, before the server loads", () => {
       [["mcp", "setup", "--http", "0"], /--http is for serving, not setup/],
       [["mcp", "setup", "--allow-private-rpc"], /--allow-private-rpc is for serving/],
       [["mcp", "serve"], /unexpected argument serve/],
-      // Wallets are stdio's alone, with a password source that is not a prompt.
+      // Wallets are stdio's alone, served by default; a password source given is read at start.
       [["mcp", "--http", "0", "--wallets", "--password-env", "X"], /--wallets is for stdio/],
-      [["mcp", "--wallets"], /--wallets needs its password source/],
-      [["mcp", "--password-file", "p"], /--password-file goes with --wallets/],
+      [["mcp", "--http", "0", "--password-env", "X"], /--password-env is for stdio/],
+      [["mcp", "--no-wallets", "--wallets", "d"], /--wallets goes with wallets, not --no-wallets/],
+      [["mcp", "--no-wallets", "--password-env", "X"], /--password-env goes with wallets/],
+      [["mcp", "setup", "--no-wallets"], /--no-wallets is for serving, not setup/],
+      [["mcp", "--password-env", "SAUCE_TEST_UNSET_X"], /--password-env SAUCE_TEST_UNSET_X: the/],
     ] as const) {
       const run = await sauce(...argv);
       expect(run.code).toBe(2);

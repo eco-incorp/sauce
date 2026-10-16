@@ -20,6 +20,13 @@
  * the chains (`lifecycle.ts#intentStatus`), every time. No key, password or endpoint is ever
  * written: the record and the events hold only public chain data.
  *
+ * What is written comes from the chain: every transaction the command (or the local MCP server)
+ * lands is read for the Portal's events (`intent-keep.ts`, through `keep.ts`), and only an event
+ * the chain logged is appended. An intent a command acts on before the store holds it — named by
+ * its file, its record or its transaction — is KNOWN to the store for the life of the process
+ * ({@link IntentStore.know}), in memory only, and written the first time a landed transaction's
+ * event names it.
+ *
  * A record is checked (its hashes against its route and reward, `lifecycle.ts#intentOf`) by
  * whoever builds or reads it; the store keeps it as given. NODE-ONLY (the filesystem), like the
  * rest of `cli/` that touches it; the default directory is `~/.sauce/intents` (`os.homedir()`),
@@ -103,11 +110,38 @@ const MAX_LINE = 1024;
 const comparable = (record: IntentRecord): string =>
   JSON.stringify({ ...record, vault: undefined });
 
+/** The most intents a store knows without holding: the latest acted on, the oldest forgotten. */
+const KNOWN_MOST = 256;
+
 export class IntentStore {
   readonly dir: string;
+  /** Intents acted on but not held, by hash, the latest last: see {@link know}. */
+  private readonly known = new Map<string, IntentRecord>();
 
   constructor(dir: string) {
     this.dir = dir;
+  }
+
+  /**
+   * Remembers `records`, in this process only, as intents a command or a tool acts on that the
+   * store may not hold yet: a transaction that lands an event of one writes it then (`recall`).
+   * Each record is checked against its hash by whoever built it (`lifecycle.ts#intentOf`); nothing
+   * is written here.
+   */
+  know(records: readonly IntentRecord[]): void {
+    for (const record of records) {
+      const hash = record.intentHash.toLowerCase();
+      this.known.delete(hash);
+      this.known.set(hash, record);
+      if (this.known.size > KNOWN_MOST) this.known.delete(this.known.keys().next().value!);
+    }
+  }
+
+  /** The intent `intentHash` as the store holds it, else as it was {@link know}n; else undefined. */
+  recall(intentHash: Hex): IntentRecord | undefined {
+    if (this.has(intentHash)) return this.readRecord(intentHash);
+
+    return this.known.get(intentHash.toLowerCase());
   }
 
   private intentDir(intentHash: Hex): string {

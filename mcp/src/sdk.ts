@@ -50,15 +50,27 @@ export {
   bindMainArguments,
   definesReach,
   fundingFor,
+  potImportTarget,
+  potOwner,
   potTarget,
   programChain,
   withoutShebang,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
+export {
+  importCommand,
+  listCommand,
+  showCommand,
+  storedTargets,
+  type LifecycleContext,
+  type Target,
+} from "../../sdk/dist/cli/intent-commands.js";
+export { keeping, keepsAny, knowIntents, type LocalStores } from "../../sdk/dist/cli/keep.js";
 export type {
   McpEntry,
   McpServeOptions,
   McpSetupOptions,
+  McpStores,
   McpWallets,
 } from "../../sdk/dist/cli/mcp.js";
 export { MAX_V4_KEYS, parseV4Key, poolsCommand, readPoolAt } from "../../sdk/dist/cli/pools.js";
@@ -88,11 +100,14 @@ export {
   intentStatus,
   type IntentRecord,
 } from "../../sdk/dist/cli/lifecycle.js";
+export { potImportCommand, potListCommand } from "../../sdk/dist/cli/pot-commands.js";
+export { PotStore } from "../../sdk/dist/cli/pot-store.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
 export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
+export { IntentStore } from "../../sdk/dist/cli/store.js";
 export {
   CHAIN_SUPPORT_ISSUES_URL,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
@@ -104,7 +119,8 @@ export {
   supportedChainNames,
   type PreviewChainRefusal,
 } from "../../sdk/dist/cli/support.js";
-export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
+export { HOT_WALLET, looksLikeKey, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
+export { describeSource, ENV_NAME, type PasswordSource } from "../../sdk/dist/cli/password.js";
 export {
   checkPlan,
   planChain,
@@ -116,7 +132,14 @@ export {
   sendSvmPlan,
 } from "../../sdk/dist/cli/wallet-send.js";
 export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
-export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";
+export {
+  generatedPasswordFile,
+  generatePasswordFile,
+  readImport,
+  walletName,
+  WalletStore,
+  type WalletKind,
+} from "../../sdk/dist/cli/wallets.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
 export { installedViem } from "../../sdk/dist/cli/init.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";

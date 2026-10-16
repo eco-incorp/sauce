@@ -1455,10 +1455,25 @@ try {
       return response.json();
     };
     assert.equal((await post(mcpRequests[0])).result.serverInfo.name, "sauce");
+    // The same tools, but for the wallets' and the stores', which a server serves and keeps over
+    // stdio only (by default): the HTTP server never signs, and keeps nothing.
+    const stdioOnly = [
+      "sauce_intent_list",
+      "sauce_intent_show",
+      "sauce_wallet_enable",
+      "sauce_wallet_create",
+      "sauce_wallet_import",
+      "sauce_wallet_list",
+      "sauce_wallet_address",
+      "sauce_wallet_send",
+      "sauce_pot_list",
+      "sauce_pot_import",
+    ];
+    for (const tool of stdioOnly) assert.ok(toolNames.includes(tool), `stdio lists ${tool}`);
     assert.deepEqual(
       (await post(mcpRequests[2])).result.tools.map((tool) => tool.name),
-      toolNames,
-      "the same tools over HTTP as over stdio",
+      toolNames.filter((tool) => !stdioOnly.includes(tool)),
+      "the same tools over HTTP as over stdio, but for the wallets' and stores' over stdio only",
     );
   } finally {
     await stopServer(http);

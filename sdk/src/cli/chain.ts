@@ -40,6 +40,9 @@ import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import { CliError } from "./args.js";
 import { guardOf } from "./policy.js";
+import { keepLanded, sayKept } from "./keep.js";
+import type { PotRecord } from "./pot-store.js";
+import { evmPotsDeployed } from "./pots.js";
 
 /** A transaction to send or simulate. */
 export interface TxRequest {
@@ -556,6 +559,8 @@ export interface Sent {
   readonly reason?: string;
   /** The receipt it landed with: what it cost, and its logs. */
   readonly receipt?: TransactionReceipt;
+  /** The Pots it deployed, as `pots.ts` records them: from the Kitchen's `PotDeployed`. */
+  readonly pots?: readonly PotRecord[];
 }
 
 /**
@@ -589,7 +594,9 @@ export async function sendAndWait(
 /**
  * Waits for the receipt of `hash`, sent from `from` as `tx`, and reads it as {@link sendAndWait}
  * reports it: what it emitted and cost, and, reverted, why — replayed at the block before it. Once
- * it succeeded, waits until the endpoint's latest state has it. `seen` is told its status first.
+ * it succeeded, waits until the endpoint's latest state has it, reads the Pots it deployed
+ * (`pots.ts`), and hands it to the stores the command keeps (`keep.ts`). `seen` is told its status
+ * first.
  */
 export async function landed(
   client: PublicClient,
@@ -616,8 +623,25 @@ export async function landed(
   };
   if (receipt.status === "success") {
     await caughtUp(client, receipt.blockNumber);
+    // What it deployed, kept as it lands: whatever the command does next, the Pot is there. A
+    // record that cannot be made never fails a transaction that landed; the scope says so.
+    const pots = await evmPotsDeployed(
+      client,
+      { ...sent, blockHash: receipt.blockHash },
+      from,
+    ).catch((error: unknown) => {
+      sayKept(
+        `warning: ${hash} deployed a Pot, whose record could not be made: ` +
+          ((error as { shortMessage?: string }).shortMessage ??
+            (error instanceof Error ? error.message : String(error))),
+      );
 
-    return sent;
+      return [];
+    });
+    const kept = pots.length === 0 ? sent : { ...sent, pots };
+    await keepLanded({ kind: "evm", client, sent: kept, from });
+
+    return kept;
   }
   const replay = await client
     .call({ account: from, ...tx, blockNumber: receipt.blockNumber - 1n })

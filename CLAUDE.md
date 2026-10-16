@@ -222,8 +222,11 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
   Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
-  run the sync, paste the digests and engine ids it reports — a row with a `null` digest or engine id
-  is a release not out yet, and the sync refuses it and writes nothing. Then `pnpm build`: the
+  run the sync, paste the digests, engine ids and the kitchen-evm pin's `kitchen` and
+  `potInitCodeHash` it reports — a row with a `null` digest, engine id, Kitchen or hash is a release
+  not out yet, and the sync refuses it and writes nothing. The Kitchen and hash are what the `sauce`
+  command tells a Pot's release from (`cli/pots.ts`), so every row keeps its own after a newer
+  release moves the hash; the sync checks the installed row's against its `addresses.json`. Then `pnpm build`: the
   release's addresses are written in docs and skills ONLY in the generated
   `docs/reference/deployments.md` and `skills/sauce-chains/references/deployments.json` (see "One
   place per release" under "Agent skills"), so those two files are the bump's whole docs/skills
@@ -952,7 +955,8 @@ executable: `compile`, `actions`, `simulate`, `run`, `intent <verb>`, `wallet <v
 `globals`, `inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and
 (`solana.ts`) Solana. `run.ts` dispatches `intent <verb>` (`INTENT_VERBS`: publish, fill, prove,
 claim, refund, cancel, status, list, show, import; no verb at a terminal is the picker,
-`interactive.ts`) and `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export) as
+`interactive.ts`), `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export) and
+`pot <verb>` (`POT_VERBS`: list, import; `sauce pot` with no verb predicts and deploys) as
 commands of their own (`VERBS`), each with its own flags and `--help`; the skills checker reads the
 verbs from each command's `--help`. An intent's life after publishing is `lifecycle.ts`: plain-value functions
 (`intentStatus`, `buildFill`/`planFill`, `buildProve`, `buildClaim`, `buildRefund`, `buildCancel`,
@@ -962,6 +966,36 @@ are; the calldata is `routes/portal.ts`'s. `intent-commands.ts` adds the signer,
 (`--auto-approve`) and the store; `store.ts` is the store under `~/.sauce/intents` (an
 `intent.json` linked into place once, an append-only `events.jsonl`, nothing read and written back;
 it imports only Node's modules, so `cli-store.test.ts` runs it in child processes).
+`pot-store.ts` is the Pot store beside it, `~/.sauce/pots` (`--pots <dir>`): one owner-only
+`<chainId>/<pot>.json` per Pot, linked into place once, the same mechanics and the same
+child-process test (`cli-pot-store.test.ts`). A Pot's identity is its chain id AND, on Solana, its
+cluster (by genesis hash, `pots.ts#clusterOf`; filed as `<chainId>-<cluster>` off mainnet), since
+the Kitchen's id, and so a Pot's address, is the same on every cluster. A second deployment of one
+Pot address (a fork with the chain's id, or a Solana Pot closed and created again) is kept beside
+the first as `<pot>@<tx>.json` and said, never dropped; an EVM record keeps its block's hash. Its records are not written by the commands: the two
+places every send lands, `chain.ts#landed` and `solana.ts#svmLanded`, read what a transaction
+deployed from the chain (the Kitchen's `PotDeployed` in a receipt that succeeded, its `create_pot`
+in a Solana transaction that succeeded; `pots.ts`, which tells each Pot's release from its address
+under every `releases.json` Kitchen and hash), put it on `Sent.pots`/`SvmSent.pots` (so every JSON
+that reports a sent transaction carries `pots`), and hand the transaction to `keep.ts#keepLanded`.
+That is the ONE hook every store a landed transaction feeds attaches to (`LocalStores`): it gives
+the transaction to each store of the current scope, which `runCli` sets per command and the local
+MCP server per tool call (`AsyncLocalStorage`, so scopes keep apart). Only the executable gives the
+Pot store's directory (`main.ts`'s `potsDir`, like `publicRpcs`), so a test records nothing unless
+it passes `--pots` or `CliIo.potsDir`. `sauce pot list` and `sauce pot import` (`POT_VERBS`,
+`pot-commands.ts`) read and add to it; `cli-pots.e2e.test.ts` and `cli-solana.e2e.test.ts` hold
+every path that deploys a Pot to its record.
+The intent store attaches to that hook too, and NO COMMAND WRITES AN INTENT EVENT ITSELF:
+`intent-keep.ts` reads each landed transaction for what it did — `IntentPublished` (stored, with
+`funded`), and the Portal's `IntentFulfilled`, `IntentProven` (with each Hyperlane `DispatchId`),
+`IntentWithdrawn`, `IntentRefunded` and `IntentCancelled`, each counted only from the intent's own
+Portal on that side; on Solana the Portal's `fulfill`, `prove` and `cancel` instructions. That is
+what makes `sauce send`, `sauce_send` and `sauce_wallet_send` record exactly what the lifecycle
+commands do. Unlike the Pot store, `runCli` always keeps it, where `--store`, `CliIo.storeDir` or
+else `~/.sauce/intents` puts it, as the commands always did (the suites pass `storeDir`). An intent
+the store does not hold yet (named by a file or a record) is recorded once the command or tool
+names it with `keep.ts#knowIntents` (`IntentStore.know`, in memory only); do not add a second,
+explicit append beside the hook, which would record the event twice.
 `cli-lifecycle.e2e.test.ts` runs a whole intent on two anvils with eco-routes' own Portal and
 HyperProver (`eco-routes-anvil.ts`, immutables rewritten where the Portal, its Executor and vault
 implementation name each other); only Hyperlane's relay is mocked (`evm/fixtures/MockMailbox.sol`).
@@ -1086,17 +1120,36 @@ in `mcp/`; do not reimplement command logic there. `sauce_actions` calls `action
 `actionsCommand` (and `actionsProgram` for its cook), what `sauce actions` and the program commands
 use. The intent tools (`mcp/src/intents.ts`: `sauce_intent_import`, `sauce_intent_status`,
 `sauce_intent_fill`, `sauce_intent_prove`, `sauce_intent_claim`, `sauce_intent_refund`,
-`sauce_intent_cancel`) call `lifecycle.ts` as it is and keep no store: a call names its intent by
-its `record` (which `sauce_intent_publish` returns per intent) or by `txHash` and its source
-`chain`, and gives each chain's endpoint in `rpcUrls`. `intents.e2e.test.ts` runs a whole intent
+`sauce_intent_cancel`) call `lifecycle.ts` as it is: a call names its intent by its `record`
+(which `sauce_intent_publish` returns per intent) or by `txHash` and its source `chain`, and gives
+each chain's endpoint in `rpcUrls`. Over stdio the server keeps the command's intent store too (on
+by default, `sauce mcp --store <dir>`, `--no-stores` for none; `McpStores.intents`): every intent
+tool also takes `intentHash` from it, `sauce_intent_import` stores through `importCommand`,
+`sauce_intent_list` and `sauce_intent_show` are `listCommand` and `showCommand`, and each intent a
+call names is made known to the store, so what its transactions do lands there through the hook
+above, whichever tool sends them. Over HTTP none of that exists (`intents-store.test.ts`;
+`intents-store.e2e.test.ts` records a whole intent through `sauce_send` and `sauce_wallet_send`). `intents.e2e.test.ts` runs a whole intent
 through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/eco-routes-anvil.ts`),
 signing each unsigned transaction itself; `intents-solana.e2e.test.ts` builds a Solana fill through
 them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and lands it.
 
+Over stdio the server is the command for an agent with no shell, so it keeps the command's stores
+as the command does, in the same directories, BY DEFAULT: `McpServeOptions.stores` (`McpStores`,
+built by `mcp.ts#storesOf`; `--pots <dir>` and `--store <dir>` for other directories,
+`--no-stores` for none) becomes the server's `LocalStores`, which the tool registrar scopes each
+call over (`keep.ts`), saying what it kept in the call's notes. So a Pot a `sauce_send` or
+`sauce_wallet_send` deploys is recorded as `sauce` records it, and `sauce_pot_list`/
+`sauce_pot_import` (`mcp/src/pots.ts`, on a server that keeps the Pot store) call
+`potListCommand`/`potImportCommand`; an intent's steps land in the intent store the same way (see
+the intent tools above). Over HTTP there are no stores, the flags are refused, and
+`createSauceServer` refuses stores beside a guard (`pots.e2e.test.ts`, `transports.test.ts`).
+
 No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
-input that looks like one), and the server reads no environment. It signs only over stdio, started
-with `--wallets [dir]` and a password source (`mcp/src/wallets.ts`, see "Agent wallets"); without
-them, and always over HTTP, it never signs. A tool reads a chain through the call's own `rpcUrl`, else the
+input that looks like one, nested fields included), and the server reads no environment. It signs
+only over stdio, where it serves the wallet tools by default (`--no-wallets` turns them off, and
+`--no-stores` with the other stores: the directory is `McpStores.wallets`), and
+only once the wallets are enabled (`mcp/src/wallets.ts`, see "Agent wallets"); over HTTP it never
+signs and serves no wallet tool. A tool reads a chain through the call's own `rpcUrl`, else the
 `--config` endpoint, else the public endpoints `sauce mcp` hands it (`Endpoints.public`, saying so in
 the result's notes), else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
 the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
@@ -1146,17 +1199,41 @@ traced native transfers, Solana from a simulation reporting its writable account
 — and holds it to the policy's `chains`, `to`, `native` and `tokens` limits, per transaction and per
 24 hours from `<name>.ledger.jsonl` (reserve, then sent or released, under a lock file). What cannot
 be measured where a limit needs it is refused. The policy file is parsed strictly (an unknown field
-is an error) and refused when others may write it. `sauce mcp --wallets` reads its password once in
-`sdk/src/cli/mcp.ts`, before the server loads, from a source that is not the prompt (stdin is the
-protocol's), and passes it in `McpServeOptions.wallets`; `--wallets` is refused with `--http`, and
-`createSauceServer` registers the wallet tools only when given wallets, which only the stdio path
-gives. `sauce_wallet_send` normalizes another tool's whole result (`plannedTransactions`, in
+is an error) and refused when others may write it.
+
+**The MCP server's wallets.** `sauce mcp` over stdio serves the wallet tools by DEFAULT, on the
+CLI's own directory (`--wallets <dir>` names another; a bare `--wallets`, as the server once had to
+be started with, is the default; `--no-wallets` serves none), always REGISTERED rather than added
+when enabled (not every client handles `tools/list_changed`): `sauce_wallet_enable`,
+`sauce_wallet_create`, `sauce_wallet_import`, `sauce_wallet_list`, `sauce_wallet_address`,
+`sauce_wallet_send` (`create` is `sauce wallet new`'s twin; the names predate the parity). List and
+address need no password. Create, import and send need the wallets ENABLED, else they refuse naming
+`sauce_wallet_enable` and its four sources. A password flag at start (`--password-env|-file|
+-command`, no longer needing `--wallets`) enables them: `sdk/src/cli/mcp.ts` reads it once, before
+the server loads, from a source that is not the prompt (stdin is the protocol's), and passes it as
+`McpServeOptions.wallets.start`; that source is the operator's, and the tool refuses to replace it.
+Otherwise the agent calls `sauce_wallet_enable` with a SOURCE, never a value: `env` (a variable of
+the server's environment, read through `McpWallets.read`, a closure over the CLI's `PasswordIo`, so
+`DELIBERATE_ENV_READ` stays the one read), `file` and `dotenv` + `variable` (`password.ts`, by
+`"tool"`: owner-only and a REGULAR file, `dotenvEntry` reading as dotenv does), or `generate`
+(`wallets.ts#generatePasswordFile`: 32 random bytes as base64url, written once 0600 by the same
+link-into-place as a wallet; `true` is `<dir>.password`, beside the directory and never in it,
+`~/.sauce/wallets.password` by default; a path inside a git work tree is noted). Never a command: a
+command the model chose would be a shell for it. The password lives in the server's
+`WalletSession`, in memory, for the process; calling the tool again replaces it.
+`sauce_wallet_import` takes a key file by PATH (the tool never sees the key; a key given as the
+path is refused unechoed), refuses one others can read, and reads it with `readImport`, so a
+keystore must open with the enabled password, as the CLI's import does. `--wallets` and the
+password flags are refused with `--http`, and `createSauceServer` registers the wallet tools only
+when given wallets, which only the stdio path gives. `sauce_wallet_send` normalizes another tool's whole result (`plannedTransactions`, in
 `wallet-send.ts`), rehearses an EVM plan in one `eth_simulateV1` block and preflights the policy
 before sending any, then sends each through `sendAndWait`; a Solana one through `sendPlannedSvm`.
 Its output schema is `refusable(...)`, like every tool the release gate can refuse. Tests: `cli-wallet.test.ts`, `cli-policy.test.ts`, `cli-wallet.e2e.test.ts`
 (anvil, released gated stack), `cli-wallet-solana.e2e.test.ts` (LiteSVM), `mcp/test/wallets.test.ts`
-and `wallets.e2e.test.ts`; `transports.test.ts` runs `sauce mcp --wallets` over stdio and checks
-the HTTP server has no wallet tool. Every password and key in them is generated and thrown away.
+and `wallets.e2e.test.ts` (each source an agent names, then a send); `transports.test.ts` runs the
+bare `sauce mcp` over stdio with a `HOME` of its own (wallet tools listed, `{ generate: true }`,
+then a wallet), an agent-named `env`, a start flag and `--no-wallets`, and checks the HTTP server
+has no wallet tool. Every password and key in them is generated and thrown away.
 
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain

@@ -3,7 +3,8 @@
  * cluster as it is (Solana's simulation takes no state overrides, so the solver's own accounts
  * pay), and with `--send` sent from `--keypair`, then the proof. The transactions are
  * `lifecycle.ts#buildFill`'s and `#buildProve`'s, the same ones `sauce mcp` returns unsigned;
- * this adds the rehearsal's report, the approval, sending and the store.
+ * this adds the rehearsal's report, the approval and sending. The store records each transaction as
+ * it lands (`keep.ts`).
  */
 import {
   address,
@@ -20,10 +21,11 @@ import { svmTokenRows } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { unapproved, type CommandOutput } from "./commands.js";
 import type { LifecycleContext, Target } from "./intent-commands.js";
+import { knowIntents } from "./keep.js";
 import { linkLines, txLinks } from "./links.js";
 import { buildFill, buildProve } from "./lifecycle.js";
 import { rehearseSvm, tokenAccountAmount, type SvmTxJson } from "./lifecycle-svm.js";
-import { sendPlannedSvm, type SvmSent } from "./solana.js";
+import { sendPlannedSvm } from "./solana.js";
 import { SOLANA_HYPERLANE } from "../svm/portal.js";
 
 /** The writable accounts a transaction takes that are not its signers: what it can change. */
@@ -185,10 +187,11 @@ export async function svmFillCommand(
     if (!answer) throw new CliError("not sent: you declined");
     // A Solana blockhash lasts about a minute: after a person's answer, build the fill again.
     if (!context.approver.auto) fill = await build();
+    // The fill and its proof are recorded as each lands, from the Portal's instructions (`keep.ts`).
+    knowIntents([record]);
     const sent = await sendPlannedSvm(url, context.svmSigner!, fill.transactions[0] as SvmTxJson);
     if (!sent.ok)
       throw new CliError(`the fill ${sent.signature} failed: ${sent.reason ?? "no reason"}`);
-    remember(context, target, "filled", chain, sent);
     const lines = [
       ...(context.approver.auto ? [...head, ...rehearsed, ""] : []),
       `Filled ${record.intentHash} on ${chain.slug}: ${sent.signature}, slot ${sent.slot ?? "?"}`,
@@ -236,7 +239,6 @@ export async function svmFillCommand(
           const message = proven.logs
             .map((line) => /Dispatched message to \d+, ID (0x[0-9a-f]{64})/.exec(line)?.[1])
             .find((id) => id !== undefined) as Hex | undefined;
-          remember(context, target, "proving", chain, proven, message);
           lines.push(
             `Proved it: ${proven.signature}, slot ${proven.slot ?? "?"}` +
               (message === undefined
@@ -269,25 +271,4 @@ export async function svmFillCommand(
     ...(notes.length === 0 ? {} : { notes }),
     ...(failed ? { exitCode: 1 } : {}),
   };
-}
-
-function remember(
-  context: LifecycleContext,
-  target: Target,
-  event: "filled" | "proving",
-  chain: ReturnType<typeof requireChain>,
-  sent: SvmSent,
-  message?: Hex,
-): void {
-  context.store.save(target.record);
-  context.store.append(target.record.intentHash, {
-    event,
-    chain: chain.slug,
-    chainId: chain.id,
-    tx: sent.signature,
-    block: (sent.slot ?? 0n).toString(),
-    time: new Date().toISOString(),
-    from: context.svmSigner!.address,
-    ...(message === undefined ? {} : { message }),
-  });
 }

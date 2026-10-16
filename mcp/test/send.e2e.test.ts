@@ -35,7 +35,6 @@ import { bytesToHex, hexToBigInt, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
-import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { decodeCursor, encodeCursor, isCook } from "../../sdk/dist/cli/svm-plan.js";
 import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
@@ -63,7 +62,7 @@ import {
   type Unsigned,
 } from "../../docs/examples/mcp-external-signer.js";
 import { SEND_MOST, SIGNED_MOST } from "../src/send.js";
-import { connect, endpointsFor, erred, failed, ok, type Connected } from "./harness.js";
+import { connect, endpointsFor, erred, failed, ok, type Connected, walletsAt } from "./harness.js";
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const AMOUNT = 1_000_000n;
@@ -164,6 +163,23 @@ describe(
         ["success", "success"],
       );
       assert.match(String(sent.sent[0]!.what), /deployPot/);
+      // The Pot it deployed, as the sauce command records it, for the caller to keep: the server
+      // keeps no store.
+      const [deployed, ...more] = sent.sent[0]!.pots as Array<Record<string, unknown>>;
+      assert.deepEqual(more, []);
+      assert.deepEqual(
+        [deployed!.pot, deployed!.owner, deployed!.chain, deployed!.kind, deployed!.origin],
+        [planned.pot, signer.address, "ethereum", "private", "deployed"],
+      );
+      assert.deepEqual(deployed!.deployment, {
+        tx: sent.sent[0]!.hash,
+        block: sent.sent[0]!.blockNumber,
+        blockHash: (
+          await local.publicClient.getTransactionReceipt({ hash: sent.sent[0]!.hash as Hex })
+        ).blockHash,
+        from: signer.address,
+      });
+      assert.equal(sent.sent[1]!.pots, undefined);
       assert.equal(sent.sent[1]!.what, `cook on Pot ${planned.pot}`);
       assert.ok(Array.isArray(sent.sent[1]!.moves));
       assert.equal(await local.balanceOf(usdc, RECIPIENT), AMOUNT);
@@ -402,11 +418,11 @@ describe(
       shim.install();
       mcp = await connect();
       dir = mkdtempSync(join(tmpdir(), "sauce-mcp-plan-"));
-      wallets = await connect(undefined, undefined, {
-        store: new WalletStore(join(dir, "wallets")),
-        password: PASSWORD,
-        source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
-      });
+      wallets = await connect(
+        undefined,
+        undefined,
+        walletsAt(join(dir, "wallets"), { start: PASSWORD }),
+      );
     });
     after(async () => {
       shim?.restore();

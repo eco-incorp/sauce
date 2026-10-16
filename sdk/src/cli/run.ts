@@ -44,7 +44,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
+import { chainServedBy, connect, connectAt, endpointFor } from "./chain.js";
 import {
   type Approver,
   type ArgsInput,
@@ -79,7 +79,6 @@ import {
   listCommand,
   proveCommand,
   refundCommand,
-  rememberPublished,
   showCommand,
   storedTargets,
   type LifecycleContext,
@@ -90,6 +89,9 @@ import { interactiveIntents } from "./interactive.js";
 import { intentOf, intentRecord } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
+import { potImportCommand, potListCommand } from "./pot-commands.js";
+import { PotStore } from "./pot-store.js";
+import { keeping, keepsAny, type LocalStores } from "./keep.js";
 import { globalsCommand } from "./globals.js";
 import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
@@ -97,6 +99,8 @@ import {
   bindMainArguments,
   definesReach,
   fundingFor,
+  potImportTarget,
+  potOwner,
   potTarget,
   programChain,
   withoutShebang,
@@ -208,6 +212,12 @@ export interface CliIo extends CliFiles {
   readonly storeDir?: string;
   /** Where the wallets are when `--wallets` does not say: `~/.sauce/wallets` by default. */
   readonly walletsDir?: string;
+  /**
+   * Where the Pot store is when `--pots` does not say: every Pot a command deploys is recorded there
+   * (`pots.ts`). The executable gives `~/.sauce/pots` (`main.ts`); without it, as in a test, a Pot
+   * is recorded only where `--pots` names a store.
+   */
+  readonly potsDir?: string;
   /** The variable `--password-env` names: the command's one read of the environment. */
   readonly readEnv: (name: string) => string | undefined;
   /** A file's permission bits, for `--password-file`; `undefined` where there are none (Windows). */
@@ -449,6 +459,15 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     value: "<dir>",
     help: "Resolve the program's relative imports here (default: beside it; from stdin, .)",
+  },
+};
+
+/** Where the Pots a command deploys are recorded (`pot-store.ts`). */
+const POTS: FlagSpecs = {
+  pots: {
+    type: "string",
+    value: "<dir>",
+    help: "The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)",
   },
 };
 
@@ -1173,23 +1192,6 @@ async function endpointLookup(
   return (chain) => (chain.id === served.id ? rpcUrl : sharedEndpoint(args, io, chain));
 }
 
-/** Records what a sent transaction published in the store, with a note per intent stored. */
-const storing =
-  (args: ParsedArgs, io: CliIo, chain: CanonicalChain, rpcUrl: string) =>
-  async (sent: Sent): Promise<readonly string[]> => {
-    const store = storeOf(args, io);
-    try {
-      const records = await rememberPublished(store, chain, rpcUrl, sent);
-
-      return records.map((record) => `stored intent ${record.intentHash} in ${store.dir}`);
-    } catch (error) {
-      return [
-        `warning: ${sent.hash} was sent, but what it published was not stored in ${store.dir}: ` +
-          (error instanceof Error ? error.message : String(error)),
-      ];
-    }
-  };
-
 /** What every lifecycle command shares: the store, the endpoints, the signer and the approvals. */
 async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleContext> {
   const endpoint = await endpointLookup(args, io);
@@ -1408,7 +1410,6 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
       dryRun: false,
       rpcUrl,
       account,
-      onSent: storing(args, io, created.source, rpcUrl),
     },
     io,
   );
@@ -1844,7 +1845,6 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
           ...(rpcUrl === undefined ? {} : { rpcUrl }),
           ...(account === undefined ? {} : { account }),
           ...(from === undefined ? {} : { from: parseAddress("from", from) }),
-          ...(rpcUrl === undefined ? {} : { onSent: storing(args, io, program.chain, rpcUrl) }),
         },
         io,
       );
@@ -1896,6 +1896,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       yes: LIFECYCLE.yes!,
       "auto-approve": LIFECYCLE["auto-approve"]!,
       store: LIFECYCLE.store!,
+      ...POTS,
       ...JSON_FLAG,
       ...HELP,
       ...ARGS,
@@ -2068,9 +2069,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         ...(solver === undefined ? {} : { solver: parseAddress("solver", solver) }),
         ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),
         ...(args.values["no-prove"] === true ? { prove: false } : {}),
-        ...(account === undefined
-          ? {}
-          : { send: { account, approver: approverOf(args, io), store } }),
+        ...(account === undefined ? {} : { send: { account, approver: approverOf(args, io) } }),
       });
     },
   },
@@ -2236,11 +2235,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     flags: { ...ENDPOINT, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "The store (--store, default ~/.sauce/intents) keeps every intent `sauce intent publish`,",
-      "`sauce run`, and the intent commands touch, and those `sauce intent import` brings in:",
-      "one directory per intent hash, its intent.json written once and never changed, and",
-      "events.jsonl, one line appended per thing that happened (published, funded, filled,",
-      "proving, claimed, refunded, cancelled) with its chain, transaction, block and time. Where",
-      "an intent stands is never stored: it is read from the chains, each time (--offline: not).",
+      "`sauce run`, `sauce send` and the intent commands touch, and those `sauce intent import`",
+      "brings in (as does `sauce mcp`, over stdio): one directory per intent hash, its",
+      "intent.json written once and never changed, and events.jsonl, one line appended per",
+      "thing that happened (published, funded, filled, proving, claimed, refunded, cancelled)",
+      "with its chain, transaction, block and time, read from the Portal's own events as each",
+      "transaction lands. Where an intent stands is never stored: it is read from the chains,",
+      "each time (--offline: not).",
     ].join("\n"),
     run: async (args, io) => {
       if (args.positionals.length > 0) {
@@ -2447,6 +2448,111 @@ const WALLET_VERBS: Readonly<Record<string, Command>> = {
         { name: walletOperand(args)[0], password: passwordOf(args) },
         io,
       ),
+  },
+};
+
+/** The Pot store: `--pots`, else the one `io` names (the executable's `~/.sauce/pots`). */
+function potStoreOf(args: ParsedArgs, io: CliIo): PotStore {
+  const dir = stringFlag(args, "pots") ?? io.potsDir;
+  if (dir === undefined) throw new UsageError("missing --pots <dir>: the Pot store");
+
+  return new PotStore(dir);
+}
+
+const POT_VERBS: Readonly<Record<string, Command>> = {
+  list: {
+    usage: "sauce pot list [--chain <slug|id>] [--owner <address>] [--pots <dir>] [--json]",
+    summary: "List the Pots you deployed or imported, each with the release it was minted under",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "Only the Pots on this chain" },
+      owner: { type: "string", value: "<address>", help: "Only this owner's Pots" },
+      ...POTS,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Lists the Pot store (--pots, default ~/.sauce/pots): every Pot a command on this machine",
+      "deployed, and every Pot `sauce pot import` recorded. Each with its chain, address, kind",
+      "(private, private-fixed-router or shared), owner and salt; the Kitchen and the release it",
+      "was minted under: the compiler whose programs it runs, and the engine and Kitchen",
+      "versions, with the engine's address; and the transaction that deployed it. It reads no",
+      "chain: what a Pot holds, and whether it is still there, `sauce pot --rpc-url` reads.",
+      "",
+      "Examples:",
+      "  sauce pot list",
+      "  sauce pot list --chain base --owner 0x… --json",
+    ].join("\n"),
+    run: (args, io) => {
+      if (args.positionals.length > 0) {
+        throw new UsageError(`unexpected argument ${args.positionals[0]}`);
+      }
+      const chainFlag = stringFlag(args, "chain");
+      const chain = chainFlag === undefined ? undefined : parseChain(chainFlag);
+      const owner = stringFlag(args, "owner");
+
+      return potListCommand(potStoreOf(args, io), {
+        ...(chain === undefined ? {} : { chain }),
+        ...(owner === undefined ? {} : { owner: potOwner(chain, owner) }),
+      });
+    },
+  },
+  import: {
+    usage: [
+      "sauce pot import --chain <slug|id> --pot <address> [options]",
+      "sauce pot import --chain <slug|id> --owner <address> [--salt <label> | --salt-hex <bytes32>] [options]",
+    ],
+    summary: "Record a Pot deployed elsewhere, read from the chain with the release that minted it",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain the Pot is on" },
+      pot: { type: "string", value: "<address>", help: "The Pot, by address", only: "evm" },
+      owner: {
+        type: "string",
+        value: "<address>",
+        help: "Or its owner, with the salt (default 0): every release's Pot of theirs there",
+      },
+      ...SALT,
+      ...ENDPOINT,
+      ...POTS,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Records in the Pot store (--pots, default ~/.sauce/pots) a Pot this machine did not",
+      "deploy: one deployed from another machine, through another wallet, or before the store",
+      "existed. It reads the chain, and records only what it finds there.",
+      "",
+      "With --pot, the Pot is read for its owner, salt and Kitchen, and its release told from its",
+      "address: the one whose Kitchen and Pot init-code hash give that address for that owner and",
+      "salt, for each kind of Pot. An address no release this sauce knows mints is refused. With",
+      "--owner (and --salt or --salt-hex; default zero), every release's Pot of that owner and",
+      "salt that has code is recorded. A Solana Pot holds nothing that names its owner, so there",
+      "it is found by --owner and its salt: the Kitchen's account for them, and its engine the",
+      "program that owns it. A Pot already recorded keeps its record.",
+      "",
+      "Examples:",
+      "  sauce pot import --chain base --pot 0x…",
+      "  sauce pot import --chain base --owner 0x… --salt treasury",
+      "  sauce pot import --chain solana --owner <pubkey>",
+    ].join("\n"),
+    run: (args, io) => {
+      if (args.positionals.length > 0) {
+        throw new UsageError(`unexpected argument ${args.positionals[0]}`);
+      }
+      const chain = potChain(args);
+      const target = potImportTarget(chain, {
+        pot: stringFlag(args, "pot"),
+        owner: stringFlag(args, "owner"),
+        salt: stringFlag(args, "salt"),
+        saltHex: stringFlag(args, "salt-hex"),
+      });
+
+      return potImportCommand({
+        store: potStoreOf(args, io),
+        chain,
+        rpcUrl: requiredEndpoint(args, io, chain),
+        ...target,
+      });
+    },
   },
 };
 
@@ -2807,6 +2913,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "The same as --yes, its older name",
       },
       store: LIFECYCLE.store!,
+      ...POTS,
       ...JSON_FLAG,
       ...HELP,
       ...ARGS,
@@ -2900,7 +3007,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           endpointOf: (chain) => sharedEndpoint(args, io, chain),
           account,
           approver: approverOf(args, io),
-          onSent: storing(args, io, input.chain, rpcUrl),
         },
         io,
       );
@@ -2971,7 +3077,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "~/.sauce/wallets), encrypted under a password from the source you name: --password-env",
       "NAME, --password-file <path>, --password-command <command>, or a prompt. Every command",
       "that signs takes --wallet <name> with that source, on EVM chains and Solana; so does the",
-      "local MCP server (sauce mcp --wallets). It is a hot wallet: keep small balances in it.",
+      "local MCP server (sauce mcp) over stdio. It is a hot wallet: keep small balances in it.",
       "",
       "A policy limits what a wallet sends: <name>.policy.json beside it, every field optional and",
       'every amount a string in whole tokens ("100" is 100 USDC), or base units ending in n:',
@@ -3074,6 +3180,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "Solana, with --cursor: give up on the cook, and close the code buffer it staged",
       },
       ...ENDPOINT,
+      ...POTS,
+      store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
     },
@@ -3112,6 +3220,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "--close gives up on the cook and closes the code buffer. A cursor",
       "carries no key and no endpoint; @file reads it from a file, or from the JSON a step was",
       "printed as.",
+      "",
+      "What landed is kept as the other commands keep it: a Pot one deployed in the Pot store,",
+      "and in the intent store (--store, default ~/.sauce/intents) every intent one published",
+      "and what one did to an intent the store holds (filled, proving, claimed, refunded,",
+      "cancelled), read from the Portal's own events.",
       ...SUPPORTED_ONLY("Sends"),
       "",
       "Examples:",
@@ -3269,9 +3382,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   pot: {
-    usage:
+    usage: [
       "sauce pot --chain <slug|id> --owner <address> [--salt <label> | --salt-hex <bytes32>] [--deploy …]",
-    summary: "Predict a Pot's address, and deploy it or print the transaction that does",
+      "sauce pot <list | import> [options]",
+    ],
+    summary: "Predict a Pot's address, deploy it, and list the Pots you deployed",
     flags: {
       owner: { type: "string", value: "<address>", help: "Whose Pot: cook() is onlyOwner" },
       chain: { type: "string", value: "<slug|id>", help: "The chain the Pot is for" },
@@ -3279,6 +3394,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       deploy: { type: "boolean", help: "Send the deployment (needs an endpoint and a signer)" },
       ...ENDPOINT,
       ...SIGNER,
+      ...POTS,
       yes: { ...YES, help: "Accepted, approving nothing: --deploy itself is the approval" },
       "auto-approve": {
         type: "boolean",
@@ -3306,6 +3422,18 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
       "instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so",
       "the signer is the owner.",
+      "",
+      "Every Pot a command deploys (this, a run that deploys its Pot first, sauce send, a fill",
+      "that deploys an intent's Pot) is recorded in the Pot store (--pots, default",
+      "~/.sauce/pots) once the chain shows it deployed: its chain, owner, salt and kind, the",
+      "Kitchen and the release it was minted under (the engine, and the compiler whose programs",
+      "it runs), and the transaction that deployed it. sauce tx sends nothing, so it records",
+      "nothing.",
+      "",
+      "Verbs (`sauce pot <verb> --help` for each):",
+      ...Object.entries(POT_VERBS).map(
+        ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
+      ),
       ...SUPPORTED_ONLY("Deploys (or prints the deployment)"),
       "",
       "Examples:",
@@ -3313,10 +3441,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  sauce pot --deploy --chain base --keystore ~/.keys/me.json --salt treasury",
       "  sauce pot --deploy --chain base --owner 0x… --keystore <keystore>",
       "  sauce pot --deploy --chain solana --keypair ~/.config/solana/id.json",
+      "  sauce pot list --chain base",
     ].join("\n"),
     run: async (args, io) => {
       if (args.positionals.length > 0) {
-        throw new UsageError(`unexpected argument ${args.positionals[0]}`);
+        throw new UsageError(
+          `unknown verb '${args.positionals[0]}': ${Object.keys(POT_VERBS).join(", ")}`,
+        );
       }
       const chain = potChain(args);
       const owner = stringFlag(args, "owner");
@@ -4133,8 +4264,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   mcp: {
     usage: [
-      "sauce mcp [--config <file> | --offline]",
-      "sauce mcp --wallets [<dir>] (--password-env <NAME> | --password-file <path> | --password-command <command>) [--config <file>]",
+      "sauce mcp [--config <file> | --offline] [--wallets <dir> | --no-wallets] [--pots <dir>] [--store <dir>] [--no-stores]",
+      "sauce mcp (--password-env <NAME> | --password-file <path> | --password-command <command>) [--wallets <dir>] [--config <file>]",
       "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
       "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
     ],
@@ -4145,8 +4276,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,",
       "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price, sauce_pools",
       "and sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
-      "sauce_install_skills) and as resources, at sauce://skills/<path>. It takes no key: every",
-      "transaction comes back unsigned, for the user's own wallet.",
+      "sauce_install_skills) and as resources, at sauce://skills/<path>. No tool takes a key or a",
+      "password: a transaction comes back unsigned, for the user's own wallet, or is sent from",
+      "one of the server's own wallets (below).",
       "",
       "A coding agent starts the server itself, from its MCP configuration. Add it once:",
       "  claude mcp add sauce -- sauce mcp    # Claude Code",
@@ -4158,13 +4290,30 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "under mcpServers, and VS Code (.vscode/mcp.json) under servers. A desktop client that does",
       "not find `sauce` on its PATH takes the absolute path `which sauce` prints as the command.",
       "",
-      "Over stdio, --wallets (the wallet directory, default ~/.sauce/wallets) and a password",
-      "source add sauce_wallet_create, sauce_wallet_list and sauce_wallet_send: the server then",
-      "signs with the wallets of that directory alone, unlocked by that password, which it reads",
-      "once at start (from the variable an MCP client's config passes from the agent's .env, a",
-      "file, or a command) and which no tool takes or returns. sauce_wallet_send simulates what it",
-      "is given and holds it to the wallet's policy (sauce wallet --help) before it sends.",
-      "The HTTP server never signs: --wallets is refused there, and it has no wallet tools.",
+      "Over stdio it serves the wallets of the wallet directory (--wallets, default",
+      "~/.sauce/wallets, the one sauce wallet uses; --no-wallets serves none): sauce_wallet_list",
+      "and sauce_wallet_address read them with no password, and sauce_wallet_create,",
+      "sauce_wallet_import and sauce_wallet_send work once the wallets are enabled. A password",
+      "source given here enables them, read once at start: the variable an MCP client's config",
+      "passes from the agent's .env, a file, or a command. Without one, the agent enables them",
+      "with sauce_wallet_enable, naming where the password comes from (a variable of the",
+      "server's environment, a file only you can read, an entry of such a .env file, or a new",
+      "random one it writes to a file), never the password itself and never a command. No tool",
+      "takes or returns a password or a key. sauce_wallet_send simulates what it is given and",
+      "holds it to the wallet's policy (sauce wallet --help) before it sends.",
+      "The HTTP server never signs: --wallets and the password flags are refused there, and it",
+      "has no wallet tools.",
+      "",
+      "Over stdio it keeps this command's stores as the command does, in the same directories,",
+      "for an agent that reaches Sauce only through it: every Pot a tool's transaction deploys",
+      "(sauce_send, sauce_wallet_send) is recorded in the Pot store (--pots, default",
+      "~/.sauce/pots), which sauce_pot_list and sauce_pot_import read and write, as sauce pot list",
+      "and sauce pot import do; and every intent one publishes, and what one does to an intent,",
+      "in the intent store (--store, default ~/.sauce/intents), which sauce_intent_list,",
+      "sauce_intent_show and sauce_intent_import read and write, as sauce intent list, show and",
+      "import do, and every intent tool names an intent from by its hash. The wallet directory",
+      "is one of those stores: --no-stores keeps none, and serves no wallet tool. Over HTTP it",
+      "keeps nothing, and has none of those tools.",
       "",
       "Over stdio by default, what a coding agent launches. With --http, Streamable HTTP at /mcp,",
       "stateless: on 127.0.0.1 unless --host says otherwise, answering only a loopback Host or an",
@@ -4184,7 +4333,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce mcp",
-      "  sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD",
+      "  sauce mcp --password-env SAUCE_WALLET_PASSWORD",
       "  sauce mcp --http 3000",
       "  sauce mcp setup --agent claude,cursor",
     ].join("\n"),
@@ -4302,12 +4451,14 @@ const ALL_COMMANDS: ReadonlyArray<readonly [string, Command]> = [
   ...Object.entries(COMMANDS),
   ...Object.entries(INTENT_VERBS).map(([verb, command]) => [`intent ${verb}`, command] as const),
   ...Object.entries(WALLET_VERBS).map(([verb, command]) => [`wallet ${verb}`, command] as const),
+  ...Object.entries(POT_VERBS).map(([verb, command]) => [`pot ${verb}`, command] as const),
 ];
 
 /** The commands that take verbs, and their verbs. */
 const VERBS: Readonly<Record<string, Readonly<Record<string, Command>>>> = {
   intent: INTENT_VERBS,
   wallet: WALLET_VERBS,
+  pot: POT_VERBS,
 };
 
 /** The command `words` name — `intent fill` for `intent fill …` — with the words after it. */
@@ -4502,7 +4653,21 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
       }
       if (args.values.offline !== true) await io.publicRpcs?.ready();
     }
-    const output = await command.run(args, io, trailing);
+    // What the command's transactions do is kept as each lands (`keep.ts`): every Pot one
+    // deploys, every intent one publishes and what one does to an intent. `sauce mcp` keeps its
+    // own, a tool call at a time, over stdio only.
+    const potsDir = label === "mcp" ? undefined : (stringFlag(args, "pots") ?? io.potsDir);
+    const stores: LocalStores =
+      label === "mcp"
+        ? {}
+        : {
+            ...(potsDir === undefined ? {} : { pots: new PotStore(potsDir) }),
+            intents: storeOf(args, io),
+          };
+    const run = async () => command.run(args, io, trailing);
+    const output = await (keepsAny(stores)
+      ? keeping({ stores, say: (line) => io.stderr(`${line}\n`) }, run)
+      : run());
     if (output === undefined) return 0;
     for (const note of output.notes ?? []) io.stderr(`${note}\n`);
     io.stdout(`${render(command, output, args)}\n`);

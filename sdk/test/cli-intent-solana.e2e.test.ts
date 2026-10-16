@@ -269,6 +269,22 @@ describeEvm("sauce intent: Base to Solana, filled and proven on Solana, claimed;
     const claimed = await run(store, "claim", hash, "--private-key", SOLVER_KEY, "--json");
     expect(claimed.code).toBe(0);
     expect(await base.balanceOf(usdc, SOLVER.address)).toBe(before + REWARD);
+
+    // Each step recorded as it landed, from the chain: Solana's Portal instructions and its
+    // Mailbox's message, Base's Portal events.
+    const events = jsonOf(await run(store, "show", hash, "--json")).events as Array<{
+      event: string;
+      chain: string;
+      message?: string;
+    }>;
+    expect(events.map((each) => `${each.event} ${each.chain}`)).toEqual([
+      "imported base",
+      "funded base",
+      "filled solana",
+      "proving solana",
+      "claimed base",
+    ]);
+    expect(events[3]!.message).toBe((sent!.proof as { message: string }).message);
   }, 240_000);
 
   it("cancels it on Solana after its deadline, proves the cancellation once final, and refunds", async () => {
@@ -308,5 +324,17 @@ describeEvm("sauce intent: Base to Solana, filled and proven on Solana, claimed;
     const refunded = await run(store, "refund", hash, "--private-key", OWNER_KEY);
     expect(refunded.code).toBe(0);
     expect(await base.balanceOf(usdc, OWNER.address)).toBe(before + REWARD);
+
+    const events = jsonOf(await run(store, "show", hash, "--json")).events as Array<{
+      event: string;
+      chain: string;
+    }>;
+    expect(events.map((each) => `${each.event} ${each.chain}`)).toEqual([
+      "imported base",
+      "funded base",
+      "cancelled solana",
+      "proving solana",
+      "refunded base",
+    ]);
   }, 240_000);
 });

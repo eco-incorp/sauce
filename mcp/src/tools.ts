@@ -25,6 +25,7 @@ import { callFiles, DEFAULT_FILE, diskProgram } from "./files.js";
 import type { RpcGuard } from "./guard.js";
 import { callReach, type Reach } from "./reach.js";
 import { toolTerms } from "./terms.js";
+import type { WalletSession } from "./wallets.js";
 import {
   actionsCommand,
   actionsProgram,
@@ -54,7 +55,10 @@ import {
   inspectFile,
   intentRecord,
   type IntentRecord,
+  keeping,
+  keepsAny,
   kitchenFee,
+  type LocalStores,
   MAX_V4_KEYS,
   parseAccounts,
   parseAddress,
@@ -104,7 +108,6 @@ import {
   txCommand,
   UsageError,
   verifyCommand,
-  type WalletStore,
   withoutShebang,
 } from "./sdk.js";
 
@@ -278,7 +281,7 @@ function sourceInputs(local: boolean): {
   ) as { source: z.ZodOptional<typeof PROGRAM.source>; path: z.ZodOptional<typeof PATH> };
 }
 
-const POT = {
+export const POT = {
   owner: z
     .string()
     .max(64)
@@ -854,7 +857,12 @@ function scaled(price: string, numerator: bigint, denominator: bigint): string {
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
 /** A rehearsal's approver: it sends nothing, so there is nothing to approve and no one to ask. */
-const NO_APPROVER = { auto: false, canAsk: false, approve: async () => undefined } as const;
+/** No one to ask: what a tool would need approved is refused, never assumed. */
+export const NO_APPROVER = {
+  auto: false,
+  canAsk: false,
+  approve: async () => undefined,
+} as const;
 /** The name an actions document goes by in messages: it comes from the call, not a file. */
 const ACTIONS_FILE = "actions.json";
 /** An intent's claimant, as fulfill records it: an address, or 32 bytes. */
@@ -1052,7 +1060,7 @@ export const SUPPORTED_ONLY =
   "chain and a prefilled new one, and the title, body and comment to post. Offer the user that " +
   "request; compile and simulate work on every chain.";
 
-/** That sentence on a server with wallets (`sauce mcp --wallets`). */
+/** That sentence on a server with wallets (over stdio, unless `--no-wallets`). */
 export const WALLET_UNSIGNED =
   "Nothing is signed or sent here: pass the result to sauce_wallet_send to send it from one of " +
   "this server's wallets, or sign it with any other wallet.";
@@ -1068,18 +1076,33 @@ export interface ToolContext {
   /** Over stdio: the caller is the server's own user, so a program may be named by `path` and
    *  read from disk. Never over HTTP. */
   readonly local?: boolean;
-  /** Over stdio with `--wallets`: the wallets the server signs with. Never over HTTP. */
-  readonly wallets?: WalletContext;
+  /** Over stdio, unless `--no-wallets` or `--no-stores`: the wallets the server serves. Never
+   *  over HTTP. */
+  readonly wallets?: WalletSession;
+  /**
+   * Over stdio: the `sauce` command's stores the server keeps (`keep.ts`), as the command does.
+   * Each tool call is a scope of them, so what its transactions do is kept as each lands, and said
+   * in its notes. Never over HTTP.
+   */
+  readonly stores?: LocalStores;
 }
 
-/** The wallet directory a stdio server was started with, and the password its wallets open with. */
-export interface WalletContext {
-  readonly store: WalletStore;
-  /** Read once at start from the source the server was given; never an input, never returned. */
-  readonly password: string;
-  /** That source, as the instructions name it. */
-  readonly source: string;
-}
+/** What a send's description says becomes of the Pot records its result carries: kept by a server
+ *  that keeps the Pot store, else the caller's to keep. */
+export const potsKept = (context: ToolContext): string =>
+  context.stores?.pots === undefined
+    ? "to keep: this server keeps none"
+    : "which this server also records in the sauce command's Pot store, as the command does " +
+      "(sauce_pot_list lists them)";
+
+/** What a send's description says becomes of what its transactions do to intents: recorded by a
+ *  server that keeps the intent store, else nothing. */
+export const intentsKept = (context: ToolContext): string =>
+  context.stores?.intents === undefined
+    ? ""
+    : "What each does to an intent (publishing it, a fill, a proof, a claim, a refund, a " +
+      "cancellation) this server records in the sauce command's intent store, as the command " +
+      "does (sauce_intent_list lists them). ";
 
 /** How many tokens `sauce_globals` returns at a time. */
 const TOKEN_PAGE = 200;
@@ -1120,7 +1143,7 @@ export type ToolRegistrar = <Input extends z.ZodRawShape, Output extends z.ZodRa
  * released after.
  */
 export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegistrar {
-  const { endpoints, guard } = context;
+  const { endpoints, guard, stores } = context;
 
   return (name, config, run) => {
     // A tool that builds a transaction, on a server that can send it: the result says how.
@@ -1141,13 +1164,24 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       },
       async (args: unknown) => {
         const reach = callReach(endpoints, guard);
+        // What the call's transactions did that the server keeps, as each landed: said in its
+        // result whether it succeeded or not, as the command says it whatever its exit.
+        const kept: string[] = [];
+        const call = async () => run(args as never, reach);
         try {
-          const output = withPublicNotes(await run(args as never, reach), reach);
+          const output = withPublicNotes(
+            await (stores === undefined || !keepsAny(stores)
+              ? call()
+              : keeping({ stores, say: (line) => kept.push(line) }, call)),
+            reach,
+          );
+          const keptOutput =
+            kept.length === 0 ? output : { ...output, notes: [...(output.notes ?? []), ...kept] };
 
           return result(
             sendable && (args as { dryRun?: unknown }).dryRun !== true
-              ? withSendNote(output)
-              : output,
+              ? withSendNote(keptOutput)
+              : keptOutput,
             reach.scrub,
           );
         } catch (error) {
@@ -1157,7 +1191,12 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
 
           return {
             isError: true,
-            content: [{ type: "text", text: [errorText(error, reach.scrub), ...said].join("\n") }],
+            content: [
+              {
+                type: "text",
+                text: [errorText(error, reach.scrub), ...said, ...kept.map(reach.scrub)].join("\n"),
+              },
+            ],
           };
         } finally {
           reach.release();

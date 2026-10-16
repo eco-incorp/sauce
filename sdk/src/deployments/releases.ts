@@ -31,11 +31,18 @@ export interface V12ReleasePin {
   readonly engine?: string | null;
 }
 
+/** The EVM Kitchen's release: the Kitchen proxy and the init-code hash every Pot it mints is
+ *  `CREATE2(kitchen, …, potInitCodeHash)` under — `null` until the release says. */
+export interface V12KitchenEvmPin extends V12ReleasePin {
+  readonly kitchen: string | null;
+  readonly potInitCodeHash: string | null;
+}
+
 /** One compiler version and the four releases its output pairs with. */
 export interface V12ReleaseSet {
   readonly compiler: string;
   readonly "v12-evm": V12ReleasePin & { readonly engine: string | null };
-  readonly "kitchen-evm": V12ReleasePin;
+  readonly "kitchen-evm": V12KitchenEvmPin;
   readonly "v12-svm": V12ReleasePin & { readonly engine: string | null };
   readonly "kitchen-svm": V12ReleasePin;
 }

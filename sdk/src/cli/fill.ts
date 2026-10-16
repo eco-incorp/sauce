@@ -84,11 +84,10 @@ import {
   planFill,
   type FillPlan,
   type FillStep,
-  type IntentRecord,
 } from "./lifecycle.js";
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf } from "./receipt.js";
-import type { IntentStore } from "./store.js";
+import { knowIntents } from "./keep.js";
 import { requireSupported } from "./support.js";
 
 /** The solver a rehearsal fills from when none is named: an address nobody holds the key of. */
@@ -126,7 +125,6 @@ export interface FillInput {
     readonly account: PrivateKeyAccount;
     /** Who approves what the fill spends: `--yes`, or the person asked. */
     readonly approver: Approver;
-    readonly store?: IntentStore;
   };
 }
 
@@ -916,11 +914,15 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
   const answer = await send.approver.approve(action, `${spend.join("\n")}\nSend them? [y/N] `);
   if (answer === undefined) throw unapproved([action], send.approver.why);
   if (!answer) throw new CliError("not sent: you declined");
+  // What each fill does is recorded as it lands, from the Portal's events (`keep.ts`).
+  knowIntents(
+    fills.map((fill) =>
+      intentRecord(fill.target.intent, { sourcePortal: fill.target.sourcePortal }),
+    ),
+  );
   const done: SentFill[] = [];
   for (const fill of send.approver.auto ? fills : await replanned(input, fills)) {
-    const result = await sendFill(input, fill);
-    done.push(result);
-    record(send.store, result);
+    done.push(await sendFill(input, fill));
   }
 
   return {
@@ -950,6 +952,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
           ...(result.receipt === undefined
             ? {}
             : { cost: costJson(costOf(result.receipt, step.value)) }),
+          ...(result.pots === undefined ? {} : { pots: result.pots }),
         })),
         fulfilled:
           entry.recordedClaimant === undefined ? null : { claimant: entry.recordedClaimant },
@@ -968,28 +971,4 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
       ),
     ],
   };
-}
-
-/** Records a sent fill in the store: the intent, once, and what happened to it. */
-function record(store: IntentStore | undefined, done: SentFill): void {
-  if (store === undefined) return;
-  const { fill } = done;
-  const intentRecordOf: IntentRecord = intentRecord(fill.target.intent, {
-    sourcePortal: fill.target.sourcePortal,
-  });
-  store.save(intentRecordOf);
-  const fulfill = done.sent[done.sent.length - 1]!.result;
-  const time = new Date(Number(done.time) * 1000).toISOString();
-  const base = {
-    chain: fill.target.destination.slug,
-    chainId: fill.target.destination.id,
-    tx: fulfill.hash,
-    block: fulfill.blockNumber.toString(),
-    time,
-    from: fill.plan.solver,
-  };
-  store.append(fill.plan.hashes.intentHash, { event: "filled", ...base });
-  for (const message of done.messages) {
-    store.append(fill.plan.hashes.intentHash, { event: "proving", ...base, message: message.id });
-  }
 }

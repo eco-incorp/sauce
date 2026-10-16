@@ -92,9 +92,12 @@ reward)`, sent by anyone, returns everything the vault holds of the reward to th
 
 `sauce intent` drives the whole lifecycle. Each verb takes the intent file (with `--chain`, the
 source, and the flags it was built with) or the intent's hash, and reads both chains. Every intent
-the commands publish, fill or import goes into a local
-store in your home directory (`--store <dir>` names another), so later steps name it by hash; where it
-stands is read from the chains each time.
+the commands publish, fill or import goes into a local store in your home directory (`--store <dir>`
+names another), with each step recorded from the Portal's own events as its transaction lands, so
+later steps name it by hash; where it stands is read from the chains each time. `sauce intent list`
+lists the store, and `sauce intent show <intent-hash>` one intent with its events. The MCP server
+over stdio keeps the same store: its intent tools take `intentHash`, and `sauce_intent_list` and
+`sauce_intent_show` read it.
 
 ```sh
 sauce intent publish --keystore <keystore>
@@ -130,7 +133,7 @@ sauce intent import <tx-hash> --chain <source>
   described above.
 - Without a signer, each prints its transactions unsigned, for a wallet to send in order; signed
   by any signer, `sauce send <signed>…` (the tool `sauce_send`) broadcasts them in order and
-  reports each.
+  reports each, and records in the store what each did, as if the command had sent it.
 - `sauce intent` alone, at a terminal, lists the stored intents with where each stands, and runs
   these on the one picked.
 

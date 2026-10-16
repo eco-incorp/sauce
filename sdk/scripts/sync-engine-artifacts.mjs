@@ -78,8 +78,9 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // not a property this can rely on. Requiring one shared commit made a
 // routine per-component bump fail as "the tag moved".
 //
-// To bump: edit the row's versions, run this script, and paste the digests and engine ids it
-// reports. A row with a `null` digest or engine id is a release that is not out yet: this script
+// To bump: edit the row's versions, run this script, and paste the digests, engine ids and the
+// kitchen-evm release's Kitchen and Pot init-code hash it reports. A row with a `null` digest,
+// engine id, Kitchen or hash is a release that is not out yet: this script
 // downloads it, reports what to paste, and writes NOTHING, because an unpinned engine is not one to
 // run. `--report <compiler>` reports any row the same way without the compiler installed — the
 // engines release before the compiler that pairs with them does.
@@ -427,6 +428,13 @@ const ENGINE_IDENTITY = {
   "v12-svm": (addresses) => addresses.programs?.engine?.programId,
 };
 
+/** What the EVM Kitchen's release says every Pot it mints is CREATE2 under: the Kitchen proxy and
+ *  the Pot's init-code hash. The `sauce` command tells which release minted a Pot from them. */
+const POT_FAMILY = {
+  kitchen: (addresses) => addresses.contracts?.kitchen?.address,
+  potInitCodeHash: (addresses) => addresses.pot?.initCodeHash,
+};
+
 // ---------------------------------------------------------------------------
 // A ROW THAT IS NOT RELEASED YET: report what to paste, and write nothing. An unpinned engine is not
 // one to run, and keeping the previous row's artifacts on disk would pair them with a compiler they
@@ -439,7 +447,10 @@ const ENGINE_IDENTITY = {
   const report = REPORT !== undefined;
   const unpinned = report ? PINS : PINS.filter((p) => p.digest === null);
   const unnamed = Object.keys(ENGINE_IDENTITY).filter((c) => report || SET[c].engine === null);
-  if (unpinned.length > 0 || unnamed.length > 0) {
+  const unfamilied = Object.keys(POT_FAMILY).filter(
+    (field) => report || (SET["kitchen-evm"][field] ?? null) === null,
+  );
+  if (unpinned.length > 0 || unnamed.length > 0 || unfamilied.length > 0) {
     console.error(
       report
         ? `[sync-engine-artifacts] releases.json's row for compiler ${COMPILER}, read from its releases:`
@@ -474,6 +485,26 @@ const ENGINE_IDENTITY = {
         console.error(`  ${tag} engine: "${ENGINE_IDENTITY[component](addresses)}"`);
       } catch (e) {
         console.error(`  ${tag} engine: not available — ${e.message}`);
+      }
+    }
+    if (unfamilied.length > 0) {
+      const tag = `kitchen-evm-v${SET["kitchen-evm"].version}`;
+      try {
+        let addresses;
+        if (report) {
+          const fresh = resolve(CACHE_ROOT, tag, ".report", "addresses.json");
+          mkdirSync(dirname(fresh), { recursive: true });
+          rmSync(fresh, { force: true });
+          download(tag, "addresses.json", fresh);
+          addresses = JSON.parse(readFileSync(fresh, "utf8"));
+        } else {
+          addresses = releaseAddresses(tag);
+        }
+        for (const field of unfamilied) {
+          console.error(`  ${tag} ${field}: "${POT_FAMILY[field](addresses)}"`);
+        }
+      } catch (e) {
+        console.error(`  ${tag} ${unfamilied.join(", ")}: not available — ${e.message}`);
       }
     }
     process.exit(report ? 0 : 1);
@@ -897,6 +928,18 @@ try {
       throw new Error(
         `releases.json records the ${component} ${SET[component].version} engine as ${recorded}, ` +
           `but its addresses.json publishes ${published}`,
+      );
+    }
+  }
+  // So must the Kitchen and the Pot init-code hash the row records: they are how a Pot's release is
+  // told, and a wrong one would name another release for every Pot this one mints.
+  for (const [field, of] of Object.entries(POT_FAMILY)) {
+    const published = String(of(kitchenEvm)).toLowerCase();
+    const recorded = String(SET["kitchen-evm"][field]).toLowerCase();
+    if (published !== recorded) {
+      throw new Error(
+        `releases.json records the kitchen-evm ${kitchenEvm.version} ${field} as ` +
+          `${SET["kitchen-evm"][field]}, but its addresses.json publishes ${of(kitchenEvm)}`,
       );
     }
   }

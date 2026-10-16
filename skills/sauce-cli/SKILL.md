@@ -29,7 +29,7 @@ differences in accounts, signing and fees: read `sauce-solana` alongside.
 | `sauce globals`  | The tokens, protocol contracts, chains and functions a program on a chain can use |
 | `sauce compile`  | Compiles a file for a chain; prints its bytecode, or with `--json` what it takes  |
 | `sauce actions`  | Lowers a JSON actions document for a chain; prints its SauceScript and bytecode   |
-| `sauce pot`      | Prints the owner's Pot address and its deploy transaction; deploys it             |
+| `sauce pot`      | Prints the owner's Pot address and deploy transaction; deploys it; lists yours    |
 | `sauce simulate` | Simulates the cook from the Pot's owner, with no key: gas, or why it reverts      |
 | `sauce run`      | Compiles, simulates, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
@@ -286,6 +286,16 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    `sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys the signer's
    Pot by hand. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an
    exact salt); use the same salt in every later command.
+
+   Every Pot a command deploys (`pot --deploy`, a run that deploys it first, `sauce send` of a
+   signed deployment) is recorded on this machine once the chain shows it deployed, in
+   `.sauce/pots` in the user's home (`--pots <dir>` for another). `sauce pot list` prints each with
+   its owner, salt and kind, the engine and compiler it pairs with, and the transaction that
+   deployed it (`--chain`, `--owner` and `--json` narrow and shape it). It reads no chain. A Pot
+   deployed elsewhere is recorded from the chain with `sauce pot import --chain base --pot <pot>`,
+   or by owner and salt (`sauce pot import --chain solana --owner <owner> --salt <label>`, the
+   only way on Solana). `sauce tx` sends nothing, so it records nothing.
+
 5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
    pass `--fund USDC:100`, 100 whole USDC (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer into the Pot in the same cook; `--sweep` returns what is
    left. `--fund-mode` picks how:
@@ -556,14 +566,28 @@ when the cook leaves anything in the Pot: tell the user.
 
 The tools sign nothing, so `sauce run` has none: the user signs what they return, with any
 signer, and `sauce_send` broadcasts the signed transactions (`sauce send`), waits for each and
-returns what it did. The one exception is a server started over stdio with `--wallets` and a
-password source (`--password-env <NAME>`, given from the client's config): it sends from its own
-wallets. `sauce_wallet_create` makes one
-(`sauce wallet new`), `sauce_wallet_list` names them, and `sauce_wallet_send` simulates what another
-tool returned, holds it to the wallet's policy, signs and sends it: `sauce run` from a wallet. Each
-transaction it sent comes back with its hash, `explorer` and `trace` to give the user, and a cook
-with `moves`, `leftInPot` and `summary`, the lines `sauce run` prints.
-Over HTTP, nothing signs.
+returns what it did. The exception is the server run on the user's machine over stdio: it serves
+the `sauce wallet` directory's wallets as tools. `sauce_wallet_list` and `sauce_wallet_address`
+name them with no password. Creating (`sauce_wallet_create`, `sauce wallet new`), importing a key
+file by its path (`sauce_wallet_import`) and sending need the wallets enabled: once per server,
+`sauce_wallet_enable` names where their password comes from, never the password — `{ env: NAME }`
+(a variable the client's configuration passes to the server), `{ file: path }` (a file only the
+user can read), `{ dotenv: path, variable: NAME }` (an entry of such a `.env` file) or
+`{ generate: true }` (a new random password the server writes to a new file beside the wallet
+directory; tell the user where it is). Ask the user which; a server started with
+`--password-env <NAME>` has them enabled already (`sauce_wallet_list` says `enabled`).
+`sauce_wallet_send` simulates what another tool returned, holds it to the wallet's policy, signs
+and sends it: `sauce run` from a wallet. Each transaction it sent comes back with its hash,
+`explorer` and `trace` to give the user, and a cook with `moves`, `leftInPot` and `summary`, the
+lines `sauce run` prints. Over HTTP, nothing signs.
+
+A server over stdio keeps the command's Pot store, on by default: a Pot a send through it deploys
+is recorded as `sauce` records one, and its result's notes say so. `sauce_pot_list` and
+`sauce_pot_import` are `sauce pot list` and `sauce pot import`. Each transaction in a send's
+result carries `pots`, the record of each Pot it deployed. It keeps the intent store the same way:
+what a send through it does to an intent is recorded as `sauce` records it, every intent tool takes
+`intentHash`, and `sauce_intent_list`, `sauce_intent_show` and `sauce_intent_import` are
+`sauce intent list`, `show` and `import`. Over HTTP nothing is kept.
 
 ## Rules
 

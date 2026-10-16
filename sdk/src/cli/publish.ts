@@ -356,8 +356,6 @@ export interface PublishInput extends ProgramInput {
   readonly from?: Address;
   /** `--assume-balance`, with a dry run: what the wallet holds, for the rehearsal only. */
   readonly assume?: readonly FundRequest[];
-  /** Called with each transaction sent, for what it published (the store); returns notes. */
-  readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
 
 /** The wallet's balances `--assume-balance` sets for a dry run, as state overrides, and lines that
@@ -609,7 +607,6 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
     );
   }
   const sent: Array<{ readonly step: Step; readonly result: Sent }> = [];
-  const stored: string[] = [];
   const sentSoFar = (): string =>
     sent.length === 0
       ? "nothing was sent"
@@ -633,7 +630,6 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
           `${step.what} ${result.hash} reverted: ${result.reason ?? "no reason"} (${sentSoFar()})`,
         );
       }
-      if (input.onSent !== undefined) stored.push(...(await input.onSent(result)));
     }
   }
 
@@ -657,6 +653,5 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
         gasUsed: result.gasUsed.toString(),
       })),
     },
-    ...(stored.length === 0 ? {} : { notes: stored }),
   };
 }

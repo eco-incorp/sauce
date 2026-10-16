@@ -3,7 +3,8 @@
     "Every release-dependent value the SDK pins, in one place: one row per compiler version, naming the four v12 releases that compiler's output pairs with and the digest of every asset the sync takes from them.",
     "Pairing is by EXACT package version, never by ISA revision: v12-svm 1.2.0 and 1.3.0 report the same `stack-compact-v2`, yet compiler 2.4.0 output fails on the first and 2.3.x output must not reach the second.",
     "`sync-engine-artifacts` takes the row whose `compiler` is the installed compiler and fetches exactly those releases, so the artifacts on disk always pair with the compiler that runs. `deployments/releases.ts` refuses, at call-build time, an engine a row names for a DIFFERENT compiler.",
-    "To bump: add or edit the row (versions), run the sync, paste the digests and engine ids it reports. A null digest or engine id means the release is not out yet; the sync refuses a row that still has one."
+    "To bump: add or edit the row (versions), run the sync, paste the digests, engine ids and the kitchen-evm release's Kitchen and Pot init-code hash it reports. A null digest, engine id, Kitchen or hash means the release is not out yet; the sync refuses a row that still has one.",
+    "A kitchen-evm pin's `kitchen` and `potInitCodeHash` are what every Pot it mints is CREATE2 under: the `sauce` command tells which release minted a Pot from them, so a row keeps its own even after a newer one moves the hash."
   ],
   "releases": [
     {
@@ -17,6 +18,8 @@
       },
       "kitchen-evm": {
         "version": "1.0.0",
+        "kitchen": "0x19845b22989150E6B09dE55a661295Dd9188506b",
+        "potInitCodeHash": "0x47913cfa9c7a1dcfe6b69ea8f3ab25a579befbcb732fa65498e6be8be6613739",
         "assets": {
           "abis.json": "3310065f6f4c752888ffbc351ef40f0d9dcdfbb877b8ee33c851d08bb174f912"
         }
@@ -50,6 +53,8 @@
       },
       "kitchen-evm": {
         "version": "1.1.0",
+        "kitchen": "0x19845b22989150E6B09dE55a661295Dd9188506b",
+        "potInitCodeHash": "0xbca068ebd8e256b92e760e595c8e4e0fa6d82764de3b68bb170daa822d5b7585",
         "assets": {
           "abis.json": "0cf29af5c11222f2842f0425895f905ea8c7b4338171c8a046aff5cc13fa9b19"
         }
@@ -83,6 +88,8 @@
       },
       "kitchen-evm": {
         "version": "1.2.0",
+        "kitchen": "0x19845b22989150E6B09dE55a661295Dd9188506b",
+        "potInitCodeHash": "0xb4f700d3ee5e337e97dbf06e283bd19b35a9267b601c735c24ced66813d5d520",
         "assets": {
           "abis.json": "dce996640a90420ae21fcf8b6447cc856af1bde4d5587ed29a149a18779510cd"
         }

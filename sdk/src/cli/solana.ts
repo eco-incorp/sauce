@@ -120,6 +120,9 @@ import {
 import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { guardOf } from "./policy.js";
+import { keepLanded, sayKept } from "./keep.js";
+import type { PotRecord } from "./pot-store.js";
+import { svmPotsCreated, type InnerInstructions } from "./pots.js";
 import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
@@ -456,6 +459,8 @@ export interface SvmSent {
   readonly fee?: bigint;
   /** What the engine returned, where it ran and the node said: a program's `main`'s value. */
   readonly returnData?: Uint8Array;
+  /** The Pots it created, as `pots.ts` records them: from the Kitchen's `create_pot`. */
+  readonly pots?: readonly PotRecord[];
 }
 
 /**
@@ -513,9 +518,27 @@ export async function sendAndConfirm(
   );
 }
 
+/** Each endpoint's cluster, by its genesis hash: asked once per process. */
+const geneses = new Map<string, Promise<string>>();
+
+/** The genesis hash of the cluster `url` serves, which names the cluster a Pot is created on. */
+function genesisOf(rpc: Rpc, url: string): Promise<string> {
+  const known = geneses.get(url);
+  if (known !== undefined) return known;
+  const asked = ask(url, "the cluster's genesis hash", () => rpc.getGenesisHash().send()).then(
+    (hash) => String(hash),
+  );
+  // A failure is asked again next time, not remembered.
+  asked.catch(() => geneses.delete(url));
+  geneses.set(url, asked);
+
+  return asked;
+}
+
 /**
  * Polls until `signature` is confirmed (or a minute passes) and reads it back: whether it failed
- * and why, its logs, units, fee and what the engine returned. `seen` is told whether it succeeded
+ * and why, its logs, units, fee and what the engine returned, and the Pots it created (`pots.ts`) —
+ * and hands it to the stores the command keeps (`keep.ts`). `seen` is told whether it succeeded
  * first.
  */
 export async function svmLanded(
@@ -551,8 +574,38 @@ export async function svmLanded(
   const logs = meta?.logMessages ?? [];
   // The engine's own: the node's return data where the engine set it last, else its log line.
   const returned = meta?.returnData?.programId === engine() ? returnData : engineReturn(logs);
+  const loaded =
+    meta?.loadedAddresses === undefined || meta.loadedAddresses === null
+      ? undefined
+      : meta.loadedAddresses;
+  const inner =
+    meta?.innerInstructions === undefined || meta.innerInstructions === null
+      ? undefined
+      : (meta.innerInstructions as InnerInstructions);
+  // What it created, kept as it lands. A record that cannot be made never fails a transaction
+  // that landed; the scope says so.
+  const pots =
+    response === null || response === undefined
+      ? []
+      : await svmPotsCreated({
+          chain: requireChain("solana"),
+          transaction: response.transaction[0],
+          ...(loaded === undefined ? {} : { loaded }),
+          ...(inner === undefined ? {} : { inner }),
+          signature,
+          slot,
+          ok: err === null,
+          genesis: () => genesisOf(rpc, url),
+        }).catch((error: unknown) => {
+          sayKept(
+            `warning: ${signature} created a Pot, whose record could not be made: ` +
+              (error instanceof Error ? error.message : String(error)),
+          );
 
-  return {
+          return [];
+        });
+
+  const landed: SvmSent = {
     signature,
     ok: err === null,
     ...(err === null ? {} : { reason: failureReason(err, logs, returnData) }),
@@ -563,7 +616,19 @@ export async function svmLanded(
     slot,
     ...(meta?.fee === undefined ? {} : { fee: BigInt(meta.fee) }),
     ...(returned === undefined ? {} : { returnData: returned }),
+    ...(pots.length === 0 ? {} : { pots }),
   };
+  await keepLanded({
+    kind: "svm",
+    sent: landed,
+    ...(response === null || response === undefined
+      ? {}
+      : { transaction: response.transaction[0] }),
+    ...(loaded === undefined ? {} : { loaded }),
+    ...(inner === undefined ? {} : { inner }),
+  });
+
+  return landed;
 }
 
 /**
@@ -2066,6 +2131,7 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
   status: sent.ok ? "success" : "failed",
   ...(sent.computeUnits === undefined ? {} : { computeUnits: sent.computeUnits.toString() }),
   ...(sent.reason === undefined ? {} : { reason: sent.reason, logs: sent.logs }),
+  ...(sent.pots === undefined ? {} : { pots: sent.pots }),
 });
 
 /**

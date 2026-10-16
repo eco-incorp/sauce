@@ -17,7 +17,16 @@ import {
   signedChain,
   supportedChainNames,
 } from "./sdk.js";
-import { chainRef, LIMITS, refusable, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
+import {
+  chainRef,
+  intentsKept,
+  LIMITS,
+  potsKept,
+  refusable,
+  RPC_URL,
+  toolRegistrar,
+  type ToolContext,
+} from "./tools.js";
 
 /**
  * The most a call sends, and the longest one signed transaction can be: an EVM transaction's 128
@@ -62,7 +71,11 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "status, `explorer` and `trace` (links to give the user, never to fetch), fee or gas, " +
         "the decoded `reason` of a failure, and for a cook what moved (`moves` on EVM, " +
         "`tokenChanges` and `lamportChanges` on Solana), `leftInPot`, and on Solana `returns` " +
-        "(main's value, hex). A Solana transaction lands within about a minute of being built, " +
+        "(main's value, hex); and on a transaction that deployed a Pot, `pots`: each Pot as the " +
+        "sauce command records it (chain, address, owner, salt, kind, Kitchen, the engine and " +
+        `compiler release it was minted under, the deploying transaction), ${potsKept(context)}. ` +
+        intentsKept(context) +
+        "A Solana transaction lands within about a minute of being built, " +
         "or never: one whose blockhash expired is refused, to build and sign again. A Solana " +
         "cook too large " +
         "for one transaction comes from sauce_tx as a plan: its first step's `transactions` " +

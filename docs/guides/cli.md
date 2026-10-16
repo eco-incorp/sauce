@@ -19,7 +19,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
 | `sauce send`     | Broadcast transactions signed elsewhere, wait for them, and report what they did  |
 | `sauce reclaim`  | List the code buffers and lookup tables a Solana owner left open, and close them  |
-| `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
+| `sauce pot`      | Predict a Pot's address, deploy it, and list the Pots you deployed                |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
 | `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
 | `sauce pools`    | List a pair's price-limit pools on a chain, deepest first, with their prices      |
@@ -552,6 +552,60 @@ sauce pot --chain base --owner 0xYou
 `run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
 and one that names someone else is refused. `simulate`, `tx` and plain `pot` have no signer and
 take `--owner` (or, for `simulate` and `tx`, `--pot <address>`, of a deployed Pot).
+
+### The Pots you deployed: `sauce pot list`
+
+Every Pot a command deploys is recorded in a store, `~/.sauce/pots` (`--pots <dir>` for another),
+once the chain shows it deployed. That covers `pot --deploy`, a `run` that deploys its Pot before
+its first cook (or, on Solana, creates it in the cook's own transaction), a deployment signed
+elsewhere and broadcast with `sauce send`, and a fill that deploys the Pot an intent cooks on. The
+record comes from the chain: the Kitchen's `PotDeployed` event in a receipt that succeeded, or its
+`create_pot` in a Solana transaction that succeeded. So a run whose cook fails after its Pot
+deployed still records the Pot. `sauce tx` sends nothing, and records nothing.
+
+A record holds the chain (on Solana with its cluster, told by its genesis hash: `mainnet-beta`,
+`devnet`, `testnet`, or the hash of any other, so a devnet Pot is never recorded as mainnet's, though
+its address is the same), the Pot's address, its owner and salt, and its kind: `private`,
+`private-fixed-router` (minted with its Router fixed) or `shared` (no owner; anyone may cook it).
+It also holds the Kitchen and the release the Pot was minted under: on an EVM chain the Pot
+init-code hash its address derives from, the engine whose gate accepts it, and the compiler, engine
+and Kitchen versions of that release; on Solana the engine program its creation named. Last come
+the transaction that deployed it (hash, block or slot, the block's hash on an EVM chain, sender), the version of `sauce` that recorded
+it, and when. The release is told from the Pot's address, under every Kitchen and init-code hash
+this `sauce` knows, not from the release it pins today. A Pot minted before a Kitchen upgrade keeps
+the release that minted it. One file per Pot, `<chain id>/<pot>.json` (a Solana cluster other than
+mainnet's after the id: `1399811149-devnet`), readable only by you, is written once and never
+changed. A second deployment of the same Pot address is kept beside the first, as
+`<pot>@<tx>.json`, with a warning: one of them landed on a fork or another network with the same
+chain id, or the Pot was closed and created again on Solana. `sauce pot list` shows both. An
+import refuses an address that holds no Pot: on Solana, an account there that no released engine
+owns. No key or endpoint is written there.
+
+```sh
+sauce pot list
+sauce pot list --chain base --owner 0xYou --json
+```
+
+`sauce pot list` reads no chain: `sauce pot --chain <chain> --owner <owner>` says whether a Pot is
+still there.
+
+`sauce pot import` records a Pot this machine did not deploy, read from the chain. Give it by
+address on an EVM chain: its owner, salt and Kitchen are read off it, and its kind and release
+told from its address. An address no known release mints is refused. Or give it by owner and
+salt: every known release's Pot of that owner and salt that has code is recorded. A Solana Pot
+holds nothing that names its owner, so there it is found by owner and salt only, its engine the
+program that owns the account. A Pot already recorded keeps its record.
+
+```sh
+sauce pot import --chain base --pot 0x…
+sauce pot import --chain base --owner 0xYou --salt treasury
+sauce pot import --chain solana --owner <pubkey>
+```
+
+The MCP server, run over stdio, keeps the same store in the same directory: a Pot its tools' sends
+deploy is recorded there, and `sauce_pot_list` and `sauce_pot_import` match these two commands
+([What a local server keeps](mcp.md#what-a-local-server-keeps)). Each send's result also carries
+`pots` on the transaction that deployed one. Over HTTP the server keeps nothing.
 
 ### For a wallet: `sauce tx`
 
@@ -1242,14 +1296,18 @@ and from when.
 
 ### The store, and picking one: `sauce intent`
 
-Every intent `sauce intent publish`, `sauce run` and the `sauce intent` verbs touch is kept in a
-store, `~/.sauce/intents` (`--store <dir>` for another), so later commands name it by hash: one
-directory per intent hash, holding `intent.json`, the full intent — route, reward, chains, Portal,
-hashes, vault — written once and never changed, and `events.jsonl`, one line appended per thing that
-happened to it (`published`, `funded`, `imported`, `filled`, `proving`, `claimed`, `refunded`,
-`cancelled`), with its chain, transaction, block and time. Nothing is read and written back, so two
-commands at once cannot tear it, and where an intent stands is never stored: it is read from the
-chains each time. No key or endpoint is written there.
+Every intent `sauce intent publish`, `sauce run`, `sauce send` and the `sauce intent` verbs touch
+is kept in a store, `~/.sauce/intents` (`--store <dir>` for another), so later commands name it by
+hash: one directory per intent hash, holding `intent.json`, the full intent — route, reward, chains,
+Portal, hashes, vault — written once and never changed, and `events.jsonl`, one line appended per
+thing that happened to it (`published`, `funded`, `imported`, `filled`, `proving`, `claimed`,
+`refunded`, `cancelled`), with its chain, transaction, block and time. Each event is read from the
+transaction as it lands — the Portal's own events, or on Solana its instructions — so a transaction
+signed elsewhere and sent with `sauce send` is recorded as one the command signed. Nothing is read
+and written back, so two commands at once cannot tear it, and where an intent stands is never
+stored: it is read from the chains each time. No key or endpoint is written there. The MCP
+server, run over stdio, keeps the same store
+([What a local server keeps](mcp.md#what-a-local-server-keeps)).
 
 `sauce intent import <tx hash> --chain <source>` stores the intents a
 transaction published — someone else's, say — rebuilt from its `IntentPublished` logs, each checked
