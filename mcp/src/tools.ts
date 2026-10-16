@@ -871,8 +871,6 @@ export const NO_APPROVER = {
 } as const;
 /** The name an actions document goes by in messages: it comes from the call, not a file. */
 const ACTIONS_FILE = "actions.json";
-/** An intent's claimant, as fulfill records it: an address, or 32 bytes. */
-export const CLAIMANT = /^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
 export const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 function hexArg(raw: string, what: string): Hex {

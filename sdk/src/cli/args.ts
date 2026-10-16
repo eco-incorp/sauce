@@ -216,6 +216,16 @@ export function parseIntentParty(flag: string, raw: string, chain: CanonicalChai
   return bytesToHex(new Uint8Array(getAddressEncoder().encode(raw)));
 }
 
+/** A fill's claimant, the account on the intent's source its reward pays: an EVM address or 32
+ *  bytes of hex, or a Solana key (base58), as the 32 bytes a fill records for it. */
+export function parseClaimant(flag: string, raw: string): Hex {
+  if (/^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(raw)) return raw as Hex;
+  if (isSolanaAddress(raw)) return bytesToHex(new Uint8Array(getAddressEncoder().encode(raw)));
+  throw new UsageError(
+    `--${flag}: '${raw}' is neither an address (20 bytes), 32 bytes of hex nor a Solana key`,
+  );
+}
+
 /** A non-negative integer amount in wei: decimal digits, or 0x-prefixed hex. */
 export function parseWei(flag: string, raw: string): bigint {
   if (!/^(?:\d+|0x[0-9a-fA-F]+)$/.test(raw)) {

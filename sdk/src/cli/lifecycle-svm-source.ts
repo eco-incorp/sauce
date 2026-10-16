@@ -244,7 +244,15 @@ export async function readSvmSource(
       ? null
       : decodeSvmProof(proof.data);
   const funded = holds.every((entry) => entry.holds >= entry.reward);
-  const withdrawn = marker !== null && marker !== undefined;
+  // The Portal's own marker, as `refund` reads it (its data, not the address's lamports): a
+  // transfer to the marker's address is no claim.
+  const withdrawn =
+    marker !== null &&
+    marker !== undefined &&
+    marker.owner === portal &&
+    PORTAL_SOURCE_DISCRIMINATORS.withdrawnMarker.every(
+      (byte, index) => marker.data[index] === byte,
+    );
   const empty = holds.every((entry) => entry.holds === 0n);
   // Solana's Portal records no refund: a vault some transaction touched that holds nothing now,
   // and was not claimed, was refunded.

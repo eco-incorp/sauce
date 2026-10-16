@@ -24,6 +24,7 @@ import {
   CliError,
   describeFlags,
   parseAddress,
+  parseClaimant,
   parseIntentParty,
   parseChain,
   parseDefines,
@@ -149,8 +150,6 @@ import {
 } from "./solana.js";
 import { address as svmAddress } from "@solana/kit";
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
-import { universalOfSvmKey } from "../svm/portal.js";
-import type { Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { passwordSource, type CapturedCommand, type PasswordSource } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
@@ -1283,20 +1282,6 @@ async function lifecycleOf(
   return { targets, context: await lifecycleContext(args, io) };
 }
 
-/** `--claimant`: an EVM address or 32 bytes of hex, or a Solana key (base58), the account on the
- *  intent's source that its reward pays — as the 32 bytes a fill records for a Solana one. */
-function claimantOf(value: string | undefined): Hex | undefined {
-  if (value === undefined) return undefined;
-  if (/^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(value)) return value as Hex;
-  try {
-    return universalOfSvmKey(svmAddress(value));
-  } catch {
-    throw new UsageError(
-      `--claimant: '${value}' is neither an address (20 bytes), 32 bytes of hex nor a Solana key`,
-    );
-  }
-}
-
 /** `sauce intent publish --chain solana`: the file's intents published from a Solana wallet. */
 async function publishFromSolana(
   args: ParsedArgs,
@@ -2038,7 +2023,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       const store = storeOf(args, io);
       const rpcUrl = stringFlag(args, "rpc-url");
       const solver = stringFlag(args, "solver");
-      const claimant = claimantOf(stringFlag(args, "claimant"));
+      const given = stringFlag(args, "claimant");
+      const claimant = given === undefined ? undefined : parseClaimant("claimant", given);
       const sending = args.values.send === true;
       if (!sending && (hasSigner(args, io) || hasSvmSigner(args, io))) {
         throw new UsageError(

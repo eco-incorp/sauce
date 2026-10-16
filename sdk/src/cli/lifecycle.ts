@@ -942,10 +942,16 @@ export async function planFill(
 
   const solver = getAddress(options.solver);
   const sourceChain = requireChain(Number(intent.sourceChainId));
-  if (sourceChain.kind === "svm" && options.claimant === undefined) {
+  if (
+    sourceChain.kind === "svm" &&
+    (options.claimant === undefined ||
+      hexToBytes(options.claimant).length !== 32 ||
+      options.claimant.toLowerCase() === CANCELLED_CLAIMANT_BYTES32)
+  ) {
+    // An EVM address, padded, would be recorded as a Solana key no one holds: the reward lost.
     throw new UsageError(
       `a fill of an intent ${sourceChain.slug} published needs the claimant, the ${sourceChain.slug} ` +
-        "key its reward pays (--claimant <key>): the solver's EVM address is not one",
+        "key its reward pays (--claimant <key>): an EVM address is not one",
     );
   }
   const claimant = (options.claimant ?? solver) as Hex;
@@ -1550,19 +1556,19 @@ export async function intentStatus(
       ? no(`needs ${sourceChain.slug}'s endpoint`)
       : source.status === "Refunded" && source.holds.every((entry) => entry.holds === 0n)
         ? no("the reward was refunded")
-        : cancelProven
-          ? yes("the cancellation is proven: refundable now")
-          : proofHere
-            ? source.status === "Withdrawn" && source.holds.some((entry) => entry.holds > 0n)
-              ? yes("claimed: the vault's leftovers go back to the creator")
-              : no(
-                  source.status === "Withdrawn"
-                    ? "claimed: the vault holds nothing to refund"
-                    : "proven: the reward is the claimant's",
-                )
-            : source.time < rewardDeadline
-              ? no(`not before the reward's deadline, ${iso(rewardDeadline)}`, rewardDeadline)
-              : yes(`the reward's deadline, ${iso(rewardDeadline)}, has passed`);
+        : // Claimed: its leftovers are refundable at once. Read before the proof, which Solana's
+          // Portal closes as it pays.
+          source.status === "Withdrawn"
+          ? source.holds.some((entry) => entry.holds > 0n)
+            ? yes("claimed: the vault's leftovers go back to the creator")
+            : no("claimed: the vault holds nothing to refund")
+          : cancelProven
+            ? yes("the cancellation is proven: refundable now")
+            : proofHere
+              ? no("proven: the reward is the claimant's")
+              : source.time < rewardDeadline
+                ? no(`not before the reward's deadline, ${iso(rewardDeadline)}`, rewardDeadline)
+                : yes(`the reward's deadline, ${iso(rewardDeadline)}, has passed`);
   const cancel: Ability =
     destination === undefined
       ? no(`needs ${destinationChain.slug}'s endpoint`)

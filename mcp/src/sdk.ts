@@ -13,6 +13,7 @@ export {
   addressDefinesOf,
   CliError,
   parseAddress,
+  parseClaimant,
   parseIntentParty,
   parseChain,
   parseDefineMap,

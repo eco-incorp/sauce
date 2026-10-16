@@ -74,6 +74,7 @@ describe("svm/portal-source.ts", () => {
     expect([...d.fund]).toEqual(anchor("global:fund"));
     expect([...d.withdraw]).toEqual(anchor("global:withdraw"));
     expect([...d.refund]).toEqual(anchor("global:refund"));
+    expect([...d.withdrawnMarker]).toEqual(anchor("account:WithdrawnMarker"));
     expect([...d.proofAccount]).toEqual(anchor("account:ProofAccount"));
     expect([...d.config]).toEqual(anchor("account:Config"));
     expect([...d.intentPublished]).toEqual(anchor("event:IntentPublished"));

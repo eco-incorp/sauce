@@ -221,6 +221,18 @@ describeEvm("sauce intent: Solana to Base, claimed on Solana; cancelled and refu
     const unnamed = await run(store, "fill", hash, "--solver", SOLVER.address);
     expect(unnamed.code).toBe(2);
     expect(unnamed.stderr).toContain("needs the claimant");
+    // An EVM address, padded, would be a Solana key no one holds: the reward lost.
+    const evm = await run(
+      store,
+      "fill",
+      hash,
+      "--solver",
+      SOLVER.address,
+      "--claimant",
+      SOLVER.address,
+    );
+    expect(evm.code).toBe(2);
+    expect(evm.stderr).toContain("an EVM address is not one");
 
     const filled = await run(
       store,
@@ -259,7 +271,7 @@ describeEvm("sauce intent: Solana to Base, claimed on Solana; cancelled and refu
       can: {
         fill: { ok: false },
         claim: { ok: false, why: "the reward was claimed" },
-        refund: { ok: false },
+        refund: { ok: false, why: "claimed: the vault holds nothing to refund" },
       },
     });
     const again = await run(store, "claim", hash, "--keypair", claimantFile);

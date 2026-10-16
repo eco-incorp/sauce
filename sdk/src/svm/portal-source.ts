@@ -50,6 +50,8 @@ export const PORTAL_SOURCE_DISCRIMINATORS = {
   fund: new Uint8Array([218, 188, 111, 221, 152, 113, 174, 7]),
   withdraw: new Uint8Array([183, 18, 70, 156, 148, 109, 161, 34]),
   refund: new Uint8Array([2, 96, 183, 251, 63, 208, 46, 46]),
+  /** The marker `withdraw` writes (`state.rs` `WithdrawnMarker`). */
+  withdrawnMarker: new Uint8Array([163, 137, 163, 33, 38, 73, 205, 42]),
   /** The HyperProver's proof account (`state.rs` `ProofAccount`). */
   proofAccount: new Uint8Array([54, 244, 192, 233, 218, 58, 44, 242]),
   /** The HyperProver's whitelist (`state.rs` `Config`). */
