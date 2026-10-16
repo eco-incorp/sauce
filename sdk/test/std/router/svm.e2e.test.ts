@@ -37,9 +37,12 @@ import { raydiumSqrtPriceAtTick } from "../../../src/svm/venues/raydium-clmm/tic
 import {
   SVM_COOK_FIXED,
   SVM_COOK_UNITS,
+  SVM_SWAP_COSTS,
   SVM_SWAP_FIXED,
   svmComputeStops,
+  svmPoolWalk,
   type SvmComputeStop,
+  type SvmStopPool,
 } from "../../../src/svm/compute-stops.js";
 import {
   describeSvm,
@@ -107,6 +110,8 @@ type Outcome =
       price?: bigint;
       /** Every fixture account the cook changed. */
       changed: Address[];
+      /** The units the venue's own program spent. */
+      venueUnits?: number;
     }
   | { ok: false; reason: string; logs: string[] };
 
@@ -257,6 +262,11 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     const returned = BigInt(
       `0x${Buffer.from(result.returnData().data().subarray(0, 32)).toString("hex")}`,
     );
+    // What the venue's own program spent, as its log line says.
+    const spent = result
+      .logs()
+      .map((line) => new RegExp(`^Program ${p.program} consumed (\\d+) of`).exec(line))
+      .find((match) => match !== null);
     const layout = LAYOUT[p.venue];
     const priced = harness.svm.getAccount(p.pool);
     const changed = [...BYTES].flatMap(([at, data]) => {
@@ -272,6 +282,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         ? {}
         : { price: le(priced.data, layout.price, 16) }),
       changed,
+      ...(spent === undefined ? {} : { venueUnits: Number(spent![1]) }),
     };
   };
 
@@ -335,7 +346,8 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         expect(expected.received).toBeGreaterThan(0n);
         expect(expected.returned).toBe(expected.received);
         const outcome = succeeded(await cook(compiled(lower(entry.venue)), order));
-        expect(outcome).toEqual(expected);
+        // The same swap, but for the units its venue spent, which move a little with the accounts.
+        expect({ ...outcome, venueUnits: 0 }).toEqual({ ...expected, venueUnits: 0 });
         expect(outcome.paid).toBeLessThanOrEqual(order.amountIn);
         expect(outcome.paid * E18).toBeLessThanOrEqual(order.priceLimit * outcome.received);
         // Each concentrated-liquidity pool stops exactly at its own fee-adjusted limit.
@@ -473,9 +485,8 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     expect(outcome.price).toBe(bound);
   }, 120_000);
 
-  // A pool's stop, as the command works it out for a cook of this one swap: the venues' share of the
-  // cook's compute units, by the cost table, with nothing else to share it with.
-  const stopOf = (order: Order): SvmComputeStop => {
+  /** A swap's pool as the command reads it for its stop. */
+  const poolOf = (order: Order): SvmStopPool => {
     const p = order.pool;
     const paysA = key(USDC) < key(order.buy);
     const layout = (
@@ -490,23 +501,21 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         crema: "crema",
       } as const
     )[p.venue as "byreal"];
-    const [stop] = svmComputeStops(
-      [
-        {
-          name: "stop",
-          program: p.program,
-          layout,
-          pool: BYTES.get(p.pool)!,
-          fee: LAYOUT[p.venue]!.fee(p),
-          arrays: (order.ticks ?? (paysA ? p.payA : p.payB)).map((at) => BYTES.get(at)),
-          paysA,
-          priceLimit: order.priceLimit,
-        },
-      ],
-      SVM_COOK_UNITS - SVM_COOK_FIXED - SVM_SWAP_FIXED,
-    );
-    return stop!;
+    return {
+      name: "stop",
+      program: p.program,
+      layout,
+      pool: BYTES.get(p.pool)!,
+      fee: LAYOUT[p.venue]!.fee(p),
+      arrays: (order.ticks ?? (paysA ? p.payA : p.payB)).map((at) => BYTES.get(at)),
+      paysA,
+      priceLimit: order.priceLimit,
+    };
   };
+  // A pool's stop, as the command works it out for a cook of this one swap: the venues' share of the
+  // cook's compute units, by the cost table, with nothing else to share it with.
+  const stopOf = (order: Order): SvmComputeStop =>
+    svmComputeStops([poolOf(order)], SVM_COOK_UNITS - SVM_COOK_FIXED - SVM_SWAP_FIXED)[0]!;
   /** The swap's ran out of compute units: its program, or the engine running it. */
   const ranOut = (outcome: Outcome): boolean =>
     !outcome.ok && outcome.logs.some((line) => line.includes("exceeded CUs meter"));
@@ -543,6 +552,53 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       const moved = i32(harness.svm.getAccount(p.pool).data as Uint8Array, tickAt);
       expect(paysA ? moved >= stop.stopTick! : moved < stop.stopTick!).toBe(true);
       expect(paysA ? moved < tick : moved > tick).toBe(true);
+    },
+    300_000,
+  );
+
+  // The cost table each stop is worked out from (`svm/compute-stops.ts`), held to the venues' own
+  // programs: for walks from a few ticks to a few hundred, each walk the command predicts ends where
+  // the swap does, crossing the initialized ticks it counts, and its units are at or above what the
+  // venue spent, within a tenth. A program upgrade that moves them fails here.
+  it.each([
+    ["RaydiumClmm", [10003n, 10030n, 10060n, 10100n]],
+    ["PancakeswapClmm", [10003n, 10030n, 10300n, 10500n]],
+    ["Byreal", [10003n, 10100n, 10500n, 11000n, 13000n]],
+    ["StabbleClmm", [10003n, 10100n]],
+    ["OrcaWhirlpool", [10003n, 10030n, 10100n, 10300n]],
+    ["Cropper", [10003n, 10030n, 10500n]],
+    ["Defituna", [10003n, 10300n, 10500n, 11000n]],
+    ["Crema", [10003n, 10700n, 11000n, 12000n, 15000n, 20000n]],
+  ] as const)(
+    "%s: the cost table holds to its program",
+    async (venue, multiples) => {
+      const entry = VENUES.find((one) => one.venue === venue)!;
+      const base = await orderFor(entry);
+      const p = base.pool;
+      const paysA = key(USDC) < key(base.buy);
+      const cost = SVM_SWAP_COSTS[p.program]!;
+      const tickAt =
+        { "orca-whirlpool": 81, cropper: 81, defituna: 183, crema: 206 }[p.venue as "crema"] ?? 269;
+      for (const times of multiples) {
+        const order = {
+          ...base,
+          priceLimit: (allIn(p, paysA) * times) / 10000n,
+          amountIn: 10_000_000_000n * 10n ** 6n,
+        };
+        // With the stop the command gives a walk that fits: on Raydium's code and Crema, the
+        // furthest array's last initialized tick.
+        const walk = svmPoolWalk(poolOf(order));
+        const stop = stopOf(order);
+        expect(stop.stopTick).toBeUndefined();
+        const outcome = succeeded(
+          await cook(compiled(lower(venue)), { ...order, stop: stop.stop }),
+        );
+        const ended = i32(harness.svm.getAccount(p.pool).data as Uint8Array, tickAt);
+        expect([times, ended]).toEqual([times, walk.limitTick]);
+        const estimate = cost.base + cost.tick * walk.crossed.length;
+        expect(estimate).toBeGreaterThanOrEqual(outcome.venueUnits!);
+        expect(estimate * 10).toBeLessThanOrEqual(outcome.venueUnits! * 11);
+      }
     },
     300_000,
   );
