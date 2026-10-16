@@ -280,7 +280,39 @@ Pass `{ accounts: [...] }` to `simulate` to see what the cook would move: the re
 holds each one's state after the transaction (`lamports`, `owner`, `data`), or `null` where it no
 longer exists, read without sending anything.
 
-After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it. Lookup-table helpers can create or extend an address lookup table and wait until it is usable.
+After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it.
+
+### When the accounts do not fit
+
+A Solana transaction holds at most 1,232 bytes, and every account it lists takes 32 of them, so a cook that names about thirty accounts no longer fits. An address lookup table is the way around it: a list of addresses kept on chain, which a transaction points into for one byte per account instead of 32. You write no code for it:
+
+- `client.execute` and `client.executeStaged` measure the cook first. When it does not fit, they create a lookup table holding exactly the accounts a table may hold (every account the cook lists except its signers and the programs it calls), wait until the table can be used, and send the cook through it. The payer pays the table's rent and owns it. The result's `lookupTableAddress` names the table: pass it as `lookupTable` to a later cook with the same accounts, and the client uses it again, adding any account it lacks. `lookupTable: false` sends the cook as it is.
+- To simulate such a cook first, or to build its transaction yourself, ask for its table with `client.cookLookupTable(bytecode, manifest, resolution)` (`stagedCookLookupTable` for a staged program). It returns `undefined` when the cook fits without one, and otherwise the ready table, whose `lookupTables` you pass on. `simulate` refuses a cook that does not fit and says so.
+
+```ts
+import type { CompileResult } from "@eco-incorp/sauce/compiler";
+import type { AccountResolution, SauceSvmClient } from "@eco-incorp/sauce/svm";
+
+export async function simulateThenSend(
+  client: SauceSvmClient,
+  compiled: CompileResult,
+  accounts: AccountResolution,
+) {
+  if (!compiled.manifest) throw new Error("Expected an SVM account manifest");
+  const table = await client.cookLookupTable(compiled.bytecode, compiled.manifest, accounts);
+  const simulated = await client.simulate(compiled.bytecode, compiled.manifest, accounts, {
+    ...(table === undefined ? {} : { lookupTables: table.lookupTables }),
+  });
+  if (!simulated.ok) throw new Error(`The cook would fail: ${JSON.stringify(simulated.err)}`);
+
+  return client.execute(compiled.bytecode, compiled.manifest, accounts, {
+    computeUnitLimit: "auto",
+    ...(table === undefined ? {} : { lookupTable: table.lookupTableAddress }),
+  });
+}
+```
+
+`ensureLookupTable(addresses)` is the step underneath, for a table of addresses you choose.
 
 ### Select the released programs and quote the fee
 

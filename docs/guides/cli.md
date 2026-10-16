@@ -1527,10 +1527,19 @@ the owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account); `
 mint and `program:USDC` its token program, SPL Token or Token-2022, the accounts
 `transferChecked` takes. A registered symbol's program is the registry's; any other mint's is read
 from the cluster. A tokenized stock is named the same way, by its symbol in any case
-(`pot:TSLAx`, `mint:NVDA_US`). `--accounts <json | file>` gives them all at once, one JSON object
-of each name to its value, as `--account` takes it; an `--account` beside it adds one more. A slot
-with no `--account` is named with the role it needs, and `simulate` notes each account it was given
-that the cluster does not have (a guard on it fails with no message of its own).
+(`pot:TSLAx`, `mint:NVDA_US`). An address is base58, or the same 32 bytes as `0x` hex, the way
+`sauce globals --chain solana --json` prints a token's `address`: every Solana key the command
+takes (`--owner`, `--lookup-table`, a token in `--assume-balance`, a wallet policy) takes either.
+`--accounts <json | file>` gives them all at once, one JSON object of each name to its value, as
+`--account` takes it; an `--account` beside it adds one more. A cook missing an account is refused
+before anything is read from the cluster: the refusal lists each one with the values that suit its
+role (`pot` or `owner` for a signer, `pot:<token>` for a token account, `program:<token>` for a
+token program) and the JSON object to save as the `--accounts` file, and `sauce compile --json`
+lists the same as `accountsToGive`. `simulate` notes each account it was given that the cluster
+does not have (a guard on it fails with no message of its own). A wallet is not a token account:
+when a cook fails and an account it writes was given as a wallet (`dest=<wallet>`), the command
+says to give the wallet's token account instead, `dest=<wallet>:USDC`, which `run` creates where
+it is missing.
 
 The token methods need none of this. In `USDC.transfer(to, amount)`, `USDC.balanceOf(ctx.self())`
 or `Token(mint).approve(spender, amount)`, compiling adds every account the call moves through to
@@ -1670,8 +1679,9 @@ is not one it checks.
 `sauce intent publish` does not work from Solana: open the intent from an EVM chain; its
 destination may be Solana, and `sauce intent fill`, `prove` and `cancel` act on it there
 ([An intent to Solana](#an-intent-to-solana)). A `main` argument of type `Address` is a 32-byte
-public key on Solana: pass it in base58 (or as 32 bytes of hex), and the command encodes the whole
-key as the word the engine reads (ABI-v1 only, not under `--compact-args`).
+public key on Solana: pass it in base58 (or as 32 bytes of hex), or a token as `USDC` or
+`mint:USDC` for its mint, and the command encodes the whole key as the word the engine reads
+(ABI-v1 only, not under `--compact-args`).
 
 ## Agent wallets
 
