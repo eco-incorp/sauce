@@ -12,7 +12,17 @@
  * `kitchen.so` and `engine-devnet.so`. So the assertion is not "the client built something
  * plausible" — it is "the gate accepted what the client built".
  */
-import { getBase64Encoder, getTransactionDecoder, type Address } from "@solana/kit";
+import {
+  address,
+  getAddressDecoder,
+  getBase64Encoder,
+  getTransactionDecoder,
+  lamports,
+  some,
+  type Address,
+} from "@solana/kit";
+import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
+import type { AccountManifest } from "sauce-compiler";
 import {
   buildComputeBudgetPrepend,
   buildExecuteInstruction,
@@ -20,6 +30,7 @@ import {
   buildSetExecutionFeeInstruction,
   createSauceSvmClient,
   deriveProgramDataPda,
+  derivePotPda,
   ENGINE_FAULTS,
 } from "../../src/svm/index.js";
 import {
@@ -261,6 +272,73 @@ describeSvm("SauceSvmClient against the gated engine", () => {
       },
     );
     expect(String(refused.err)).toContain(`code: ${ENGINE_FAULTS.CodeHashMismatch}`);
+  });
+
+  it("runs a cook too wide for one transaction through the lookup table cookLookupTable names", async () => {
+    // Forty accounts: 1,280 bytes of keys alone, past the 1,232 a transaction holds.
+    const names = Array.from({ length: 40 }, (_, i) => `a${i}`);
+    const wide = compileSvm(
+      `function main(${names.map((name) => `${name}: Account`).join(", ")}): Uint256 {\n` +
+        "  return 42;\n}\n",
+    );
+    // The compiler's manifest, as the client takes it.
+    const manifest = wide.manifest! as unknown as AccountManifest;
+    const keys = names.map((_, i) => getAddressDecoder().decode(new Uint8Array(32).fill(i + 7)));
+    const resolution = Object.fromEntries(names.map((name, i) => [name, keys[i]!]));
+    const client = await createSauceSvmClient({
+      kitchen: harness.kitchen,
+      maxExecutionFee: 0n,
+      payer: harness.payer,
+      potSalt: HARNESS_POT_SALT,
+      programId: harness.programId,
+      rpcUrl: RPC_URL,
+    });
+    // As it is, the cook does not fit one transaction: refused before the cluster is asked.
+    await expect(client.simulate(wide.bytecode, manifest, resolution)).rejects.toThrow(
+      /past Solana's 1232: execute and executeStaged take its accounts through a lookup table/,
+    );
+
+    // A table the payer holds already, over the program's accounts and the Kitchen cook's own that
+    // neither sign nor are called — the Pot, the fee config, the System Program, the engine.
+    const { address: pot } = await derivePotPda(
+      harness.kitchen,
+      harness.payer.address,
+      HARNESS_POT_SALT,
+    );
+    const table = getAddressDecoder().decode(new Uint8Array(32).fill(250));
+    const data = getAddressLookupTableEncoder().encode({
+      deactivationSlot: 2n ** 64n - 1n,
+      lastExtendedSlot: 100n,
+      lastExtendedSlotStartIndex: 0,
+      authority: some(harness.payer.address),
+      addresses: [
+        ...keys,
+        pot,
+        harness.feeConfig,
+        address("11111111111111111111111111111111"),
+        harness.programId,
+      ],
+    });
+    harness.svm.setAccount({
+      address: table,
+      data: new Uint8Array(data),
+      executable: false,
+      lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
+      programAddress: address("AddressLookupTab1e1111111111111111111111111"),
+      space: BigInt(data.length),
+    });
+
+    // It covers every account the client measures a table must hold, so nothing is sent, and the
+    // cook through it is one the Kitchen and the engine run.
+    const ready = await client.cookLookupTable(wide.bytecode, manifest, resolution, {
+      existing: table,
+    });
+    expect(ready?.lookupTableAddress).toBe(table);
+    const result = await client.simulate(wide.bytecode, manifest, resolution, {
+      lookupTables: ready!.lookupTables,
+    });
+    expect(result.err ?? null).toBeNull();
+    expect(toBigInt(result.returnData!)).toBe(42n);
   });
 
   it("refuses the SAME program invoked through the legacy execute, bypassing the kitchen — no Pot gate, no run", async () => {

@@ -93,6 +93,7 @@ import {
   type EngineFault,
   engineFaultName,
   fetchAlt,
+  lookupTableAddresses,
   GROWTH_STEP,
   MAX_POT_LEN,
   resolveAccounts,
@@ -146,7 +147,6 @@ import {
   nextStep,
   planBuffer,
   signableStep,
-  tableAddresses,
   unsignedSigner,
   type CookHandedOut,
   type PlanStep,
@@ -1986,7 +1986,7 @@ async function stagedRehearsal(
     ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
     cook,
   ];
-  const lookupTables = fork.table(tableAddresses(await transactionOf(instructions)));
+  const lookupTables = fork.table(lookupTableAddresses(await transactionOf(instructions)));
   const cookTransaction = await buildExecuteTransaction({
     payer: signer,
     instructions,
