@@ -29,6 +29,12 @@ export interface SvmLoweringResult {
    * `--account` value (`self:USDC`, `@to:USDC`, …). Empty when nothing was lowered.
    */
   readonly derived: Readonly<Record<string, string>>;
+  /**
+   * Each `Uint256` the lowering added to `main` after the accounts, by its parameter name, in their
+   * order: how the cook's builder works it out (a venue's `stop:…`). None of them is one of the
+   * arguments a caller gives.
+   */
+  readonly values?: Readonly<Record<string, string>>;
 }
 
 /** A mint as a call names it. */
@@ -79,7 +85,7 @@ interface Slot {
 class Slots {
   private readonly byDerivation = new Map<string, Slot>();
 
-  constructor(private readonly taken: Set<string>) {}
+  constructor(readonly taken: Set<string>) {}
 
   use(derivation: string, base: string, role: { writable?: boolean; signer?: boolean }): string {
     let slot = this.byDerivation.get(derivation);
@@ -247,6 +253,7 @@ export class SvmLowering {
   private readonly params: ReadonlyMap<string, MainParam>;
   private readonly functions: AstNode[] = [];
   private readonly slots: Slots;
+  private readonly values = new Map<string, string>();
   private readonly sites: { readonly node: AstNode; readonly lower: () => void }[] = [];
   /** Each module's imports, `name as local`, in the order they were first used. */
   private readonly imports = new Map<string, Map<string, string>>();
@@ -349,6 +356,22 @@ export class SvmLowering {
           `functions under \`__sauce_\` names. Rename your \`${name}\`.`,
       );
     }
+  }
+
+  /**
+   * A `Uint256` added to `main` after the accounts, one per derivation, which the cook's builder
+   * works out as it builds the cook (a venue's `stop`).
+   */
+  value(derivation: string, base: string): string {
+    let name = this.values.get(derivation);
+    if (name === undefined) {
+      name = base;
+      for (let n = 2; this.slots.taken.has(name); n++) name = `${base}${n}`;
+      this.slots.taken.add(name);
+      this.values.set(derivation, name);
+    }
+
+    return name;
   }
 
   /** An account added to `main`: one per derivation, its role the union of its uses. */
@@ -576,10 +599,16 @@ export class SvmLowering {
     const declaredParams = (main as { params?: AstNode[] }).params ?? [];
     const last = declaredParams[declaredParams.length - 1];
     const open = this.source.indexOf("(", (main.id as AstNode).end);
+    const added = [
+      this.slots.params(),
+      ...[...this.values.values()].map((name) => `${name}: Uint256`),
+    ]
+      .filter((params) => params !== "")
+      .join(", ");
     this.splices.push(
       last === undefined
-        ? { start: open + 1, end: open + 1, replacement: this.slots.params() }
-        : { start: last.end, end: last.end, replacement: `, ${this.slots.params()}` },
+        ? { start: open + 1, end: open + 1, replacement: added }
+        : { start: last.end, end: last.end, replacement: `, ${added}` },
     );
     const imports = [...this.imports].map(
       ([module, names]) =>
@@ -590,6 +619,13 @@ export class SvmLowering {
       source: `${imports.join("")}${applySplices(this.source, this.splices)}${[...this.helpers.values()].join("")}`,
       rewrote: true,
       derived: this.slots.derived(),
+      ...(this.values.size === 0
+        ? {}
+        : {
+            values: Object.fromEntries(
+              [...this.values].map(([derivation, name]) => [name, derivation]),
+            ),
+          }),
     };
   }
 }

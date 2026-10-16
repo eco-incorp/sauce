@@ -420,7 +420,11 @@ export function collectVenueMethods(l: SvmLowering): void {
     ];
     const recipient = l.tokenAccount({ kind: "self" }, tokenOut, true, spelled).account;
     const fn = SVM_VENUE_NAMESPACES[namespace]!.swap;
-    const stop = SVM_STOPPED_VENUES.has(namespace) ? ", 0" : "";
+    // The swap's stop, which the cook's builder works out for this pool paying `tokenIn`, from the
+    // limit it is given: main's parameter or a number written out, read as the cook is built.
+    const stop = SVM_STOPPED_VENUES.has(namespace)
+      ? `, ${l.value(`stop:${pool.name}:${tokenIn.name}:${limitOf(args[4]!)}`, `${pool.stem}Stop`)}`
+      : "";
     l.spliceCall(
       site,
       amountIn,
@@ -428,6 +432,21 @@ export function collectVenueMethods(l: SvmLowering): void {
       `${l.use(ROUTER, fn, `__sauce_${fn}`)}([${slot.join(", ")}], [${trader.join(", ")}], `,
       `, ${recipient}${stop})`,
     );
+  }
+
+  /**
+   * Where a swap's `priceLimit` comes from, for its stop: `@<name>`, main's `Uint256` parameter, or
+   * a number written out; empty for any other expression, whose limit is not known as the cook is
+   * built.
+   */
+  function limitOf(node: AstNode): string {
+    if (node.type === "Identifier") {
+      const param = l.param(nameOf(node));
+      return param?.type === "Uint256" ? `@${nameOf(node)}` : "";
+    }
+    const value = integerLiteral(node, l.source);
+
+    return value === undefined ? "" : String(value);
   }
 
   /**
