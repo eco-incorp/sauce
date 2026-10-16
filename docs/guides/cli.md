@@ -1304,8 +1304,8 @@ sauce intent claim 0x<intent hash> --keystore ~/.keys/me.json
   the same transaction. What the proof spends (the gas paymaster's quote and the message accounts'
   rent) is measured by a simulation and approved. `--no-prove` leaves it to `prove`.
 - A fill too large for one transaction takes its accounts through an address lookup table. `fill`
-  without `--send` lists the transactions that create it first, and cannot rehearse the fill until
-  the table exists; with `--send` it creates the table, waits a slot for it, then rehearses and sends
+  without `--send` lists the transactions that create it first, and cannot simulate the fill until
+  the table exists; with `--send` it creates the table, waits a slot for it, then simulates and sends
   the fill. The table's rent is the solver's, and `sauce reclaim --chain solana` closes it later.
 - **`prove`** and **`cancel`** sign with `--keypair`, which pays their fee: their transactions are
   built for it, so on Solana they need it. A cancellation's proof waits until the slot that
