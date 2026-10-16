@@ -32,9 +32,9 @@
   },
   "devDependencies": {
     "@eco-incorp/sauce-source": "workspace:*",
-    "@solana/kit": "^6.10.0",
+    "@solana/kit": "^8.5.0",
     "@types/node": "^22.0.0",
-    "litesvm": "^1.2.1",
+    "litesvm": "^1.6.0",
     "tsx": "^4.7.0",
     "typescript": "^5.7.0"
   },
