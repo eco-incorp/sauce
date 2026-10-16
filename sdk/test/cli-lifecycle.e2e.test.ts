@@ -739,6 +739,12 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(refunded.code).toBe(0);
     expect(await ethereum.balanceOf(ethereumUsdc, OWNER.address)).toBe(before + REWARD);
     expect(getAddress(CANCELLED_CLAIMANT)).toBe("0xe685056aEc77686A83E2a6bDf37c6f71dD2fdB5f");
+    // Refunded, the proof of its cancellation standing: nothing is left to do, a refund included.
+    const settled = jsonOf(await lifecycle("status", hash, store, "--json"));
+    expect((settled.intents as Array<{ status: unknown }>)[0]!.status).toMatchObject({
+      state: "refunded",
+      can: { claim: { ok: false }, refund: { ok: false, why: "the reward was refunded" } },
+    });
   }, 240_000);
 
   it("proves two fills in one message, leaves out one proven, claims both in one batchWithdraw", async () => {
