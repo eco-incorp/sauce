@@ -1380,6 +1380,29 @@ describe("sauce_intent_publish", () => {
     assert.ok(out.notes.some((note) => /no solana endpoint: the route creates each/.test(note)));
   });
 
+  it("refuses a Solana program body with no endpoint to read whether its Pot exists", async () => {
+    assert.match(
+      failed(
+        await mcp.call("sauce_intent_publish", {
+          source: [
+            "function main(recipient: Address, amount: Uint256) {",
+            "  Solana(() => {",
+            "    const sent = amount;",
+            "    USDC.transfer(recipient, sent);",
+            "  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount: 2000000 }] });",
+            "}",
+          ].join("\n"),
+          chain: "base",
+          args: ["9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", "1000000"],
+          intentDeadline: 2_000_000_000,
+          intentCreator: CREATOR,
+          intentExecutionFee: "5000",
+        }),
+      ),
+      /runs a program on the Pot its Portal's executor owns[^]*give solana's endpoint/,
+    );
+  });
+
   it("refuses a program that does more than open fixed intents", async () => {
     assert.match(
       failed(

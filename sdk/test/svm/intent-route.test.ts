@@ -135,6 +135,24 @@ describe("a cook's route", () => {
   });
 });
 
+describe("a cook's accounts", () => {
+  it("refuses a program taking a variable list of accounts, which a route cannot attach", () => {
+    expect(() =>
+      svmCookRoute({
+        portal: PORTAL,
+        kitchen: KITCHEN,
+        engine: ENGINE,
+        bytecode: new Uint8Array([1]),
+        manifest: { accounts: [{ kind: "remaining" }] } as never,
+        accounts: {},
+        executionFee: 0n,
+        delivered: [],
+        potExists: true,
+      }),
+    ).toThrow(/a variable list of accounts after its named ones, which an intent's route cannot/);
+  });
+});
+
 describe("a route of transfers", () => {
   it("creates the wallet's account where it is missing, and pays it", () => {
     const route = svmTransferRoute({

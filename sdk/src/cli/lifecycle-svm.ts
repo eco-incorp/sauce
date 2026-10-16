@@ -19,6 +19,7 @@ import {
   createSolanaRpc,
   createTransactionMessage,
   generateKeyPairSigner,
+  getAddressDecoder,
   getBase64Decoder,
   getBase64Encoder,
   getBase64EncodedWireTransaction,
@@ -418,13 +419,16 @@ function fillInstructions(intent: Intent, fulfill: Instruction): Instruction[] {
     : [getSetComputeUnitLimitInstruction({ units: 400_000 }), fulfill];
 }
 
+/** Any key stands for the solver in a size: 32 bytes like every other. */
+const PLACEHOLDER_SOLVER = getAddressDecoder().decode(new Uint8Array(32).fill(7));
+
 /**
  * The size of `intent`'s fill on the wire, as {@link planSvmFill} builds it for any solver: whether
  * a solver can send it in one transaction ({@link SVM_PACKET_BYTES}). Reads nothing: the solver is
  * a placeholder key, which changes no size.
  */
 export async function svmFillBytes(intent: Intent): Promise<number> {
-  const solver = (await generateKeyPairSigner()).address;
+  const solver = PLACEHOLDER_SOLVER;
   const fulfill = await buildPortalFulfillInstruction({
     intent,
     portal: svmKeyOf(intent.route.portal),
