@@ -222,6 +222,20 @@ describe("svm account names", () => {
     );
   });
 
+  it("an empty slot: a pool that is the System Program reads nothing, all nine its own key", async () => {
+    const empty = "11111111111111111111111111111111";
+    for (const part of ["program", "pool", "vaultA", "ticks2"]) {
+      expect(
+        (
+          await resolveSvmAccountName(
+            `slot:@pool:USDC.${part}`,
+            ctx({ args: { pool: empty as Address } }),
+          )
+        ).value,
+      ).toBe(empty);
+    }
+  });
+
   it("refuses the System Program as a token's holder, by name", async () => {
     await expect(resolveSvmAccountName("system:USDC", ctx())).rejects.toThrow(
       "system:USDC: system is the System Program, which holds no token account: name the " +

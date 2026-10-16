@@ -127,6 +127,8 @@ The namespaces are `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`, `O
   - What is bought lands in the Pot's own account for `tokenOut`, which `sauce run` creates when it is missing.
 - **What must be known.** The pool and both tokens are each a parameter of `main` declared `Address`, a 32-byte key, or (a token) a registered symbol. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
 
+`Solana.swap` and `Solana.trySwap` take the same arguments at a pool of any of the nine: the venue is read from the pool's owner as the program runs, so a program can take its pools as `main`'s arguments without knowing their venues, and still name no account. Each such call carries every venue's code, a larger program than one venue's. A pool given as the System Program, `11111111111111111111111111111111`, is an empty slot, which `trySwap` skips.
+
 `sauce globals --chain solana` lists the namespaces under Venues. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools whose venues its program reads as it runs, and takes their accounts itself.
 
 ## Compile an SPL transfer

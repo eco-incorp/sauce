@@ -21,7 +21,8 @@
  *                        one of the nine accounts `@sauce/router`'s swap at a price takes for the
  *                        pool (base58, or `@<param>`) paying the token: `program`, `pool`, `config`,
  *                        `vaultA`, `vaultB`, `extra`, `ticks0`, `ticks1`, `ticks2`, read from the
- *                        pool's own state through `load` (`svm/pool-slot.ts`)
+ *                        pool's own state through `load` (`svm/pool-slot.ts`); a pool that is the
+ *                        System Program is an empty slot, whose nine are the System Program
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
@@ -473,6 +474,10 @@ async function resolveSlot(
       ? argument(parsed.pool.param, ctx)
       : address((parsed.pool as { key: string }).key);
   const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
+  // An empty slot, which `@sauce/router`'s `trySwap` skips: nothing to read.
+  if (pool === SYSTEM_PROGRAM) {
+    return { value: pool, label: `an empty slot (${parsed.part})`, kind: "address" };
+  }
   const load = ctx.load;
   if (load === undefined) {
     throw new SvmAccountNameError(
