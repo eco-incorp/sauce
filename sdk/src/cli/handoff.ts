@@ -56,9 +56,6 @@ export interface SendCalls {
   readonly calls: readonly SendCall[];
 }
 
-/** The chain name `send_calls` takes for `chainId`, if it takes one. */
-export const sendCallsChain = (chainId: number): string | undefined => SEND_CALLS_CHAINS[chainId];
-
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
 const DECIMAL = /^\d+$/;
 
@@ -123,7 +120,7 @@ function batchOf(carried: Carried): SendCalls | undefined {
   const ids = new Set(carried.evm.map((tx) => tx.chainId));
   const [id] = ids;
   if (ids.size !== 1 || id === undefined) return undefined;
-  const chain = sendCallsChain(id);
+  const chain = SEND_CALLS_CHAINS[id];
   if (chain === undefined) return undefined;
 
   return {
