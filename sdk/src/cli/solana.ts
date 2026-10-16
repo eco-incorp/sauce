@@ -1179,6 +1179,57 @@ async function missingAccounts(
   });
 }
 
+/**
+ * For a cook that failed: each writable account `--account` gave as a wallet — the owner, or an
+ * address the System Program owns that holds no data — where a token account was likely meant,
+ * since a token program refuses a wallet as one (InvalidAccountData). Each says the form that
+ * names the wallet's token account. Read only once a cook fails: a wallet is right for SOL.
+ */
+async function walletHints(prepared: Prepared, input: SvmCookInput): Promise<string[]> {
+  const writable = new Set(
+    prepared.manifest.accounts.flatMap((entry) =>
+      entry.kind === "slot" && /writable/.test(entry.requires) ? [entry.name] : [],
+    ),
+  );
+  const plain = Object.entries(input.accounts).filter(
+    ([name, value]) =>
+      writable.has(name) &&
+      !prepared.derived.has(name) &&
+      !prepared.given.named.has(name) &&
+      value !== "pot",
+  );
+  if (plain.length === 0) return [];
+  const keys = plain.map(([name]) => {
+    const value = prepared.given.accounts[name]!;
+    return value === "owner" ? input.owner : address(value);
+  });
+  let found: readonly ({ owner: string; data: readonly string[] } | null)[];
+  try {
+    ({ value: found } = await prepared.rpc
+      .getMultipleAccounts(keys, { encoding: "base64" })
+      .send());
+  } catch {
+    // A hint, never a failure of its own.
+    return [];
+  }
+
+  return plain.flatMap(([name, value], index) => {
+    const account = found[index];
+    const wallet =
+      value === "owner" ||
+      (account != null && account.owner === SYSTEM_PROGRAM && account.data[0] === "");
+    if (!wallet) return [];
+    const holder = value === "owner" ? "owner" : value;
+
+    return [
+      `--account ${name}=${value}: ${value === "owner" ? "the owner" : value} is a wallet, which ` +
+        "holds SOL and no token. Where the program moves or reads a token through " +
+        `${name}, give the wallet's token account instead: --account ${name}=${holder}:<token> ` +
+        `(${holder}:USDC for its USDC account), which sauce run creates where it is missing`,
+    ];
+  });
+}
+
 /** How a note names a slot: by the `--account` that gave it, or as an account the SDK derived. */
 const slotLabel = (name: string, derived: ReadonlySet<string>): string =>
   derived.has(name) ? `the account ${name}` : `--account ${name}`;
@@ -1820,6 +1871,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
     };
   }
   const short = await ownerShort(prepared, input, !created);
+  const wallets = await walletHints(prepared, input);
 
   return {
     text: [
@@ -1829,9 +1881,9 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
       ...result.logs.map((l) => `  ${l}`),
     ].join("\n"),
     json,
-    ...(short === undefined && missing.length === 0
+    ...(short === undefined && missing.length === 0 && wallets.length === 0
       ? {}
-      : { notes: [...missing, ...(short === undefined ? [] : [short])] }),
+      : { notes: [...missing, ...wallets, ...(short === undefined ? [] : [short])] }),
     exitCode: 1,
   };
 }
@@ -2512,11 +2564,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   }
   if (step.wait !== undefined) throw new CliError(`${step.wait}${await closedAgain()}`);
   if (step.fails !== undefined) {
+    const wallets = await walletHints(prepared, input);
     throw new CliError(
       `the cook would fail, so it was not sent: ${step.fails.reason}` +
         (step.fails.logs.length === 0
           ? ""
           : `\nProgram logs:\n${step.fails.logs.map((l) => `  ${l}`).join("\n")}`) +
+        wallets.map((hint) => `\n${hint}`).join("") +
         (await closedAgain()),
     );
   }

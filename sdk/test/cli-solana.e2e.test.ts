@@ -1079,6 +1079,28 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     );
   }, 60_000);
 
+  it("a failed cook given a wallet where a token account belongs names the wallet's token account", async () => {
+    const pot = await potOf(hexToBytes(potSalt("vault")));
+    const { source } = accountsFor(pot, 1_000n);
+    const wallet = randomAddress();
+    harness.svm.airdrop(wallet, lamports(1_000_000_000n));
+    const out = await sauce(
+      ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ...["--salt", "vault", "--rpc-url", RPC_URL],
+      ...["--account", `tokenProgram=${TOKEN_PROGRAM}`, "--account", `source=${source}`],
+      ...["--account", `dest=${wallet}`, "--account", "authority=pot", "--args", "400"],
+    );
+    expect(out.code).toBe(1);
+    expect(out.stdout).toMatch(
+      /^The cook reverts: program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed/,
+    );
+    expect(out.stderr).toContain(
+      `--account dest=${wallet}: ${wallet} is a wallet, which holds SOL and no token. Where the ` +
+        "program moves or reads a token through dest, give the wallet's token account instead: " +
+        `--account dest=${wallet}:<token> (${wallet}:USDC for its USDC account)`,
+    );
+  }, 60_000);
+
   it("`sauce simulate` rehearses the cook with no key; a failure prints the program logs", async () => {
     const pot = await potOf(hexToBytes(potSalt("vault")));
     const { flags } = accountsFor(pot, 1_000n);
