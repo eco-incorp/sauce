@@ -48,7 +48,7 @@ a millionfold for WETH and USDC:
 ```
 
 Then it gives the numbers: `sqrtPriceX96`, the price a Uniswap-style pool keeps and a swap's price
-limit, and for buying and selling, the `maxPrice`, `maxAvgPrice` and `minAvgPrice` the
+limit, and for buying and selling, the `priceLimit`, `maxAvgPrice` and `minAvgPrice` the
 [distributed swap](distributed-swap.md) and single swaps check against. It also reads the pair's
 price now, and warns when yours is far from it.
 
@@ -73,9 +73,9 @@ USDC/SPCXc on base at block 36120411: 3 pools with liquidity, deepest first (by 
    fee 0.05% (read from the pool), tick spacing 10, liquidity 206953500095168, tick -3968
    sqrtPriceX96  64972491279845651558239670148
    buy SPCXc with USDC  148.771 USDC each, 148.696 before the fee; 128966 USDC moves it 1%
-                        maxPrice 1487706738131601814
+                        priceLimit 1487706738131601814
    buy USDC with SPCXc  0.00672848 SPCXc each, 0.00672512 before the fee; 1267.21 SPCXc moves it 1%
-                        maxPrice 672848166136197636
+                        priceLimit 672848166136197636
 …
 ```
 
@@ -145,9 +145,9 @@ a Uniswap V3 or V4 pool (or a fork) trades at, which is also the swap's `sqrtPri
 when selling token0, a ceiling when selling token1), and, for selling the base token and for buying
 it, the price both ways round, each labelled with its units (`units` in `--json`):
 
-- `maxPrice` and `maxAvgPrice`: the paid token's base units per bought base unit, times 1e18 (the
+- `priceLimit` and `maxAvgPrice`: the paid token's base units per bought base unit, times 1e18 (the
   price times 10^(18 + paid decimals − bought decimals), rounded down), which the distributed swap
-  takes as its `maxPrice` and `maxAvgPrice`, as `sauce pools` prints a pool's. Buying WETH with USDC
+  takes as its `priceLimit` and `maxAvgPrice`, as `sauce pools` prints a pool's. Buying WETH with USDC
   at 2700 that is `2700000000`.
 - `minAvgPrice`: the other way round, bought base units per paid base unit, times 1e18, rounded up,
   for a single swap's check `out * 1e18 >= minAvgPrice * spent`. It is never a `maxAvgPrice`.
@@ -188,9 +188,9 @@ Pools with liquidity at their price come first, deepest first, by that liquidity
 - tick spacing, liquidity, tick and `sqrtPriceX96`;
 - both directions, paying the first token for the second and then the reverse: what one token costs
   in the other at the pool's price (`mid`) and with the fee (`taker`), in whole tokens,
-  decimals-aware; that taker price as the distributed swap's `maxPrice` (the paid token's base units
+  decimals-aware; that taker price as the distributed swap's `priceLimit` (the paid token's base units
   per bought base unit, times 1e18, so 150 USDC for an 8-decimal token is `1500000000000000000`),
-  the pool trading only to a `maxPrice` above it; and `depth1Pct`, how much of the paid token, fee
+  the pool trading only to a `priceLimit` above it; and `depth1Pct`, how much of the paid token, fee
   included, moves the pool's price 1% against the taker, walked through its initialized ticks.
 
 Then the pools with no liquidity at their price, or none at all, listed apart as skipped (`empty`): a
