@@ -2,6 +2,12 @@
 
 # Compound V3 (`compound-v3`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Compound V3 is a lending market: deposit tokens to earn interest, or borrow against them. This
+> page lists the chains it is deployed on, the name a program writes for each of its contracts, and
+> the functions a program can call.
+
 Single-asset lending protocol (Comet) with isolated markets per base asset. Each market has one borrowable asset and multiple collateral assets.
 
 | Fact | Value |

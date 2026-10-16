@@ -2,6 +2,12 @@
 
 # GMX V1 (`gmx-v1`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> GMX V1 is a perpetuals exchange: bet on a price, with leverage and no expiry date. This page lists
+> the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 > **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, [the distributed swap](../../guides/distributed-swap.md)). The templates below call the protocol's own contracts.
 
 Decentralized perpetual exchange with multi-asset liquidity pool (GLP). Supports leverage trading up to 50x with low swap fees and zero price impact trades.

@@ -2,6 +2,12 @@
 
 # Synapse Protocol (`synapse`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Synapse Protocol is a bridge: it moves tokens from one chain to another. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Cross-chain bridge and DEX with multi-chain AMM pools. Supports token swaps and bridging via SynapseBridge and CCTP router.
 
 | Fact | Value |

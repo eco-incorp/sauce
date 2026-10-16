@@ -2,6 +2,12 @@
 
 # LayerBank (`layerbank`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> LayerBank is a lending market: deposit tokens to earn interest, or borrow against them. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Leading lending protocol on Scroll. Compound-style markets (lTokens), but every user action goes through the Core contract, which names the market.
 
 | Fact | Value |

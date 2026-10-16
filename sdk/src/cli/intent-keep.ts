@@ -17,8 +17,12 @@
  *    destination's for a fill, a proof or a cancellation, the source's for a claim or a refund.
  *  - On Solana, a transaction that succeeded: the Portal's `fulfill`, `prove` and `cancel`
  *    instructions it carries or a program of it invoked, each counted only when the program is the
- *    intent's destination Portal, with the Hyperlane message its Mailbox logged. An intent's hash
- *    commits to its chains and its route's Portal, so it needs no cluster of its own.
+ *    intent's destination Portal, with the Hyperlane message its Mailbox logged; and for an intent
+ *    Solana published, each `publish` of the registry's Portal rebuilt and stored
+ *    (`lifecycle-svm-source.ts#svmPublishedIntents`, checked against the hash the Portal logged),
+ *    and its `fund` (funded), `withdraw` (claimed) and `refund` (refunded), counted only when the
+ *    program is the intent's source Portal. An intent's hash commits to its chains and its route's
+ *    Portal, so it needs no cluster of its own.
  *
  * An intent the store neither holds nor knows is left alone: its record is not in the logs.
  */
@@ -39,9 +43,18 @@ import {
 
 import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { PortalABI } from "../protocols/eco-routes/abis.js";
-import { PORTAL_DISCRIMINATORS, svmKeyOf } from "../svm/portal.js";
+import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
+import { hashIntent } from "../routes/encode.js";
+import { PORTAL_DISCRIMINATORS, svmKeyOf, universalOfSvmKey } from "../svm/portal.js";
+import { svmVaultPda } from "../svm/portal-source.js";
 import type { Landed } from "./keep.js";
-import { dispatchedMessages, publishedIntents, type IntentRecord } from "./lifecycle.js";
+import {
+  dispatchedMessages,
+  intentRecord,
+  publishedIntents,
+  type IntentRecord,
+} from "./lifecycle.js";
+import { svmPublishedIntents, svmSourceInstruction } from "./lifecycle-svm-source.js";
 import type { IntentStore, StoreEvent, StoreEventName } from "./store.js";
 
 /** The Portal's events a landed transaction moves an intent on by, and the side that emits each. */
@@ -229,7 +242,10 @@ function portalInstruction(
   return undefined;
 }
 
-function keepSvm(store: IntentStore, landed: Extract<Landed, { kind: "svm" }>): string[] {
+async function keepSvm(
+  store: IntentStore,
+  landed: Extract<Landed, { kind: "svm" }>,
+): Promise<string[]> {
   const { sent, transaction } = landed;
   if (!sent.ok || transaction === undefined) return [];
   const decoded = getTransactionDecoder().decode(
@@ -260,7 +276,55 @@ function keepSvm(store: IntentStore, landed: Extract<Landed, { kind: "svm" }>): 
     ),
   ];
   const chain = requireChain("solana");
+  const where = {
+    chain: chain.slug,
+    chainId: chain.id,
+    tx: sent.signature,
+    block: (sent.slot ?? 0n).toString(),
+    time: new Date().toISOString(),
+    ...(message.staticAccounts[0] === undefined ? {} : { from: message.staticAccounts[0] }),
+  };
+  const ran = invoked.map((instruction) => ({
+    program: accounts[instruction.programAddressIndex] ?? "",
+    data: instruction.data ?? new Uint8Array(),
+  }));
+  // The intents it published from Solana: rebuilt from each `publish`, and funded where the same
+  // transaction funded them.
+  const lines: string[] = [];
+  const portal = svmKeyOf(ecoRoutesPortal(chain));
+  const sourceActs = ran
+    .filter((instruction) => instruction.program === portal)
+    .map((instruction) => svmSourceInstruction(instruction.data))
+    .filter((acted) => acted !== undefined);
+  const published = new Set<string>();
+  for (const intent of svmPublishedIntents(ran, portal, sent.logs)) {
+    const { intentHash } = hashIntent(intent);
+    const record = intentRecord(intent, {
+      sourcePortal: universalOfSvmKey(portal),
+      vault: universalOfSvmKey(await svmVaultPda(portal, intentHash)),
+    });
+    store.save(record);
+    store.append(record.intentHash, { event: "published", ...where });
+    if (sourceActs.some((acted) => acted.event === "funded" && acted.intentHash === intentHash)) {
+      store.append(record.intentHash, { event: "funded", ...where });
+    }
+    published.add(intentHash);
+    lines.push(`stored intent ${record.intentHash} in ${store.dir}`);
+  }
   const happened = new Map<string, Happened>();
+  for (const instruction of ran) {
+    const acted = svmSourceInstruction(instruction.data);
+    if (acted === undefined || published.has(acted.intentHash)) continue;
+    noted(
+      happened,
+      store,
+      acted.intentHash,
+      acted.event,
+      "source",
+      chain,
+      (at) => svmKeyOf(at) === instruction.program,
+    );
+  }
   for (const instruction of invoked) {
     const program = accounts[instruction.programAddressIndex];
     const acted = portalInstruction(instruction.data ?? new Uint8Array());
@@ -277,26 +341,14 @@ function keepSvm(store: IntentStore, landed: Extract<Landed, { kind: "svm" }>): 
       );
     }
   }
-  if (happened.size === 0) return [];
+  if (happened.size === 0) return lines;
   const messages = sent.logs.flatMap((line) => {
     const found = DISPATCHED.exec(line);
 
     return found === null ? [] : [found[1] as Hex];
   });
 
-  return append(
-    store,
-    happened,
-    {
-      chain: chain.slug,
-      chainId: chain.id,
-      tx: sent.signature,
-      block: (sent.slot ?? 0n).toString(),
-      time: new Date().toISOString(),
-      ...(message.staticAccounts[0] === undefined ? {} : { from: message.staticAccounts[0] }),
-    },
-    messages,
-  );
+  return [...lines, ...append(store, happened, where, messages)];
 }
 
 /** What `landed` did to intents, kept in `store`: the lines that say so. */

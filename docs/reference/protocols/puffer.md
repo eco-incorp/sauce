@@ -2,6 +2,12 @@
 
 # Puffer Finance (`puffer`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Puffer Finance is a restaking protocol: staked coins put to work securing other services too. This
+> page lists the chains it is deployed on, the name a program writes for each of its contracts, and
+> the functions a program can call.
+
 Liquid restaking protocol that issues pufETH via an ERC-4626 vault. Deposits are natively restaked via EigenLayer for additional yield.
 
 | Fact | Value |

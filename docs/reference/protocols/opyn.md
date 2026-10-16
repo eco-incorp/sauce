@@ -2,6 +2,12 @@
 
 # Opyn (`opyn`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Opyn is an options protocol: the right to buy or sell at a set price later. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 DeFi options protocol known for Squeeth (squared ETH), a power perpetual that provides leveraged ETH exposure without liquidations.
 
 | Fact | Value |

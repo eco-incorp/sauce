@@ -96,8 +96,21 @@ const TRANSFER = readFileSync(
   "utf8",
 );
 
-/** Pays the recipient only what the Pot holds of what was delivered, and refuses less. */
+/**
+ * A program, not a list of transfers (the `const` makes it one): what was delivered, moved into the
+ * Pot, paid on from there. Small, as a program an intent runs on Solana has to be: the fill carries
+ * its bytecode, and Solana's transaction is 1,232 bytes, its accounts through a lookup table.
+ */
 const PROGRAM = `function main(recipient: Address, amount: Uint256, reward: Uint256) {
+  Solana(() => {
+    const delivered = amount;
+    USDC.transfer(recipient, delivered);
+  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount: reward }] });
+}
+`;
+
+/** The same, checking the Pot holds it first: too large for any fill. */
+const CHECKED = `function main(recipient: Address, amount: Uint256, reward: Uint256) {
   Solana(() => {
     require(self.USDC >= amount, "short");
     USDC.transfer(recipient, amount);
@@ -159,6 +172,9 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
   }
 
   /** `text` published from the owner's Ethereum wallet with `args`; the hash of its one intent. */
+  /** What the last `publish` said beside its result. */
+  let said = "";
+
   async function publish(store: string, text: string, ...args: string[]): Promise<Hex> {
     const file = join(work, `intent-${Math.random().toString(16).slice(2)}.sauce.ts`);
     writeFileSync(file, text);
@@ -170,7 +186,8 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
       ...["--intent-reward-deadline", String(start + 7200n), "--intent-execution-fee", "auto"],
       ...["--args", ...args],
     );
-    expect(published.code).toBe(0);
+    if (published.code !== 0) throw new Error(published.stderr);
+    said = published.stderr;
     const [only] = jsonOf(published).intents as Array<{ intentHash: Hex }>;
 
     return only!.intentHash;
@@ -270,20 +287,47 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
     expect(tokenAmount(harness, recipient.account)).toBe(AMOUNT);
   }, 240_000);
 
-  it("refuses a program whose fill no solver could send in one transaction", async () => {
-    const file = join(work, "program.sauce.ts");
-    writeFileSync(file, PROGRAM);
-    const start = await now();
-    const recipient = await wallet();
-    const refused = await intent(
-      mkdtempSync(join(work, "store-")),
-      ...["publish", file, "--chain", "ethereum", "--private-key", OWNER_KEY, "--yes"],
-      ...["--intent-deadline", String(start + 3600n), "--intent-creator", OWNER.address],
-      ...["--intent-execution-fee", "auto", "--args", recipient.key, String(AMOUNT), "1"],
-    );
-    expect(refused.code).toBe(1);
-    expect(refused.stderr).toMatch(/filled by a \d+-byte transaction, past Solana's 1232/);
+  it("creates the executor's Pot from the first program's route, then cooks on it", async () => {
+    writeFileSync(join(work, "checked.sauce.ts"), CHECKED);
     const pot = await svmIntentPot({ portal: PORTAL, kitchen: harness.kitchen });
     expect(harness.svm.getAccount(pot).exists).toBe(false);
-  }, 240_000);
+    const feeBefore = harness.svm.getBalance(harness.feeConfig) ?? 0n;
+    for (const round of [1, 2]) {
+      const store = mkdtempSync(join(work, "store-"));
+      const recipient = await wallet();
+      const hash = await publish(store, PROGRAM, recipient.key, String(AMOUNT), String(REWARD));
+      // The first route creates the Pot, and says another published before it is filled races it;
+      // the second, read once the Pot exists, does not. Both fills need a lookup table.
+      expect(said.includes("does not exist yet: this intent's route creates it")).toBe(round === 1);
+      expect(said).toContain("only through an address lookup table");
+      // Too large for one transaction as it is: a simulation says the table comes first.
+      const planned = await intent(
+        store,
+        ...["fill", hash, "--solver", solver.address, "--claimant", SOLVER.address, "--json"],
+      );
+      expect(planned.code).toBe(0);
+      expect(jsonOf(planned).intents).toMatchObject([{ ok: true, sent: false, simulated: false }]);
+      await fillProveClaim(store, hash);
+      expect(harness.svm.getAccount(pot).exists).toBe(true);
+      expect(tokenAmount(harness, recipient.account)).toBe(AMOUNT);
+      expect((harness.svm.getBalance(harness.feeConfig) ?? 0n) - feeBefore).toBe(
+        BigInt(round) * KITCHEN_FEE,
+      );
+    }
+    // A program whose fill would not fit even through a table is refused before anything is sent.
+    const refused = await intent(
+      mkdtempSync(join(work, "store-")),
+      ...["publish", join(work, "checked.sauce.ts"), "--chain", "ethereum"],
+      ...["--private-key", OWNER_KEY],
+      ...["--yes", "--intent-deadline", String((await now()) + 3600n)],
+      ...["--intent-creator", OWNER.address, "--intent-execution-fee", "auto"],
+      ...["--args", (await wallet()).key, String(AMOUNT), "1"],
+    );
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/even through a lookup table, past Solana's 1232/);
+    // What the routes delivered went where the program sent it: none stays in the Pot.
+    expect(
+      tokenAmount(harness, await associatedTokenAccount(pot, USDC_MINT, TOKEN_PROGRAM_ID)),
+    ).toBe(0n);
+  }, 480_000);
 });

@@ -207,12 +207,12 @@ export async function planTransfer(rpcUrl: string, mint: Address, pot: Address, 
 }
 ```
 
-`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD`, and a stock's by its symbol, `pot:TSLAx` ([CLI guide](cli.md#solana)). PreStocks' mints charge a transfer fee, so a program paying one measures what arrived.
+`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD`, and a stock's by its symbol, `pot:TSLAx` ([CLI guide](cli-solana.md)). PreStocks' mints charge a transfer fee, so a program paying one measures what arrived.
 
 ## Two ways to run a program
 
 The released engine has two entry points, and the SDK builds a cook for each. A client chooses with
-`via`, and the `sauce` command with `--via` ([CLI guide](cli.md#solana)).
+`via`, and the `sauce` command with `--via` ([CLI guide](cli-solana.md)).
 
 |                                 | Through the Kitchen: `via: "kitchen"` (the default)                      | Direct to the engine: `via: "engine"`                                                  |
 | ------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -473,7 +473,9 @@ Publish a hand-built route with the EVM Portal helpers (`routes.publishAndFundTx
 The fill must request the engine's heap frame, as every cook does; `sauce intent fill`
 adds it when a route call is the Kitchen's. The whole route rides in the solver's one
 fill transaction, which Solana caps at 1,232 bytes, and a program's bytecode is most
-of it.
+of it; a fill too large as it is takes its accounts through an address lookup table
+the solver creates first, which `sauce intent fill` builds (`lookupTable` in its
+result, the table's transactions first).
 
 A route's program runs through the Kitchen, on the executor's Pot: that is what
 these builders make, and the `sauce intent` commands take no `--via`. The direct
@@ -487,15 +489,22 @@ gas for Hyperlane's delivery paid in the same transaction) and
 `buildPortalCancelInstruction`. `decodeFulfillMarker` reads what the Portal
 recorded, and `svmTokenTransferCall` is the route call eco-routes' Solana deposit
 addresses publish. `sauce intent fill`, `prove` and `cancel` send them
-([CLI guide](cli.md#an-intent-to-solana)).
+([CLI guide](cli-intents.md#an-intent-to-solana)).
 
 One detail worth knowing if you are reading routes somebody already built:
 `execution.code` there means the finalized **code account**, not its metadata
 address, and the helper neither stages that code nor checks it against the bytes
 it just compiled. Keep the direct compilation result when you inspect one.
 
-The EVM-source Portal helpers can encode a Solana destination perfectly well.
-That is about encoding, not about submitting from Solana.
+An intent can also start on Solana, its reward held by Solana's Portal. The
+builders for that side are `buildPortalFundInstruction` (moves the reward into the
+intent's vault, `svmVaultPda`), `buildPortalPublishInstruction` (announces the
+intent), `buildPortalWithdrawInstruction` (pays the claimant once the proof is
+recorded) and `buildPortalRefundInstruction` (returns the reward to its creator).
+`decodeSvmProof` reads the proof the HyperProver records when Hyperlane delivers
+it. `sauce intent publish --chain solana`, `claim` and `refund` send them
+([CLI guide](cli-intents.md#an-intent-from-solana)). A Sauce program running on Solana
+cannot open an intent itself: the wallet calls the Portal.
 
 ## Venue accessors
 

@@ -348,17 +348,30 @@ describeSvm("the token methods on Solana: every account derived by the command",
     const me = address(made.address as string);
     harness.svm.airdrop(me, lamports(1_000_000_000n));
 
-    // Simulated first: no password, the Pot not created yet, its USDC assumed.
+    // Simulated first: no password, the Pot not created yet, its USDC assumed. The 1 USDC moves from
+    // the Pot's USDC account to the recipient's, in the copy only: nothing is created or paid.
+    const mePot = (await derivePotPda(KITCHEN, me, new Uint8Array(32))).address;
+    const toUsdc = await ataOf(usdc, recipient, TOKEN_PROGRAM);
     const simulated = json(await asReader(...usage("simulate"), "--json"));
     expect(simulated).toMatchObject({ ok: true });
+    expect(simulated.tokenChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          account: await ataOf(usdc, mePot, TOKEN_PROGRAM),
+          delta: "-1000000",
+        }),
+        expect.objectContaining({ account: toUsdc, delta: "1000000" }),
+      ]),
+    );
+    expect(harness.svm.getAccount(toUsdc).exists).toBe(false);
+    expect(harness.svm.getAccount(mePot).exists).toBe(false);
 
     // Then run: the page has its reader send the Pot 1 USDC first, and the run asks to create the
     // Pot and the recipient's USDC account before the cook.
-    const mePot = (await derivePotPda(KITCHEN, me, new Uint8Array(32))).address;
     const potUsdcOfMe = await account(usdc, mePot, 1_000_000n, TOKEN_PROGRAM, 6);
     const ran = await asReader(...usage("run"), ...PASSWORD);
     expect(ran.code).toBe(0);
-    expect(tokenAmount(harness, await ataOf(usdc, recipient, TOKEN_PROGRAM))).toBe(1_000_000n);
+    expect(tokenAmount(harness, toUsdc)).toBe(1_000_000n);
     expect(tokenAmount(harness, potUsdcOfMe)).toBe(0n);
   }, 120_000);
 
