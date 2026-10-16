@@ -2,6 +2,12 @@
 
 # Sommelier (`sommelier`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Sommelier is a yield vault: deposits are put to work to earn interest. This page lists the chains
+> it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 ERC-4626 strategy vaults (Cellars) managed by off-chain strategists via Cosmos validators. Automated DeFi portfolio management.
 
 | Fact | Value |

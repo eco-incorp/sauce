@@ -2,6 +2,12 @@
 
 # Evmos
 
+**Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
+
+> Everything a program can name on Evmos: its tokens, and every protocol deployed there with the
+> name a program writes for each contract. Evmos is a preview chain: programs compile and simulate
+> here, and the `sauce` command sends nothing.
+
 **Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
 On Evmos a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
 runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,

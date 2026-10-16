@@ -2,6 +2,12 @@
 
 # Lido (`lido`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Lido is a liquid staking protocol: stake a chain's coin and get back a token you can still use.
+> This page lists the chains it is deployed on, the name a program writes for each of its contracts,
+> and the functions a program can call.
+
 The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a rebasing liquid staking token. wstETH is the non-rebasing wrapped version for DeFi composability.
 
 | Fact | Value |

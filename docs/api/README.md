@@ -27,7 +27,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                                                             |
 | `/skills`                      | The per-protocol documents (the `sauce-protocols` agent skill's references) and their index, as text                                                                                |
 | `/testing`                     | Node-only: run programs on a forked or empty local chain from a test, recorded once and replayed ([Testing programs](../guides/testing.md))                                         |
-| `/sauce-script`                | Types only: SauceScript's builtins, chains and ABI modules, for an editor checking `*.sauce.ts` programs ([In an editor](../guides/cli.md#in-an-editor))                            |
+| `/sauce-script`                | Types only: SauceScript's builtins, chains and ABI modules, for an editor checking `*.sauce.ts` programs ([In an editor](../guides/cli-programs.md#in-an-editor))                   |
 
 The [`exports` map](../../package.json) defines this list. There is no `/routes`, `/token`,
 `/deposit`, or `/contracts` subpath; import these namespaces from the root:
@@ -96,3 +96,18 @@ Anything that compiles — `/compiler`, route compilation, the builders, the rec
 loads; the [compiler reference](compiler.md#in-a-browser) covers it. In Node nothing needs it.
 `/verify` never loads the compiler: its dependency closure is `viem` alone, so an EVM settlement
 payload can be validated in a browser or an edge runtime without it.
+
+## Pots and cooks in code
+
+Each step of running a program on a Pot, with the `sauce` command and in TypeScript
+([Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md) explains the three):
+
+| To                          | With the `sauce` command                        | In TypeScript                                                                    |
+| --------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| Find a Pot's address        | `sauce pot --owner <address>`                   | `v12PredictPot(owner, salt)` from `@eco-incorp/sauce`                            |
+| Deploy a Pot                | `sauce run` (when needed), `sauce pot --deploy` | `routes.sauceEvmDeployPotCall({ owner, salt })`                                  |
+| Simulate a cook             | `sauce simulate`                                | an `eth_call` of the cook from the owner, on a deployed Pot                      |
+| Build a cook                | `sauce tx`                                      | `v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine`         |
+| Send a cook                 | `sauce run`                                     | your own wallet client, with the cook as `to`, `data` and `value`                |
+| Read the fee                | read by `sauce run` and `sauce tx`              | `destinationExecutionFee()`                                                      |
+| Find the Kitchen and engine | `sauce pot` prints the Kitchen                  | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments` |

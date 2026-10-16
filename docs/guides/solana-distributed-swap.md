@@ -2,6 +2,12 @@
 
 # A distributed swap on Solana
 
+**How-to guide** · [Documentation](../README.md)
+
+> The same order on Solana: buy a lot of a token, never paying more than a set price for any of it,
+> spread over the pools of several Solana exchanges. Each pool sells what it can below your price,
+> and what you have not spent moves on to the next, in one transaction.
+
 The limit order of [the distributed swap](distributed-swap.md), on Solana: one price, the most the caller pays for any
 unit, fees included, and every pool trading until its own price reaches it. The method (the price
 does the splitting, no sorting, the two checks on the total) is that skill's. This skill owns what

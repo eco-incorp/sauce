@@ -207,12 +207,12 @@ export async function planTransfer(rpcUrl: string, mint: Address, pot: Address, 
 }
 ```
 
-`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD`, and a stock's by its symbol, `pot:TSLAx` ([CLI guide](cli.md#solana)). PreStocks' mints charge a transfer fee, so a program paying one measures what arrived.
+`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD`, and a stock's by its symbol, `pot:TSLAx` ([CLI guide](cli-solana.md)). PreStocks' mints charge a transfer fee, so a program paying one measures what arrived.
 
 ## Two ways to run a program
 
 The released engine has two entry points, and the SDK builds a cook for each. A client chooses with
-`via`, and the `sauce` command with `--via` ([CLI guide](cli.md#solana)).
+`via`, and the `sauce` command with `--via` ([CLI guide](cli-solana.md)).
 
 |                                 | Through the Kitchen: `via: "kitchen"` (the default)                      | Direct to the engine: `via: "engine"`                                                  |
 | ------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -489,7 +489,7 @@ gas for Hyperlane's delivery paid in the same transaction) and
 `buildPortalCancelInstruction`. `decodeFulfillMarker` reads what the Portal
 recorded, and `svmTokenTransferCall` is the route call eco-routes' Solana deposit
 addresses publish. `sauce intent fill`, `prove` and `cancel` send them
-([CLI guide](cli.md#an-intent-to-solana)).
+([CLI guide](cli-intents.md#an-intent-to-solana)).
 
 One detail worth knowing if you are reading routes somebody already built:
 `execution.code` there means the finalized **code account**, not its metadata
@@ -503,7 +503,7 @@ intent), `buildPortalWithdrawInstruction` (pays the claimant once the proof is
 recorded) and `buildPortalRefundInstruction` (returns the reward to its creator).
 `decodeSvmProof` reads the proof the HyperProver records when Hyperlane delivers
 it. `sauce intent publish --chain solana`, `claim` and `refund` send them
-([CLI guide](cli.md#an-intent-from-solana)). A Sauce program running on Solana
+([CLI guide](cli-intents.md#an-intent-from-solana)). A Sauce program running on Solana
 cannot open an intent itself: the wallet calls the Portal.
 
 ## Venue accessors

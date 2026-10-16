@@ -458,8 +458,9 @@ repository's documentation is not an independent correctness check.
 **The language reference is held to the compiler, and there is one.**
 `skills/sauce-script/references/builtins.md` (the SauceScript reference) and its `builtins.json`
 (every builtin, with an example program per target and the error on a target that lacks it) are the
-`sauce-script` skill's reference and the manual's: the build renders `builtins.md` byte for byte as
-`docs/reference/saucescript.md` (see "The manual renders the same facts" below), so edit the skill's.
+`sauce-script` skill's reference and the manual's: the build renders `builtins.md` byte for byte,
+under its plain-words intro, as `docs/reference/saucescript.md` (see "The manual renders the same
+facts" below), so edit the skill's.
 `pnpm skills:check` (`sdk/scripts/skills-check/builtins.mjs`) holds them: every builtin example
 compiles on each target it lists, every table example compiles on each target its row claims, and
 every error the page quotes (`…` and `N` as wildcards) is produced by a rejected program — a
@@ -1345,14 +1346,17 @@ them, `references/`.
   agent-only sections, When to use and Files, left out: `AGENT_SECTIONS`). The two
   renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
   manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
-  never sent into `skills/`, nor an agent into `docs/`. `docs/reference/` is generated whole (a page
+  never sent into `skills/`, nor an agent into `docs/`. And each manual page opens with the
+  plain-words intro every page of the manual has, which the generator writes (`docsIntros`) and
+  only the manual's rendering carries. `docs/reference/` is generated whole (a page
   written there by hand is removed: hand-written reference pages belong in `docs/api/`), committed,
   prettier-ignored, and held like the skills' references: CI fails when the build changed it, and
   `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
   README or `docs/` into `skills/`; every page a list entry of `docs/README.md` (its link, then one line)
   exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
-  than an index with more than 3 links per 100 words; and `docs/guides/skills.md`'s table naming
-  exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
+  than an index with more than 3 links per 100 words; every page, generated or not, opening with a
+  plain-words intro (a blockquote after its title and breadcrumb); and `docs/guides/skills.md`'s
+  table naming exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
   manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
   operation) is written once, in the manual.
 - **One place per release.** The release's addresses (EVM engine, Routers, Kitchen and its

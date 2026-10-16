@@ -76,7 +76,8 @@ Two things need money:
 - **Your wallet pays the fees and the rent**, in SOL. Have 0.1 SOL for the first run. Solana charges
   a deposit, called rent, for every new account. Your Pot keeps 10 KB of storage for your programs,
   so its deposit is the big one, about 0.072 SOL, paid once. A token account costs about 0.002 SOL.
-  After that, a run costs a fraction of a cent in fees, plus the Kitchen's fee.
+  After that, a run costs a fraction of a cent in fees, plus the Kitchen's fee. The simulation in
+  step 3 lists these first-run costs too, under its lamport changes.
 - **Your Pot pays the USDC.** Find its address, then send it 1 USDC on Solana from any wallet:
 
 ```sh
@@ -125,4 +126,4 @@ PYUSD and tokenized stocks are in the [Solana guide](solana.md).
   [ethereum-to-solana.ts](../examples/ethereum-to-solana.ts) builds that intent, and
   [your first cross-chain intent](first-intent.md) explains intents.
 - Swap at Solana pools by name: [the Solana guide](solana.md#venues-by-namespace).
-- Every command and flag for Solana: [the sauce command](cli.md#solana).
+- Every command and flag for Solana: [the sauce command](cli-solana.md).

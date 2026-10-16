@@ -2,6 +2,12 @@
 
 # Kelp DAO (`kelp`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Kelp DAO is a restaking protocol: staked coins put to work securing other services too. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Liquid restaking protocol built on EigenLayer. Deposit LSTs (stETH, ETHx, etc.) and receive rsETH, a non-rebasing liquid restaked token.
 
 | Fact | Value |

@@ -2,6 +2,12 @@
 
 # Eco Routes (`eco-routes`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Eco Routes is a building block that other protocols are built on. This page lists the chains it is
+> deployed on, the name a program writes for each of its contracts, and the functions a program can
+> call.
+
 Eco's cross-chain intent protocol. A Portal publishes an intent, escrows its reward in a per-intent vault, and pays a solver who fulfills the route on the destination chain; a prover carries the proof of that fulfillment back. This is the layer Sauce intents are built on.
 
 | Fact | Value |

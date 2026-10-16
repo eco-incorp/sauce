@@ -2,6 +2,12 @@
 
 # Euler V2 (`euler-v2`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
+> Euler V2 is a lending market: deposit tokens to earn interest, or borrow against them. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Modular lending platform built on the Ethereum Vault Connector (EVC). Supports permissionless vault creation with customizable risk parameters.
 
 | Fact | Value |
