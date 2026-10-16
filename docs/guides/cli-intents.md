@@ -135,7 +135,8 @@ sauce intent publish --source ethereum --destination solana --token USDC --amoun
 Before it builds either, the command reads Solana: which token accounts exist and, for a program,
 whether the Pot Solana's Portal owns exists. A wallet with no account for the token gets one,
 created by the route, and its rent (about 0.002 SOL) is added to what the solver brings. An intent
-whose fill would not fit one Solana transaction is refused before anything is sent.
+whose fill would not fit one Solana transaction, even with its accounts in a lookup table, is
+refused before anything is sent.
 
 The intent is filled, proven and cancelled through Solana's Portal program, and claimed or refunded
 on its source like any other:
@@ -363,6 +364,10 @@ destination, `claim` and `refund` by its source.
   paying Hyperlane's Interchain Gas Paymaster for the message's delivery in the same transaction.
   What the proof spends (the gas paymaster's quote and the message accounts' rent) is measured by a
   simulation and approved. `--no-prove` leaves it to `prove`.
+- A fill too large for one transaction takes its accounts through an address lookup table. `fill`
+  without `--send` lists the transactions that create it first, and cannot simulate the fill until
+  the table exists; with `--send` it creates the table, waits a slot for it, then simulates and sends
+  the fill. The table's rent is the solver's, and `sauce reclaim --chain solana` closes it later.
 - **`prove`** and **`cancel`** sign with `--keypair`, which pays their fee: their transactions are
   built for it, so on Solana they need it. A cancellation's proof waits until the slot that cancelled
   it is finalized; `--and-prove` sends the cancellation and its proof in one transaction.

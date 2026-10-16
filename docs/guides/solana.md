@@ -473,7 +473,9 @@ Publish a hand-built route with the EVM Portal helpers (`routes.publishAndFundTx
 The fill must request the engine's heap frame, as every cook does; `sauce intent fill`
 adds it when a route call is the Kitchen's. The whole route rides in the solver's one
 fill transaction, which Solana caps at 1,232 bytes, and a program's bytecode is most
-of it.
+of it; a fill too large as it is takes its accounts through an address lookup table
+the solver creates first, which `sauce intent fill` builds (`lookupTable` in its
+result, the table's transactions first).
 
 A route's program runs through the Kitchen, on the executor's Pot: that is what
 these builders make, and the `sauce intent` commands take no `--via`. The direct

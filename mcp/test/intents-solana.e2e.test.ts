@@ -159,7 +159,7 @@ describe("the intent tools on a Solana destination", () => {
     shim?.restore();
   });
 
-  it("publishes an intent paying a Solana wallet, built against the accounts Solana has", async () => {
+  it("publishes intents to Solana, built against the accounts and the Pot Solana has", async () => {
     // A server whose endpoint reaches Solana: sauce_intent_publish reads which token accounts
     // exist before it builds the route, as the command does.
     const reading = await connect({
@@ -194,6 +194,31 @@ describe("the intent tools on a Solana destination", () => {
       const created = await publish((await generateKeyPairSigner()).address);
       assert.equal(created.calls.length, 2);
       assert.equal(created.nativeAmount, "2039280");
+      // A program, cooked on the Pot the Portal's executor owns, which this cluster lacks: its
+      // route creates the Pot, and the notes say what races it and that its fill needs a table.
+      const program = ok(
+        await reading.call("sauce_intent_publish", {
+          source: [
+            "function main(recipient: Address, amount: Uint256) {",
+            "  Solana(() => {",
+            "    const sent = amount;",
+            "    USDC.transfer(recipient, sent);",
+            "  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount: 1050000 }] });",
+            "}",
+          ].join("\n"),
+          chain: "ethereum",
+          args: [(await generateKeyPairSigner()).address, AMOUNT.toString()],
+          intentDeadline: 2_000_000_000,
+          intentCreator: CLAIMANT,
+          intentExecutionFee: "5000",
+        }),
+      ) as { notes: string[] };
+      assert.ok(
+        program.notes.some((note) =>
+          /does not exist yet: this intent's route creates it/.test(note),
+        ),
+      );
+      assert.ok(program.notes.some((note) => /only through an address lookup table/.test(note)));
     } finally {
       await reading.close();
     }

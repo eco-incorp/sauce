@@ -85,6 +85,18 @@ for (const file of manual) {
 }
 if (failures.length) throw new Error(`Broken manual links:\n${failures.join("\n")}`);
 console.log(`Manual links: ${manual.length} files checked`);
+// The LiteSVM the testing guide installs is the one the testing kit takes: the package's pin.
+{
+  const pin = JSON.parse(readFileSync(join(root, "sdk/runtime/package.json"), "utf8")).dependencies
+    .litesvm;
+  const guide = readFileSync(join(root, "docs/guides/testing.md"), "utf8");
+  const named = [...guide.matchAll(/litesvm@(\S+)/g)].map((match) => match[1]);
+  if (named.length === 0 || named.some((version) => version !== pin)) {
+    throw new Error(
+      `docs/guides/testing.md installs litesvm@${named.join(", litesvm@")}; the package pins ${pin}`,
+    );
+  }
+}
 // No page teaches a define: `--define` and `--defines` are the command's low-level flags, and a value
 // a reader supplies is a `main` argument (`example-programs.mjs`). The manual and its examples; the
 // skills are skills:check's.
