@@ -130,16 +130,21 @@ A program names a pool as `<Venue>.pool(tokenA, tokenB, key)`: the program addre
 program derives from the pair, the lower key first whichever way it is written, and the key. The
 command derives it as it builds the cook and reads the pool there; no pool there is an empty slot.
 
-| Venue                                      | Key                    | Seeds                                                                                                  |
-| ------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| Orca Whirlpools                            | tick spacing (u16, LE) | `"whirlpool"`, the WhirlpoolsConfig `2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ`, lower, higher, key |
-| Cropper                                    | tick spacing (u16, LE) | `"whirlpool"`, the WhirlpoolsConfig `2CmCWqXhw7f3jCnvJg74t4vsm62DTUbKQPWL7NX8oCpL`, lower, higher, key |
-| DefiTuna                                   | tick spacing (u16, LE) | `"fusion_pool"`, lower, higher, key                                                                    |
-| Crema                                      | tick spacing (u16, LE) | `"clmmpool"`, the config `2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox`, lower, higher, key            |
-| Raydium CLMM, PancakeSwap, Byreal, Stabble | fee, in millionths     | `"pool"`, the `AmmConfig` charging that fee, lower, higher                                             |
+| Venue                                      | Key                    | Seeds                                                                                                                             |
+| ------------------------------------------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Orca Whirlpools                            | tick spacing           | `"whirlpool"`, the WhirlpoolsConfig `2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ`, lower, higher, the fee tier's index (u16, LE) |
+| Cropper                                    | tick spacing           | `"whirlpool"`, the WhirlpoolsConfig `2CmCWqXhw7f3jCnvJg74t4vsm62DTUbKQPWL7NX8oCpL`, lower, higher, the fee tier's index (u16, LE) |
+| DefiTuna                                   | tick spacing (u16, LE) | `"fusion_pool"`, lower, higher, key                                                                                               |
+| Crema                                      | tick spacing (u16, LE) | `"clmmpool"`, the config `2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox`, lower, higher, key                                       |
+| Raydium CLMM, PancakeSwap, Byreal, Stabble | fee, in millionths     | `"pool"`, the `AmmConfig` charging that fee, lower, higher                                                                        |
 
-A whirlpool's key is its fee tier's index, at 43: its tick spacing for every pool whose fee is
-fixed, and another number for an adaptive fee, which the swap skips. A Raydium-code program keeps
+A whirlpool's seed is its fee tier's index, at 43 of the pool: a static tier's index is its tick
+spacing, an adaptive-fee tier's another number (1024 and up). Each tier is the program's account
+at `["fee_tier", WhirlpoolsConfig, index]` (a little-endian u16), its tick spacing at 40 of a
+static tier and at 42 of an adaptive one. A program names the tick spacing, and the SDK knows
+every tier of each venue: the spacing alone derives the pool on its static tier; a pool on an adaptive
+tier is named by the tier's index after the spacing (`Orca.Whirlpool.pool(SPCX_US, USDC, 64, 1025)`),
+and the swap at a price skips it, an adaptive fee being more than one rate. A Raydium-code program keeps
 its `AmmConfig`s at the program address of `["amm_config", index]` (a big-endian u16), each one's
 fee at 47 and tick spacing at 51 of that account: the program names the fee, and the SDK knows
 every config of each venue. Some fees have two configs, at different tick spacings (Raydium's and

@@ -574,9 +574,10 @@ async function clmmPool(
 
 /**
  * How a program finds `pool` by key, `<Venue>.pool(<first>, <second>, <key>)`: a whirlpool's,
- * DefiTuna's and Crema's tick spacing from its own bytes, a Raydium-code pool's fee from its config,
- * with the config's tick spacing after it where the venue keeps another config at that fee. Only
- * where that key derives this pool; none where the SDK does not know the pool's config.
+ * DefiTuna's and Crema's tick spacing from its own bytes, with a whirlpool's fee tier after it where
+ * the tier is not the spacing's static one; a Raydium-code pool's fee from its config, with the
+ * config's tick spacing after it where the venue keeps another config at that fee. Only where that
+ * key derives this pool; none where the SDK does not know the pool's config or fee tier.
  */
 function keyOf(
   venue: SvmVenue,
@@ -588,24 +589,28 @@ function keyOf(
   const keyed = Object.values(SVM_KEYED_VENUES).find((one) => one.program === venue.program);
   if (keyed === undefined) return undefined;
   let key: bigint;
-  let spacing: bigint | undefined;
+  let refinement: bigint | undefined;
   if (keyed.configs !== undefined) {
     const config = keyAt(data, 9);
     const at = keyed.configs.find((one) => svmAmmConfig(keyed.program, one.index) === config);
     if (at === undefined) return undefined;
     key = BigInt(at.fee);
     if (keyed.configs.filter((one) => one.fee === at.fee).length > 1)
-      spacing = BigInt(at.tickSpacing);
+      refinement = BigInt(at.tickSpacing);
+  } else if (keyed.feeTiers !== undefined) {
+    // A whirlpool's tick spacing at 41, its fee tier's index at 43.
+    key = le(data, 41, 2);
+    if (le(data, 43, 2) !== key) refinement = le(data, 43, 2);
   } else {
-    const offset = { whirlpool: 43, defituna: 139, crema: 168 }[venue.layout as string];
+    const offset = { defituna: 139, crema: 168 }[venue.layout as string];
     if (offset === undefined) return undefined;
     key = le(data, offset, 2);
   }
-  if (svmPoolKeyProblem(keyed.namespace, key, spacing) !== undefined) return undefined;
-  const candidates = svmPoolCandidates(keyed.namespace, first.mint, second.mint, key, spacing);
+  if (svmPoolKeyProblem(keyed.namespace, key, refinement) !== undefined) return undefined;
+  const candidates = svmPoolCandidates(keyed.namespace, first.mint, second.mint, key, refinement);
   if (!candidates.some((one) => one.pool === pool)) return undefined;
 
-  return `${keyed.namespace}.pool(${first.symbol}, ${second.symbol}, ${key}${spacing === undefined ? "" : `, ${spacing}`})`;
+  return `${keyed.namespace}.pool(${first.symbol}, ${second.symbol}, ${key}${refinement === undefined ? "" : `, ${refinement}`})`;
 }
 
 /** A Phoenix market: skipped, or listed with its sides (its best offer each way) and slots. */

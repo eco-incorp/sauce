@@ -2,20 +2,27 @@
  * The `sauce-solana-distributed-swap` skill's program, executed: staged and cooked through the
  * released Kitchen on the harness Pot, against the venues' own mainnet programs and the pools'
  * mainnet accounts (`test/fixtures/svm-venue-programs/`, written by `scripts/dump-svm-venues.mjs`).
- * The program finds its pools by key (`Orca.Whirlpool.pool(USDC, WSOL, spacing)`), and every account
+ * It buys SPCX_US, a Token-2022 mint with its issuer's extensions as mainnet holds them, with USDC.
+ * The program finds its pools by key (`Raydium.CLMM.pool(USDC, SPCX_US, fee)`), and every account
  * it names is derived (`derivedAccounts`): each is resolved here as the command resolves it, by
  * `resolveSvmAccountName` reading the bank, so a key with no pool in the fixture is an empty slot.
- * It proves what the skill says the program does: one exact-input order split over the pools its keys
- * find, each stopping exactly at its own fee-adjusted limit; a key with no pool, a pool past its
- * limit, an empty pool and a remainder of dust skipped; the minimum-output and average-price checks;
- * what was bought and what is left of the budget sent to the recipient, and the Pot's other balance
- * untouched; both kept in the Pot when the recipient is the Pot; and the refusals of a budget the Pot
- * does not hold and a recipient's account another wallet holds.
+ * The Token-2022 accounts are the ones the ATA program creates, sized for the extensions the mint
+ * requires. It proves what the skill says the program does: one exact-input order split over the
+ * pools its keys find, each stopping exactly at its own fee-adjusted limit; a key with no pool, a
+ * pool past its limit, an empty pool and a remainder of dust skipped; the minimum-output and
+ * average-price checks; what was bought and what is left of the budget sent to the recipient, and the
+ * Pot's other balance untouched; both kept in the Pot when the recipient is the Pot; the refusals of
+ * a budget the Pot does not hold and a recipient's account another wallet holds; and Orca's pool of
+ * the pair, on an adaptive fee tier, found by its tier and skipped at a price.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { AccountRole } from "@solana/kit";
+import { AccountRole, address, getAddressCodec } from "@solana/kit";
 import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
+import {
+  findAssociatedTokenPda,
+  getCreateAssociatedTokenIdempotentInstruction,
+} from "@solana-program/token";
 import { FailedTransactionMetadata } from "litesvm";
 
 import { requireChain } from "../../src/chains/canonical.js";
@@ -37,6 +44,7 @@ import {
   fabricateAlt,
   HARNESS_POT_SALT,
   randomAddress,
+  sendInstructions,
   setTokenAccount,
   stageProgram,
   startEngine,
@@ -57,10 +65,10 @@ import {
   restoreVenues,
   SYSTEM,
   TOKEN,
+  TOKEN_2022,
   USDC,
-  WSOL,
 } from "./venue-fixture.js";
-import type { Pool } from "./venue-fixture.js";
+import type { Edit, Pool } from "./venue-fixture.js";
 
 /** The skill's program. */
 const PROGRAM = fileURLToPath(
@@ -70,11 +78,24 @@ const PROGRAM = fileURLToPath(
   ),
 );
 
-/** The pools of the program's keys the fixture holds, in the program's order; its other keys find
- *  none there. */
-const ORCA = pool("orca-whirlpool-sol-usdc");
-const RAYDIUM = pool("raydium-clmm-sol-usdc");
-const FOUND = [ORCA, RAYDIUM];
+/** SpaceX, as Backpack issues it: a Token-2022 mint of 6 decimals. */
+const SPCX_US = address("SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb");
+
+/** The pools of the program's keys the fixture holds, in the program's order; its other key, Raydium's
+ *  0.18%, finds none there. */
+const RAYDIUM = pool("raydium-clmm-spcx-usdc");
+const BYREAL = pool("byreal-spcx-usdc");
+const FOUND = [RAYDIUM, BYREAL];
+/** Orca's pool of the pair: on fee tier 1025, an adaptive fee at tick spacing 64. */
+const ORCA = pool("orca-whirlpool-spcx-usdc");
+
+/** Each pool's liquidity zeroed: the pool emptied. */
+const emptied = (...pools: Pool[]): Edit[] =>
+  pools.map((p) => ({
+    address: p.pool,
+    offset: LAYOUT[p.venue]!.liquidity,
+    bytes: Array(16).fill(0),
+  }));
 
 interface Order {
   budget: bigint;
@@ -89,8 +110,10 @@ interface Order {
   keepInPot?: boolean;
   /** The recipient's token account held by another wallet than the recipient. */
   strangerRecipient?: boolean;
-  /** Bytes to change in an account before the cook, for one case: a pool emptied. */
-  edit?: { address: Address; offset: number; bytes: number[] };
+  /** Bytes to change in fixture accounts before the cook: pools emptied. */
+  edit?: Edit[];
+  /** The program to cook, when not the skill's: one taking the same arguments. */
+  program?: ReturnType<typeof compileSauceProgram>;
 }
 
 type Outcome =
@@ -102,7 +125,7 @@ type Outcome =
       received: bigint;
       /** The recipient's USDC: what is left of the budget. */
       refunded: bigint;
-      /** The Pot's WSOL: nothing, unless the recipient is the Pot. */
+      /** The Pot's SPCX_US: nothing, unless the recipient is the Pot. */
       kept: bigint;
       /** The Pot's USDC after the cook. */
       left: bigint;
@@ -122,8 +145,9 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
   let nonce = 0n;
 
   beforeAll(async () => {
-    // A little after the snapshot: a whirlpool refuses a clock before its last update.
-    harness = await startEngine(BigInt(manifest.unixTimestamp) + 60n);
+    // A little after the pools were read: a pool refuses a clock before its last update.
+    const read = Math.max(manifest.unixTimestamp, ...FOUND.map((p) => p.unixTimestamp ?? 0));
+    harness = await startEngine(BigInt(read) + 60n);
     loadVenues(harness.svm);
   }, 120_000);
 
@@ -133,8 +157,42 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     return account.exists ? { data: account.data, owner: account.programAddress } : null;
   };
 
+  /**
+   * A holder's SPCX_US account, as the ATA program creates it for the holder (with the account
+   * extensions the mint requires), holding nothing; `owner` written over the holder's in it, for an
+   * account at the holder's address that another wallet holds.
+   */
+  const stockAccount = async (holder: Address, owner: Address = holder): Promise<Address> => {
+    const [ata] = await findAssociatedTokenPda({
+      owner: holder,
+      mint: SPCX_US,
+      tokenProgram: TOKEN_2022,
+    });
+    if (!harness.svm.getAccount(ata).exists) {
+      const created = await sendInstructions(harness, [
+        getCreateAssociatedTokenIdempotentInstruction({
+          payer: harness.payer,
+          ata,
+          owner: holder,
+          mint: SPCX_US,
+          tokenProgram: TOKEN_2022,
+        }),
+      ]);
+      if (!created.ok) throw new Error(`the ATA program made no SPCX_US account: ${created.err}`);
+    }
+    const account = harness.svm.getAccount(ata);
+    if (!account.exists) throw new Error(`no SPCX_US account at ${ata}`);
+    const data = new Uint8Array(account.data);
+    data.set(new Uint8Array(getAddressCodec().encode(owner)), 32);
+    data.fill(0, 64, 72); // amount
+    harness.svm.setAccount({ ...account, data });
+
+    return ata;
+  };
+
   const cook = async (order: Order): Promise<Outcome> => {
     restoreVenues(harness.svm, order.edit);
+    const cooked = order.program ?? program;
     const kept = order.kept ?? 0n;
     const ata = (holder: Address, mint: Address) =>
       svmTokenAccount({ mint, tokenProgram: TOKEN }, holder);
@@ -146,26 +204,20 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       harness.pot,
       (order.short ? order.budget - 1n : order.budget) + kept,
     );
-    const potBuy = setTokenAccount(harness, await ata(harness.pot, WSOL), WSOL, harness.pot, 0n);
+    const potBuy = await stockAccount(harness.pot);
     const to = order.keepInPot ? harness.pot : randomAddress();
     const recipient = order.keepInPot
       ? potBuy
-      : setTokenAccount(
-          harness,
-          await ata(to, WSOL),
-          WSOL,
-          order.strangerRecipient ? randomAddress() : to,
-          0n,
-        );
+      : await stockAccount(to, order.strangerRecipient ? randomAddress() : to);
     const refund = order.keepInPot
       ? potPay
       : setTokenAccount(harness, await ata(to, USDC), USDC, to, 0n);
 
     // Each account the program names, from its derivation, as the command resolves it.
     const slots = new Map<string, Promise<SvmSlot>>();
-    const derived = program.derivedAccounts as Readonly<Record<string, string>>;
+    const derived = cooked.derivedAccounts as Readonly<Record<string, string>>;
     const tail = await Promise.all(
-      program.manifest!.accounts.map(async (entry) => {
+      cooked.manifest!.accounts.map(async (entry) => {
         if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
         const derivation = derived[entry.name];
         if (derivation === undefined) throw new Error(`${entry.name} is not derived`);
@@ -190,8 +242,8 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     // through a lookup table: as `sauce run` stages a program too large for one transaction. An
     // `Address` argument is its key's 32 bytes, one word, as the command encodes it.
     const keyed = {
-      ...program,
-      entryParams: program.entryParams.map((param) => ({
+      ...cooked,
+      entryParams: cooked.entryParams.map((param) => ({
         ...param,
         type: param.type.replace(/\bAddress\b/g, "Uint256"),
       })),
@@ -203,9 +255,9 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       order.maxAvgPrice ?? 0n,
       word(to),
     ]);
-    const payload = new Uint8Array(program.bytecode.length + args.length);
-    payload.set(program.bytecode);
-    payload.set(args, program.bytecode.length);
+    const payload = new Uint8Array(cooked.bytecode.length + args.length);
+    payload.set(cooked.bytecode);
+    payload.set(args, cooked.bytecode.length);
     nonce += 1n;
     const staged = await stageProgram(harness, payload, nonce);
     const instructions: Instruction[] = [
@@ -290,7 +342,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
   };
   const snapshotPrice = (p: Pool): bigint => le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16);
 
-  // Buying SOL with USDC: USDC is the higher key, so every pool's price rises as it sells.
+  // Buying SPCX_US with USDC: USDC is the higher key, so every pool's price rises as it sells.
   const dearest = FOUND.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b));
   // 3 bps above the dearer pool's price, fee included: both have room to trade.
   const priceLimit = (dearest * 10003n) / 10000n;
@@ -327,8 +379,8 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(outcome.unspent).toBe(0n);
     expect(outcome.refunded).toBe(0n);
     expect(outcome.left).toBe(0n);
-    expect(priceOf(ORCA)).not.toBe(snapshotPrice(ORCA));
-    expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
+    expect(priceOf(RAYDIUM)).not.toBe(snapshotPrice(RAYDIUM));
+    expect(priceOf(BYREAL)).toBe(snapshotPrice(BYREAL));
   }, 120_000);
 
   it("skips a pool past its limit, an empty pool, and a remainder of dust, and completes", async () => {
@@ -345,37 +397,52 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(priceOf(dearer)).toBe(snapshotPrice(dearer));
     expect(one.bought).toBeGreaterThan(0n);
 
-    // Orca's pool emptied (no liquidity at its price): Raydium takes the order alone.
-    const emptied = {
-      address: ORCA.pool,
-      offset: LAYOUT[ORCA.venue]!.liquidity,
-      bytes: Array(16).fill(0),
-    };
-    const alone = succeeded(await cook({ budget, priceLimit, edit: emptied }));
-    expect(priceOf(ORCA)).toBe(snapshotPrice(ORCA));
-    expect(priceOf(RAYDIUM)).toBe(ownLimit(RAYDIUM, priceLimit, false));
-    expect(alone.bought).toBeGreaterThan(0n);
+    // Raydium's pool emptied (no liquidity at its price): Byreal takes the order alone.
+    const without = succeeded(await cook({ budget, priceLimit, edit: emptied(RAYDIUM) }));
+    expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
+    expect(priceOf(BYREAL)).toBe(ownLimit(BYREAL, priceLimit, false));
+    expect(without.bought).toBeGreaterThan(0n);
 
-    // What Orca's pool takes on its own, and one atom more: Raydium's pool is offered one atom of
-    // USDC, which its fee takes whole, so it buys nothing there, and is skipped rather than the cook
+    // What Raydium's pool takes on its own, and one atom more: Byreal's pool is offered one atom of
+    // USDC, which its fee takes whole, so it buys nothing there and is skipped rather than the cook
     // reverted.
-    const orcaAlone = succeeded(
-      await cook({
-        budget,
-        priceLimit,
-        edit: {
-          address: RAYDIUM.pool,
-          offset: LAYOUT[RAYDIUM.venue]!.liquidity,
-          bytes: Array(16).fill(0),
-        },
-      }),
-    );
-    const dust = succeeded(await cook({ budget: orcaAlone.spent + 1n, priceLimit }));
-    expect(dust.spent).toBe(orcaAlone.spent);
-    expect(dust.bought).toBe(orcaAlone.bought);
+    const alone = succeeded(await cook({ budget, priceLimit, edit: emptied(BYREAL) }));
+    const dust = succeeded(await cook({ budget: alone.spent + 1n, priceLimit }));
+    expect(dust.spent).toBe(alone.spent);
+    expect(dust.bought).toBe(alone.bought);
     expect(dust.unspent).toBe(1n);
     expect(dust.refunded).toBe(1n);
-    expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
+    expect(priceOf(BYREAL)).toBe(snapshotPrice(BYREAL));
+  }, 180_000);
+
+  it("finds Orca's pool on its adaptive fee tier by that tier, and skips it at a price", async () => {
+    // Fee tier 1025 is an adaptive fee at tick spacing 64: the spacing alone is the static tier's
+    // pool, which the pair does not have, and the tier after it is this one.
+    const data = BYTES.get(ORCA.pool)!;
+    expect([le(data, 41, 2), le(data, 43, 2)]).toEqual([64n, 1025n]);
+    const orca =
+      "  bought += Orca.Whirlpool.swap(\n" +
+      "    Orca.Whirlpool.pool(USDC, SPCX_US, 64, 1025),\n" +
+      "    USDC,\n    SPCX_US,\n    self.USDC - kept,\n    priceLimit,\n    0,\n  );\n";
+    const at = source.indexOf("  bought += Byreal.CLMM.swap(");
+    const withOrca = compileSauceProgram(
+      "solana",
+      `${source.slice(0, at)}${orca}${source.slice(at)}`,
+    );
+    expect(Object.values(withOrca.derivedAccounts!)).toContain(
+      "slot:Orca.Whirlpool(USDC,SPCX_US,64,1025):USDC.pool",
+    );
+    // Its accounts read from the pool and named in the cook, its fee more than one rate: it trades
+    // nothing, and the order is the program's without it.
+    const budget = 1_000_000n * 10n ** 6n;
+    const plain = succeeded(await cook({ budget, priceLimit }));
+    const tried = succeeded(await cook({ budget, priceLimit, program: withOrca }));
+    expect(priceOf(ORCA)).toBe(snapshotPrice(ORCA));
+    expect([tried.spent, tried.bought, tried.unspent]).toEqual([
+      plain.spent,
+      plain.bought,
+      plain.unspent,
+    ]);
   }, 180_000);
 
   it("reverts below minTokens and above maxAvgPrice", async () => {

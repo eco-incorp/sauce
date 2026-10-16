@@ -22,8 +22,9 @@
  *
  * `pool(tokenA, tokenB, key)` is the pool the venue's program derives for the pair at the key — a
  * whirlpool's, DefiTuna's and Crema's tick spacing, a Raydium-code pool's fee (`svm/pool-keys.ts`),
- * with the tick spacing after it where the program keeps two configs at that fee — written as the
- * swap's pool, with the key a number written out. Where the venue has no pool at the key, the slot
+ * with the tick spacing after a fee where the program keeps two configs at it, and an adaptive-fee
+ * tier's index after a whirlpool's spacing — written as the swap's pool, with the key a number
+ * written out. Where the venue has no pool at the key, the slot
  * is empty and the swap returns 0. A loop over keys written out,
  *
  *   for (const spacing of [4, 1]) {
@@ -63,7 +64,12 @@ import {
   type TokenRef,
 } from "./svm-lowering.js";
 import { SVM_SLOT_PARTS, SVM_SLOT_VENUES } from "../svm/pool-slot.js";
-import { svmPoolKeyProblem, SVM_KEYED_VENUES, type SvmPoolKind } from "../svm/pool-keys.js";
+import {
+  svmPoolKeyProblem,
+  SVM_KEYED_VENUES,
+  type SvmPoolKind,
+  type SvmPoolRefinement,
+} from "../svm/pool-keys.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 const ROUTER = "@sauce/router";
@@ -81,10 +87,13 @@ export interface SvmVenueNamespace {
   readonly exact?: true;
   /** What its `pool(tokenA, tokenB, key)` takes as the key; none where pools are not found by key. */
   readonly key?: SvmPoolKind;
+  /** What its `pool` may take after the key, where one key may name more than one pool. */
+  readonly refinement?: SvmPoolRefinement;
 }
 
 const venue = (namespace: string, name: string, swap: string, exact?: true): SvmVenueNamespace => {
   const key = SVM_KEYED_VENUES[namespace]?.key;
+  const refinement = SVM_KEYED_VENUES[namespace]?.refinement;
 
   return {
     name,
@@ -92,6 +101,7 @@ const venue = (namespace: string, name: string, swap: string, exact?: true): Svm
     swap,
     ...(exact ? { exact } : {}),
     ...(key === undefined ? {} : { key }),
+    ...(refinement === undefined ? {} : { refinement }),
   };
 };
 
@@ -117,19 +127,17 @@ const paramsOf = (namespace: string): string[] =>
 
 /** How a program calls a venue's methods: its swap, and its `pool` where it finds pools by key. */
 export function svmVenueMethods(namespace: string): readonly string[] {
-  const key = SVM_VENUE_NAMESPACES[namespace]?.key;
+  const venue = SVM_VENUE_NAMESPACES[namespace];
+  const key = venue?.key === "fee" ? "fee" : "tickSpacing";
+  const refinement = venue?.refinement === undefined ? "" : `, ${venue.refinement}?: Uint256`;
 
   return [
-    SVM_VENUE_NAMESPACES[namespace]?.exact
+    venue?.exact
       ? "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, minOut: Uint256): Uint256"
       : "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, priceLimit: Uint256, minOut: Uint256): Uint256",
-    ...(key === undefined
+    ...(venue?.key === undefined
       ? []
-      : [
-          key === "fee"
-            ? "pool(tokenA: Address, tokenB: Address, fee: Uint256, tickSpacing?: Uint256): Address"
-            : "pool(tokenA: Address, tokenB: Address, tickSpacing: Uint256): Address",
-        ]),
+      : [`pool(tokenA: Address, tokenB: Address, ${key}: Uint256${refinement}): Address`]),
   ];
 }
 
@@ -438,17 +446,19 @@ export function collectVenueMethods(l: SvmLowering): void {
       const args = (call.site.call as { arguments?: AstNode[] }).arguments ?? [];
       const keyName = venue.key === "fee" ? "fee" : "tickSpacing";
       const takes =
-        venue.key === "fee"
+        venue.refinement === "tickSpacing"
           ? "3 or 4 arguments (tokenA, tokenB, fee, and the tickSpacing where two configs charge the fee)"
-          : "3 arguments (tokenA, tokenB, tickSpacing)";
+          : venue.refinement === "feeTierIndex"
+            ? "3 or 4 arguments (tokenA, tokenB, tickSpacing, and the feeTierIndex of an adaptive-fee tier)"
+            : "3 arguments (tokenA, tokenB, tickSpacing)";
       if (
         args.length < 3 ||
-        args.length > (venue.key === "fee" ? 4 : 3) ||
+        args.length > (venue.refinement === undefined ? 3 : 4) ||
         args.some((arg) => arg.type === "SpreadElement")
       ) {
         throw new Error(`\`${namespace}.pool(…)\` takes ${takes}, got ${args.length}.`);
       }
-      const [aArg, bArg, keyArg, spacingArg] = args as [AstNode, AstNode, AstNode, AstNode?];
+      const [aArg, bArg, keyArg, refinementArg] = args as [AstNode, AstNode, AstNode, AstNode?];
       const of = (arg: AstNode): string => l.source.slice(arg.start, arg.end);
       const a = l.tokenOf(aArg, of(aArg), `\`${namespace}.pool(…)\``);
       const b = l.tokenOf(bArg, of(bArg), `\`${namespace}.pool(…)\``);
@@ -467,23 +477,24 @@ export function collectVenueMethods(l: SvmLowering): void {
             `numbers written out (for (const ${keyName} of ${keyName === "fee" ? "[400, 200]" : "[4, 1]"}) { … }).`,
         );
       }
-      const spacing = spacingArg === undefined ? undefined : integerLiteral(spacingArg, l.source);
-      if (spacingArg !== undefined && spacing === undefined) {
+      const refinement =
+        refinementArg === undefined ? undefined : integerLiteral(refinementArg, l.source);
+      if (refinementArg !== undefined && refinement === undefined) {
         throw new Error(
-          `\`${text}\` on Solana: its tickSpacing must be known when the program compiles: a ` +
+          `\`${text}\` on Solana: its ${venue.refinement} must be known when the program compiles: a ` +
             "number written out.",
         );
       }
-      const problem = svmPoolKeyProblem(namespace, key, spacing);
+      const problem = svmPoolKeyProblem(namespace, key, refinement);
       if (problem !== undefined) throw new Error(`\`${text}\` on Solana: ${problem}`);
       const [protocol, program] = namespace.split(".") as [string, string];
-      const tail = spacing === undefined ? "" : `,${spacing}`;
+      const tail = refinement === undefined ? "" : `,${refinement}`;
 
       return {
         name: `${namespace}(${a.name},${b.name},${key}${tail})`,
         stem:
           `${protocol.charAt(0).toLowerCase()}${protocol.slice(1)}` +
-          `${capitalized(program.toLowerCase())}${key}${spacing === undefined ? "" : `x${spacing}`}`,
+          `${capitalized(program.toLowerCase())}${key}${refinement === undefined ? "" : `x${refinement}`}`,
       };
     }
     if (node.type === "Identifier" && l.param(nameOf(node))?.kind === "address") {

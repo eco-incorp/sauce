@@ -25,9 +25,10 @@
  *                        System Program is an empty slot, whose nine are the System Program. The
  *                        pool may be a venue's pool by key, `<Venue>(<token>,<token>,<key>)`
  *                        (`Orca.Whirlpool(USDC,WSOL,4)`; a fee may take a tick spacing after it,
- *                        `Raydium.CLMM(USDC,WSOL,100,1)`, `svm/pool-keys.ts`): the pool the venue
- *                        derives for the pair, an empty slot where none is there, and refused
- *                        where the key names more than one
+ *                        `Raydium.CLMM(USDC,WSOL,100,1)`, and a whirlpool's tick spacing a fee
+ *                        tier's index, `Orca.Whirlpool(SPCX_US,USDC,64,1025)`,
+ *                        `svm/pool-keys.ts`): the pool the venue derives for the pair, an empty
+ *                        slot where none is there, and refused where the key names more than one
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
@@ -146,8 +147,8 @@ interface KeyedPool {
   readonly venue: string;
   readonly tokens: readonly [Token, Token];
   readonly key: bigint;
-  /** A Raydium-code pool's tick spacing, beside its fee. */
-  readonly spacing?: bigint;
+  /** A Raydium-code pool's tick spacing beside its fee, or a whirlpool's fee tier beside its spacing. */
+  readonly refinement?: bigint;
   /** As written, for a message. */
   readonly text: string;
 }
@@ -216,7 +217,7 @@ function parseToken(text: string): Token | undefined {
   return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
 }
 
-/** `<Venue>(<token>,<token>,<key>[,<tick spacing>])`, a venue's pool by key. */
+/** `<Venue>(<token>,<token>,<key>[,<tick spacing or fee tier>])`, a venue's pool by key. */
 function parseKeyedPool(text: string): KeyedPool | undefined {
   const parts = /^([A-Za-z]+\.[A-Za-z]+)\(([^,()]+),([^,()]+),(\d+)(?:,(\d+))?\)$/.exec(text);
   if (parts === null || SVM_KEYED_VENUES[parts[1]!] === undefined) return undefined;
@@ -229,7 +230,7 @@ function parseKeyedPool(text: string): KeyedPool | undefined {
     venue: parts[1]!,
     tokens: [tokenA, tokenB],
     key: BigInt(parts[4]!),
-    ...(parts[5] === undefined ? {} : { spacing: BigInt(parts[5]) }),
+    ...(parts[5] === undefined ? {} : { refinement: BigInt(parts[5]) }),
     text,
   };
 }
@@ -707,7 +708,7 @@ async function keyedPool(
   ctx: SvmAccountNameContext,
   rows: readonly SvmTokenRow[],
 ): Promise<Address> {
-  const problem = svmPoolKeyProblem(keyed.venue, keyed.key, keyed.spacing);
+  const problem = svmPoolKeyProblem(keyed.venue, keyed.key, keyed.refinement);
   if (problem !== undefined) throw new SvmAccountNameError(problem);
   const [a, b] = keyed.tokens.map((token) => mintOf(token, "slot", ctx, rows).mint) as [
     Address,
@@ -721,7 +722,7 @@ async function keyedPool(
     );
   }
   const program = SVM_KEYED_VENUES[keyed.venue]!.program;
-  const candidates = svmPoolCandidates(keyed.venue, a, b, keyed.key, keyed.spacing);
+  const candidates = svmPoolCandidates(keyed.venue, a, b, keyed.key, keyed.refinement);
   const accounts = await Promise.all(candidates.map((one) => load(one.pool)));
   const there = candidates.filter((_, i) => accounts[i]?.owner === program);
   if (there.length > 1) {
