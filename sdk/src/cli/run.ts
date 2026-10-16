@@ -104,6 +104,7 @@ import {
   bindMainArguments,
   definesReach,
   fundingFor,
+  fundTransfers,
   potImportTarget,
   potOwner,
   potTarget,
@@ -600,6 +601,17 @@ const FUND: FlagSpecs = {
   sweep: {
     type: "boolean",
     help: "Return what is left of each funded token afterwards",
+    only: "evm",
+  },
+};
+
+/** `sauce tx --fund`: what the owner moves into the Pot, as the plan's own transactions. */
+const TX_FUND: FlagSpecs = {
+  fund: {
+    type: "string",
+    multiple: true,
+    value: "<TOKEN:amount>",
+    help: "Transfer tokens from the owner into the Pot before the cook: USDC:1.5 (whole tokens); ETH:0.01 rides as its value",
     only: "evm",
   },
 };
@@ -3223,7 +3235,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "sauce tx <file | -> --chain solana --owner <pubkey> [--account NAME=<value>]… [options]",
     ],
     summary: "Print the unsigned cook transaction, for a wallet to sign",
-    flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...FORMAT, ...HELP, ...ARGS },
+    flags: { ...PROGRAM, ...COOK, ...TX_FUND, ...ENDPOINT, ...FORMAT, ...HELP, ...ARGS },
     details: [
       "Compiles the file and prints the transaction that runs it, unsigned, as JSON:",
       "{ chainId, to: the Pot, data: Pot.cook(engine, program ++ arguments), value }. The value",
@@ -3232,6 +3244,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "transactions }, Kitchen.deployPot first (marked deploysPot; any account may send it), then",
       "the cook, to send in that order. `--format cast` prints each as a `cast send` line. What",
       "must be true for it to land goes to stderr: the Pot funded, and sent from its owner.",
+      "Each transaction is what a wallet's send tool takes (value and gas hex), and sendCalls",
+      "is all of them as one batch, for a wallet that sends a batch.",
+      "",
+      "--fund TOKEN:amount (whole tokens, or base units ending in n) plans the owner's transfer",
+      "of each token into the Pot after its deployment and before the cook; ETH:<amount> rides",
+      "as the cook's value. Sent as one batch, a smart wallet deploys, funds and cooks with one",
+      "approval, or nothing happens.",
       "",
       "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },",
       "the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via",
@@ -3244,6 +3263,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Example:",
       "  sauce tx pay.sauce.ts --chain base --owner 0x…",
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --offline",
+      "  sauce tx pay.sauce.ts --chain base --owner 0x… --fund USDC:100",
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
@@ -3257,10 +3277,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const input = cookInput(args, io, trailing, undefined, program);
       const rpcUrl = endpoint(args, io, input.chain);
 
+      const fund = repeatedFlag(args, "fund");
+
       return txCommand(
         {
           ...input,
           ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          ...(fund.length === 0 ? {} : { transfers: fundTransfers(fund, input.chain) }),
           endpointOf: (chain) => sharedEndpoint(args, io, chain),
         },
         io,

@@ -287,6 +287,83 @@ async function amounts(
   return { tokens, native, notes };
 }
 
+/**
+ * `sauce tx --fund`: the owner's plain transfers of each token into the Pot, unsigned, for the plan
+ * to list before the cook — what any wallet sends, and a smart wallet batches with the Pot's
+ * deployment and the cook into one approval. `ETH:<amount>` is no transfer: it rides as the cook's
+ * value. An amount in whole tokens of a token given by address reads its decimals through `client`;
+ * with none, it is refused, naming the base-units form. With `client`, the owner's balances are read,
+ * and a shortfall said: the transfer would revert, and every batch with it.
+ */
+export async function transfersToPot(input: {
+  readonly client?: PublicClient;
+  readonly requests: readonly FundRequest[];
+  /** Who transfers: its balances are checked, where it and an endpoint are known. */
+  readonly owner?: Address;
+  readonly pot: Address;
+}): Promise<{
+  readonly transfers: readonly BeforeCook[];
+  readonly native: bigint;
+  readonly notes: readonly string[];
+}> {
+  const transfers: BeforeCook[] = [];
+  const notes: string[] = [];
+  let native = 0n;
+  for (const request of input.requests) {
+    if (
+      input.client === undefined &&
+      request.decimals === undefined &&
+      !("base" in request.amount)
+    ) {
+      throw new UsageError(
+        `${request.flag} ${request.raw}: reading ${request.label}'s decimals needs an endpoint; ` +
+          `or give the amount in base units, ending in n (${request.label}:1500000n)`,
+      );
+    }
+    const { amount, note } =
+      "base" in request.amount
+        ? { amount: request.amount.base, note: undefined }
+        : await baseUnits(input.client!, request);
+    if (note !== undefined) notes.push(note);
+    if (request.token === undefined) {
+      native += amount;
+      continue;
+    }
+    if (input.client !== undefined && input.owner !== undefined) {
+      const owner = input.owner;
+      const held = await read(`${request.label}'s balanceOf`, () =>
+        input.client!.readContract({
+          address: request.token!,
+          abi: ERC20,
+          functionName: "balanceOf",
+          args: [owner],
+        }),
+      );
+      if (held < amount) {
+        notes.push(
+          `${owner} holds ${held} of ${request.label} (base units), below the ${amount} ` +
+            `${request.flag} ${request.raw} transfers: that transfer, and any batch it is in, ` +
+            "reverts until it holds enough",
+        );
+      }
+    }
+    transfers.push({
+      what: `transfer ${amount} ${request.label} to the Pot`,
+      tx: {
+        to: request.token,
+        data: encodeFunctionData({
+          abi: ERC20,
+          functionName: "transfer",
+          args: [input.pot, amount],
+        }),
+        value: 0n,
+      },
+    });
+  }
+
+  return { transfers, native, notes };
+}
+
 /** The registry's Permit2 on `chain`. */
 export function permit2On(chain: CanonicalChain): Address {
   const descriptor = getDescriptor("permit2", "Permit2");
