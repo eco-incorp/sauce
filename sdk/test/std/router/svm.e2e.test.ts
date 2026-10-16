@@ -59,6 +59,7 @@ import {
   pool,
   restoreVenues,
   windowBound,
+  windowStop,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
@@ -420,6 +421,40 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       const outcome = succeeded(await cook(compiled(lower(venue)), order));
       expect(outcome.received).toBeGreaterThan(0n);
       expect(outcome.price).toBe(bound);
+    },
+    120_000,
+  );
+
+  // The window takes the furthest array's liquidity too: it ends at that array's last initialized
+  // tick that way, past where the array begins.
+  it.each(["RaydiumClmm", "Crema"])(
+    "%s: a limit far past its window walks into its furthest array, to its last initialized tick",
+    async (venue) => {
+      const entry = VENUES.find((one) => one.venue === venue)!;
+      const base = await orderFor(entry);
+      const p = base.pool;
+      const paysA = key(USDC) < key(base.buy);
+      const ticks = (paysA ? p.payA : p.payB).filter((at) => at !== SYSTEM);
+      const spacing = Number(le(BYTES.get(p.pool)!, venue === "Crema" ? 168 : 235, 2));
+      const span = (venue === "Crema" ? 64 : 60) * spacing;
+      const starts = ticks.map((at) => {
+        const data = BYTES.get(at)!;
+        return venue === "Crema"
+          ? -443636 + (443636 % spacing) + Number(le(data, 8, 2)) * span
+          : new DataView(data.buffer, data.byteOffset).getInt32(40, true);
+      });
+      const furthest = paysA ? Math.min(...starts) : Math.max(...starts);
+      const stop = windowStop(p, paysA)!;
+      // Inside the furthest array that way, past where the walk enters it.
+      expect(stop >= furthest && stop < furthest + span).toBe(true);
+      expect(stop).not.toBe(paysA ? furthest + span : furthest);
+      const order = {
+        ...base,
+        priceLimit: allIn(p, paysA) * 3n,
+        amountIn: 10_000_000_000n * 10n ** 6n,
+      };
+      const outcome = succeeded(await cook(compiled(lower(venue)), order));
+      expect(outcome.price).toBe(windowBound(p, paysA));
     },
     120_000,
   );

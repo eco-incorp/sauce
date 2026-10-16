@@ -148,22 +148,33 @@ export const ownLimit = (p: Pool, priceLimit: bigint, paysA: boolean): bigint =>
 const i32 = (data: Uint8Array, at: number): number =>
   new DataView(data.buffer, data.byteOffset).getInt32(at, true);
 
-/** The router's bound `n` ticks from `price`, up or down (`router.svm.js`'s `ticksAway`). */
-const ticksAway = (price: bigint, n: bigint, up: boolean): bigint => {
+/** The first four binomial terms of √1.0001^n, times 1e18 (`router.svm.js`'s `binomial`). */
+const binomial = (n: bigint): bigint => {
   const x = 49_998_750_062_496n;
   const a = n * x;
   const b = n > 1n ? (n - 1n) * x : 0n;
   const c = n > 2n ? (n - 2n) * x : 0n;
-  const power = E18 + a + (a * b) / (2n * E18) + (((a * b) / E18) * c) / (6n * E18);
+  return E18 + a + (a * b) / (2n * E18) + (((a * b) / E18) * c) / (6n * E18);
+};
+
+/** The router's bound `n` ticks from `price`, up or down (`router.svm.js`'s `ticksAway`): the power
+ *  of a sixteenth of `n`, squared four times, then the rest. */
+const ticksAway = (price: bigint, n: bigint, up: boolean): bigint => {
+  let power = binomial(n >> 4n);
+  for (let i = 0; i < 4; i++) power = (power * power) / E18;
+  power = (power * binomial(n & 15n)) / E18;
   return up ? (price * power) / E18 : (price * E18) / power;
 };
 
 /**
  * The window a swap at a price walks, as `router.svm.js` reads it from the pool and the slot's tick
- * arrays (`ticks`, the pool's own both ways by default): its last safe tick, then the sqrt price a
- * tick inside it, or the pool's price where it leaves no room.
+ * arrays (`ticks`, the pool's own both ways by default): its last safe tick, undefined for none.
  */
-export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.payB): bigint => {
+export const windowStop = (
+  p: Pool,
+  paysA: boolean,
+  ticks = paysA ? p.payA : p.payB,
+): number | undefined => {
   const data = BYTES.get(p.pool)!;
   const down = paysA;
   const layout = {
@@ -179,7 +190,6 @@ export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.
         : p.venue
   ]!;
   const tick = i32(data, layout.tick);
-  const price = le(data, layout.price, 16);
   let stop: number | undefined;
   if (layout.tick === 269) {
     const spacing = Number(le(data, 235, 2));
@@ -195,21 +205,21 @@ export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.
         far = { data: array!, start, dynamic: kind === "6a8b98247599b838" };
     }
     if (far !== undefined) {
-      if (down ? far.start + span <= tick : far.start > tick) {
-        stop = down ? far.start + span : far.start;
-      } else {
-        const here = Math.floor((tick - far.start) / spacing);
-        for (let n = 0; n < 60 && stop === undefined; n++) {
-          const offset = down ? n : 59 - n;
-          if (down ? offset > here : offset <= here) break;
-          let at = 64 + offset * 168;
-          if (far.dynamic) {
-            const place = far.data[48 + offset]!;
-            at = place === 0 ? 0 : 216 + (place - 1) * 168 + 20;
-          }
-          if (at !== 0 && le(far.data, at, 16) !== 0n) stop = far.start + offset * spacing;
+      // Its last initialized tick that way, from its far end (not past the price in the array that
+      // holds it); none, an array marked for limit orders alone, where it begins.
+      const holds = down ? far.start + span > tick : far.start <= tick;
+      const here = Math.floor((tick - far.start) / spacing);
+      for (let n = 0; n < 60 && stop === undefined; n++) {
+        const offset = down ? n : 59 - n;
+        if (holds && (down ? offset > here : offset <= here)) break;
+        let at = 64 + offset * 168;
+        if (far.dynamic) {
+          const place = far.data[48 + offset]!;
+          at = place === 0 ? 0 : 216 + (place - 1) * 168 + 20;
         }
+        if (at !== 0 && le(far.data, at, 16) !== 0n) stop = far.start + offset * spacing;
       }
+      if (stop === undefined && !holds) stop = down ? far.start + span : far.start;
     }
   } else if (layout.tick === 206) {
     const spacing = Number(le(data, 168, 2));
@@ -217,16 +227,14 @@ export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.
     const passed = ticks.filter((at) => at !== SYSTEM);
     const array = BYTES.get(passed[passed.length - 1]!)!;
     const start = -443636 + (443636 % spacing) + Number(le(array, 8, 2)) * span;
-    if (down ? start + span <= tick : start > tick) {
-      stop = down ? start + span : start;
-    } else {
-      const here = Math.floor((tick - start) / spacing);
-      for (let n = 0; n < 64 && stop === undefined; n++) {
-        const offset = down ? n : 63 - n;
-        if (down ? offset > here : offset <= here) break;
-        if (array[44 + offset * 133] === 1) stop = start + offset * spacing;
-      }
+    const holds = down ? start + span > tick : start <= tick;
+    const here = Math.floor((tick - start) / spacing);
+    for (let n = 0; n < 64 && stop === undefined; n++) {
+      const offset = down ? n : 63 - n;
+      if (holds && (down ? offset > here : offset <= here)) break;
+      if (array[44 + offset * 133] === 1) stop = start + offset * spacing;
     }
+    if (stop === undefined && !holds) stop = down ? start + span : start;
   } else {
     const spacing = Number(le(data, layout.tick === 81 ? 41 : 139, 2));
     const span = 88 * spacing;
@@ -234,8 +242,25 @@ export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.
     const first = tick + spacing >= base + span ? base + span : base;
     stop = down ? base - 2 * span : first + 2 * span + 87 * spacing;
   }
+  return stop;
+};
+
+/** The sqrt price the router holds a swap at a price to: a tick inside the window's last safe tick
+ *  (`windowStop`), or the pool's price where it leaves no room. */
+export const windowBound = (p: Pool, paysA: boolean, ticks = paysA ? p.payA : p.payB): bigint => {
+  const data = BYTES.get(p.pool)!;
+  const at = ["raydium-clmm", "pancakeswap-clmm", "byreal", "stabble-clmm"].includes(p.venue)
+    ? { tick: 269, price: 253 }
+    : ["orca-whirlpool", "cropper"].includes(p.venue)
+      ? { tick: 81, price: 65 }
+      : p.venue === "defituna"
+        ? { tick: 183, price: 167 }
+        : { tick: 206, price: 190 };
+  const tick = i32(data, at.tick);
+  const price = le(data, at.price, 16);
+  const stop = windowStop(p, paysA, ticks);
   if (stop === undefined) return price;
-  if (down) return stop + 1 < tick ? ticksAway(price, BigInt(tick - stop - 1), false) : price;
+  if (paysA) return stop + 1 < tick ? ticksAway(price, BigInt(tick - stop - 1), false) : price;
   return stop > tick + 2 ? ticksAway(price, BigInt(stop - tick - 2), true) : price;
 };
 

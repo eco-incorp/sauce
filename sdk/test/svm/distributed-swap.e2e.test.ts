@@ -38,6 +38,7 @@ import {
 } from "../../src/svm/index.js";
 import type { SvmSlot } from "../../src/svm/pool-slot.js";
 import { svmTokenAccount } from "../../src/svm/token-accounts.js";
+import { raydiumSqrtPriceAtTick } from "../../src/svm/venues/raydium-clmm/tick-math.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import {
   describeSvm,
@@ -64,6 +65,7 @@ import {
   pool,
   restoreVenues,
   windowBound,
+  windowStop,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
@@ -450,6 +452,39 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     );
     expect(alone.bought).toBeGreaterThan(0n);
     expect(priceOf(PANCAKE)).toBe(bound);
+  }, 120_000);
+
+  it("walks Raydium's wide pool into its furthest array, its bound within a millionth of the exact price", async () => {
+    // Raydium's SPCX_US pool, tick spacing 60: arrays of 3,600 ticks. Paying USDC its slot gives
+    // the array holding the price and the next two; the window ends at the last initialized tick of
+    // the furthest, about 6,900 ticks above the price, not where that array begins.
+    const stop = windowStop(RAYDIUM, false)!;
+    const furthest = Math.max(
+      ...RAYDIUM.payB.map((at) =>
+        new DataView(BYTES.get(at)!.buffer, BYTES.get(at)!.byteOffset).getInt32(40, true),
+      ),
+    );
+    expect(stop).toBeGreaterThan(furthest);
+    // The bound is the pool's price moved up `stop − tick − 2` ticks (a tick inside the stop, less
+    // the part of a tick the price may lie above its own): never past that exact price, and within a
+    // millionth of it.
+    const data = BYTES.get(RAYDIUM.pool)!;
+    const tick = new DataView(data.buffer, data.byteOffset).getInt32(269, true);
+    const price = le(data, 253, 16);
+    const exact = (price * raydiumSqrtPriceAtTick(stop - 2)) / raydiumSqrtPriceAtTick(tick);
+    const bound = windowBound(RAYDIUM, false);
+    expect(bound).toBeLessThanOrEqual(exact);
+    expect((exact - bound) * 1_000_000n).toBeLessThan(exact);
+    // A limit at three times its price, the other pools emptied: it stops at that bound.
+    const alone = succeeded(
+      await cook({
+        budget: 10_000_000n * 10n ** 6n,
+        priceLimit: allIn(RAYDIUM, false) * 3n,
+        edit: emptied(BYREAL, PANCAKE),
+      }),
+    );
+    expect(alone.bought).toBeGreaterThan(0n);
+    expect(priceOf(RAYDIUM)).toBe(bound);
   }, 120_000);
 
   it("finds Orca's pool on its adaptive fee tier by that tier, and skips it at a price", async () => {
