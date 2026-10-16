@@ -12,6 +12,9 @@ dev-tools/cache
 
 # Preserve the license text verbatim from eco-incorp/v12.
 /LICENSE.md
+# Wallet MCP servers' schemas, copied verbatim from their packages so a diff against upstream reads
+# clean (mcp/test/wallet-mcp/).
+mcp/test/wallet-mcp/*.verbatim.ts
 
 # Formatted by the package manager itself.
 pnpm-lock.yaml
