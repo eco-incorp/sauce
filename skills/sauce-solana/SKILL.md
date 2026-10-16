@@ -222,7 +222,7 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   `Account` parameters is refused with each missing account, the values that suit its role (`pot`
   or `owner` for a signer, `pot:<token>` for a token account, `program:<token>` for a token
   program) and the JSON object `--accounts <file>` takes them all from, to fill in.
-  `sauce compile --json` lists the same, each account's name, role and forms, under accountsToGive.
+  `sauce compile --json` lists the same, each account's name, role and forms, as `accountsToGive`.
 - **An `Account` compares by identity** (`tokenProgram.address == splToken`, with the SPL Token
   program an `Address` argument, or its 32-byte hex
   `0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9` as a literal) and exposes

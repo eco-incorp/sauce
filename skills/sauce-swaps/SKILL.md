@@ -287,23 +287,22 @@ swap(slot, trader, amountIn, maxPrice, minOut, recipient): Uint256
 | `maxPrice`  | the most one unit bought may cost, fee included: payToken base units per buyToken base unit, times 1e18. The function reads the pool's fee and stops where its last unit, fee paid, costs `maxPrice`; the rest of `amountIn` stays in `source`                                                               |
 | `recipient` | the token account the output lands in; Crema and Phoenix pay only into the authority's own. The function returns what it gained                                                                                                                                                                              |
 
-Each returns `0` having moved nothing for a missing slot (the System program as its pool),
-no input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than
-one rate, an empty pool, a pool already past its limit, an input too small to buy one unit at the
-pool's price after its fee (dust), and a book with no offer within it. A swap that ran returns at
-least 1, and below `minOut` the cook reverts. A failed call into another program fails the whole
-Solana transaction and cannot be caught, so these are checks made before the swap. The accounts are
-the caller's, so a pool that is not the pair, a slot whose program is not the pool's owner, and a
-pool of another venue or of none revert; only the System program itself as the pool is a missing
-slot.
+Each returns `0` having moved nothing for a missing slot (the System program as its pool), no
+input, a pool whose swaps are off, a paused pool or a market not open, a fee that is more than one
+rate, an empty pool, a pool already past its limit, an input too small to buy one unit at the pool's
+price after its fee (dust), and a book with no offer within it. A swap that ran returns at least 1,
+and below `minOut` the cook reverts. A failed call into another program fails the whole Solana
+transaction and cannot be caught, so these are checks made before the swap. The accounts are the
+caller's, so a pool that is not the pair, a slot whose program is not the pool's owner, and a pool
+of another venue or of none revert; only the System program itself as the pool is a missing slot.
 
 Three more forms, for a program that wants less:
 
 - **At a limit in the pool's own terms**, `<venue>AtLimit`, for those nine and `invariantAtLimit`
   and `openbookV2AtLimit`, and Manifest's book, `manifest`, which has no limit:
-  `(slot, trader, amountIn, limit, minOut, recipient)`, `limit`
-  the sqrt price the pool's swap takes (Phoenix's order price in ticks, OpenBook's
-  `priceLots, orders`; `0` none, where the venue takes that). No fee is read, so an adaptive-fee
+  `(slot, trader, amountIn, limit, minOut, recipient)`, `limit` the sqrt price the pool's swap takes
+  (Phoenix's order price in ticks, OpenBook's `priceLots, orders`; `0` none, where the venue takes
+  that). No fee is read, so an adaptive-fee
   whirlpool trades there, and `minOut` rides in the venue's own least-out field where it has one.
   At a limit a slot may carry accounts past its nine: a Raydium-layout pool's bitmap extension,
   Invariant's program authority, OpenBook's oracles.
