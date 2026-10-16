@@ -1590,8 +1590,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "sauce_simulate's block to simulate on the prices a priceLimit was taken from. On Solana " +
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
         "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
-        "liquidity, sides as above but for depth1Pct and with `priceLimit` (a swap's priceLimit " +
-        "argument) for maxPrice, `byKey` (how a program finds the pool by key: " +
+        "liquidity, sides as above but for depth1Pct, `byKey` (how a program finds the pool by key: " +
         "Orca.Whirlpool.pool(USDC, WSOL, 4)), and `slots`: by the token paid, the nine accounts a swap " +
         "at the pool takes (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
         "System program, which a program given the pool as an Address argument derives itself; " +
@@ -1691,8 +1690,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                 buy: z.string(),
                 mid: z.string(),
                 taker: z.string(),
-                maxPrice: z.string().optional(),
-                priceLimit: z.string().optional(),
+                priceLimit: z.string(),
               }),
             ),
             slots: z.record(z.string(), z.looseObject({})).optional(),
