@@ -1,6 +1,6 @@
 ---
 name: sauce-cli
-description: The sauce command line, and the same steps as tools of the Sauce MCP server. Getting the command; looking up a chain's names and pools; compiling a program file or a JSON actions document; the owner's Pot, deployed when first needed and recorded; funding it (--fund and its modes); simulating the cook with no key and reading what it prints (what main returns, what moved, what is left in the Pot); sauce run to sign and send, sauce tx for any other wallet and sauce send for what it signed; arguments to main; sauce inspect; endpoints and signers; an agent's own wallets, password sources and policies; what a preview chain refuses. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, create or use an agent's own wallet and its policy, map a command to its MCP tool, or when a command refuses a chain.
+description: The sauce command line, and the same steps as tools of the Sauce MCP server. Getting the command; looking up a chain's names and pools; compiling a program file or a JSON actions document; the owner's Pot, deployed when first needed and recorded; funding it (--fund and its modes); simulating the cook with no key and reading what it prints; sauce run to sign and send, sauce tx for the user's wallet MCP server (Coinbase, Phantom) or any signer, sauce send for what it signed; arguments to main; sauce inspect; endpoints and signers; an agent's own wallets, password sources and policies; what a preview chain refuses. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, sign with a wallet's MCP server or an agent's own wallet and its policy, map a command to its MCP tool, or when a command refuses a chain.
 ---
 
 # The sauce command
@@ -18,6 +18,7 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
 | Compile, simulate, send, read back a program or an actions document | yes                 |                                         |
 | Deploy, fund or list a Pot                                          | yes                 |                                         |
 | Hand a transaction to another wallet, then broadcast what it signed | yes                 | a Solana plan of steps: `sauce-solana`  |
+| Sign through a wallet's MCP server (Coinbase, Phantom)              | yes                 |                                         |
 | Create or use an agent wallet; a policy refusal                     | yes                 |                                         |
 | A command refuses a preview chain                                   | yes, which commands | the policy: `sauce-overview`            |
 | Publish, fill, prove, claim, refund or cancel an intent             |                     | `sauce-intents` (`sauce intent <verb>`) |
@@ -89,11 +90,57 @@ fetches and runs npm's unrelated `sauce` package.
   Stdin is then spent, so pass a password source for a wallet or keystore, and `--yes` (`-y`) once
   the user agrees to what the run lists.
 
+## Signing through a wallet's MCP server
+
+The safer signer is a wallet whose key stays with its provider, reached through that wallet's own
+MCP server: the key never reaches the agent or this machine, and the wallet applies its own
+approvals and limits. On Base and Ethereum that is Coinbase Wallet MCP, the user's own wallet, whose
+one batch deploys the Pot and cooks; on Solana, Phantom MCP, which signs on Base and Ethereum too.
+Build for the wallet's address (`--owner`, or `--from`), simulate, show the user, then hand the
+result over. Every command and tool that prints unsigned transactions writes what these servers
+take, beside its own fields, so nothing is converted:
+
+- **`sendTransaction`** on each EVM transaction: `{ chainId, to, data, value, gas }`, every amount
+  a hex quantity (`gas` only where the plan gives one): the eth_sendTransaction object.
+- **`sendCalls`** on the result: `{ chain, calls: [{ to, value, data }] }`, every transaction in
+  order, `value` hex, `chain` the wallet's name for it (`base`, `ethereum`).
+- **`transaction`** on each Solana transaction, as it always is: base64, the fee payer first and its
+  signature the only one missing; any other signer (a fresh key the transaction creates an account
+  with) signed already.
+
+| Wallet server       | Chains                 | Add it to the agent's MCP servers                                                 |
+| ------------------- | ---------------------- | --------------------------------------------------------------------------------- |
+| Coinbase Wallet MCP | Base, Ethereum         | an HTTP server at `https://wallet-mcp.coinbase.com`; signs in through the browser |
+| Phantom MCP         | Solana, Base, Ethereum | a stdio server, `npx -y @phantom/mcp-server@latest`; signs in through the browser |
+
+- **Coinbase Wallet MCP**: `send_calls` with the result's `sendCalls` as its whole input. Every
+  transaction runs as one atomic batch after one approval: the user approves in their wallet
+  through the link it returns (open it for them where a shell can), and `get_request_status` with
+  its request id says when it landed. The signer is a smart wallet: its address (`get_wallets`) is
+  the Pot's owner, so one batch deploys the Pot and cooks on it, and a cook that reverts leaves no
+  Pot behind. Tokens sent to the Pot's address before it exists are there when it is deployed.
+- **Phantom MCP**: the agent gets a wallet of its own, held by Phantom; fund its address
+  (`wallet_addresses`) first. On an EVM chain, `evm_send` with each transaction's `sendTransaction`
+  as its input, in order, each landed before the next (`sauce inspect <hash>`). On Solana,
+  `solana_send` with `{ transaction }`. Without `confirmed` it returns a preview to show the user;
+  `confirmed: true` signs and sends, returning the hash or signature.
+- **A Solana plan** (a `cursor` beside the transactions): send each transaction, then
+  `sauce send --cursor <cursor> --signature <signature>…` (the tool `sauce_send`, `signatures`)
+  confirms them and prints the next step, until it is done. A Solana transaction lands within about
+  a minute of being built or never: when the user takes longer, build it again
+  (`sauce send --cursor <cursor>` alone, or the command that printed it) and hand over the new one.
+  Always pass back the signatures of what landed: the plan builds again only what did not.
+- **Any other signer** (a KMS, a hardware wallet, another wallet's tool) signs the same fields; what
+  it signed but does not send, `sauce send` broadcasts (below).
+
 ## Wallets
 
-An agent with no wallet makes one, and it persists. `sauce wallet` keeps each key in the wallet
-directory (`.sauce/wallets` in the user's home, or `--wallets <dir>`), encrypted under a password
-the agent holds in its `.env` or its secret store. Name the password's source, never the password:
+For experiments and development, the command keeps wallets of its own: a key on this machine,
+encrypted, that the agent unlocks and sends with, nobody approving each send. That is quick to set
+up and right for test runs and small balances; a wallet's MCP server (above) is the safer signer
+for real funds. `sauce wallet` keeps each key in the wallet directory (`.sauce/wallets` in the
+user's home, or `--wallets <dir>`), encrypted under a password the agent holds in its `.env` or its
+secret store. Name the password's source, never the password:
 
 | Source                           | Where the password comes from                                     |
 | -------------------------------- | ----------------------------------------------------------------- |
@@ -119,7 +166,7 @@ sauce wallet address agent
 - `sauce wallet export <name>` shows a key only at a terminal, after the user types the wallet's
   name: never run it for the user.
 - **It is a hot wallet.** Whoever has its file and password has the key, and nothing asks before it
-  sends: suggest small balances and a policy.
+  sends: suggest small balances and a policy, and a wallet's MCP server for anything more.
 
 ```sh
 sauce run payout.sauce.ts --chain base --wallet agent --password-env SAUCE_WALLET_PASSWORD \
@@ -356,12 +403,14 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
 ## For another signer: `sauce tx` and `sauce send`
 
 - **`sauce tx`** with the same arguments prints the unsigned transaction as JSON,
-  `{ chainId, to, data, value }`, for any wallet to sign from the owner:
+  `{ chainId, to, data, value }` with `sendTransaction` and `sendCalls` for a wallet's MCP server
+  (above), for any wallet to sign from the owner:
   `sauce tx buy.sauce.ts --chain base --owner <address> --value <wei> --args <arguments>`. While the
   Pot has no code its deployment comes first (`transactions`), each with `gas`: have each signed with
   that limit (the cook's is estimated as if the deployment had landed; a signer's own estimate, taken
-  while the Pot has no code, is far too low). `--format cast` prints a `cast send` line instead. It
-  simulates nothing: show the user the program, the arguments and `sauce simulate`'s outcome first.
+  while the Pot has no code, is far too low), or send `sendCalls` as one batch. `--format cast`
+  prints a `cast send` line instead. It simulates nothing: show the user the program, the arguments
+  and `sauce simulate`'s outcome first.
 - **`sauce send <signed>… --chain base`** broadcasts what a hardware wallet, a KMS or another tool
   signed (raw hex for EVM, the base64 wire transaction for Solana), in order, waits for each and
   prints what it did as `run` does. It takes no key. Each is simulated as signed first, and one that
@@ -461,9 +510,11 @@ imports in `modules`), and an endpoint of the user's own, optional, is the call'
 tool's own description gives its inputs. `sauce_simulate` returns `leftInPot` first after `ok`, and
 a note when the cook leaves anything in the Pot: tell the user.
 
-- **The tools sign nothing**, so `sauce run` has none: the user signs what they return, with any
-  signer, and `sauce_send` broadcasts the signed transactions (`sauce send`).
-- **The server over stdio serves the `sauce wallet` directory's wallets as tools.**
+- **The tools sign nothing**, so `sauce run` has none: the user signs what they return, through a
+  wallet's MCP server (`sendCalls`, `sendTransaction` or `transaction`, above) or with any other
+  signer, and `sauce_send` broadcasts what a signer signed but did not send (`sauce send`).
+- **The server over stdio serves the `sauce wallet` directory's wallets as tools**, for experiments
+  and development.
   `sauce_wallet_list` and `sauce_wallet_address` name them with no password. Creating
   (`sauce_wallet_create`), importing a key file by its path (`sauce_wallet_import`) and sending need
   the wallets enabled: once per server, `sauce_wallet_enable` names where their password comes from,
@@ -494,7 +545,11 @@ a note when the cook leaves anything in the Pot: tell the user.
   simulation.** Simulate with `sauce simulate` (or `sauce intent publish --dry-run`, and
   `sauce intent fill` for an intent's body) first.
 - **A `sauce tx` cook signed with the wallet's own gas estimate while the Pot has no code.** Use the
-  `gas` the plan gives.
+  `gas` the plan gives, or send `sendCalls` as one batch.
+- **Converting a result by hand for a wallet's tool.** Pass `sendCalls` or each `sendTransaction`
+  whole: `value` there is hex, and a decimal one is refused or misread.
+- **A Solana transaction handed to a wallet the user approves slowly.** Past about a minute it can
+  no longer land: build it again and hand over the new one.
 - **Fetching the explorer or trace link.** Give both to the user.
 - **Looking for another way to send on a preview chain.** Offer the chain-support request.
 

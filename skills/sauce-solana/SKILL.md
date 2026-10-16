@@ -500,7 +500,8 @@ fit), the cook, then the buffer's close.
 - The owner signs and pays every transaction; none needs a fresh keypair.
 - A transaction broadcast another way is confirmed with `--signature <signature>`, so the plan knows
   how its cook went (a cook it handed out is never built again while it can still land, nor once it
-  has). `--close` gives up on the cook and closes the buffer, once a cook handed out can no longer
+  has). A wallet's MCP server that signs and sends in one step (`sauce-cli`) returns the signature
+  to pass. `--close` gives up on the cook and closes the buffer, once a cook handed out can no longer
   land.
 - A step with nothing to sign says why in `wait`: a cook through a lookup table extended a moment
   ago waits a slot, about half a second; the cursor alone, sent again, builds the cook.
