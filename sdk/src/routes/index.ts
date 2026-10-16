@@ -103,7 +103,7 @@ export type {
 } from "./sauce-route.js";
 export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
-export type { LoweredIntent } from "./intent-sugar.js";
+export type { IntentSvmState, LoweredIntent } from "./intent-sugar.js";
 
 export {
   ECO_ROUTES_VAULT_PROXY_CREATION_CODE,

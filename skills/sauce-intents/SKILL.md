@@ -102,6 +102,9 @@ function main(beneficiary: Address) {
 The gap between `delivered` (brought on Ethereum) and `amount` (paid on Base) is the solver's
 margin: make it worth filling.
 
+On Solana the two kinds lower to Solana's own instructions, and every amount in the body is fixed
+when the intent is built: see [An intent to Solana](#an-intent-to-solana).
+
 ### A whole program as the body
 
 The body can be any program for the destination, written inside the braces, using `main`'s
@@ -348,18 +351,41 @@ sauce intent import <tx-hash> --chain <source>
 - **Over MCP**, the server over stdio keeps the same store: its intent tools take `intentHash`, and
   `sauce_intent_list` and `sauce_intent_show` read it.
 
-**An intent to Solana.** An intent Ethereum or Base publishes for Solana is filled, proven and
-cancelled on Solana, through its Portal program, and claimed or refunded on its source as above:
+### An intent to Solana
+
+An intent Ethereum or Base publishes for Solana is written as any intent, `Solana(() => { ... })`
+in `main`, and published from the EVM chain; it is filled, proven and cancelled on Solana, through
+its Portal program, and claimed or refunded on its source as above:
 
 ```sh
+sauce intent publish <file> --chain ethereum --keystore <path> --intent-deadline <unix seconds> \
+  --intent-creator <address> --args <solana wallet> <amount> <reward>
 sauce intent import <tx-hash> --chain <source>
 sauce intent fill <intent-hash> --solver <solana-key> --claimant <address>
 sauce intent fill <intent-hash> --claimant <address> --send --keypair <keypair>
 sauce intent cancel <intent-hash> --keypair <keypair>
 ```
 
-- `--claimant` is required: the address on the source chain the reward pays. A Solana key is not
-  one.
+- A body of `USDC.transfer(recipient, amount)` pays Solana wallets: the route creates each
+  wallet's associated token account where it has none (the rent rides in the route's native
+  amount), then transfers from the Portal executor's account. `approve` is refused there.
+- `recipient: Address` takes a Solana wallet in base58 on `--args`; a 32-byte `0x` key written in
+  the file works too. A token is a mint the registry records (a symbol, or its mint's address).
+- Every amount inside the braces is fixed when the intent is built: a literal, a `main` argument
+  or a top-level `const`. A value measured while the program runs is refused, by name.
+- Any other body is a Solana program, cooked through the Kitchen on the Pot the Portal's executor
+  owns; the route creates that Pot when it is missing, and the delivery (the intent's second
+  argument) is moved into it first. Its bytecode rides in the solver's one fill transaction
+  (1,232 bytes), and the command refuses an intent whose fill would not fit, which today is most
+  programs.
+- The command reads Solana before building (which token accounts and Pot exist; with
+  `--intent-execution-fee auto`, the Kitchen's fee in lamports), so it needs Solana's endpoint for
+  a program body. Two program intents published before the Pot exists race: only the first filled
+  creates it, and the other is refunded after its deadline.
+- With no file, `sauce intent publish --destination solana --recipient <solana wallet> …` writes
+  the transfer intent itself.
+- `--claimant` is required on a fill: the address on the source chain the reward pays. A Solana key
+  is not one.
 - The simulation runs on the solver's accounts as they are, since Solana's simulation takes no
   overrides: the solver must hold the route's tokens.
 - `fill --send` sends the fill, then the proof through the HyperProver, with Hyperlane's gas paid in

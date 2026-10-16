@@ -251,6 +251,9 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       ...globals.venues.map(
         (venue) => `  ${venue.namespace.padEnd(width)}  ${venue.program}  (${venue.name})`,
       ),
+      "  Solana.swap(…) and Solana.trySwap(…) take a pool of any of them, its venue read from the " +
+        "pool's owner as the program runs; the System Program as the pool is an empty slot, which " +
+        "trySwap skips",
       "Protocols: none. Protocol namespaces are EVM contracts.",
     );
   } else if (showProtocols) {

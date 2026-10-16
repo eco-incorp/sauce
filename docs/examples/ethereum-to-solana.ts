@@ -1,100 +1,57 @@
-// An intent from Ethereum to Solana: "pay this Solana wallet 1 USDC, and whoever does it earns
-// 1.05 USDC on Ethereum."
+// Compiles ethereum-to-solana.sauce.ts for Ethereum, with a Solana wallet as `main`'s first argument,
+// and builds what an Ethereum wallet sends to publish it: the reward paid into the intent's vault,
+// then Portal.publish. What `sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --args …`
+// sends.
 //
-// You publish it on Ethereum, from your own wallet, and the reward waits there in escrow. A solver
-// pays the USDC on Solana from its own funds, proves it did, and claims the reward. If nobody does
-// it in time, you take the reward back. You never send a Solana transaction yourself.
-//
-// This file only builds the transactions: the addresses are fixtures, and nothing is sent. Your
-// Ethereum wallet sends the two it prints, in order: the reward's approval, then the publish.
-// `sauce intent import <tx hash> --chain ethereum` then follows the intent from that transaction.
-import { Ethereum, Solana, routes } from "@eco-incorp/sauce";
-import { ecoRoutesPortal, ecoRoutesProver } from "@eco-incorp/sauce/protocols/eco-routes";
-import {
-  address,
-  associatedTokenAccount,
-  svmKeyOf,
-  svmTokenTransferCall,
-  TOKEN_PROGRAM_ID,
-} from "@eco-incorp/sauce/svm";
+// Offline: the wallet, the creator and the deadline are fixtures, and nothing is read or sent. The
+// `sauce` command reads Solana first (`intents.svm`): which token accounts exist, so the route
+// creates only what is missing. With nothing read, the route creates the wallet's USDC account,
+// idempotently, which costs the solver its rent.
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-/** What you decide. The SDK knows the rest: the Portals, the prover and the USDC on each chain. */
-export interface PaySolanaWallet {
-  /** Your Ethereum address. You publish the intent, and you take the reward back if nobody earns it. */
-  readonly creator: `0x${string}`;
-  /** The Solana wallet paid, in base58. */
-  readonly recipient: string;
-  /** The USDC it receives, in USDC's smallest unit: 6 decimals, so 1000000 is 1 USDC. */
-  readonly amount: bigint;
-  /** The USDC a solver earns on Ethereum for delivering it. */
-  readonly reward: bigint;
-  /** The last moment a solver may deliver, in unix seconds. */
-  readonly deliverBy: bigint;
-  /** From when you may take back a reward nobody earned, in unix seconds. */
-  readonly refundableFrom: bigint;
-  /** Any 32 bytes, so that two intents with the same terms are still two intents. */
-  readonly salt: `0x${string}`;
+import { routes } from "@eco-incorp/sauce";
+import { ecoRoutesPortal } from "@eco-incorp/sauce/protocols/eco-routes";
+import { svmKeyOf } from "@eco-incorp/sauce/svm";
+
+const source = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "ethereum-to-solana.sauce.ts"),
+  "utf8",
+);
+
+// Offline fixtures: the Solana wallet paid, and who may reclaim the reward if no solver earns it.
+const wallet = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+const creator = "0x4444444444444444444444444444444444444444";
+
+// main(recipient, amount, reward): 1 USDC to the wallet, for 1.05 USDC on Ethereum.
+const [opened] = routes.compileSauceProgram("ethereum", source, {
+  args: [wallet, 1_000_000n, 1_050_000n],
+  intents: { deadline: 2_000_000_000n, creator },
+}).intents;
+if (opened === undefined || opened.destination.slug !== "solana") {
+  throw new Error("the file opens no intent to Solana");
+}
+const { route } = opened.intent;
+
+// The route runs on Solana: each call a Solana program, its Portal Solana's.
+console.log("Intent to Solana:", routes.hashIntent(opened.intent).intentHash);
+console.log("Solana's Portal:", svmKeyOf(route.portal));
+console.log(
+  "Route calls:",
+  route.calls.map((call) => svmKeyOf(call.target)),
+);
+console.log(
+  "The solver delivers:",
+  route.tokens.map((token) => `${token.amount} of ${svmKeyOf(token.token)}`),
+);
+console.log("and lamports for the account it creates:", route.nativeAmount);
+if (route.calls.length !== 2 || route.nativeAmount === 0n) {
+  throw new Error("expected the wallet's account created, then paid");
 }
 
-export async function paySolanaWallet(input: PaySolanaWallet) {
-  const portal = svmKeyOf(ecoRoutesPortal("solana"));
-  const mint = svmKeyOf(Solana.USDC.address);
-  // The solver pays the wallet's USDC account. It must exist by then: a wallet that has held USDC
-  // before has one.
-  const account = await associatedTokenAccount(address(input.recipient), mint, TOKEN_PROGRAM_ID);
-
-  const intent = routes.assembleIntent(
-    Ethereum.chain,
-    Solana.chain,
-    {
-      salt: input.salt,
-      deadline: input.deliverBy,
-      portal: ecoRoutesPortal("solana"),
-      // What the solver brings to Solana, and what the Portal does with it there.
-      tokens: [{ token: Solana.USDC.address, amount: input.amount }],
-      calls: [
-        await svmTokenTransferCall({
-          portal,
-          mint,
-          amount: input.amount,
-          decimals: Solana.USDC.decimals,
-          recipient: account,
-        }),
-      ],
-    },
-    {
-      deadline: input.refundableFrom,
-      creator: input.creator,
-      prover: ecoRoutesProver("ethereum", "solana"),
-      // What waits in escrow on Ethereum until a solver proves it delivered.
-      tokens: [{ token: Ethereum.USDC.address, amount: input.reward }],
-    },
-  );
-  const sourcePortal = { portal: ecoRoutesPortal("ethereum") };
-
-  return {
-    intent,
-    intentHash: routes.hashIntent(intent).intentHash,
-    // Approve the Portal for the reward, then publish the intent and escrow the reward in one call.
-    transactions: [
-      ...routes.approvalTxs(intent, sourcePortal),
-      routes.publishAndFundTx(intent, false, sourcePortal),
-    ],
-  };
-}
-
-// Fixtures: who publishes, who is paid, and deadlines an hour and a day after a fixed moment.
-const built = await paySolanaWallet({
-  creator: "0x4444444444444444444444444444444444444444",
-  recipient: "6666666666666666666666666666666666666666666",
-  amount: 1_000_000n,
-  reward: 1_050_000n,
-  deliverBy: 2_000_003_600n,
-  refundableFrom: 2_000_086_400n,
-  salt: `0x${"01".repeat(32)}`,
+// Published from an Ethereum wallet: the reward into its vault, then publish.
+const transactions = routes.intentSourceTxs(opened.intent, {
+  portal: ecoRoutesPortal("ethereum"),
 });
-
-console.log(`Ethereum to Solana: intent ${built.intentHash}`);
-for (const { to, data } of built.transactions) {
-  console.log(`  send to ${to}: ${data.slice(0, 10)}…, ${(data.length - 2) / 2} bytes`);
-}
+console.log(`Published by ${transactions.length} transactions on Ethereum`);

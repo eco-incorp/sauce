@@ -12,6 +12,7 @@
  * the encoding the program was compiled for. Only annotations are types here: a parameter without
  * one is a `Uint256`, as the compiler reads it.
  */
+import { address as svmAddress, getAddressEncoder, isAddress as isSvmKey } from "@solana/kit";
 import {
   bytesToBigInt,
   bytesToHex,
@@ -543,6 +544,11 @@ export function entryConstant(
   const parsed = parseEntryType(type);
   if (parsed.kind !== "uint" && parsed.kind !== "address" && parsed.kind !== "bool") {
     return undefined;
+  }
+  // A Solana key, in base58: an account an intent to Solana names, bound as the 32-byte word
+  // that is its key there. Never an address on an EVM chain, whose 20 bytes are hex.
+  if (parsed.kind === "address" && typeof value === "string" && isSvmKey(value)) {
+    return BigInt(bytesToHex(new Uint8Array(getAddressEncoder().encode(svmAddress(value)))));
   }
   const normalized = normalize(parsed, value, at, false);
 

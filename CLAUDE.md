@@ -1026,11 +1026,12 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 `eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
-`docs-ethereum-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.ts` the
-same way from an Ethereum anvil, importing the example for its exact transactions: jest
+`cli-intent-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.sauce.ts`
+the same way from an Ethereum anvil, published with `sauce intent publish` (with LiteSVM running the
+released engine and Kitchen, for the program bodies that cook on the Portal executor's Pot). jest
 (`moduleNameMapper`) and `sdk/tsconfig.test.json` (`paths`) map `@eco-incorp/sauce`, `/svm` and
-`/protocols/*` to `src` for a manual example, which imports the package by its name, so the SDK's
-typecheck, which CI runs before its build, needs no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
+`/protocols/*` to `src`, so a suite may import a manual example, which imports the package by its
+name, with no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
 header's lines say in `cli-examples.e2e.test.ts` (Base, from the wallet `me` the page makes) and
 `cli-solana-token-methods.e2e.test.ts` (Solana, from `me-solana`).
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
@@ -1490,8 +1491,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
 harness for developing the SDK (local node scripts, compile helpers, the SVM Kitchen runner), which
 does not ship. The kit is `src/testing/`, built by `tsconfig.build.json` (strict; only that
 directory) to `dev-tools/dist/testing`, which alone is in the root `files`; `recorder.mjs` is copied
-beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY`) and EVM-only,
-needs anvil on `PATH`, and reads no environment: the RPC, block and state file are arguments.
+beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY`), needs anvil on
+`PATH` for an EVM chain, and reads no environment: the RPC, block and state file are arguments.
 `fork(chain, { block, state, rpcUrl, mode })` replays a recorded state file, records one, or forks
 live (`state.ts`): record and replay are `actions/tests/mainnet.ts`' mechanism generalized — a
 recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv),
@@ -1535,6 +1536,37 @@ replayed from `test/testing/state/base.json.gz`; record that again as the action
 and hook `--test-timeout`, as the guide tells consumers to.
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
+
+**Solana in the kit** (`solana*.ts`): `fork("solana", { state, rpcUrl, mode })` and
+`local({ chain: "solana" })` give a `SolanaTestChain` over a LiteSVM bank (`solana-bank.ts`) with
+the packaged `engine-mainnet.so` and `kitchen.so` at the release ids. LiteSVM is the project's own,
+an optional peer at the `sdk/runtime` pin exactly (the guide's `npm i -D litesvm@…` line is held to
+it by `docs:check`), imported dynamically by `solana-bank.ts` alone, which `optional-dependencies.test.ts`
+allows; no litesvm type reaches a `.d.ts` (the bank keeps them private), so an EVM-only consumer's
+typecheck never needs it. There is no anvil-style lazy fork: a transaction names every account it
+touches, so the bank reads each the first time a message (or a name the cook resolves) names it —
+from the cluster (`clusterSource`, a hundred to a request, a program's code from its program data,
+errors scrubbed of the URL), from a state file (`stateSource`), or nowhere (`local`). A Solana node
+serves accounts only as they are now, so a recording pins the slot it read at (the Clock, Rent and
+EpochSchedule sysvars go in its header) and has no `block` option. The file is gzipped
+`{ sauce: { version: 1, chain, clock, rent, epochSchedule }, accounts, programs }`, sorted, so the
+same reads record the same bytes, and must not mention the RPC. A replayed key the file lacks reads
+as missing and is noted on the `CookReverted` (or a missing mint's error). LiteSVM has no snapshots:
+the bank snapshots every account it ever read or wrote, plus the clock, and puts back each key read
+since a snapshot as it was first read. Cooks (`solana-cook.ts`) are `sauce run`'s, rebuilt without
+importing the command: names resolved by `svm/account-names.ts#resolveSvmAccountName` over the
+compile's `derivedAccounts`, missing token accounts created first (owner pays), inline when it fits,
+else staged (code buffer at the first free nonce, closed after) and through a lookup table the bank
+writes in place, as `sauce simulate`'s copy does. `simulate` is a snapshot, the same cook, a revert
+(the Pot it creates is kept, as on EVM). Test accounts come from fixed seeds so recordings replay.
+`solana-local.test.ts`, `solana-record.test.ts` (records from the SDK's pinned mainnet dumps served
+by `sdk/scripts/solana-rpc-stub.mjs` on loopback — `solana-support.ts#pinnedCluster` — then replays
+with it closed) and `solana-examples.test.ts`, which runs the skills' Solana examples (listed in
+`skills-check/executed.json`; `example-programs.mjs` counts a suite in dev-tools' `test` script as
+one CI runs) from `test/testing/state/solana-examples.json.gz`. Record that again with
+`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC; the packed check runs a Solana cook,
+staged too, from a clean install with LiteSVM beside it, and checks the error naming LiteSVM
+without it.
 
 `start:local`/`start:fork` start anvil (a fork keeps its chain id; an empty node takes Base's, since
 the `sauce` command refuses an unknown one) and run `scripts/deploy.ts`, which sets the stack up

@@ -303,7 +303,10 @@ describe("the package's dependencies", () => {
       [...files].filter((file) => file.startsWith("sdk/src/cli/") || file.startsWith("mcp/")),
     ).toEqual([]);
     const undeclared = [...packages].filter(([name]) => ROOT.dependencies?.[name] === undefined);
-    expect(undeclared).toEqual([]);
+    // But LiteSVM, an optional peer, which the testing kit imports only for a Solana chain, from the
+    // project's own install (a project testing on Solana installs it, as one on an EVM chain
+    // installs Foundry).
+    expect(undeclared).toEqual([["litesvm", ["dev-tools/src/testing/solana-bank.ts"]]]);
     expect([...packages.keys()]).toEqual(expect.arrayContaining(["viem", "sauce-compiler"]));
   });
 
@@ -318,17 +321,28 @@ describe("the package's dependencies", () => {
     expect(loaders).toEqual(["sdk/src/cli/mcp.ts"]);
   });
 
-  it("LiteSVM loads only when a Solana rehearsal needs it", () => {
+  it("LiteSVM loads only when a Solana rehearsal, or a Solana test chain, needs it", () => {
     const uses = shippedModules().flatMap((file) =>
       importsOf(file)
         .filter((each) => LITESVM_EXTRA.packages.includes(packageOf(each.specifier) ?? ""))
         .map((each) => ({ file, ...each })),
     );
-    // A type-only import, which compiles to nothing, and the one dynamic import.
+    // Type-only imports, which compile to nothing, and one dynamic import each: the command's local
+    // copy, and the testing kit's Solana bank, which takes the project's own LiteSVM.
     expect(uses.filter((each) => !each.typeOnly)).toEqual([
+      {
+        file: "dev-tools/src/testing/solana-bank.ts",
+        specifier: "litesvm",
+        dynamic: true,
+        typeOnly: false,
+      },
       { file: "sdk/src/cli/svm-fork.ts", specifier: "litesvm", dynamic: true, typeOnly: false },
     ]);
-    expect(uses.every((each) => each.file === "sdk/src/cli/svm-fork.ts")).toBe(true);
+    expect(
+      uses.every((each) =>
+        ["sdk/src/cli/svm-fork.ts", "dev-tools/src/testing/solana-bank.ts"].includes(each.file),
+      ),
+    ).toBe(true);
   });
 
   it("the sauce command loads no runtime package until a command needs it", () => {

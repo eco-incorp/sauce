@@ -19,7 +19,8 @@ read a chain do so only when your application calls them.
 | [pay.sauce.ts](pay.sauce.ts)                               | Pay someone USDC from your Pot, on Base or on Solana, and stop if the Pot holds too little: the quick start's program              |
 | [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts) | A program that measures its Pot and posts an intent carrying what it measured to Ethereum                                          |
 | [cross-chain-intent.ts](cross-chain-intent.ts)             | Compiling that program for Base with its intents' deadline and creator, and building the cook that runs it with `main`'s arguments |
-| [ethereum-to-solana.ts](ethereum-to-solana.ts)             | An intent from Ethereum to Solana: 1 USDC to a Solana wallet, the reward on Ethereum, and the two transactions your wallet sends   |
+| [ethereum-to-solana.sauce.ts](ethereum-to-solana.sauce.ts) | An intent from Ethereum to Solana: pay a Solana wallet USDC, for a USDC reward on Ethereum                                         |
+| [ethereum-to-solana.ts](ethereum-to-solana.ts)             | Compiling it for Ethereum with the wallet in base58, its Solana route, and the two transactions your wallet sends                  |
 | [first-intent.ts](first-intent.ts)                         | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests              |
 
 ## Intents that post more intents
@@ -43,6 +44,8 @@ read a chain do so only when your application calls them.
 | [router-swap.ts](router-swap.ts)                               | Compiling that program for Ethereum and appending its floor as `main`'s argument                                                             |
 | [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                                              |
 | [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                               |
+| [solana-swap.sauce.ts](solana-swap.sauce.ts)                   | One swap on Solana, at an Orca whirlpool: the pool and the amounts are `main`'s arguments, and every account the swap uses is found for you  |
+| [solana-swap.ts](solana-swap.ts)                               | Compiling that program for Solana, and how a cook works out each account it takes                                                            |
 | [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program (token symbols, a pool by key) compiled for two chains, with a runtime amount, and as an intent on Base |
 
 ## Compiling, reading a chain and signing
@@ -81,9 +84,9 @@ node dist/example.js
 
 ## Details
 
-`ethereum-to-solana.ts` runs end to end in `sdk/test/docs-ethereum-to-solana.e2e.test.ts`: its
-transactions published on a local Ethereum, the intent filled and proven on a local copy of Solana
-running eco-routes' own programs, and the reward claimed.
+`ethereum-to-solana.sauce.ts` runs end to end in `sdk/test/cli-intent-to-solana.e2e.test.ts`: it
+is published with `sauce intent publish` on a local Ethereum, the intent filled and proven on a
+local copy of Solana running eco-routes' own programs, and the reward claimed.
 
 `mcp-external-signer.ts` takes your MCP client's tool call and your signer, and imports nothing:
 `mcp/test/send.e2e.test.ts` runs it against the server on a local chain, signing with a throwaway

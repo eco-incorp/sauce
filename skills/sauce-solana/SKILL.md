@@ -522,6 +522,10 @@ on every cluster; confirm both are deployed on the cluster (`getAccountInfo` ret
 account). For a local run the package ships both programs, to load into a local validator or
 LiteSVM (`sauce-typescript` says where they are).
 
+**Testing.** A program is tested end to end with no funds through `@eco-incorp/sauce/testing`
+(`sauce-typescript`); a recording pins the slot it was read at, since a Solana node serves accounts
+only as they are now.
+
 ## Pitfalls
 
 - **`ctx.self()` alone as the Pot.** It is the engine's program id; only as a token's holder is it

@@ -159,6 +159,46 @@ describe("the intent tools on a Solana destination", () => {
     shim?.restore();
   });
 
+  it("publishes an intent paying a Solana wallet, built against the accounts Solana has", async () => {
+    // A server whose endpoint reaches Solana: sauce_intent_publish reads which token accounts
+    // exist before it builds the route, as the command does.
+    const reading = await connect({
+      chainIds: [1399811149],
+      endpoint: (chain) => (chain.kind === "svm" ? SOLANA_URL : undefined),
+    });
+    const publish = async (wallet: string) => {
+      const out = ok(
+        await reading.call("sauce_intent_publish", {
+          source: [
+            "function main(recipient: Address, amount: Uint256) {",
+            "  Solana(() => {",
+            "    USDC.transfer(recipient, amount);",
+            "  }).reward({ tokens: [{ token: USDC, amount: 1050000 }] });",
+            "}",
+          ].join("\n"),
+          chain: "ethereum",
+          args: [wallet, AMOUNT.toString()],
+          intentDeadline: 2_000_000_000,
+          intentCreator: CLAIMANT,
+        }),
+      ) as { intents: Array<{ record: { route: { calls: unknown[]; nativeAmount: string } } }> };
+
+      return out.intents[0]!.record.route;
+    };
+    try {
+      // The solver's wallet holds a USDC account already: the route only pays it.
+      const paid = await publish(solver.address);
+      assert.equal(paid.calls.length, 1);
+      assert.equal(paid.nativeAmount, "0");
+      // A new wallet has none: the route creates it first, and delivers its rent.
+      const created = await publish((await generateKeyPairSigner()).address);
+      assert.equal(created.calls.length, 2);
+      assert.equal(created.nativeAmount, "2039280");
+    } finally {
+      await reading.close();
+    }
+  });
+
   it("builds the solver's fill as a base64 transaction, which it signs and lands", async () => {
     const intent = await record("01", NOW + 3600n);
     const before = (await mcp.call("sauce_intent_status", { intent, rpcUrls })) as never;

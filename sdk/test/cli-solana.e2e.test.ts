@@ -65,6 +65,7 @@ import {
   deriveProgramDataPda,
   derivePotPda,
   getTransactionSize,
+  MAX_POT_LEN,
 } from "../src/svm/index.js";
 import { svmSettleSource } from "../src/svm/recipes/index.js";
 import {
@@ -1079,6 +1080,38 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     );
   }, 60_000);
 
+  it("a failed cook given a wallet where a token account belongs names the wallet's token account", async () => {
+    const pot = await potOf(hexToBytes(potSalt("vault")));
+    const { source } = accountsFor(pot, 1_000n);
+    const wallet = randomAddress();
+    harness.svm.airdrop(wallet, lamports(1_000_000_000n));
+    const out = await sauce(
+      ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ...["--salt", "vault", "--rpc-url", RPC_URL],
+      ...["--account", `tokenProgram=${TOKEN_PROGRAM}`, "--account", `source=${source}`],
+      ...["--account", `dest=${wallet}`, "--account", "authority=pot", "--args", "400"],
+    );
+    expect(out.code).toBe(1);
+    expect(out.stdout).toMatch(
+      /^The cook reverts: program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed/,
+    );
+    // The Pot given as `self` is no wallet: the cook's own failure stands, with no hint.
+    const self = await sauce(
+      ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ...["--salt", "vault", "--rpc-url", RPC_URL],
+      ...["--account", `tokenProgram=${TOKEN_PROGRAM}`, "--account", `source=${source}`],
+      ...["--account", "dest=self", "--account", "authority=pot", "--args", "400"],
+    );
+    expect(self.code).toBe(1);
+    expect(self.stdout).toMatch(/^The cook reverts: /);
+    expect(self.stderr).not.toContain("is a wallet");
+    expect(out.stderr).toContain(
+      `--account dest=${wallet}: ${wallet} is a wallet, which holds SOL and no token. Where the ` +
+        "program moves or reads a token through dest, give the wallet's token account instead: " +
+        `--account dest=${wallet}:<token> (${wallet}:USDC for its USDC account)`,
+    );
+  }, 60_000);
+
   it("`sauce simulate` rehearses the cook with no key; a failure prints the program logs", async () => {
     const pot = await potOf(hexToBytes(potSalt("vault")));
     const { flags } = accountsFor(pot, 1_000n);
@@ -1118,11 +1151,12 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(failed.stdout).toMatch(/insufficient funds/i);
     // Nothing was sent by either.
     expect(rpc.sent.length).toBe(1);
-    // A slot the program takes, left out, is named with the role it needs.
+    // A slot the program takes, left out, is named with the role it needs and what suits it.
     const missing = await sauce(...base, "--salt", "vault", "--rpc-url", RPC_URL, "--args", "1");
     expect(missing.stderr).toMatch(
-      /missing --account for tokenProgram \(readonly\), source \(writable\)/,
+      /cannot derive, so each is given by name:\n {2}tokenProgram \(readonly\) +program:<token>/,
     );
+    expect(missing.stderr).toMatch(/\n {2}source \(writable\) +pot:<token>/);
   }, 60_000);
 
   it("`sauce simulate` shows what the cook moved, from the accounts as it leaves them", async () => {
@@ -1497,12 +1531,47 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       ...["simulate", big, "--owner", owner.signer.address, "--salt", "absent"],
       ...["--rpc-url", RPC_URL, "--json"],
     );
-    expect(json(rehearsed)).toMatchObject({
+    const copied = json(rehearsed) as {
+      setupCosts: { what: string; lamports: string; back?: string }[];
+      payerPays: string;
+      lamportChanges: { account: string; delta: string }[];
+    };
+    expect(copied).toMatchObject({
       ok: true,
       path: "local copy (LiteSVM)",
       staged: { bytes: program },
       createPot: expect.any(Object),
     });
+    // What the copy did for nothing before the cook, the first run pays: the Pot's rent above all
+    // (a 10,240-byte account, about 0.072 SOL), the code buffer's (back once it is closed), and the
+    // fees of the transactions before the cook.
+    const cost = (what: string) =>
+      BigInt(copied.setupCosts.find((one) => one.what.startsWith(what))?.lamports ?? "0");
+    expect(cost("creating the Pot: its rent")).toBe(
+      harness.svm.minimumBalanceForRentExemption(BigInt(MAX_POT_LEN)),
+    );
+    expect(cost("creating the Pot: its rent")).toBeGreaterThan(70_000_000n);
+    expect(cost("staging the program: the code buffer's rent")).toBeGreaterThan(0n);
+    expect(copied.setupCosts.find((one) => one.what.startsWith("staging the program"))?.back).toBe(
+      "when sauce run closes the buffer after the cook",
+    );
+    expect(cost("the fees of the")).toBe(5000n * BigInt(planned.transactions.length));
+    const ownerCook = -BigInt(
+      copied.lamportChanges.find((change) => change.account === owner.signer.address)!.delta,
+    );
+    expect(BigInt(copied.payerPays)).toBe(
+      ownerCook + copied.setupCosts.reduce((sum, one) => sum + BigInt(one.lamports), 0n),
+    );
+    const told = await sauce(
+      ...["simulate", big, "--owner", owner.signer.address, "--salt", "absent"],
+      ...["--rpc-url", RPC_URL],
+    );
+    expect(told.stdout).toMatch(
+      /\nBefore the cook, \w+ \(the owner\) also pays:\n {2}creating the Pot: its rent: -\d+ lamports\n/,
+    );
+    expect(told.stdout).toMatch(
+      /\nIn all, \w+ \(the owner\) pays \d+ lamports \(0\.\d+ SOL\), \d+ of them/,
+    );
   }, 120_000);
 
   it("`sauce tx` prints the cook unsigned; signed by the owner as printed, it lands", async () => {
@@ -1773,6 +1842,14 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const keypair = await sauce(...base, "--keypair", bad);
     expect(keypair.stderr).toMatch(/not a Solana keypair file/);
     expect(keypair.stderr).not.toContain("[1, 2, 3]");
+    // A wallet `sauce wallet` keeps is that keypair encrypted: named for --wallet, not read.
+    const kept = join(work, "kept.json");
+    writeFileSync(kept, JSON.stringify({ version: 3, kind: "solana", crypto: { cipher: "x" } }));
+    const asKeypair = await sauce(...base, "--keypair", kept);
+    expect(asKeypair.stderr).toContain(
+      `--keypair ${kept} is a sauce wallet, its keypair encrypted: sign with --wallet kept ` +
+        `--wallets ${work}`,
+    );
   }, 60_000);
 
   describe("--via engine: the engine's own paid cook, with no Kitchen and no Pot", () => {

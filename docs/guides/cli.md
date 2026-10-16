@@ -1267,6 +1267,25 @@ unsigned, each is refused on a preview chain: `prove` and `cancel` by the intent
 
 ### An intent to Solana
 
+You publish an intent to Solana from Ethereum or Base, like any other: write a file whose body
+pays a Solana wallet, and give the wallet in base58.
+
+```sh
+sauce intent publish pay-on-solana.sauce.ts --chain base --keystore ~/.keys/me.json \
+  --intent-deadline 1900000000 --intent-creator 0xYou --args <solana wallet> 1000000 1050000
+sauce intent publish --source base --destination solana --token USDC --amount 1 \
+  --recipient <solana wallet> --reward-token USDC --reward 1.05 --prover HyperProver
+```
+
+The first publishes a file such as `Solana(() => { USDC.transfer(recipient, amount) })
+.reward({ tokens: [{ token: USDC, amount: reward }] })` with `main(recipient: Address, amount:
+Uint256, reward: Uint256)`. The second makes that file for you, step by step. Before building
+either, the command reads Solana (`--config` with chain id `1399811149`, or its public endpoint):
+which token accounts exist, and for a program, whether the Pot Solana's Portal owns exists. A
+wallet with no account for the token gets one, created by the route, its rent (about 0.002 SOL)
+added to what the solver delivers. An intent whose fill would not fit one Solana transaction is
+refused before anything is sent.
+
 An intent an EVM chain publishes for Solana (eco-routes' Solana deposit addresses publish one per
 deposit) is filled, proven and cancelled through Solana's Portal program, and claimed or refunded on
 its source like any other. Store it from the transaction that published it, then:
@@ -1575,10 +1594,19 @@ the owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account); `
 mint and `program:USDC` its token program, SPL Token or Token-2022, the accounts
 `transferChecked` takes. A registered symbol's program is the registry's; any other mint's is read
 from the cluster. A tokenized stock is named the same way, by its symbol in any case
-(`pot:TSLAx`, `mint:NVDA_US`). `--accounts <json | file>` gives them all at once, one JSON object
-of each name to its value, as `--account` takes it; an `--account` beside it adds one more. A slot
-with no `--account` is named with the role it needs, and `simulate` notes each account it was given
-that the cluster does not have (a guard on it fails with no message of its own).
+(`pot:TSLAx`, `mint:NVDA_US`). An address is base58, or the same 32 bytes as `0x` hex, the way
+`sauce globals --chain solana --json` prints a token's `address`: every Solana key the command
+takes (`--owner`, `--lookup-table`, a token in `--assume-balance`, a wallet policy) takes either.
+`--accounts <json | file>` gives them all at once, one JSON object of each name to its value, as
+`--account` takes it; an `--account` beside it adds one more. A cook missing an account is refused
+before anything is read from the cluster: the refusal lists each one with the values that suit its
+role (`pot` or `owner` for a signer, `pot:<token>` for a token account, `program:<token>` for a
+token program) and the JSON object to save as the `--accounts` file, and `sauce compile --json`
+lists the same as `accountsToGive`. `simulate` notes each account it was given that the cluster
+does not have (a guard on it fails with no message of its own). A wallet is not a token account:
+when a cook fails and an account it writes was given as a wallet (`dest=<wallet>`), the command
+says to give the wallet's token account instead, `dest=<wallet>:USDC`, which `run` creates where
+it is missing.
 
 The token methods need none of this. In `USDC.transfer(to, amount)`, `USDC.balanceOf(ctx.self())`
 or `Token(mint).approve(spender, amount)`, compiling adds every account the call moves through to
@@ -1663,7 +1691,11 @@ where missing, the program staged into a code buffer as `run` stages it, then th
 accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
 spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
 `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note:
-`run` creates it before the cook (asking first, or with `--yes`). An `--owner` that is
+`run` creates it before the cook (asking first, or with `--yes`). What the copy does for nothing
+before the cook, a first run pays, so it is listed under the lamport changes with what it pays
+for: the Pot's rent (about 0.072 SOL), each token account's, the code buffer's (back once `run`
+closes it), a lookup table's, and the fees of the transactions before the cook; then what the
+owner pays in all. `--json` gives them as `setupCosts` and `payerPays`. An `--owner` that is
 not a wallet (a program's account, or one holding data) is refused, as it cannot pay. `tx` prints
 a cook too large for one transaction as a plan of steps, for another signer to sign and `sauce send`
 to send ([Signed elsewhere](#signed-elsewhere-sauce-send)). Each account a transaction lists costs 32
@@ -1717,8 +1749,9 @@ is not one it checks.
 
 An intent can go to Solana ([An intent to Solana](#an-intent-to-solana)) or start there
 ([An intent from Solana](#an-intent-from-solana)). A `main` argument of type `Address` is a 32-byte
-public key on Solana: pass it in base58 (or as 32 bytes of hex), and the command encodes the whole
-key as the word the engine reads (ABI-v1 only, not under `--compact-args`).
+public key on Solana: pass it in base58 (or as 32 bytes of hex), or a token as `USDC` or
+`mint:USDC` for its mint, and the command encodes the whole key as the word the engine reads
+(ABI-v1 only, not under `--compact-args`).
 
 ## Agent wallets
 

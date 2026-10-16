@@ -171,7 +171,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 }
 ```
 
-The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built. An intent can also start on Solana, published from a Solana wallet: see [An intent from Solana](cli.md#an-intent-from-solana).
+The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana; a program builds that route for you, as [Sending to Solana](#sending-to-solana) shows. An intent can also start on Solana, published from a Solana wallet: see [An intent from Solana](cli.md#an-intent-from-solana).
 
 The route has two calls: the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above, and the route's `nativeAmount`, which the solver sends, is that fee. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
@@ -461,6 +461,54 @@ Each of these is a compile error naming the construct, never a silently differen
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.
 
+### Sending to Solana
+
+An intent's destination can be Solana. You still publish it from Ethereum or Base: that is where
+the reward waits. A solver then does the work on Solana and collects the reward back home.
+
+The simplest one pays a Solana wallet. Write it like any other intent:
+
+```js
+// Pays a Solana wallet USDC, for a USDC reward on the chain that publishes it.
+function main(recipient: Address, amount: Uint256, reward: Uint256) {
+  Solana(() => {
+    USDC.transfer(recipient, amount);
+  }).reward({ tokens: [{ token: USDC, amount: reward }] });
+}
+```
+
+Inside the braces, `USDC` means Solana's USDC mint, and `recipient` is a Solana wallet
+([the complete example](../examples/ethereum-to-solana.ts)). When you publish from a wallet, pass the
+recipient in base58, the way Solana writes addresses:
+
+```sh
+sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --keystore <path> \
+  --intent-deadline <unix seconds> --intent-creator <your address> \
+  --args <solana wallet> 1000000 1050000
+```
+
+Three things are different from an EVM destination:
+
+- **Solana keeps tokens in token accounts.** Each wallet holds its USDC in its own account. If the
+  wallet has none yet, the intent's route creates it first. The solver pays its rent (about 0.002
+  SOL), and the command adds that to what the solver must bring.
+- **Amounts are fixed before anything runs.** A Solana route is built whole when the intent is
+  made, so every amount inside the braces is a literal or one of `main`'s arguments. A value the
+  program measures while it runs is refused, with its name.
+- **A token needs to be one the package knows.** USDC, USDT, PYUSD and the tokenized stocks are
+  among them (`sauce globals --chain solana --tokens`). The route has to name each mint's program
+  and decimals.
+
+A body that does more than pay wallets is a program. It runs on the Pot that Solana's Portal
+owns, which every intent through that Portal shares. Only an intent's route can create that Pot,
+so the first one does it, and the `sauce` command reads whether it exists before building yours.
+Two intents built before either is filled would both try to create it, and the second could never
+be filled; its reward would come back to you after its deadline, and the command warns you.
+
+A program's bytecode travels inside the solver's one fill transaction, which Solana caps at 1,232
+bytes. The command refuses an intent whose fill would not fit, so you never publish one nobody can
+fill. Today that rules out most programs: pay with token transfers instead.
+
 ## Callbacks are compiled source
 
 A callback is read with `Function.prototype.toString()`, parsed, and compiled as SauceScript. It is never invoked as a JavaScript callback and captures no outer variables. An `amount` in surrounding JavaScript does not become a value inside the program.
@@ -628,4 +676,4 @@ export async function readVault(
 
 Execute this read on the source chain. `hashCall()` cross-checks hashes against the Portal; `fundedCall()` checks funding. `predictVault()` is the offline CREATE2 prediction of the same address, with nothing read from a chain: an eco-routes Portal's vaults are clones, salted with the intent hash, of a Proxy over the Portal's first `CREATE`, so the address follows from the Portal's own. For a Portal built some other way, pass its configuration: `predictVault({ portal, vaultInitCodeHash })`.
 
-For a Solana destination, build the execution with the Kitchen client rather than the SVM route helpers: the instruction those helpers emit is not one the Solana engine accepts, and staging the code does not change that. The [Solana guide](solana.md) has the supported path.
+For a Solana destination, write the intent in a program instead ([Sending to Solana](#sending-to-solana)): the SDK builds Solana's route itself. The SVM route helpers emit an instruction the Solana engine does not accept, and staging the code does not change that.
