@@ -31,7 +31,6 @@ import {
   getTransactionSize,
   isAddress,
   signTransaction,
-  TRANSACTION_SIZE_LIMIT,
   lamports,
   type Address,
   type AddressesByLookupTableAddress,
@@ -103,6 +102,7 @@ import {
   svmTokenAccount,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
