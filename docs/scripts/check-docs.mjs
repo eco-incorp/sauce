@@ -25,6 +25,7 @@ import {
   releaseAddresses,
   releaseAddressProblems,
 } from "./release-addresses.mjs";
+import { simulateWordingProblems } from "./simulate-wording.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const packageArgument = process.argv.indexOf("--package-root");
@@ -113,6 +114,25 @@ console.log(`Manual links: ${manual.length} files checked`);
     defineFlagProblems({ where: file.slice(root.length + 1), text: readFileSync(file, "utf8") }),
   );
   if (taught.length) throw new Error(`Low-level flags taught:\n${taught.join("\n")}`);
+}
+// A run with no key and nothing sent is a simulation, and the manual says so
+// (`simulate-wording.mjs`): the README, every page and every example. The skills are skills:check's.
+{
+  const pages = [
+    join(root, "README.md"),
+    ...markdownFiles(join(root, "docs")),
+    ...readdirSync(join(root, "docs/examples"))
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => join(root, "docs/examples", name)),
+  ];
+  const problems = pages.flatMap((file) =>
+    simulateWordingProblems({
+      where: relative(root, file).split("\\").join("/"),
+      text: readFileSync(file, "utf8"),
+    }),
+  );
+  if (problems.length) throw new Error(`Simulate, never rehearse:\n${problems.join("\n")}`);
+  console.log(`Wording: ${pages.length} files say simulate`);
 }
 
 // ---- The manual's shape: one place per fact, and a reader never sent into the skills ----------------

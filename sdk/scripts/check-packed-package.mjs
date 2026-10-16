@@ -43,6 +43,13 @@ const RUNTIME = ["@modelcontextprotocol/sdk", "litesvm", "zod"];
 // What a plain install of the package never brings: those, the web servers the MCP SDK brings, and
 // TypeScript and dotenv, which it once depended on and nothing of it imports.
 const NEVER_IN_A_LIBRARY_INSTALL = [...RUNTIME, "express", "hono", "typescript", "dotenv"];
+// The Solana packages a project writing Solana code installs itself — Kit and the program clients
+// for the System and Token programs — at the ranges the package depends on them by: the current
+// majors, so a project on today's Kit shares the package's one copy.
+const SOLANA_PROJECT = ["@solana/kit", "@solana-program/system", "@solana-program/token"].map(
+  (dependency) =>
+    `${dependency}@${JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).dependencies[dependency]}`,
+);
 // The runtime packages' own install, as the package ships it: the versions it pins.
 const RUNTIME_PINS = JSON.parse(
   readFileSync(resolve(root, "sdk/runtime/package.json"), "utf8"),
@@ -1363,6 +1370,35 @@ try {
   } finally {
     rmSync(mismatch, { recursive: true, force: true });
   }
+  // A project on Solana's Kit adds the package, and a project with the package adds Kit and the
+  // program clients: either way npm resolves the one Kit both use and refuses nothing. With a Kit
+  // a major behind, the second was refused (ERESOLVE): today's program clients peer-require
+  // today's Kit, and the package's older copy stood at the project's root.
+  for (const packageFirst of [false, true]) {
+    const solana = mkdtempSync(join(tmpdir(), "sauce-solana-project-"));
+    try {
+      writeFileSync(join(solana, "package.json"), JSON.stringify({ private: true }));
+      const npmInstall = (...specs) =>
+        execFileSync(
+          "npm",
+          ["install", "--ignore-scripts", "--prefer-offline", "--no-audit", "--no-fund", ...specs],
+          { cwd: solana, stdio: "inherit" },
+        );
+      const steps = [[join(work, filename)], SOLANA_PROJECT];
+      for (const specs of packageFirst ? steps : steps.reverse()) npmInstall(...specs);
+      assert.equal(
+        existsSync(join(solana, "node_modules", name, "node_modules", "@solana", "kit")),
+        false,
+        "the package and the project share one Kit",
+      );
+    } finally {
+      rmSync(solana, { recursive: true, force: true });
+    }
+  }
+  console.log(
+    `Clean package install: a project on Solana's Kit adds the package, and one with the package ` +
+      `adds Kit and its program clients (${SOLANA_PROJECT.join(", ")}): one Kit, no conflict`,
+  );
   // Where it may not install, it refuses on one line: --offline; no npm; npm with no registry.
   const offlineHome = home("offline");
   const offline = spawnSync(process.execPath, [bin, "mcp", "--offline"], {

@@ -35,7 +35,7 @@ const RENT_SYSVAR = "SysvarRent111111111111111111111111111111111" as Address;
 const LOOKUP_TABLE_PROGRAM = "AddressLookupTab1e1111111111111111111111111";
 const WRAPPED_SOL = "So11111111111111111111111111111111111111112";
 /** Where the copy keeps the lookup table it makes: a key no cluster account has. */
-const TABLE_KEY = "SauceRehearsa1LookupTab1e111111111111111111";
+const TABLE_KEY = "SauceSimu1ationLookupTab1e11111111111111111";
 /** `UpgradeableLoaderState::ProgramData`: a u32 tag, the deploy slot, an `Option<Pubkey>`. */
 const PROGRAM_DATA_HEADER = 4 + 8 + 1 + 32;
 /** SIMD-0268, the deeper CPI stack mainnet has not turned on: off, as the cluster has it. */
