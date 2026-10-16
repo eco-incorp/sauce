@@ -1027,11 +1027,12 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 `eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
-`docs-ethereum-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.ts` the
-same way from an Ethereum anvil, importing the example for its exact transactions: jest
+`cli-intent-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.sauce.ts`
+the same way from an Ethereum anvil, published with `sauce intent publish` (with LiteSVM running the
+released engine and Kitchen, for the program bodies that cook on the Portal executor's Pot). jest
 (`moduleNameMapper`) and `sdk/tsconfig.test.json` (`paths`) map `@eco-incorp/sauce`, `/svm` and
-`/protocols/*` to `src` for a manual example, which imports the package by its name, so the SDK's
-typecheck, which CI runs before its build, needs no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
+`/protocols/*` to `src`, so a suite may import a manual example, which imports the package by its
+name, with no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
 header's lines say in `cli-examples.e2e.test.ts` (Base, from the wallet `me` the page makes) and
 `cli-solana-token-methods.e2e.test.ts` (Solana, from `me-solana`).
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,

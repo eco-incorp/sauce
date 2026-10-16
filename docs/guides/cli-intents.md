@@ -107,9 +107,38 @@ With no signer, each prints its transactions unsigned, for a wallet to send in o
 
 ## An intent to Solana
 
-An intent published on Ethereum or Base can pay out on Solana. It is filled, proven and cancelled
-through Solana's Portal program, and claimed or refunded on its source like any other.
-[ethereum-to-solana.ts](../examples/ethereum-to-solana.ts) builds one.
+You publish an intent to Solana from Ethereum or Base, like any other. Write a file whose job pays a
+Solana wallet, and give the wallet in base58:
+
+```js
+// Pays a Solana wallet USDC, for a USDC reward on the chain that publishes it.
+function main(recipient: Address, amount: Uint256, reward: Uint256) {
+  Solana(() => {
+    USDC.transfer(recipient, amount);
+  }).reward({ tokens: [{ token: USDC, amount: reward }] });
+}
+```
+
+```sh
+sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --wallet me \
+  --intent-deadline <unix seconds> --intent-creator <your address> \
+  --args <solana wallet> 1000000 1050000
+```
+
+Or let `sauce intent publish` make the file, step by step:
+
+```sh
+sauce intent publish --source ethereum --destination solana --token USDC --amount 1 \
+  --recipient <solana wallet> --reward-token USDC --reward 1.05 --prover HyperProver
+```
+
+Before it builds either, the command reads Solana: which token accounts exist and, for a program,
+whether the Pot Solana's Portal owns exists. A wallet with no account for the token gets one,
+created by the route, and its rent (about 0.002 SOL) is added to what the solver brings. An intent
+whose fill would not fit one Solana transaction is refused before anything is sent.
+
+The intent is filled, proven and cancelled through Solana's Portal program, and claimed or refunded
+on its source like any other:
 
 ```sh
 sauce intent import 0x<tx hash> --chain ethereum
@@ -191,18 +220,18 @@ same number of transactions, plus a standing approval of Permit2.
 
 ### Publishing with no file, in detail
 
-The source and destination chains are those with a Portal that are supported: Ethereum and Base. The
-token delivered is a registry symbol, or an address whose decimals it reads; the recipient is you by
-default; the prover is one the registry records on both chains; and the reward is funded by a
-transfer to the vault by default, or with `publishAndFund`. With no terminal, it names every flag
-still missing; the funding, which has a default, is not one. The suggested reward prices what a
-solver spends on the destination (the gas of a fill, the prover's fee quoted from the destination's
-prover, and a Kitchen fee where the body cooks) in the reward token, through a Uniswap V3 pool of
-the destination's wrapped native token. The fill deadline is the last second a solver may fill; the
-reward deadline, when an unproven reward becomes refundable, must leave time after it for the fill
-to be proven. The file it writes is `--out`, else `intent-<source>-to-<destination>-<time>.sauce.ts`,
-headed by the command that publishes it again; with a signer it publishes once you approve (or with
-`--yes`), storing it.
+The source is Ethereum or Base, and the destination Ethereum, Base or Solana (a Solana recipient in
+base58). The token delivered is a registry symbol, or an address whose decimals it reads; the
+recipient is you by default; the prover is one the registry records on both chains; and the reward
+is funded by a transfer to the vault by default, or with `publishAndFund`. With no terminal, it
+names every flag still missing; the funding, which has a default, is not one. The suggested reward
+prices what a solver spends on the destination (the gas of a fill, the prover's fee quoted from the
+destination's prover, and a Kitchen fee where the body cooks) in the reward token, through a Uniswap
+V3 pool of the destination's wrapped native token. The fill deadline is the last second a solver may
+fill; the reward deadline, when an unproven reward becomes refundable, must leave time after it for
+the fill to be proven. The file it writes is `--out`, else
+`intent-<source>-to-<destination>-<time>.sauce.ts`, headed by the command that publishes it again;
+with a signer it publishes once you approve (or with `--yes`), storing it.
 
 ### Simulating a fill, in detail
 

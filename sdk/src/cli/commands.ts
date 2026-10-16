@@ -33,6 +33,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
+import type { IntentSvmState } from "../routes/intent-sugar.js";
 import type { IntentFundVia } from "../routes/portal.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
@@ -177,6 +178,9 @@ export interface ProgramInput {
     /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
      *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
     readonly fundVia?: IntentFundVia;
+    /** For an intent to Solana: the cluster's state its route is built against
+     *  (`intent-solana.ts#solanaIntentState` reads it). */
+    readonly svm?: IntentSvmState;
   };
   /**
    * ABI bindings the program calls through without declaring them — an actions document's
@@ -257,8 +261,9 @@ function compileOptions(
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
-  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia } = input.intents;
+  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia, svm } = input.intents;
   const intents = {
+    ...(svm === undefined ? {} : { svm }),
     ...(deadline === undefined ? {} : { deadline }),
     ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
     ...(creator === undefined ? {} : { creator }),
@@ -313,12 +318,27 @@ export function compileProgram(
  * intents' cooks are not given yet is zero here: the chains do not depend on it.
  */
 export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
-  const probe = compileProgram(
-    { ...input, intents: { ...input.intents, executionFee: input.intents.executionFee ?? 0n } },
-    files,
-  );
+  const probe = compileProgram(probeInput(input), files);
 
   return [input.chain, ...intentDestinations(probe.intents)];
+}
+
+/**
+ * `input` with what its intents' routes are built against filled in where it is not given, for a
+ * compile that only asks which intents a program opens and what their routes touch: a fee of zero,
+ * and on Solana no account existing. Never what is published.
+ */
+export function probeInput(input: ProgramInput): ProgramInput {
+  const { svm } = input.intents;
+
+  return {
+    ...input,
+    intents: {
+      ...input.intents,
+      executionFee: input.intents.executionFee ?? 0n,
+      svm: { ...svm, potExists: svm?.potExists ?? false },
+    },
+  };
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */

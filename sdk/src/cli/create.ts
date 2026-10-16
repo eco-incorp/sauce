@@ -13,13 +13,16 @@
  * <file>` would: rehearsed on the source (`--dry-run`) and on the destination (`fill`), confirmed,
  * sent, stored.
  */
+import { address as svmAddress, getAddressEncoder, isAddress as isSvmKey } from "@solana/kit";
 import {
+  bytesToHex,
   formatUnits,
   getAddress,
   isAddress,
   parseAbi,
   parseUnits,
   type Address,
+  type Hex,
   type PublicClient,
 } from "viem";
 
@@ -29,11 +32,13 @@ import { ecoRoutesDeployment, ecoRoutesProver } from "../protocols/eco-routes/lo
 import { deployments as uniswapV3 } from "../protocols/uniswap-v3/addresses.js";
 import { hashIntent } from "../routes/encode.js";
 import { proverFeeCall } from "../routes/portal.js";
-import { TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { svmTokenRows, TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import { CliError, parseChain, UsageError } from "./args.js";
 import { connect, kitchenFee } from "./chain.js";
 import { nativeSymbol, tokenInfo } from "../evm/effects.js";
 import { proverPlan } from "./lifecycle.js";
+import { svmRpc } from "./lifecycle-svm.js";
 import { askChoice, askText, missingFlags, type Ask } from "./prompt.js";
 import { isSupportedChain, requireSupported } from "./support.js";
 import { parseFundVia } from "./args.js";
@@ -86,21 +91,29 @@ export interface Created {
 
 /** The chains a Portal is recorded on, in the current generation: where an intent can go. */
 export const portalChains = (): CanonicalChain[] =>
-  CANONICAL_CHAINS.filter(
-    (chain) => chain.kind === "evm" && ecoRoutesDeployment(chain)?.Portal !== undefined,
-  );
+  CANONICAL_CHAINS.filter((chain) => ecoRoutesDeployment(chain)?.Portal !== undefined);
 
 /** The chains creation offers: those with a Portal that the release supports (`support.ts`). */
 export const publishableChains = (): CanonicalChain[] => portalChains().filter(isSupportedChain);
 
+/** The chains an intent made here is published from: a wallet on an EVM chain, whose Portal
+ *  escrows the reward. Its destination may be any publishable chain, Solana included. */
+export const sourceChains = (): CanonicalChain[] =>
+  publishableChains().filter((chain) => chain.kind === "evm");
+
 /** A token on `chain`: what the program names it by (a symbol, or its address), and its decimals. */
 interface Token {
   readonly symbol?: string;
-  readonly address: Address;
+  /** Its address: 20 bytes on an EVM chain, a mint's 32-byte key on Solana. */
+  readonly address: Hex;
   readonly decimals: number;
   /** How the program spells it: `USDC`, or `Token(0x…n)` for one the registry does not name. */
   readonly spelled: string;
 }
+
+/** A Solana key as the 32-byte word a program writes it as. */
+const svmWord = (key: string): Hex =>
+  bytesToHex(new Uint8Array(getAddressEncoder().encode(svmAddress(key))));
 
 const STABLES = new Set(["USDC", "USDT", "USDT0", "USDC.E", "USDBC", "DAI", "USDS", "PYUSD"]);
 
@@ -139,6 +152,7 @@ async function tokenOn(
   client: PublicClient | undefined,
   flag: string,
 ): Promise<Token> {
+  if (chain.kind === "svm") return svmTokenOn(chain, raw, flag);
   const rows = TOKEN_REGISTRY[chain.id] ?? [];
   const bySymbol = rows.find((row) => row.symbol.toLowerCase() === raw.toLowerCase());
   if (bySymbol !== undefined) {
@@ -188,10 +202,41 @@ async function tokenOn(
   };
 }
 
+/**
+ * `raw` on Solana: a mint the registry records, by symbol or by its base58 address. A route there
+ * names the mint's program and decimals, which only a registered mint has here.
+ */
+function svmTokenOn(chain: CanonicalChain, raw: string, flag: string): Token {
+  const rows = svmTokenRows(chain);
+  const row = rows.find(
+    (candidate) =>
+      candidate.symbol.toLowerCase() === raw.toLowerCase() || candidate.mint === raw.trim(),
+  );
+  if (row === undefined) {
+    const listed = rows.filter((candidate) => candidate.stock === undefined);
+    throw new UsageError(
+      `--${flag}: '${raw}' is not a token ${chain.slug} registers: one of ` +
+        `${listed.map((candidate) => candidate.symbol).join(", ") || "(none recorded)"}, a stock ` +
+        `token (sauce globals --chain ${chain.slug} --stocks), or a registered mint's address`,
+    );
+  }
+
+  return { symbol: row.symbol, address: row.address, decimals: row.decimals, spelled: row.symbol };
+}
+
 /** Asks which token, from `chain`'s registry or by address. */
 async function askToken(ask: Ask, chain: CanonicalChain, question: string, fallback?: string) {
+  const svm = chain.kind === "svm";
   // A tokenized stock is still a choice by address: Ethereum has over a thousand of them.
-  const rows = (TOKEN_REGISTRY[chain.id] ?? []).filter((row) => row.stock === undefined);
+  const rows = (
+    svm
+      ? svmTokenRows(chain).map((row) => ({
+          symbol: row.symbol,
+          address: row.mint,
+          stock: row.stock,
+        }))
+      : (TOKEN_REGISTRY[chain.id] ?? [])
+  ).filter((row) => row.stock === undefined);
   const choices = [
     ...rows.map((row) => ({ label: `${row.symbol} (${row.address})`, value: row.symbol })),
     { label: "another token, by address", value: "" },
@@ -200,10 +245,44 @@ async function askToken(ask: Ask, chain: CanonicalChain, question: string, fallb
   const picked = await askChoice(ask, question, choices, at === -1 ? undefined : at);
   if (picked !== "") return picked;
 
-  return askText(ask, `The token's address on ${chain.slug} (address, or address:decimals)`, {
-    check: (text) =>
-      isAddress(text.split(":")[0]!, { strict: false }) ? undefined : "not an address",
-  });
+  return svm
+    ? askText(ask, `The mint's address on ${chain.slug} (base58)`, {
+        check: (text) => (isSvmKey(text) ? undefined : "not a Solana address"),
+      })
+    : askText(ask, `The token's address on ${chain.slug} (address, or address:decimals)`, {
+        check: (text) =>
+          isAddress(text.split(":")[0]!, { strict: false }) ? undefined : "not an address",
+      });
+}
+
+/**
+ * A recipient on Solana: a wallet, whose associated token account for the mint the route pays
+ * (and creates where it has none). A token account given instead is refused where the cluster can
+ * be read: the route would pay an account derived from it, which nobody holds the key to.
+ */
+async function svmRecipient(chain: CanonicalChain, raw: string, url: string | undefined) {
+  if (!isSvmKey(raw)) {
+    throw new UsageError(`--recipient: '${raw}' is not a ${chain.slug} address (base58)`);
+  }
+  if (url === undefined) return raw;
+  let owner: string | undefined;
+  try {
+    const { value } = await svmRpc(url)
+      .getAccountInfo(svmAddress(raw), { encoding: "base64" })
+      .send();
+    owner = value?.owner;
+  } catch {
+    // Unread, the recipient is taken as the wallet it was given as.
+    return raw;
+  }
+  if (owner === TOKEN_PROGRAM_ID || owner === TOKEN_2022_PROGRAM_ID) {
+    throw new UsageError(
+      `--recipient: ${raw} is a token account on ${chain.slug}; give the wallet that owns it, whose ` +
+        "token account the intent pays",
+    );
+  }
+
+  return raw;
 }
 
 const POOL = parseAbi([
@@ -273,6 +352,16 @@ async function margin(
   deliveredToken: Token,
   proverFee: bigint | undefined,
 ): Promise<{ readonly amount: bigint; readonly lines: string[] }> {
+  if (destination.kind === "svm") {
+    return {
+      amount: 0n,
+      lines: [
+        `the solver's costs on ${destination.slug} — the fill's fees, the rent of the recipient's ` +
+          "token account where it has none (which the route delivers), and the proof's gas — are " +
+          "not priced here, so the reward has no margin over what it delivers. Set it with --reward.",
+      ],
+    };
+  }
   if (client === undefined) {
     return {
       amount: 0n,
@@ -348,7 +437,7 @@ function intentText(options: {
   readonly destination: CanonicalChain;
   readonly delivered: Token;
   readonly amount: bigint;
-  readonly recipient: Address;
+  readonly recipient: Hex;
   readonly rewardToken: Token;
   readonly reward: bigint;
   readonly header: readonly string[];
@@ -368,13 +457,14 @@ function intentText(options: {
 export async function createIntent(input: CreateInput): Promise<Created> {
   const missing: string[] = [];
   const chains = publishableChains();
-  const chainChoices = (exclude?: CanonicalChain) =>
-    chains
+  const sources = sourceChains();
+  const chainChoices = (among: readonly CanonicalChain[], exclude?: CanonicalChain) =>
+    among
       .filter((chain) => chain !== exclude)
       .map((chain) => ({ label: `${chain.name} (${chain.id})`, value: chain.slug }));
 
   const sourceRaw = await value(input, missing, "--source", input.given.source, (ask) =>
-    askChoice(ask, "Source chain (where the reward is escrowed):", chainChoices()),
+    askChoice(ask, "Source chain (where the reward is escrowed):", chainChoices(sources)),
   );
   const source = sourceRaw === undefined ? undefined : parseChain(sourceRaw);
   const destinationRaw = await value(
@@ -382,7 +472,8 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     missing,
     "--destination",
     input.given.destination,
-    (ask) => askChoice(ask, "Destination chain (where it is delivered):", chainChoices(source)),
+    (ask) =>
+      askChoice(ask, "Destination chain (where it is delivered):", chainChoices(chains, source)),
   );
   const destination = destinationRaw === undefined ? undefined : parseChain(destinationRaw);
   // Before anything is read from either chain: publishing goes only between supported ones.
@@ -397,12 +488,19 @@ export async function createIntent(input: CreateInput): Promise<Created> {
       );
     }
   }
+  if (source !== undefined && !sources.includes(source)) {
+    throw new UsageError(
+      `--source ${source.slug}: an intent made here is published from a wallet on an EVM chain, ` +
+        `one of ${sources.map((c) => c.slug).join(", ")}; its destination may be ${source.slug}`,
+    );
+  }
   if (source !== undefined && source === destination) {
     throw new UsageError("the source and the destination are the same chain");
   }
   const destinationUrl = destination === undefined ? undefined : input.endpoint(destination);
+  // Solana is read through its own client, where a recipient is checked; nothing is priced there.
   const destinationClient =
-    destination === undefined || destinationUrl === undefined
+    destination === undefined || destinationUrl === undefined || destination.kind !== "evm"
       ? undefined
       : await connect(destinationUrl, destination);
   const sourceUrl = source === undefined ? undefined : input.endpoint(source);
@@ -435,16 +533,29 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     amountRaw === undefined || delivered === undefined
       ? undefined
       : parseUnits(amountRaw, delivered.decimals);
+  const svm = destination?.kind === "svm";
   const recipientRaw = await value(input, missing, "--recipient", input.given.recipient, (ask) =>
-    askText(ask, `Recipient on ${destination?.slug ?? "the destination"}`, {
-      ...(input.signer === undefined ? {} : { fallback: input.signer }),
-      check: (text) => (isAddress(text, { strict: false }) ? undefined : "not an address"),
-    }),
+    svm
+      ? askText(ask, `Recipient on ${destination!.slug}: a wallet (base58)`, {
+          check: (text) => (isSvmKey(text) ? undefined : "not a Solana address"),
+        })
+      : askText(ask, `Recipient on ${destination?.slug ?? "the destination"}`, {
+          ...(input.signer === undefined ? {} : { fallback: input.signer }),
+          check: (text) => (isAddress(text, { strict: false }) ? undefined : "not an address"),
+        }),
   );
-  if (recipientRaw !== undefined && !isAddress(recipientRaw, { strict: false })) {
-    throw new UsageError(`--recipient: '${recipientRaw}' is not an address`);
+  // On Solana a wallet, written into the file as the 32-byte key it is there.
+  let recipientKey: string | undefined;
+  let recipient: Hex | undefined;
+  if (recipientRaw !== undefined && svm) {
+    recipientKey = await svmRecipient(destination!, recipientRaw, destinationUrl);
+    recipient = svmWord(recipientKey);
+  } else if (recipientRaw !== undefined) {
+    if (!isAddress(recipientRaw, { strict: false })) {
+      throw new UsageError(`--recipient: '${recipientRaw}' is not an address`);
+    }
+    recipient = getAddress(recipientRaw);
   }
-  const recipient = recipientRaw === undefined ? undefined : getAddress(recipientRaw);
 
   // The prover, which also prices the proof.
   const provers =
@@ -606,8 +717,14 @@ export async function createIntent(input: CreateInput): Promise<Created> {
   if (input.exists(out)) throw new CliError(`${out} exists: name another with --out`);
   const header = [
     `${formatUnits(amount!, delivered!.decimals)} ${delivered!.symbol ?? delivered!.address} to ` +
-      `${recipient!} on ${destination!.slug}, for ${formatUnits(reward!, rewardToken!.decimals)} ` +
+      `${recipientKey ?? recipient!} on ${destination!.slug}, for ${formatUnits(reward!, rewardToken!.decimals)} ` +
       `${rewardToken!.symbol ?? rewardToken!.address} on ${source!.slug}.`,
+    ...(recipientKey === undefined
+      ? []
+      : [
+          `The recipient is the wallet ${recipientKey}, written below as its 32-byte key: the ` +
+            `route pays its ${delivered!.symbol} account, and creates that account if it has none.`,
+        ]),
     "Written by `sauce intent publish`. Publish it again with the same deadlines and prover:",
     `  sauce intent publish ${out} --chain ${source!.slug} --keystore <path> \\`,
     `    --intent-deadline ${deadline} --intent-reward-deadline ${rewardDeadline} \\`,
