@@ -1,6 +1,9 @@
 # Contracts and tokens API
 
-[API reference](README.md) · [Protocols and tokens](../guides/protocols-and-tokens.md) · [Protocols](../reference/protocols.md)
+**Reference** · [API reference](README.md) · [Protocols and tokens](../guides/protocols-and-tokens.md) · [Protocols](../reference/protocols.md)
+
+> Every protocol and token in Sauce's address book has a name, and you use the same name in a program
+> and in TypeScript. This page lists the shapes those names take.
 
 Every registry protocol is a namespace and every registered token a name, with the same names in a
 program and in TypeScript. This page lists both surfaces; the

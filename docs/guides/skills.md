@@ -1,6 +1,10 @@
 # Agent skills
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [The MCP server](mcp.md)
+**How-to guide** · [Documentation](../README.md) · [The sauce command](cli.md) · [The MCP server](mcp.md)
+
+> Agent skills are handbooks written for coding agents, not for people. Put them in your project and
+> your agent learns to write and run Sauce programs. This manual is the people's version of the same
+> facts.
 
 The package ships agent skills: directories in the
 [Agent Skills](https://agentskills.io/specification) format, each a `SKILL.md` with the examples and

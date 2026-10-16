@@ -1,10 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "..",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@eco-incorp/sauce": ["./src/index.ts"],
+      "@eco-incorp/sauce/svm": ["./src/svm/index.ts"],
+      "@eco-incorp/sauce/protocols/*": ["./src/protocols/*/index.ts"]
+    }
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist", "research", "**/*.sauce.ts"]

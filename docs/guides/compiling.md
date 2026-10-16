@@ -1,6 +1,10 @@
 # Compiling programs
 
-[Documentation](../README.md) · [Compiler API](../api/compiler.md) · [SauceScript](../concepts/saucescript.md)
+**How-to guide** · [Documentation](../README.md) · [Compiler API](../api/compiler.md) · [SauceScript](../concepts/saucescript.md)
+
+> Compiling turns your program into the compact code the chain runs, like translating a recipe into
+> the cook's shorthand. `sauce compile` does it from a terminal. This page does it from your app, in
+> TypeScript, and shows how to hand a compiled program its inputs.
 
 There are two ways to compile, and the choice is about who resolves names. Either way the compiler
 is already in this package, and the output is a program a Sauce engine runs, not a contract you

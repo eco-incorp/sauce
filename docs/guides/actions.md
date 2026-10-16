@@ -1,6 +1,10 @@
 # Actions
 
-[Documentation](../README.md) · [Intents](intents.md) · [Nested intents](nested-intents.md) · [Compiling](compiling.md)
+**How-to guide** · [Documentation](../README.md) · [Intents](intents.md) · [Nested intents](nested-intents.md) · [Compiling](compiling.md)
+
+> Actions are the steps of a program written as a list instead of code, like a shopping list: "swap
+> 100 USDC for ETH on Uniswap, then deposit the ETH in Aave". Sauce turns the list into a program and
+> runs it in one go. Any language that can write JSON can write one.
 
 An **action** is one protocol operation written as data: swap on a Uniswap V3 pool, supply to Aave, bridge through Across, wrap ETH. An **action program** is an ordered list of actions. `@eco-incorp/sauce/actions` compiles it, for a chain, into one Sauce program that executes, atomically, in a Pot on that chain — directly, or as the destination route of an Eco intent.
 
