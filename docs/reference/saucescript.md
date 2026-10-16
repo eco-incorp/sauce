@@ -2,6 +2,10 @@
 
 # SauceScript reference
 
+> SauceScript is the language programs are written in: a small, strict TypeScript. This page is its
+> dictionary: every type, statement and built-in function, and which chains allow each. Learning the
+> language? Start with [Writing SauceScript](../concepts/saucescript.md).
+
 SauceScript is the checked subset of TypeScript that Sauce programs are written in. You compile a program for
 one of two targets:
 

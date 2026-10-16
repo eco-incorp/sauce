@@ -2,6 +2,10 @@
 
 # Chains
 
+> Sauce knows 41 chains. On Ethereum, Base and Solana, the `sauce` command builds and sends
+> transactions. Every other chain is a preview chain: programs compile and simulate there, and
+> nothing is sent. Each chain has a page with its tokens and the protocols a program can call on it.
+
 Every chain the SDK knows, with a page each: whether the initial release supports it, ids, native
 coin, intents, its tokens and every protocol recorded there with its addresses. The Sauce
 contracts have the same addresses on every EVM chain, and its programs the same ids on Solana:

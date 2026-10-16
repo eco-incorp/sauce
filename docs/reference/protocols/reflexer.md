@@ -2,6 +2,10 @@
 
 # Reflexer (`reflexer`)
 
+> Reflexer is a stablecoin protocol: lock tokens as collateral and mint a stablecoin against them.
+> This page lists the chains it is deployed on, the name a program writes for each of its contracts,
+> and the functions a program can call.
+
 Non-pegged stablecoin protocol issuing RAI. Uses a PID controller to dampen RAI price volatility against ETH collateral.
 
 | Fact | Value |

@@ -2,6 +2,10 @@
 
 # Polygon Native Bridge (`polygon-bridge`)
 
+> Polygon Native Bridge is a bridge: it moves tokens from one chain to another. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Official Polygon PoS bridge via RootChainManager. Supports ETH, ERC-20, ERC-721, and ERC-1155 deposits with checkpoint-based withdrawals.
 
 | Fact | Value |

@@ -2,6 +2,10 @@
 
 # Seaport (`seaport`)
 
+> Seaport is an NFT marketplace: people buy and sell NFTs there. This page lists the chains it is
+> deployed on, the name a program writes for each of its contracts, and the functions a program can
+> call.
+
 OpenSea's decentralized NFT marketplace protocol supporting flexible order types including English and Dutch auctions, collection offers, and trait-based offers.
 
 | Fact | Value |

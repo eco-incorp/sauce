@@ -2,6 +2,10 @@
 
 # Silo (`silo`)
 
+> Silo is a lending market: deposit tokens to earn interest, or borrow against them. This page lists
+> the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Permissionless lending protocol with isolated risk markets (Silos). Each Silo is a pair of two assets with independent risk parameters, preventing cross-market contagion.
 
 | Fact | Value |

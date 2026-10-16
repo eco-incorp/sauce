@@ -2,6 +2,9 @@
 
 # Solana stock tokens
 
+> A tokenized stock is a token that follows the price of a company's shares. These are the ones on
+> Solana, each with the symbol a program writes for it.
+
 Every tokenized stock a program compiled for `solana` names by its symbol, with its
 mint. Each is a Token-2022 mint (Token-2022 (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`)), whose writes
 are the checked ones, and the symbol is the mint's key, the value a program holds.

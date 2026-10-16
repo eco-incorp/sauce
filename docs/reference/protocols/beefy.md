@@ -2,6 +2,10 @@
 
 # Beefy Finance (`beefy`)
 
+> Beefy Finance is a yield vault: deposits are put to work to earn interest. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Multi-chain yield optimizer. Auto-compounds rewards from LP tokens and other yield sources across many chains.
 
 | Fact | Value |

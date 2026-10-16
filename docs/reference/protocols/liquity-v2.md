@@ -2,6 +2,10 @@
 
 # Liquity V2 (`liquity-v2`)
 
+> Liquity V2 is a stablecoin protocol: lock tokens as collateral and mint a stablecoin against them.
+> This page lists the chains it is deployed on, the name a program writes for each of its contracts,
+> and the functions a program can call.
+
 Next generation of Liquity protocol with user-set interest rates, multi-collateral support, and the BOLD stablecoin.
 
 | Fact | Value |

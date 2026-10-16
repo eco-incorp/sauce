@@ -2,6 +2,10 @@
 
 # Hegic (`hegic`)
 
+> Hegic is an options protocol: the right to buy or sell at a set price later. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 On-chain options trading protocol allowing users to buy call and put options on ETH and BTC with simplified UX.
 
 | Fact | Value |

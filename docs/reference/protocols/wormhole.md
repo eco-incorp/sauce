@@ -2,6 +2,10 @@
 
 # Wormhole (`wormhole`)
 
+> Wormhole is a messenger between chains: it carries messages and tokens from one to another. This
+> page lists the chains it is deployed on, the name a program writes for each of its contracts, and
+> the functions a program can call.
+
 Generic cross-chain messaging protocol with guardian-based attestation. Supports token bridging and arbitrary message passing across 30+ chains.
 
 | Fact | Value |

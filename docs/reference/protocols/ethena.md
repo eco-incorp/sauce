@@ -2,6 +2,10 @@
 
 # Ethena (`ethena`)
 
+> Ethena is a stablecoin protocol: lock tokens as collateral and mint a stablecoin against them.
+> This page lists the chains it is deployed on, the name a program writes for each of its contracts,
+> and the functions a program can call.
+
 Synthetic dollar protocol providing USDe, a crypto-native dollar backed by delta-neutral positions. sUSDe offers yield from staking and funding rates.
 
 | Fact | Value |

@@ -2,6 +2,10 @@
 
 # Tokens
 
+> Tokens are the coins a program moves, such as USDC and WETH. In a program you write a token's
+> symbol, and Sauce puts in its address on the chain the program runs on. This page lists every
+> chain's tokens, the tokenized stocks among them, and the token functions.
+
 A program compiled for a chain names that chain's registered tokens by symbol, with no import
 (`USDC.balanceOf(ctx.self())`), and any other ERC-20 as `Token(<address>)`. In TypeScript the
 same token is a property of the chain's export, `Base.USDC`, with its `address`, `decimals` and

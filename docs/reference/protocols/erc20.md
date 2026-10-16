@@ -2,6 +2,10 @@
 
 # ERC20 (`erc20`)
 
+> ERC20 is a building block that other protocols are built on. This page lists the chains it is
+> deployed on, the name a program writes for each of its contracts, and the functions a program can
+> call.
+
 The standard interface for fungible tokens on EVM chains (EIP-20). Defines transfer, approve, transferFrom, balanceOf, allowance, totalSupply, name, symbol, and decimals.
 
 | Fact | Value |

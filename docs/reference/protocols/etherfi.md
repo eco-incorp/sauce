@@ -2,6 +2,10 @@
 
 # ether.fi (`etherfi`)
 
+> ether.fi is a restaking protocol: staked coins put to work securing other services too. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Decentralized, non-custodial liquid restaking protocol. Stake ETH to receive eETH (rebasing), or wrap it as weETH (non-rebasing) for DeFi composability. Natively restaked via EigenLayer.
 
 | Fact | Value |

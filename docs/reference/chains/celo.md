@@ -2,6 +2,10 @@
 
 # Celo
 
+> Everything a program can name on Celo: its tokens, and every protocol deployed there with the name
+> a program writes for each contract. Celo is a preview chain: programs compile and simulate here,
+> and the `sauce` command sends nothing.
+
 **Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
 On Celo a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
 runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,

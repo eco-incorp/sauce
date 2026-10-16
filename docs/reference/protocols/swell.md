@@ -2,6 +2,10 @@
 
 # Swell (`swell`)
 
+> Swell is a liquid staking protocol: stake a chain's coin and get back a token you can still use.
+> This page lists the chains it is deployed on, the name a program writes for each of its contracts,
+> and the functions a program can call.
+
 Liquid staking and restaking protocol for Ethereum. Offers swETH for liquid staking and rswETH for liquid restaking via EigenLayer.
 
 | Fact | Value |

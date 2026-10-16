@@ -2,6 +2,9 @@
 
 # Base stock tokens
 
+> A tokenized stock is a token that follows the price of a company's shares. These are the ones on
+> Base, each with the symbol a program writes for it.
+
 Every tokenized stock a program compiled for `base` names by its symbol, with its
 address. [Base](base.md) has the chain's other tokens and its contracts;
 [tokens](../tokens.md) has what a stock token is and how its symbol is spelled.

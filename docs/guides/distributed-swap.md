@@ -2,6 +2,11 @@
 
 # A distributed swap: one limit order over several pools
 
+> Say you want to buy a lot of a token, and never pay more than a set price for any of it. One pool
+> alone gets dearer as you buy. A distributed swap spreads the order over several pools: each sells
+> you what it can below your price, and what you have not spent moves on to the next. You name one
+> price, and one transaction does the rest.
+
 The caller gives **one price: the most they pay for any unit, fees included**. Every pool trades
 until its own price reaches that price, and the budget it does not take stays in the Pot for the
 next pool. The price does the splitting: the program never computes an amount per pool and never

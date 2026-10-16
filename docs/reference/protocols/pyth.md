@@ -2,6 +2,10 @@
 
 # Pyth Network (`pyth`)
 
+> Pyth Network is a price oracle: it publishes prices on chain for programs to read. This page lists
+> the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 High-fidelity oracle network providing low-latency price feeds from institutional sources. Uses pull-based model for efficient on-chain price updates.
 
 | Fact | Value |

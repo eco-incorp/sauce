@@ -2,6 +2,10 @@
 
 # Convex Finance (`convex`)
 
+> Convex Finance is a yield vault: deposits are put to work to earn interest. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Yield optimizer for Curve Finance LP tokens. Deposit Curve LP tokens to earn boosted CRV rewards plus CVX incentives without needing to lock CRV.
 
 | Fact | Value |

@@ -2,6 +2,10 @@
 
 # Arrakis Finance (`arrakis`)
 
+> Arrakis Finance is a yield vault: deposits are put to work to earn interest. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Automated liquidity management protocol for Uniswap V3. Provides vaults that actively manage concentrated liquidity positions with rebalancing.
 
 | Fact | Value |

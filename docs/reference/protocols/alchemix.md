@@ -2,6 +2,10 @@
 
 # Alchemix (`alchemix`)
 
+> Alchemix is a stablecoin protocol: lock tokens as collateral and mint a stablecoin against them.
+> This page lists the chains it is deployed on, the name a program writes for each of its contracts,
+> and the functions a program can call.
+
 Self-repaying loan protocol. Deposit yield-bearing collateral to borrow synthetic assets (alUSD, alETH) that repay themselves over time via yield.
 
 | Fact | Value |

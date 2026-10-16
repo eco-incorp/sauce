@@ -2,6 +2,10 @@
 
 # ENS (`ens`)
 
+> ENS is a building block that other protocols are built on. This page lists the chains it is
+> deployed on, the name a program writes for each of its contracts, and the functions a program can
+> call.
+
 Ethereum Name Service - the decentralized naming system for wallets, websites, and resources. Maps human-readable names to Ethereum addresses.
 
 | Fact | Value |

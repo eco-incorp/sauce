@@ -2,6 +2,9 @@
 
 # Ethereum stock tokens
 
+> A tokenized stock is a token that follows the price of a company's shares. These are the ones on
+> Ethereum, each with the symbol a program writes for it.
+
 Every tokenized stock a program compiled for `ethereum` names by its symbol, with its
 address. [Ethereum](ethereum.md) has the chain's other tokens and its contracts;
 [tokens](../tokens.md) has what a stock token is and how its symbol is spelled.

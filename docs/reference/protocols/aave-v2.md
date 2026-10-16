@@ -2,6 +2,10 @@
 
 # Aave V2 (`aave-v2`)
 
+> Aave V2 is a lending market: deposit tokens to earn interest, or borrow against them. This page
+> lists the chains it is deployed on, the name a program writes for each of its contracts, and the
+> functions a program can call.
+
 Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum, Polygon, and Avalanche.
 
 | Fact | Value |

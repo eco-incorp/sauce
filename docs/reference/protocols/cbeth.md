@@ -2,6 +2,10 @@
 
 # Coinbase Wrapped Staked ETH (`cbeth`)
 
+> Coinbase Wrapped Staked ETH is a liquid staking protocol: stake a chain's coin and get back a
+> token you can still use. This page lists the chains it is deployed on, the name a program writes
+> for each of its contracts, and the functions a program can call.
+
 Coinbase's liquid staking token for Ethereum. cbETH represents staked ETH plus accrued staking rewards. Non-rebasing.
 
 | Fact | Value |

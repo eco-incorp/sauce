@@ -2,6 +2,10 @@
 
 # Protocols
 
+> Every protocol a program can call by name, grouped by what it does: exchanges, lending markets,
+> bridges, staking and more. Each one has a page with where it is deployed and the name a program
+> writes for each of its contracts.
+
 Every protocol the SDK registers, by category: how to choose between them, then each one with
 its family, whether a program names it as a namespace (and on which chains), and where it is
 deployed. Each protocol's page has what it is for and its pitfalls where the registry documents

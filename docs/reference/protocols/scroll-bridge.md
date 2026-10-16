@@ -2,6 +2,10 @@
 
 # Scroll Native Bridge (`scroll-bridge`)
 
+> Scroll Native Bridge is a bridge: it moves tokens from one chain to another. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Official Scroll zkEVM bridge via L1ScrollMessenger and L1GatewayRouter. Deposits ETH and ERC-20 tokens with ZK proof-based finality.
 
 | Fact | Value |

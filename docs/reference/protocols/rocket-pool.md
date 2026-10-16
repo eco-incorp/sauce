@@ -2,6 +2,10 @@
 
 # Rocket Pool (`rocket-pool`)
 
+> Rocket Pool is a liquid staking protocol: stake a chain's coin and get back a token you can still
+> use. This page lists the chains it is deployed on, the name a program writes for each of its
+> contracts, and the functions a program can call.
+
 Decentralised Ethereum liquid staking protocol. Stake ETH and receive rETH, a non-rebasing liquid staking token backed by a decentralized network of permissionless node operators.
 
 | Fact | Value |

@@ -2,6 +2,10 @@
 
 # Base Native Bridge (`base-bridge`)
 
+> Base Native Bridge is a bridge: it moves tokens from one chain to another. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Official Base L1StandardBridge for depositing ETH and ERC-20 tokens from Ethereum to Base. OP Stack architecture with 7-day withdrawal finality.
 
 | Fact | Value |

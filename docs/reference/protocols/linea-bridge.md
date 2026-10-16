@@ -2,6 +2,10 @@
 
 # Linea Native Bridge (`linea-bridge`)
 
+> Linea Native Bridge is a bridge: it moves tokens from one chain to another. This page lists the
+> chains it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Official Linea zkEVM bridge via L1MessageService. Deposits ETH from Ethereum to Linea with ZK proof-based finality.
 
 | Fact | Value |

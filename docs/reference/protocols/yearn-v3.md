@@ -2,6 +2,10 @@
 
 # Yearn V3 (`yearn-v3`)
 
+> Yearn V3 is a yield vault: deposits are put to work to earn interest. This page lists the chains
+> it is deployed on, the name a program writes for each of its contracts, and the functions a
+> program can call.
+
 Yield aggregator protocol. V3 vaults follow the ERC-4626 standard for automated yield optimization with multi-strategy allocations.
 
 | Fact | Value |

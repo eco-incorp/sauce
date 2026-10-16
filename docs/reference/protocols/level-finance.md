@@ -2,6 +2,10 @@
 
 # Level Finance (`level-finance`)
 
+> Level Finance is a perpetuals exchange: bet on a price, with leverage and no expiry date. This
+> page lists the chains it is deployed on, the name a program writes for each of its contracts, and
+> the functions a program can call.
+
 Decentralized perpetual exchange with risk-tranched liquidity pools. Senior (low risk), Mezzanine (medium), and Junior (high risk/reward) tranches.
 
 | Fact | Value |

@@ -2019,8 +2019,132 @@ export function renderDocsReference(data, skillFiles) {
   }
   for (const p of data.protocols)
     files[site.protocol(p.slug)] = renderProtocolRegistry(p, data, site, skillFiles.documents);
+  const intros = docsIntros(data);
+  for (const path of Object.keys(files)) {
+    if (intros[path] === undefined)
+      throw new Error(`no plain-words intro for docs/reference/${path}`);
+    files[path] = introduced(files[path], intros[path]);
+  }
 
   return files;
+}
+
+// ---- The manual's plain-words intros ------------------------------------------------------------
+//
+// Every page of the manual opens with a few short sentences a newcomer can follow, in a blockquote
+// after its title (`docs:check` holds every page to one): the manual is for people, the skills for
+// agents (CLAUDE.md). A page generated here gets its intro here, and only the manual's rendering has
+// one: the skills' references and the skills themselves stay as they are.
+
+/** What a protocol of each category is, for a reader who has never used one. */
+const CATEGORY_PLAINLY = {
+  dex: "an exchange: people swap one token for another in its pools",
+  aggregator: "an exchange aggregator: it looks across many exchanges for the best price",
+  lending: "a lending market: deposit tokens to earn interest, or borrow against them",
+  cdp: "a stablecoin protocol: lock tokens as collateral and mint a stablecoin against them",
+  bridge: "a bridge: it moves tokens from one chain to another",
+  "cross-chain": "a messenger between chains: it carries messages and tokens from one to another",
+  "liquid-staking":
+    "a liquid staking protocol: stake a chain's coin and get back a token you can still use",
+  restaking: "a restaking protocol: staked coins put to work securing other services too",
+  staking: "a staking protocol: lock a token to earn rewards",
+  yield: "a yield vault: deposits are put to work to earn interest",
+  perpetuals: "a perpetuals exchange: bet on a price, with leverage and no expiry date",
+  synthetics: "a synthetic assets protocol: tokens that follow the price of something else",
+  options: "an options protocol: the right to buy or sell at a set price later",
+  oracle: "a price oracle: it publishes prices on chain for programs to read",
+  payments: "a payments protocol: payments streamed or scheduled over time",
+  "nft-marketplace": "an NFT marketplace: people buy and sell NFTs there",
+  infrastructure: "a building block that other protocols are built on",
+};
+
+/** `text`, one paragraph, wrapped at `width` columns. */
+function wrapped(text, width) {
+  const lines = [];
+  let line = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (line && line.length + 1 + word.length > width) {
+      lines.push(line);
+      line = word;
+    } else line = line ? `${line} ${word}` : word;
+  }
+  if (line) lines.push(line);
+
+  return lines;
+}
+
+/** `page` with `intro` as a blockquote right after its title. */
+function introduced(page, intro) {
+  const lines = page.split("\n");
+  const title = lines.findIndex((line) => line.startsWith("# "));
+  if (title < 0) throw new Error("a manual page with no title has nowhere to put its intro");
+
+  return [
+    ...lines.slice(0, title + 1),
+    "",
+    ...wrapped(intro, 98).map((line) => `> ${line}`),
+    ...lines.slice(title + 1),
+  ].join("\n");
+}
+
+/** The intro of each page of the manual's reference, by its path relative to `docs/reference/`. */
+function docsIntros(data) {
+  const site = DOCS_SITE;
+  const supported = andList(data.support.supported.map((c) => c.name));
+  const intros = {
+    [site.chainIndex]:
+      `Sauce knows ${data.chains.length} chains. On ${supported}, the \`sauce\` command builds and ` +
+      "sends transactions. Every other chain is a preview chain: programs compile and simulate " +
+      "there, and nothing is sent. Each chain has a page with its tokens and the protocols a " +
+      "program can call on it.",
+    [site.protocolIndex]:
+      "Every protocol a program can call by name, grouped by what it does: exchanges, lending " +
+      "markets, bridges, staking and more. Each one has a page with where it is deployed and the " +
+      "name a program writes for each of its contracts.",
+    [site.deployments]:
+      "Sauce's own contracts and programs: the Kitchen that makes Pots, the engine that runs " +
+      "programs, and the Routers that help with swaps. They sit at the same address on every " +
+      "chain, so this one page lists them. You rarely need them: the `sauce` command and the SDK " +
+      "fill them in for you.",
+    "tokens.md":
+      "Tokens are the coins a program moves, such as USDC and WETH. In a program you write a " +
+      "token's symbol, and Sauce puts in its address on the chain the program runs on. This page " +
+      "lists every chain's tokens, the tokenized stocks among them, and the token functions.",
+    "saucescript.md":
+      "SauceScript is the language programs are written in: a small, strict TypeScript. This page " +
+      "is its dictionary: every type, statement and built-in function, and which chains allow " +
+      "each. Learning the language? Start with [Writing SauceScript](../concepts/saucescript.md).",
+    [DISTRIBUTED_SWAP_GUIDE]:
+      "Say you want to buy a lot of a token, and never pay more than a set price for any of it. " +
+      "One pool alone gets dearer as you buy. A distributed swap spreads the order over several " +
+      "pools: each sells you what it can below your price, and what you have not spent moves on " +
+      "to the next. You name one price, and one transaction does the rest.",
+    [SOLANA_DISTRIBUTED_SWAP_GUIDE]:
+      "The same order on Solana: buy a lot of a token, never paying more than a set price for any " +
+      "of it, spread over the pools of several Solana exchanges. Each pool sells what it can below " +
+      "your price, and what you have not spent moves on to the next, in one transaction.",
+  };
+  for (const chain of data.chains) {
+    intros[site.chain(chain.slug)] =
+      `Everything a program can name on ${chain.name}: its tokens, and every protocol deployed ` +
+      "there with the name a program writes for each contract. " +
+      (chain.support === "supported"
+        ? `The \`sauce\` command builds and sends transactions on ${chain.name}.`
+        : `${chain.name} is a preview chain: programs compile and simulate here, and the ` +
+          "`sauce` command sends nothing.");
+    intros[site.chainStocks(chain.slug)] =
+      "A tokenized stock is a token that follows the price of a company's shares. These are the " +
+      `ones on ${chain.name}, each with the symbol a program writes for it.`;
+  }
+  for (const p of data.protocols) {
+    const plainly = CATEGORY_PLAINLY[p.category];
+    if (plainly === undefined) throw new Error(`no plain words for the category ${p.category}`);
+    intros[site.protocol(p.slug)] =
+      `${p.name} is ${plainly}. This page lists the chains it is deployed on, the name a program ` +
+      "writes for each of its contracts, and the functions a program can call.";
+  }
+
+  return intros;
 }
 
 // ---- Writing and checking -------------------------------------------------------------------------
