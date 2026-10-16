@@ -1,6 +1,6 @@
 ---
 name: sauce-solana-distributed-swap
-description: A Sauce program for Solana that spreads one exact-input swap over several price-limited pools as a limit order, never paying more than a maximum price for any unit, fees included, and never stranding input. Pools found before the cook with sauce pools and passed as main's Address arguments, every account they take derived as the cook is built, every venue whose swap stops at a price limit (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix) and those left out, one Solana.swap call per pool at any of those venues, a complete program over four pools used whole (and a fifth slot), maxPrice, minTokens and maxAvgPrice for tokens of any decimals, compute units, lookup tables, what fits in one cook, and running it from sauce pools to sauce run with --args alone. Use when asked for a distributed, split or multi-venue swap on Solana, "swap across Raydium and Orca", "buy SOL up to a price", a limit order, or one trade routed through several Solana pools.
+description: A Sauce program for Solana that spreads one exact-input swap over several price-limited pools as a limit order, never paying more than a maximum price for any unit, fees included, and never stranding input. Pools found with sauce pools before the cook, passed as main's Address arguments, every account they take derived as the cook is built, every venue whose swap stops at a price limit (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix, Meteora DLMM) and those left out, one Solana.swap call per pool at any of those venues, a complete program over four pools used whole (and a fifth slot), maxPrice, minTokens and maxAvgPrice for tokens of any decimals, compute units, lookup tables, what fits in one cook, and running it from sauce pools to sauce run with --args alone. Use when asked for a distributed, split or multi-venue swap on Solana, "swap across Raydium and Orca", "buy SOL up to a price", a limit order, or one trade routed through several Solana pools.
 ---
 
 # A distributed swap on Solana
@@ -53,17 +53,20 @@ A correct distributed swap on Solana, whatever its tokens or venues:
    switched off, a paused pool and a market not open: `swap` reads each before calling, so the
    skips are reads, never failures. A dynamic fee, an adaptive fee, or a Byreal pool's decay,
    imbalance or own fee rate is more than the rate the limit is adjusted for, so that pool is
-   skipped rather than pay past `maxPrice`. A remainder too small to buy a unit at a pool's price
-   after its fee buys nothing there, so that slot is skipped too.
+   skipped rather than pay past `maxPrice`; so is a Meteora DLMM pool that takes its fee from the
+   token bought, or is not yet active. A remainder too small to buy a unit at a pool's price after
+   its fee buys nothing there, so that slot is skipped too.
 3. **Gives each pool its own limit, adjusted for its fee.** A concentrated-liquidity pool takes its
    fee from the input, so its last unit costs its price divided by `1 − fee`: each pool's limit is
    the caller's sqrt price moved toward the trade by `√(1 − fee)`, **`limit ÷ √(1 − fee)` paying
    the lower-key token, `limit × √(1 − fee)` paying the other**. An order book charges its fee on
-   top, so its limit price is `maxPrice ÷ (1 + fee)`. The fee is read from the pool or its config
-   in the cook.
+   top, so its limit price is `maxPrice ÷ (1 + fee)`. A Meteora DLMM pool takes no limit: its bins
+   are walked in the cook, each at its own fee (a base and a volatility term), and its swap is
+   offered exactly what drains those within `maxPrice`, at most eight. The fee is read from the
+   pool or its config in the cook.
 4. **Offers each pool everything still unspent** and lets the limit stop it. Every venue here takes
-   only what it swapped before its price reached the limit and leaves the rest in the Pot: nothing
-   is stranded.
+   only what it swapped before its price reached the limit (a DLMM pool, only what its bins within
+   it drain) and leaves the rest in the Pot: nothing is stranded.
 5. **Checks the total**: at least `minTokens` bought, an average no dearer than `maxAvgPrice`.
 6. **Refunds only what is left of the budget**, to `refund`, never the Pot's whole balance; what
    was bought goes on to `recipient`.
@@ -88,18 +91,24 @@ swap and the function of `@sauce/router` that swap is:
 | DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `swap`, a sqrt price limit              | `Defituna.Fusion.swap`   | `defituna`        |
 | Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `swap`, a sqrt price limit              | `Crema.CLMM.swap`        | `crema`           |
 | Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | an immediate-or-cancel order at a price | `Phoenix.Market.swap`    | `phoenix`         |
+| Meteora DLMM     | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  | `swap` of what its bins within it drain | `Meteora.DLMM.swap`      | `meteoraDlmm`     |
 
 Each takes `Solana.swap`'s arguments and refuses a pool of any other venue: a program that knows its
 venue calls that one and carries only its code. `Solana.swap` takes a pool of any of them, reading
 its venue from the pool's owner as it runs (`@sauce/router`'s `swap`), and carries every venue's
 code: the distributed swap, which takes its pools as arguments, cannot know their venues.
 
+Meteora DLMM's swap takes no limit, and its price-impact swap fails past its bound
+(`ExceededAmountSlippageTolerance`) instead of stopping there, so its function walks the pool's
+bins in the cook, as the venue's swap walks them, fee and all, and offers the swap exactly what
+drains those within `maxPrice`: the swap stops with the last of them drained. It walks at most
+eight bins, from the active one, on the two bin arrays its slot gives (one for a pool with a
+Token-2022 mint).
+
 **Left out**, each for what its program does:
 
 - **Invariant** takes a sqrt price limit, but reaching it with input left fails the swap
   (`PriceLimitReached`) instead of stopping it.
-- **Meteora DLMM**: its swap has no limit, and its price-impact swap fails past its bound
-  (`ExceededAmountSlippageTolerance`) instead of stopping there.
 - **Bonkswap** takes a price limit and fails the swap past it (`PriceLimitExceeded`).
 - **Saros DLMM, Meteora DAMM, Raydium CPMM and AMM v4, PumpSwap, the stable and weighted pools, the
   proprietary market makers (HumidiFi, SolFi, Tessera V, Obric, ZeroFi, GoonFi) and Manifest** take
@@ -257,7 +266,7 @@ refunds the whole budget, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 6.3 KB, well past one transaction, so it runs from a code
+- **The program is staged.** It is about 8.8 KB, well past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that (`sauce-solana`).
 - **The accounts go through a lookup table.** The program names 48 accounts, every one derived:
   four slots of nine, the Pot's, the mints', the programs' and the settle's. The cook names each
@@ -268,8 +277,10 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
   own come to about 52 accounts of 64; a fifth pool brings eight more, about 60. Measured on the
   venues' own programs: about 220,000 compute units with every slot empty, each pool that trades
   about 190,000 more, each pool skipped after its reads about 80,000; four trading pools take about
-  950,000 of the 1,400,000, the settle's two transfers about 60,000 of them, and the five-slot
-  program with four trading and one skipped about 1,050,000. Pools that share a program or a config
+  960,000 of the 1,400,000, the settle's two transfers about 60,000 of them, and the five-slot
+  program with four trading and one skipped about 1,060,000. A Meteora DLMM pool costs about
+  26,000 more for each bin it drains: four slots, one a DLMM pool draining its eight, about
+  1,220,000. Pools that share a program or a config
   cost fewer accounts.
 - **Which pools, then.** The cook carries the four or five best the search found, the deepest and
   cheapest first. More pools than fit is more than one cook.
@@ -356,10 +367,10 @@ simulation to fix and run again, never a result. Buying SOL with 2,000 USDC over
 first deep enough for all of it, the addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 392916 compute units, returns <the same three words, in hex>
+The cook succeeds from <owner>: 383737 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 41 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 6667-byte program staged into a code buffer in 10 transactions, as `sauce run` stages it
+  the 9230-byte program staged into a code buffer in 13 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potPay, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC

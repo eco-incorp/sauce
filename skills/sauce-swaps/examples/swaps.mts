@@ -161,11 +161,15 @@ const priced = [
   ...functions.slice(0, functions.indexOf("Every one takes")).matchAll(/`([a-z]\w+)`/g),
 ].map((m) => m[1]!);
 check(
-  priced.length === 10 && priced.includes("swap"),
-  "the skill names nine venues' functions and swap",
+  priced.length === 11 && priced.includes("swap"),
+  "the skill names ten venues' functions and swap",
 );
+// Meteora DLMM's swap has no limit of its own: no `…AtLimit`, and its `…Cpi` and `…Data` its exact
+// input's.
 const atLimit = [
-  ...priced.filter((name) => name !== "swap").map((name) => `${name}AtLimit`),
+  ...priced
+    .filter((name) => name !== "swap" && name !== "meteoraDlmm")
+    .map((name) => `${name}AtLimit`),
   "invariantAtLimit",
   "openbookV2AtLimit",
   "manifest",
@@ -250,7 +254,7 @@ for (const [, name, args] of svmExports.filter((m) => !limit.has(m[1]!)))
         : argsOf(args!) === exactSignature,
     `${name}'s arguments`,
   );
-// What a program carries: one venue's function, or all nine through swap.
+// What a program carries: one venue's function, or all ten through swap.
 const block = [...solana.matchAll(/```sauce chain=solana\n([\s\S]*?)```/g)]
   .map((match) => match[1]!)
   .find((code) => code.includes('from "@sauce/router"'))!;
@@ -260,7 +264,7 @@ const all = routes.compileSauceProgram("solana", block.replaceAll("orcaWhirlpool
 const kb = (bytes: number) => (bytes / 1000).toFixed(1);
 check(
   solana.includes(`about ${kb(one)} KB of program`) &&
-    solana.replace(/\s+/g, " ").includes(`all nine, about ${kb(all)} KB`),
+    solana.replace(/\s+/g, " ").includes(`all ten, about ${kb(all)} KB`),
   `one venue's function is ${one} bytes of program, swap ${all}`,
 );
 console.log(`@sauce/router on Solana: ${priced.join(", ")}; ${one} and ${all} bytes`);

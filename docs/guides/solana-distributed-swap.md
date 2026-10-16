@@ -40,17 +40,20 @@ A correct distributed swap on Solana, whatever its tokens or venues:
    switched off, a paused pool and a market not open: `swap` reads each before calling, so the
    skips are reads, never failures. A dynamic fee, an adaptive fee, or a Byreal pool's decay,
    imbalance or own fee rate is more than the rate the limit is adjusted for, so that pool is
-   skipped rather than pay past `maxPrice`. A remainder too small to buy a unit at a pool's price
-   after its fee buys nothing there, so that slot is skipped too.
+   skipped rather than pay past `maxPrice`; so is a Meteora DLMM pool that takes its fee from the
+   token bought, or is not yet active. A remainder too small to buy a unit at a pool's price after
+   its fee buys nothing there, so that slot is skipped too.
 3. **Gives each pool its own limit, adjusted for its fee.** A concentrated-liquidity pool takes its
    fee from the input, so its last unit costs its price divided by `1 − fee`: each pool's limit is
    the caller's sqrt price moved toward the trade by `√(1 − fee)`, **`limit ÷ √(1 − fee)` paying
    the lower-key token, `limit × √(1 − fee)` paying the other**. An order book charges its fee on
-   top, so its limit price is `maxPrice ÷ (1 + fee)`. The fee is read from the pool or its config
-   in the cook.
+   top, so its limit price is `maxPrice ÷ (1 + fee)`. A Meteora DLMM pool takes no limit: its bins
+   are walked in the cook, each at its own fee (a base and a volatility term), and its swap is
+   offered exactly what drains those within `maxPrice`, at most eight. The fee is read from the
+   pool or its config in the cook.
 4. **Offers each pool everything still unspent** and lets the limit stop it. Every venue here takes
-   only what it swapped before its price reached the limit and leaves the rest in the Pot: nothing
-   is stranded.
+   only what it swapped before its price reached the limit (a DLMM pool, only what its bins within
+   it drain) and leaves the rest in the Pot: nothing is stranded.
 5. **Checks the total**: at least `minTokens` bought, an average no dearer than `maxAvgPrice`.
 6. **Refunds only what is left of the budget**, to `refund`, never the Pot's whole balance; what
    was bought goes on to `recipient`.
@@ -75,18 +78,24 @@ swap and the function of `@sauce/router` that swap is:
 | DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `swap`, a sqrt price limit              | `Defituna.Fusion.swap`   | `defituna`        |
 | Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `swap`, a sqrt price limit              | `Crema.CLMM.swap`        | `crema`           |
 | Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | an immediate-or-cancel order at a price | `Phoenix.Market.swap`    | `phoenix`         |
+| Meteora DLMM     | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  | `swap` of what its bins within it drain | `Meteora.DLMM.swap`      | `meteoraDlmm`     |
 
 Each takes `Solana.swap`'s arguments and refuses a pool of any other venue: a program that knows its
 venue calls that one and carries only its code. `Solana.swap` takes a pool of any of them, reading
 its venue from the pool's owner as it runs (`@sauce/router`'s `swap`), and carries every venue's
 code: the distributed swap, which takes its pools as arguments, cannot know their venues.
 
+Meteora DLMM's swap takes no limit, and its price-impact swap fails past its bound
+(`ExceededAmountSlippageTolerance`) instead of stopping there, so its function walks the pool's
+bins in the cook, as the venue's swap walks them, fee and all, and offers the swap exactly what
+drains those within `maxPrice`: the swap stops with the last of them drained. It walks at most
+eight bins, from the active one, on the two bin arrays its slot gives (one for a pool with a
+Token-2022 mint).
+
 **Left out**, each for what its program does:
 
 - **Invariant** takes a sqrt price limit, but reaching it with input left fails the swap
   (`PriceLimitReached`) instead of stopping it.
-- **Meteora DLMM**: its swap has no limit, and its price-impact swap fails past its bound
-  (`ExceededAmountSlippageTolerance`) instead of stopping there.
 - **Bonkswap** takes a price limit and fails the swap past it (`PriceLimitExceeded`).
 - **Saros DLMM, Meteora DAMM, Raydium CPMM and AMM v4, PumpSwap, the stable and weighted pools, the
   proprietary market makers (HumidiFi, SolFi, Tessera V, Obric, ZeroFi, GoonFi) and Manifest** take
@@ -275,7 +284,7 @@ refunds the whole budget, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 6.3 KB, well past one transaction, so it runs from a code
+- **The program is staged.** It is about 8.8 KB, well past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that ([Solana](solana.md)).
 - **The accounts go through a lookup table.** The program names 48 accounts, every one derived:
   four slots of nine, the Pot's, the mints', the programs' and the settle's. The cook names each
@@ -286,8 +295,10 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
   own come to about 52 accounts of 64; a fifth pool brings eight more, about 60. Measured on the
   venues' own programs: about 220,000 compute units with every slot empty, each pool that trades
   about 190,000 more, each pool skipped after its reads about 80,000; four trading pools take about
-  950,000 of the 1,400,000, the settle's two transfers about 60,000 of them, and the five-slot
-  program with four trading and one skipped about 1,050,000. Pools that share a program or a config
+  960,000 of the 1,400,000, the settle's two transfers about 60,000 of them, and the five-slot
+  program with four trading and one skipped about 1,060,000. A Meteora DLMM pool costs about
+  26,000 more for each bin it drains: four slots, one a DLMM pool draining its eight, about
+  1,220,000. Pools that share a program or a config
   cost fewer accounts.
 - **Which pools, then.** The cook carries the four or five best the search found, the deepest and
   cheapest first. More pools than fit is more than one cook.
@@ -374,10 +385,10 @@ simulation to fix and run again, never a result. Buying SOL with 2,000 USDC over
 first deep enough for all of it, the addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 392916 compute units, returns <the same three words, in hex>
+The cook succeeds from <owner>: 383737 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 41 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 6667-byte program staged into a code buffer in 10 transactions, as `sauce run` stages it
+  the 9230-byte program staged into a code buffer in 13 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potPay, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC
@@ -426,7 +437,7 @@ builds the cook. Offsets are bytes from the start of the account; integers are l
 | 3   | `vaultA`     | the pool's vault for its first token (token 0, token A, Phoenix's base) |
 | 4   | `vaultB`     | the pool's vault for its second token                                   |
 | 5   | `extra`      | one more account the venue's swap takes                                 |
-| 6–8 | `ticks`      | the three tick arrays the swap walks, in walk order                     |
+| 6–8 | `ticks`      | the three tick arrays the swap walks, in walk order (bin arrays, DLMM)  |
 
 An account a venue does not take is the System program, `11111111111111111111111111111111`, and so
 is every account of an empty slot. The concentrated-liquidity venues keep the pair in the order of
@@ -535,12 +546,51 @@ Base and quote are not in key order: the program reads which one it pays. The or
 immediate-or-cancel at the limit price: it takes every offer at or better than the limit, leaves
 the rest on the book, and fills nothing when the best offer is past the limit.
 
+### Meteora DLMM
+
+Bins instead of ticks: a pool of 904 bytes (`Meteora.DLMM.swap`, `meteoraDlmm`). Each bin holds two
+amounts at one fixed price, `(1 + binStep ÷ 10,000)^id` token Y per token X, its id an i32; 70 bins
+make a bin array. Its swap takes no price limit: `meteoraDlmm` walks the bins itself, from the
+active one in the trade's direction, and offers the swap exactly what drains every bin within
+`maxPrice`, its fee included, so the swap stops with the last of them drained. It walks at most
+eight bins.
+
+| Read                                              | Where                                                   |
+| ------------------------------------------------- | ------------------------------------------------------- |
+| base factor, filter and decay periods, reduction  | 8, 10, 12, 14 (u16)                                     |
+| variable fee control, most volatility             | 16 and 20 (u32)                                         |
+| base fee power factor                             | 34                                                      |
+| fee taken from the token bought                   | 36; not zero means so, and the pool is skipped          |
+| volatility, its floor, reference bin, last update | 40, 44 (u32), 48 (i32), 56 (i64)                        |
+| active bin, bin step, status                      | 76 (i32), 80 (u16), 82; status not zero means swaps off |
+| activation type, activation point                 | 86 (0 a slot, 1 a time), 816 (u64); before it, skipped  |
+| mint X, mint Y                                    | 88 and 120, the pool's own order, not the keys'         |
+| reserve X, reserve Y                              | 152 and 184                                             |
+| oracle                                            | 552                                                     |
+| bin-array bitmap                                  | 584, 1,024 bits: bit `i` is the bin array `i − 512`     |
+| a bin array's index; bin `k`'s X, Y and price     | 8 (i64); 56 + 144 × `k`: u64, u64, u128 (Q64.64)        |
+
+The fee, in billionths of the input: `base factor × bin step × 10 × 10^power`, plus
+`(volatility × bin step)² × control ÷ 10^11`, rounded up, at most a tenth. A bin's volatility is
+the floor plus 10,000 for each bin between it and the reference, at most the pool's most; at the
+swap's start, past the filter period since the last update the reference is the active bin and the
+floor the volatility times the reduction over 10,000, and past the decay period the floor is 0.
+
+The slot: `config` = the event authority, the program address of `["__event_authority"]` under the
+DLMM program; `vaultA`/`vaultB` = reserve X and reserve Y; `extra` = the oracle; `ticks0` and
+`ticks1` = the two bin arrays the bitmap marks nearest the active bin's, that one included, in the
+walk's direction (down paying token X, up paying token Y), and `ticks2` = the System program. A bin
+array is the program address of `["bin_array", pool, index]`, `index` a little-endian i64. Its swap
+is `swap` on the first two for two SPL Token mints, and `swap2` on the first for a Token-2022 mint.
+A pool whose active bin is past the 1,024 arrays of its bitmap needs its bitmap extension, which the
+slot does not carry: it is skipped.
+
 ### Finding a pair's pools
 
 A venue's pools are its program's accounts, so `getProgramAccounts` on the venue's program finds
 them, with the pool's size and the pair at its mints' offsets as filters: for the
 concentrated-liquidity venues the lower key at the first offset and the higher at the second, for
-Phoenix the base and quote in either order. Then read each pool's liquidity, price and fee at the
+Phoenix the base and quote and for Meteora DLMM its X and Y, in either order. Then read each pool's liquidity, price and fee at the
 offsets above, drop the empty ones and those whose fee is more than one rate, and keep the deepest
 and cheapest. `sauce pools` does all of this, and `--pay` gives the pools chosen in slot order.
 
@@ -551,7 +601,10 @@ and cheapest. `sauce pools` does all of this, and `--pay` gives the pools chosen
 | DefiTuna                                   | 423   | 11         | 43          |
 | Crema                                      | 748   | 40         | 72          |
 | Phoenix (base, quote)                      | any   | 48         | 128         |
+| Meteora DLMM (X, Y)                        | 904   | 88         | 120         |
 
 A pool's price, back in whole tokens: `(sqrtPrice ÷ 2^64)^2 × 10^(lowerDecimals − higherDecimals)`
 higher-key tokens per lower-key token. Paying the higher-key token, its price fee included is that
-divided by `1 − fee`; paying the lower-key token, `1 ÷ (price × (1 − fee))`.
+divided by `1 − fee`; paying the lower-key token, `1 ÷ (price × (1 − fee))`. A DLMM pool's, at
+its active bin: `(1 + binStep ÷ 10,000)^active × 10^(xDecimals − yDecimals)` token Y per token X;
+paying Y, its price fee included is that divided by `1 − fee`, and paying X, `1 ÷ (price × (1 − fee))`.

@@ -744,10 +744,21 @@ signs a CPI into a program the caller names; only `swap`'s internal path relies 
 read. Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions
 (each venue's `…Data`, `cpi<Venue>` laying out a slot, `swap<Venue>`, `clmmOrder` — which reads
 the pool at its venue's offsets, ~250 bytes smaller and ~5k CU a pool dearer than reading at
-each call site — `clmmCan`, `settled`): a program carries only the venues it calls (`swap` ~4.4
-KB, one venue's function ~0.9–1.7 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the
-distributed swap, its pools `Address` arguments each swapped by `Solana.swap`, 6,283 bytes with
-four and 6,432 with five, cooks four trading pools in about 951,000 CU). `compile.test.ts` pins its exports, each family's argument order, each venue's
+each call site — `clmmCan`, `settled`): a program carries only the venues it calls (`swap` ~6.9
+KB, one venue's function ~0.9–1.7 KB and `meteoraDlmm` ~3.1 KB, its `…Cpi` ~0.4–0.5 KB, its
+`…Data` ~0.2–0.4 KB; the distributed swap, its pools `Address` arguments each swapped by
+`Solana.swap`, 8,846 bytes with four and 8,995 with five, cooks four trading pools in about
+957,000 CU, and four with one a DLMM pool draining its eight bins in about 1,217,000). Meteora
+DLMM's swap takes no limit, so `meteoraDlmm` WALKS its bins in the cook as the venue does
+(`update_references`, then each bin's fee from its distance to the reference) and offers the swap
+exactly what drains the bins within `maxPrice`, at most eight (each ~26k CU with the venue's
+share): `svm-dlmm.e2e.test.ts` holds it to a model of the venue's rules, the swap draining exactly
+those bins, at three clocks. It sends `swap` on the slot's first two bin arrays, `swap2` on the
+first for a Token-2022 mint: a function other than `main` lays out at most seventeen accounts (an
+array literal is built on the stack; seventeen only when the filler value is dead after it), so
+neither takes more. The program skips a bin array behind the walk and stops before one the swap
+would need that the slot does not give (the pool's bitmap, at 584, says), since the venue aborts on
+a missing one. `compile.test.ts` pins its exports, each family's argument order, each venue's
 program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
 revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
 in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from
@@ -868,16 +879,16 @@ writes are SafeERC20 — that is the documented way to get the checks.
 
 **On Solana the token methods and the venue namespaces add their accounts to `main`.**
 `USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf`, `self.USDC`, `Token(mint)`,
-`<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)` (the nine
+`<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)` (the ten
 price-limit venues, protocol then program as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`,
 `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`,
-`Crema.CLMM`, `Phoenix.Market`; ONE method, `swap`, and a `try` spelling is refused) and
-`Solana.swap(…)` (a pool of any of the nine, the venue read from its owner at run time; the System
+`Crema.CLMM`, `Phoenix.Market`, `Meteora.DLMM`; ONE method, `swap`, and a `try` spelling is refused)
+and `Solana.swap(…)` (a pool of any of the ten, the venue read from its owner at run time; the System
 program as the pool is an empty slot, returning 0) are lowered by `routes/svm-lowering.ts`, one
 engine with a collector per syntax (`svm-token-rewrite.ts`, `svm-venue-methods.ts`): each call
 becomes its library function (`@sauce/token`'s SVM arm; for a namespace the venue's OWN
 `@sauce/router` function, `orcaWhirlpool`, never `swap`; for `Solana.swap` the router's `swap`,
-every venue's code, ~4.4 KB) and every account it takes is appended to `main` as an `Account`
+every venue's code, ~6.9 KB) and every account it takes is appended to `main` as an `Account`
 parameter, with how it is derived written as an `--account` value in
 `CompiledSauceProgram.derivedAccounts` (`self:USDC`, `@to:USDC`, `mint:USDC`, a program id,
 `slot:@pool:USDC.vaultA`). ONE resolver,
@@ -1043,7 +1054,8 @@ header's lines say in `cli-examples.e2e.test.ts` (Base, from the wallet `me` the
 `cli-solana-token-methods.e2e.test.ts` (Solana, from `me-solana`).
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 `cli-solana-distributed-swap.e2e.test.ts`) and `@sauce/router`'s SVM arm's
-(`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way: the
+(`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way (Meteora DLMM's,
+whose fixture is the exact-input suite's older one, they load from there): the
 programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
 take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
 lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
