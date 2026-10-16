@@ -142,7 +142,7 @@ interface Listed {
   readonly program: Address;
   readonly pool: Address;
   /** How a program finds the pool by key, its pair as the command was given it. */
-  readonly key?: string;
+  readonly byKey?: string;
   /** In millionths: a Phoenix market's taker fee, in basis points, times 100. */
   readonly fee: number;
   readonly liquidity?: string;
@@ -268,7 +268,7 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
       "",
       `${pool.venue} ${pool.pool}: fee ${pool.fee / 10_000}%` +
         (pool.liquidity === undefined ? "" : `, liquidity ${pool.liquidity}`),
-      ...(pool.key === undefined ? [] : [`  found by key: ${pool.key}`]),
+      ...(pool.byKey === undefined ? [] : [`  found by key: ${pool.byKey}`]),
     );
     for (const side of pool.sides)
       lines.push(
@@ -557,7 +557,7 @@ async function clmmPool(
     venue: venue.name,
     program: venue.program,
     pool,
-    ...(key === undefined ? {} : { key }),
+    ...(key === undefined ? {} : { byKey: key }),
     fee: Number(fee),
     liquidity: liquidity.toString(),
     sqrtPriceX64: sqrt.toString(),

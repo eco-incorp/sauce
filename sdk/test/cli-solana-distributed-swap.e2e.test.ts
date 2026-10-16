@@ -363,7 +363,7 @@ describeSvm(
         pools: {
           venue: string;
           pool: Address;
-          key?: string;
+          byKey?: string;
           sides: { pay: string; priceLimit: string }[];
           slots: Record<
             string,
@@ -395,7 +395,7 @@ describeSvm(
         const p = pool(name);
         const found = listed.pools.find((one) => one.pool === p.pool);
         if (found === undefined) throw new Error(`sauce pools does not list ${name}`);
-        expect(found.key).toBe(key);
+        expect(found.byKey).toBe(key);
         expect(found.slots.USDC).toEqual({
           program: p.program,
           pool: p.pool,

@@ -151,7 +151,7 @@ them, with the pool's size and the pair at its mints' offsets as filters: for th
 concentrated-liquidity venues the lower key at the first offset and the higher at the second, for
 Phoenix the base and quote in either order. Then read each pool's liquidity, price and fee at the
 offsets above, drop the empty ones and those whose fee is more than one rate, and keep the deepest
-and cheapest. `sauce pools` does all of this, and gives each pool's `key`: how a program finds it.
+and cheapest. `sauce pools` does all of this, and gives each pool's `byKey`: how a program finds it.
 
 | Venue                                      | Size  | First mint | Second mint |
 | ------------------------------------------ | ----- | ---------- | ----------- |

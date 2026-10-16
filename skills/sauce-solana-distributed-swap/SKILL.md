@@ -275,7 +275,7 @@ command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tok
 (`USDC:1000000000n`, with a trailing `n`, the same in base units).
 
 1. **Choose the keys.** `sauce pools --chain solana USDC WSOL --json` reads every pool of the pair
-   at the venues above, deepest first, each with its `venue`, `pool`, `key` (how a program finds
+   at the venues above, deepest first, each with its `venue`, `pool`, `byKey` (how a program finds
    it: `Orca.Whirlpool.pool(USDC, WSOL, 4)`), `fee`, `liquidity`, and its price both ways with the
    fee (`sides[].taker`, and as `priceLimit`). A pool the program would skip is under `skipped`,
    with `why`; `checked` names each venue read. A venue that could not be read (an endpoint

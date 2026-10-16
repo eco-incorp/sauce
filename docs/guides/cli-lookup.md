@@ -202,7 +202,7 @@ On Solana, `sauce pools --chain solana USDC WSOL` finds the pair's pools with `g
 the program of each venue whose swap stops at a price limit: Raydium CLMM, PancakeSwap CLMM, Byreal
 and Stabble CLMM, Orca Whirlpools and Cropper, DefiTuna, Crema, and Phoenix's markets. Beside each
 pool's fee, liquidity and price both ways (`sides`, as above, the taker price as a swap's
-`priceLimit`), it gives the pool's `key`: how a program finds it, as `Orca.Whirlpool.pool(USDC,
+`priceLimit`), it gives the pool's `byKey`: how a program finds it, as `Orca.Whirlpool.pool(USDC,
 WSOL, 4)`, the venue's tick spacing or fee, which is what
 [the distributed swap on Solana](solana-distributed-swap.md) lists in its loops. A Solana program
 takes its pools' accounts too, so it gives `slots`: by the token paid, the nine accounts a swap at

@@ -1591,7 +1591,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
         "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
         "liquidity, sides as above but for depth1Pct and with `priceLimit` (a swap's priceLimit " +
-        "argument) for maxPrice, `key` (how a program finds the pool by key: " +
+        "argument) for maxPrice, `byKey` (how a program finds the pool by key: " +
         "Orca.Whirlpool.pool(USDC, WSOL, 4)), and `slots`: by the token paid, the nine accounts a swap " +
         "at the pool takes (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
         "System program, which a program given the pool as an Address argument derives itself; " +
@@ -1680,7 +1680,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             contract: z.string().optional(),
             program: z.string().optional(),
             pool: z.string().optional(),
-            key: z.string().optional(),
+            byKey: z.string().optional(),
             fee: z.number(),
             tickSpacing: z.number().optional(),
             liquidity: z.string().optional(),
