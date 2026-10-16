@@ -66,9 +66,10 @@ programs, the Pot is the Kitchen's account for the owner and salt, and a cook is
 ## Rules every program keeps
 
 1. **Nothing is left behind by surprise.** Measure outputs as balance deltas, deliver them where
-   the user chose, return unspent input, and approve exactly what the next call spends.
+   the user chose, return unspent input or leave it in the Pot where the user keeps it (and say how
+   much), and approve exactly what the next call spends.
 2. **A swap leg never strands input.** Exact input, a minimum output it `require`s, and what a
-   price limit leaves unspent returned (`sauce-swaps`).
+   price limit leaves unspent accounted for: returned, or kept in the Pot (`sauce-swaps`).
 3. **Every check is in the program.** A failed `require` reverts the whole transaction; that
    atomicity is the safety mechanism.
 4. **An intent is an offer.** Say it is offered, never that it will execute.
@@ -208,7 +209,7 @@ the owner rather than repeat it.
 ### `sauce-distributed-swap`
 
 - **Owns**: one exact-input order over several price-limited pools under one maximum price: the
-  rules, `maxPrice`, `minTokens` and `maxAvgPrice`, setting the price, simulating it, and the
+  rules, `priceLimit`, `minTokens` and `maxAvgPrice`, setting the price, simulating it, and the
   complete program for EVM chains.
 - **Load**: when an order should take the best of several pools or stop at a price, on an EVM
   chain.
