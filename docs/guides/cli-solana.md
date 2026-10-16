@@ -150,9 +150,8 @@ same either way. The [Solana guide](solana.md#two-ways-to-run-a-program) sets th
 
 ## Intents
 
-An intent cannot be published from Solana: open it from Ethereum or Base. Its destination may be
-Solana, where `sauce intent fill`, `prove` and `cancel` act on it
-([Intents](cli-intents.md#an-intent-to-solana)).
+An intent can go to Solana ([An intent to Solana](cli-intents.md#an-intent-to-solana)) or start
+there, published with a Solana wallet ([An intent from Solana](cli-intents.md#an-intent-from-solana)).
 
 ## Details
 

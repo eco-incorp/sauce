@@ -45,6 +45,9 @@ sauce intent publish --source ethereum --destination base --token USDC --amount 
 It suggests a reward: what is delivered, plus a margin over what a solver spends on the destination,
 doubled so a fill is worth a solver's while. It shows how it got there, and you can change it.
 
+You can also publish from Solana, with a Solana wallet:
+[An intent from Solana](#an-intent-from-solana).
+
 Every intent needs two things Sauce cannot know: `--intent-deadline`, the last moment a solver may
 do the job, and `--intent-creator`, who may take the reward back if nobody does (you). The deadline
 is in unix seconds: `$(($(date +%s) + 3600))` is an hour from now in most shells. With no file,
@@ -151,6 +154,30 @@ sauce intent claim <intent hash> --wallet me
 `--claimant` is required: it is your address on the source chain, where the reward is paid, and a
 Solana key is not one.
 
+## An intent from Solana
+
+An intent can also start on Solana. You pay the reward in a Solana token, say USDC, and a solver
+does the work on an EVM chain, say Base. Solana's eco-routes Portal holds your reward in a vault
+until a proof arrives that the work was done, then pays the solver on Solana. Nothing on the EVM
+side changes: the solver fills it on Base as it fills any intent, and the proof travels back to
+Solana through Hyperlane.
+
+The file is the same intent file you would publish from an EVM chain. `--chain solana` makes the
+reward Solana's: `USDC` in `.reward(...)` is Solana's USDC mint, while `USDC` inside the braces is
+still Base's.
+
+```sh
+sauce intent publish pay.sauce.ts --chain solana --keypair ~/.config/solana/id.json \
+  --intent-deadline <unix seconds> --intent-creator <your Solana key> --args 0xRecipient
+sauce intent fill 0x<intent hash> --claimant <solver's Solana key> \
+  --send --keystore ~/.keys/solver.json
+sauce intent claim 0x<intent hash> --keypair ~/.config/solana/solver.json
+```
+
+Publishing sends two Solana transactions for each intent: `fund`, which moves the reward into the
+intent's vault, then `publish`, which announces it. The fill and the proof happen on the EVM chain,
+and the claim or refund back on Solana.
+
 ## Details
 
 ### The intent flags
@@ -194,7 +221,8 @@ signer's wallet or `--from <address>`'s, printing each one's gas or revert (`gas
 `--json`); `--assume-balance USDC:2` (repeatable, `ETH:` for the native coin) gives that wallet the
 reward for the simulation only. `--format json` (or `cast`) prints the transactions unsigned, with
 `--from <address>` when there is no signer. Publishing, sent or printed, needs a supported source and
-supported destinations; a dry run simulates on any chain. Publishing from Solana is not supported.
+supported destinations; a dry run simulates on any chain. Publishing from Solana works
+differently: [From Solana, in detail](#from-solana-in-detail).
 
 The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), which is what
 a solver checks once it sees `IntentPublished`, so paying the vault directly needs no approval at
@@ -372,6 +400,30 @@ destination, `claim` and `refund` by its source.
   built for it, so on Solana they need it. A cancellation's proof waits until the slot that cancelled
   it is finalized; `--and-prove` sends the cancellation and its proof in one transaction.
 - **`claim`** and **`refund`** are the source chain's, as for any intent.
+
+### From Solana, in detail
+
+- **`publish`** sends two Solana transactions for each intent, signed by `--keypair` (or a Solana
+  `--wallet`). First `fund` moves the reward from your token account into the intent's vault, an
+  account Solana's Portal derives from the intent's hash. Then `publish` announces the intent so
+  solvers can find it. They are two transactions because together they are larger than one Solana
+  transaction can be. If the second fails, the reward waits in the vault: publish again, or refund
+  it after the reward's deadline. Both are simulated on the cluster first, and nothing is sent if
+  either would fail. `--dry-run` only simulates; `--format json` prints them unsigned, for the
+  wallet that `--from <key>` names. `--intent-creator` is a Solana key: the account a refund pays.
+- The route has to fit in one Solana transaction, because the Portal takes it whole. Plain token
+  transfers fit; a program body does not.
+- **`fill`**, **`prove`** and **`cancel`** happen on the EVM destination, as for any intent.
+  `--claimant` is required: it is the Solana key the reward will pay, since an EVM address cannot
+  hold the reward. The proof goes to Solana's HyperProver, which accepts proofs from the EVM
+  chains' HyperProver.
+- **`claim`** and **`refund`** happen on Solana. Anyone may send them with `--keypair`, which pays
+  the fee: the claim pays the claimant the proof names, and the refund pays the creator. Each opens
+  the receiving token account first if it does not exist yet.
+- **`import`** stores an intent someone published from Solana, by the transaction's signature:
+  `sauce intent import <signature> --chain solana`.
+- A Sauce program running on Solana cannot open an intent itself yet: compiling one says to publish
+  it from a wallet instead.
 
 ### The store, in detail
 

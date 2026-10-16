@@ -64,6 +64,7 @@ import {
 } from "../protocols/eco-routes/lookup.js";
 import {
   rewriteIntentSugar,
+  type IntentSugarContext,
   type IntentSugarDefaults,
   type LoweredIntent,
 } from "./intent-sugar.js";
@@ -656,6 +657,91 @@ export function compileSauceProgram(
   };
 }
 
+/** What the intent sugar needs of a program compiled for `chain`, the intents' source. */
+function intentSugarContext(
+  chain: CanonicalChain,
+  options: SauceCompileOptions,
+  scope: RouteScope,
+  publishOnly?: boolean,
+): IntentSugarContext {
+  return {
+    source: chain,
+    chains: chainAccessorNames(),
+    // This chain's values for this chain — the program's own names and the reward it funds — and
+    // each other chain's own for a body there: see `levelOn`.
+    definesFor: (destination) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileTimeValues(destination, level.options, level.scope);
+    },
+    portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
+    proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
+    defaults: options.intents ?? {},
+    compileChild: (destination, childSource, captures, destinationPortal) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileIntentChild(
+        destination,
+        childSource,
+        captures,
+        destinationPortal,
+        level.options,
+        level.scope,
+      );
+    },
+    svmTransfers: (destination, portal, transfers) =>
+      svmTransferRoute({
+        portal: svmKeyOfWord(BigInt(toUniversalAddress(portal)), "the Portal"),
+        transfers: transfers.map((transfer) => ({
+          ...svmMintOf(destination, transfer.mint),
+          recipient: svmKeyOfWord(transfer.recipient, "a transfer's recipient"),
+          amount: transfer.amount,
+        })),
+        existing: new Set(options.intents?.svm?.existing ?? []),
+      }),
+    svmProgram: (destination, childSource, portal, delivered) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileSvmIntentChild(destination, childSource, portal, delivered, level);
+    },
+    ...(publishOnly === true ? { publishOnly } : {}),
+  };
+}
+
+/**
+ * The intents a program opens, as {@link compileSauceProgram} lowers them, without compiling the
+ * program that would publish them: what a WALLET publishes. The only way to build an intent whose
+ * source is Solana, whose Portal a wallet calls itself (`svm/portal-source.ts`): a program running
+ * on Solana does not open one, and its compile says so.
+ */
+export function lowerProgramIntents(
+  chain: ChainRef,
+  source: string,
+  options: SauceProgramOptions = {},
+): {
+  readonly chain: CanonicalChain;
+  readonly intents: readonly LoweredIntent[];
+  readonly entryParams: readonly EntryParam[];
+} {
+  const resolved = requireChain(chain);
+  const { args, ...given } = options;
+  const bound = args === undefined ? undefined : bindEntryArguments(source, args);
+  const compile: SauceCompileOptions =
+    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
+  const scope: RouteScope = { chainDefines: (on) => definesOf(on, compile.tokens) };
+  const text = bound?.source ?? source;
+  const available = rewriteAvailability(text, resolved, resolveTokenMap(resolved, compile.tokens));
+  const sugar = rewriteIntentSugar(
+    available.source,
+    intentSugarContext(resolved, compile, scope, true),
+  );
+
+  return {
+    chain: resolved,
+    intents: sugar.intents,
+    entryParams: mainParams(text).filter(
+      (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
+    ),
+  };
+}
+
 /**
  * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
  * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
@@ -710,44 +796,7 @@ function compileForChain(
   // that had already turned `USDC.transfer(...)` into `__sauce_transfer(USDC, ...)` would leave it
   // nothing it recognises. What it leaves behind is ordinary `evm.call` statements, which every
   // later pass is free to walk over.
-  const sugar = rewriteIntentSugar(source, {
-    source: chain,
-    chains: chainAccessorNames(),
-    // This chain's values for this chain — the program's own names and the reward it funds — and
-    // each other chain's own for a body there: see `levelOn`.
-    definesFor: (destination) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileTimeValues(destination, level.options, level.scope);
-    },
-    portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
-    proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
-    defaults: options.intents ?? {},
-    compileChild: (destination, childSource, captures, destinationPortal) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileIntentChild(
-        destination,
-        childSource,
-        captures,
-        destinationPortal,
-        level.options,
-        level.scope,
-      );
-    },
-    svmTransfers: (destination, portal, transfers) =>
-      svmTransferRoute({
-        portal: svmKeyOfWord(BigInt(toUniversalAddress(portal)), "the Portal"),
-        transfers: transfers.map((transfer) => ({
-          ...svmMintOf(destination, transfer.mint),
-          recipient: svmKeyOfWord(transfer.recipient, "a transfer's recipient"),
-          amount: transfer.amount,
-        })),
-        existing: new Set(options.intents?.svm?.existing ?? []),
-      }),
-    svmProgram: (destination, childSource, portal, delivered) => {
-      const level = levelOn(chain, destination, options, scope);
-      return compileSvmIntentChild(destination, childSource, portal, delivered, level);
-    },
-  });
+  const sugar = rewriteIntentSugar(source, intentSugarContext(chain, options, scope));
   source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes

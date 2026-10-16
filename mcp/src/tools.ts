@@ -62,6 +62,7 @@ import {
   MAX_V4_KEYS,
   parseAccounts,
   parseAddress,
+  parseIntentParty,
   parseChain,
   parseDefineMap,
   parseLamports,
@@ -87,6 +88,7 @@ import {
   programChains,
   type ProgramInput,
   publishCommand,
+  publishSvmCommand,
   solanaIntentState,
   readPoolAt,
   reclaimCommand,
@@ -223,8 +225,8 @@ export const PROGRAM = {
     .max(64)
     .optional()
     .describe(
-      "For intents the program opens: their creator (0x address), who may reclaim an unearned " +
-        "reward.",
+      "For intents the program opens: their creator (0x address; from Solana a base58 key), " +
+        "who may reclaim an unearned reward.",
     ),
   intentRewardDeadline: integer
     .optional()
@@ -542,6 +544,8 @@ function intentsOf(
     | "intentExecutionFee"
     | "intentFundVia"
   >,
+  /** The intents' source: on Solana their creator and prover are base58 keys. */
+  chain: CanonicalChain,
 ) {
   const { intentDeadline, intentRewardDeadline, intentCreator, intentProver } = args;
   const { intentExecutionFee, intentFundVia } = args;
@@ -563,10 +567,12 @@ function intentsOf(
             integerText(intentRewardDeadline, "intentRewardDeadline"),
           ),
         }),
-    ...(intentProver === undefined ? {} : { prover: parseAddress("intent-prover", intentProver) }),
+    ...(intentProver === undefined
+      ? {}
+      : { prover: parseIntentParty("intent-prover", intentProver, chain) }),
     ...(intentCreator === undefined
       ? {}
-      : { creator: parseAddress("intent-creator", intentCreator) }),
+      : { creator: parseIntentParty("intent-creator", intentCreator, chain) }),
     ...(intentExecutionFee === undefined
       ? {}
       : {
@@ -691,7 +697,7 @@ function programWith(
       defines,
       ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
       compactArgs: args.compactArgs === true,
-      intents: intentsOf(args),
+      intents: intentsOf(args, chain),
     },
     files,
   };
@@ -868,8 +874,6 @@ export const NO_APPROVER = {
 } as const;
 /** The name an actions document goes by in messages: it comes from the call, not a file. */
 const ACTIONS_FILE = "actions.json";
-/** An intent's claimant, as fulfill records it: an address, or 32 bytes. */
-export const CLAIMANT = /^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
 export const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 function hexArg(raw: string, what: string): Hex {
@@ -2475,7 +2479,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "wallet balances for the simulation only. A program that measures an amount on chain, or " +
         "does anything besides open intents, is refused: run it on a Pot (sauce_tx) instead. " +
         "dryRun works on every chain; the transactions only where the source and every " +
-        `destination are supported. ${UNSIGNED} ${SUPPORTED_ONLY}`,
+        "destination are supported. From Solana (chain solana): two Solana transactions an " +
+        "intent for `from`, Portal.fund (the reward into the vault Solana's Portal derives) then " +
+        "Portal.publish, each simulated first; the route must fit one Solana transaction (token " +
+        `transfers, not a program body). ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...PROGRAM,
         args: INTENT_ARGS,
@@ -2486,7 +2493,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .describe(
             "The 0x wallet that funds and publishes: with an endpoint, the vault is read and " +
               "only what it lacks is transferred (or, with intentFundVia publishAndFund, the " +
-              "approvals are planned against its allowance); dryRun's sender.",
+              "approvals are planned against its allowance); dryRun's sender. From Solana " +
+              "(chain solana), the base58 key that funds the reward and pays the fee: required.",
           ),
         dryRun: z
           .boolean()
@@ -2521,6 +2529,35 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ? output
           : { ...output, notes: [...solana.notes, ...(output.notes ?? [])] };
       const chain = program.input.chain;
+      // From Solana the wallet calls Solana's Portal itself: fund, then publish, one transaction an
+      // intent, built for `from` (the CLI's `publish-svm.ts`).
+      if (chain.kind === "svm") {
+        if (args.assumeBalance !== undefined) {
+          throw new UsageError(
+            "assumeBalance overrides an EVM chain's state: a Solana simulation runs on the accounts " +
+              "as they are",
+          );
+        }
+        if (args.from === undefined) {
+          throw new UsageError(
+            "give from: the base58 key of the Solana wallet that funds the reward and pays the fee",
+          );
+        }
+
+        return withRecords(
+          program,
+          await publishSvmCommand(
+            {
+              ...program.input,
+              ...(args.dryRun === true ? {} : { format: "json" as const }),
+              dryRun: args.dryRun === true,
+              rpcUrl: await reach.require(chain, args.rpcUrl, "Publishing from Solana"),
+              from: parsePubkey("from", args.from),
+            },
+            program.files,
+          ),
+        );
+      }
       const from = args.from === undefined ? undefined : parseAddress("from", args.from);
       const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
       if (assume.length > 0 && args.dryRun !== true) {

@@ -1835,7 +1835,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       ).stderr,
     ).toMatch(/--value is for EVM/);
     expect((await sauce("intent", "publish", sweep)).stderr).toMatch(
-      /Publishing from Solana is not supported/,
+      /opens no intent — there is nothing to publish/,
     );
     const bad = join(work, "bad.json");
     writeFileSync(bad, "[1, 2, 3]");

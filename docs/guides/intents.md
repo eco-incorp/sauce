@@ -171,7 +171,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 }
 ```
 
-The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana; a program builds that route for you, as [Sending to Solana](#sending-to-solana) shows.
+The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana; a program builds that route for you, as [Sending to Solana](#sending-to-solana) shows. An intent can also start on Solana, published from a Solana wallet: see [An intent from Solana](cli.md#an-intent-from-solana).
 
 The route has two calls: the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above, and the route's `nativeAmount`, which the solver sends, is that fee. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
