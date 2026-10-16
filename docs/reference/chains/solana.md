@@ -59,10 +59,10 @@ of `main`, given to `--args` as the mint's base58 address:
 
 ## Venues
 
-Each venue whose swap a price limit stops, by the namespace a program swaps at one of its pools
-with, its protocol then its program: `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn,
-maxPrice, minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts
-below `minOut`; `Solana.swap(…)` takes a pool of any of them. The pool's accounts, and the
+Each venue, by the namespace a program swaps at one of its pools with, its protocol then its
+program: at a price, `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`,
+which returns 0 having moved nothing where the pool cannot trade and reverts below `minOut`;
+`Solana.swap(…)` takes a pool of any venue swapping at a price. The pool's accounts, and the
 Pot's, are derived when the cook is built ([the `@sauce/router` reference](../../api/router.md)).
 
 | Namespace | Venue | Program |
@@ -76,6 +76,11 @@ Pot's, are derived when the cook is built ([the `@sauce/router` reference](../..
 | `Defituna.Fusion` | DefiTuna | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9` |
 | `Crema.CLMM` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
 | `Phoenix.Market` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` |
+| `Meteora.DLMM` | Meteora DLMM | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo` |
+
+`Meteora.DLMM`'s swap is an exact input, its venue's own with no price limit:
+`Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)` pays all of `amountIn` or
+fails the cook, and reverts below `minOut`.
 
 ## Accounts
 

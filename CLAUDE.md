@@ -872,7 +872,11 @@ writes are SafeERC20 — that is the documented way to get the checks.
 `<Protocol>.<Program>.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)` (the nine
 price-limit venues, protocol then program as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`,
 `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`,
-`Crema.CLMM`, `Phoenix.Market`; ONE method, `swap`, and a `try` spelling is refused) and
+`Crema.CLMM`, `Phoenix.Market`; ONE method, `swap`, and a `try` spelling is refused; and
+`Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)`, the venue's own exact input with no
+`maxPrice`, lowered to the router's `meteoraDlmm`, a slot form laying out seventeen accounts in place
+— its first two bin arrays for `swap`, the first for a Token-2022 mint's `swap2` — which
+`svm-dlmm.e2e.test.ts` holds to the venue's own swap of the same amount) and
 `Solana.swap(…)` (a pool of any of the nine, the venue read from its owner at run time; the System
 program as the pool is an empty slot, returning 0) are lowered by `routes/svm-lowering.ts`, one
 engine with a collector per syntax (`svm-token-rewrite.ts`, `svm-venue-methods.ts`): each call

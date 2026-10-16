@@ -1174,16 +1174,24 @@ function renderChain(chain, supported, site) {
     lines.push(
       "## Venues",
       "",
-      "Each venue whose swap a price limit stops, by the namespace a program swaps at one of its pools",
-      "with, its protocol then its program: `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn,",
-      "maxPrice, minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts",
-      "below `minOut`; `Solana.swap(…)` takes a pool of any of them. The pool's accounts, and the",
+      "Each venue, by the namespace a program swaps at one of its pools with, its protocol then its",
+      "program: at a price, `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`,",
+      "which returns 0 having moved nothing where the pool cannot trade and reverts below `minOut`;",
+      "`Solana.swap(…)` takes a pool of any venue swapping at a price. The pool's accounts, and the",
       "Pot's, are derived when the cook is built (`sauce-swaps`).",
       "",
       "| Namespace | Venue | Program |",
       "| --- | --- | --- |",
       ...chain.venues.map((v) => `| \`${v.namespace}\` | ${v.name} | \`${v.program}\` |`),
       "",
+      ...chain.venues
+        .filter((v) => !v.methods.some((method) => method.includes("maxPrice")))
+        .flatMap((v) => [
+          `\`${v.namespace}\`'s swap is an exact input, its venue's own with no price limit:`,
+          `\`${v.namespace}.swap(pool, tokenIn, tokenOut, amountIn, minOut)\` pays all of \`amountIn\` or`,
+          "fails the cook, and reverts below `minOut`.",
+          "",
+        ]),
     );
   }
   if (chain.accounts.length > 0) {

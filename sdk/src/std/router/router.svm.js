@@ -2363,8 +2363,8 @@ export function openbookV2Cpi(
 // pool), no input, and the venue's own refusals its comment names; otherwise it swaps, or the
 // transaction fails, and returns what the recipient received, held to `minOut` and at least 1, which
 // it also writes into the venue's least out. A function reading its accounts
-// out of `slot` and `trader` cannot hand over more than sixteen: a venue whose swap takes more has
-// only its `Cpi` and `Data` forms.
+// out of `slot` and `trader` cannot hand over more than sixteen, seventeen filled in place (Meteora
+// DLMM's): a venue whose swap takes more has only its `Cpi` and `Data` forms.
 //
 // A swap spends exactly `amountIn` unless its venue's comment says otherwise. Every form but `Data`
 // requires the program to be its venue's before the authority signs into it ("not a <venue> pool"),
@@ -4432,6 +4432,89 @@ export function guacswapCpi(
   return held - left;
 }
 
+// Meteora DLMM, LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo: `swap` of exactly `amountIn`, held to
+// the venue's own floor, `minOut`, with no price limit: the swap crosses the bins it needs. `slot`:
+// the program, the pool, its program's event authority, its X and Y reserves (the pool's own order,
+// not the keys'), its oracle, and the bin arrays its bitmap marks from the active bin's in the
+// trade's direction, the System program past the last. Its swap takes the first two (`swap`, for two
+// SPL Token mints) or the first alone (`swap2`, for a Token-2022 mint): an input past what they
+// hold fails the swap. Returns 0 having moved nothing for a missing slot, no input, a pool whose swaps
+// are off and one not active yet.
+export function meteoraDlmm(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const id = 0x04e9e12fbc84e826c932cce9e2640cce15590c1c6273b0925708ba3b8520b0bc;
+  require(pool.owner == id && slot[0].address == id, "not a Meteora DLMM pool");
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  // Paying token X, the pool's first (not key order): a pair the pool does not hold the venue
+  // refuses.
+  const paysX = svm.sload(pool, 88, 32).toBe() == trader[2].address;
+  // Swaps off (its status), or not active yet: its activation point, a slot or a time by its type.
+  const point = svm.sload(pool, 816, 8).toLe();
+  if (
+    svm.sload(pool, 82, 1).toLe() != 0 ||
+    (point != 0 &&
+      (svm.sload(pool, 86, 1).toLe() == 0 ? ctx.blockNumber() : ctx.timestamp()) < point)
+  ) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  cpiDlmm(slot, trader, paysX, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Meteora DLMM's swap of `amount`, `minOut` its least out, from a slot: the pool, its bitmap
+// extension (the program, for none), its X and Y reserves, the paying and receiving accounts, mints X
+// and Y, the oracle, the host fee account (the program, for none), the authority, X's and Y's token
+// programs, then the event authority, the program and the slot's first two bin arrays (a System
+// program among them is passed over) for `swap`; for `swap2`, which takes Token-2022 too, the memo
+// program before them, no transfer-hook accounts, and the first bin array alone. Seventeen accounts,
+// filled in place: more than a function holds at once.
+function cpiDlmm(
+  slot: Account[],
+  trader: Account[],
+  paysX: bool,
+  amount: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const mintX = paysX ? trader[2] : trader[3];
+  const mintY = paysX ? trader[3] : trader[2];
+  const token = trader[4].address;
+  const swap2 = mintX.owner != token || mintY.owner != token;
+  const p = slot[0];
+  const accounts = [p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p];
+  accounts[0] = slot[1];
+  accounts[2] = slot[3];
+  accounts[3] = slot[4];
+  accounts[4] = trader[1];
+  accounts[5] = recipient;
+  accounts[6] = mintX;
+  accounts[7] = mintY;
+  accounts[8] = slot[5];
+  accounts[10] = trader[0];
+  accounts[11] = mintX.owner == token ? trader[4] : trader[5];
+  accounts[12] = mintY.owner == token ? trader[4] : trader[5];
+  accounts[13] = swap2 ? trader[6] : slot[2];
+  accounts[14] = swap2 ? slot[2] : slot[0];
+  accounts[15] = swap2 ? slot[0] : slot[6];
+  accounts[16] = swap2 ? slot[6] : slot[7];
+  // `swap2`'s data ends with the transfer-hook accounts' count, 0.
+  const swap = swap2 ? hex`414b3f4ceb5b5b88` : hex`f8c69e91e17587c8`;
+  const word = (amount & 0xffffffffffffffff) | (minOut << 64);
+  svm.call(slot[0], accounts, swap.concat(word.toBytesLe(swap2 ? 20 : 16)));
+}
+
 // Meteora DLMM's `swap`: exact input of `amountIn`, `minOut` its least out. The direction is the
 // accounts'.
 export function meteoraDlmmData(amountIn: Uint256, minOut: Uint256): bytes {
@@ -4443,8 +4526,8 @@ export function meteoraDlmmData(amountIn: Uint256, minOut: Uint256): bytes {
 
 // Meteora DLMM, LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo: `swap`, exact input held to the
 // venue's own floor, with no price limit: the swap crosses the bins it needs, up to the end of the
-// bin arrays it is given. It takes more accounts than a function can list, so it has only its `Cpi`
-// form. `accounts`: the pool, its bin-array bitmap extension (the program itself when the pool has
+// bin arrays it is given, as many as the caller lists (`meteoraDlmm`, above, takes a slot's two).
+// `accounts`: the pool, its bin-array bitmap extension (the program itself when the pool has
 // none), its X and Y reserves, the authority's paying and receiving token accounts, mints X and Y,
 // the oracle, the host fee account (the program itself for none), the authority, X's and Y's token
 // programs, the event authority, the program, then the bin arrays the swap crosses, from the active

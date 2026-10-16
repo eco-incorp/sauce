@@ -53,13 +53,14 @@ describe("Solana's venue namespaces", () => {
     expect(program.source).not.toContain("{ swap as");
   });
 
-  it("names every venue a price limit stops, its protocol then its program, each to its function", () => {
+  it("names every venue, its protocol then its program, each to its function", () => {
     expect(Object.keys(SVM_VENUE_NAMESPACES).sort()).toEqual(
       [
         "Byreal.CLMM",
         "Crema.CLMM",
         "Cropper.Whirlpool",
         "Defituna.Fusion",
+        "Meteora.DLMM",
         "Orca.Whirlpool",
         "Pancakeswap.CLMM",
         "Phoenix.Market",
@@ -68,8 +69,10 @@ describe("Solana's venue namespaces", () => {
       ].sort(),
     );
     for (const [namespace, venue] of Object.entries(SVM_VENUE_NAMESPACES)) {
+      // Meteora DLMM's swap is an exact input: no maxPrice.
+      const price = venue.exact ? "" : "10, ";
       const program = compile(
-        `function main(pool: Address): Uint256 {\n  return ${namespace}.swap(pool, USDC, WSOL, 5, 10, 1);\n}\n`,
+        `function main(pool: Address): Uint256 {\n  return ${namespace}.swap(pool, USDC, WSOL, 5, ${price}1);\n}\n`,
       );
       expect(program.source).toContain(
         `import { ${venue.swap} as __sauce_${venue.swap} } from "@sauce/router";`,

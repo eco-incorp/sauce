@@ -106,7 +106,11 @@ const VENUES: [string, string, string, string][] = [
 ];
 const ARGS = "slot, trader, amountIn, maxPrice, minOut, recipient";
 check(params("swap") === ARGS, `swap takes (${ARGS})`);
-const named = routes.sourceGlobals("solana").venues;
+// The venues swapping at a price: Meteora DLMM's namespace is an exact input, which this program
+// cannot stop at a price.
+const named = routes
+  .sourceGlobals("solana")
+  .venues.filter((one) => one.methods.some((method) => method.includes("maxPrice")));
 check(
   named.map((one) => `${one.namespace} ${one.program}`).join() ===
     VENUES.map(([namespace, , id]) => `${namespace} ${id}`).join(),

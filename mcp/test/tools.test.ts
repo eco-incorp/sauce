@@ -287,6 +287,7 @@ describe("sauce_globals", () => {
         "Defituna.Fusion",
         "Crema.CLMM",
         "Phoenix.Market",
+        "Meteora.DLMM",
       ],
     );
     assert.equal(

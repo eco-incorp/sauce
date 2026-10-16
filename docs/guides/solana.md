@@ -126,6 +126,8 @@ function main(
 
 Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. Each has one method, `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`. It returns what arrived. Where the pool cannot trade (it is empty, paused, or already past `maxPrice`), it returns 0 and moves nothing. Below `minOut` the whole transaction reverts. `maxPrice` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
 
+Meteora DLMM's own swap has no price limit, so `Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)` takes no `maxPrice`: it pays all of `amountIn`, or the whole transaction fails, and reverts below `minOut`.
+
 - **One venue's function.** Each call compiles to that venue's own `@sauce/router` function (`orcaWhirlpool`), never the router's all-venue `swap`, and keeps that function's checks: the venue's program, the pool's owner, the pair, `minOut`.
 - **The accounts are added to `main`.**
   - The pool's nine (`slot:@pool:USDC.program` through `ticks2`) are read from the pool on the cluster as the cook is built. Its tick arrays follow the token paid, so the slot is that direction's (`svm.svmPoolSlot`, the same `sauce pools --chain solana` lists).

@@ -325,6 +325,7 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   huma: 8,
   heliumTreasury: 6,
   solfiV1: 5,
+  meteoraDlmm: 9,
 };
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form
@@ -334,7 +335,6 @@ export const SVM_CPI_ONLY = [
   "pumpswap",
   "bonkswap",
   "guacswap",
-  "meteoraDlmm",
   "sarosDlmm",
   "raydiumLaunchlab",
   "runnerRodeo",
