@@ -3,7 +3,7 @@
  * there — Uniswap V3 and PancakeSwap V3 at every fee tier, Aerodrome Slipstream at every tick
  * spacing of every CLFactory, and hookless Uniswap V4 pools at the standard keys and any given —
  * each with its fee, liquidity and price both ways round, before and after the fee, and the
- * distributed swap's `maxPrice` at that price.
+ * distributed swap's `priceLimit` at that price.
  *
  * Everything is read in five rounds (`chain.ts#readAll`, each `eth_call` carrying up to 32 reads):
  * the pools the V3-style factories have and the tick spacings Slipstream's enable, beside the
@@ -315,11 +315,11 @@ export interface PoolSide {
   /** The same with the fee paid: what a unit costs a taker now. */
   readonly taker: string;
   /**
-   * The taker price as the distributed swap's `maxPrice`: pay base units per buy base unit, times
+   * The taker price as the distributed swap's `priceLimit`: pay base units per buy base unit, times
    * 1e18 — the price in whole tokens times 10^(18 + pay decimals − buy decimals) — rounded up. The
-   * pool sells only to a `maxPrice` above it.
+   * pool sells only to a `priceLimit` above it.
    */
-  readonly maxPrice: bigint;
+  readonly priceLimit: bigint;
   /** Whole pay tokens, fee included, a taker spends before the price moves 1% against them,
    *  through the pool's ticks; absent where they could not be read. */
   readonly depth1Pct?: string;
@@ -358,7 +358,7 @@ export function poolSides(
       // To 18 significant digits: a price a millionth of a cent is as exact as one of thousands.
       mid: significant(midN, midD, 18),
       taker: significant(takerN, takerD, 18),
-      maxPrice: (num * PPM * E18 + den * keep - 1n) / (den * keep),
+      priceLimit: (num * PPM * E18 + den * keep - 1n) / (den * keep),
       // The pool is paid the depth with its fee on top.
       ...(ticks === undefined
         ? {}
@@ -893,8 +893,8 @@ function report(found: {
       fee: "millionths of the amount paid: 500 is 0.05%",
       mid: "pay tokens per buy token, in whole tokens, at the pool's price before its fee (18 significant digits)",
       taker: "the same with the fee: what a unit costs a taker now",
-      maxPrice:
-        "the taker price as the distributed swap's maxPrice: pay base units per buy base unit, " +
+      priceLimit:
+        "the taker price as the distributed swap's priceLimit: pay base units per buy base unit, " +
         "times 1e18 (the price times 10^(18 + pay decimals - buy decimals)), rounded up",
       depth1Pct:
         "whole pay tokens, fee included, a taker spends before the pool's price is 1% worse, " +
@@ -909,7 +909,7 @@ function report(found: {
         mid: side.mid,
         taker: side.taker,
         means: `${side.taker} ${side.pay.symbol} per ${side.buy.symbol}, fee included`,
-        maxPrice: side.maxPrice.toString(),
+        priceLimit: side.priceLimit.toString(),
         depth1Pct: side.depth1Pct ?? null,
       })),
     })),
@@ -971,7 +971,7 @@ function report(found: {
             `${indent}${label}  ${human(side, side.taker)} each, ` +
               `${shortDecimal(side.mid)} before the fee` +
               (side.depth1Pct === undefined ? "" : `; ${human(side, side.depth1Pct)} moves it 1%`),
-            `${indent}${" ".repeat(label.length)}  maxPrice ${side.maxPrice}`,
+            `${indent}${" ".repeat(label.length)}  priceLimit ${side.priceLimit}`,
           ];
         }),
       ];
@@ -1003,9 +1003,9 @@ function report(found: {
       ? []
       : [
           "",
-          "maxPrice is the price as the distributed swap takes it: pay base units per buy base",
+          "priceLimit is the price as the distributed swap takes it: pay base units per buy base",
           "unit, times 1e18, fee included, at the pool's price now. A pool sells to a program only",
-          "while its price with its fee is below the maxPrice given. What moves it 1% is what a",
+          "while its price with its fee is below the priceLimit given. What moves it 1% is what a",
           "taker pays, fee included, before the pool's price is 1% worse, through its ticks.",
         ]),
   ];

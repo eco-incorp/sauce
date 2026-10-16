@@ -1,11 +1,10 @@
-// Compiles distributed-swap.sauce.ts for Base the way `sauce compile` does, and builds the cooks
-// `sauce tx` would print for buying SPCXc and WETH with USDC and selling WETH for USDC. Checks that
-// the SKILL.md shows the program's own code, and that its venues and lookups, its typed reads, the
-// Slipstream swap through uniswapV3, a V4 pool id held as a Uint256, the `priceLimit` values, the
-// limits the program derives from them, each pool's own limit, `minTokens`, `maxAvgPrice`, the
-// simulation it reads, the chains it compiles on, and the arguments of its commands (and the program
-// header's) are what the program and the arithmetic give. Asserts what can be checked offline;
-// sends nothing.
+// Compiles distributed-swap.sauce.ts for Base the way `sauce compile` does, and builds the cook
+// `sauce tx` would print for buying SPCXc with USDC. Checks that the SKILL.md shows the program's own
+// code, and that its venues and lookups, its typed reads, the Slipstream swap through uniswapV3, a
+// V4 pool id held as a Uint256, the tokens it names, the `priceLimit` value, the limit the program
+// derives from it, each pool's own limit, `minTokens`, `maxAvgPrice`, the simulation it reads, the
+// chains it compiles on, and the arguments of its commands (and the program header's) are what the
+// program and the arithmetic give. Asserts what can be checked offline; sends nothing.
 //
 //   node distributed-swap.mts --owner <Pot owner> --recipient <address>
 import { readFileSync } from "node:fs";
@@ -190,16 +189,23 @@ check(
   "every swap is a @sauce/router call",
 );
 check(
-  /__sauce_transfer\(pay, recipient, unspent\)/.test(program.source),
+  /__sauce_transfer\(USDC, recipient, unspent\)/.test(program.source),
   "what is left of the budget goes to the recipient, by a SafeERC20 transfer",
 );
 check(
   program.entryParams.map((param) => param.name).join() ===
-    "payToken,buyToken,budget,priceLimit,minTokens,maxAvgPrice,recipient",
-  "main takes payToken, buyToken, budget, priceLimit, minTokens, maxAvgPrice and recipient",
+    "budget,priceLimit,minTokens,maxAvgPrice,recipient",
+  "main takes budget, priceLimit, minTokens, maxAvgPrice and recipient: no token is an argument",
+);
+// The tokens are written in, by name: USDC paid, SPCXc bought, at every venue.
+check(
+  code.includes("uniswapV3(pool, USDC, SPCXc, ") &&
+    code.includes("uniswapV4(manager, USDC, SPCXc, "),
+  "the program pays USDC and buys SPCXc, both by name",
 );
 // On a chain without Slipstream's factory, naming it is the compile error the skill quotes; less its
-// Slipstream loop, the program compiles for Ethereum, which has Uniswap V3 and V4.
+// Slipstream loop, and with that chain's own SpaceX token, the program compiles for Ethereum, which
+// has Uniswap V3 and V4 and SPCXon.
 let refused = "";
 try {
   routes.compileSauceProgram("ethereum", source);
@@ -211,9 +217,9 @@ check(refused.includes(quoted), `Ethereum refuses the Slipstream venue: ${refuse
 check(prose.includes(quoted), "the skill quotes that error");
 const loop = /\n {2}for \(const spacing of [^\n]*\n[^\n]*\n[^\n]*\n {2}\}/.exec(source);
 check(loop !== null, "the program has a Slipstream loop");
-routes.compileSauceProgram("ethereum", source.replace(loop[0], ""));
+routes.compileSauceProgram("ethereum", source.replace(loop[0], "").replaceAll("SPCXc", "SPCXon"));
 check(
-  prose.includes("so the program less its Slipstream loop"),
+  prose.includes("so the program less its Slipstream loop, with `SPCXon` for `SPCXc`"),
   "the skill says it compiles there",
 );
 
@@ -221,63 +227,42 @@ const registered = (symbol: string) => {
   const token = routes.TOKEN_REGISTRY[chain.id]!.find((t) => t.symbol === symbol)!;
   return { ...token, address: getAddress(token.address) };
 };
-const weth = registered("WETH");
 const usdc = registered("USDC");
-check(BigInt(weth.address) < BigInt(usdc.address), "on Base, WETH is token0");
-const tokens = { baseDecimals: weth.decimals, quoteDecimals: usdc.decimals, baseIsToken0: true };
-
 // SPCXc, Coinbase's tokenized SpaceX on Base: a token global, with 8 decimals.
 const spcxc = registered("SPCXc");
 check(spcxc.decimals === 8, "SPCXc has 8 decimals");
-check(skill.includes(spcxc.address) && source.includes(spcxc.address), "both name SPCXc's address");
+check(BigInt(usdc.address) < BigInt(spcxc.address), "on Base, USDC is token0: the program pays it");
+check(skill.includes(spcxc.address), "the skill names SPCXc's address");
+const tokens = { baseDecimals: spcxc.decimals, quoteDecimals: usdc.decimals, baseIsToken0: false };
 
-// priceLimit: the price in whole tokens times 10^(18 + payDecimals - buyDecimals); maxAvgPrice the
-// same, halfway from a simulation's average to priceLimit: 148.5 to 150, 2,700 to 2,713.5.
-const spcxScale = 10n ** BigInt(18 + usdc.decimals - spcxc.decimals);
-const wethScale = 10n ** BigInt(18 + usdc.decimals - weth.decimals);
-const buyWeth = (27135n * wethScale) / 10n; // 2,713.5
-const buySpcxc = 150n * spcxScale; // 150 USDC
-const avgSpcxc = ceil((1485n * spcxScale) / 10n + buySpcxc, 2n); // 149.25
-const avgWeth = ceil(2700n * wethScale + buyWeth, 2n); // 2,706.75
-const capSpcxc = 140n * spcxScale; // 140, below the reference
-const sellWeth = (E18 * E18 * 10n) / (26865n * 10n ** BigInt(usdc.decimals)); // 1 ÷ 2,686.5
-check(spcxScale === 10n ** 16n, "SPCXc's scale is 1e16");
-check(buyWeth === 2_713_500_000n, "priceLimit buying WETH at most 2,713.5 USDC");
+// priceLimit: the price in whole tokens times 10^(18 + 6 - 8); maxAvgPrice the same, halfway from a
+// simulation's average to priceLimit: 148.5 to 150 is 149.25.
+const scale = 10n ** BigInt(18 + usdc.decimals - spcxc.decimals);
+const buySpcxc = 150n * scale; // 150 USDC
+const avgSpcxc = ceil((1485n * scale) / 10n + buySpcxc, 2n); // 149.25
+const capSpcxc = 140n * scale; // 140, below the reference
+check(scale === 10n ** 16n, "SPCXc's scale is 1e16");
 check(buySpcxc === 1_500_000_000_000_000_000n, "priceLimit buying SPCXc at most 150 USDC");
-check(sellWeth === 372231528010422482784291829n, "priceLimit selling WETH at least 2,686.5 USDC");
 check(avgSpcxc === 1_492_500_000_000_000_000n, "maxAvgPrice halfway between 148.5 and 150: 149.25");
-check(avgWeth === 2_706_750_000n, "maxAvgPrice halfway between 2,700 and 2,713.5: 2,706.75");
-for (const value of [buyWeth, buySpcxc, sellWeth, avgSpcxc, avgWeth])
+for (const value of [buySpcxc, avgSpcxc])
   check(skill.includes(`**${value}**`), `the skill quotes ${value}`);
 
-// The limits the program derives from those are the pool prices at 2,713.5 and 2,686.5.
-const ceiling = limitOf(buyWeth, false); // paying USDC, token1
-const floor = limitOf(sellWeth, true); // paying WETH, token0
-check(ceiling === sqrtPriceX96FromPrice("2713.5", tokens), "2,713.5 as the program's limit");
-const exactFloor = sqrtPriceX96FromPrice("2686.5", tokens);
-check(floor - exactFloor <= 1n, "2,686.5 as the program's limit, priceLimit rounded down");
-for (const value of [ceiling, exactFloor])
-  check(skill.includes(String(value)), `the skill quotes ${value}`);
+// The limit the program derives from it is the pool price at 150, paying token0 (rounded down).
+const limit = limitOf(buySpcxc, true);
+const exact = sqrtPriceX96FromPrice("150", tokens);
+check(limit - exact <= 1n && exact - limit <= 1n, "150 as the program's limit");
+check(skill.includes(String(exact)), `the skill quotes ${exact}`);
 
 // Each pool's own limit, back as a price, is the skill's table, the four standard tiers; the pool's
-// last unit there, after its fee, costs priceLimit: at it or inside it, to 0.001%.
+// last SPCXc there, after its fee, costs priceLimit: at it or inside it, to 0.001%.
 for (const fee of [100n, 500n, 3000n, 10000n]) {
-  const buying = poolLimit(ceiling, fee, false);
-  const selling = poolLimit(floor, fee, true);
-  const cells = [
-    `${fee} (${Number(fee) / 10_000}%)`,
-    two(priceFromSqrtPriceX96(buying, tokens)),
-    two(priceFromSqrtPriceX96(selling, tokens)),
-  ];
+  const own = poolLimit(limit, fee, true);
+  const cells = [`${fee} (${Number(fee) / 10_000}%)`, two(priceFromSqrtPriceX96(own, tokens))];
   check(row(...cells).test(skill), `the skill's row for fee ${fee}: ${cells.join(" | ")}`);
-  // Paying token1: a token0 costs price ÷ (1 − fee), at most priceLimit.
-  const boughtAt = buying * buying * 1_000_000n * E18;
-  const buyBound = buyWeth * Q192 * (1_000_000n - fee);
-  check(boughtAt <= buyBound && boughtAt * 100_001n >= buyBound * 100_000n, `fee ${fee}: buying`);
   // Paying token0: a token1 costs 1 ÷ (price × (1 − fee)), at most priceLimit.
-  const soldAt = Q192 * 1_000_000n * E18;
-  const sellBound = sellWeth * selling * selling * (1_000_000n - fee);
-  check(soldAt <= sellBound && soldAt * 100_001n >= sellBound * 100_000n, `fee ${fee}: selling`);
+  const paid = Q192 * 1_000_000n * E18;
+  const bound = buySpcxc * own * own * (1_000_000n - fee);
+  check(paid <= bound && paid * 100_001n >= bound * 100_000n, `fee ${fee}: within priceLimit`);
 }
 // A V4 pool's fee: the protocol fee for the direction, then the LP fee on the rest. 0.05% with a
 // 0.1% protocol fee is 0.15%, as the skill says.
@@ -292,87 +277,56 @@ check(
 
 // minTokens to spend all of the budget or nothing: budget × 1e18 ÷ priceLimit, rounded up.
 const spend = 1000n * 10n ** BigInt(usdc.decimals);
-const wethBudget = 3000n * 10n ** BigInt(usdc.decimals);
 const allSpcxc = ceil(spend * E18, buySpcxc);
-const allWeth = ceil(wethBudget * E18, buyWeth);
 check(allSpcxc === 666_666_667n, "minTokens for all of 1,000 USDC of SPCXc at 150");
-check(allWeth === 1105583195135433942n, "minTokens for all of 3,000 USDC of WETH at 2,713.5");
-for (const value of [allSpcxc, allWeth])
-  check(skill.includes(`\`${value}\``), `the skill quotes ${value}`);
+check(skill.includes(`\`${allSpcxc}\``), `the skill quotes ${allSpcxc}`);
 // The commands pass these values, in main's order: the trade with maxAvgPrice 0 (to read the
 // average), 10 SPCXc (more than the budget buys at 150: the minTokens revert), an average capped at
 // 140 (the maxAvgPrice revert), and the trade sent with maxAvgPrice 149.25.
 const tooMany = 10n * 10n ** BigInt(spcxc.decimals); // 10 SPCXc
 check(tooMany > (spend * E18) / buySpcxc, "10 SPCXc is more than 1,000 USDC buys at 150");
-const args = (
-  buyToken: string,
-  budget: bigint,
-  priceLimit: bigint,
-  minTokens: bigint,
-  maxAvgPrice: bigint,
-) =>
-  `--args ${usdc.address} ${buyToken} \\\n  ${budget} ${priceLimit} ${minTokens} ${maxAvgPrice} <recipient>`;
+const args = (minTokens: bigint, maxAvgPrice: bigint) =>
+  `--args ${spend} ${buySpcxc} ${minTokens} ${maxAvgPrice} <recipient>`;
 for (const [minTokens, maxAvgPrice, what] of [
   [allSpcxc, 0n, "the trade, reading its average"],
   [tooMany, 0n, "the minTokens revert"],
   [allSpcxc, capSpcxc, "the maxAvgPrice revert"],
   [allSpcxc, avgSpcxc, "the trade sent"],
 ] as const)
-  check(
-    skill.includes(args(spcxc.address, spend, buySpcxc, minTokens, maxAvgPrice)),
-    `the skill simulates ${what}`,
-  );
-const header = (line: string) => line.replace("\n  ", "\n//     ");
-check(
-  source.includes(header(args(spcxc.address, spend, buySpcxc, allSpcxc, avgSpcxc))),
-  "the program header's SPCXc command passes the same",
-);
-check(
-  source.includes(header(args(weth.address, wethBudget, buyWeth, allWeth, avgWeth))),
-  "the program header's WETH command passes its own",
-);
+  check(skill.includes(args(minTokens, maxAvgPrice)), `the skill simulates ${what}`);
+check(source.includes(args(allSpcxc, avgSpcxc)), "the program header's command passes the same");
 
-// The simulation the skill reads: 2,000 USDC over two pools for 0.738558490183795118 WETH, its
-// average in priceLimit's units, and maxAvgPrice halfway from it to 2,713.5.
+// The simulation the skill reads, on a local chain at 150.75: 2,000 USDC over two pools for
+// 13.29416629 SPCXc, its average in priceLimit's units, and maxAvgPrice halfway from it to 150.75.
 const spent = 2000n * 10n ** BigInt(usdc.decimals);
-const bought = 738558490183795118n;
-check(455100231n + 1544899769n === spent, "the two pools took the 2,000 USDC");
-check(167790241413064662n + 570768248770730456n === bought, "and paid out what main returns");
+const bought = 1_329_416_629n;
+const localLimit = 15075n * 10n ** 14n; // 150.75
+check(512_659_160n + 1_487_340_840n === spent, "the two pools took the 2,000 USDC");
+check(340_239_687n + 989_176_942n === bought, "and paid out what main returns");
 check(
   skill.includes(`{ spent: ${spent}, bought: ${bought}, unspent: 0 }`),
   "the skill shows main's return by name",
 );
 const average = (spent * E18) / bought;
-check(average === 2_707_977_806n, "an average of 2,707.98 USDC per WETH");
-check(ceil(average + buyWeth, 2n) === 2_710_738_903n, "maxAvgPrice halfway to 2,713.5");
-for (const value of [average, ceil(average + buyWeth, 2n)])
+for (const value of [localLimit, average, ceil(average + localLimit, 2n)])
   check(skill.includes(`**${value}**`), `the skill quotes ${value}`);
 
 // main's arguments, encoded as `--args` encodes them, appended to the program; then the cook the
 // owner sends, with the Kitchen's fee as its value.
-for (const [payToken, buyToken, amount, priceLimit] of [
-  [usdc.address, spcxc.address, spend, buySpcxc],
-  [usdc.address, weth.address, wethBudget, buyWeth],
-  [weth.address, usdc.address, E18, sellWeth],
-] as const) {
-  const encoded = routes.encodeEntryArguments(program, [
-    payToken,
-    buyToken,
-    amount,
-    priceLimit,
-    0n,
-    0n,
-    recipient,
-  ]);
-  const data = v12Pot.encodeCook(
-    engine,
-    concatHex([bytesToHex(program.bytecode), bytesToHex(encoded)]),
-  );
-  check(
-    routes.decodeEntryArguments(program, encoded)[3] === priceLimit,
-    "the arguments decode back to what was encoded",
-  );
+const encoded = routes.encodeEntryArguments(program, [spend, buySpcxc, 0n, 0n, recipient]);
+const data = v12Pot.encodeCook(
+  engine,
+  concatHex([bytesToHex(program.bytecode), bytesToHex(encoded)]),
+);
+check(
+  routes.decodeEntryArguments(program, encoded)[1] === buySpcxc,
+  "the arguments decode back to what was encoded",
+);
+console.log(
+  `base: ${program.bytecode.length} bytes; cook to ${pot}, ${(data.length - 2) / 2} bytes of calldata`,
+);
+for (const fee of [100n, 500n, 3000n, 10000n])
   console.log(
-    `base: ${program.bytecode.length} bytes; cook to ${pot}, ${(data.length - 2) / 2} bytes of calldata`,
+    `fee ${fee}: stops at ${two(priceFromSqrtPriceX96(poolLimit(limit, fee, true), tokens))}`,
   );
-}
+console.log(`limit ${exact}; average ${average}; halfway ${ceil(average + localLimit, 2n)}`);

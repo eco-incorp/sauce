@@ -1,7 +1,7 @@
 /**
  * `sauce price`: a human price for a pair as the numbers a swap program takes, for selling the base
  * token and for buying it — the pool's `sqrtPriceX96` for that pair on the chain, which is also the
- * swap's price limit; the distributed swap's `maxPrice` and `maxAvgPrice` (input paid per output
+ * swap's price limit; the distributed swap's `priceLimit` and `maxAvgPrice` (input paid per output
  * bought, times 1e18); and the average-price floor a single swap compares a fill against, output
  * received per input paid (`out * 1e18 >= minAvgPrice * spent`), which runs the other way round.
  *
@@ -287,16 +287,16 @@ export const PRICE_UNITS = {
   sqrtPriceLimitX96:
     "the pool's sqrtPriceX96 at the price: token1 per token0 in base units, its square root, " +
     "times 2^96. A swap's limit: a floor selling token0, a ceiling selling token1",
-  maxPrice:
+  priceLimit:
     "tokenIn base units paid per tokenOut base unit bought, times 1e18: the price in whole " +
     "tokens times 10^(18 + tokenIn decimals - tokenOut decimals), rounded down. The distributed " +
-    "swap's maxPrice (payToken is tokenIn, buyToken tokenOut), as sauce pools prints it",
+    "swap's priceLimit (payToken is tokenIn, buyToken tokenOut), as sauce pools prints it",
   maxAvgPrice:
     "the same number as the distributed swap's maxAvgPrice, an average cap: spent * 1e18 <= " +
     "maxAvgPrice * bought",
   minAvgPrice:
     "the other way round: tokenOut base units received per tokenIn base unit paid, times 1e18, " +
-    "rounded up. An average floor, out * 1e18 >= minAvgPrice * spent; never a maxPrice or " +
+    "rounded up. An average floor, out * 1e18 >= minAvgPrice * spent; never a priceLimit or " +
     "maxAvgPrice",
 } as const;
 
@@ -348,21 +348,21 @@ export function priceCommand(input: PriceInput): CommandOutput {
         : [1n << 192n, sqrtPriceX96 * sqrtPriceX96]
       : rational(price, quote.decimals, base.decimals);
   // Each direction both ways round, times 1e18: input paid per output bought, rounded down (the
-  // distributed swap's maxPrice and maxAvgPrice), and output per input, rounded up (minAvgPrice).
+  // distributed swap's priceLimit and maxAvgPrice), and output per input, rounded up (minAvgPrice).
   // Either way a fill its check passes is never at a worse average than the price.
   const directions = [
     {
       name: "sell",
       tokenIn: base,
       tokenOut: quote,
-      maxPrice: (den * SCALE) / num,
+      priceLimit: (den * SCALE) / num,
       minAvgPrice: ceilDiv(num * SCALE, den),
     },
     {
       name: "buy",
       tokenIn: quote,
       tokenOut: base,
-      maxPrice: (num * SCALE) / den,
+      priceLimit: (num * SCALE) / den,
       minAvgPrice: ceilDiv(den * SCALE, num),
     },
   ].map((side) => {
@@ -449,9 +449,9 @@ export function priceCommand(input: PriceInput): CommandOutput {
           `(${side.tokenIn.symbol} in, ${side.tokenOut.symbol} out):`,
         `  sqrtPriceLimitX96  ${sqrtPriceX96}  a ${side.limit}: selling ` +
           `${side.zeroForOne ? "token0 lowers" : "token1 raises"} the price`,
-        `  maxPrice           ${side.maxPrice}  ${side.tokenIn.symbol} units paid per ` +
-          `${side.tokenOut.symbol} unit bought, times 1e18: the distributed swap's maxPrice`,
-        `  maxAvgPrice        ${side.maxPrice}  the same, as its maxAvgPrice: ` +
+        `  priceLimit         ${side.priceLimit}  ${side.tokenIn.symbol} units paid per ` +
+          `${side.tokenOut.symbol} unit bought, times 1e18: the distributed swap's priceLimit`,
+        `  maxAvgPrice        ${side.priceLimit}  the same, as its maxAvgPrice: ` +
           "spent * 1e18 <= maxAvgPrice * bought",
         `  minAvgPrice        ${side.minAvgPrice}  the other way round, ${side.tokenOut.symbol} ` +
           `units received per ${side.tokenIn.symbol} unit, times 1e18: a floor for out * 1e18 ` +
@@ -508,8 +508,8 @@ export function priceCommand(input: PriceInput): CommandOutput {
             zeroForOne: side.zeroForOne,
             sqrtPriceLimitX96: sqrtPriceX96.toString(),
             limit: side.limit,
-            maxPrice: side.maxPrice.toString(),
-            maxAvgPrice: side.maxPrice.toString(),
+            priceLimit: side.priceLimit.toString(),
+            maxAvgPrice: side.priceLimit.toString(),
             minAvgPrice: side.minAvgPrice.toString(),
           },
         ]),

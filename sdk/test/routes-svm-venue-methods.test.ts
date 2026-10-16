@@ -68,7 +68,7 @@ describe("Solana's venue namespaces", () => {
       ].sort(),
     );
     for (const [namespace, venue] of Object.entries(SVM_VENUE_NAMESPACES)) {
-      // Meteora DLMM's swap is an exact input: no maxPrice.
+      // Meteora DLMM's swap is an exact input: no priceLimit.
       const price = venue.exact ? "" : "10, ";
       const program = compile(
         `function main(pool: Address): Uint256 {\n  return ${namespace}.swap(pool, USDC, WSOL, 5, ${price}1);\n}\n`,
