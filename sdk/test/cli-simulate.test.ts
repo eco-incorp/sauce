@@ -9,6 +9,7 @@ import {
   decodeFunctionData,
   encodeAbiParameters,
   encodeErrorResult,
+  encodeEventTopics,
   getAddress,
   keccak256,
   pad,
@@ -30,6 +31,12 @@ import { effectLines, effectsJson, effectsOf, flowLines, type RawLog } from "../
 import { POT_ROUTER_SLOT } from "../src/cli/rehearse.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
+import { encodeRoute, hashIntent } from "../src/routes/encode.js";
+import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
+import { predictIntentVault } from "../src/routes/portal.js";
+import type { Intent } from "../src/routes/types.js";
 
 const TOKEN = getAddress("0x1000000000000000000000000000000000000001");
 const HOLDER = getAddress("0x5a0ce0000000000000000000000000000000beef");
@@ -326,6 +333,93 @@ describe("what the cook did, from its logs", () => {
       return functionName === "symbol" ? "OTH" : 18;
     },
   } as unknown as PublicClient;
+
+  it("names an intent the cook published, and the reward it paid into the intent's vault", async () => {
+    const portal = getAddress(ecoRoutesPortal(base));
+    const intent: Intent = {
+      sourceChainId: 8453n,
+      destination: 1n,
+      route: normalizeRoute({
+        deadline: 2_000_000_000n,
+        portal: ecoRoutesPortal("ethereum"),
+        tokens: [{ token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", amount: 1_000_000n }],
+        calls: [],
+      }),
+      reward: normalizeReward({
+        deadline: 2_000_003_600n,
+        creator: POT,
+        prover: ecoRoutesProver(base, "ethereum"),
+        tokens: [{ token: usdc, amount: 1_050_000n }],
+      }),
+    };
+    const { intentHash } = hashIntent(intent);
+    const vault = getAddress(predictIntentVault(intent, { portal }));
+    // As the Portal logs them: the indexed fields as topics, the rest ABI-encoded as the data.
+    const prover = getAddress(ecoRoutesProver(base, "ethereum"));
+    const published = {
+      topics: encodeEventTopics({
+        abi: PortalABI,
+        eventName: "IntentPublished",
+        args: { intentHash, creator: POT, prover },
+      }),
+      data: encodeAbiParameters(
+        [
+          { type: "uint64" },
+          { type: "bytes" },
+          { type: "uint64" },
+          { type: "uint256" },
+          { type: "tuple[]", components: [{ type: "address" }, { type: "uint256" }] },
+        ],
+        [
+          intent.destination,
+          encodeRoute(intent.route, intent.destination),
+          intent.reward.deadline,
+          0n,
+          [[usdc, 1_050_000n]],
+        ],
+      ),
+    };
+    const funded = {
+      topics: encodeEventTopics({ abi: PortalABI, eventName: "IntentFunded" }),
+      data: encodeAbiParameters(
+        [{ type: "bytes32" }, { type: "address" }, { type: "bool" }],
+        [intentHash, POT, true],
+      ),
+    };
+    const effects = await effectsOf(
+      metadata,
+      base,
+      [
+        log(usdc, [TRANSFER, at(POT), at(vault)], 1_050_000n),
+        { address: portal, topics: published.topics as Hex[], data: published.data },
+        { address: portal, topics: funded.topics as Hex[], data: funded.data },
+      ],
+      true,
+      new Map([[POT, "the Pot"]]),
+    );
+    // Neither Portal log is left as an unnamed event.
+    expect(effects.other).toEqual([]);
+    expect(effects.intents).toMatchObject([{ intentHash, portal, vault, funded: true }]);
+    const lines = effectLines(effects);
+    const short = `${intentHash.slice(0, 6)}…${intentHash.slice(-4)}`;
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        `  [1] Pot 0x0000…00A1 -> vault of intent ${short} ${vault.slice(0, 6)}…${vault.slice(-4)}  1.05 USDC  the intent's reward`,
+        "Intents published:",
+        `  intent ${intentHash} to ethereum, through the Portal ${portal}`,
+        "    its route: 0 calls, the solver delivering 1 USDC",
+        `    its reward: 1.05 USDC, refundable from ${new Date(2_000_003_600_000).toISOString()} if no fill is proven, held in its vault ${vault} (funded)`,
+      ]),
+    );
+    expect(lines.some((line) => line.startsWith("Other events"))).toBe(false);
+    expect((effectsJson(effects).intents as Array<Record<string, unknown>>)[0]).toMatchObject({
+      intentHash,
+      destination: "ethereum",
+      vault,
+      funded: true,
+      rewardTokens: [{ amount: "1050000" }],
+    });
+  });
 
   it("decodes transfers, approvals, wraps and native transfers, and nets each address", async () => {
     const effects = await effectsOf(
