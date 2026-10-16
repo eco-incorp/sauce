@@ -170,22 +170,31 @@ export async function readSvmSource(
   const prover = svmKeyOf(intent.reward.prover);
   const vault = await svmVaultPda(portal, intentHash);
   const legs = svmRewardTokens(intent.reward);
-  const [program, proof, marker, vaultAccount, ...mints] = await accounts(
-    rpc,
-    [
-      portal,
-      await svmProofPda(prover, intentHash),
-      await svmWithdrawnMarkerPda(portal, intentHash),
-      vault,
-      ...legs.map((leg) => leg.mint),
-    ],
-    "the intent's vault, proof and marker",
-  );
+  // Everything in one read, the program's code beside it: each mint, and the vault's account for
+  // it under either token program, since which one owns the mint is not known yet.
+  const [read, code] = await Promise.all([
+    accounts(
+      rpc,
+      [
+        portal,
+        await svmProofPda(prover, intentHash),
+        await svmWithdrawnMarkerPda(portal, intentHash),
+        vault,
+        ...legs.map((leg) => leg.mint),
+        ...(await tokenAccountsOf(vault, legs)),
+      ],
+      "the intent's vault, proof and marker",
+    ),
+    programCode(rpc, portal),
+  ]);
+  const [program, proof, marker, vaultAccount] = read;
+  const mints = read.slice(4, 4 + legs.length);
+  const candidates = read.slice(4 + legs.length);
   if (program === null || program === undefined || !program.executable) {
     throw new CliError(`the source Portal ${portal} is not a program on Solana`);
   }
-  const code = await programCode(rpc, portal);
   const tokenPrograms: Record<string, SvmAddress> = {};
+  const held: Array<Account | null | undefined> = [];
   const opened = await Promise.all(
     legs.map(async (leg, index) => {
       const mint = mints[index];
@@ -197,6 +206,7 @@ export async function readSvmSource(
         throw new CliError(`the reward's mint ${leg.mint} is owned by ${owner}, no token program`);
       }
       tokenPrograms[leg.mint] = owner;
+      held[index] = candidates[2 * index + (owner === TOKEN_PROGRAM_ID ? 0 : 1)];
 
       return {
         leg,
@@ -205,11 +215,6 @@ export async function readSvmSource(
         held: await associatedTokenAccount(vault, leg.mint, owner),
       };
     }),
-  );
-  const held = await accounts(
-    rpc,
-    opened.map((entry) => entry.held),
-    "the vault's token accounts",
   );
   const holds: SvmVaultHold[] = [
     ...(intent.reward.nativeAmount > 0n
@@ -287,6 +292,23 @@ export async function readSvmSource(
       code !== undefined && dispatchesDiscriminator(code, PORTAL_DISCRIMINATORS.cancel),
     time: await svmTime(rpc),
   };
+}
+
+/** `owner`'s associated token account for each leg's mint under SPL Token, then under
+ *  Token-2022: two candidates a mint, read before its program is known. */
+async function tokenAccountsOf(
+  owner: SvmAddress,
+  legs: ReadonlyArray<{ readonly mint: SvmAddress }>,
+): Promise<SvmAddress[]> {
+  const out: SvmAddress[] = [];
+  for (const { mint } of legs) {
+    out.push(
+      await associatedTokenAccount(owner, mint, TOKEN_PROGRAM_ID),
+      await associatedTokenAccount(owner, mint, TOKEN_2022_PROGRAM_ID),
+    );
+  }
+
+  return out;
 }
 
 /** Whether Solana's HyperProver takes a proof from `sender` (32 bytes): `undefined` where its
@@ -370,24 +392,25 @@ export async function svmPublishPlan(
 }> {
   const { intentHash } = hashIntent(intent);
   const legs = svmRewardTokens(intent.reward);
-  const mints = await accounts(
+  // One read: the funder, each mint, and the funder's account for it under either token program.
+  const read = await accounts(
     rpc,
-    legs.map((leg) => leg.mint),
-    "the reward's mints",
+    [from, ...legs.map((leg) => leg.mint), ...(await tokenAccountsOf(from, legs))],
+    "the reward's mints and the funder's balances",
   );
+  const payer = read[0];
+  const mints = read.slice(1, 1 + legs.length);
+  const candidates = read.slice(1 + legs.length);
   const tokenPrograms: Record<string, SvmAddress> = {};
-  const funderAccounts: SvmAddress[] = [];
-  legs.forEach((leg, index) => {
+  const held = legs.map((leg, index) => {
     const mint = mints[index];
     if (mint === null || mint === undefined) {
       throw new CliError(`the reward's mint ${leg.mint} does not exist on Solana`);
     }
     tokenPrograms[leg.mint] = address(mint.owner);
+
+    return candidates[2 * index + (mint.owner === TOKEN_PROGRAM_ID ? 0 : 1)];
   });
-  for (const leg of legs) {
-    funderAccounts.push(await associatedTokenAccount(from, leg.mint, tokenPrograms[leg.mint]!));
-  }
-  const [payer, ...held] = await accounts(rpc, [from, ...funderAccounts], "the funder's balances");
   const funder: SvmFunderHold[] = [
     ...(intent.reward.nativeAmount > 0n
       ? [
