@@ -26,7 +26,7 @@ function trade(
   shared: Account[],
   kept: Uint256,
   limit: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
 ): void {
   const pool = slot[1];
   if (pool.address == 0) {
@@ -53,7 +53,7 @@ function trade(
     const fee = svm.sload(pool, 856, 8).toLe();
     const baseLot = svm.sload(pool, 112, 8).toLe();
     const quoteLot = svm.sload(pool, 192, 8).toLe();
-    // One tick, in maxPrice's units: quote atoms per base atom, times 10^18.
+    // One tick, in priceLimit's units: quote atoms per base atom, times 10^18.
     const tick = Math.mulDiv(
       svm.sload(pool, 840, 8).toLe() * quoteLot,
       10 ** 18,
@@ -61,10 +61,10 @@ function trade(
     );
     // Buying base: the most a base atom may cost before the fee. Selling it: the least it must
     // fetch before the fee is taken, rounded up.
-    let ticks = Math.mulDiv(maxPrice, 10000, (10000 + fee) * tick);
+    let ticks = Math.mulDiv(priceLimit, 10000, (10000 + fee) * tick);
     let side = hex`000200`;
     if (paysBase) {
-      ticks = Math.mulDiv(10 ** 36, 10000, maxPrice * (10000 - fee) * tick) + 1;
+      ticks = Math.mulDiv(10 ** 36, 10000, priceLimit * (10000 - fee) * tick) + 1;
       side = hex`000201`;
     }
     // Every lot still unspent, of the token it pays: base lots selling base, quote lots buying it.
@@ -153,7 +153,7 @@ function trade(
   }
   require(mintA == (paysA ? pay : buy) && mintB == (paysA ? buy : pay), "pool is not the pair");
   // The pool's own limit: the caller's moved by √(1 − fee), so that its last unit, fee paid,
-  // costs exactly maxPrice. Paying the lower-key token pushes the price down, the other up.
+  // costs exactly priceLimit. Paying the lower-key token pushes the price down, the other up.
   const root = Math.sqrt((1000000 - fee) * 10 ** 30); // √(1 − fee), times 1e18
   const own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
   const better = paysA ? price > own : price < own;
@@ -316,22 +316,22 @@ function main(
   memo: Account,
   recipient: Account<Writable>,
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
 ): Uint256 {
   const pay = payMint.address;
   const buy = buyMint.address;
   const kept = balanceOf(pay, source) - amountIn;
   const before = balanceOf(buy, recipient);
-  let limit = Math.sqrt(Math.mulDiv(maxPrice, 1 << 128, 10 ** 18));
+  let limit = Math.sqrt(Math.mulDiv(priceLimit, 1 << 128, 10 ** 18));
   if (pay < buy) {
-    limit = Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, maxPrice));
+    limit = Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, priceLimit));
   }
   trade(
     [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2],
     [authority, source, recipient, payMint, buyMint, tokenProgram, token2022, memo],
     kept,
     limit,
-    maxPrice,
+    priceLimit,
   );
   return balanceOf(buy, recipient) - before;
 }

@@ -57,7 +57,7 @@ fetches and runs npm's unrelated `sauce` package.
 | ---------------- | --------------------------------------------------------------------------------- |
 | `sauce globals`  | The tokens, protocol contracts, chains and functions a program on a chain can use |
 | `sauce pools`    | Lists a pair's price-limit pools on a chain, deepest first, with their prices     |
-| `sauce price`    | Turns a price, or a pool's now, into `sqrtPriceX96`, the limits and `maxPrice`    |
+| `sauce price`    | Turns a price, or a pool's now, into `sqrtPriceX96`, the limits and `priceLimit`  |
 | `sauce compile`  | Compiles a file for a chain; prints its bytecode, or with `--json` what it takes  |
 | `sauce actions`  | Lowers a JSON actions document for a chain; prints its SauceScript and bytecode   |
 | `sauce simulate` | Simulates the cook from the Pot's owner, with no key: gas, or why it reverts      |
@@ -156,7 +156,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    the same for a program to read. Before a swap, `sauce pools --chain base USDC WETH` lists the
    pair's pools at every price-limit venue, deepest first: each one's fee, liquidity and
    `sqrtPriceX96`, what a token costs both ways with and without the fee, the distributed swap's
-   `maxPrice` at that price, and how much moves the price 1%. It reads at one block and prints it:
+   `priceLimit` at that price, and how much moves the price 1%. It reads at one block and prints it:
    simulate with `--block <number>` on the prices you chose from.
    `sauce price --chain base 2700 USDC per WETH` turns a price into the pool's: its
    `sqrtPriceLimitX96` under "Buying WETH", `4116816085950893928074568`, is the buy's limit.

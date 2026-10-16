@@ -168,8 +168,8 @@ Base WETH is token0, USDC token1) and two blocks:
 - **`buy`** (the base token out: USDC → WETH): its `sqrtPriceLimitX96` is a **ceiling**.
 
 Each also gives that direction's average floor `minAvgPrice` (output per input:
-`out * 1e18 >= minAvgPrice * spent`) and the other way round `maxPrice` and `maxAvgPrice` (input per
-output), which the distributed swap takes as its `priceLimit` and `maxAvgPrice`. Take the limit from the block of the direction you trade.
+`out * 1e18 >= minAvgPrice * spent`) and the other way round `priceLimit` and `maxAvgPrice` (input
+per output), which the distributed swap takes. Take the limit from the block of the direction you trade.
 `--pool <address>` reads a pool's price now.
 
 **Build the limit from the best price a taker gets among pools with liquidity**: drop the pools with

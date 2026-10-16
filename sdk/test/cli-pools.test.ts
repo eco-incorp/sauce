@@ -1,6 +1,6 @@
 /**
  * `sauce pools`' arithmetic and inputs, with nothing reached: a pool's state as prices both ways
- * round, before and after its fee, as the distributed swap's `maxPrice`, and as depth through its
+ * round, before and after its fee, as the distributed swap's `priceLimit`, and as depth through its
  * ticks; the venues it reads on a chain; and the invocations it refuses. `cli-pools.e2e.test.ts`
  * runs it against real Uniswap V3 pools.
  */
@@ -59,7 +59,7 @@ async function sauce(...argv: string[]) {
 }
 
 describe("a pool's prices, both ways round", () => {
-  it("6 and 8 decimals: 400 USDC per token, and maxPrice as price x 10^(18 + 6 - 8)", () => {
+  it("6 and 8 decimals: 400 USDC per token, and priceLimit as price x 10^(18 + 6 - 8)", () => {
     // USDC is token0; one 8-decimal unit costs 4 USDC units, so the pool's price (token1 units per
     // token0 unit) is 1/4 and its sqrt exactly 2^95.
     const usdc = token("USDC", 6, true);
@@ -67,10 +67,10 @@ describe("a pool's prices, both ways round", () => {
     const state = { sqrtPriceX96: Q96 / 2n, liquidity: 0n, tick: -13_863 };
     const [buyStock, buyUsdc] = poolSides(usdc, stock, state, [0, 0]);
     expect(buyStock).toMatchObject({ mid: "400", taker: "400", feePpm: 0 });
-    expect(buyStock.maxPrice).toBe(400n * 10n ** 16n);
-    expect(buyStock.maxPrice).toBe(4n * 10n ** 18n);
+    expect(buyStock.priceLimit).toBe(400n * 10n ** 16n);
+    expect(buyStock.priceLimit).toBe(4n * 10n ** 18n);
     expect(buyUsdc).toMatchObject({ mid: "0.0025", taker: "0.0025" });
-    expect(buyUsdc.maxPrice).toBe(25n * 10n ** 16n); // 0.0025 x 10^(18 + 8 - 6)
+    expect(buyUsdc.priceLimit).toBe(25n * 10n ** 16n); // 0.0025 x 10^(18 + 8 - 6)
     expect(buyStock.depth1Pct).toBeUndefined();
   });
 
@@ -82,13 +82,13 @@ describe("a pool's prices, both ways round", () => {
     const [buyUsdc, buyWeth] = poolSides(weth, usdc, state, [0, 0]);
     expect(buyWeth.mid).toBe("953674.31640625");
     // USDC base units per WETH base unit, times 1e18 = 953674.31640625 x 10^(18 + 6 - 18), rounded up.
-    expect(buyWeth.maxPrice).toBe(953_674_316_407n);
+    expect(buyWeth.priceLimit).toBe(953_674_316_407n);
     expect(buyUsdc.mid).toBe("0.000001048576");
     // Paying WETH: WETH base units per USDC base unit, times 1e18 = 1.048576e-6 x 10^(18+18-6).
-    expect(buyUsdc.maxPrice).toBe(1_048_576n * 10n ** 18n);
+    expect(buyUsdc.priceLimit).toBe(1_048_576n * 10n ** 18n);
   });
 
-  it("18 and 18 decimals, and the fee: the taker pays mid / (1 - fee), rounded up in maxPrice", () => {
+  it("18 and 18 decimals, and the fee: the taker pays mid / (1 - fee), rounded up in priceLimit", () => {
     const a = token("A", 18, true);
     const b = token("B", 18, false);
     // Price 4: a sqrt of 2.
@@ -96,10 +96,10 @@ describe("a pool's prices, both ways round", () => {
     const [buyB, buyA] = poolSides(a, b, state, [3000, 3000]);
     expect(buyA.mid).toBe("4");
     expect(buyA.taker).toBe("4.01203610832497492"); // 4 / 0.997, to 18 significant digits
-    expect(buyA.maxPrice).toBe(4_012_036_108_324_974_925n); // ceil(4e18 / 0.997)
+    expect(buyA.priceLimit).toBe(4_012_036_108_324_974_925n); // ceil(4e18 / 0.997)
     expect(buyB.mid).toBe("0.25");
     expect(buyB.taker).toBe("0.250752256770310933"); // 0.25 / 0.997
-    expect(buyB.maxPrice).toBe(250_752_256_770_310_932n + 1n);
+    expect(buyB.priceLimit).toBe(250_752_256_770_310_932n + 1n);
     // Each side its own fee: a V4 pool's protocol fee differs by direction.
     const [cheap, dear] = poolSides(a, b, state, [0, 10_000]);
     expect(cheap.taker).toBe("0.25");
@@ -119,11 +119,11 @@ describe("a pool's prices, both ways round", () => {
       for (const side of poolSides(a, b, state, [500, 500])) {
         const mid = Number(side.mid);
         expect(Number(side.taker) / mid).toBeCloseTo(1 / 0.9995, 9);
-        // maxPrice is the taker price times 10^(18 + pay decimals - buy decimals), rounded up to
+        // priceLimit is the taker price times 10^(18 + pay decimals - buy decimals), rounded up to
         // a whole number.
         const want = Number(side.taker) * 10 ** (18 + side.pay.decimals - side.buy.decimals);
-        expect(Math.abs(Number(side.maxPrice) - want)).toBeLessThanOrEqual(1 + want * 1e-12);
-        expect(Number(side.maxPrice)).toBeGreaterThanOrEqual(want * (1 - 1e-12));
+        expect(Math.abs(Number(side.priceLimit) - want)).toBeLessThanOrEqual(1 + want * 1e-12);
+        expect(Number(side.priceLimit)).toBeGreaterThanOrEqual(want * (1 - 1e-12));
       }
     }
   });
@@ -443,9 +443,9 @@ describe("a pool given by its address (sauce price --pool)", () => {
       `Pool: Aerodrome Slipstream ${getAddress(pool.address)} ` +
         "(AerodromeSlipstream.CLFactoryGaugesV3), fee 0.05%, tick spacing 10",
     );
-    // Buying SPCXc with USDC: the distributed swap's maxPrice is USDC units per SPCXc unit times
+    // Buying SPCXc with USDC: the distributed swap's priceLimit is USDC units per SPCXc unit times
     // 1e18, the price times 10^(18 + 6 - 8), as sauce pools gives each pool's.
-    const buy = out.json.buy as { maxPrice: string; maxAvgPrice: string; minAvgPrice: string };
+    const buy = out.json.buy as { priceLimit: string; maxAvgPrice: string; minAvgPrice: string };
     const [usdcPerSpcx] = poolSides(
       usdc as PriceToken,
       spcx as PriceToken,
@@ -453,11 +453,11 @@ describe("a pool given by its address (sauce price --pool)", () => {
       [0, 0],
     );
     // sauce pools rounds its taker price up, sauce price its limit down: one unit apart at most.
-    expect(usdcPerSpcx.maxPrice - BigInt(buy.maxPrice)).toBeGreaterThanOrEqual(0n);
-    expect(usdcPerSpcx.maxPrice - BigInt(buy.maxPrice)).toBeLessThanOrEqual(1n);
-    expect(buy.maxAvgPrice).toBe(buy.maxPrice);
-    // minAvgPrice is the other way round: SPCXc units per USDC unit, about 1e36 / maxPrice.
-    expect(BigInt(buy.minAvgPrice) * BigInt(buy.maxPrice)).toBeGreaterThanOrEqual(10n ** 36n);
+    expect(usdcPerSpcx.priceLimit - BigInt(buy.priceLimit)).toBeGreaterThanOrEqual(0n);
+    expect(usdcPerSpcx.priceLimit - BigInt(buy.priceLimit)).toBeLessThanOrEqual(1n);
+    expect(buy.maxAvgPrice).toBe(buy.priceLimit);
+    // minAvgPrice is the other way round: SPCXc units per USDC unit, about 1e36 / priceLimit.
+    expect(BigInt(buy.minAvgPrice) * BigInt(buy.priceLimit)).toBeGreaterThanOrEqual(10n ** 36n);
     expect(() =>
       priceCommand({
         chain: BASE,
