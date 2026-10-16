@@ -56,6 +56,47 @@ function amountText(mint: string, amount: bigint): string {
     : `${formatUnits(amount, row.decimals)} ${row.symbol}`;
 }
 
+/** How long a fill waits for the lookup table it just extended to come into use: the slot after,
+ *  usually well inside the first try. */
+const TABLE_WARMUP = { tries: 30, delayMs: 500 };
+
+/**
+ * Waits until the cluster has passed `extended`, the slot the table was last extended in (from the
+ * slot it reads now, where the send did not report one): only then does a transaction resolve the
+ * addresses it added. A read that fails, or a slot that does not move, ends in an error, and the
+ * fill is not sent against a table that may not be usable yet.
+ */
+export async function tableReady(
+  rpc: Pick<ReturnType<typeof createSolanaRpc>, "getSlot">,
+  chain: string,
+  table: string,
+  extended: bigint | undefined,
+  warmup: { readonly tries: number; readonly delayMs: number } = TABLE_WARMUP,
+): Promise<void> {
+  const slot = async (): Promise<bigint> => {
+    try {
+      return await rpc.getSlot({ commitment: "confirmed" }).send();
+    } catch (error) {
+      // The transport's message can name the endpoint, which may carry a key: never print one.
+      const reason = (error as Error).message.replace(/[a-z][\w+.-]*:\/\/\S+/gi, "<endpoint>");
+      throw new CliError(
+        `reading ${chain}'s slot, to wait for the lookup table ${table}, failed: ${reason}. The ` +
+          "fill was not sent; the table stays (sauce reclaim --chain solana closes it)",
+      );
+    }
+  };
+  const after = extended ?? (await slot());
+  for (let tries = 0; tries < warmup.tries; tries++) {
+    if ((await slot()) > after) return;
+    await new Promise((resolve) => setTimeout(resolve, warmup.delayMs));
+  }
+  throw new CliError(
+    `${chain} did not pass slot ${after}, where the lookup table ${table} was extended, in ` +
+      `${(warmup.tries * warmup.delayMs) / 1000} s, so the fill was not sent: run it ` +
+      "again, and close the unused table (sauce reclaim --chain solana)",
+  );
+}
+
 export interface SvmFillInput {
   readonly targets: readonly Target[];
   /** Who the rehearsal fills as, with no `--send`: a Solana key. Default: the `--keypair` key. */
@@ -144,19 +185,15 @@ export async function svmFillCommand(
       );
       if (answer === undefined) throw unapproved([action], context.approver.why);
       if (!answer) throw new CliError("not sent: you declined");
-      let last = 0n;
+      let last: bigint | undefined;
       for (const tx of setup) {
         const sent = await sendPlannedSvm(url, context.svmSigner!, tx);
         if (!sent.ok) {
           throw new CliError(`${tx.what} ${sent.signature} failed: ${sent.reason ?? "no reason"}`);
         }
-        last = sent.slot ?? last;
+        last = sent.slot;
       }
-      // A table is usable from the slot after its last extension.
-      for (let tries = 0; tries < 30; tries++) {
-        if ((await rpc.getSlot({ commitment: "confirmed" }).send()) > last) break;
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
+      await tableReady(rpc, chain.slug, table.address, last);
       fill = await build(table.address);
     }
     const fillTx = fill.transactions[0] as SvmTxJson;

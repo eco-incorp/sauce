@@ -278,8 +278,10 @@ describeSvm(
           ...["run", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
           ...["--keypair", owner.path, "--yes", "--json", ...args(DEEP, pot, pot)],
         ),
-      ) as { cook: { status: string } };
+      ) as { createTokenAccounts?: { accounts: string[] }; cook: { status: string } };
       expect(out.cook.status).toBe("success");
+      // The Pot's two accounts exist, and the recipient's and the refund's are those: nothing made.
+      expect(out.createTokenAccounts).toBeUndefined();
       const bought = tokenAmount(harness, output);
       expect(bought).toBeGreaterThan(0n);
       const unspent = tokenAmount(harness, source);

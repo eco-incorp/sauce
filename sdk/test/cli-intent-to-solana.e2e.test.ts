@@ -35,7 +35,13 @@ import {
 } from "@solana/kit";
 import { bytesToHex, encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import {
+  ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS,
+  getAddressLookupTableEncoder,
+} from "@solana-program/address-lookup-table";
 
+import { buildFill } from "../src/cli/lifecycle.js";
+import { IntentStore } from "../src/cli/store.js";
 import { v12SvmEngineProgramId } from "../src/deployments/index.js";
 import {
   associatedTokenAccount,
@@ -325,6 +331,35 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
     );
     expect(refused.code).toBe(1);
     expect(refused.stderr).toMatch(/even through a lookup table, past Solana's 1232/);
+    // A lookup table given to a fill must still be active: one deactivated is refused, before
+    // anything is sent through it.
+    const store = mkdtempSync(join(work, "store-"));
+    const hash = await publish(store, PROGRAM, (await wallet()).key, String(AMOUNT), "1");
+    const deactivated = (await generateKeyPairSigner()).address;
+    const table = new Uint8Array(
+      getAddressLookupTableEncoder().encode({
+        deactivationSlot: 5n,
+        lastExtendedSlot: 1n,
+        lastExtendedSlotStartIndex: 0,
+        authority: solver.address,
+        addresses: [PORTAL],
+      }),
+    );
+    harness.svm.setAccount({
+      address: deactivated,
+      data: table,
+      executable: false,
+      lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(table.length))),
+      programAddress: ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS,
+      space: BigInt(table.length),
+    });
+    await expect(
+      buildFill(
+        new IntentStore(store).load(hash).record,
+        { "1": ethereum.rpcUrl, "1399811149": SOLANA_URL },
+        { from: solver.address, claimant: SOLVER.address, lookupTable: deactivated },
+      ),
+    ).rejects.toThrow(`the lookup table ${deactivated} was deactivated in slot 5`);
     // What the routes delivered went where the program sent it: none stays in the Pot.
     expect(
       tokenAmount(harness, await associatedTokenAccount(pot, USDC_MINT, TOKEN_PROGRAM_ID)),
