@@ -192,6 +192,19 @@ describe("the Pots a landed EVM transaction deployed", () => {
     ).toEqual([]);
   });
 
+  it("refuses a PotDeployed that does not decode by the Kitchen's ABI, never reading guessed offsets", async () => {
+    const log = potDeployed(KITCHEN, OWNER, SALT, pot);
+    // Its data short of the address word, or an indexed field missing: refused, not misread.
+    for (const malformed of [
+      { ...log, data: "0x1234" as Hex },
+      { ...log, topics: log.topics.slice(0, 2) },
+    ]) {
+      await expect(
+        evmPotsDeployed(clientOf(BASE.id), landed([malformed]), SENDER),
+      ).rejects.toThrow();
+    }
+  });
+
   it("records a Pot a Kitchen upgraded past the SDK minted, under the hash the Kitchen reports", async () => {
     const hash = `0x${"56".repeat(32)}` as Hex;
     const newer = potOf(KITCHEN, hash, OWNER, SALT, true);

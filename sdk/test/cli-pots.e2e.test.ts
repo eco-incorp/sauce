@@ -326,6 +326,20 @@ describeEvm("the Pots the sauce command deploys, recorded", () => {
       expect(kitchen.stderr).toMatch(
         /is not a Pot: it has no userSalt\(\)|is not a Pot: it has no kitchen\(\)/,
       );
+      // A Pot's code at an address no Kitchen minted it at: it answers owner(), userSalt() and
+      // kitchen() as the Pot does, but no known release's CREATE2 gives this address.
+      const copy = getAddress("0x00000000000000000000000000000000000c0b1e");
+      await base.testClient.setCode({
+        address: copy,
+        bytecode: (await base.publicClient.getCode({ address: minted.private }))!,
+      });
+      const copied = await importing("--pot", copy);
+      expect(copied.code).toBe(1);
+      expect(copied.stderr).toContain(
+        `${copy} on base says it is Kitchen ${getAddress(v12KitchenAddress())}'s, for owner ` +
+          `${IMPORTED.address} and salt ${salts.private}, but no release this sauce knows minted ` +
+          "it there",
+      );
     }, 60_000);
   });
 });
