@@ -18,12 +18,29 @@ import {
   fundingFor,
   potTarget,
   programChain,
+  potOwner,
 } from "../src/cli/inputs.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const POT = "0x6666666666666666666666666666666666666666";
 const base = requireChain("base");
+
+describe("potOwner", () => {
+  it("takes a Solana owner in base58 or as its 32 bytes of hex, with the chain or without", () => {
+    const solana = requireChain("solana");
+    const owner = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+    const hex = "0x7e8c088760bfde1dddcf32c17f209b8242ee52aaf131facd88d0ea2c6d0b06f2";
+    for (const chain of [solana, undefined]) {
+      expect(potOwner(chain, owner)).toBe(owner);
+      expect(potOwner(chain, hex)).toBe(owner);
+    }
+    // 20 bytes of hex, with no chain, are an EVM address.
+    expect(potOwner(undefined, "0x70997970c51812dc3a010c7d01b50e0d17dc79c8")).toBe(
+      "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    );
+  });
+});
 
 describe("programChain", () => {
   it("takes the chain given, else the header's, else solana for svm alone", () => {

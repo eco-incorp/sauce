@@ -321,7 +321,8 @@ function choose(
   accounts: Record<string, string>;
 } {
   const symbol = want.pay.toUpperCase() === "SOL" ? "WSOL" : want.pay.toUpperCase();
-  const pay = mints.find((mint) => mint.symbol.toUpperCase() === symbol || mint.mint === want.pay);
+  const key = svmPublicKey(want.pay);
+  const pay = mints.find((mint) => mint.symbol.toUpperCase() === symbol || mint.mint === key);
   if (pay === undefined)
     throw new UsageError(
       `--pay ${want.pay} is not one of the pair (${mints.map((m) => m.symbol).join(", ")})`,

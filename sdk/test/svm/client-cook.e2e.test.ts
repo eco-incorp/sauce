@@ -298,6 +298,9 @@ describeSvm("SauceSvmClient against the gated engine", () => {
       /past Solana's 1232: execute and executeStaged take its accounts through a lookup table/,
     );
 
+    // The same program staged, which a staged cook names with its code buffer and code account.
+    const staged = await stageProgram(harness, wide.bytecode, 77n);
+
     // A table the payer holds already, over the program's accounts and the Kitchen cook's own that
     // neither sign nor are called — the Pot, the fee config, the System Program, the engine.
     const { address: pot } = await derivePotPda(
@@ -317,6 +320,8 @@ describeSvm("SauceSvmClient against the gated engine", () => {
         harness.feeConfig,
         address("11111111111111111111111111111111"),
         harness.programId,
+        staged.codeBuffer,
+        staged.code,
       ],
     });
     harness.svm.setAccount({
@@ -339,6 +344,18 @@ describeSvm("SauceSvmClient against the gated engine", () => {
     });
     expect(result.err ?? null).toBeNull();
     expect(toBigInt(result.returnData!)).toBe(42n);
+
+    // Staged, the same: a simulation of it names the staged cook's table to pass.
+    await expect(client.simulateStaged(staged.codeBuffer, manifest, resolution)).rejects.toThrow(
+      /executeStaged takes its accounts through a lookup table it makes ready; to simulate it, pass the lookupTables stagedCookLookupTable returns/,
+    );
+    const stagedTable = await client.stagedCookLookupTable(
+      staged.codeBuffer,
+      manifest,
+      resolution,
+      { existing: table },
+    );
+    expect(stagedTable?.lookupTableAddress).toBe(table);
   });
 
   it("refuses the SAME program invoked through the legacy execute, bypassing the kitchen — no Pot gate, no run", async () => {

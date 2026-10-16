@@ -54,7 +54,7 @@ export interface TokenChange {
 }
 
 /**
- * What a first run pays before the cook, which a rehearsal in a local copy does for nothing: rent
+ * What a first run pays before the cook, which a simulation in a local copy does for nothing: rent
  * for an account the run creates (the Pot, a token account, a code buffer, a lookup table), and
  * the fees of the transactions that come before the cook.
  */
@@ -72,7 +72,7 @@ export interface SvmMoved {
   readonly labels: ReadonlyMap<string, string>;
   /** The transaction's fee payer, whose lamports include the fee. */
   readonly payer: Address;
-  /** What the payer pays before the cook, where the rehearsal did it for nothing. */
+  /** What the payer pays before the cook, where the simulation did it for nothing. */
   readonly setup?: readonly SvmSetupCost[];
 }
 

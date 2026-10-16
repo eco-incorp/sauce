@@ -1591,13 +1591,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         tokenA: z
           .string()
           .min(1)
-          .max(64)
+          .max(80)
           .describe(
             "One token of the pair, paid in the first side: a symbol the chain registers " +
               "(USDC, or a tokenized stock's such as SPCXc, in any case), or a 0x address (its " +
-              "decimals and symbol read from the token), or <0x address>:<decimals>.",
+              "decimals and symbol read from the token), or <0x address>:<decimals>; on Solana " +
+              "a mint, in base58 or as its 32 bytes of 0x hex.",
           ),
-        tokenB: z.string().min(1).max(64).describe("The other token, written the same ways."),
+        tokenB: z.string().min(1).max(80).describe("The other token, written the same ways."),
         v4Pools: z
           .array(z.string().min(3).max(16))
           .max(MAX_V4_KEYS)
@@ -1622,7 +1623,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         pay: z
           .string()
           .min(1)
-          .max(64)
+          .max(80)
           .optional()
           .describe(
             "Solana only: choose the pools a distributed swap paying this token (one of the " +

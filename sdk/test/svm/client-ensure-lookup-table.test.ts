@@ -217,6 +217,23 @@ describe("cookLookupTable: the table a cook too wide for one transaction goes th
     }
   });
 
+  it("refuses to simulate a program too large for one transaction, saying to stage it", async () => {
+    const payer = await generateKeyPairSigner();
+    const stub = fetchStub(encodeLookupTable(payer.address, []));
+    stub.install();
+    try {
+      const { manifest, resolution } = wide(2);
+      await expect(
+        (await client(payer)).simulate(new Uint8Array(1200), manifest, resolution),
+      ).rejects.toThrow(
+        /the program itself is too large for one, so stage it in a code buffer and simulateStaged it/,
+      );
+      expect(stub.methods()).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("refuses, sending nothing, a cook too large even through a table: the program is staged", async () => {
     const payer = await generateKeyPairSigner();
     const stub = fetchStub(encodeLookupTable(payer.address, []));
@@ -226,7 +243,7 @@ describe("cookLookupTable: the table a cook too wide for one transaction goes th
       await expect(
         (await client(payer)).cookLookupTable(new Uint8Array(1100), manifest, resolution),
       ).rejects.toThrow(
-        /even with every account it names through a lookup table, past Solana's 1232: the program itself is too large for one, so stage it in a code buffer and executeStaged it/,
+        /past Solana's 1232 bytes even with every account it names through a lookup table: the program itself is too large for one, so stage it in a code buffer and executeStaged it/,
       );
       expect(stub.methods()).toEqual([]);
     } finally {

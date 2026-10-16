@@ -91,6 +91,7 @@ import {
   type SvmTxJson,
 } from "./lifecycle-svm.js";
 import { svmHyperDispatcherPda, svmKeyOf, universalOfSvmKey } from "../svm/portal.js";
+import { svmPublicKey } from "../svm/account-names.js";
 import { address as svmAddress } from "@solana/kit";
 
 // ---------------------------------------------------------------------------------------------
@@ -2013,13 +2014,15 @@ function svmPayer(from: string | undefined, what: string): ReturnType<typeof svm
       `${what} on Solana needs the account that pays its fee (--keypair <path>)`,
     );
   }
-  try {
-    return svmAddress(from);
-  } catch {
+  // In base58, or as the 32 bytes of hex the command prints a Solana key in too.
+  const key = svmPublicKey(from);
+  if (key === undefined) {
     throw new UsageError(
       `${from} is not a Solana key: ${what} on Solana is paid by a Solana account`,
     );
   }
+
+  return key;
 }
 
 async function buildSvmFill(

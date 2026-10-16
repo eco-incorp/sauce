@@ -127,11 +127,12 @@ export interface LookupTableOpts {
   /**
    * Unset (the default), a cook that does not fit one transaction goes through a lookup table the
    * client creates for it: over exactly the accounts a table may hold (every account the cook lists
-   * but its signers and the programs it calls), paid and owned by the payer, and usable before the
-   * cook is sent. A table's address reuses that table, extended with any account it lacks. `false`
-   * sends the cook as it is. A cook that fits, or one given `lookupTables`, takes no table. The
-   * table the cook went through is the result's `lookupTableAddress`, for a later cook naming the
-   * same accounts.
+   * but its signers and the programs it calls), owned by the payer, who pays its rent (about 0.0016
+   * SOL, and 0.00022 more per account) and the fees that create it, and usable before the cook is
+   * sent. A table's address reuses that table, extended with any account it lacks. `false` sends
+   * the cook as it is. A cook that fits, or one given `lookupTables`, takes no table. The table the
+   * cook went through is the result's `lookupTableAddress`, and an error's after the table was
+   * made, for a later cook naming the same accounts.
    */
   lookupTable?: Address | false;
 }
@@ -385,26 +386,49 @@ export async function createSauceSvmClient({
     });
   }
 
+  /** The size of a transaction of the payer's `instructions`, through `lookupTables`, unsigned. */
+  const sizeOf = (
+    instructions: readonly Instruction[],
+    lookupTables?: AddressesByLookupTableAddress,
+  ): number =>
+    getTransactionSize(
+      measureExecuteTransaction({ feePayer: payer.address, instructions, lookupTables }),
+    );
+
+  /** Whether `instructions` fit one transaction with every account a table may hold in one. */
+  const fitsThroughTable = (instructions: readonly Instruction[]): boolean =>
+    sizeOf(instructions, {
+      // Where a table will be is not known before it is created; any key measures the same.
+      [payer.address]: lookupTableAddresses(
+        measureExecuteTransaction({ feePayer: payer.address, instructions }),
+      ),
+    }) <= TRANSACTION_SIZE_LIMIT;
+
   /**
    * Refuses to simulate a cook too large for one transaction, which the cluster would refuse
-   * opaquely — measured before a signer or the cluster is asked anything.
+   * opaquely — measured before a signer or the cluster is asked anything — saying what fits it.
    */
   function refuseTooLarge(
     executeInstruction: Instruction,
     prepends: readonly Instruction[],
-    lookupTables?: AddressesByLookupTableAddress,
+    lookupTables: AddressesByLookupTableAddress | undefined,
+    staged: boolean,
   ): void {
     const instructions = [buildHeapFramePrepend(), ...prepends, executeInstruction];
-    const size = getTransactionSize(
-      measureExecuteTransaction({ feePayer: payer.address, instructions, lookupTables }),
-    );
-    if (size > TRANSACTION_SIZE_LIMIT) {
+    const size = sizeOf(instructions, lookupTables);
+    if (size <= TRANSACTION_SIZE_LIMIT) return;
+    const prefix = `the cook is a ${size}-byte transaction, past Solana's ${TRANSACTION_SIZE_LIMIT}: `;
+    if (!staged && !fitsThroughTable(instructions)) {
       throw new Error(
-        `the cook is a ${size}-byte transaction, past Solana's ${TRANSACTION_SIZE_LIMIT}: ` +
-          "execute and executeStaged take its accounts through a lookup table they make ready; " +
-          "to simulate it, pass the lookupTables cookLookupTable returns",
+        `${prefix}the program itself is too large for one, so stage it in a code buffer and ` +
+          "simulateStaged it",
       );
     }
+    throw new Error(
+      `${prefix}${staged ? "executeStaged takes" : "execute and executeStaged take"} its accounts ` +
+        "through a lookup table it makes ready; to simulate it, pass the lookupTables " +
+        `${staged ? "stagedCookLookupTable" : "cookLookupTable"} returns`,
+    );
   }
 
   /** The cook's own instruction: the Kitchen's `cook`, or the engine's `cookAndPay`. */
@@ -466,6 +490,7 @@ export async function createSauceSvmClient({
       cookInstruction(bytecode, manifest, resolution, opts),
       prepends,
       opts.lookupTables,
+      false,
     );
     const transaction = await buildTransaction(bytecode, manifest, resolution, prepends, opts);
 
@@ -542,6 +567,7 @@ export async function createSauceSvmClient({
       await stagedCookInstruction(buffer, manifest, resolution, opts),
       prepends,
       opts.lookupTables,
+      true,
     );
     const transaction = await buildStagedTransaction(buffer, manifest, resolution, prepends, opts);
 
@@ -649,27 +675,17 @@ export async function createSauceSvmClient({
 
   /**
    * The table a transaction of `cook` needs, made ready, or `undefined` when it fits without one.
-   * Measured as `cookTransaction` builds it — the heap frame, a compute limit where one is set, the
-   * caller's prepends — with no blockhash and no signature, so no signer is asked for anything.
+   * Measured as it is sent — the heap frame, then `prepends`, then the cook — with no blockhash and
+   * no signature, so no signer is asked for anything.
    */
   async function lookupTableFor(
     cook: Instruction,
+    prepends: readonly Instruction[],
     opts: CookLookupTableOpts,
     staged: boolean,
   ): Promise<EnsuredLookupTable | undefined> {
-    const instructions = [
-      buildHeapFramePrepend(),
-      ...(opts.computeUnitLimit === undefined
-        ? []
-        : buildComputeBudgetPrepend({ unitLimit: ENGINE_GAS_LIMIT_CU })),
-      ...(opts.prepends ?? []),
-      cook,
-    ];
-    const size = (lookupTables?: AddressesByLookupTableAddress): number =>
-      getTransactionSize(
-        measureExecuteTransaction({ feePayer: payer.address, instructions, lookupTables }),
-      );
-    if (size(opts.lookupTables) <= TRANSACTION_SIZE_LIMIT) return undefined;
+    const instructions = [buildHeapFramePrepend(), ...prepends, cook];
+    if (sizeOf(instructions, opts.lookupTables) <= TRANSACTION_SIZE_LIMIT) return undefined;
     const addresses = lookupTableAddresses(
       measureExecuteTransaction({ feePayer: payer.address, instructions }),
     );
@@ -679,12 +695,10 @@ export async function createSauceSvmClient({
           `holds (${LOOKUP_TABLE_MAX_ADDRESSES})`,
       );
     }
-    // Where the table will be is not known before it is created; any key measures the same.
-    const through = size({ [payer.address]: addresses });
-    if (through > TRANSACTION_SIZE_LIMIT) {
+    if (!fitsThroughTable(instructions)) {
       throw new Error(
-        `the cook is a ${through}-byte transaction even with every account it names through a ` +
-          `lookup table, past Solana's ${TRANSACTION_SIZE_LIMIT}: ` +
+        `the cook is a transaction past Solana's ${TRANSACTION_SIZE_LIMIT} bytes even with every ` +
+          "account it names through a lookup table: " +
           (staged
             ? "it signs or calls too many accounts"
             : "the program itself is too large for one, so stage it in a code buffer and " +
@@ -698,13 +712,32 @@ export async function createSauceSvmClient({
     });
   }
 
+  /**
+   * The prepends a cook is sent with: a compute limit where one is asked for (`execute`), or, for a
+   * table a simulation goes through too, wherever `simulate` adds one (`measuring`).
+   */
+  const sentPrepends = (opts: ExecuteOpts, simulated: boolean): Instruction[] =>
+    simulated
+      ? measuring(opts.prepends ?? [])
+      : [
+          ...(opts.computeUnitLimit === undefined
+            ? []
+            : buildComputeBudgetPrepend({ unitLimit: ENGINE_GAS_LIMIT_CU })),
+          ...(opts.prepends ?? []),
+        ];
+
   async function cookLookupTable(
     bytecode: Uint8Array,
     manifest: AccountManifest,
     resolution: AccountResolution,
     opts: CookLookupTableOpts = {},
   ): Promise<EnsuredLookupTable | undefined> {
-    return lookupTableFor(cookInstruction(bytecode, manifest, resolution, opts), opts, false);
+    return lookupTableFor(
+      cookInstruction(bytecode, manifest, resolution, opts),
+      sentPrepends(opts, true),
+      opts,
+      false,
+    );
   }
 
   async function stagedCookLookupTable(
@@ -715,6 +748,7 @@ export async function createSauceSvmClient({
   ): Promise<EnsuredLookupTable | undefined> {
     return lookupTableFor(
       await stagedCookInstruction(buffer, manifest, resolution, opts),
+      sentPrepends(opts, true),
       opts,
       true,
     );
@@ -728,12 +762,30 @@ export async function createSauceSvmClient({
         ? {}
         : { existing: opts.lookupTable };
 
-  /** A cook's result, with the table it went through. */
-  const sentThrough = (
-    sent: SendExecuteResult,
+  /**
+   * Sends a cook through the table `execute` made ready for it, if any: its result names the table,
+   * and so does a failure after the table was made, which the payer has paid for and may reuse.
+   */
+  async function sendThrough(
     table: EnsuredLookupTable | undefined,
-  ): SendExecuteResult =>
-    table === undefined ? sent : { ...sent, lookupTableAddress: table.lookupTableAddress };
+    transaction: () => Promise<SignedExecuteTransaction>,
+  ): Promise<SendExecuteResult> {
+    try {
+      const sent = await sendExecute({ rpc, rpcSubscriptions, transaction: await transaction() });
+
+      return table === undefined ? sent : { ...sent, lookupTableAddress: table.lookupTableAddress };
+    } catch (error) {
+      if (table === undefined || !(error instanceof Error)) throw error;
+      throw Object.assign(
+        new Error(
+          `${error.message} (the cook's lookup table ${table.lookupTableAddress} stays, for a ` +
+            "later cook: pass it as lookupTable)",
+          { cause: error },
+        ),
+        { lookupTableAddress: table.lookupTableAddress },
+      );
+    }
+  }
 
   async function cookTransaction(
     bytecode: Uint8Array,
@@ -796,15 +848,21 @@ export async function createSauceSvmClient({
       const table =
         wanted === undefined
           ? undefined
-          : await cookLookupTable(bytecode, manifest, resolution, { ...opts, ...wanted });
-      const transaction = await cookTransaction(
-        bytecode,
-        manifest,
-        resolution,
-        table === undefined ? opts : { ...opts, lookupTables: table.lookupTables },
-      );
+          : await lookupTableFor(
+              cookInstruction(bytecode, manifest, resolution, opts),
+              sentPrepends(opts, false),
+              { ...opts, ...wanted },
+              false,
+            );
 
-      return sentThrough(await sendExecute({ rpc, rpcSubscriptions, transaction }), table);
+      return sendThrough(table, () =>
+        cookTransaction(
+          bytecode,
+          manifest,
+          resolution,
+          table === undefined ? opts : { ...opts, lookupTables: table.lookupTables },
+        ),
+      );
     },
 
     simulateStaged,
@@ -820,15 +878,21 @@ export async function createSauceSvmClient({
       const table =
         wanted === undefined
           ? undefined
-          : await stagedCookLookupTable(buffer, manifest, resolution, { ...opts, ...wanted });
-      const transaction = await stagedCookTransaction(
-        buffer,
-        manifest,
-        resolution,
-        table === undefined ? opts : { ...opts, lookupTables: table.lookupTables },
-      );
+          : await lookupTableFor(
+              await stagedCookInstruction(buffer, manifest, resolution, opts),
+              sentPrepends(opts, false),
+              { ...opts, ...wanted },
+              true,
+            );
 
-      return sentThrough(await sendExecute({ rpc, rpcSubscriptions, transaction }), table);
+      return sendThrough(table, () =>
+        stagedCookTransaction(
+          buffer,
+          manifest,
+          resolution,
+          table === undefined ? opts : { ...opts, lookupTables: table.lookupTables },
+        ),
+      );
     },
   };
 }

@@ -1095,6 +1095,16 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(out.stdout).toMatch(
       /^The cook reverts: program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed/,
     );
+    // The Pot given as `self` is no wallet: the cook's own failure stands, with no hint.
+    const self = await sauce(
+      ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ...["--salt", "vault", "--rpc-url", RPC_URL],
+      ...["--account", `tokenProgram=${TOKEN_PROGRAM}`, "--account", `source=${source}`],
+      ...["--account", "dest=self", "--account", "authority=pot", "--args", "400"],
+    );
+    expect(self.code).toBe(1);
+    expect(self.stdout).toMatch(/^The cook reverts: /);
+    expect(self.stderr).not.toContain("is a wallet");
     expect(out.stderr).toContain(
       `--account dest=${wallet}: ${wallet} is a wallet, which holds SOL and no token. Where the ` +
         "program moves or reads a token through dest, give the wallet's token account instead: " +

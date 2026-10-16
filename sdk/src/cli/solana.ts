@@ -103,6 +103,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   TRANSACTION_SIZE_LIMIT,
+  associatedTokenAccountLength,
 } from "../svm/index.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
@@ -1192,41 +1193,41 @@ async function walletHints(prepared: Prepared, input: SvmCookInput): Promise<str
       entry.kind === "slot" && /writable/.test(entry.requires) ? [entry.name] : [],
     ),
   );
-  const plain = Object.entries(input.accounts).filter(
-    ([name, value]) =>
-      writable.has(name) &&
-      !prepared.derived.has(name) &&
-      !prepared.given.named.has(name) &&
-      value !== "pot",
-  );
-  if (plain.length === 0) return [];
-  const keys = plain.map(([name]) => {
-    const value = prepared.given.accounts[name]!;
-    return value === "owner" ? input.owner : address(value);
+  // Each as given and as resolved: `self` is the Pot through the Kitchen, the owner directly.
+  const plain = Object.entries(input.accounts).flatMap(([name, value]) => {
+    const resolved = prepared.given.accounts[name];
+    if (!writable.has(name) || prepared.derived.has(name) || prepared.given.named.has(name)) {
+      return [];
+    }
+    const key = resolved === "owner" ? input.owner : svmPublicKey(resolved ?? "");
+
+    return key === undefined ? [] : [{ name, value, key, owner: resolved === "owner" }];
   });
+  if (plain.length === 0) return [];
   let found: readonly ({ owner: string; data: readonly string[] } | null)[];
   try {
     ({ value: found } = await prepared.rpc
-      .getMultipleAccounts(keys, { encoding: "base64" })
+      .getMultipleAccounts(
+        plain.map((one) => one.key),
+        { encoding: "base64" },
+      )
       .send());
   } catch {
     // A hint, never a failure of its own.
     return [];
   }
 
-  return plain.flatMap(([name, value], index) => {
+  return plain.flatMap(({ name, value, owner }, index) => {
     const account = found[index];
     const wallet =
-      value === "owner" ||
-      (account != null && account.owner === SYSTEM_PROGRAM && account.data[0] === "");
+      owner || (account != null && account.owner === SYSTEM_PROGRAM && account.data[0] === "");
     if (!wallet) return [];
-    const holder = value === "owner" ? "owner" : value;
 
     return [
-      `--account ${name}=${value}: ${value === "owner" ? "the owner" : value} is a wallet, which ` +
+      `--account ${name}=${value}: ${owner ? "the owner" : value} is a wallet, which ` +
         "holds SOL and no token. Where the program moves or reads a token through " +
-        `${name}, give the wallet's token account instead: --account ${name}=${holder}:<token> ` +
-        `(${holder}:USDC for its USDC account), which sauce run creates where it is missing`,
+        `${name}, give the wallet's token account instead: --account ${name}=${value}:<token> ` +
+        `(${value}:USDC for its USDC account), which sauce run creates where it is missing`,
     ];
   });
 }
@@ -1989,13 +1990,18 @@ async function stagedRehearsal(
   // `sauce run` does not make it, so the note says to.
   for (const [name, token] of prepared.given.named) {
     if (token.account === undefined || fork.account(token.address) !== null) continue;
-    // The run creates it with the Associated Token Account program, which gives a Token-2022
-    // account its ImmutableOwner extension: 170 bytes, where SPL Token's is 165.
+    // The run creates it with the Associated Token Account program, which sizes a Token-2022
+    // account for the extensions its mint requires.
     made++;
     setup.push({
       what: `creating ${token.label}, ${token.address}: its rent`,
       lamports: fork.svm.minimumBalanceForRentExemption(
-        token.account.program === TOKEN_2022_PROGRAM_ID ? 170n : 165n,
+        BigInt(
+          associatedTokenAccountLength(
+            fork.account(token.account.mint)?.data ?? new Uint8Array(),
+            token.account.program === TOKEN_2022_PROGRAM_ID,
+          ),
+        ),
       ),
     });
     fork.tokenAccount(
