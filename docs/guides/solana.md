@@ -419,8 +419,15 @@ One detail worth knowing if you are reading routes somebody already built:
 address, and the helper neither stages that code nor checks it against the bytes
 it just compiled. Keep the direct compilation result when you inspect one.
 
-The EVM-source Portal helpers can encode a Solana destination perfectly well.
-That is about encoding, not about submitting from Solana.
+An intent can also start on Solana, its reward held by Solana's Portal. The
+builders for that side are `buildPortalFundInstruction` (moves the reward into the
+intent's vault, `svmVaultPda`), `buildPortalPublishInstruction` (announces the
+intent), `buildPortalWithdrawInstruction` (pays the claimant once the proof is
+recorded) and `buildPortalRefundInstruction` (returns the reward to its creator).
+`decodeSvmProof` reads the proof the HyperProver records when Hyperlane delivers
+it. `sauce intent publish --chain solana`, `claim` and `refund` send them
+([CLI guide](cli.md#an-intent-from-solana)). A Sauce program running on Solana
+cannot open an intent itself: the wallet calls the Portal.
 
 ## Venue accessors
 

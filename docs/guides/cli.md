@@ -1070,7 +1070,8 @@ There are two ways to get such a file's intents onto the chain:
   `Permit2.approve` per intent — the same number of transactions, plus a standing approval of
   Permit2.
 
-Publishing from Solana is not supported: see [Solana](#solana).
+Publishing from Solana works too, with a Solana wallet: see
+[An intent from Solana](#an-intent-from-solana).
 
 Everything after publishing is a verb of `sauce intent` too. Each takes the intent's file (with
 `--chain`, its source, and the flags it was built with) or its hash, and reads both chains:
@@ -1288,6 +1289,48 @@ sauce intent claim 0x<intent hash> --keystore ~/.keys/me.json
   built for it, so on Solana they need it. A cancellation's proof waits until the slot that
   cancelled it is finalized; `--and-prove` sends the cancellation and its proof in one transaction.
 - **`claim`** and **`refund`** are the source chain's, as for any intent.
+
+### An intent from Solana
+
+An intent can also start on Solana. You pay the reward in a Solana token, say USDC, and a solver
+does the work on an EVM chain, say Base. Solana's eco-routes Portal holds your reward in a vault
+until a proof arrives that the work was done, then pays the solver on Solana. Nothing on the EVM
+side changes: the solver fills it on Base as it fills any intent, and the proof travels back to
+Solana through Hyperlane.
+
+The file is the same intent file you would publish from an EVM chain. `--chain solana` makes
+the reward Solana's: `USDC` in `.reward(...)` is Solana's USDC mint, while `USDC` inside the
+braces is still Base's.
+
+```sh
+sauce intent publish pay.sauce.ts --chain solana --keypair ~/.config/solana/id.json \
+  --intent-deadline <unix seconds> --intent-creator <your Solana key> --args 0xRecipient
+sauce intent fill 0x<intent hash> --claimant <solver's Solana key> \
+  --send --keystore ~/.keys/solver.json
+sauce intent claim 0x<intent hash> --keypair ~/.config/solana/solver.json
+```
+
+- **`publish`** sends two Solana transactions for each intent, signed by `--keypair` (or a Solana
+  `--wallet`). First `fund` moves the reward from your token account into the intent's vault, an
+  account Solana's Portal derives from the intent's hash. Then `publish` announces the intent so
+  solvers can find it. They are two transactions because together they are larger than one Solana
+  transaction can be. If the second fails, the reward waits in the vault: publish again, or refund
+  it after the reward's deadline. Both are rehearsed on the cluster first, and nothing is sent if
+  either would fail. `--dry-run` only rehearses; `--format json` prints them unsigned, for the
+  wallet that `--from <key>` names. `--intent-creator` is a Solana key: the account a refund pays.
+- The route has to fit in one Solana transaction, because the Portal takes it whole. Plain token
+  transfers fit; a program body does not.
+- **`fill`**, **`prove`** and **`cancel`** happen on the EVM destination, as for any intent.
+  `--claimant` is required: it is the Solana key the reward will pay, since an EVM address cannot
+  hold the reward. The proof goes to Solana's HyperProver, which accepts proofs from the EVM
+  chains' HyperProver.
+- **`claim`** and **`refund`** happen on Solana. Anyone may send them with `--keypair`, which pays
+  the fee: the claim pays the claimant the proof names, and the refund pays the creator. Each
+  opens the receiving token account first if it does not exist yet.
+- **`import`** stores an intent someone published from Solana, by the transaction's signature:
+  `sauce intent import <signature> --chain solana`.
+- A Sauce program running on Solana cannot open an intent itself yet: compiling one says to publish
+  it from a wallet instead.
 
 `sauce intent status <file | hash>` reads the intent on both chains and prints its state —
 `unfunded`, `funded`, `filled`, `cancelled`, `proven`, `cancelProven`, `claimed` or `refunded` —
@@ -1667,9 +1710,8 @@ engine invocation it made, against the SDK's settle program recompiled for that 
 `NO_SETTLE` or `NOT_GENUINE`. It reads a cook through the Kitchen: a settle cooked `--via engine`
 is not one it checks.
 
-`sauce intent publish` does not work from Solana: open the intent from an EVM chain; its
-destination may be Solana, and `sauce intent fill`, `prove` and `cancel` act on it there
-([An intent to Solana](#an-intent-to-solana)). A `main` argument of type `Address` is a 32-byte
+An intent can go to Solana ([An intent to Solana](#an-intent-to-solana)) or start there
+([An intent from Solana](#an-intent-from-solana)). A `main` argument of type `Address` is a 32-byte
 public key on Solana: pass it in base58 (or as 32 bytes of hex), and the command encodes the whole
 key as the word the engine reads (ABI-v1 only, not under `--compact-args`).
 

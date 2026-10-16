@@ -156,6 +156,33 @@ sauce intent cancel <intent-hash> --keypair <keypair>
 - `prove` and `cancel` sign with `--keypair`, which pays their fee. A cancellation's proof waits
   until the slot that cancelled it is finalized.
 
+**An intent from Solana.** The same intent file publishes from Solana with `--chain solana`: the
+reward's names resolve on Solana (`USDC` in `.reward(...)` is Solana's mint), the body's on the
+destination, and Solana's Portal escrows the reward in the intent's vault, a key it derives from
+the intent's hash. The creator is a Solana key.
+
+```sh
+sauce intent publish <file> --chain solana --keypair <keypair> \
+  --intent-deadline <unix-seconds> --intent-creator <solana-key> --args <recipient>
+sauce intent fill <intent-hash> --claimant <solana-key> --send --keystore <keystore>
+sauce intent claim <intent-hash> --keypair <keypair>
+sauce intent refund <intent-hash> --keypair <keypair>
+sauce intent import <signature> --chain solana
+```
+
+- `publish` sends two transactions per intent from the signer: `fund` (the reward into the vault;
+  it fails unless the whole reward arrives), then `publish` (the announcement). A `publish` that
+  fails after its `fund` leaves the reward in the vault, refundable after the reward's deadline.
+- The route travels whole in one Solana transaction: a body of token transfers fits, a program body
+  does not.
+- A program running on Solana does not open an intent: its compile refuses one, naming
+  `sauce intent publish`.
+- The fill, proof and cancellation are the EVM destination's, as for any intent; `--claimant` is
+  required there, the Solana key the reward pays. The proof travels to Solana's HyperProver, which
+  takes it from the EVM HyperProver.
+- `claim` and `refund` are Solana transactions any key may pay for (`--keypair`): the claimant, or
+  the creator, is paid, its token account opened first where it has none.
+
 The Portal's functions, events and errors, with selectors and topics, are in
 [references/portal.md](references/portal.md).
 

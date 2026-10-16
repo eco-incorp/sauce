@@ -595,6 +595,13 @@ the address on the EVM source the reward pays. Sign each with that key, last, an
 about a minute, before its blockhash expires. `dryRun` simulates an EVM destination's fill only;
 a Solana fill is simulated as it is built. Claim and refund stay on the EVM source.
 
+An intent can also start on Solana. Give `sauce_intent_publish` the file with `chain: "solana"`
+and `from`, the Solana key that holds the reward and pays the fees. You get two transactions per
+intent, in order: `fund`, which moves the reward into the intent's vault, then `publish`, which
+announces the intent. Its fill and proof are the EVM destination's, with `claimant` the Solana
+key the reward pays. `sauce_intent_claim` and `sauce_intent_refund` then come back as Solana
+transactions for `from`, which anyone may pay.
+
 A step that cannot happen yet is a result, `ready: false` with `why`, not an error. Each tool reads
 the chains it needs through the server's endpoints, or through `rpcUrls`, each chain's endpoint by
 slug or id; `rpcUrl` is the endpoint of the chain the tool names (the source for import, claim and
