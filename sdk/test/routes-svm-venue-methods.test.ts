@@ -206,6 +206,18 @@ describe("Solana's venue namespaces", () => {
         "        + Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, f), USDC, WSOL, 5, 10, 0);\n" +
         "    }\n  }\n  return t;\n}\n",
     );
+    // A body of one statement, with no braces, is written out the same way.
+    const bare = compile(
+      "function main(): Uint256 {\n  let t = 0;\n" +
+        "  for (const s of [4, 1]) t += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, s), USDC, WSOL, 5, 10, 0);\n" +
+        "  return t;\n}\n",
+    );
+    expect(Object.values(bare.derivedAccounts!)).toEqual(
+      expect.arrayContaining([
+        "slot:Orca.Whirlpool(USDC,WSOL,4):USDC.pool",
+        "slot:Orca.Whirlpool(USDC,WSOL,1):USDC.pool",
+      ]),
+    );
     expect(skipping.source).toContain("for (const s of [1]) {");
     expect(skipping.source).toContain("for (const s of [4]) {");
     expect(skipping.source).toContain("if (true) { const f = 400;");
@@ -273,6 +285,17 @@ describe("Solana's venue namespaces", () => {
       expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 4, 4)")).toThrow(
         "`Orca.Whirlpool.pool(…)` takes 3 arguments (tokenA, tokenB, tickSpacing), got 4.",
       );
+    });
+
+    it("a loop over keys whose body declares its variable again", () => {
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  let t = 0;\n  for (const s of [1, 4]) {\n" +
+            "    const s = 8;\n" +
+            "    t += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, s), USDC, WSOL, 5, 10, 0);\n" +
+            "  }\n  return t;\n}\n",
+        ),
+      ).toThrow("the loop over s declares s again in its body");
     });
 
     it("a loop over keys that breaks out of it, or is labelled", () => {

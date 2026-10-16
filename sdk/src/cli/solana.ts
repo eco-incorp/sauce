@@ -875,6 +875,7 @@ export async function resolveTokenAccounts(
   const named = new Map<string, TokenAccountNamed>();
   // This cook's pool slots, each read once for its nine names and never kept for another cook.
   const slots = new Map<string, Promise<SvmSlot>>();
+  const keyedPools = new Map<string, Promise<Address>>();
   for (const [name, value] of Object.entries(given)) {
     let resolved: ResolvedSvmAccountName;
     try {
@@ -886,7 +887,7 @@ export async function resolveTokenAccounts(
         args: args.keys ?? {},
         integers: args.integers ?? {},
         ...(programOf === undefined ? {} : { programOf }),
-        ...(load === undefined ? {} : { load, slots }),
+        ...(load === undefined ? {} : { load, slots, keyedPools }),
         ...(found === undefined ? {} : { found }),
       });
     } catch (error) {
@@ -1540,7 +1541,13 @@ async function prepare(
     coalescingOwnedAccountLoader(kitBatchAccountLoader(rpc)),
     found,
   );
-  refuseTooManyAccounts(given.accounts, input.owner, pot, found);
+  refuseTooManyAccounts(
+    given.accounts,
+    input.owner,
+    pot,
+    (await deriveExecutionFeeConfigPda(kitchen())).address,
+    found,
+  );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
   if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
@@ -1578,19 +1585,24 @@ async function prepare(
 }
 
 /** The most accounts a Solana transaction may lock. */
-const ACCOUNT_LOCK_LIMIT = 64;
+export const ACCOUNT_LOCK_LIMIT = 64;
 
 /**
  * Refuses a cook naming more accounts than a transaction may lock, before anything is signed: the
  * accounts it attaches, and the cook's own around them — the owner, the Kitchen, the engine, the
  * Pot, the fee's config and the System program, the compute-budget program, and a staged program's
- * code buffer and code. Where the program finds pools by key, it says which keys found a pool: each
- * pool there brings up to eight accounts of its own, so naming fewer keys is how the cook fits.
+ * code buffer and code (staged or not, counted: a cook this wide is staged). Each by its address,
+ * so one the program also attaches counts once; the two buffers have none before the program is
+ * staged, and are its own. An address lookup table the cook goes through is not locked, nor are the
+ * accounts it holds beyond these. Where the program finds pools by key, it says which keys found a
+ * pool: each pool there brings up to eight accounts of its own, so naming fewer keys is how the cook
+ * fits.
  */
-function refuseTooManyAccounts(
+export function refuseTooManyAccounts(
   accounts: Readonly<Record<string, string>>,
   owner: Address,
   pot: Address,
+  feeConfig: Address,
   found: ReadonlyMap<string, Address | null>,
 ): void {
   const locked = new Set<string>([
@@ -1598,9 +1610,10 @@ function refuseTooManyAccounts(
     pot,
     kitchen(),
     engine(),
+    feeConfig,
     "11111111111111111111111111111111",
     "ComputeBudget111111111111111111111111111111",
-    "the fee's config",
+    // A staged program's code buffer and code: new accounts, distinct from every other.
     "the code buffer",
     "its code",
   ]);

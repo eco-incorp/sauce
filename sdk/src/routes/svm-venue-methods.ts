@@ -187,22 +187,31 @@ export function unrollPoolKeyLoops(source: string): string {
   // Before parsing: a program that finds no pool by key has no such loop.
   if (!source.includes(".pool(")) return source;
   let declared: ReadonlySet<string> = new Set();
-  for (let pass = 0; pass < 16; pass++) {
+  // One parse a level: every outermost loop over keys written out at once, then the loops nested in
+  // them, which the copies hold.
+  for (let level = 0; level < 16; level++) {
     const program = parseSauce(source);
     declared = new Set(countDeclarations(program).keys());
-    let found: AstNode | undefined;
+    const found: AstNode[] = [];
     walk(program, (node) => {
-      if (found !== undefined) return;
+      if (found.some((loop) => loop.start <= node.start && node.end <= loop.end)) return;
       if (node.type === "LabeledStatement" && keyLoopOf(node.body as AstNode) !== undefined) {
         throw new Error(
           `the loop over ${keyLoopOf(node.body as AstNode)!.name} is labelled: a loop over pool ` +
             "keys is written out once per key, so it takes no label",
         );
       }
-      if (keyLoopOf(node) !== undefined) found = node;
+      if (keyLoopOf(node) !== undefined) found.push(node);
     });
-    if (found === undefined) return source;
-    source = unrolled(source, found);
+    if (found.length === 0) return source;
+    source = applySplices(
+      source,
+      found.map((loop) => ({
+        start: loop.start,
+        end: loop.end,
+        replacement: unrolled(source, loop),
+      })),
+    );
   }
   throw new Error("loops over pool keys nest more than 16 deep");
 
@@ -242,7 +251,7 @@ export function unrollPoolKeyLoops(source: string): string {
     return sites;
   }
 
-  /** `source` with `loop` written out once per key. */
+  /** `loop` written out once per key, in place of its text in `text`. */
   function unrolled(text: string, loop: AstNode): string {
     const { name, kind, keys } = keyLoop(loop)!;
     const body = loop.body as AstNode;
@@ -278,7 +287,7 @@ export function unrollPoolKeyLoops(source: string): string {
     const line = text.lastIndexOf("\n", loop.start) + 1;
     const indent = /^[ \t]*/.exec(text.slice(line))![0];
 
-    return `${text.slice(0, loop.start)}${copies.join(`\n${indent}`)}${text.slice(loop.end)}`;
+    return copies.join(`\n${indent}`);
   }
 
   /** Whether `body` breaks out of, or continues, the loop it is the body of. */

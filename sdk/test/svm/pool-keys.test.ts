@@ -17,6 +17,7 @@ import {
   svmPoolKeyProblem,
   SVM_KEYED_VENUES,
 } from "../../src/svm/pool-keys.js";
+import { memoizedFindProgramAddressSync } from "../../src/svm/venues/pda-memo.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import { BYTES, manifest, pool, SNAPSHOT, SYSTEM, USDC, WSOL } from "./venue-fixture.js";
 
@@ -197,6 +198,17 @@ describe("a venue's pool by key", () => {
         })
       ).value,
     ).toBe(SYSTEM);
+  });
+
+  it("derives a config from its index big-endian: 256 is [1, 0]", () => {
+    const program = SVM_KEYED_VENUES["Raydium.CLMM"]!.program;
+    expect(svmAmmConfig(program, 256)).toBe(
+      memoizedFindProgramAddressSync(program, [
+        new TextEncoder().encode("amm_config"),
+        Uint8Array.of(1, 0),
+      ])[0],
+    );
+    expect(svmAmmConfig(program, 256)).not.toBe(svmAmmConfig(program, 1));
   });
 
   it("refuses a key the venue has no pool at, and a pair of one mint", async () => {

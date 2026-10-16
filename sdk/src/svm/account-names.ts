@@ -103,6 +103,11 @@ export interface SvmAccountNameContext {
    * pool, or `null` where the venue has none at that key. For a message about the cook's pools.
    */
   readonly found?: Map<string, Address | null>;
+  /**
+   * The pools by key this resolution has read, by spelling, which the nine names of one slot share.
+   * Give one map per cook, as `slots`. Without it each name reads them.
+   */
+  readonly keyedPools?: Map<string, Promise<Address>>;
 }
 
 /** One name, resolved. */
@@ -636,9 +641,14 @@ async function resolveSlot(
   const keyed = parsed.pool.kind === "keyed" ? parsed.pool : undefined;
   const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
   const load = ctx.load;
+  let pending = keyed === undefined ? undefined : ctx.keyedPools?.get(keyed.text);
+  if (keyed !== undefined && pending === undefined) {
+    pending = keyedPool(keyed, ctx, rows);
+    ctx.keyedPools?.set(keyed.text, pending);
+  }
   const pool =
-    keyed !== undefined
-      ? await keyedPool(keyed, ctx, rows)
+    pending !== undefined
+      ? await pending
       : parsed.pool.kind === "arg"
         ? argument(parsed.pool.param, ctx)
         : address((parsed.pool as { key: string }).key);

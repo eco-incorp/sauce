@@ -486,6 +486,14 @@ describeSvm(
         `Orca.Whirlpool.pool(USDC, WSOL, 4) is ${pool("orca-whirlpool-sol-usdc").pool}`,
       );
       expect(run.stderr).toContain("Orca.Whirlpool.pool(USDC, WSOL, 1) finds none");
+      for (const [key, name] of [
+        ["Raydium.CLMM.pool(USDC, WSOL, 400)", "raydium-clmm-sol-usdc"],
+        ["Pancakeswap.CLMM.pool(USDC, WSOL, 100)", "pancakeswap-clmm-sol-usdc"],
+        ["Defituna.Fusion.pool(USDC, WSOL, 4)", "defituna-sol-usdc"],
+        ["Crema.CLMM.pool(USDC, WSOL, 50)", "crema-sol-usdc"],
+        ["Cropper.Whirlpool.pool(USDC, WSOL, 2)", "cropper-sol-usdc"],
+      ] as const)
+        expect(run.stderr).toContain(`${key} is ${pool(name).pool}`);
       expect(run.stderr).toContain("name fewer keys");
     }, 300_000);
   },
