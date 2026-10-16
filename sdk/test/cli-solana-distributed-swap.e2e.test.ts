@@ -383,6 +383,43 @@ describeSvm(
       expect(pooled.stderr).toContain("not a wallet");
     }, 300_000);
 
+    it("works out each pool's stop for an order its pools' walks would run out of compute units on, and says which it held", async () => {
+      restoreVenues(harness.svm);
+      const wide =
+        (FOUND.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b)) * 11000n) / 10000n;
+      const argv = (command: string) => [
+        ...[command, PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
+        ...["--owner", owner.signer.address],
+        ...(command === "simulate" ? ["--assume-balance", "USDC:10000000"] : []),
+        ...["--args", String(10_000_000n * 10n ** 6n), String(wide), "0", "0", randomAddress()],
+      ];
+      // The deepest pool walks its whole way, the next is held short of its limit, and the
+      // shallowest is skipped: the simulation succeeds, and says so.
+      const run = await sauce(...argv("simulate"), "--json");
+      const out = ok(run) as {
+        returned: { bought: string };
+        computeStops: { label: string; held: boolean; skipped: boolean; rank: number }[];
+        computeBudget: { measured: boolean };
+      };
+      expect(BigInt(out.returned.bought)).toBeGreaterThan(0n);
+      const byRank = [...out.computeStops].sort((a, b) => a.rank - b.rank);
+      expect(byRank.map((stop) => [stop.held, stop.skipped])).toEqual([
+        [false, false],
+        [true, false],
+        [false, true],
+      ]);
+      const text = await sauce(...argv("simulate"));
+      expect(text.code).toBe(0);
+      expect(text.stdout).toMatch(
+        /Byreal\.CLMM\.pool\(USDC, SPCX_US, 1000\) stops at [\d.]+ USDC per SPCX_US, short of its limit/,
+      );
+      expect(text.stdout).toContain("Pancakeswap.CLMM.pool(USDC, SPCX_US, 800) is skipped");
+      // sauce tx works them out from the cost table alone, and says so.
+      const tx = await sauce(...argv("tx"));
+      expect(tx.stderr).toContain("comes from the cost table, with no simulation");
+      expect((ok(tx) as { computeStops: unknown[] }).computeStops).toHaveLength(3);
+    }, 300_000);
+
     it("lists the pair's pools with sauce pools, each with the key a program finds it by", async () => {
       restoreVenues(harness.svm);
       // SOL/USDC, whose pools the fixture holds at every venue. SOL names the wrapped SOL a pool
