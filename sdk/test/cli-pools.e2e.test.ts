@@ -54,7 +54,7 @@ interface Side {
   feePpm: number;
   mid: string;
   taker: string;
-  maxPrice: string;
+  priceLimit: string;
   depth1Pct: string | null;
 }
 interface Listed {
@@ -195,18 +195,18 @@ describeAnvil("sauce pools, against a local Base", () => {
       expect(Number(buyUsdc.mid) * Number(buySpcx.mid)).toBeCloseTo(1, 12);
       for (const side of pool.sides) {
         expect(Number(side.taker) / Number(side.mid)).toBeCloseTo(1e6 / (1e6 - side.feePpm), 12);
-        // maxPrice: the taker price x 10^(18 + pay decimals - buy decimals).
+        // priceLimit: the taker price x 10^(18 + pay decimals - buy decimals).
         const scale = side.pay === "USDC" ? 16 : 20;
-        expect(Number(side.maxPrice) / (Number(side.taker) * 10 ** scale)).toBeCloseTo(1, 12);
+        expect(Number(side.priceLimit) / (Number(side.taker) * 10 ** scale)).toBeCloseTo(1, 12);
       }
     }
     // 0.05% Uniswap V3 at 400 USDC per SPCXc: 400 / 0.9995 with the fee (to 18 significant
-    // digits), and maxPrice that x 10^(18 + 6 - 8), rounded up.
+    // digits), and priceLimit that x 10^(18 + 6 - 8), rounded up.
     const v3 = report.pools.find((pool) => pool.pool === poolOf("v3:500"))!;
     expect(v3.sqrtPriceX96).toBe(sqrtAt("400").toString());
     expect(v3.sides[0].mid).toBe("400");
     expect(v3.sides[0].taker).toBe("400.200100050025013");
-    expect(v3.sides[0].maxPrice).toBe("4002001000500250126");
+    expect(v3.sides[0].priceLimit).toBe("4002001000500250126");
     // The V4 pool's protocol fee on top of its LP fee, each way: 0.03% paying token0, 0.01% token1.
     const v4 = report.pools[3]!;
     expect(v4.protocolFee).toBe(300 | (100 << 12));
@@ -305,7 +305,7 @@ describeAnvil("sauce pools, against a local Base", () => {
     );
     expect(run.stdout).toContain(`1. Aerodrome Slipstream ${poolOf("slipstream:10")}`);
     expect(run.stdout).toMatch(/buy SPCXc with USDC {2}400\.2 USDC each, 400 before the fee; /);
-    expect(run.stdout).toContain("maxPrice 4002001000500250126");
+    expect(run.stdout).toContain("priceLimit 4002001000500250126");
     expect(run.stdout).toContain("No liquidity at their price, skipped (2):");
     expect(run.stdout).toContain("UniswapV3.Factory");
     // The other Slipstream factories have no code here, and it says so.
@@ -404,13 +404,13 @@ describeAnvil("sauce pools, against a local Base", () => {
       const out = JSON.parse(run.stdout) as {
         sqrtPriceX96: string;
         pool: Record<string, unknown>;
-        buy: { maxPrice: string; maxAvgPrice: string };
+        buy: { priceLimit: string; maxAvgPrice: string };
       };
       expect(out.pool).toMatchObject({ address: poolOf(name), venue, contract, readFrom: "base" });
       expect(out.sqrtPriceX96).toBe(sqrtAt(price).toString());
       // Buying SPCXc with USDC: the price x 10^(18 + 6 - 8), as the distributed swap takes it.
-      expect(Number(out.buy.maxPrice) / (Number(price) * 1e16)).toBeCloseTo(1, 12);
-      expect(out.buy.maxAvgPrice).toBe(out.buy.maxPrice);
+      expect(Number(out.buy.priceLimit) / (Number(price) * 1e16)).toBeCloseTo(1, 12);
+      expect(out.buy.maxAvgPrice).toBe(out.buy.priceLimit);
     }
     // A pool of another pair is refused, naming what it trades.
     const other = await sauce(

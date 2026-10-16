@@ -394,20 +394,20 @@ describe("sauce_globals", () => {
 
 describe("sauce_price", () => {
   it("turns a price into the pool's sqrtPriceX96 and both directions' limits, and back", async () => {
-    type Side = { maxPrice: string; maxAvgPrice: string; minAvgPrice: string };
+    type Side = { priceLimit: string; maxAvgPrice: string; minAvgPrice: string };
     const out = ok(
       await mcp.call("sauce_price", { chain: "base", base: "WETH", quote: "USDC", price: "2700" }),
     ) as { sqrtPriceX96: string; sell: Side; buy: Side; units: Record<string, string> };
     assert.match(out.sqrtPriceX96, /^\d+$/);
-    // Buying WETH with USDC: the distributed swap's maxPrice and maxAvgPrice, USDC units paid per
+    // Buying WETH with USDC: the distributed swap's priceLimit and maxAvgPrice, USDC units paid per
     // WETH unit times 1e18 (2700 x 10^(18 + 6 - 18)); minAvgPrice the other way round.
-    assert.equal(out.buy.maxPrice, "2700000000");
+    assert.equal(out.buy.priceLimit, "2700000000");
     assert.equal(out.buy.maxAvgPrice, "2700000000");
     assert.equal(out.buy.minAvgPrice, ((10n ** 36n + 2699999999n) / 2700000000n).toString());
     assert.equal(out.sell.minAvgPrice, "2700000000");
-    assert.equal(out.sell.maxPrice, (10n ** 36n / 2700000000n).toString());
+    assert.equal(out.sell.priceLimit, (10n ** 36n / 2700000000n).toString());
     assert.match(out.units.maxAvgPrice!, /distributed swap's maxAvgPrice/);
-    assert.match(out.units.minAvgPrice!, /never a maxPrice or maxAvgPrice/);
+    assert.match(out.units.minAvgPrice!, /never a priceLimit or maxAvgPrice/);
     const back = ok(
       await mcp.call("sauce_price", {
         chain: "base",
@@ -423,7 +423,7 @@ describe("sauce_price", () => {
     type Side = {
       price: string;
       sqrtPriceLimitX96: string;
-      maxPrice: string;
+      priceLimit: string;
       maxAvgPrice: string;
       minAvgPrice: string;
     };
@@ -446,10 +446,10 @@ describe("sauce_price", () => {
     // 2700 * 1.005 / 0.997, to the 24 places the tool computes it to.
     const worst = await at("2721.664994984954864593781344");
     assert.equal(out.limits.buy.minAvgPrice, worst.buy.minAvgPrice);
-    // The distributed swap's maxPrice is that same worst price, fee included, as input per output.
-    assert.equal(out.limits.buy.maxPrice, worst.buy.maxPrice);
-    assert.equal(out.limits.buy.maxAvgPrice, worst.buy.maxPrice);
-    assert.equal(out.limits.sell.maxPrice, (await at("2678.4405")).sell.maxPrice);
+    // The distributed swap's priceLimit is that same worst price, fee included, as input per output.
+    assert.equal(out.limits.buy.priceLimit, worst.buy.priceLimit);
+    assert.equal(out.limits.buy.maxAvgPrice, worst.buy.priceLimit);
+    assert.equal(out.limits.sell.priceLimit, (await at("2678.4405")).sell.priceLimit);
     const feeless = ok(
       await mcp.call("sauce_price", { ...pair, price: "2700", slippageBps: 50 }),
     ) as { limits: { feePpm: number; sell: Side } };

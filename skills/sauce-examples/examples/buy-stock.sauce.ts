@@ -1,15 +1,15 @@
 // Buys SpaceX stock (SPCXon, Ondo's tokenized SpaceX) with up to `budget` USDC from the Pot, from
 // the one Uniswap V3 pool of the pair that sells a share cheapest once its fee is paid, and never
-// above `maxPrice` a share, fee included. The pool fills only up to that price; the shares go to
+// above `priceLimit` a share, fee included. The pool fills only up to that price; the shares go to
 // `recipient` and the budget it leaves to `refundTo`. Returns the pool's fee tier, the USDC spent
 // and the shares bought.
 //
 //   sauce run buy-stock.sauce.ts --chain <chain> --keystore <keystore> \
-//     --args <budget> <maxPrice> <minShares> <recipient> <refundTo>
+//     --args <budget> <priceLimit> <minShares> <recipient> <refundTo>
 //
 //   budget: Uint256      the most USDC to spend, in its base units (6 decimals): 1000000000 is
 //                        1,000 USDC; the Pot must hold it
-//   maxPrice: Uint256    the most one share may cost, fee included, in USDC base units:
+//   priceLimit: Uint256  the most one share may cost, fee included, in USDC base units:
 //                        150000000 is 150 USDC
 //   minShares: Uint256   the fewest shares to accept, in SPCXon base units (18 decimals):
 //                        5000000000000000000 is 5 shares; fewer reverts the whole cook
@@ -26,13 +26,13 @@ const ONE_SHARE = 1000000000000000000; // SPCXon has 18 decimals
 
 function main(
   budget: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minShares: Uint256,
   recipient: Address,
   refundTo: Address,
 ): { fee: Uint256; spent: Uint256; shares: Uint256 } {
   const self = ctx.self();
-  require(maxPrice > 0, "maxPrice is 0");
+  require(priceLimit > 0, "priceLimit is 0");
   const before = USDC.balanceOf(self);
   require(before >= budget, "budget is not in the Pot");
 
@@ -61,11 +61,11 @@ function main(
     }
   }
   require(pool != 0, "no SPCXon/USDC pool with liquidity");
-  require(cheapest <= maxPrice, "every pool is above maxPrice");
+  require(cheapest <= priceLimit, "every pool is above priceLimit");
 
-  // The pool's price at which a share, with the fee on top, costs maxPrice, as its sqrt price:
+  // The pool's price at which a share, with the fee on top, costs priceLimit, as its sqrt price:
   // the swap stops there. Paying token0 pushes the price down, token1 pushes it up.
-  const atLimit = Math.mulDiv(maxPrice, 1000000 - fee, 1000000);
+  const atLimit = Math.mulDiv(priceLimit, 1000000 - fee, 1000000);
   const limit =
     USDC < SPCXon
       ? Math.sqrt(Math.mulDiv(1 << 192, ONE_SHARE, atLimit))
