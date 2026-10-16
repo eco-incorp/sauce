@@ -1,0 +1,125 @@
+/**
+ * The input schemas of the two wallet MCP servers an agent hands Sauce's unsigned transactions to,
+ * copied (the parts that hold what a result carries) so a test can hold our output to them. Each
+ * is cited by package and version, or by commit: when either server changes its input, update the
+ * copy here, then the hand-off it checks.
+ *
+ * Phantom's MCP server (`@phantom/mcp-server` 1.2.9) registers the tools of `@phantom/cli` 3.0.0:
+ * `src/actions/send-evm-transaction.ts`, `src/actions/send-solana-transaction.ts`, and the shared
+ * field schemas in `src/utils/schemas.ts`. Its zod is the `z` of `incur`, zod 4. The fields a
+ * caller does not fill from a Sauce result (walletId, derivationIndex, the fee fields, nonce,
+ * type) are left out; `confirmed` is the caller's (true once the user approved the preview).
+ *
+ * Coinbase's Wallet MCP (`https://wallet-mcp.coinbase.com`, formerly Base MCP) publishes no
+ * package: its `send_calls` input is as its own skill documents it, base/skills at
+ * ef8bcd52ccc2e79de846cdf8d16b6fc62cf459a4, `skills/wallet-mcp/references/batch-calls.md` — a
+ * `chain` string and `calls` of `{ to, value, data }`, `value` hex wei ("0x0"), `data` hex
+ * calldata — and the plugins built on it, which hex-encode a decimal value before passing it
+ * (`skills/base-mcp/plugins/kyberswap.md`: `"0x" + BigInt(transactionValue).toString(16)`).
+ */
+import { getAddress } from "viem";
+import * as z from "zod";
+
+// --- Phantom: src/utils/schemas.ts ---------------------------------------------------------------
+
+/** `EthereumAddressSchema`: any case, normalized to EIP-55. */
+const EthereumAddressSchema = z.string().transform((value, ctx) => {
+  try {
+    return getAddress(value);
+  } catch {
+    ctx.addIssue({
+      code: "custom",
+      message: "Invalid Ethereum address — must be a 0x-prefixed 40-char hex string",
+    });
+
+    return z.NEVER;
+  }
+});
+
+/** `HexStringSchema`: 0x-prefixed hex of any length. A decimal string is refused. */
+const HexStringSchema = z
+  .string()
+  .regex(/^0x[0-9a-fA-F]*$/, 'Must be a 0x-prefixed hex string (e.g. "0x", "0x1234abcd")');
+
+/** `EvmChainIdSchema`: a number, or a decimal or hex string. */
+const EvmChainIdSchema = z.union([z.number(), z.string()]);
+
+/** `Base64Schema`: standard base64, never base64url or base58. */
+const Base64Schema = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9+/]*={0,2}$/,
+    "Must be a valid standard base64 string (A-Za-z0-9+/= with correct padding)",
+  )
+  .refine((s) => s.length % 4 !== 1, "Base64 string has invalid length — check padding");
+
+/** `Caip2ChainIdSchema` refined to `solana:` (`SolanaCaip2ChainIdSchema`). */
+const SolanaCaip2ChainIdSchema = z
+  .string()
+  .regex(/^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$/)
+  .refine((v) => v.startsWith("solana:"));
+
+// --- Phantom: the tools --------------------------------------------------------------------------
+
+/** `send_evm_transaction`'s input (`SendEvmTransactionSchema`), the fields a hand-off fills. */
+export const phantomSendEvmTransaction = z.object({
+  chainId: EvmChainIdSchema,
+  to: EthereumAddressSchema.optional(),
+  value: HexStringSchema.optional().default("0x0"),
+  data: HexStringSchema.optional(),
+  gas: HexStringSchema.optional(),
+  gasLimit: HexStringSchema.optional(),
+  confirmed: z.union([z.boolean(), z.stringbool()]).default(false),
+});
+
+/** `send_solana_transaction`'s input (`SendSolanaTransactionSchema`), the fields a hand-off fills. */
+export const phantomSendSolanaTransaction = z.object({
+  transaction: Base64Schema,
+  networkId: SolanaCaip2ChainIdSchema.default("solana:mainnet"),
+  confirmed: z.union([z.boolean(), z.stringbool()]).default(false),
+});
+
+/** The networkIds `normalizeNetworkId` (`src/utils/network.ts`) maps to Solana's mainnet. */
+export const PHANTOM_SOLANA_MAINNET = ["solana:mainnet", "solana:mainnet-beta"] as const;
+
+/** The EVM chains `send_evm_transaction` refuses (`assertTransactionNetworkSupported`). */
+export const PHANTOM_EVM_REFUSED = [42161, 421614] as const;
+
+// --- Coinbase Wallet MCP: send_calls -------------------------------------------------------------
+
+/** The chain strings `send_calls` takes (batch-calls.md). */
+export const COINBASE_CHAINS = [
+  "base",
+  "ethereum",
+  "arbitrum",
+  "optimism",
+  "polygon",
+  "bsc",
+  "avalanche",
+  "robinhood-chain",
+  "base-sepolia",
+] as const;
+
+/** A `value` as the batch-calls reference writes it: hex wei, `0x0` for none. */
+const HexQuantity = z.string().regex(/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/);
+
+/** `send_calls`' input: `{ chain, calls: [{ to, value?, data? }] }`, held strictly. */
+export const coinbaseSendCalls = z
+  .object({
+    chain: z.enum(COINBASE_CHAINS),
+    calls: z
+      .array(
+        z
+          .object({
+            to: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+            value: HexQuantity.optional(),
+            data: z
+              .string()
+              .regex(/^0x(?:[0-9a-fA-F]{2})*$/)
+              .optional(),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
