@@ -14,7 +14,10 @@ import { decodeFunctionData, erc20Abi, toFunctionSelector, type AbiFunction, typ
 import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
+import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { svmKeyOf, universalOfSvmKey } from "../src/svm/portal.js";
+import { decodePortalCalldataWithAccounts } from "../src/svm/intent.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
 import {
   ecoRoutesExecutorOf,
@@ -28,6 +31,7 @@ import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js"
 const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
 const SOLANA = requireChain("solana");
+const SOLANA_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" as never;
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 const RECIPIENT_ADDRESS = "0x9999999999999999999999999999999999999999" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
@@ -492,22 +496,59 @@ describe("a body that is not just token writes becomes a program", () => {
     expect(result.intents[0]!.captures).toContain("amount");
   });
 
-  it("a token write on Solana takes the program path, never ERC-20 calldata aimed at the mint", () => {
+  it("a token write on Solana lowers to Solana's own transfer, never ERC-20 calldata aimed at the mint", () => {
     // On Solana `USDC` is the mint's 32-byte key, so the direct-call shape would be a `transfer`
     // call whose target is the mint: a route no solver can run, with the reward escrowed behind it.
-    const source = program(
-      `  Solana(() => {\n    USDC.transfer(RECIPIENT, amount);\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
-    );
-    const compileChild = () => {
-      throw new Error("compiled as a program");
-    };
+    const MINT = 0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61n;
+    const WALLET = 0x8a3f1d6c3f2b4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9dn;
+    const given: unknown[] = [];
+    const call = { target: `0x${"ab".repeat(32)}` as Hex, data: "0x01" as Hex, value: 0n };
+    const solana = context({
+      chains: new Map([["Solana", SOLANA]]),
+      // The body's `USDC` is Solana's mint; the reward's, the enclosing chain's token.
+      definesFor: (chain: typeof BASE) =>
+        new Map([
+          ["USDC", chain === SOLANA ? MINT : 0x7777777777777777777777777777777777777777n],
+          ["WALLET", WALLET],
+        ]),
+      proverFor: () => CREATOR,
+      compileChild: () => {
+        throw new Error("compiled as an EVM program");
+      },
+      svmTransfers: (_chain: unknown, _portal: unknown, transfers: unknown) => {
+        given.push(transfers);
 
+        return {
+          calls: [call],
+          nativeAmount: 2_039_280n,
+          tokens: [{ token: `0x${MINT.toString(16)}`, amount: 5n }],
+          creates: [],
+          accounts: [],
+        };
+      },
+    });
+    const result = rewriteIntentSugar(
+      program(
+        `  Solana(() => {\n    USDC.transfer(WALLET, 5);\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
+      ),
+      solana,
+    );
+
+    expect(given).toEqual([[{ mint: MINT, recipient: WALLET, amount: 5n }]]);
+    const { route } = result.intents[0]!.intent;
+    expect(route.calls).toEqual([call]);
+    expect(route.nativeAmount).toBe(2_039_280n);
+    // A value the program has only while it runs cannot reach a route built before then.
     expect(() =>
       rewriteIntentSugar(
-        source,
-        context({ chains: new Map([["Solana", SOLANA]]), proverFor: () => CREATOR, compileChild }),
+        program(
+          `  Solana(() => {\n    USDC.transfer(WALLET, amount);\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
+        ),
+        solana,
       ),
-    ).toThrow("compiled as a program");
+    ).toThrow(
+      /a transfer's amount on solana is `amount`, which the program has only while it runs/,
+    );
   });
 
   it("lowers an intent opened inside an intent, recursively", () => {
@@ -748,24 +789,65 @@ describe("what it refuses, and how clearly", () => {
 });
 
 describe("through the real compile path", () => {
-  it("builds no Solana intent from a token write", () => {
-    // The program path: an SVM child, which this sugar does not build (it derives an EVM Pot), and
-    // whose compile would refuse the token syntax by name. Either way, nothing is published.
-    expect(() =>
-      compileSauceRoute(
-        "base",
-        `function main() {
+  it("builds a Solana intent from a token write: the recipient's account created, then paid", () => {
+    const wallet = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+    const out = compileSauceProgram(
+      "base",
+      `function main(recipient: Address) {
   Solana(() => {
-    USDC.transfer(RECIPIENT, 5n);
-  }).reward({ tokens: [{ token: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913n, amount: 7n }] });
+    USDC.transfer(recipient, 5);
+  }).reward({ tokens: [{ token: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, amount: 7 }] });
 }`,
-        {
-          pot: "0x1111111111111111111111111111111111111111",
-          engine: "0x2222222222222222222222222222222222222222",
-        },
-        { defines: { RECIPIENT }, intents: { deadline: 4_000_000_000n, creator: CREATOR } },
-      ),
-    ).toThrow();
+      { args: [wallet], intents: { deadline: 4_000_000_000n, creator: CREATOR } },
+    );
+    const [lowered] = out.intents;
+    expect(lowered!.destination.slug).toBe("solana");
+    const { route } = lowered!.intent;
+    expect(route.portal).toBe(ecoRoutesPortal("solana"));
+    expect(route.tokens).toEqual([{ token: universalOfSvmKey(SOLANA_USDC), amount: 5n }]);
+    // The recipient's associated account, its rent the route's lamports.
+    expect(route.nativeAmount).toBe(2_039_280n);
+    const [create, transfer] = route.calls.map((call) => ({
+      program: svmKeyOf(call.target),
+      ...decodePortalCalldataWithAccounts(call.data),
+    }));
+    expect(create!.program).toBe("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+    expect(create!.accounts[2]!.pubkey).toBe(wallet);
+    expect(transfer!.program).toBe("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    expect([...transfer!.instructionData]).toEqual([12, 5, 0, 0, 0, 0, 0, 0, 0, 6]);
+    expect(transfer!.accounts[2]!.pubkey).toBe(create!.accounts[1]!.pubkey);
+    expect(lowered!.solana!.creates.map((created) => created.address)).toEqual([
+      create!.accounts[1]!.pubkey,
+    ]);
+  });
+
+  it("builds a Solana program body on the executor's Pot, creating it only where it is missing", () => {
+    const source = `function main(recipient: Address) {
+  Solana(() => {
+    require(self.USDC >= 5, "short");
+    USDC.transfer(recipient, 5);
+  }, { tokens: [{ token: USDC, amount: 5 }] }).reward({ tokens: [{ token: USDC, amount: 7 }] });
+}`;
+    const build = (svm: Record<string, unknown>) =>
+      compileSauceProgram("base", source, {
+        args: ["9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"],
+        intents: { deadline: 4_000_000_000n, creator: CREATOR, svm },
+      }).intents[0]!;
+    // Whether the Pot exists decides the route: it is never guessed.
+    expect(() => build({ executionFee: 5_000n })).toThrow(/`intents\.svm\.potExists`/);
+    expect(() => build({ potExists: true })).toThrow(/`intents\.svm\.executionFee`/);
+    const kitchen = v12SvmKitchenProgramId();
+    const programs = (lowered: ReturnType<typeof build>) =>
+      lowered.intent.route.calls.map((call) => svmKeyOf(call.target));
+    const missing = build({ potExists: false, executionFee: 5_000n });
+    expect(programs(missing)[0]).toBe(kitchen);
+    expect(programs(missing).at(-1)).toBe(kitchen);
+    expect(missing.solana!.creates[0]!.lamports).toBe(72_161_280n);
+    const there = build({ potExists: true, executionFee: 5_000n });
+    expect(programs(there)[0]).not.toBe(kitchen);
+    expect(there.solana!.pot).toBe(missing.solana!.pot);
+    // The Pot's rent, no more: everything else is the same.
+    expect(missing.intent.route.nativeAmount - there.intent.route.nativeAmount).toBe(72_161_280n);
   });
 
   it("compiles, with no Portal or selector written by the caller", () => {
