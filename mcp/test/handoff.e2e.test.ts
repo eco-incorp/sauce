@@ -7,7 +7,7 @@
  *   (`sdk/test/evm/fixtures/BatchWallet.sol`, Coinbase Smart Wallet's `executeBatch` shape): the
  *   wallet owns the Pot, and one batch deploys it and cooks on it — or, when the cook reverts,
  *   leaves nothing behind;
- * - `sendTransaction`, Phantom MCP's `send_evm_transaction` input, sent one by one as the
+ * - `sendTransaction`, Phantom MCP's `evm_send` input, sent one by one as the
  *   eth_sendTransaction object it is, from the account the Pot belongs to.
  *
  * Nothing here signs with a key the server sees: anvil's own accounts send. GATED on

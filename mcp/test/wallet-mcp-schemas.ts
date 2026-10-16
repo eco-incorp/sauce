@@ -8,7 +8,10 @@
  * `src/actions/send-evm-transaction.ts`, `src/actions/send-solana-transaction.ts`, and the shared
  * field schemas in `src/utils/schemas.ts`. Its zod is the `z` of `incur`, zod 4. The fields a
  * caller does not fill from a Sauce result (walletId, derivationIndex, the fee fields, nonce,
- * type) are left out; `confirmed` is the caller's (true once the user approved the preview).
+ * type) are left out; `confirmed` is the caller's (true once the user approved the preview). The
+ * bundled `incur` names each tool by its command path, so the server registers them as `evm_send`
+ * and `solana_send`; `send_evm_transaction` and `send_solana_transaction`, the names Phantom's
+ * documentation uses, are each action's `mcp.command`, which that `incur` does not read.
  *
  * Coinbase's Wallet MCP (`https://wallet-mcp.coinbase.com`, formerly Base MCP) publishes no
  * package: its `send_calls` input is as its own skill documents it, base/skills at
@@ -71,7 +74,7 @@ const SolanaCaip2ChainIdSchema = z
 
 // --- Phantom: the tools --------------------------------------------------------------------------
 
-/** `send_evm_transaction`'s input (`SendEvmTransactionSchema`), the fields a hand-off fills. */
+/** `evm_send`'s input (`SendEvmTransactionSchema`), the fields a hand-off fills. */
 export const phantomSendEvmTransaction = z.object({
   chainId: EvmChainIdSchema,
   to: EthereumAddressSchema.optional(),
@@ -82,7 +85,7 @@ export const phantomSendEvmTransaction = z.object({
   confirmed: z.union([z.boolean(), z.stringbool()]).default(false),
 });
 
-/** `send_solana_transaction`'s input (`SendSolanaTransactionSchema`), the fields a hand-off fills. */
+/** `solana_send`'s input (`SendSolanaTransactionSchema`), the fields a hand-off fills. */
 export const phantomSendSolanaTransaction = z.object({
   transaction: Base64Schema,
   networkId: SolanaCaip2ChainIdSchema.default("solana:mainnet"),
@@ -92,7 +95,7 @@ export const phantomSendSolanaTransaction = z.object({
 /** The networkIds `normalizeNetworkId` (`src/utils/network.ts`) maps to Solana's mainnet. */
 export const PHANTOM_SOLANA_MAINNET = ["solana:mainnet", "solana:mainnet-beta"] as const;
 
-/** The EVM chains `send_evm_transaction` refuses (`assertTransactionNetworkSupported`). */
+/** The EVM chains `evm_send` refuses (`assertTransactionNetworkSupported`). */
 export const PHANTOM_EVM_REFUSED = [42161, 421614] as const;
 
 // --- Coinbase Wallet MCP: send_calls -------------------------------------------------------------
@@ -134,10 +137,10 @@ export const coinbaseSendCalls = z
   })
   .strict();
 
-// --- What send_solana_transaction signs ----------------------------------------------------------
+// --- What solana_send signs ----------------------------------------------------------------------
 
 /**
- * Holds `transaction` to what Phantom's `send_solana_transaction` signs: standard base64 its schema
+ * Holds `transaction` to what Phantom's `solana_send` signs: standard base64 its schema
  * takes, a message whose first account, the fee payer, is `feePayer` and is the one signature
  * missing (all zero: the KMS adds it), and every other signer's signature there and valid over the
  * message — the fresh keys a transaction creates accounts with sign before it is handed out.

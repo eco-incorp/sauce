@@ -46,6 +46,28 @@ export function packageInfo(): { readonly name: string; readonly version: string
   return manifest;
 }
 
+/**
+ * How a result reaches the user's own wallet's MCP server, which signs it: what every building
+ * tool's result carries for one (`handoff.ts`), and how each server takes it.
+ */
+const SIGN_WITH_THE_USERS_WALLET = [
+  "SIGN WITH THE USER'S OWN WALLET: its MCP server signs what these tools build, and the key",
+  "never leaves it. Build for that wallet's address (owner, or from), simulate, show the user,",
+  "then hand it over. Each EVM transaction a tool returns carries `sendTransaction` (the",
+  "eth_sendTransaction object, amounts hex) and the result `sendCalls` (every transaction in",
+  "order, as one atomic batch), so nothing is converted:",
+  "- Coinbase Wallet MCP (Base, Ethereum): send_calls with `sendCalls` as its input. The user",
+  "  approves in their wallet through the link it returns; get_request_status says when it",
+  "  landed. Its smart wallet's address is the owner, and one batch deploys the Pot and cooks.",
+  "- Phantom MCP (Solana, Ethereum, Base): evm_send with each `sendTransaction`, in order, each",
+  "  landed before the next; on Solana solana_send with each `transaction` (base64, the fee",
+  "  payer's signature the one missing). Without confirmed it previews; confirmed true signs and",
+  "  sends, returning the signature: give it to sauce_send with the cursor, which returns the",
+  "  next step. A Solana transaction lands within about a minute of being built or never: when",
+  "  the user takes longer, build it again (sauce_send with the cursor alone, or the tool that",
+  "  built it) and send the new one.",
+];
+
 /** What the server tells a client about itself when it connects. */
 export function instructions(
   endpoints: Endpoints,
@@ -133,17 +155,20 @@ export function instructions(
           "Pot deployed some other way, read from the chain.",
           "",
         ]),
+    ...SIGN_WITH_THE_USERS_WALLET,
+    "",
     ...(wallets === undefined
       ? [
           "NOTHING HERE SIGNS. Every transaction comes back unsigned, for the user to sign with",
-          "their own wallet or signer (a KMS, a hardware wallet, another wallet's tool); sauce_send",
+          "their own wallet or signer (a wallet's MCP server, a KMS, a hardware wallet); sauce_send",
           "takes the signed transactions, broadcasts them, waits for each to land and reports what",
           "it did. Never ask anyone for a private key or a seed phrase: no tool takes one.",
         ]
       : [
-          "THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY (the sauce command's",
-          "own, shared with it). sauce_wallet_list names them and sauce_wallet_address gives one's",
-          "address, with no password.",
+          "THIS SERVER ALSO SIGNS, WITH THE WALLETS IN ITS WALLET DIRECTORY (the sauce command's",
+          "own, shared with it): for experiments and development, not for the user's real funds,",
+          "which their own wallet signs (above). sauce_wallet_list names them and",
+          "sauce_wallet_address gives one's address, with no password.",
           ...(wallets.source === undefined
             ? [
                 "To create (sauce_wallet_create), import (sauce_wallet_import, a key file by its",

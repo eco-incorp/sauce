@@ -5,8 +5,8 @@
  *
  * - `sendTransaction` on each EVM transaction: `{ chainId, to, data, value, gas? }`, every amount a
  *   hex quantity — the eth_sendTransaction object (less its `from`), which is the input of Phantom's
- *   MCP tool `send_evm_transaction` (`@phantom/cli`'s `SendEvmTransactionSchema` refuses a decimal
- *   value, and reads a hex chain id).
+ *   MCP tool `evm_send` (`send_evm_transaction` in its documentation; `@phantom/cli`'s
+ *   `SendEvmTransactionSchema` refuses a decimal value, and reads a hex chain id).
  * - `sendCalls` on the result: `{ chain, calls: [{ to, value, data }] }`, every transaction below
  *   it in order, `value` hex — the input of Coinbase's Wallet MCP tool `send_calls`, which runs them
  *   as one atomic batch after one approval (EIP-5792). It sits on the outermost object whose
@@ -15,7 +15,7 @@
  *
  * Solana transactions are left as they are: `transaction`, standard base64 with the fee payer's
  * signature empty and every other one present, is already what a wallet's Solana tool takes
- * (Phantom's `send_solana_transaction`).
+ * (Phantom's `solana_send`).
  *
  * A result is read the way `wallet-send.ts#plannedTransactions` reads one — a transaction, a list,
  * `transactions`, `intents[].transactions`, `transaction` — so whatever `sauce_wallet_send` sends,
@@ -94,7 +94,7 @@ function evmTx(fields: Record<string, unknown>, chainId: number | undefined): Ev
   };
 }
 
-/** The `send_evm_transaction` input for `tx`. */
+/** The `evm_send` input for `tx`. */
 const sendTransactionOf = (tx: EvmTx & { readonly chainId: number }): SendTransaction => ({
   chainId: hexQuantity(tx.chainId),
   to: tx.to,

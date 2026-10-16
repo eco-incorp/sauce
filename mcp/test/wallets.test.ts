@@ -193,7 +193,7 @@ describe("a server with wallets", () => {
       assert.ok(byName.get(name)?.description?.includes(WALLET_UNSIGNED), name);
     }
     const instructions = mcp.client.getInstructions() ?? "";
-    assert.match(instructions, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
+    assert.match(instructions, /THIS SERVER ALSO SIGNS, WITH THE WALLETS IN ITS WALLET DIRECTORY/);
     assert.match(instructions, /--password-env SAUCE_TEST_WALLET_PASSWORD/);
   });
 
@@ -364,7 +364,7 @@ describe("a server whose wallets the agent enables", () => {
 
   it("lists and names the wallets before they are enabled, and refuses to create, import or send", async () => {
     const instructions = mcp.client.getInstructions() ?? "";
-    assert.match(instructions, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
+    assert.match(instructions, /THIS SERVER ALSO SIGNS, WITH THE WALLETS IN ITS WALLET DIRECTORY/);
     assert.match(instructions, /call sauce_wallet_enable once/);
     assert.match(instructions, /\{ generate: true \}/);
     const listed = ok(await mcp.call("sauce_wallet_list"));

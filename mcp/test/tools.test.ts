@@ -106,6 +106,11 @@ describe("the tool list", () => {
   it("tells a client what the server is, that it never signs, and where the skills are", () => {
     const instructions = mcp.client.getInstructions() ?? "";
     assert.match(instructions, /NOTHING HERE SIGNS\./);
+    // The user's own wallet signs, through its MCP server, and each one's tool is named.
+    assert.match(instructions, /SIGN WITH THE USER'S OWN WALLET/);
+    for (const tool of ["send_calls", "evm_send", "solana_send", "sauce_send with the cursor"]) {
+      assert.ok(instructions.includes(tool), tool);
+    }
     assert.match(instructions, /sauce:\/\/skills\/index/);
     assert.match(instructions, /has no endpoint of its own/);
     assert.match(instructions, /rpcUrl/);

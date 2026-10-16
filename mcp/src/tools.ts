@@ -1062,9 +1062,9 @@ export function refusable<Shape extends z.ZodRawShape>(
  */
 export const HANDOFF =
   "Each EVM transaction carries `sendTransaction`, the input of a wallet's send-transaction " +
-  "tool (Phantom's send_evm_transaction: value and gas hex), and the result `sendCalls`, the " +
-  "input of Coinbase Wallet's send_calls (every transaction in order, as one atomic batch); a " +
-  "Solana `transaction` is the input of Phantom's send_solana_transaction.";
+  "tool (Phantom's evm_send: value and gas hex), and the result `sendCalls`, the input of " +
+  "Coinbase Wallet's send_calls (every transaction in order, as one atomic batch); a Solana " +
+  "`transaction` is what Phantom's solana_send takes as its `transaction`.";
 
 /** The sentence every tool that builds a transaction ends on. */
 export const UNSIGNED =
