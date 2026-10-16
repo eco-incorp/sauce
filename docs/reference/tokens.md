@@ -153,38 +153,33 @@ A tokenized stock is a token like any other, named by its symbol with no import:
 `SPCXc.balanceOf(ctx.self())`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
 functions, a token a swap buys or sells.
 
-- **Ethereum**: Backed's xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets'
-  (`TSLAon`, `SPCXon`), and Mt Pelerin's own shares (`MPS`).
-- **Base**: Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens.
-- **Solana**: Backed's xStocks (`TSLAx`), Ondo Global Markets' (`TSLAon`), Backpack Securities'
-  (`NVDA_US`, `SPCX_US`) and PreStocks' shares of private companies (`SPACEX`, `OPENAI`), each a
-  Token-2022 mint (below).
+| Chain    | Issuers (example symbols)                                                                                                                                   |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ethereum | Backed's xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets' (`TSLAon`, `SPCXon`), Mt Pelerin's own shares (`MPS`)                       |
+| Base     | Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens                                                                                                          |
+| Solana   | Backed's xStocks (`TSLAx`), Ondo Global Markets' (`TSLAon`), Backpack Securities' (`NVDA_US`, `SPCX_US`), PreStocks' private companies (`SPACEX`, `OPENAI`) |
 
-The symbol is the issuer's own ticker for the token, in its case: symbols are case-sensitive, and
-`SPCXC` is not `SPCXc`. A `.` in a ticker is written `_`: `BRK.Bx` is `BRK_Bx`, and Backpack's
-`NVDA.US` is `NVDA_US`. PreStocks' symbol is the company's name, `SPACEX`. One company has one token
-per issuer: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on Base, and `SPCXx`, `SPCXon`,
-`SPCX_US` and `SPACEX` on Solana. Find one by the company's name or ticker with
-`sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
-[the stock tokens of each chain](#stock-tokens-by-issuer).
-
-Buying and selling one on a DEX needs no account with its issuer, and any contract can hold it,
-the program's Pot included; only minting and redeeming with the issuer need KYC. What differs from
-a plain ERC-20:
-
-- An issuer can pause its token, and refuses a sanctioned or blocked address.
-- Backed's tokens rebase: a balance is shares times a multiplier the issuer moves, so it changes
+- **The symbol is the issuer's own ticker, in its case**: symbols are case-sensitive (`SPCXC` is
+  not `SPCXc`), a `.` is written `_` (`BRK.Bx` is `BRK_Bx`, Backpack's `NVDA.US` is `NVDA_US`), and
+  PreStocks' symbol is the company's name (`SPACEX`).
+- **One company has one token per issuer**: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on
+  Base, and `SPCXx`, `SPCXon`, `SPCX_US` and `SPACEX` on Solana. Find one by name or ticker with
+  `sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
+  [the stock tokens of each chain](#stock-tokens-by-issuer).
+- **Buying or selling one needs no account with its issuer**, and any contract can hold one, the
+  Pot included; only minting and redeeming with the issuer need KYC.
+- **An issuer can pause its token**, and refuses a sanctioned or blocked address.
+- **Backed's tokens rebase**: a balance is shares times a multiplier the issuer moves, so it changes
   between transactions, never within one. A transfer can credit one unit less than sent, so paying
   one into a pool that checks what it received can fail; buying one is unaffected.
-- Ondo's keep their balance: dividends raise the shares each token stands for (Ondo's multiplier),
-  so its price follows the stock with dividends reinvested.
-- Coinbase's are B20 tokens, built into the Base node: they run on Base, and not in a local copy of
-  the chain. Simulate a program that moves one with `sauce simulate` against Base itself; no assumed
-  balance can give a Pot one, since no state override reaches a B20 balance.
-
-Each issuer's list is copied from the issuer's own published list, and every row is checked on
-chain. Backpack lists mints it has not opened yet, and Superstate's can be held only by an
-allowlisted holder: neither is registered.
+- **Ondo's keep their balance**: dividends raise the shares each token stands for, so its price
+  follows the stock with dividends reinvested.
+- **Coinbase's are B20 tokens**, built into the Base node: they run on Base and not in a local copy
+  of the chain. Simulate a program that moves one with `sauce simulate` against Base itself; no
+  assumed balance can give a Pot one.
+- **Each issuer's list is copied from its own published list**, and every row is checked on chain.
+  Backpack's mints it has not opened yet, and Superstate's (allowlisted holders only), are not
+  registered.
 
 ```ts
 function main(recipient: Address, amount: Uint256) {
@@ -195,27 +190,17 @@ function main(recipient: Address, amount: Uint256) {
 
 ### On Solana
 
-A stock on Solana is a Token-2022 mint with the same methods: `SPACEX.transfer(to, amount)`
-lowers to the checked write, `transferChecked`, with the mint's decimals, and the accounts it moves
-through are added to `main` and derived ([Solana](../guides/solana.md)). Its symbol alone is the mint's 32-byte
-key, a value for `@sauce/token`'s functions: `balanceOf(TSLAx, account)`. Written out, the checked
-writes take the mint's token program, the mint and its decimals beside the token accounts
-(`transfer` and `approve` take legacy SPL Token mints only). `sauce` names each of those accounts by
-the symbol:
+A stock on Solana is a Token-2022 mint with the same methods: `SPACEX.transfer(to, amount)` lowers
+to the checked write, `transferChecked`, with the mint's decimals, and its symbol alone is the
+mint's 32-byte key (`balanceOf(TSLAx, account)`). Token-2022 and the accounts it moves through are
+[Solana](../guides/solana.md)'s; what is particular to the stocks:
 
-- `program:TSLAx`, the token program;
-- `mint:TSLAx`, the mint;
-- `pot:TSLAx`, the Pot's token account;
-- `owner:TSLAx`, the owner's.
-
-- Amounts are raw, in the mint's decimals. The issuer's multiplier, by which a wallet shows them,
-  moves for splits and dividends, so a raw unit is not always one share.
-- PreStocks' mints charge a transfer fee: the token program keeps part of every transfer, so the
-  recipient gets less than was sent. Measure what arrived, as below; the references mark each mint
-  that charges one.
-- Every stock mint has a transfer hook that names no program, which is no hook. `@sauce/token`
-  refuses a mint whose hook names a program (`transfer hook`), and no registered mint has one.
-- The issuer can pause its mint, and can hold a permanent delegate, which can move or burn any
+- **Amounts are raw**, in the mint's decimals. The issuer's multiplier, by which a wallet shows
+  them, moves for splits and dividends, so a raw unit is not always one share.
+- **PreStocks' mints charge a transfer fee**: the recipient gets less than was sent. Measure what
+  arrived; [the stock tokens of each chain](#stock-tokens-by-issuer) marks each mint that charges one.
+- **Every stock mint has a transfer hook that names no program**, which is no hook.
+- **The issuer can pause its mint**, and can hold a permanent delegate that can move or burn any
   balance. A new token account is usable, not frozen.
 
 ```ts
