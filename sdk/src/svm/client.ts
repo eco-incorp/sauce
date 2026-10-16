@@ -395,14 +395,16 @@ export async function createSauceSvmClient({
       measureExecuteTransaction({ feePayer: payer.address, instructions, lookupTables }),
     );
 
-  /** Whether `instructions` fit one transaction with every account a table may hold in one. */
-  const fitsThroughTable = (instructions: readonly Instruction[]): boolean =>
-    sizeOf(instructions, {
-      // Where a table will be is not known before it is created; any key measures the same.
-      [payer.address]: lookupTableAddresses(
-        measureExecuteTransaction({ feePayer: payer.address, instructions }),
-      ),
-    }) <= TRANSACTION_SIZE_LIMIT;
+  /**
+   * Whether `instructions` fit one transaction with `addresses`, every account of theirs a table
+   * may hold, in one.
+   */
+  const fitsThroughTable = (
+    instructions: readonly Instruction[],
+    addresses: readonly Address[],
+  ): boolean =>
+    // Where a table will be is not known before it is created; any key measures the same.
+    sizeOf(instructions, { [payer.address]: [...addresses] }) <= TRANSACTION_SIZE_LIMIT;
 
   /**
    * Refuses to simulate a cook too large for one transaction, which the cluster would refuse
@@ -415,10 +417,12 @@ export async function createSauceSvmClient({
     staged: boolean,
   ): void {
     const instructions = [buildHeapFramePrepend(), ...prepends, executeInstruction];
-    const size = sizeOf(instructions, lookupTables);
+    const plain = measureExecuteTransaction({ feePayer: payer.address, instructions });
+    const size =
+      lookupTables === undefined ? getTransactionSize(plain) : sizeOf(instructions, lookupTables);
     if (size <= TRANSACTION_SIZE_LIMIT) return;
     const prefix = `the cook is a ${size}-byte transaction, past Solana's ${TRANSACTION_SIZE_LIMIT}: `;
-    if (!staged && !fitsThroughTable(instructions)) {
+    if (!staged && !fitsThroughTable(instructions, lookupTableAddresses(plain))) {
       throw new Error(
         `${prefix}the program itself is too large for one, so stage it in a code buffer and ` +
           "simulateStaged it",
@@ -685,17 +689,21 @@ export async function createSauceSvmClient({
     staged: boolean,
   ): Promise<EnsuredLookupTable | undefined> {
     const instructions = [buildHeapFramePrepend(), ...prepends, cook];
-    if (sizeOf(instructions, opts.lookupTables) <= TRANSACTION_SIZE_LIMIT) return undefined;
-    const addresses = lookupTableAddresses(
-      measureExecuteTransaction({ feePayer: payer.address, instructions }),
-    );
+    // Compiled once: its size, and the accounts a table would hold.
+    const plain = measureExecuteTransaction({ feePayer: payer.address, instructions });
+    const size =
+      opts.lookupTables === undefined
+        ? getTransactionSize(plain)
+        : sizeOf(instructions, opts.lookupTables);
+    if (size <= TRANSACTION_SIZE_LIMIT) return undefined;
+    const addresses = lookupTableAddresses(plain);
     if (addresses.length > LOOKUP_TABLE_MAX_ADDRESSES) {
       throw new Error(
         `the cook names ${addresses.length} accounts a lookup table may hold, more than one table ` +
           `holds (${LOOKUP_TABLE_MAX_ADDRESSES})`,
       );
     }
-    if (!fitsThroughTable(instructions)) {
+    if (!fitsThroughTable(instructions, addresses)) {
       throw new Error(
         `the cook is a transaction past Solana's ${TRANSACTION_SIZE_LIMIT} bytes even with every ` +
           "account it names through a lookup table: " +
