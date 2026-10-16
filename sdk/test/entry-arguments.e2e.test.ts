@@ -236,7 +236,7 @@ describeEvm("main's arguments, encoded by the SDK and read by the compiled progr
       child.includes(word(sentinel)),
     );
     const spliced = (values: Record<string, bigint>): Hex =>
-      argumentWords.reduce(
+      argumentWords.reduce<string>(
         (program, { sentinel, capture }) => program.replace(word(sentinel), word(values[capture]!)),
         child,
       ) as Hex;
