@@ -11,7 +11,9 @@
 //
 // Build first (`pnpm --filter './sdk' build`): the accounts a pool's swap takes (its config, vaults,
 // observation or oracle, and the tick arrays its walk crosses each way) come from the SDK's own venue
-// decoders in `dist/`. `--redump` rewrites the fixture: each program's ELF (gzipped), each account
+// decoders and slot reader in `dist/`, the ones the cook names its accounts by. Every read is
+// `getMultipleAccounts` or `getAccountInfo`, each pinned to a slot no earlier than the last (retried
+// while the endpoint's node lags it): a tick array is a program address, so nothing lists accounts. `--redump` rewrites the fixture: each program's ELF (gzipped), each account
 // (refreshing a fixture file that already holds it), and `manifest.json` — every program's id,
 // ProgramData address, last-deploy slot and sha256; every account's address, owner, lamports, file
 // and sha256; every pool's slot (its nine accounts, the tick arrays both ways); the slot and time the
@@ -88,6 +90,7 @@ const MANIFEST = join(DIR, "manifest.json");
 const venues = await import(join(SDK, "dist", "svm", "venues", "index.js")).catch(() =>
   fail("the SDK is not built: run `pnpm --filter './sdk' build` first"),
 );
+const slots = await import(join(SDK, "dist", "svm", "pool-slot.js"));
 
 /** The venues' programs, by the slug the SDK's venue modules use. */
 const PROGRAMS = {
@@ -119,7 +122,8 @@ const USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
  * already holds it, the snapshot the venue suite's worked examples price against) and an OpenBook v2
  * BONK/USDC market. And the SPCX_US/USDC pools the SpaceX swap finds by key, SPCX_US a Token-2022
  * mint: Raydium's at a fee of 2500, Byreal's at 1000, PancakeSwap's at 800, and Orca's at tick
- * spacing 64, on an adaptive fee tier.
+ * spacing 64, on an adaptive fee tier; and Orca's SOL/USDC pool on the adaptive tier at spacing 4,
+ * beside the static tier's: a pair with a pool on both.
  */
 const POOLS = [
   {
@@ -212,6 +216,11 @@ const POOLS = [
     venue: "orca-whirlpool",
     pool: "FgjxPHeYsq1axH29fnGKZi6UyRWi4tMPHgu1gc3ezA9U",
   },
+  {
+    name: "orca-whirlpool-sol-usdc-adaptive",
+    venue: "orca-whirlpool",
+    pool: "4HppGTweoGQ8ZZ6UcCgwJKfi5mJD9Dqwy6htCpnbfBLW",
+  },
 ];
 
 async function rpc(method, params) {
@@ -230,6 +239,11 @@ async function rpc(method, params) {
       fail(`the endpoint did not answer ${method}`);
     }
     const body = await response.json();
+    // A node behind the slot a read is pinned to catches up within seconds.
+    if (/minimum context slot/i.test(body.error?.message ?? "") && attempt < 20) {
+      await new Promise((done) => setTimeout(done, 1500));
+      continue;
+    }
     if (body.error !== undefined) fail(`${method}: ${body.error.message ?? "an error"}`);
 
     return body.result;
@@ -318,55 +332,6 @@ if (cli.values.check) {
 const pda = async (programId, seeds) =>
   (await getProgramDerivedAddress({ programAddress: address(programId), seeds }))[0];
 
-/** sha256("account:TickArrayState")[..8], and Byreal's `DynamicTickArray`'s. */
-const TICK_ARRAYS = new Set(["c09b55cd31f9812a", "6a8b98247599b838"]);
-
-/**
- * A Raydium-layout pool's swap loads every tick array it is given, so each must exist, and starts
- * at the first that holds liquidity in the walk's direction: the pool's arrays with liquidity
- * nearest its price that way, in walk order. Fewer than three that way: the rest are its nearest
- * the other way, then arrays with none, which the swap loads and never reaches.
- */
-async function raydiumTickArrays(programId, pool, tick, spacing) {
-  const arrays = await rpc("getProgramAccounts", [
-    programId,
-    {
-      encoding: "base64",
-      dataSlice: { offset: 0, length: 44 },
-      filters: [{ memcmp: { offset: 8, bytes: pool } }],
-    },
-  ]);
-  // Fixed tick arrays (`TickArrayState`) and Byreal's variable-length ones: the pool at 8, the
-  // first tick at 40 in both.
-  const starts = arrays
-    .map((item) => Buffer.from(item.account.data[0], "base64"))
-    .map((data, i) => ({ address: arrays[i].pubkey, data }))
-    .filter(({ data }) => TICK_ARRAYS.has(data.subarray(0, 8).toString("hex")))
-    .map(({ address, data }) => ({ address, start: data.readInt32LE(40) }));
-  const span = 60 * spacing;
-  const current = Math.floor(tick / span) * span;
-  // An array that exists but holds no initialized tick is not one the swap steps through: the
-  // pool's bitmap (1,024 bits at 904, bit 512 the array at 0) says which hold liquidity.
-  await fetchAll([pool]);
-  const bitmap = read.get(pool).data.subarray(904, 904 + 128);
-  const live = ({ start }) => {
-    const bit = start / span + 512;
-    return bit >= 0 && bit < 1024 && (bitmap[bit >> 3] >> (bit & 7)) & 1;
-  };
-  const down = starts
-    .filter((a) => live(a) && a.start <= current)
-    .sort((a, b) => b.start - a.start);
-  const up = starts.filter((a) => live(a) && a.start >= current).sort((a, b) => a.start - b.start);
-  // A pool with fewer than three arrays holding liquidity: any other of its arrays fills the slot.
-  const empty = starts
-    .filter((a) => !live(a))
-    .sort((a, b) => Math.abs(a.start - current) - Math.abs(b.start - current));
-  const three = (near, far) =>
-    [...new Set([...near, ...far, ...empty])].slice(0, 3).map((a) => a.address);
-
-  return { payA: three(down, up), payB: three(up, down) };
-}
-
 const RAYDIUM_CODE = ["raydium-clmm", "pancakeswap-clmm", "byreal", "stabble-clmm"];
 
 /**
@@ -424,12 +389,12 @@ async function slotOf({ venue, pool, only }) {
       }[venue];
       const { load, mints } = await quotable(venue, pool);
       const cfg = await fetchConfig(load, at);
-      const { payA, payB } = await raydiumTickArrays(
-        programId,
-        pool,
-        cfg.tickCurrentIndex,
-        cfg.tickSpacing,
-      );
+      // The tick arrays each way, as the cook names them: the pool's bitmap read for the arrays
+      // holding liquidity nearest its price, each array the program address of its start.
+      const clmm = slots.SVM_PRICE_LIMIT_VENUES.find((one) => one.program === programId);
+      const ticks = async (paysA) =>
+        (await slots.svmClmmSlot(clmm, at, read.get(pool).data, paysA, loader)).ticks;
+      const [payA, payB] = [await ticks(true), await ticks(false)];
       return {
         program: programId,
         pool,
