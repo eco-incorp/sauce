@@ -114,10 +114,12 @@ const USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
  * deepest pool with no fee beyond its rate (its SOL/USDC pool adds decay and imbalance fees, which
  * the program skips) and Stabble's USDC/USDT pool (its SOL/USDC pools are thinner), to run their
  * swaps, and a Meteora DLMM pool, a venue the program refuses. `only`: the pool account alone. The
- * venues `@sauce/router` swaps at a pool's own limit besides: an Orca pool with an adaptive fee
- * (`adaptive`), Invariant's USDC/USDT pool, Manifest's SOL/USDC market (`keep`: as
- * `test/svm/fixtures/manifest` already holds it, the snapshot the venue suite's worked examples
- * price against) and an OpenBook v2 BONK/USDC market.
+ * venues `@sauce/router` swaps at a pool's own limit besides: an Orca pool with an adaptive fee,
+ * Invariant's USDC/USDT pool, Manifest's SOL/USDC market (`keep`: as `test/svm/fixtures/manifest`
+ * already holds it, the snapshot the venue suite's worked examples price against) and an OpenBook v2
+ * BONK/USDC market. And the SPCX_US/USDC pools the SpaceX swap finds by key, SPCX_US a Token-2022
+ * mint: Raydium's at a fee of 2500, Byreal's at 1000, PancakeSwap's at 800, and Orca's at tick
+ * spacing 64, on an adaptive fee tier.
  */
 const POOLS = [
   {
@@ -173,7 +175,6 @@ const POOLS = [
     name: "orca-whirlpool-adaptive",
     venue: "orca-whirlpool",
     pool: "7Vj2goVVARSH6GFzHfmMNvMsASKjTQ8dw59oN1ZNW82s",
-    adaptive: true,
   },
   {
     name: "invariant-usdc-usdt",
@@ -190,6 +191,26 @@ const POOLS = [
     name: "openbook-v2-bonk-usdc",
     venue: "openbook-v2",
     pool: "D3gZwng2MgZGjktYcKpbR8Bz8653i4qCgzHCf5E4TcZb",
+  },
+  {
+    name: "raydium-clmm-spcx-usdc",
+    venue: "raydium-clmm",
+    pool: "FjuBy7jjf9DXj9d3R7cHpvcnoFW2iQxf7F7P3vqx4Jza",
+  },
+  {
+    name: "byreal-spcx-usdc",
+    venue: "byreal",
+    pool: "7mcKEBY6Y8EcCst4u55aNAP84Gn2a2VUGCV1n6AS3KoZ",
+  },
+  {
+    name: "pancakeswap-clmm-spcx-usdc",
+    venue: "pancakeswap-clmm",
+    pool: "JB9r54vk2cS9RjKDJmxnMNDNVcmvLYNwkq392cwKpxRc",
+  },
+  {
+    name: "orca-whirlpool-spcx-usdc",
+    venue: "orca-whirlpool",
+    pool: "FgjxPHeYsq1axH29fnGKZi6UyRWi4tMPHgu1gc3ezA9U",
   },
 ];
 
@@ -346,8 +367,37 @@ async function raydiumTickArrays(programId, pool, tick, spacing) {
   return { payA: three(down, up), payB: three(up, down) };
 }
 
+const RAYDIUM_CODE = ["raydium-clmm", "pancakeswap-clmm", "byreal", "stabble-clmm"];
+
+/**
+ * The SDK's decoders read a pool for an off-chain quote, and refuse one they cannot quote: a
+ * Token-2022 mint, a dynamic or one-sided fee (Raydium's code), an adaptive fee tier (a
+ * whirlpool's). The accounts a swap takes depend on none of these, so a pool of these venues is
+ * read through a loader that shows the decoder its pool without them, and its mints as unread
+ * (which the decoder takes as SPL Token's). Its mints, as the pool names them, are dumped with it.
+ */
+async function quotable(venue, pool) {
+  await fetchAll([pool]);
+  const data = read.get(pool)?.data;
+  if (data === undefined || data === null) return { load: loader, mints: [] };
+  const raydium = RAYDIUM_CODE.includes(venue);
+  const [atA, atB] = raydium ? [73, 105] : [101, 181];
+  const mints = [atA, atB].map((at) => getAddressDecoder().decode(data.subarray(at, at + 32)));
+  const shown = new Uint8Array(data);
+  if (raydium) {
+    shown[390] = 0; // fee_on: on the input
+    shown.fill(0, 1096, 1096 + 80); // dynamic_fee_info: none
+  } else {
+    shown.set(shown.subarray(41, 43), 43); // fee_tier_index := tick_spacing
+  }
+  const load = async (account) =>
+    account === pool ? shown : mints.includes(account) ? null : loader(account);
+
+  return { load, mints };
+}
+
 /** A pool's slot, the nine accounts the program takes for it, and the tick arrays each way. */
-async function slotOf({ venue, pool, only, adaptive }) {
+async function slotOf({ venue, pool, only }) {
   const programId = PROGRAMS[venue] ?? (await loader(pool), read.get(pool).owner);
   if (only)
     return {
@@ -372,7 +422,8 @@ async function slotOf({ venue, pool, only, adaptive }) {
         byreal: venues.fetchByrealPoolConfig,
         "stabble-clmm": venues.fetchStabbleClmmConfig,
       }[venue];
-      const cfg = await fetchConfig(loader, at);
+      const { load, mints } = await quotable(venue, pool);
+      const cfg = await fetchConfig(load, at);
       const { payA, payB } = await raydiumTickArrays(
         programId,
         pool,
@@ -389,24 +440,15 @@ async function slotOf({ venue, pool, only, adaptive }) {
         payA,
         payB,
         ...(await moreOf({ venue, pool })),
+        mints,
       };
     }
     case "orca-whirlpool":
     case "cropper": {
       const fetchConfig =
         venue === "cropper" ? venues.fetchCropperConfig : venues.fetchOrcaWhirlpoolConfig;
-      // The SDK's decoder refuses an adaptive fee tier (its fee is not one rate); the accounts a
-      // swap takes do not depend on the fee, so such a pool is read as if its tier were static.
-      const read = adaptive
-        ? async (account) => {
-            const data = await loader(account);
-            if (account !== pool || data === null) return data;
-            const copy = new Uint8Array(data);
-            copy.set(copy.subarray(41, 43), 43); // fee_tier_index := tick_spacing
-            return copy;
-          }
-        : loader;
-      const cfg = await fetchConfig(read, at);
+      const { load, mints } = await quotable(venue, pool);
+      const cfg = await fetchConfig(load, at);
       return {
         program: programId,
         pool,
@@ -416,7 +458,7 @@ async function slotOf({ venue, pool, only, adaptive }) {
         extra: cfg.oracle,
         payA: cfg.windows.aToB.tickArrays,
         payB: cfg.windows.bToA.tickArrays,
-        ...(adaptive ? { mints: [cfg.tokenMintA, cfg.tokenMintB] } : {}),
+        mints,
       };
     }
     case "defituna": {
@@ -528,7 +570,7 @@ const BITMAP_EXTENSION = "3c9624db61808b99";
  */
 async function moreOf({ venue, pool }) {
   const programId = PROGRAMS[venue];
-  if (["raydium-clmm", "pancakeswap-clmm", "byreal", "stabble-clmm"].includes(venue)) {
+  if (RAYDIUM_CODE.includes(venue)) {
     const extension = await pda(programId, [
       new TextEncoder().encode("pool_tick_array_bitmap_extension"),
       getAddressCodec().encode(address(pool)),
