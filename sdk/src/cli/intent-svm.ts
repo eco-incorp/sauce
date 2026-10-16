@@ -109,8 +109,8 @@ export async function svmFillCommand(
     let fill = await build();
     const rpc = createSolanaRpc(url);
     // A fill too large for one transaction takes its accounts through a lookup table the solver
-    // creates first. It cannot be rehearsed before the table exists: with --send the table is made,
-    // then the fill rehearsed on it and sent.
+    // creates first. It cannot be simulated before the table exists: with --send the table is made,
+    // then the fill simulated on it and sent.
     const table = fill.lookupTable;
     if (table !== undefined && table.setup > 0) {
       const setup = fill.transactions.slice(0, table.setup) as SvmTxJson[];
@@ -122,14 +122,14 @@ export async function svmFillCommand(
       if (!input.send) {
         texts.push(
           ...steps,
-          "The fill is rehearsed once the table exists: --send creates it, then rehearses the " +
+          "The fill is simulated once the table exists: --send creates it, then simulates the " +
             "fill on it before sending.",
         );
         json.push({
           intentHash: record.intentHash,
           ok: true,
           sent: false,
-          rehearsed: false,
+          simulated: false,
           solver,
           lookupTable: table.address,
           transactions: fill.transactions,

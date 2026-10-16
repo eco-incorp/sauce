@@ -292,13 +292,13 @@ describeBoth("sauce intent publish: Sauce intents to Solana, from an Ethereum wa
       const store = mkdtempSync(join(work, "store-"));
       const recipient = await wallet();
       const hash = await publish(store, PROGRAM, recipient.key, String(AMOUNT), String(REWARD));
-      // Too large for one transaction as it is: a rehearsal says the table comes first.
+      // Too large for one transaction as it is: a simulation says the table comes first.
       const planned = await intent(
         store,
         ...["fill", hash, "--solver", solver.address, "--claimant", SOLVER.address, "--json"],
       );
       expect(planned.code).toBe(0);
-      expect(jsonOf(planned).intents).toMatchObject([{ ok: true, sent: false, rehearsed: false }]);
+      expect(jsonOf(planned).intents).toMatchObject([{ ok: true, sent: false, simulated: false }]);
       await fillProveClaim(store, hash);
       expect(harness.svm.getAccount(pot).exists).toBe(true);
       expect(tokenAmount(harness, recipient.account)).toBe(AMOUNT);
