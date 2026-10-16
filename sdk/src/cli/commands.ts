@@ -38,6 +38,7 @@ import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
+  lowerProgramIntents,
   type CompiledSauceProgram,
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
@@ -170,9 +171,10 @@ export interface ProgramInput {
     readonly deadline?: bigint;
     /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
     readonly rewardDeadline?: bigint;
-    readonly creator?: Address;
+    /** An EVM address; on Solana a key, as its 32 bytes. */
+    readonly creator?: Hex;
     /** The reward's prover; the registry's for the pair by default. */
-    readonly prover?: Address;
+    readonly prover?: Hex;
     readonly executionFee?: bigint;
     /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
      *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
@@ -303,6 +305,25 @@ export function compileProgram(
           ? `\nhint: the program came from stdin, so its relative imports resolve against ` +
             `${sourceDirOf(input)}: pass --source-dir <dir> to resolve them elsewhere`
           : ""),
+    );
+  }
+}
+
+/**
+ * The intents the file opens, lowered as {@link compileProgram} lowers them but with no program
+ * compiled: what a wallet publishes. The only way to build an intent from Solana
+ * (`routes/sauce-route.ts#lowerProgramIntents`).
+ */
+export function lowerProgram(
+  input: ProgramInput,
+  files: CliFiles,
+): ReturnType<typeof lowerProgramIntents> {
+  try {
+    return lowerProgramIntents(input.chain, input.text, compileOptions(input, files));
+  } catch (error) {
+    throw new CliError(
+      `${input.file} does not lower for ${input.chain.slug}\n` +
+        describeCompileError(error, input.file, input.text, input.chain),
     );
   }
 }

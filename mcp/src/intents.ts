@@ -428,6 +428,15 @@ const FEE_PAYER = z
       "required there. On an EVM destination any account may send it, and from is not needed.",
   );
 
+const SOURCE_FEE_PAYER = z
+  .string()
+  .max(64)
+  .optional()
+  .describe(
+    "On a Solana source: the fee payer's base58 key, which signs the transaction last; required " +
+      "there. On an EVM source any account may send it, and from is not needed.",
+  );
+
 // ---------------------------------------------------------------------------------------------
 // The tools
 // ---------------------------------------------------------------------------------------------
@@ -870,7 +879,12 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "claimed, refunded, or proven cancelled (which pays no claimant) is refused or left " +
         `out, saying why. ${NOT_YET} Any account may send it: the reward goes to the claimant, ` +
         `not the sender. Needs the source chain's endpoint. ${UNSIGNED} ${SUPPORTED_ONLY}`,
-      input: { ...MANY, ...byHash(store, true), ...endpointInputs("The source chain") },
+      input: {
+        ...MANY,
+        ...byHash(store, true),
+        from: SOURCE_FEE_PAYER,
+        ...endpointInputs("The source chain"),
+      },
       output: refusable({ ...PLAN_OUTPUT, claims: z.array(z.looseObject({})) }),
       annotations: READS_CHAIN,
     },
@@ -882,7 +896,11 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         gate: { action: "building a claim", side: "source" },
       });
 
-      return anyone(await buildClaim(records, endpoints), "the claim");
+      return anyone(
+        await buildClaim(records, endpoints, args.from === undefined ? {} : { from: args.from }),
+        "the claim",
+        args.from,
+      );
     },
   );
 
@@ -898,7 +916,12 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         `one only what is left. Returns the refundee and what moves. ${NOT_YET} Any account ` +
         `may send it: the reward goes to the creator. Needs the source chain's endpoint. ${UNSIGNED} ` +
         SUPPORTED_ONLY,
-      input: { ...ONE, ...byHash(store, false), ...endpointInputs("The source chain") },
+      input: {
+        ...ONE,
+        ...byHash(store, false),
+        from: SOURCE_FEE_PAYER,
+        ...endpointInputs("The source chain"),
+      },
       output: refusable({
         ...PLAN_OUTPUT,
         refundee: z.string(),
@@ -914,7 +937,15 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         gate: { action: "building a refund", side: "source" },
       });
 
-      return anyone(await buildRefund(records[0]!, endpoints), "the refund");
+      return anyone(
+        await buildRefund(
+          records[0]!,
+          endpoints,
+          args.from === undefined ? {} : { from: args.from },
+        ),
+        "the refund",
+        args.from,
+      );
     },
   );
 
