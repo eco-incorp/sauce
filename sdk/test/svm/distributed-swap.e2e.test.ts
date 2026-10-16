@@ -1,26 +1,27 @@
 /**
  * The `sauce-solana-distributed-swap` skill's program, executed: staged and cooked through the
  * released Kitchen on the harness Pot, against the venues' own mainnet programs and the pools'
- * mainnet accounts (`test/fixtures/svm-venues/`, written by `scripts/dump-svm-venues.mjs`). The
- * program takes its pools as `Address` arguments, and every account it names is derived
- * (`derivedAccounts`): each is filled here from the fixture as the command would read it from the
- * cluster. It proves what the skill says the program does: one exact-input order split over
- * price-limited pools, each stopping exactly at its own fee-adjusted limit; an empty slot, a pool
- * past its limit, an empty pool, a pool whose fee is more than one rate, a paused pool and a market
- * whose book is past the limit skipped; the minimum-output and average-price checks; only the
- * unspent budget refunded and the Pot's other balance untouched; what was bought and the rest kept
- * in the Pot when the recipient and refund are the Pot; and the refusals of a budget the Pot does
- * not hold, a pool that is not the pair, a venue the program does not take, a slot whose program
- * does not own its pool, and a recipient's account another wallet holds.
+ * mainnet accounts (`test/fixtures/svm-venue-programs/`, written by `scripts/dump-svm-venues.mjs`).
+ * The program finds its pools by key (`Orca.Whirlpool.pool(USDC, WSOL, spacing)`), and every account
+ * it names is derived (`derivedAccounts`): each is resolved here as the command resolves it, by
+ * `resolveSvmAccountName` reading the bank, so a key with no pool in the fixture is an empty slot.
+ * It proves what the skill says the program does: one exact-input order split over the pools its keys
+ * find, each stopping exactly at its own fee-adjusted limit; a key with no pool, a pool past its
+ * limit, an empty pool and a remainder of dust skipped; the minimum-output and average-price checks;
+ * what was bought and what is left of the budget sent to the recipient, and the Pot's other balance
+ * untouched; both kept in the Pot when the recipient is the Pot; and the refusals of a budget the Pot
+ * does not hold and a recipient's account another wallet holds.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { AccountRole, getAddressCodec } from "@solana/kit";
+import { AccountRole } from "@solana/kit";
 import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
 import { FailedTransactionMetadata } from "litesvm";
 
+import { requireChain } from "../../src/chains/canonical.js";
 import { encodeEntryArguments } from "../../src/routes/entry.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
+import { resolveSvmAccountName } from "../../src/svm/account-names.js";
 import {
   buildComputeBudgetPrepend,
   buildCookFromAccountInstruction,
@@ -28,7 +29,9 @@ import {
   buildHeapFramePrepend,
   getTransactionSize,
 } from "../../src/svm/index.js";
-import { fetchPhoenixConfig } from "../../src/svm/venues/phoenix/index.js";
+import type { SvmSlot } from "../../src/svm/pool-slot.js";
+import { svmTokenAccount } from "../../src/svm/token-accounts.js";
+import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import {
   describeSvm,
   fabricateAlt,
@@ -49,61 +52,44 @@ import {
   le,
   loadVenues,
   manifest,
-  NONE,
   ownLimit,
   pool,
   restoreVenues,
   SYSTEM,
+  TOKEN,
   USDC,
-  USDT,
   WSOL,
 } from "./venue-fixture.js";
 import type { Pool } from "./venue-fixture.js";
 
-/** The skill's program, and the same with a fifth slot. */
+/** The skill's program. */
 const PROGRAM = fileURLToPath(
   new URL(
     "../../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts",
     import.meta.url,
   ),
 );
-const PROGRAM_5 = fileURLToPath(
-  new URL(
-    "../../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts",
-    import.meta.url,
-  ),
-);
 
-/** A slot's nine accounts, in the order its derivations name them. */
-const PARTS = [
-  "program",
-  "pool",
-  "config",
-  "vaultA",
-  "vaultB",
-  "extra",
-  "ticks0",
-  "ticks1",
-  "ticks2",
-];
+/** The pools of the program's keys the fixture holds, in the program's order; its other keys find
+ *  none there. */
+const ORCA = pool("orca-whirlpool-sol-usdc");
+const RAYDIUM = pool("raydium-clmm-sol-usdc");
+const FOUND = [ORCA, RAYDIUM];
 
 interface Order {
-  slots: Pool[];
-  pay: Address;
-  buy: Address;
   budget: bigint;
-  maxPrice: bigint;
+  priceLimit: bigint;
   minTokens?: bigint;
   maxAvgPrice?: bigint;
-  /** Of the pay token, in the Pot's account beside the budget: never spent, never refunded. */
+  /** USDC in the Pot's account beside the budget: never spent. */
   kept?: bigint;
   /** Less than the budget in the Pot's account. */
   short?: boolean;
-  /** The recipient and the refund are the Pot itself: what was bought and the rest stay there. */
+  /** The recipient is the Pot itself: what was bought and the rest of the budget stay there. */
   keepInPot?: boolean;
   /** The recipient's token account held by another wallet than the recipient. */
   strangerRecipient?: boolean;
-  /** Bytes to change in an account before the cook, for one case: a pool emptied, paused. */
+  /** Bytes to change in an account before the cook, for one case: a pool emptied. */
   edit?: { address: Address; offset: number; bytes: number[] };
 }
 
@@ -113,10 +99,12 @@ type Outcome =
       spent: bigint;
       bought: bigint;
       unspent: bigint;
-      refunded: bigint;
       received: bigint;
-      /** What stays in the Pot's account of the bought token: nothing, unless it is kept there. */
+      /** The recipient's USDC: what is left of the budget. */
+      refunded: bigint;
+      /** The Pot's WSOL: nothing, unless the recipient is the Pot. */
       kept: bigint;
+      /** The Pot's USDC after the cook. */
       left: bigint;
       units: bigint;
       size: number;
@@ -130,7 +118,6 @@ const word = (at: Address): bigint => key(at);
 describeSvm("the Solana distributed swap, on the venues' own programs and pools", () => {
   const source = readFileSync(PROGRAM, "utf8");
   const program = compileSauceProgram("solana", source);
-  const program5 = compileSauceProgram("solana", readFileSync(PROGRAM_5, "utf8"));
   let harness: EngineHarness;
   let nonce = 0n;
 
@@ -140,111 +127,85 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     loadVenues(harness.svm);
   }, 120_000);
 
-  const cook = async (order: Order, compiled = program): Promise<Outcome> => {
+  /** The bank's accounts, as the command reads the cluster's. */
+  const load: OwnedAccountLoader = async (at) => {
+    const account = harness.svm.getAccount(at);
+    return account.exists ? { data: account.data, owner: account.programAddress } : null;
+  };
+
+  const cook = async (order: Order): Promise<Outcome> => {
     restoreVenues(harness.svm, order.edit);
     const kept = order.kept ?? 0n;
-    const programOf = (mint: Address): Address => {
-      const account = harness.svm.getAccount(mint);
-      if (!account.exists) throw new Error(`the fixture has no mint ${mint}`);
-      return account.programAddress;
-    };
-    // The Pot's accounts for the two tokens, and the recipient's and the refund's: any token
-    // account of the right holder, which the program checks.
+    const ata = (holder: Address, mint: Address) =>
+      svmTokenAccount({ mint, tokenProgram: TOKEN }, holder);
+    // The Pot's accounts for the two tokens and the recipient's, where the program derives them.
     const potPay = setTokenAccount(
       harness,
-      randomAddress(),
-      order.pay,
+      await ata(harness.pot, USDC),
+      USDC,
       harness.pot,
       (order.short ? order.budget - 1n : order.budget) + kept,
-      programOf(order.pay),
     );
-    const potBuy = setTokenAccount(
-      harness,
-      randomAddress(),
-      order.buy,
-      harness.pot,
-      0n,
-      programOf(order.buy),
-    );
+    const potBuy = setTokenAccount(harness, await ata(harness.pot, WSOL), WSOL, harness.pot, 0n);
     const to = order.keepInPot ? harness.pot : randomAddress();
-    const back = order.keepInPot ? harness.pot : randomAddress();
     const recipient = order.keepInPot
       ? potBuy
       : setTokenAccount(
           harness,
-          randomAddress(),
-          order.buy,
+          await ata(to, WSOL),
+          WSOL,
           order.strangerRecipient ? randomAddress() : to,
           0n,
-          programOf(order.buy),
         );
     const refund = order.keepInPot
       ? potPay
-      : setTokenAccount(harness, randomAddress(), order.pay, back, 0n, programOf(order.pay));
-    const paysA = key(order.pay) < key(order.buy);
-    const slotCount = compiled.entryParams.filter((param) => /^pool\d+$/.test(param.name)).length;
-    const slots = [...order.slots];
-    while (slots.length < slotCount) slots.push(NONE);
+      : setTokenAccount(harness, await ata(to, USDC), USDC, to, 0n);
 
-    // Each account the program names, from its derivation: what the command reads from the cluster.
-    const resolve = (derivation: string): Address => {
-      const slot = /^slot:@pool(\d+):@pay\.(\w+)$/.exec(derivation);
-      if (slot !== null) {
-        const p = slots[Number(slot[1])]!;
-        const each = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra];
-        return [...each, ...(paysA ? p.payA : p.payB)][PARTS.indexOf(slot[2]!)]!;
-      }
-      const fixed: Record<string, Address> = {
-        self: harness.pot,
-        "self:@pay": potPay,
-        "self:@buy": potBuy,
-        "mint:@pay": order.pay,
-        "mint:@buy": order.buy,
-        "program:@pay": programOf(order.pay),
-        "program:@buy": programOf(order.buy),
-        "@recipient:@buy": recipient,
-        "@refund:@pay": refund,
-      };
-      if (fixed[derivation] !== undefined) return fixed[derivation];
-      if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(derivation)) return derivation as Address;
-      throw new Error(`no account for the derivation ${derivation}`);
-    };
-    const derived = compiled.derivedAccounts as Readonly<Record<string, string>>;
-    const tail = compiled.manifest!.accounts.map((entry) => {
-      if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
-      const derivation = derived[entry.name];
-      if (derivation === undefined) throw new Error(`${entry.name} is not derived`);
-      const at = resolve(derivation);
-      // The Kitchen signs for the Pot; the System program, which stands in for every account a
-      // slot does not use, is never writable.
-      const writable = entry.requires === "writable" && at !== SYSTEM;
-      return { address: at, role: writable ? AccountRole.WRITABLE : AccountRole.READONLY };
-    });
+    // Each account the program names, from its derivation, as the command resolves it.
+    const slots = new Map<string, Promise<SvmSlot>>();
+    const derived = program.derivedAccounts as Readonly<Record<string, string>>;
+    const tail = await Promise.all(
+      program.manifest!.accounts.map(async (entry) => {
+        if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
+        const derivation = derived[entry.name];
+        if (derivation === undefined) throw new Error(`${entry.name} is not derived`);
+        const { value } = await resolveSvmAccountName(derivation, {
+          chain: requireChain("solana"),
+          owner: harness.payer.address,
+          pot: harness.pot,
+          args: { recipient: to },
+          load,
+          slots,
+        });
+        const at =
+          value === "pot" ? harness.pot : value === "owner" ? harness.payer.address : value;
+        // The Kitchen signs for the Pot; the System program, which stands in for every account a
+        // slot does not use, is never writable.
+        const writable = entry.requires === "writable" && at !== SYSTEM;
+        return { address: at, role: writable ? AccountRole.WRITABLE : AccountRole.READONLY };
+      }),
+    );
 
     // The cook carries the program and its arguments staged in a code buffer, and its accounts
     // through a lookup table: as `sauce run` stages a program too large for one transaction. An
     // `Address` argument is its key's 32 bytes, one word, as the command encodes it.
     const keyed = {
-      ...compiled,
-      entryParams: compiled.entryParams.map((param) => ({
+      ...program,
+      entryParams: program.entryParams.map((param) => ({
         ...param,
         type: param.type.replace(/\bAddress\b/g, "Uint256"),
       })),
     };
     const args = encodeEntryArguments(keyed, [
-      word(order.pay),
-      word(order.buy),
-      ...slots.map((p) => word(p.pool)),
       order.budget,
-      order.maxPrice,
+      order.priceLimit,
       order.minTokens ?? 0n,
       order.maxAvgPrice ?? 0n,
       word(to),
-      word(back),
     ]);
-    const payload = new Uint8Array(compiled.bytecode.length + args.length);
-    payload.set(compiled.bytecode);
-    payload.set(args, compiled.bytecode.length);
+    const payload = new Uint8Array(program.bytecode.length + args.length);
+    payload.set(program.bytecode);
+    payload.set(args, program.bytecode.length);
     nonce += 1n;
     const staged = await stageProgram(harness, payload, nonce);
     const instructions: Instruction[] = [
@@ -302,8 +263,8 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       spent: at(0),
       bought: at(1),
       unspent: at(2),
-      refunded: order.keepInPot ? 0n : tokenAmount(harness, refund),
       received: order.keepInPot ? 0n : tokenAmount(harness, recipient),
+      refunded: order.keepInPot ? 0n : tokenAmount(harness, refund),
       kept: tokenAmount(harness, potBuy),
       left: tokenAmount(harness, potPay),
       units: result.computeUnitsConsumed(),
@@ -330,359 +291,132 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
   const snapshotPrice = (p: Pool): bigint => le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16);
 
   // Buying SOL with USDC: USDC is the higher key, so every pool's price rises as it sells.
-  const DEEP = [
-    pool("orca-whirlpool-sol-usdc"),
-    pool("raydium-clmm-sol-usdc"),
-    pool("pancakeswap-clmm-sol-usdc"),
-    pool("defituna-sol-usdc"),
-  ];
-  const dearest = DEEP.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b));
-  // 3 bps above the dearest pool's price, fee included: every pool has room to trade.
-  const maxPrice = (dearest * 10003n) / 10000n;
+  const dearest = FOUND.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b));
+  // 3 bps above the dearer pool's price, fee included: both have room to trade.
+  const priceLimit = (dearest * 10003n) / 10000n;
 
-  it("splits one order over four venues, each pool stopping exactly at its own limit", async () => {
-    const budget = 1_000_000n * 10n ** 6n; // 1,000,000 USDC: more than the four take within maxPrice
-    const outcome = succeeded(
-      await cook({ slots: DEEP, pay: USDC, buy: WSOL, budget, maxPrice, kept: 7n }),
-    );
-    for (const p of DEEP) {
+  it("finds its pools by key and splits one order over them, each stopping at its own limit", async () => {
+    const budget = 1_000_000n * 10n ** 6n; // 1,000,000 USDC: more than the pools take within it
+    const outcome = succeeded(await cook({ budget, priceLimit, kept: 7n }));
+    for (const p of FOUND) {
       expect(priceOf(p)).not.toBe(snapshotPrice(p));
-      expect(priceOf(p)).toBe(ownLimit(p, maxPrice, false));
+      expect(priceOf(p)).toBe(ownLimit(p, priceLimit, false));
     }
     expect(outcome.bought).toBe(outcome.received);
     expect(outcome.kept).toBe(0n);
     expect(outcome.spent + outcome.unspent).toBe(budget);
+    // What is left of the budget goes to the recipient; the Pot keeps only its own 7.
+    expect(outcome.unspent).toBeGreaterThan(0n);
     expect(outcome.refunded).toBe(outcome.unspent);
-    expect(outcome.left).toBe(7n); // the paying account's own USDC, never spent or refunded
-    expect(outcome.spent * E18).toBeLessThanOrEqual(maxPrice * outcome.bought);
+    expect(outcome.left).toBe(7n);
+    expect(outcome.spent * E18).toBeLessThanOrEqual(priceLimit * outcome.bought);
     expect(outcome.units).toBeLessThan(1_400_000);
     expect(outcome.accounts).toBeLessThanOrEqual(64);
     expect(outcome.size).toBeLessThanOrEqual(1232);
     console.log(
-      `four pools: ${outcome.units} compute units, ${outcome.size}-byte transaction, ${outcome.accounts} accounts, ${program.bytecode.length}-byte program`,
+      `${program.entryParams.length} arguments, ${program.manifest!.accounts.length} accounts named, ` +
+        `two pools found: ${outcome.units} compute units, ${outcome.size}-byte transaction, ` +
+        `${outcome.accounts} accounts, ${program.bytecode.length}-byte program`,
     );
   }, 120_000);
 
-  it("takes a fifth slot in one cook: each pool trades to its own limit or, past it, sits out", async () => {
-    const cropper = pool("cropper-sol-usdc");
-    const five = [...DEEP, cropper];
-    const budget = 1_000_000n * 10n ** 6n;
-    const outcome = succeeded(
-      await cook({ slots: five, pay: USDC, buy: WSOL, budget, maxPrice }, program5),
-    );
-    for (const p of DEEP) expect(priceOf(p)).toBe(ownLimit(p, maxPrice, false));
-    // The fifth, read and decided as the others: at its own limit, or untouched past it.
-    const pastLimit = allIn(cropper, false) > maxPrice;
-    expect(priceOf(cropper)).toBe(
-      pastLimit ? snapshotPrice(cropper) : ownLimit(cropper, maxPrice, false),
-    );
-    expect(outcome.spent + outcome.unspent).toBe(budget);
-    expect(outcome.spent * E18).toBeLessThanOrEqual(maxPrice * outcome.bought);
-    expect(outcome.units).toBeLessThan(1_400_000);
-    expect(outcome.accounts).toBeLessThanOrEqual(64);
-    expect(outcome.size).toBeLessThanOrEqual(1232);
-    console.log(
-      `five pools (the fifth ${pastLimit ? "past its limit" : "trading"}): ${outcome.units} compute units, ${outcome.size}-byte transaction, ${outcome.accounts} accounts, ${program5.bytecode.length}-byte program`,
-    );
-  }, 120_000);
-
-  it("gives the budget to the slots in order, and stops when it is spent", async () => {
+  it("gives the budget to the pools in order, and stops when it is spent", async () => {
     const budget = 100n * 10n ** 6n;
-    const outcome = succeeded(await cook({ slots: DEEP, pay: USDC, buy: WSOL, budget, maxPrice }));
+    const outcome = succeeded(await cook({ budget, priceLimit }));
     expect(outcome.spent).toBe(budget);
     expect(outcome.unspent).toBe(0n);
     expect(outcome.refunded).toBe(0n);
-    expect(priceOf(DEEP[0]!)).not.toBe(snapshotPrice(DEEP[0]!));
-    for (const p of DEEP.slice(1)) expect(priceOf(p)).toBe(snapshotPrice(p));
+    expect(outcome.left).toBe(0n);
+    expect(priceOf(ORCA)).not.toBe(snapshotPrice(ORCA));
+    expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
   }, 120_000);
 
-  it("skips the slots a pool before them left only dust, and completes", async () => {
-    const raydium = pool("raydium-clmm-sol-usdc");
-    // What Raydium's pool takes before its price reaches its own limit, on its own.
-    const alone = succeeded(
-      await cook({
-        slots: [raydium],
-        pay: USDC,
-        buy: WSOL,
-        budget: 1_000_000n * 10n ** 6n,
-        maxPrice,
-      }),
-    );
-    expect(priceOf(raydium)).toBe(ownLimit(raydium, maxPrice, false));
-    // One atom more: each slot after it is offered one atom of USDC, which its fee takes whole, so
-    // it buys nothing there, and the slot is skipped rather than the cook reverted.
-    const after = [
-      pool("orca-whirlpool-sol-usdc"),
-      pool("pancakeswap-clmm-sol-usdc"),
-      pool("defituna-sol-usdc"),
-    ];
-    const outcome = succeeded(
-      await cook({
-        slots: [raydium, ...after],
-        pay: USDC,
-        buy: WSOL,
-        budget: alone.spent + 1n,
-        maxPrice,
-      }),
-    );
-    expect(outcome.spent).toBe(alone.spent);
-    expect(outcome.bought).toBe(alone.bought);
-    expect(outcome.unspent).toBe(1n);
-    expect(outcome.refunded).toBe(1n);
-    for (const p of after) expect(priceOf(p)).toBe(snapshotPrice(p));
-  }, 120_000);
+  it("skips a pool past its limit, an empty pool, and a remainder of dust, and completes", async () => {
+    const budget = 1_000_000n * 10n ** 6n;
+    // A limit between the two pools' prices: the dearer sits out.
+    const [cheaper, dearer] = [...FOUND].sort((a, b) =>
+      allIn(a, false) < allIn(b, false) ? -1 : 1,
+    ) as [Pool, Pool];
+    const between = (allIn(cheaper, false) + allIn(dearer, false)) / 2n;
+    expect(allIn(cheaper, false)).toBeLessThan(between);
+    expect(allIn(dearer, false)).toBeGreaterThan(between);
+    const one = succeeded(await cook({ budget, priceLimit: between }));
+    expect(priceOf(cheaper)).toBe(ownLimit(cheaper, between, false));
+    expect(priceOf(dearer)).toBe(snapshotPrice(dearer));
+    expect(one.bought).toBeGreaterThan(0n);
 
-  it("skips a missing slot, a pool past its limit, a pool with fees past its rate and an empty pool", async () => {
-    const crema = pool("crema-sol-usdc");
-    const byreal = pool("byreal-sol-usdc");
-    const raydium = pool("raydium-clmm-sol-usdc");
-    expect(allIn(crema, false)).toBeGreaterThan(maxPrice); // already past the limit
-    const budget = 1_000n * 10n ** 6n;
-    const outcome = succeeded(
+    // Orca's pool emptied (no liquidity at its price): Raydium takes the order alone.
+    const emptied = {
+      address: ORCA.pool,
+      offset: LAYOUT[ORCA.venue]!.liquidity,
+      bytes: Array(16).fill(0),
+    };
+    const alone = succeeded(await cook({ budget, priceLimit, edit: emptied }));
+    expect(priceOf(ORCA)).toBe(snapshotPrice(ORCA));
+    expect(priceOf(RAYDIUM)).toBe(ownLimit(RAYDIUM, priceLimit, false));
+    expect(alone.bought).toBeGreaterThan(0n);
+
+    // What Orca's pool takes on its own, and one atom more: Raydium's pool is offered one atom of
+    // USDC, which its fee takes whole, so it buys nothing there, and is skipped rather than the cook
+    // reverted.
+    const orcaAlone = succeeded(
       await cook({
-        slots: [NONE, crema, byreal, raydium],
-        pay: USDC,
-        buy: WSOL,
         budget,
-        maxPrice,
-        kept: 5n,
-        // Raydium's pool emptied: no liquidity at its price.
-        edit: { address: raydium.pool, offset: 237, bytes: Array(16).fill(0) },
+        priceLimit,
+        edit: {
+          address: RAYDIUM.pool,
+          offset: LAYOUT[RAYDIUM.venue]!.liquidity,
+          bytes: Array(16).fill(0),
+        },
       }),
     );
-    expect(outcome.spent).toBe(0n);
-    expect(outcome.bought).toBe(0n);
-    expect(outcome.refunded).toBe(budget);
-    expect(outcome.left).toBe(5n);
-    for (const p of [crema, byreal]) expect(priceOf(p)).toBe(snapshotPrice(p));
-  }, 120_000);
-
-  it("skips a paused pool and an order book whose offers are past the limit", async () => {
-    const phoenix = pool("phoenix-sol-usdc");
-    const raydium = pool("raydium-clmm-sol-usdc");
-    const orca = pool("orca-whirlpool-sol-usdc");
-    const budget = 1_000n * 10n ** 6n;
-    const outcome = succeeded(
-      await cook({
-        slots: [phoenix, raydium, orca],
-        pay: USDC,
-        buy: WSOL,
-        budget,
-        maxPrice,
-        // Raydium's swaps switched off: status bit 4.
-        edit: { address: raydium.pool, offset: 389, bytes: [16] },
-      }),
-    );
-    // The market took the order and filled none of it: its vaults hold what they held.
-    for (const vault of [phoenix.vaultA, phoenix.vaultB])
-      expect(tokenAmount(harness, vault)).toBe(le(BYTES.get(vault)!, 64, 8));
-    expect(priceOf(raydium)).toBe(snapshotPrice(raydium));
-    expect(priceOf(orca)).not.toBe(snapshotPrice(orca));
-    expect(outcome.spent).toBe(budget);
-  }, 120_000);
-
-  it("trades the thin venues to their own limits: Cropper and Crema", async () => {
-    const thin = [pool("cropper-sol-usdc"), pool("crema-sol-usdc")];
-    const top = thin.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b));
-    const thinMax = (top * 10005n) / 10000n;
-    const budget = 100_000n * 10n ** 6n;
-    const outcome = succeeded(
-      await cook({ slots: thin, pay: USDC, buy: WSOL, budget, maxPrice: thinMax }),
-    );
-    for (const p of thin) expect(priceOf(p)).toBe(ownLimit(p, thinMax, false));
-    expect(outcome.spent * E18).toBeLessThanOrEqual(thinMax * outcome.bought);
-    expect(outcome.refunded).toBe(outcome.unspent);
-  }, 120_000);
-
-  it("takes an order book's offers up to the limit, fee included, and no further", async () => {
-    const phoenix = pool("phoenix-sol-usdc");
-    const loader = async (at: Address) => (BYTES.has(at) ? new Uint8Array(BYTES.get(at)!) : null);
-    const market = await fetchPhoenixConfig(loader, phoenix.pool);
-    const data = BYTES.get(phoenix.pool)!;
-    const offers = market.windows.quoteIn.orders.map((o) => {
-      const node = market.asksNodesBase + (o.nodeIndex - 1) * 64;
-      return { ticks: le(data, node + 16, 8), lots: le(data, node + 40, 8) };
-    });
-    const fee = le(data, 856, 8);
-    // A tick in maxPrice's units: quote atoms per base atom, × 1e18.
-    const tick =
-      (market.tickSizeInQuoteLotsPerBaseUnit * market.quoteLotSize * E18) /
-      (market.baseLotsPerBaseUnit * market.baseLotSize);
-    // A limit just past the first price level, fee included.
-    const first = offers[0]!.ticks;
-    const limitTicks = first;
-    const bookMax = (limitTicks * tick * (10000n + fee)) / 10000n + tick / 2n;
-    const expected = offers.filter((o) => o.ticks <= limitTicks).reduce((n, o) => n + o.lots, 0n);
-    expect(offers.some((o) => o.ticks > limitTicks)).toBe(true);
-    const budget = 10_000n * 10n ** 6n;
-    const outcome = succeeded(
-      await cook({ slots: [phoenix], pay: USDC, buy: WSOL, budget, maxPrice: bookMax }),
-    );
-    expect(outcome.bought).toBe(expected * market.baseLotSize);
-    expect(outcome.spent * E18).toBeLessThanOrEqual(bookMax * outcome.bought);
-    expect(outcome.refunded).toBe(outcome.unspent);
-  }, 120_000);
-
-  it("sells the other way: paying the lower-key token, each price falls to its own limit", async () => {
-    // Selling SOL for USDC: maxPrice is SOL per USDC, the order's floor seen from the other side.
-    const cheapest = DEEP.map((p) => allIn(p, true)).reduce((a, b) => (a > b ? a : b));
-    const sellMax = (cheapest * 10003n) / 10000n;
-    const budget = 100_000n * 10n ** 9n; // 100,000 SOL
-    const outcome = succeeded(
-      await cook({ slots: DEEP, pay: WSOL, buy: USDC, budget, maxPrice: sellMax }),
-    );
-    for (const p of DEEP) expect(priceOf(p)).toBe(ownLimit(p, sellMax, true));
-    expect(outcome.spent * E18).toBeLessThanOrEqual(sellMax * outcome.bought);
-    expect(outcome.refunded).toBe(outcome.unspent);
-  }, 120_000);
-
-  it("runs Byreal's and Stabble's own swaps", async () => {
-    const byreal = pool("byreal-usdc");
-    const mint = getAddressCodec().decode(BYTES.get(byreal.pool)!.subarray(73, 105));
-    const byrealMax = (allIn(byreal, false) * 10003n) / 10000n;
-    const first = succeeded(
-      await cook({
-        slots: [byreal],
-        pay: USDC,
-        buy: mint,
-        budget: 100_000n * 10n ** 6n,
-        maxPrice: byrealMax,
-      }),
-    );
-    expect(priceOf(byreal)).toBe(ownLimit(byreal, byrealMax, false));
-    expect(first.bought).toBeGreaterThan(0n);
-
-    const stabble = pool("stabble-clmm-usdc-usdt");
-    const stabbleMax = (allIn(stabble, true) * 10003n) / 10000n;
-    const second = succeeded(
-      await cook({
-        slots: [stabble],
-        pay: USDC,
-        buy: USDT,
-        budget: 100_000n * 10n ** 6n,
-        maxPrice: stabbleMax,
-      }),
-    );
-    expect(priceOf(stabble)).toBe(ownLimit(stabble, stabbleMax, true));
-    expect(second.bought).toBeGreaterThan(0n);
-  }, 120_000);
+    const dust = succeeded(await cook({ budget: orcaAlone.spent + 1n, priceLimit }));
+    expect(dust.spent).toBe(orcaAlone.spent);
+    expect(dust.bought).toBe(orcaAlone.bought);
+    expect(dust.unspent).toBe(1n);
+    expect(dust.refunded).toBe(1n);
+    expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
+  }, 180_000);
 
   it("reverts below minTokens and above maxAvgPrice", async () => {
     const budget = 1_000n * 10n ** 6n;
-    const rehearsed = succeeded(
-      await cook({ slots: DEEP, pay: USDC, buy: WSOL, budget, maxPrice }),
+    const simulated = succeeded(await cook({ budget, priceLimit }));
+    expect(refused(await cook({ budget, priceLimit, minTokens: simulated.bought + 1n }))).toBe(
+      "bought below minTokens",
     );
-    expect(
-      refused(
-        await cook({
-          slots: DEEP,
-          pay: USDC,
-          buy: WSOL,
-          budget,
-          maxPrice,
-          minTokens: rehearsed.bought + 1n,
-        }),
-      ),
-    ).toBe("bought below minTokens");
-    const average = (rehearsed.spent * E18) / rehearsed.bought;
-    expect(
-      refused(
-        await cook({
-          slots: DEEP,
-          pay: USDC,
-          buy: WSOL,
-          budget,
-          maxPrice,
-          maxAvgPrice: average - 1n,
-        }),
-      ),
-    ).toBe("average too high");
+    const average = (simulated.spent * E18) / simulated.bought;
+    expect(refused(await cook({ budget, priceLimit, maxAvgPrice: average - 1n }))).toBe(
+      "average too high",
+    );
     // At the average, both checks pass.
     succeeded(
       await cook({
-        slots: DEEP,
-        pay: USDC,
-        buy: WSOL,
         budget,
-        maxPrice,
-        minTokens: rehearsed.bought,
+        priceLimit,
+        minTokens: simulated.bought,
         maxAvgPrice: average + 1n,
       }),
     );
   }, 180_000);
 
-  it("keeps what was bought and the rest of the budget in the Pot when recipient and refund are the Pot", async () => {
+  it("keeps what was bought and the rest of the budget in the Pot when the recipient is the Pot", async () => {
     const budget = 1_000_000n * 10n ** 6n;
-    const outcome = succeeded(
-      await cook({
-        slots: DEEP,
-        pay: USDC,
-        buy: WSOL,
-        budget,
-        maxPrice,
-        kept: 7n,
-        keepInPot: true,
-      }),
-    );
+    const outcome = succeeded(await cook({ budget, priceLimit, kept: 7n, keepInPot: true }));
     expect(outcome.bought).toBeGreaterThan(0n);
     expect(outcome.unspent).toBeGreaterThan(0n);
-    // Nothing moved on: the Pot holds what it bought, and its USDC is the rest and its own 7.
+    // The Pot holds what it bought, and its USDC is the rest of the budget and its own 7.
     expect(outcome.kept).toBe(outcome.bought);
     expect(outcome.left).toBe(outcome.unspent + 7n);
   }, 120_000);
 
-  it("refuses a budget not in the Pot, a pool that is not the pair, and a venue it does not take", async () => {
+  it("refuses a budget not in the Pot, and a recipient's account another wallet holds", async () => {
     const budget = 1_000n * 10n ** 6n;
-    expect(
-      refused(await cook({ slots: DEEP, pay: USDC, buy: WSOL, budget, maxPrice, short: true })),
-    ).toBe("budget is not in the Pot");
-    expect(
-      refused(
-        await cook({
-          slots: [pool("stabble-clmm-usdc-usdt")],
-          pay: USDC,
-          buy: WSOL,
-          budget,
-          maxPrice,
-        }),
-      ),
-    ).toBe("pool is not the pair");
-    expect(
-      refused(
-        await cook({
-          slots: [pool("meteora-dlmm-sol-usdc")],
-          pay: USDC,
-          buy: WSOL,
-          budget,
-          maxPrice,
-        }),
-      ),
-    ).toBe("not a supported venue's pool");
-    const orca = pool("orca-whirlpool-sol-usdc");
-    expect(
-      refused(
-        await cook({
-          slots: [{ ...orca, program: pool("raydium-clmm-sol-usdc").program }],
-          pay: USDC,
-          buy: WSOL,
-          budget,
-          maxPrice,
-        }),
-      ),
-    ).toBe("a pool's program is not its owner");
-    // A recipient's token account another wallet holds: the transfer is refused after it, by the
-    // check that binds the account to the recipient.
-    expect(
-      refused(
-        await cook({
-          slots: DEEP,
-          pay: USDC,
-          buy: WSOL,
-          budget,
-          maxPrice,
-          strangerRecipient: true,
-        }),
-      ),
-    ).toBe("wrong recipient account");
-  }, 180_000);
+    expect(refused(await cook({ budget, priceLimit, short: true }))).toBe(
+      "budget is not in the Pot",
+    );
+    // The transfer is refused after it, by the check that binds the account to the recipient.
+    expect(refused(await cook({ budget, priceLimit, strangerRecipient: true }))).toBe(
+      "wrong recipient account",
+    );
+  }, 120_000);
 });

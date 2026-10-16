@@ -328,13 +328,20 @@ for (const mint of mints) claim(mint, "a Solana mint symbol");
 // A Solana venue is its protocol's program (`Orca.Whirlpool`): its protocol a name of its own, or a
 // field of a protocol namespace or family of the same name (`Pancakeswap`).
 const venueFields = new Map();
-for (const [venue, { exact }] of Object.entries(SVM_VENUE_NAMESPACES)) {
+for (const [venue, { exact, key }] of Object.entries(SVM_VENUE_NAMESPACES)) {
   const [protocol, program] = venue.split(".");
   if (!ts.isIdentifierText(program, ts.ScriptTarget.Latest))
     fail(`'${venue}' (a Solana venue namespace) does not name a program`);
+  const type = exact
+    ? "SauceSvmExactVenueSource"
+    : key === "fee"
+      ? "SauceSvmFeeVenueSource"
+      : key === "tick spacing"
+        ? "SauceSvmSpacingVenueSource"
+        : "SauceSvmVenueSource";
   venueFields.set(protocol, [
     ...(venueFields.get(protocol) ?? []),
-    `  readonly ${program}: ${exact ? "SauceSvmExactVenueSource" : "SauceSvmVenueSource"};`,
+    `  readonly ${program}: ${type};`,
   ]);
 }
 for (const protocol of venueFields.keys()) {
@@ -518,10 +525,10 @@ export interface SauceSolanaAccounts {
  * A Solana venue's swap at one pool, in a program compiled for Solana: the pool and both tokens are
  * known when the cook is built, which reads the pool's accounts from it; what arrives lands in the
  * Pot's own account for the token bought. It returns 0, having moved nothing, where the pool cannot
- * trade (past \`maxPrice\`, empty, paused, no pool), and reverts below \`minOut\`.
+ * trade (past \`priceLimit\`, empty, paused, no pool), and reverts below \`minOut\`.
  */
 export interface SauceSvmVenueSource {
-  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
+  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, priceLimit: bigint, minOut: bigint): bigint;
 }
 
 /**
@@ -531,6 +538,24 @@ export interface SauceSvmVenueSource {
  */
 export interface SauceSvmExactVenueSource {
   swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, minOut: bigint): bigint;
+}
+
+/**
+ * A Solana venue whose pools are found by tick spacing: \`pool(tokenA, tokenB, tickSpacing)\` is
+ * the pool its program keeps for the pair at that spacing, written as a swap's pool, the spacing a
+ * number written out (or a loop's over numbers written out). Where there is none, the swap returns 0.
+ */
+export interface SauceSvmSpacingVenueSource extends SauceSvmVenueSource {
+  pool(tokenA: bigint, tokenB: bigint, tickSpacing: bigint): bigint;
+}
+
+/**
+ * A Solana venue whose pools are found by fee, in millionths (400 is 0.04%), as an EVM pool's:
+ * \`pool(tokenA, tokenB, fee)\`, written as a swap's pool, with the tick spacing after the fee
+ * where the venue keeps two configs at it. Where there is none, the swap returns 0.
+ */
+export interface SauceSvmFeeVenueSource extends SauceSvmVenueSource {
+  pool(tokenA: bigint, tokenB: bigint, fee: bigint, tickSpacing?: bigint): bigint;
 }
 
 /** A collection returned by Sauce, whose length is a Sauce scalar. */

@@ -40,8 +40,7 @@ programs, the Pot is the Kitchen's account for the owner and salt, and a cook is
 
 1. **Write the program yourself**, in SauceScript, for the task as asked. The skills teach the
    language, the names and the patterns; their examples show idioms and are not templates. Never
-   ask the user which example or existing file to begin with. The one exception is the Solana
-   distributed swap, whose program is used whole (`sauce-solana-distributed-swap`).
+   ask the user which example or existing file to begin with.
 2. **Ask only what the request leaves open**: an amount, a price limit, a recipient, the chain, and
    **where the results end**. Before writing a program that produces assets (a swap's output, a
    lending market's aTokens, a vault's shares, what a bridge delivers), ask whether they should end
@@ -215,9 +214,9 @@ the owner rather than repeat it.
 
 ### `sauce-solana-distributed-swap`
 
-- **Owns**: the same order on Solana: pools as `main`'s `Address` arguments found with
-  `sauce pools`, each swapped with `Solana.swap` at whichever venue owns it, the program used whole,
-  what fits in one cook, running it.
+- **Owns**: the same order on Solana: a program for one request, its pools found by key
+  (`Orca.Whirlpool.pool(USDC, WSOL, spacing)`) in loops over the keys, each swapped at its venue,
+  choosing the keys with `sauce pools`, what fits in one cook, running it.
 - **Load**: for a split or limit order on Solana, with `sauce-solana`.
 
 ### `sauce-intents`

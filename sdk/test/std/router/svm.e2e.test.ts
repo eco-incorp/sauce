@@ -7,14 +7,14 @@
  *   - a paid swap is the swap the Solana distributed swap's per-pool helper made before the library
  *     took its venue code (`fixtures/inline-trade.svm.sauce.ts`, run from the same state): the same
  *     amount received, the same input taken, the pool left at the same price — its own limit, for
- *     an order large enough to reach it — through the venue's own function and `swap`, both ways
- *     for the deep pools;
+ *     an order large enough to reach it — through the venue's own function, both ways for the deep
+ *     pools;
  *   - each function returns 0 having moved nothing for every skip its header names (an input too
  *     small to buy one unit and a Phoenix limit too large for an order among them); the smallest
  *     input the estimate lets through delivers at least one unit;
  *   - a swap that ran below its floor reverts;
- *   - a slot that is not the pair, whose program is not its pool's owner, or whose pool is another
- *     venue's or no venue's, is refused.
+ *   - a slot that is not the pair, whose program is not the venue's, or whose pool is another venue's
+ *     or no venue's, is refused.
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
@@ -75,7 +75,7 @@ interface Order {
   pay: Address;
   buy: Address;
   amountIn: bigint;
-  maxPrice: bigint;
+  priceLimit: bigint;
   minOut?: bigint;
   /** Bytes to change in an account before the cook, for one case: a pool emptied, paused. */
   edit?: { address: Address; offset: number; bytes: number[] };
@@ -178,8 +178,8 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     const args = encodeEntryArguments(
       program,
       program.entryParams.length === 3
-        ? [order.amountIn, order.maxPrice, order.minOut ?? 0n]
-        : [order.amountIn, order.maxPrice],
+        ? [order.amountIn, order.priceLimit, order.minOut ?? 0n]
+        : [order.amountIn, order.priceLimit],
     );
     const payload = new Uint8Array(program.bytecode.length + args.length);
     payload.set(program.bytecode);
@@ -277,7 +277,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     return (ticks * tick * (10000n + le(data, 856, 8))) / 10000n + tick / 2n;
   };
 
-  // Each venue's function, one of its pools, and the trade: buying with USDC, a maxPrice a few basis
+  // Each venue's function, one of its pools, and the trade: buying with USDC, a priceLimit a few basis
   // points above the pool's own price with its fee, and enough to reach it.
   const VENUES: { venue: string; pool: string; buy: Address; bps: bigint }[] = [
     { venue: "RaydiumClmm", pool: "raydium-clmm-sol-usdc", buy: WSOL, bps: 3n },
@@ -297,31 +297,29 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     const p = pool(entry.pool);
     const buy = entry.buy === SYSTEM ? other(p) : entry.buy;
     const paysA = key(USDC) < key(buy);
-    const maxPrice =
+    const priceLimit =
       p.venue === "phoenix"
         ? await phoenixMax(p)
         : (allIn(p, paysA) * (10000n + entry.bps)) / 10000n;
-    return { pool: p, pay: USDC, buy, amountIn: 1_000_000n * 10n ** 6n, maxPrice };
+    return { pool: p, pay: USDC, buy, amountIn: 1_000_000n * 10n ** 6n, priceLimit };
   };
 
   describe("a paid swap is the per-pool helper's swap", () => {
     it.each(VENUES)(
-      "$venue: its own function and swap",
+      "$venue: its own function",
       async (entry) => {
         const order = await orderFor(entry);
         const expected = succeeded(await cook(inline, order));
         expect(expected.received).toBeGreaterThan(0n);
         expect(expected.returned).toBe(expected.received);
-        for (const name of [lower(entry.venue), "swap"]) {
-          const outcome = succeeded(await cook(compiled(name), order));
-          expect({ name, ...outcome }).toEqual({ name, ...expected });
-          expect(outcome.paid).toBeLessThanOrEqual(order.amountIn);
-          expect(outcome.paid * E18).toBeLessThanOrEqual(order.maxPrice * outcome.received);
-        }
+        const outcome = succeeded(await cook(compiled(lower(entry.venue)), order));
+        expect(outcome).toEqual(expected);
+        expect(outcome.paid).toBeLessThanOrEqual(order.amountIn);
+        expect(outcome.paid * E18).toBeLessThanOrEqual(order.priceLimit * outcome.received);
         // Each concentrated-liquidity pool stops exactly at its own fee-adjusted limit.
         if (expected.price !== undefined)
           expect(expected.price).toBe(
-            ownLimit(order.pool, order.maxPrice, key(USDC) < key(order.buy)),
+            ownLimit(order.pool, order.priceLimit, key(USDC) < key(order.buy)),
           );
       },
       120_000,
@@ -341,7 +339,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
           pay: WSOL,
           buy: USDC,
           amountIn: 100_000n * 10n ** 9n,
-          maxPrice: (allIn(p, true) * 10003n) / 10000n,
+          priceLimit: (allIn(p, true) * 10003n) / 10000n,
         };
         const expected = succeeded(await cook(inline, order));
         expect(expected.received).toBeGreaterThan(0n);
@@ -351,14 +349,12 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
           "orca-whirlpool": "orcaWhirlpool",
           defituna: "defituna",
         }[p.venue]!;
-        for (const fn of [venue, "swap"]) {
-          const outcome = succeeded(await cook(compiled(fn), order));
-          expect(outcome.received).toBe(expected.received);
-          expect(outcome.paid).toBe(expected.paid);
-          expect(outcome.price).toBe(expected.price);
-          expect(outcome.returned).toBe(outcome.received);
-        }
-        expect(expected.price).toBe(ownLimit(p, order.maxPrice, true));
+        const outcome = succeeded(await cook(compiled(venue), order));
+        expect(outcome.received).toBe(expected.received);
+        expect(outcome.paid).toBe(expected.paid);
+        expect(outcome.price).toBe(expected.price);
+        expect(outcome.returned).toBe(outcome.received);
+        expect(expected.price).toBe(ownLimit(p, order.priceLimit, true));
       },
       120_000,
     );
@@ -374,16 +370,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     const all = succeeded(await cook(compiled("crema"), order));
     expect(all.received).toBeGreaterThan(0n);
     const first = (key(order.pay) < key(order.buy) ? order.pool.payA : order.pool.payB)[0]!;
-    for (const name of ["crema", "swap"]) {
-      const one = succeeded(
-        await cook(compiled(name), { ...order, ticks: [first, SYSTEM, SYSTEM] }),
-      );
-      expect([one.returned, one.received, one.paid]).toEqual([
-        all.returned,
-        all.received,
-        all.paid,
-      ]);
-    }
+    const one = succeeded(
+      await cook(compiled("crema"), { ...order, ticks: [first, SYSTEM, SYSTEM] }),
+    );
+    expect([one.returned, one.received, one.paid]).toEqual([all.returned, all.received, all.paid]);
   }, 120_000);
 
   describe("each function skips, having moved nothing", () => {
@@ -407,7 +397,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       const order = await orderFor(entry);
       return {
         ...order,
-        maxPrice: (allIn(order.pool, key(USDC) < key(order.buy)) * 9990n) / 10000n,
+        priceLimit: (allIn(order.pool, key(USDC) < key(order.buy)) * 9990n) / 10000n,
       };
     });
     add("a pool with no liquidity at its price", CLMM, async (entry) => {
@@ -446,7 +436,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       ["Phoenix"],
       async (entry) => {
         const order = await orderFor(entry);
-        return { ...order, maxPrice: order.maxPrice / 2n };
+        return { ...order, priceLimit: order.priceLimit / 2n };
       },
       true,
     );
@@ -460,14 +450,14 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     // selling for one so high that no bid could meet it.
     add("a limit too large for an order, buying", ["Phoenix"], async (entry) => ({
       ...(await orderFor(entry)),
-      maxPrice: 2n ** 200n,
+      priceLimit: 2n ** 200n,
     }));
     add("a limit too large for an order, selling", ["Phoenix"], async (entry) => ({
       ...(await orderFor(entry)),
       pay: WSOL,
       buy: USDC,
       amountIn: 10n * 10n ** 9n,
-      maxPrice: 1n,
+      priceLimit: 1n,
     }));
     add("an input smaller than one lot", ["Phoenix"], async (entry) => {
       const order = await orderFor(entry);
@@ -478,27 +468,23 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       "$fn: $why",
       async ({ fn, order: make, numbered }) => {
         const order = await make();
-        for (const name of [lower(fn), "swap"]) {
-          const outcome = succeeded(await cook(compiled(name), order));
-          expect({
-            name,
-            returned: outcome.returned,
-            received: outcome.received,
-            paid: outcome.paid,
-            changed: outcome.changed,
-          }).toEqual({
-            name,
-            returned: 0n,
-            received: 0n,
-            paid: 0n,
-            // Nothing but the edit, which `restoreVenues` wrote before the cook, and a market's
-            // order count.
-            changed: [
-              ...(order.edit === undefined ? [] : [order.edit.address]),
-              ...(numbered ? [order.pool.pool] : []),
-            ],
-          });
-        }
+        const outcome = succeeded(await cook(compiled(lower(fn)), order));
+        expect({
+          returned: outcome.returned,
+          received: outcome.received,
+          paid: outcome.paid,
+          changed: outcome.changed,
+        }).toEqual({
+          returned: 0n,
+          received: 0n,
+          paid: 0n,
+          // Nothing but the edit, which `restoreVenues` wrote before the cook, and a market's order
+          // count.
+          changed: [
+            ...(order.edit === undefined ? [] : [order.edit.address]),
+            ...(numbered ? [order.pool.pool] : []),
+          ],
+        });
       },
       120_000,
     );
@@ -510,12 +496,11 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       async (entry) => {
         const order = await orderFor(entry);
         const { received } = succeeded(await cook(inline, order));
-        for (const name of [lower(entry.venue), "swap"]) {
-          expect(refused(await cook(compiled(name), { ...order, minOut: received + 1n }))).toBe(
-            "below minOut",
-          );
-          succeeded(await cook(compiled(name), { ...order, minOut: received }));
-        }
+        const name = lower(entry.venue);
+        expect(refused(await cook(compiled(name), { ...order, minOut: received + 1n }))).toBe(
+          "below minOut",
+        );
+        succeeded(await cook(compiled(name), { ...order, minOut: received }));
       },
       120_000,
     );
@@ -527,12 +512,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     "$venue: two atoms pass the estimate and deliver at least one",
     async (entry) => {
       const order = { ...(await orderFor(entry)), amountIn: 2n };
-      for (const name of [lower(entry.venue), "swap"]) {
-        const outcome = succeeded(await cook(compiled(name), order));
-        expect(outcome.paid).toBe(2n);
-        expect(outcome.returned).toBe(outcome.received);
-        expect(outcome.received).toBeGreaterThan(0n);
-      }
+      const outcome = succeeded(await cook(compiled(lower(entry.venue)), order));
+      expect(outcome.paid).toBe(2n);
+      expect(outcome.returned).toBe(outcome.received);
+      expect(outcome.received).toBeGreaterThan(0n);
     },
     120_000,
   );
@@ -540,11 +523,9 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   describe("the caller's accounts, refused", () => {
     it("a pool that is not the pair, and a market that is not", async () => {
       const stabble = { ...(await orderFor(VENUES[3]!)), buy: WSOL };
-      for (const name of ["stabbleClmm", "swap"])
-        expect(refused(await cook(compiled(name), stabble))).toBe("pool is not the pair");
+      expect(refused(await cook(compiled("stabbleClmm"), stabble))).toBe("pool is not the pair");
       const phoenix = { ...(await orderFor(VENUES[8]!)), buy: USDT };
-      for (const name of ["phoenix", "swap"])
-        expect(refused(await cook(compiled(name), phoenix))).toBe("market is not the pair");
+      expect(refused(await cook(compiled("phoenix"), phoenix))).toBe("market is not the pair");
     }, 120_000);
 
     // Each venue's function refuses any pool but its venue's, by the program it would call.
@@ -560,10 +541,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       Phoenix: "not a Phoenix market",
     };
 
-    // The authority signs the swap, so the program a slot names must be the venue's own: a direct
-    // call checks its venue's id itself, and `swap` that the slot's program owns the pool.
+    // The authority signs the swap, so the program a slot names must be the venue's own: each
+    // venue's function checks its venue's id itself.
     it.each(VENUES)(
-      "$venue: a slot naming another program reverts, through its function and through swap",
+      "$venue: a slot naming another program reverts",
       async (entry) => {
         const order = await orderFor(entry);
         const another =
@@ -573,9 +554,6 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         const misnamed = { ...order, pool: { ...order.pool, program: another } };
         expect(refused(await cook(compiled(lower(entry.venue)), misnamed))).toBe(
           REASONS[entry.venue],
-        );
-        expect(refused(await cook(compiled("swap"), misnamed))).toBe(
-          "a pool's program is not its owner",
         );
       },
       120_000,
@@ -596,7 +574,6 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       const dlmm = { ...orca, pool: pool("meteora-dlmm-sol-usdc") };
       const nobody = { ...orca, pool: { ...NONE, pool: randomAddress() } };
       for (const order of [dlmm, nobody]) {
-        expect(refused(await cook(compiled("swap"), order))).toBe("not a supported venue's pool");
         for (const [venue, reason] of Object.entries(REASONS))
           expect(refused(await cook(compiled(lower(venue)), order))).toBe(reason);
       }

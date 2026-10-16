@@ -202,6 +202,12 @@ interface ArrayConstructor {
  */
 declare function Token(address: SauceInt): SauceTokenSource;
 
+/**
+ * The program's own account as a token holder (the Pot, cooked through the Kitchen), and its
+ * balances by symbol: `self.USDC` is its USDC, as `USDC.balanceOf(self)`.
+ */
+declare const self: bigint & { readonly [symbol: string]: bigint };
+
 // `@sauce/token`, whose functions every program on a chain calls with no import: an EVM token is
 // an address; on Solana the mint is an address, its accounts `Account` slots, and a write names
 // its token program and the authority (`transfer`/`approve` SPL Token only, the checked writes

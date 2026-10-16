@@ -4,7 +4,8 @@
  * layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema and Phoenix's order book — read now
  * through an endpoint, each with its price both ways, its fee and the nine accounts a swap at it
  * takes in each direction (program, pool, config, two vaults, one more account, three tick arrays),
- * its slot. `--pay` chooses the pools a distributed swap paying one of the pair takes and gives them
+ * its slot, and how a program finds it by key (`Orca.Whirlpool.pool(USDC, WSOL, 4)`, where its
+ * venue finds pools by key and the SDK knows the key). `--pay` chooses the pools a distributed swap paying one of the pair takes and gives them
  * in slot order, padded with the System Program (an empty slot), for the program's `--args`: a
  * program that takes a pool as an `Address` argument has its slot derived from the pool as the cook
  * is built. It gives their slots' accounts too, for a program that takes its slots as accounts.
@@ -27,6 +28,12 @@ import type { Address } from "@solana/kit";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows } from "../routes/token-registry.js";
 import { svmPublicKey } from "../svm/account-names.js";
+import {
+  svmAmmConfig,
+  svmPoolCandidates,
+  svmPoolKeyProblem,
+  SVM_KEYED_VENUES,
+} from "../svm/pool-keys.js";
 import { coalescingAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
 import {
   PHOENIX_BASE_MINT_AT,
@@ -64,14 +71,14 @@ export interface SvmPoolsInput {
   readonly tokens: readonly [string, string];
   /**
    * Chooses the pools for a distributed swap paying `pay` (one of the pair): those whose price with
-   * the fee is within `maxPrice` (its units), the deepest first, one a venue with `perVenue`, the
+   * the fee is within `priceLimit` (its units), the deepest first, one a venue with `perVenue`, the
    * first `slots` (4) of them; and returns them in slot order as the program's pool arguments, and
    * the accounts a program that takes its slots as accounts takes for them, every slot past the
    * last chosen the System program.
    */
   readonly choose?: {
     readonly pay: string;
-    readonly maxPrice?: bigint;
+    readonly priceLimit?: bigint;
     readonly perVenue?: boolean;
     readonly slots?: number;
   };
@@ -123,7 +130,7 @@ function decimal(numerator: bigint, denominator: bigint): string {
   return text;
 }
 
-/** One side of a pool: paying `pay` for `buy`, before and with the fee, and as a maxPrice. */
+/** One side of a pool: paying `pay` for `buy`, before and with the fee, and as a priceLimit. */
 interface Side {
   readonly pay: string;
   readonly buy: string;
@@ -131,14 +138,16 @@ interface Side {
   readonly mid: string;
   /** With the fee. */
   readonly taker: string;
-  /** The taker price as the distributed swap's maxPrice: pay base units per buy base unit × 1e18. */
-  readonly maxPrice: string;
+  /** The taker price as the distributed swap's priceLimit: pay base units per buy base unit × 1e18. */
+  readonly priceLimit: string;
 }
 
 interface Listed {
   readonly venue: string;
   readonly program: Address;
   readonly pool: Address;
+  /** How a program finds the pool by key, its pair as the command was given it. */
+  readonly byKey?: string;
   /** In millionths: a Phoenix market's taker fee, in basis points, times 100. */
   readonly fee: number;
   readonly liquidity?: string;
@@ -219,7 +228,7 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
     : listed.filter((pool) => pool.liquidity === undefined)) {
     const near = book.sides.some((side) => {
       const there = deepest!.sides.find((one) => one.pay === side.pay);
-      return there !== undefined && BigInt(side.maxPrice) * 2n <= BigInt(there.maxPrice) * 3n;
+      return there !== undefined && BigInt(side.priceLimit) * 2n <= BigInt(there.priceLimit) * 3n;
     });
     if (near) continue;
     listed.splice(listed.indexOf(book), 1);
@@ -264,10 +273,11 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
       "",
       `${pool.venue} ${pool.pool}: fee ${pool.fee / 10_000}%` +
         (pool.liquidity === undefined ? "" : `, liquidity ${pool.liquidity}`),
+      ...(pool.byKey === undefined ? [] : [`  found by key: ${pool.byKey}`]),
     );
     for (const side of pool.sides)
       lines.push(
-        `  paying ${side.pay}: ${side.mid} ${side.pay} per ${side.buy}, ${side.taker} with the fee, maxPrice ${side.maxPrice}`,
+        `  paying ${side.pay}: ${side.mid} ${side.pay} per ${side.buy}, ${side.taker} with the fee, priceLimit ${side.priceLimit}`,
       );
     for (const [paid, slot] of Object.entries(pool.slots))
       lines.push(
@@ -288,7 +298,7 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
   if (chosen !== undefined) {
     lines.push(
       "",
-      `Chosen, paying ${chosen.pay}${input.choose?.maxPrice === undefined ? "" : ` within maxPrice ${input.choose.maxPrice}`}: ` +
+      `Chosen, paying ${chosen.pay}${input.choose?.priceLimit === undefined ? "" : ` within priceLimit ${input.choose.priceLimit}`}: ` +
         (chosen.pools.length === 0
           ? "no pool"
           : chosen.pools.map((pool, k) => `slot ${k} ${pool.venue} ${pool.pool}`).join(", ")),
@@ -346,7 +356,7 @@ function choose(
     if (pools.length === slots) break;
     const side = pool.sides.find((one) => one.pay === pay.symbol);
     if (side === undefined || pool.slots[pay.symbol] === undefined) continue;
-    if (want.maxPrice !== undefined && BigInt(side.maxPrice) > want.maxPrice) continue;
+    if (want.priceLimit !== undefined && BigInt(side.priceLimit) > want.priceLimit) continue;
     if (want.perVenue && venues.has(pool.venue)) continue;
     venues.add(pool.venue);
     pools.push({ venue: pool.venue, pool: pool.pool, taker: side.taker });
@@ -467,17 +477,17 @@ async function programAccounts(
   ]);
 }
 
-/** A price in maxPrice's units (pay base units per buy base unit, × 1e18) in whole tokens. */
+/** A price in priceLimit's units (pay base units per buy base unit, × 1e18) in whole tokens. */
 const whole = (priceE18: bigint, pay: Mint, buy: Mint): string =>
   decimal(priceE18 * 10n ** BigInt(buy.decimals), E18 * 10n ** BigInt(pay.decimals));
 
-/** A side from its prices in maxPrice's units, before and with the fee. */
+/** A side from its prices in priceLimit's units, before and with the fee. */
 const sideOf = (pay: Mint, buy: Mint, mid: bigint, taker: bigint): Side => ({
   pay: pay.symbol,
   buy: buy.symbol,
   mid: whole(mid, pay, buy),
   taker: whole(taker, pay, buy),
-  maxPrice: taker.toString(),
+  priceLimit: taker.toString(),
 });
 
 /** Both sides of a pool whose price is a Q64.64 sqrt price of the higher-key token per the lower. */
@@ -537,6 +547,7 @@ async function clmmPool(
     fee = le(data, 172, 2);
   }
   if (liquidity === 0n || sqrt === 0n) return { why: "no liquidity at its price" };
+  const key = keyOf(venue, pool, data, first, second);
   const slots: Record<string, SvmSlot> = {};
   const unfilled: Record<string, string> = {};
   for (const pay of [first, second]) {
@@ -551,6 +562,7 @@ async function clmmPool(
     venue: venue.name,
     program: venue.program,
     pool,
+    ...(key === undefined ? {} : { byKey: key }),
     fee: Number(fee),
     liquidity: liquidity.toString(),
     sqrtPriceX64: sqrt.toString(),
@@ -558,6 +570,42 @@ async function clmmPool(
     slots,
     ...(Object.keys(unfilled).length === 0 ? {} : { unfilled }),
   };
+}
+
+/**
+ * How a program finds `pool` by key, `<Venue>.pool(<first>, <second>, <key>)`: a whirlpool's,
+ * DefiTuna's and Crema's tick spacing from its own bytes, a Raydium-code pool's fee from its config,
+ * with the config's tick spacing after it where the venue keeps another config at that fee. Only
+ * where that key derives this pool; none where the SDK does not know the pool's config.
+ */
+function keyOf(
+  venue: SvmVenue,
+  pool: Address,
+  data: Uint8Array,
+  first: Mint,
+  second: Mint,
+): string | undefined {
+  const keyed = Object.values(SVM_KEYED_VENUES).find((one) => one.program === venue.program);
+  if (keyed === undefined) return undefined;
+  let key: bigint;
+  let spacing: bigint | undefined;
+  if (keyed.configs !== undefined) {
+    const config = keyAt(data, 9);
+    const at = keyed.configs.find((one) => svmAmmConfig(keyed.program, one.index) === config);
+    if (at === undefined) return undefined;
+    key = BigInt(at.fee);
+    if (keyed.configs.filter((one) => one.fee === at.fee).length > 1)
+      spacing = BigInt(at.tickSpacing);
+  } else {
+    const offset = { whirlpool: 43, defituna: 139, crema: 168 }[venue.layout as string];
+    if (offset === undefined) return undefined;
+    key = le(data, offset, 2);
+  }
+  if (svmPoolKeyProblem(keyed.namespace, key, spacing) !== undefined) return undefined;
+  const candidates = svmPoolCandidates(keyed.namespace, first.mint, second.mint, key, spacing);
+  if (!candidates.some((one) => one.pool === pool)) return undefined;
+
+  return `${keyed.namespace}.pool(${first.symbol}, ${second.symbol}, ${key}${spacing === undefined ? "" : `, ${spacing}`})`;
 }
 
 /** A Phoenix market: skipped, or listed with its sides (its best offer each way) and slots. */
