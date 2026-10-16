@@ -1,5 +1,5 @@
 {
-  "$comment": "Every AmmConfig of the four Raydium-code programs, index 0 to 199 (the program address of [\"amm_config\", index] as a big-endian u16), as mainnet-beta held them when read: each account's owner, lamports and data, its trade fee rate (millionths) a u32 at 47 and its tick spacing a u16 at 51. Written by scripts/dump-amm-configs.mjs --redump --rpc-config <file>; svm/pool-keys.test.ts holds svm/pool-keys.ts's table to it.",
+  "$comment": "As mainnet-beta held them when read, each account's owner, lamports and data: under venues, every AmmConfig of the four Raydium-code programs, index 0 to 199 (the program address of [\"amm_config\", index] as a big-endian u16), its trade fee rate (millionths) a u32 at 47 and its tick spacing a u16 at 51; under whirlpools, every fee tier of Orca's and Cropper's WhirlpoolsConfig, index 0 to 4095 (the program address of [\"fee_tier\", config, index] as a little-endian u16), a static tier's tick spacing a u16 at 40, an adaptive-fee tier's index a u16 at 40 and its tick spacing a u16 at 42. Written by scripts/dump-amm-configs.mjs --redump --rpc-config <file>; svm/pool-keys.test.ts holds svm/pool-keys.ts's tables to it.",
   "read": "2026-10-16T10:41:38.091Z",
   "venues": {
     "Raydium.CLMM": {

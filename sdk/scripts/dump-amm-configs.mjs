@@ -1,17 +1,23 @@
-// Dumps every AmmConfig of the four Raydium-code programs on Solana mainnet (Raydium CLMM,
-// PancakeSwap CLMM, Byreal, Stabble CLMM) into the test-only fixture
-// `test/fixtures/svm-pool-keys/amm-configs.json`, which `svm/pool-keys.test.ts` holds
-// `src/svm/pool-keys.ts`'s table to: a program finds a pool of these venues by its fee, and the
-// config that charges it is the program address of `["amm_config", index]`, its fee rate a u32 at
-// 47, its tick spacing a u16 at 51.
+// Dumps the accounts a program finds a Solana pool by key through, from mainnet, into the test-only
+// fixture `test/fixtures/svm-pool-keys/amm-configs.json`, which `svm/pool-keys.test.ts` holds
+// `src/svm/pool-keys.ts`'s tables to:
+//
+//   - every AmmConfig of the four Raydium-code programs (Raydium CLMM, PancakeSwap CLMM, Byreal,
+//     Stabble CLMM), the program address of `["amm_config", index]` (u16 big-endian), its fee rate a
+//     u32 at 47 and its tick spacing a u16 at 51: a program finds such a pool by its fee;
+//   - every fee tier of Orca's and Cropper's WhirlpoolsConfig, the program address of
+//     `["fee_tier", config, index]` (u16 little-endian): a whirlpool is the address of
+//     `["whirlpool", config, mintA, mintB, index]`, and a program finds it by its tick spacing,
+//     which a static tier's index is and an adaptive-fee tier's (at 1024 and up) is not.
 //
 //   node scripts/dump-amm-configs.mjs --redump --rpc-config rpc.config.json
 //   node scripts/dump-amm-configs.mjs --check --rpc-config rpc.config.json
 //
-// `--redump` reads indexes 0 to 199 of each program and rewrites the fixture with every config
-// there: its index, address, owner, lamports and data. `--check` reads the same and reports each
-// config added, gone or changed since the fixture, writing nothing. A config a program adds is a
-// fee the table may take: redump, then add its row to `pool-keys.ts`.
+// `--redump` reads AmmConfig indexes 0 to 199 and fee tier indexes 0 to 4095 and rewrites the
+// fixture with every account there: its index, address, owner, lamports and data. `--check` reads
+// the same and reports each one added, gone or changed since the fixture, writing nothing. A config
+// or a tier a program adds is a key the tables may take: redump, then add its row to
+// `pool-keys.ts`.
 //
 // The endpoint comes only from the `--rpc-config` file (chain id -> URL), under Solana's chain id
 // 1399811149, as in `dump-eco-routes-svm.mjs`: no default, no fallback, nothing read from the
@@ -20,11 +26,12 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { address, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
 
 const USAGE = "usage: node scripts/dump-amm-configs.mjs (--redump | --check) --rpc-config <path>";
 const SOLANA = "1399811149";
 const INDEXES = 200;
+const FEE_TIERS = 4096;
 
 function fail(message) {
   console.error(`dump-amm-configs: ${message}`);
@@ -61,6 +68,18 @@ if (typeof RPC !== "string" || !/^https?:\/\//.test(RPC)) {
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = join(SDK, "test", "fixtures", "svm-pool-keys", "amm-configs.json");
 
+/** The whirlpool programs and their WhirlpoolsConfig, by the namespace a program writes. */
+const WHIRLPOOLS = {
+  "Orca.Whirlpool": {
+    program: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+    config: "2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ",
+  },
+  "Cropper.Whirlpool": {
+    program: "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+    config: "2CmCWqXhw7f3jCnvJg74t4vsm62DTUbKQPWL7NX8oCpL",
+  },
+};
+
 /** The four programs, by the namespace a program writes. */
 const PROGRAMS = {
   "Raydium.CLMM": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
@@ -83,28 +102,29 @@ async function rpc(method, params) {
   return body.result;
 }
 
-const index16 = (index) => {
+const text = (value) => new TextEncoder().encode(value);
+const index16 = (index, littleEndian = false) => {
   const bytes = new Uint8Array(2);
-  new DataView(bytes.buffer).setUint16(0, index, false);
+  new DataView(bytes.buffer).setUint16(0, index, littleEndian);
   return bytes;
 };
 
-/** Every config of `program` at indexes 0 to 199, in index order. */
-async function configsOf(program) {
+/** Each account `program` keeps at `seedsOf(index)` for indexes 0 to `count` − 1, in index order. */
+async function accountsAt(program, count, seedsOf) {
   const keys = await Promise.all(
     Array.from(
-      { length: INDEXES },
+      { length: count },
       async (_, index) =>
         (
           await getProgramDerivedAddress({
             programAddress: address(program),
-            seeds: [new TextEncoder().encode("amm_config"), index16(index)],
+            seeds: seedsOf(index),
           })
         )[0],
     ),
   );
-  // Every chunk of 100 read at once; the configs kept in index order.
-  const starts = Array.from({ length: Math.ceil(INDEXES / 100) }, (_, k) => k * 100);
+  // Every chunk of 100 read at once; the accounts kept in index order.
+  const starts = Array.from({ length: Math.ceil(count / 100) }, (_, k) => k * 100);
   const reads = await Promise.all(
     starts.map((start) =>
       rpc("getMultipleAccounts", [
@@ -113,12 +133,12 @@ async function configsOf(program) {
       ]),
     ),
   );
-  const configs = [];
+  const found = [];
   reads.forEach(({ value }, k) =>
     value.forEach((account, i) => {
       if (account === null || account.owner !== program) return;
       const index = starts[k] + i;
-      configs.push({
+      found.push({
         index,
         address: keys[index],
         owner: account.owner,
@@ -128,12 +148,26 @@ async function configsOf(program) {
     }),
   );
 
-  return configs;
+  return found;
 }
 
-const read = { venues: {} };
+const read = { venues: {}, whirlpools: {} };
 for (const [venue, program] of Object.entries(PROGRAMS)) {
-  read.venues[venue] = { program, configs: await configsOf(program) };
+  read.venues[venue] = {
+    program,
+    configs: await accountsAt(program, INDEXES, (index) => [text("amm_config"), index16(index)]),
+  };
+}
+for (const [venue, { program, config }] of Object.entries(WHIRLPOOLS)) {
+  read.whirlpools[venue] = {
+    program,
+    config,
+    feeTiers: await accountsAt(program, FEE_TIERS, (index) => [
+      text("fee_tier"),
+      new Uint8Array(getAddressEncoder().encode(address(config))),
+      index16(index, true),
+    ]),
+  };
 }
 
 if (cli.values.redump) {
@@ -144,26 +178,32 @@ if (cli.values.redump) {
   );
   for (const [venue, { configs }] of Object.entries(read.venues))
     console.log(`${venue}: ${configs.length} configs`);
+  for (const [venue, { feeTiers }] of Object.entries(read.whirlpools))
+    console.log(`${venue}: ${feeTiers.length} fee tiers`);
   console.log(`wrote ${FIXTURE}; run prettier on it, and review the diff`);
 } else {
   const fixture = JSON.parse(readFileSync(FIXTURE, "utf8"));
   let moved = 0;
-  for (const [venue, { configs }] of Object.entries(read.venues)) {
-    const before = new Map(fixture.venues[venue].configs.map((one) => [one.index, one]));
-    const now = new Map(configs.map((one) => [one.index, one]));
+  const compare = (what, held, read) => {
+    const before = new Map((held ?? []).map((one) => [one.index, one]));
+    const now = new Map(read.map((one) => [one.index, one]));
     for (const [index, one] of now) {
       const was = before.get(index);
-      if (was === undefined) console.log(`${venue} config ${index}: added`);
-      else if (was.base64Data !== one.base64Data) console.log(`${venue} config ${index}: changed`);
+      if (was === undefined) console.log(`${what} ${index}: added`);
+      else if (was.base64Data !== one.base64Data) console.log(`${what} ${index}: changed`);
       else continue;
       moved++;
     }
     for (const index of before.keys()) {
       if (now.has(index)) continue;
-      console.log(`${venue} config ${index}: gone`);
+      console.log(`${what} ${index}: gone`);
       moved++;
     }
-  }
-  console.log(moved === 0 ? "the fixture is mainnet's" : `${moved} configs moved`);
+  };
+  for (const [venue, { configs }] of Object.entries(read.venues))
+    compare(`${venue} config`, fixture.venues[venue]?.configs, configs);
+  for (const [venue, { feeTiers }] of Object.entries(read.whirlpools))
+    compare(`${venue} fee tier`, fixture.whirlpools?.[venue]?.feeTiers, feeTiers);
+  console.log(moved === 0 ? "the fixture is mainnet's" : `${moved} accounts moved`);
   if (moved > 0) process.exit(1);
 }
