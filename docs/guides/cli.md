@@ -1282,8 +1282,8 @@ Uint256, reward: Uint256)`. The second makes that file for you, step by step. Be
 either, the command reads Solana (`--config` with chain id `1399811149`, or its public endpoint):
 which token accounts exist, and for a program, whether the Pot Solana's Portal owns exists. A
 wallet with no account for the token gets one, created by the route, its rent (about 0.002 SOL)
-added to what the solver delivers. An intent whose fill would not fit one Solana transaction is
-refused before anything is sent.
+added to what the solver delivers. An intent whose fill would not fit one Solana transaction, even
+with its accounts in a lookup table, is refused before anything is sent.
 
 An intent an EVM chain publishes for Solana (eco-routes' Solana deposit addresses publish one per
 deposit) is filled, proven and cancelled through Solana's Portal program, and claimed or refunded on
@@ -1308,6 +1308,10 @@ sauce intent claim 0x<intent hash> --keystore ~/.keys/me.json
   eco-routes' proof_helper paying Hyperlane's Interchain Gas Paymaster for the message's delivery in
   the same transaction. What the proof spends (the gas paymaster's quote and the message accounts'
   rent) is measured by a simulation and approved. `--no-prove` leaves it to `prove`.
+- A fill too large for one transaction takes its accounts through an address lookup table. `fill`
+  without `--send` lists the transactions that create it first, and cannot simulate the fill until
+  the table exists; with `--send` it creates the table, waits a slot for it, then simulates and sends
+  the fill. The table's rent is the solver's, and `sauce reclaim --chain solana` closes it later.
 - **`prove`** and **`cancel`** sign with `--keypair`, which pays their fee: their transactions are
   built for it, so on Solana they need it. A cancellation's proof waits until the slot that
   cancelled it is finalized; `--and-prove` sends the cancellation and its proof in one transaction.
