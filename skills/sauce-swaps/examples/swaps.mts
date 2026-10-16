@@ -189,8 +189,10 @@ check(
   "the SVM arm exports those and each venue's instruction alone and its data",
 );
 const signature = "slot, trader, amountIn, priceLimit, minOut, recipient";
+// The eight concentrated-liquidity ones take the stop the command works out after them; Phoenix's
+// book takes none.
 check(
-  solana.includes(`orcaWhirlpool(${signature}): Uint256`),
+  solana.includes(`orcaWhirlpool(${signature}, stop): Uint256`),
   "the skill gives the functions' arguments",
 );
 check(
@@ -212,7 +214,7 @@ for (const [, name, args] of svmExports.filter((m) => limit.has(m[1]!))) {
       ? /^program, accounts, source, amountIn\b/
       : name!.endsWith("AtLimit") || name === "manifest"
         ? /^slot, trader, amountIn, (limit|ticks|priceLots, orders), minOut, recipient$|^slot, trader, amountIn, minOut, recipient$/
-        : new RegExp(`^${signature}$`);
+        : new RegExp(`^${signature}${name === "phoenix" ? "" : ", stop"}$`);
   check(want.test(argsOf(args!)), `${name}(${argsOf(args!)})`);
 }
 // The exact-input venues: each one the skill names exported plain, as `Cpi` and as `Data`, the ones it
