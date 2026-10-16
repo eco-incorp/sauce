@@ -1,28 +1,27 @@
 // A limit buy over Base's Aerodrome Slipstream, Uniswap V3 and hookless Uniswap V4 pools: up to
-// `budget` of `payToken` for `buyToken`, never more than `maxPrice` for any unit, fees included.
+// `budget` of `payToken` for `buyToken`, never more than `priceLimit` for any unit, fees included.
 //
 //   sauce run distributed-swap.sauce.ts --chain <chain> --keystore <keystore> \
-//     --fund <payToken>:<budget> --args <payToken> <buyToken> <budget> <maxPrice> <minTokens> \
-//     <maxAvgPrice> <recipient> <refundTo>
+//     --fund <payToken>:<budget> --args <payToken> <buyToken> <budget> <priceLimit> <minTokens> \
+//     <maxAvgPrice> <recipient>
 //
 //   payToken: Address     the token paid; the budget must be in the Pot (`--fund` pulls it in)
 //   buyToken: Address     the token bought
 //   budget: Uint256       the most payToken to spend, in its base units: 1000000000 is 1,000 USDC
-//   maxPrice: Uint256     the most one buyToken may cost, fees included: the price in whole tokens
+//   priceLimit: Uint256   the most one buyToken may cost, fees included: the price in whole tokens
 //                         times 10^(18 + payDecimals − buyDecimals)
 //   minTokens: Uint256    the least buyToken to receive, in its base units; less reverts the cook
-//   maxAvgPrice: Uint256  the most the average may cost, in maxPrice's units; 0 turns it off
-//   recipient: Address    receives what is bought
-//   refundTo: Address     receives what is left of the budget
+//   maxAvgPrice: Uint256  the most the average may cost, in priceLimit's units; 0 turns it off
+//   recipient: Address    receives what is bought; what is left of the budget stays in the Pot
 //
 //   SPCXc (8 decimals) for all of 1,000 USDC (6) or nothing, at most 150 each, 149.25 on average:
 //   sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> --fund USDC:1000 \
 //     --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
-//     1000000000 1500000000000000000 666666667 1492500000000000000 <recipient> <refundTo>
+//     1000000000 1500000000000000000 666666667 1492500000000000000 <recipient>
 //   WETH (18 decimals) for all of 3,000 USDC or nothing, at most 2,713.5 each, 2,706.75 on average:
 //   sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> --fund USDC:3000 \
 //     --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0x4200000000000000000000000000000000000006 \
-//     3000000000 2713500000 1105583195135433942 2706750000 <recipient> <refundTo>
+//     3000000000 2713500000 1105583195135433942 2706750000 <recipient>
 import { uniswapV3, uniswapV4 } from "@sauce/router";
 
 // One pool: skipped when missing, empty or already past its own limit, else offered all of the
@@ -66,7 +65,7 @@ function trade(
     fee = protocolFee + lpFee - (protocolFee * lpFee) / 1000000;
   }
   // The pool's own limit: the caller's moved by √(1 − fee), so that its last unit, fee paid,
-  // costs exactly maxPrice. Paying token0 pushes the price down, token1 pushes it up.
+  // costs exactly priceLimit. Paying token0 pushes the price down, token1 pushes it up.
   const root = Math.sqrt((1000000 - fee) * 10 ** 30); // √(1 − fee), times 1e18
   const own = paysToken0 ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
   const better = paysToken0 ? price > own : price < own;
@@ -86,23 +85,22 @@ function main(
   payToken: Address,
   buyToken: Address,
   budget: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minTokens: Uint256,
   maxAvgPrice: Uint256,
   recipient: Address,
-  refundTo: Address,
 ): { spent: Uint256; bought: Uint256; unspent: Uint256 } {
   const self = ctx.self();
   const pay = Token(payToken);
-  require(maxPrice > 0, "maxPrice is 0");
+  require(priceLimit > 0, "priceLimit is 0");
   require(pay.balanceOf(self) >= budget, "budget is not in the Pot");
   const kept = pay.balanceOf(self) - budget; // the Pot's other payToken, never spent
   let bought = 0;
 
-  // maxPrice as a pool's sqrt price (token1 per token0, times 2^96): where a unit costs maxPrice.
-  let limit = Math.sqrt(Math.mulDiv(maxPrice, 1 << 192, 10 ** 18));
+  // priceLimit as a pool's sqrt price (token1 per token0, times 2^96): where a unit costs priceLimit.
+  let limit = Math.sqrt(Math.mulDiv(priceLimit, 1 << 192, 10 ** 18));
   if (payToken < buyToken) {
-    limit = Math.sqrt(Math.mulDiv(1 << 192, 10 ** 18, maxPrice));
+    limit = Math.sqrt(Math.mulDiv(1 << 192, 10 ** 18, priceLimit));
   }
 
   // The loops only find pools; trade() decides and swaps. Slipstream, keyed by tick spacing.
@@ -129,13 +127,11 @@ function main(
     bought += trade(2, id, key.spacing, payToken, buyToken, kept, limit, recipient);
   }
 
-  // Settle: what was bought is already with the recipient; what is left of the budget goes back.
+  // Settle: what was bought is already with the recipient. What is left of the budget stays in the
+  // Pot, the owner's, for a later cook: `unspent` says how much.
   const unspent = pay.balanceOf(self) - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
-  if (unspent > 0) {
-    pay.transfer(refundTo, unspent);
-  }
   return { spent, bought, unspent };
 }

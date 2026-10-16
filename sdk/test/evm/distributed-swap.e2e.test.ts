@@ -30,11 +30,11 @@
  * at 2,702 with liquidity and a protocol fee of 0.1% paying token1 (0.02% paying token0), 1% at
  * 2,690 with liquidity, past its own limit both ways. What the skill says the program does, and
  * this holds it to: a missing pool, an empty one and one past its own limit are skipped; each pool
- * stops at its own limit, `maxPrice` moved by √(1 − fee) with the fee read from the pool (for V4,
- * this direction's protocol fee composed with the LP fee), so every fill costs at most `maxPrice`
- * with its fee paid, on average and at its last unit, which costs `maxPrice`; the budget's unspent
- * rest goes to `refundTo` and the Pot's other balance stays; `minTokens` at `budget × 1e18 ÷
- * maxPrice` buys all of the budget or reverts, and `maxAvgPrice` reverts; `main` returns
+ * stops at its own limit, `priceLimit` moved by √(1 − fee) with the fee read from the pool (for V4,
+ * this direction's protocol fee composed with the LP fee), so every fill costs at most `priceLimit`
+ * with its fee paid, on average and at its last unit, which costs `priceLimit`; the budget's unspent
+ * rest stays in the Pot, beside its other balance; `minTokens` at `budget × 1e18 ÷
+ * priceLimit` buys all of the budget or reverts, and `maxAvgPrice` reverts; `main` returns
  * `{ spent, bought, unspent }`, the same three words `abi.encode` gave, and `sauce simulate` prints
  * them by name. What each guard is for, by taking it out. And what a lookup costs.
  *
@@ -128,7 +128,6 @@ const OWNER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 );
 const RECIPIENT = getAddress("0x7777777777777777777777777777777777777777");
-const REFUND_TO = getAddress("0x8888888888888888888888888888888888888888");
 /** A port from the OS, so no other suite or checkout meets this one on it (`anvil-process.ts`). */
 const PORT = freePortSync();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
@@ -153,13 +152,13 @@ const Q192 = 2n ** 192n;
 const E18 = 10n ** 18n;
 const ZERO = "0x0000000000000000000000000000000000000000";
 
-/** `maxPrice` buying WETH with USDC, for a price in tenths of a USDC: USDC units per WETH unit, times
+/** `priceLimit` buying WETH with USDC, for a price in tenths of a USDC: USDC units per WETH unit, times
  *  1e18, which for 6 and 18 decimals is the price times 1e6. */
 const usdcPerWeth = (tenths: bigint): bigint => tenths * 10n ** 5n;
-/** `maxPrice` buying USDC with WETH, for a price in USDC per WETH: WETH units per USDC unit. */
+/** `priceLimit` buying USDC with WETH, for a price in USDC per WETH: WETH units per USDC unit. */
 const wethPerUsdc = (tenths: bigint): bigint => (E18 * E18 * 10n) / (tenths * 10n ** 6n);
-/** 2,713.5 USDC per WETH: the `maxPrice` most tests buy at, the skill's own. */
-const MAX_PRICE = usdcPerWeth(27_135n);
+/** 2,713.5 USDC per WETH: the `priceLimit` most tests buy at, the skill's own. */
+const PRICE_LIMIT = usdcPerWeth(27_135n);
 
 interface Venue {
   kind: "v3" | "cl" | "v4";
@@ -309,18 +308,17 @@ const compiled = (source = PROGRAM) => {
   return programs.get(source)!;
 };
 
-/** main(payToken, buyToken, budget, maxPrice, minTokens, maxAvgPrice, recipient, refundTo). */
-type Args = [Address, Address, bigint, bigint, bigint, bigint, Address, Address];
-/** Buying WETH with `budget` USDC at most `maxPrice`, with no minimum and no average cap. */
-const buying = (budget: bigint, maxPrice = MAX_PRICE): Args => [
+/** main(payToken, buyToken, budget, priceLimit, minTokens, maxAvgPrice, recipient). */
+type Args = [Address, Address, bigint, bigint, bigint, bigint, Address];
+/** Buying WETH with `budget` USDC at most `priceLimit`, with no minimum and no average cap. */
+const buying = (budget: bigint, priceLimit = PRICE_LIMIT): Args => [
   USDC,
   WETH,
   budget,
-  maxPrice,
+  priceLimit,
   0n,
   0n,
   RECIPIENT,
-  REFUND_TO,
 ];
 
 /** The cook of the program with `main`'s arguments, as `sauce tx` builds it. */
@@ -405,24 +403,24 @@ const fills = (receipt: TransactionReceipt): Fill[] =>
     });
   });
 
-/** A fill's last unit, against `maxPrice` with its fee paid: `[cost, bound]`, cost ≤ bound when it
+/** A fill's last unit, against `priceLimit` with its fee paid: `[cost, bound]`, cost ≤ bound when it
  *  is within. Paying token1, a token0 costs price ÷ (1 − fee); paying token0, a token1 costs
- *  1 ÷ (price × (1 − fee)). Both as cost × (1 − fee) × 2^192 × 1e6 against maxPrice's side. */
-const lastUnit = (fill: Fill, maxPrice: bigint, paysToken0: boolean): [bigint, bigint] => {
+ *  1 ÷ (price × (1 − fee)). Both as cost × (1 − fee) × 2^192 × 1e6 against priceLimit's side. */
+const lastUnit = (fill: Fill, priceLimit: bigint, paysToken0: boolean): [bigint, bigint] => {
   const square = fill.sqrtPriceX96 * fill.sqrtPriceX96; // token1 per token0, times 2^192
   return paysToken0
-    ? [Q192 * 1_000_000n * E18, maxPrice * square * (1_000_000n - fill.fee)]
-    : [square * 1_000_000n * E18, maxPrice * Q192 * (1_000_000n - fill.fee)];
+    ? [Q192 * 1_000_000n * E18, priceLimit * square * (1_000_000n - fill.fee)]
+    : [square * 1_000_000n * E18, priceLimit * Q192 * (1_000_000n - fill.fee)];
 };
 
 /**
- * A fill costs at most `maxPrice` (payToken units per buyToken unit, times 1e18) with its fee paid:
+ * A fill costs at most `priceLimit` (payToken units per buyToken unit, times 1e18) with its fee paid:
  * on average, and at its last unit, the pool's price after the swap. `atLimit`: and that last unit
- * costs `maxPrice` itself, to within 0.001%, as it does for a pool that stopped at its own limit.
+ * costs `priceLimit` itself, to within 0.001%, as it does for a pool that stopped at its own limit.
  */
-const expectWithin = (fill: Fill, maxPrice: bigint, paysToken0: boolean, atLimit = false) => {
-  expect(fill.paid * E18).toBeLessThanOrEqual(maxPrice * fill.got);
-  const [cost, bound] = lastUnit(fill, maxPrice, paysToken0);
+const expectWithin = (fill: Fill, priceLimit: bigint, paysToken0: boolean, atLimit = false) => {
+  expect(fill.paid * E18).toBeLessThanOrEqual(priceLimit * fill.got);
+  const [cost, bound] = lastUnit(fill, priceLimit, paysToken0);
   expect(cost).toBeLessThanOrEqual(bound);
   if (atLimit) expect(cost * 100_001n).toBeGreaterThanOrEqual(bound * 100_000n);
 };
@@ -575,7 +573,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     }
   });
 
-  it("buys with all of the budget across two pools, each fill within maxPrice", async () => {
+  it("buys with all of the budget across two pools, each fill within priceLimit", async () => {
     const budget = 2_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
     const empty = await priceOf(venue("v3:10000"));
@@ -586,13 +584,12 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const swapped = fills(receipt);
     // Slipstream first, to its own limit, then the 0.05% Uniswap V3 pool with the rest.
     expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500"]);
-    swapped.forEach((fill, i) => expectWithin(fill, MAX_PRICE, false, i < 1));
+    swapped.forEach((fill, i) => expectWithin(fill, PRICE_LIMIT, false, i < 1));
     expect([spent, unspent]).toEqual([budget, 0n]);
     expect(sum(swapped, "paid")).toBe(budget);
     expect(bought).toBe(sum(swapped, "got"));
     expect(await balance(WETH, RECIPIENT)).toBe(bought);
     expect(await balance(USDC, sauce.pot)).toBe(0n);
-    expect(await balance(USDC, REFUND_TO)).toBe(0n);
     // The empty 1% pool, priced inside its limit, was not touched.
     expect(await priceOf(venue("v3:10000"))).toBe(empty);
     console.log(`full fill: gas ${receipt.gasUsed}, ${bought} WETH units for ${budget} USDC units`);
@@ -637,11 +634,10 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
         USDC,
         WETH,
         String(budget),
-        String(MAX_PRICE),
+        String(PRICE_LIMIT),
         "0",
         "0",
         RECIPIENT,
-        REFUND_TO,
       ],
       io,
     );
@@ -657,7 +653,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     console.log(stdout);
   });
 
-  it("spends only what maxPrice allows: every pool with liquidity, V4's too, stops at its own limit", async () => {
+  it("spends only what priceLimit allows: every pool with liquidity, V4's too, stops at its own limit", async () => {
     const budget = 5_000n * 10n ** 6n;
     const kept = 123n * 10n ** 6n; // the Pot's own USDC, not part of the budget
     await call(USDC, erc20, "mint", [sauce.pot, budget + kept]);
@@ -672,13 +668,13 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     // pool's fee is its LP fee and the 0.1% protocol fee for paying token1, composed.
     expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500", "v3:3000", "v4:500"]);
     expect(swapped[3]!.fee).toBe(1500n);
-    // Every pool stopped at its own limit: every unit within maxPrice, the last at it.
-    for (const fill of swapped) expectWithin(fill, MAX_PRICE, false, true);
+    // Every pool stopped at its own limit: every unit within priceLimit, the last at it.
+    for (const fill of swapped) expectWithin(fill, PRICE_LIMIT, false, true);
     expect(spent).toBe(sum(swapped, "paid"));
     expect(spent + unspent).toBe(budget);
     expect(unspent).toBeGreaterThan(0n);
-    expect(await balance(USDC, REFUND_TO)).toBe(unspent);
-    expect(await balance(USDC, sauce.pot)).toBe(kept);
+    // What the limits left of the budget stays in the Pot, beside the Pot's own.
+    expect(await balance(USDC, sauce.pot)).toBe(kept + unspent);
     expect(await balance(WETH, RECIPIENT)).toBe(bought);
     // The empty V3 pool, the empty V4 pool and the V4 pool past its own limit were not touched.
     expect(await Promise.all(untouched.map(priceOf))).toEqual(before);
@@ -687,22 +683,22 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
 
   it("buys USDC with WETH the same way: paying token0, each pool down to its own limit", async () => {
     const budget = 4n * 10n ** 18n;
-    const maxPrice = wethPerUsdc(26_865n); // at least 2,686.5 USDC for each WETH
+    const priceLimit = wethPerUsdc(26_865n); // at least 2,686.5 USDC for each WETH
     await call(WETH, erc20, "mint", [sauce.pot, budget]);
 
-    const receipt = await cook([WETH, USDC, budget, maxPrice, 0n, 0n, RECIPIENT, REFUND_TO]);
+    const receipt = await cook([WETH, USDC, budget, priceLimit, 0n, 0n, RECIPIENT]);
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
     expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500", "v3:3000", "v4:500"]);
     // Paying token0, the V4 pool's protocol fee is the low 12 bits': 0.02%.
     expect(swapped[3]!.fee).toBe(700n);
-    for (const fill of swapped) expectWithin(fill, maxPrice, true, true);
+    for (const fill of swapped) expectWithin(fill, priceLimit, true, true);
     const spent = sum(swapped, "paid");
-    expect(await balance(WETH, REFUND_TO)).toBe(budget - spent);
+    expect(await balance(WETH, sauce.pot)).toBe(budget - spent);
     expect(await balance(USDC, RECIPIENT)).toBe(sum(swapped, "got"));
   });
 
-  it("skips every pool already past its own limit, and refunds the whole budget", async () => {
+  it("skips every pool already past its own limit, and leaves the whole budget in the Pot", async () => {
     const budget = 1_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
     // At most 2,700: each pool's own limit is below its price (the 0.05% V3 pool's is 2,698.65, the
@@ -712,22 +708,22 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const receipt = await cook(args);
     expect(receipt.status).toBe("success");
     expect(fills(receipt)).toEqual([]);
-    expect(await balance(USDC, REFUND_TO)).toBe(budget);
+    expect(await balance(USDC, sauce.pot)).toBe(budget);
   });
 
-  it("minTokens at budget × 1e18 ÷ maxPrice, rounded up: all of the budget, or the cook reverts", async () => {
+  it("minTokens at budget × 1e18 ÷ priceLimit, rounded up: all of the budget, or the cook reverts", async () => {
     const allOrNothing = (budget: bigint): Args => {
       const args = buying(budget);
-      args[4] = (budget * E18 + MAX_PRICE - 1n) / MAX_PRICE;
+      args[4] = (budget * E18 + PRICE_LIMIT - 1n) / PRICE_LIMIT;
       return args;
     };
-    // 2,000 USDC fits within maxPrice: it is all spent, and buys more than the minimum.
+    // 2,000 USDC fits within priceLimit: it is all spent, and buys more than the minimum.
     await call(USDC, erc20, "mint", [sauce.pot, 7_000n * 10n ** 6n]);
     const fits = allOrNothing(2_000n * 10n ** 6n);
     const { spent, bought } = await returned(fits);
     expect(spent).toBe(fits[2]);
     expect(bought).toBeGreaterThanOrEqual(fits[4]);
-    // 5,000 does not: the pools take about 3,700 within maxPrice, so the cook reverts.
+    // 5,000 does not: the pools take about 3,700 within priceLimit, so the cook reverts.
     await expect(rehearse(allOrNothing(5_000n * 10n ** 6n))).rejects.toThrow(
       /bought below minTokens/,
     );
@@ -751,19 +747,19 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(await balance(WETH, RECIPIENT)).toBe(0n);
   });
 
-  it("maxAvgPrice halfway from the rehearsal's average to maxPrice: lands as rehearsed, reverts once the market moves", async () => {
+  it("maxAvgPrice halfway from the rehearsal's average to priceLimit: lands as rehearsed, reverts once the market moves", async () => {
     const budget = 2_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
     const { spent, bought } = await returned(buying(budget));
-    const average = (spent * E18) / bought; // maxPrice's units
+    const average = (spent * E18) / bought; // priceLimit's units
     const capped = buying(budget);
-    capped[5] = (average + MAX_PRICE + 1n) / 2n;
-    expect(capped[5]).toBeLessThan(MAX_PRICE);
+    capped[5] = (average + PRICE_LIMIT + 1n) / 2n;
+    expect(capped[5]).toBeLessThan(PRICE_LIMIT);
     const rehearsal = await snapshotNow();
     expect((await cook(capped)).status).toBe("success");
 
-    // Another buyer takes most of what the pools hold within maxPrice first: the same cook would
-    // now average close to maxPrice, past the cap, and reverts.
+    // Another buyer takes most of what the pools hold within priceLimit first: the same cook would
+    // now average close to priceLimit, past the cap, and reverts.
     await testClient.revert({ id: rehearsal });
     await call(USDC, erc20, "mint", [sauce.pot, 3_500n * 10n ** 6n]);
     expect((await cook(buying(3_500n * 10n ** 6n))).status).toBe("success");
@@ -776,7 +772,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     await expect(rehearse(buying(1n))).rejects.toThrow(/budget is not in the Pot/);
   });
 
-  it("without the √(1 − fee), a 0.3% pool's last unit costs more than maxPrice", async () => {
+  it("without the √(1 − fee), a 0.3% pool's last unit costs more than priceLimit", async () => {
     // Enough for every pool to reach the looser limits, the V4 pools' included.
     const budget = 10_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
@@ -786,12 +782,12 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(receipt.status).toBe("success");
     for (const name of ["v3:3000", "v4:500"]) {
       const pricier = fills(receipt).find((fill) => fill.venue === name)!;
-      const [cost, bound] = lastUnit(pricier, MAX_PRICE, false);
+      const [cost, bound] = lastUnit(pricier, PRICE_LIMIT, false);
       expect(cost).toBeGreaterThan(bound);
     }
   });
 
-  it("with the other direction's protocol fee, the V4 pool's last unit costs more than maxPrice", async () => {
+  it("with the other direction's protocol fee, the V4 pool's last unit costs more than priceLimit", async () => {
     const budget = 5_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
     const swapped = replacing(
@@ -803,7 +799,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(receipt.status).toBe("success");
     const v4 = fills(receipt).find((fill) => fill.venue === "v4:500")!;
     expect(v4.fee).toBe(1500n);
-    const [cost, bound] = lastUnit(v4, MAX_PRICE, false);
+    const [cost, bound] = lastUnit(v4, PRICE_LIMIT, false);
     expect(cost).toBeGreaterThan(bound);
   });
 
