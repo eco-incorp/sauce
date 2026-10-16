@@ -1909,16 +1909,37 @@ function renderTokens(data, globalsSkill) {
 }
 
 /**
+ * The sections of a SKILL.md that route an agent rather than inform a reader: which skill to load
+ * instead, and the skill's own files. A guide rendered from a skill leaves them out.
+ */
+const AGENT_SECTIONS = new Set(["When to use", "Files"]);
+
+/** `lines` less each `## ` section AGENT_SECTIONS names, from its heading to the next one. */
+function readerSections(lines) {
+  const kept = [];
+  let fenced = false;
+  let dropping = false;
+  for (const line of lines) {
+    if (line.startsWith("```")) fenced = !fenced;
+    if (!fenced && line.startsWith("## ")) dropping = AGENT_SECTIONS.has(line.slice(3).trim());
+    if (!dropping) kept.push(line);
+  }
+
+  return kept;
+}
+
+/**
  * A skill's SKILL.md as a guide in the manual, at `from` (relative to `docs/reference/`): its
- * frontmatter dropped, the code block that is its example's code shown as the whole example file
- * (header and all, which the page refers to), each link replaced as `links` says (`[label, href]`,
- * or `[label]` for no link: a file the manual does not ship), and its skill names linked.
+ * frontmatter and its agent-only sections (AGENT_SECTIONS) dropped, the code block that is its
+ * example's code shown as the whole example file (header and all, which the page refers to), each
+ * link replaced as `links` says (`[label, href]`, or `[label]` for no link: a file the manual does
+ * not ship), and its skill names linked.
  */
 function renderSkillGuide(source, skill, example, links, from) {
   const body = skill.replace(/^---\n[^]*?\n---\n+/, "");
   const lines = [];
   let block;
-  for (const line of body.split("\n")) {
+  for (const line of readerSections(body.split("\n"))) {
     if (block === undefined && line.startsWith("```")) {
       block = [line];
       continue;
