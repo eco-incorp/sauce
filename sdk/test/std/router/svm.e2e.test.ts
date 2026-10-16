@@ -360,6 +360,39 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     );
   });
 
+  // A pool priced past its own tick bitmap takes its bitmap extension among its tick arrays, in the
+  // first place (`svm/pool-slot.ts`). Each fork of Raydium's code finds the extension there by its
+  // key and reads the arrays after it: a slot whose first place is the extension swaps exactly as
+  // the slot of three arrays does.
+  it.each([
+    "raydium-clmm-sol-usdc",
+    "pancakeswap-clmm-sol-usdc",
+    "byreal-usdc",
+    "stabble-clmm-usdc-usdt",
+  ])(
+    "%s: its bitmap extension in the first tick-array place is passed over by its key",
+    async (name) => {
+      const entry = VENUES.find((one) => one.pool === name)!;
+      const order = await orderFor(entry);
+      const p = order.pool;
+      const ticks = key(USDC) < key(order.buy) ? p.payA : p.payB;
+      const plain = succeeded(await cook(compiled(lower(entry.venue)), order));
+      expect(plain.received).toBeGreaterThan(0n);
+      const extended = succeeded(
+        await cook(compiled(lower(entry.venue)), {
+          ...order,
+          ticks: [p.more![0]!, ticks[0]!, ticks[1]!],
+        }),
+      );
+      expect([extended.received, extended.paid, extended.price]).toEqual([
+        plain.received,
+        plain.paid,
+        plain.price,
+      ]);
+    },
+    120_000,
+  );
+
   // Crema refuses a tick array its map does not mark, so a slot names fewer by the System program,
   // and the swap at a price passes only the arrays before it.
   it("Crema: a slot of one tick array passes one", async () => {

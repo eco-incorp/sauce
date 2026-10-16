@@ -347,12 +347,14 @@ async function raydiumTickArrays(
     const read = await load(extension);
     extended = read !== null && BITMAP_EXTENSION.every((byte, i) => read[i] === byte) ? read : null;
   }
-  const reach = 15 * edge; // the extension's last bitmap ends here, each way
+  // The search spans the bitmaps read: the pool's own, and past it the extension's 14 each way.
+  const reach = extended === undefined || extended === null ? edge : 15 * edge;
+  const within = (start: number) => start >= -reach && start < reach;
   const step = down ? -span : span;
   const starts: number[] = [];
-  for (let start = current; starts.length < 3 && Math.abs(start) < reach; start += step)
+  for (let start = current; starts.length < 3 && within(start); start += step)
     if (marked(start)) starts.push(start);
-  for (let start = current - step; starts.length < 3 && Math.abs(start) < reach; start -= step)
+  for (let start = current - step; starts.length < 3 && within(start); start -= step)
     if (marked(start)) starts.push(start);
   const at = (start: number) => {
     const seed = new Uint8Array(4);
