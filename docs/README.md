@@ -57,8 +57,8 @@ From your application, in TypeScript:
   amount it measured.
 - [Builders](guides/builders-and-actions.md): generate programs from data your application already
   has.
-- [Testing programs](guides/testing.md): run your programs on a local copy of a chain from your
-  tests, recorded once and replayed offline.
+- [Testing programs](guides/testing.md): run your programs on a local copy of a chain, EVM or
+  Solana, from your tests, recorded once and replayed offline.
 - [Verification](guides/verification.md): check that a settlement someone hands you is what it
   claims to be.
 

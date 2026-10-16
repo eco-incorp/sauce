@@ -19,7 +19,8 @@ function rentSysvar() {
 const rentExempt = (size) => (128n + BigInt(size)) * 5080n;
 
 /**
- * Serves `accounts` (address -> { owner, data }) beside the Rent sysvar, the fee config at
+ * Serves `accounts` (address -> { owner, data, and optionally lamports and executable: rent-exempt
+ * and not, unless given }) beside the Rent sysvar, the fee config at
  * `feeConfig` (when given) charging `fee` lamports, and a clock at `slot`. A scan
  * (`getProgramAccounts`) of a program in `refuseScans` is always refused, and the first
  * `rateLimitScans` scans of any program are, as a rate-limited endpoint refuses them; a scan of a
@@ -54,8 +55,8 @@ export async function solanaRpcStub({
     const data = Buffer.from(account.data);
     return {
       data: [data.toString("base64"), "base64"],
-      executable: false,
-      lamports: Number(rentExempt(data.length)),
+      executable: account.executable === true,
+      lamports: Number(account.lamports ?? rentExempt(data.length)),
       owner: account.owner,
       rentEpoch: 0,
       space: data.length,

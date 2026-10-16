@@ -13,10 +13,12 @@ Follow the [quick start](../docs/guides/quick-start.md) and the
 ## The testing kit
 
 `src/testing` is `@eco-incorp/sauce/testing`, which ships in the package: run programs on a forked
-chain from `node:test`, recorded once and replayed with no RPC. Its guide is
+chain, EVM or Solana, from `node:test`, recorded once and replayed with no RPC. Its guide is
 [Testing programs](../docs/guides/testing.md). Its own suites are `test/testing/`; the Base one
 replays `test/testing/state/base.json.gz`, which `RECAPTURE_ANVIL_STATE=1` records again, reading
-the RPC from the gitignored `sdk/rpc.config.json`.
+the RPC from the gitignored `sdk/rpc.config.json`. The Solana examples suite replays
+`test/testing/state/solana-examples.json.gz`, which `RECAPTURE_SOLANA_STATE=1` records again from
+the SDK's pinned mainnet dumps, served on loopback: no RPC at all.
 
 ## The dev harness
 
