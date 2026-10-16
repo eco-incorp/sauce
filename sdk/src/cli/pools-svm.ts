@@ -462,7 +462,7 @@ async function programAccounts(
     ];
     return [...(await query(pair(first, second))), ...(await query(pair(second, first)))];
   }
-  const layout = CLMM[venue.layout];
+  const layout = CLMM[venue.layout as Exclude<Layout, "phoenix" | "dlmm">];
   return query([
     { dataSize: BigInt(layout.size) },
     {
@@ -523,7 +523,7 @@ async function clmmPool(
   second: Mint,
   load: (key: Address) => Promise<Uint8Array | null>,
 ): Promise<Listed | { why: string }> {
-  const layout = CLMM[venue.layout as Exclude<Layout, "phoenix">];
+  const layout = CLMM[venue.layout as Exclude<Layout, "phoenix" | "dlmm">];
   const liquidity = le(data, layout.liquidity, 16);
   const sqrt = le(data, layout.price, 16);
   let fee: bigint;

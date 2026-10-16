@@ -169,7 +169,7 @@ Base WETH is token0, USDC token1) and two blocks:
 
 Each also gives that direction's average floor `minAvgPrice` (output per input:
 `out * 1e18 >= minAvgPrice * spent`) and the other way round `maxPrice` and `maxAvgPrice` (input per
-output), which the distributed swap takes. Take the limit from the block of the direction you trade.
+output), which the distributed swap takes as its `priceLimit` and `maxAvgPrice`. Take the limit from the block of the direction you trade.
 `--pool <address>` reads a pool's price now.
 
 **Build the limit from the best price a taker gets among pools with liquidity**: drop the pools with
@@ -260,6 +260,11 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
   under both. Where the venue has no pool at the key, the swap returns `0`.
   `sauce pools --chain solana USDC WSOL` prints how a program finds each pool (`byKey`).
   Phoenix's markets are named by their address instead: a `main` parameter declared `Address`.
+- **`Meteora.DLMM`**'s `swap(pool, tokenIn, tokenOut, amountIn, minOut)` is Meteora DLMM's own swap,
+  an exact input with no price limit: it pays all of `amountIn` or the cook fails, and reverts below
+  `minOut`. Its pool is named by its address, its accounts derived the same way, its bin arrays the
+  first two its bitmap marks in the trade's direction (the first alone for a pool with a Token-2022
+  mint): an input past them fails the cook.
 - **Each call compiles to that venue's function below** (`orcaWhirlpool`), keeping every check: the
   venue's program, the pool's owner, the pair, `minOut`. A pool of another venue reverts on chain
   (`not an Orca whirlpool`).
@@ -371,8 +376,8 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
 `aldrin`, `omnipair`, `saber`, `saberDecimalsWrapper`, `stabbleStableSwap`, `stabbleWeightedSwap`,
 `mercurial`, `perena`, `metadaoFutarchy`, `solfiV1`, `solfiV2`, `hadron`, `taurusfi`, `riptide`,
 `denali`, `gavel`, `tesserav`, `flint`, `deriverse`, `goonfiV2`, `meteoraDbc`, `trends`, `heaven`,
-`virtuals`, `xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma` and
-`heliumTreasury`.
+`virtuals`, `xorca`, `solayer`, `voltr`, `vaultLiquidUnstake`, `hyloStabilityPool`, `huma`,
+`heliumTreasury` and `meteoraDlmm`.
 
 | Venues                           | What to know                                                                                                                                                                                                  |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -400,14 +405,15 @@ The venues: `raydiumCpSwap`, `gamma`, `raydiumAmmV4`, `orcaLegacyTokenSwap`, `to
   data written by hand, a `Cpi` form about 7,500 more, and the slot forms about 1,400 more for each
   account they read out of `slot` or `trader`.
 
-A function cannot list more than sixteen accounts, nor a number that varies. `scaleAmm`, `pumpswap`,
-`bonkswap`, `guacswap`, `meteoraDlmm`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo`, `scaleVmm`,
+A function cannot list more than sixteen accounts, nor a number that varies (`meteoraDlmm` fills
+seventeen in place, so its slot carries two bin arrays). `scaleAmm`, `pumpswap`,
+`bonkswap`, `guacswap`, `sarosDlmm`, `raydiumLaunchlab`, `runnerRodeo`, `scaleVmm`,
 `jupiterLendEarn`, `hylo`, `carrot`, `mswap`, `perpsJlp`, `sanctumInfinity` and `archer`, and
 Jupiter Perpetuals' JLP mint, swap with more, so they have only their `Cpi` and `Data` forms:
-`scaleAmmCpi`, `pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `meteoraDlmmCpi`, `sarosDlmmCpi`,
+`scaleAmmCpi`, `pumpswapCpi`, `bonkswapCpi`, `guacswapCpi`, `sarosDlmmCpi`,
 `raydiumLaunchlabCpi`, `runnerRodeoCpi`, `scaleVmmCpi`, `jupiterLendEarnCpi`, `hyloCpi`,
 `carrotCpi`, `mswapCpi`, `perpsJlpCpi`, `perpsJlpMintCpi`, `sanctumInfinityCpi`, `archerCpi`,
-`scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `meteoraDlmmData`, `sarosDlmmData`,
+`scaleAmmData`, `pumpswapData`, `bonkswapData`, `guacswapData`, `sarosDlmmData`,
 `raydiumLaunchlabData`, `runnerRodeoData`, `scaleVmmData`, `jupiterLendEarnData`, `hyloData`,
 `carrotData`, `mswapData`, `perpsJlpData`, `perpsJlpMintData`, `sanctumInfinityData` and
 `archerData`.

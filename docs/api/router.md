@@ -751,9 +751,15 @@ one slot serves both directions. Each token's program is the one that owns its m
 | `trends`               | Trends                | `CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz` | `config, poolAuthority, baseVault, quoteVault, eventAuthority`                                                                       |
 | `heaven`               | Heaven                | `HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o` | `vaultA, vaultB, protocolConfig, instructionsSysvar, chainlink, solUsdFeed, associatedTokenProgram, systemProgram`                   |
 | `virtuals`             | Virtuals (selling)    | `5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki` | `poolTokenAccount, platform, platformVirtualsAccount, poolVirtualsAccount`                                                           |
+| `meteoraDlmm`          | Meteora DLMM          | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  | `eventAuthority, reserveX, reserveY, oracle, binArray0, binArray1, systemProgram`                                                    |
 
 Each row names three functions: the one listed, its `Cpi` form and its `Data` form. Raydium CP-Swap
-and Gamma require token 0 to be the lower-key mint. A Stabble pool's `vaultTokenA` and `vaultTokenB`
+and Gamma require token 0 to be the lower-key mint. A Meteora DLMM pool's reserves are its token X's
+and token Y's, the pool's own order, and its bin arrays the two its bitmap marks from the active
+bin's in the trade's direction: `meteoraDlmm` lays out seventeen accounts in place, so it sends
+`swap` on both (two SPL Token mints) or `swap2` on the first (a Token-2022 mint), and an input past
+what they hold fails the swap. It returns `0`, having moved nothing, for a pool whose swaps are off
+or not active yet; a program writes it `Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)`. A Stabble pool's `vaultTokenA` and `vaultTokenB`
 are the vault's accounts for the two tokens traded, in either order. Each beneficiary account is the
 vault beneficiary's for that token. Raydium AMM v4 and Mercurial read the direction from the paying
 and receiving accounts themselves. Perena finds each mint's index among the pool's ten tokens, and
@@ -792,7 +798,7 @@ config. The liquid-unstake vault pays wrapped SOL into a native wrapped-SOL acco
 pool's deposit takes native SOL from its signer, which a Pot cannot pay: the stake pools are among
 the instruction-only venues below.
 
-Seventeen venues take more accounts in their swap than a function can list, or a number of them
+Sixteen venues take more accounts in their swap than a function can list, or a number of them
 that varies. A function other than
 `main` builds a list of at most sixteen accounts. These venues have only their `Cpi` and `Data`
 forms, on the list the caller's `main` builds:
@@ -803,7 +809,6 @@ forms, on the list the caller's `main` builds:
 | `pumpswap`         | PumpSwap                     | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`  |
 | `bonkswap`         | Bonkswap                     | `BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p` |
 | `guacswap`         | Guacswap                     | `Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1` |
-| `meteoraDlmm`      | Meteora DLMM                 | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`  |
 | `sarosDlmm`        | Saros DLMM                   | `1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE`  |
 | `raydiumLaunchlab` | Raydium LaunchLab            | `LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj`  |
 | `runnerRodeo`      | Runner Rodeo                 | `runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA`  |
@@ -822,8 +827,9 @@ pay to create it, because the System program won't move lamports out of an accou
 PumpSwap's `init_user_volume_accumulator` takes any payer. Bonkswap and Guacswap require the paying
 and receiving accounts to be the authority's associated token accounts. PumpSwap, Bonkswap, Guacswap
 and Scale AMM write the authority, so it is attached writable. Scale AMM takes one account per fee
-beneficiary. A Meteora DLMM swap crosses bins only as far as the bin arrays its list ends with, from
-the active bin onwards in the trade's direction, and a Saros DLMM swap only within the two bin
+beneficiary. A Meteora DLMM swap (`meteoraDlmmCpi`, on a list of any length) crosses bins only as far
+as the bin arrays its list ends with, from the active bin onwards in the trade's direction, and a
+Saros DLMM swap only within the two bin
 arrays around its active bin; a trade too large for them fails. Jupiter Lend Earn deposits an asset
 for its fToken and redeems it back, through the Jupiter Lend liquidity program, and writes the
 authority. Hylo mints hyUSD for USDC and redeems it back, at its Pyth price. Carrot issues CRT for

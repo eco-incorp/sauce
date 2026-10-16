@@ -63,6 +63,15 @@ export interface SauceSvmVenueSource {
 }
 
 /**
+ * A Solana venue's swap of an exact input at one pool, with no price limit: it pays all of
+ * `amountIn` or fails the transaction, and reverts below `minOut`; 0, having moved nothing, for no
+ * pool or no input. Its accounts are read from the pool as `SauceSvmVenueSource`'s are.
+ */
+export interface SauceSvmExactVenueSource {
+  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, minOut: bigint): bigint;
+}
+
+/**
  * A Solana venue whose pools are found by tick spacing: `pool(tokenA, tokenB, tickSpacing)` is
  * the pool its program keeps for the pair at that spacing, written as a swap's pool, the spacing a
  * number written out (or a loop's over numbers written out). Where there is none, the swap returns 0.
@@ -2468,6 +2477,10 @@ export interface PhoenixSvmVenuesSource {
   readonly Market: SauceSvmVenueSource;
 }
 
+export interface MeteoraSvmVenuesSource {
+  readonly DLMM: SauceSvmExactVenueSource;
+}
+
 declare global {
   const AaveV2: AaveV2Source;
   const AaveV3: AaveV3Source;
@@ -4502,6 +4515,7 @@ declare global {
   const Defituna: DefitunaSvmVenuesSource;
   const Crema: CremaSvmVenuesSource;
   const Phoenix: PhoenixSvmVenuesSource;
+  const Meteora: MeteoraSvmVenuesSource;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;

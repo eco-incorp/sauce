@@ -7,9 +7,14 @@
  * and the same on `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`,
  * `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. `swap` returns what
  * arrived; where the pool cannot trade — past `priceLimit`, empty, paused, a slot with no pool — it
- * returns 0 having moved nothing, and below `minOut` it reverts. Each lowers to that venue's own
- * `@sauce/router` function (`orcaWhirlpool`), which keeps its every check — its program id, the
- * pool's owner, the pair.
+ * returns 0 having moved nothing, and below `minOut` it reverts. `Meteora.DLMM`'s swap is an exact
+ * input, its venue's own, with no price limit:
+ *
+ *   Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)
+ *
+ * which pays all of `amountIn` or fails the transaction, and reverts below `minOut`. Each lowers to
+ * that venue's own `@sauce/router` function (`orcaWhirlpool`), which keeps its every check — its
+ * program id, the pool's owner, the pair.
  *
  * The pool is found by its key, as an EVM factory's `getPool(tokenA, tokenB, fee)` finds one:
  *
@@ -57,29 +62,35 @@ import {
   type SvmLowering,
   type TokenRef,
 } from "./svm-lowering.js";
-import { SVM_PRICE_LIMIT_VENUES, SVM_SLOT_PARTS } from "../svm/pool-slot.js";
+import { SVM_SLOT_PARTS, SVM_SLOT_VENUES } from "../svm/pool-slot.js";
 import { svmPoolKeyProblem, SVM_KEYED_VENUES, type SvmPoolKind } from "../svm/pool-keys.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 const ROUTER = "@sauce/router";
 const MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
-/** A venue's namespace: its name for a person, its program, and its `@sauce/router` function. */
+/**
+ * A venue's namespace: its name for a person, its program, its `@sauce/router` function, whether
+ * its swap is an exact input (no `priceLimit`) rather than at a price, and what its pools are found
+ * by.
+ */
 export interface SvmVenueNamespace {
   readonly name: string;
   readonly program: string;
   readonly swap: string;
+  readonly exact?: true;
   /** What its `pool(tokenA, tokenB, key)` takes as the key; none where pools are not found by key. */
   readonly key?: SvmPoolKind;
 }
 
-const venue = (namespace: string, name: string, swap: string): SvmVenueNamespace => {
+const venue = (namespace: string, name: string, swap: string, exact?: true): SvmVenueNamespace => {
   const key = SVM_KEYED_VENUES[namespace]?.key;
 
   return {
     name,
-    program: SVM_PRICE_LIMIT_VENUES.find((one) => one.name === name)!.program,
+    program: SVM_SLOT_VENUES.find((one) => one.name === name)!.program,
     swap,
+    ...(exact ? { exact } : {}),
     ...(key === undefined ? {} : { key }),
   };
 };
@@ -95,16 +106,23 @@ export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> =
   "Defituna.Fusion": venue("Defituna.Fusion", "DefiTuna", "defituna"),
   "Crema.CLMM": venue("Crema.CLMM", "Crema", "crema"),
   "Phoenix.Market": venue("Phoenix.Market", "Phoenix", "phoenix"),
+  "Meteora.DLMM": venue("Meteora.DLMM", "Meteora DLMM", "meteoraDlmm", true),
 };
 
-const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "priceLimit", "minOut"] as const;
+const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "priceLimit", "minOut"];
+const EXACT_PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "minOut"];
+/** A venue's swap's arguments: an exact input's take no `priceLimit`. */
+const paramsOf = (namespace: string): string[] =>
+  SVM_VENUE_NAMESPACES[namespace]!.exact ? EXACT_PARAMS : PARAMS;
 
 /** How a program calls a venue's methods: its swap, and its `pool` where it finds pools by key. */
 export function svmVenueMethods(namespace: string): readonly string[] {
   const key = SVM_VENUE_NAMESPACES[namespace]?.key;
 
   return [
-    "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, priceLimit: Uint256, minOut: Uint256): Uint256",
+    SVM_VENUE_NAMESPACES[namespace]?.exact
+      ? "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, minOut: Uint256): Uint256"
+      : "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, priceLimit: Uint256, minOut: Uint256): Uint256",
     ...(key === undefined
       ? []
       : [
@@ -323,7 +341,7 @@ export function collectVenueMethods(l: SvmLowering): void {
     if (site.method !== "swap") {
       const pool = SVM_VENUE_NAMESPACES[namespace]!.key === undefined ? "" : " and pool";
       throw new Error(
-        `${spelled} on Solana: ${namespace} offers swap${pool}, swap taking (${PARAMS.join(", ")}): ` +
+        `${spelled} on Solana: ${namespace} offers swap${pool}, swap taking (${paramsOf(namespace).join(", ")}): ` +
           "it returns 0 having moved nothing where the pool cannot trade, and reverts below minOut",
       );
     }
@@ -337,19 +355,14 @@ export function collectVenueMethods(l: SvmLowering): void {
   function lowerSwap(site: MethodCall, namespace: string, spelled: string): void {
     l.requireInMain(site.call, spelled, "a venue's swap");
     const args = (site.call as { arguments?: AstNode[] }).arguments ?? [];
-    if (args.length !== PARAMS.length || args.some((arg) => arg.type === "SpreadElement")) {
+    const params = paramsOf(namespace);
+    if (args.length !== params.length || args.some((arg) => arg.type === "SpreadElement")) {
       throw new Error(
-        `${spelled} takes ${PARAMS.length} arguments (${PARAMS.join(", ")}), got ${args.length}.`,
+        `${spelled} takes ${params.length} arguments (${params.join(", ")}), got ${args.length}.`,
       );
     }
-    const [poolArg, inArg, outArg, amountIn, , minOut] = args as [
-      AstNode,
-      AstNode,
-      AstNode,
-      AstNode,
-      AstNode,
-      AstNode,
-    ];
+    const [poolArg, inArg, outArg, amountIn] = args as [AstNode, AstNode, AstNode, AstNode];
+    const minOut = args[args.length - 1]!;
     const text = (node: AstNode): string => l.source.slice(node.start, node.end);
     const tokenIn = l.tokenOf(inArg, text(inArg), spelled);
     const tokenOut = l.tokenOf(outArg, text(outArg), spelled);

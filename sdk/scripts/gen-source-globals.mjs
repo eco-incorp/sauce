@@ -328,12 +328,13 @@ for (const mint of mints) claim(mint, "a Solana mint symbol");
 // A Solana venue is its protocol's program (`Orca.Whirlpool`): its protocol a name of its own, or a
 // field of a protocol namespace or family of the same name (`Pancakeswap`).
 const venueFields = new Map();
-for (const [venue, { key }] of Object.entries(SVM_VENUE_NAMESPACES)) {
+for (const [venue, { exact, key }] of Object.entries(SVM_VENUE_NAMESPACES)) {
   const [protocol, program] = venue.split(".");
   if (!ts.isIdentifierText(program, ts.ScriptTarget.Latest))
     fail(`'${venue}' (a Solana venue namespace) does not name a program`);
-  const type =
-    key === "fee"
+  const type = exact
+    ? "SauceSvmExactVenueSource"
+    : key === "fee"
       ? "SauceSvmFeeVenueSource"
       : key === "tick spacing"
         ? "SauceSvmSpacingVenueSource"
@@ -528,6 +529,15 @@ export interface SauceSolanaAccounts {
  */
 export interface SauceSvmVenueSource {
   swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, priceLimit: bigint, minOut: bigint): bigint;
+}
+
+/**
+ * A Solana venue's swap of an exact input at one pool, with no price limit: it pays all of
+ * \`amountIn\` or fails the transaction, and reverts below \`minOut\`; 0, having moved nothing, for no
+ * pool or no input. Its accounts are read from the pool as \`SauceSvmVenueSource\`'s are.
+ */
+export interface SauceSvmExactVenueSource {
+  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, minOut: bigint): bigint;
 }
 
 /**

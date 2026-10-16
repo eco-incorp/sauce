@@ -1,7 +1,7 @@
 // Compiles distributed-swap.sauce.ts for Base the way `sauce compile` does, and builds the cooks
 // `sauce tx` would print for buying SPCXc and WETH with USDC and selling WETH for USDC. Checks that
 // the SKILL.md shows the program's own code, and that its venues and lookups, its typed reads, the
-// Slipstream swap through uniswapV3, a V4 pool id held as a Uint256, the `maxPrice` values, the
+// Slipstream swap through uniswapV3, a V4 pool id held as a Uint256, the `priceLimit` values, the
 // limits the program derives from them, each pool's own limit, `minTokens`, `maxAvgPrice`, the
 // simulation it reads, the chains it compiles on, and the arguments of its commands (and the program
 // header's) are what the program and the arithmetic give. Asserts what can be checked offline;
@@ -175,9 +175,9 @@ const row = (...cells: string[]) =>
   new RegExp(`^\\|${cells.map((cell) => ` *${escape(cell)} *`).join("\\|")}\\|$`, "m");
 const ceil = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
-// The program's arithmetic, in TypeScript: maxPrice to a sqrt price, then each pool's own limit.
-const limitOf = (maxPrice: bigint, paysToken0: boolean) =>
-  paysToken0 ? isqrt((Q192 * E18) / maxPrice) : isqrt((maxPrice * Q192) / E18);
+// The program's arithmetic, in TypeScript: priceLimit to a sqrt price, then each pool's own limit.
+const limitOf = (priceLimit: bigint, paysToken0: boolean) =>
+  paysToken0 ? isqrt((Q192 * E18) / priceLimit) : isqrt((priceLimit * Q192) / E18);
 const poolLimit = (limit: bigint, fee: bigint, paysToken0: boolean) => {
   const root = isqrt((1_000_000n - fee) * 10n ** 30n);
   return paysToken0 ? (limit * E18) / root : (limit * root) / E18;
@@ -190,8 +190,13 @@ check(
   "every swap is a @sauce/router call",
 );
 check(
-  /__sauce_transfer\(pay, refundTo, unspent\)/.test(program.source),
-  "the refund is a SafeERC20 transfer of what is left of the budget",
+  /__sauce_transfer\(pay, recipient, unspent\)/.test(program.source),
+  "what is left of the budget goes to the recipient, by a SafeERC20 transfer",
+);
+check(
+  program.entryParams.map((param) => param.name).join() ===
+    "payToken,buyToken,budget,priceLimit,minTokens,maxAvgPrice,recipient",
+  "main takes payToken, buyToken, budget, priceLimit, minTokens, maxAvgPrice and recipient",
 );
 // On a chain without Slipstream's factory, naming it is the compile error the skill quotes; less its
 // Slipstream loop, the program compiles for Ethereum, which has Uniswap V3 and V4.
@@ -226,8 +231,8 @@ const spcxc = registered("SPCXc");
 check(spcxc.decimals === 8, "SPCXc has 8 decimals");
 check(skill.includes(spcxc.address) && source.includes(spcxc.address), "both name SPCXc's address");
 
-// maxPrice: the price in whole tokens times 10^(18 + payDecimals - buyDecimals); maxAvgPrice the
-// same, halfway from a simulation's average to maxPrice: 148.5 to 150, 2,700 to 2,713.5.
+// priceLimit: the price in whole tokens times 10^(18 + payDecimals - buyDecimals); maxAvgPrice the
+// same, halfway from a simulation's average to priceLimit: 148.5 to 150, 2,700 to 2,713.5.
 const spcxScale = 10n ** BigInt(18 + usdc.decimals - spcxc.decimals);
 const wethScale = 10n ** BigInt(18 + usdc.decimals - weth.decimals);
 const buyWeth = (27135n * wethScale) / 10n; // 2,713.5
@@ -237,9 +242,9 @@ const avgWeth = ceil(2700n * wethScale + buyWeth, 2n); // 2,706.75
 const capSpcxc = 140n * spcxScale; // 140, below the reference
 const sellWeth = (E18 * E18 * 10n) / (26865n * 10n ** BigInt(usdc.decimals)); // 1 ÷ 2,686.5
 check(spcxScale === 10n ** 16n, "SPCXc's scale is 1e16");
-check(buyWeth === 2_713_500_000n, "maxPrice buying WETH at most 2,713.5 USDC");
-check(buySpcxc === 1_500_000_000_000_000_000n, "maxPrice buying SPCXc at most 150 USDC");
-check(sellWeth === 372231528010422482784291829n, "maxPrice selling WETH at least 2,686.5 USDC");
+check(buyWeth === 2_713_500_000n, "priceLimit buying WETH at most 2,713.5 USDC");
+check(buySpcxc === 1_500_000_000_000_000_000n, "priceLimit buying SPCXc at most 150 USDC");
+check(sellWeth === 372231528010422482784291829n, "priceLimit selling WETH at least 2,686.5 USDC");
 check(avgSpcxc === 1_492_500_000_000_000_000n, "maxAvgPrice halfway between 148.5 and 150: 149.25");
 check(avgWeth === 2_706_750_000n, "maxAvgPrice halfway between 2,700 and 2,713.5: 2,706.75");
 for (const value of [buyWeth, buySpcxc, sellWeth, avgSpcxc, avgWeth])
@@ -250,12 +255,12 @@ const ceiling = limitOf(buyWeth, false); // paying USDC, token1
 const floor = limitOf(sellWeth, true); // paying WETH, token0
 check(ceiling === sqrtPriceX96FromPrice("2713.5", tokens), "2,713.5 as the program's limit");
 const exactFloor = sqrtPriceX96FromPrice("2686.5", tokens);
-check(floor - exactFloor <= 1n, "2,686.5 as the program's limit, maxPrice rounded down");
+check(floor - exactFloor <= 1n, "2,686.5 as the program's limit, priceLimit rounded down");
 for (const value of [ceiling, exactFloor])
   check(skill.includes(String(value)), `the skill quotes ${value}`);
 
 // Each pool's own limit, back as a price, is the skill's table, the four standard tiers; the pool's
-// last unit there, after its fee, costs maxPrice: at it or inside it, to 0.001%.
+// last unit there, after its fee, costs priceLimit: at it or inside it, to 0.001%.
 for (const fee of [100n, 500n, 3000n, 10000n]) {
   const buying = poolLimit(ceiling, fee, false);
   const selling = poolLimit(floor, fee, true);
@@ -265,11 +270,11 @@ for (const fee of [100n, 500n, 3000n, 10000n]) {
     two(priceFromSqrtPriceX96(selling, tokens)),
   ];
   check(row(...cells).test(skill), `the skill's row for fee ${fee}: ${cells.join(" | ")}`);
-  // Paying token1: a token0 costs price ÷ (1 − fee), at most maxPrice.
+  // Paying token1: a token0 costs price ÷ (1 − fee), at most priceLimit.
   const boughtAt = buying * buying * 1_000_000n * E18;
   const buyBound = buyWeth * Q192 * (1_000_000n - fee);
   check(boughtAt <= buyBound && boughtAt * 100_001n >= buyBound * 100_000n, `fee ${fee}: buying`);
-  // Paying token0: a token1 costs 1 ÷ (price × (1 − fee)), at most maxPrice.
+  // Paying token0: a token1 costs 1 ÷ (price × (1 − fee)), at most priceLimit.
   const soldAt = Q192 * 1_000_000n * E18;
   const sellBound = sellWeth * selling * selling * (1_000_000n - fee);
   check(soldAt <= sellBound && soldAt * 100_001n >= sellBound * 100_000n, `fee ${fee}: selling`);
@@ -285,7 +290,7 @@ check(
   "the program composes it so",
 );
 
-// minTokens to spend all of the budget or nothing: budget × 1e18 ÷ maxPrice, rounded up.
+// minTokens to spend all of the budget or nothing: budget × 1e18 ÷ priceLimit, rounded up.
 const spend = 1000n * 10n ** BigInt(usdc.decimals);
 const wethBudget = 3000n * 10n ** BigInt(usdc.decimals);
 const allSpcxc = ceil(spend * E18, buySpcxc);
@@ -302,11 +307,11 @@ check(tooMany > (spend * E18) / buySpcxc, "10 SPCXc is more than 1,000 USDC buys
 const args = (
   buyToken: string,
   budget: bigint,
-  maxPrice: bigint,
+  priceLimit: bigint,
   minTokens: bigint,
   maxAvgPrice: bigint,
 ) =>
-  `--args ${usdc.address} ${buyToken} \\\n  ${budget} ${maxPrice} ${minTokens} ${maxAvgPrice} <recipient> <refundTo>`;
+  `--args ${usdc.address} ${buyToken} \\\n  ${budget} ${priceLimit} ${minTokens} ${maxAvgPrice} <recipient>`;
 for (const [minTokens, maxAvgPrice, what] of [
   [allSpcxc, 0n, "the trade, reading its average"],
   [tooMany, 0n, "the minTokens revert"],
@@ -328,7 +333,7 @@ check(
 );
 
 // The simulation the skill reads: 2,000 USDC over two pools for 0.738558490183795118 WETH, its
-// average in maxPrice's units, and maxAvgPrice halfway from it to 2,713.5.
+// average in priceLimit's units, and maxAvgPrice halfway from it to 2,713.5.
 const spent = 2000n * 10n ** BigInt(usdc.decimals);
 const bought = 738558490183795118n;
 check(455100231n + 1544899769n === spent, "the two pools took the 2,000 USDC");
@@ -345,7 +350,7 @@ for (const value of [average, ceil(average + buyWeth, 2n)])
 
 // main's arguments, encoded as `--args` encodes them, appended to the program; then the cook the
 // owner sends, with the Kitchen's fee as its value.
-for (const [payToken, buyToken, amount, maxPrice] of [
+for (const [payToken, buyToken, amount, priceLimit] of [
   [usdc.address, spcxc.address, spend, buySpcxc],
   [usdc.address, weth.address, wethBudget, buyWeth],
   [weth.address, usdc.address, E18, sellWeth],
@@ -354,10 +359,9 @@ for (const [payToken, buyToken, amount, maxPrice] of [
     payToken,
     buyToken,
     amount,
-    maxPrice,
+    priceLimit,
     0n,
     0n,
-    recipient,
     recipient,
   ]);
   const data = v12Pot.encodeCook(
@@ -365,7 +369,7 @@ for (const [payToken, buyToken, amount, maxPrice] of [
     concatHex([bytesToHex(program.bytecode), bytesToHex(encoded)]),
   );
   check(
-    routes.decodeEntryArguments(program, encoded)[3] === maxPrice,
+    routes.decodeEntryArguments(program, encoded)[3] === priceLimit,
     "the arguments decode back to what was encoded",
   );
   console.log(

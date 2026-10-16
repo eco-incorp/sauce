@@ -873,7 +873,11 @@ writes are SafeERC20 — that is the documented way to get the checks.
 price-limit venues, protocol then program as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`,
 `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`,
 `Crema.CLMM`, `Phoenix.Market`; ONE swap, and a `try` spelling is refused; there is no chain-level
-`Solana.swap`) with its pool found by key, `<Protocol>.<Program>.pool(tokenA, tokenB, key)`, as an
+`Solana.swap`; and `Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)`, the venue's own
+exact input with no `priceLimit`, lowered to the router's `meteoraDlmm`, a slot form laying out
+seventeen accounts in place — its first two bin arrays for `swap`, the first for a Token-2022 mint's
+`swap2` — which `svm-dlmm.e2e.test.ts` holds to the venue's own swap of the same amount) with its
+pool found by key, `<Protocol>.<Program>.pool(tokenA, tokenB, key)`, as an
 EVM factory's `getPool` (`svm/pool-keys.ts`: the PDA of the pair, lower key first, and a tick
 spacing for Orca/Cropper/DefiTuna/Crema or a fee for the Raydium-code four, each fee its `AmmConfig`s
 from a table of every config the four programs keep, pinned to

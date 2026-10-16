@@ -298,12 +298,11 @@ check(
 // Each venue that finds pools by key has its `pool`, the key the skill says: a tick spacing or a fee.
 for (const venue of routes.sourceGlobals("solana").venues) {
   const pool = venue.methods.find((method) => method.startsWith("pool("));
-  const by =
-    venue.namespace === "Phoenix.Market"
-      ? undefined
-      : /^(Raydium|Pancakeswap|Byreal|Stabble)\./.test(venue.namespace)
-        ? "fee"
-        : "tickSpacing";
+  const by = ["Phoenix.Market", "Meteora.DLMM"].includes(venue.namespace)
+    ? undefined
+    : /^(Raydium|Pancakeswap|Byreal|Stabble)\./.test(venue.namespace)
+      ? "fee"
+      : "tickSpacing";
   check(
     by === undefined
       ? pool === undefined
