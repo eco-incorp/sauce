@@ -360,9 +360,15 @@ tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line a
 
 ### Signing what it builds
 
-The server's transactions are for the user's own signer, or, over stdio, for
+The server's transactions are for the user's own signer, or, over stdio and for experiments, for
 [`sauce_wallet_send`](mcp-local.md#wallets). On an EVM chain, `sauce_tx` returns what
 any wallet signs. Sign it as the Pot's owner, since `cook()` is the owner's alone.
+
+The safest signer is the user's wallet's own MCP server. Every tool that builds a transaction
+returns what such a server takes as it is: `sendCalls`, every transaction in order for Coinbase
+Wallet MCP's `send_calls`, and on each EVM transaction `sendTransaction`, for Phantom MCP's
+`evm_send`, each amount in hex. A Solana `transaction` is already what Phantom's `solana_send`
+takes. [Sign with your wallet's MCP server](wallet-mcp.md) walks through both.
 
 The signer hands back signed bytes, and `sauce_send` sends them. A session with a hardware wallet
 or a KMS, the key never near the agent:

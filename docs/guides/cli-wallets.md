@@ -8,6 +8,10 @@
 > else, such as a hardware wallet or a company vault, `sauce` hands you the transaction unsigned and
 > sends it once it is signed.
 
+The wallets `sauce` keeps are quick to set up, and right for trying things out with small amounts.
+For real money, a wallet that keeps its key to itself is safer: with a coding agent, let your
+wallet's own MCP server sign ([Sign with your wallet's MCP server](wallet-mcp.md)).
+
 ## Make a wallet
 
 ```sh
@@ -109,6 +113,9 @@ sauce send 0x02f8…signed
 ```json
 { "chainId": 8453, "to": "0x8a…", "data": "0x…", "value": "1000" }
 ```
+
+It also prints the same transaction the way a wallet's MCP server takes it, `sendTransaction` and
+`sendCalls`, with each amount in hex ([Sign with your wallet's MCP server](wallet-mcp.md)).
 
 When the Pot does not exist yet, it prints a plan of two instead, the Pot's creation then the cook,
 each with the `gas` to sign it with. Sign and send them in that order.
