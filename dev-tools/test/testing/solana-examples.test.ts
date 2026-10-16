@@ -1,5 +1,6 @@
 /**
- * The skills' Solana example programs, run by the testing kit on Solana mainnet's own accounts —
+ * The Solana example programs the package ships — the skills' and the manual's (`docs/examples`) —
+ * run by the testing kit on Solana mainnet's own accounts —
  * USDC, PYUSD and TSLAx as mainnet holds them, an Orca whirlpool and its program — replayed from a
  * state file it recorded (`state/solana-examples.json.gz`), with the released engine and Kitchen
  * and mainnet's Kitchen fee. No RPC, and no funds: each program's inputs are funded on the copy.
@@ -28,7 +29,7 @@ const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SPL_TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 describe(
-  "the skills' Solana examples, on mainnet's accounts, replayed",
+  "the skills' and the manual's Solana examples, on mainnet's accounts, replayed",
   { skip: solanaMissing() },
   () => {
     let solana: SolanaTestChain;
@@ -153,6 +154,49 @@ describe(
       assert.equal(skipped.returned, 0n);
       assert.equal(skipped.delta(pot, "USDC"), 0n);
       assert.equal(skipped.delta(bob, "WSOL"), 0n);
+    });
+
+    it("docs/examples/solana-swap.sauce.ts, the manual's single swap, buys WSOL at an Orca whirlpool", async () => {
+      const pot = solana.account(0).pot;
+      const bob = solana.account(1).address;
+      await solana.fund(pot, { USDC: "100" });
+      const swap = example("docs/examples/solana-swap.sauce.ts");
+      const pool = pinnedPool("orca-whirlpool-sol-usdc");
+      // Its header's example: 100 USDC at up to 200 USDC a SOL, for at least 0.4 SOL.
+      const args = [pool, bob, 100_000_000n, 200_000_000_000_000_000n, 400_000_000n] as const;
+      const result = await solana.run(swap, { args });
+      const bought = result.returned as bigint;
+      assert.ok(bought >= 400_000_000n, `bought ${bought}`);
+      assert.equal(result.delta(bob, "WSOL"), bought);
+      assert.equal(result.delta(pot, "USDC"), -100_000_000n);
+
+      // Below `minOut`, the whole cook reverts, and nothing moves.
+      await solana.fund(pot, { USDC: "100" });
+      await assert.rejects(
+        solana.simulate(swap, { args: [pool, bob, 100_000_000n, args[3], bought * 2n] }),
+        (error: unknown) => error instanceof CookReverted && error.reason === "below minOut",
+      );
+      // A pool already past `maxPrice` is skipped: `swap` returns 0, and nothing moves.
+      const skipped = await solana.simulate(swap, {
+        args: [pool, bob, 100_000_000n, 1_000_000_000_000_000n, 0n],
+      });
+      assert.equal(skipped.returned, 0n);
+      assert.equal(skipped.delta(pot, "USDC"), 0n);
+    });
+
+    it("docs/examples/pay.sauce.ts pays USDC from the Pot on Solana, as on Base", async () => {
+      const pot = solana.account(0).pot;
+      const bob = solana.account(1).address;
+      await solana.fund(pot, { USDC: "5" });
+      const pay = example("docs/examples/pay.sauce.ts");
+      // Its header's Solana line: 1 USDC to the recipient.
+      const result = await solana.run(pay, { args: [bob, 1_000_000n] });
+      assert.equal(result.delta(bob, "USDC"), 1_000_000n);
+      assert.equal(result.delta(pot, "USDC"), -1_000_000n);
+      await assert.rejects(
+        solana.simulate(pay, { args: [bob, 5_000_000n] }),
+        (error: unknown) => error instanceof CookReverted && error.reason === "not enough USDC",
+      );
     });
   },
 );

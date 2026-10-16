@@ -1572,8 +1572,8 @@ writes in place, as `sauce simulate`'s copy does. `simulate` is a snapshot, the 
 (the Pot it creates is kept, as on EVM). Test accounts come from fixed seeds so recordings replay.
 `solana-local.test.ts`, `solana-record.test.ts` (records from the SDK's pinned mainnet dumps served
 by `sdk/scripts/solana-rpc-stub.mjs` on loopback — `solana-support.ts#pinnedCluster` — then replays
-with it closed) and `solana-examples.test.ts`, which runs the skills' Solana examples (listed in
-`skills-check/executed.json`; `example-programs.mjs` counts a suite in dev-tools' `test` script as
+with it closed) and `solana-examples.test.ts`, which runs the skills' and the manual's Solana examples (listed in
+`skills-check/executed.json` and `docs/examples/executed.json`; `example-programs.mjs` counts a suite in dev-tools' `test` script as
 one CI runs) from `test/testing/state/solana-examples.json.gz`. Record that again with
 `RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC; the packed check runs a Solana cook,
 staged too, from a clean install with LiteSVM beside it, and checks the error naming LiteSVM
