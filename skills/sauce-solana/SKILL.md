@@ -21,7 +21,7 @@ is `sauce-solana-distributed-swap`'s.
 | A PDA, a CPI, an account read; `--account`                           | yes                                |                                                    |
 | A cook too large for one transaction; plans; rent left open          | yes                                |                                                    |
 | A swap at a Solana venue                                             |                                    | `sauce-swaps`                                      |
-| An intent filled on Solana                                           |                                    | `sauce-intents`                                    |
+| An intent to or from Solana                                          |                                    | `sauce-intents`                                    |
 
 ## Core model
 
@@ -540,9 +540,8 @@ only as they are now.
 - **The Pot's own account passed as its token account.** `pot` is the Pot; its USDC is `pot:USDC`.
 - **An SPL derivation for a Token-2022 account.** An ATA derives under the mint's own token program.
 - **`--fund` on Solana.** It is EVM only: fund the Pot's token account by a transfer.
-- **A program on Solana opening an intent.** A program running on Solana does not open one: an
-  intent starts on Solana from a wallet, `sauce intent publish <file> --chain solana --keypair
-<keypair>` (`sauce-intents`).
+- **An intent from Solana.** A wallet publishes it with `sauce intent publish --chain solana`
+  (`sauce-intents`, An intent from Solana).
 - **A program past 1,232 bytes sent by another tool unstaged.** Use `sauce run`, or the plan
   `sauce tx` prints.
 

@@ -401,7 +401,7 @@ once the destination's proof arrives.
 
 ```sh
 sauce intent publish <file> --chain solana --keypair <keypair> \
-  --intent-deadline <unix-seconds> --intent-creator <solana-key> --args <recipient>
+  --intent-deadline <unix seconds> --intent-creator <solana-key> --args <recipient>
 sauce intent fill <intent-hash> --claimant <solana-key> --send --keystore <keystore>
 sauce intent claim <intent-hash> --keypair <keypair>
 sauce intent refund <intent-hash> --keypair <keypair>
