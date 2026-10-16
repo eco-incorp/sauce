@@ -54,7 +54,6 @@ import {
 import type { ForkMode } from "./state.js";
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111" as Address;
-const WRAPPED_SOL = "So11111111111111111111111111111111111111112" as Address;
 /** The salt `sauce pot` and `sauce run` use when given none. */
 const POT_SALT = new Uint8Array(32);
 /** What each test account holds when the chain starts: 1,000 SOL. */
@@ -416,11 +415,13 @@ export class SolanaTestChain {
       }
       const data = new Uint8Array(held.data);
       new DataView(data.buffer).setBigUint64(64, target, true);
-      // Wrapped SOL's amount is the account's lamports above its rent: both move.
+      // A native account's (wrapped SOL's) amount is its lamports above its rent: both move. It
+      // says so in `is_native`, an option whose tag is at byte 109.
+      const native = held.data[109] === 1;
       this.bank.set(key, {
         ...held,
         data,
-        lamports: token.mint === WRAPPED_SOL ? held.lamports + units : held.lamports,
+        lamports: native ? held.lamports + units : held.lamports,
       });
       if ((await this.balanceOf(holder, name)) !== target) {
         throw new Error(`funding ${holder} with ${name} did not change its balance as written`);

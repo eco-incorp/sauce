@@ -43,6 +43,9 @@ export type {
   SolanaTestAccount,
 } from "./solana.js";
 
+/** Solana, by any name the registry knows it by. */
+export type SolanaChainRef = "solana" | "sol" | "mainnet-beta" | "solana-mainnet" | 1399811149;
+
 export interface ForkOptions {
   /** The block the fork starts at. Pin it: a test that forks "latest" changes under you. */
   readonly block: number | bigint;
@@ -128,7 +131,7 @@ async function ready(
  * named: from the cluster (recording it), or from a recorded state file. Stop it with `stop()`; a
  * recording is written then.
  */
-export function fork(chain: "solana", options: SolanaForkOptions): Promise<SolanaTestChain>;
+export function fork(chain: SolanaChainRef, options: SolanaForkOptions): Promise<SolanaTestChain>;
 /**
  * Forks `chain` at `options.block` on a local anvil, ready to cook: the released stack (the chain's
  * own, or deployed), and anvil's dev accounts as test accounts, account 0's Pot deployed. Replays a
@@ -142,7 +145,15 @@ export async function fork(
 ): Promise<TestChain | SolanaTestChain> {
   const resolved = requireChain(chain);
   const mode = forkMode(options);
-  if (resolved.kind === "svm") return forkSolana(resolved, mode, options);
+  if (resolved.kind === "svm") {
+    if ("block" in options) {
+      throw new Error(
+        "a Solana fork takes no `block`: a Solana node serves accounts only as they are now, so a " +
+          "recording keeps the slot it read at",
+      );
+    }
+    return forkSolana(resolved, mode, options);
+  }
   if (!("block" in options)) {
     throw new Error(`forking ${resolved.slug} needs \`block\`, the block it starts at`);
   }
@@ -170,7 +181,7 @@ export interface LocalOptions {
  * with the released engine and Kitchen at their program ids and no Kitchen fee. For programs that
  * need nothing deployed; fork Solana for anything that calls a program or moves a token.
  */
-export function local(options: { readonly chain: "solana" }): Promise<SolanaTestChain>;
+export function local(options: { readonly chain: SolanaChainRef }): Promise<SolanaTestChain>;
 /**
  * An empty local chain — no protocols, no tokens — with the released stack deployed at its release
  * addresses and no Kitchen fee, running as `options.chain` (Base by default). For programs that

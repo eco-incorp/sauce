@@ -745,13 +745,17 @@ export class Bank {
   moveClock(slot: bigint, unixTimestamp: bigint): void {
     const now = this.clock();
     const epoch = this.epochOf(slot);
-    const offset = this.svm.getEpochSchedule().leaderScheduleSlotOffset;
+    const schedule = this.svm.getEpochSchedule();
     this.setClock({
       slot,
       epoch,
       // A new epoch starts now: the cluster records when its first slot came.
       epochStartTimestamp: epoch === now.epoch ? now.epochStartTimestamp : unixTimestamp,
-      leaderScheduleEpoch: this.epochOf(slot + offset),
+      // Solana's `get_leader_schedule_epoch`: the next epoch's while warming up.
+      leaderScheduleEpoch:
+        slot < schedule.firstNormalSlot
+          ? epoch + 1n
+          : this.epochOf(slot + schedule.leaderScheduleSlotOffset),
       unixTimestamp,
     });
   }
@@ -772,6 +776,8 @@ export class Bank {
     const accounts =
       this.source === undefined ? toRead.map(() => null) : await this.source.read(toRead);
     toRead.forEach((key, index) => {
+      // Read meanwhile by another call, and perhaps written since: what the bank holds stands.
+      if (this.first.has(key) || this.own.has(key)) return;
       const account = accounts[index] ?? null;
       if (this.mode === "record") this.read.set(key, account);
       if (account?.executable === true && account.code !== undefined) {
@@ -805,9 +811,14 @@ export class Bank {
 
   /** Sets `key` to `account`, or removes it (`null`). Read it first (`ensure`). */
   set(key: Address, account: BankAccount | null): void {
-    if (!this.first.has(key) && !this.own.has(key)) {
-      throw new Error(`internal: ${key} is set before it is read`);
+    if (this.own.has(key)) {
+      const held = this.account(key);
+      if (held?.executable === true) throw new Error(`${key} is a program: the kit changes none`);
+      // One of the bank's own sysvars or mints, written from now on: a snapshot puts it back too.
+      this.own.delete(key);
+      this.first.set(key, held);
     }
+    if (!this.first.has(key)) throw new Error(`internal: ${key} is set before it is read`);
     this.put(key, account);
   }
 

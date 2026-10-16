@@ -9,6 +9,7 @@ import { address, type Address } from "@solana/kit";
 
 import {
   CookReverted,
+  fork,
   local,
   type SolanaChange,
   type SolanaTestChain,
@@ -163,6 +164,16 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     assert.equal(result.returned, 5n);
   });
 
+  it("is Solana by any of its names, and takes no block", async () => {
+    const other = await local({ chain: 1399811149 });
+    assert.equal(other.chain.slug, "solana");
+    await other.stop();
+    await assert.rejects(
+      fork("mainnet-beta" as string, { block: 1, rpcUrl: "http://127.0.0.1:1" }),
+      /a Solana fork takes no `block`/,
+    );
+  });
+
   it("refuses a token an empty chain does not have", async () => {
     await assert.rejects(
       chain.fund(chain.account(0).pot, { USDC: "1" }),
@@ -185,9 +196,18 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
       executable: false,
     });
     assert.deepEqual((await chain.getAccount(key))?.data, new Uint8Array([1, 2, 3]));
+    // The chain's own accounts too: the native mint an empty chain starts with.
+    const native = address("So11111111111111111111111111111111111111112");
+    const mint = (await chain.getAccount(native))!;
+    await chain.setAccount(native, { ...mint, lamports: mint.lamports + 1n });
+    await assert.rejects(
+      chain.setAccount(chain.engine, null),
+      /is a program: the kit changes none/,
+    );
     await chain.revert();
     assert.equal(await chain.balanceOf(holder, "SOL"), before);
     assert.equal(await chain.getAccount(key), null);
+    assert.equal((await chain.getAccount(native))?.lamports, mint.lamports);
     await assert.rejects(chain.revert(), /revert\(\) with no snapshot\(\) to return to/);
 
     const clock = {
