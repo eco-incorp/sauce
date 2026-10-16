@@ -103,6 +103,7 @@ export {
   intentStatus,
   type IntentRecord,
 } from "../../sdk/dist/cli/lifecycle.js";
+export { presignedNote } from "../../sdk/dist/cli/lifecycle-svm.js";
 export { potImportCommand, potListCommand } from "../../sdk/dist/cli/pot-commands.js";
 export { PotStore } from "../../sdk/dist/cli/pot-store.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";

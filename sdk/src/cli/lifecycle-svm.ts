@@ -75,6 +75,32 @@ export interface SvmTxJson {
   readonly value: string;
   /** What it does, for a person. */
   readonly what: string;
+  /**
+   * The keys that signed it already, beside the fee payer: fresh accounts it creates (a proof's
+   * Hyperlane message). Their signatures cover this exact message, so it is to be signed as it is:
+   * a signer that rebuilds it first (a new blockhash or fee payer) drops them ({@link presignedNote}).
+   */
+  readonly signedBy?: readonly string[];
+}
+
+/**
+ * What a signer must be told of `transactions` that carry other keys' signatures already, or
+ * `undefined` when none does: a wallet that rebuilds a transaction before it signs, as a hosted
+ * signer may to refresh its blockhash, drops them, and the cluster refuses the transaction.
+ */
+export function presignedNote(transactions: readonly object[]): string | undefined {
+  const presigned = transactions.filter(
+    (tx): tx is SvmTxJson => isSvmTx(tx) && (tx.signedBy?.length ?? 0) > 0,
+  );
+  if (presigned.length === 0) return undefined;
+
+  return (
+    `${presigned.length === 1 ? `${presigned[0]!.what} is` : `${presigned.length} of these transactions are`} ` +
+    "signed already by a fresh key it creates an account with (signedBy): have the fee payer sign " +
+    "it as it is, with a wallet that signs a transaction as given. A wallet that rebuilds it " +
+    "before signing (a new blockhash or fee payer) drops that signature, and the cluster refuses " +
+    "it; build it again and sign it with the fee payer's key, then send it with sauce_send."
+  );
 }
 
 /** Whether a plan's transaction is Solana's. */
@@ -230,11 +256,13 @@ export async function svmTransaction(
   const { value: blockhash } = await ask("the latest blockhash", () =>
     rpc.getLatestBlockhash().send(),
   );
-  const transaction = getBase64EncodedWireTransaction(
-    await partiallySignTransactionMessageWithSigners(
-      messageOf(feePayer, instructions, blockhash, tables),
-    ),
+  const signed = await partiallySignTransactionMessageWithSigners(
+    messageOf(feePayer, instructions, blockhash, tables),
   );
+  const transaction = getBase64EncodedWireTransaction(signed);
+  const signedBy = Object.entries(signed.signatures)
+    .filter(([key, signature]) => key !== feePayer && signature !== null)
+    .map(([key]) => key);
   const size = getBase64Encoder().encode(transaction).length;
   if (size > SVM_PACKET_BYTES) {
     throw new CliError(
@@ -243,7 +271,15 @@ export async function svmTransaction(
     );
   }
 
-  return { chainId: chain.id, chain: chain.slug, feePayer, transaction, value: "0", what };
+  return {
+    chainId: chain.id,
+    chain: chain.slug,
+    feePayer,
+    transaction,
+    value: "0",
+    what,
+    ...(signedBy.length === 0 ? {} : { signedBy }),
+  };
 }
 
 /** A v0 message of `instructions` from `feePayer`, through `tables` where given. */

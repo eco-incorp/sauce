@@ -134,6 +134,11 @@ take, beside its own fields, so nothing is converted:
   a minute of being built or never: when the user takes longer, build it again
   (`sauce send --cursor <cursor>` alone, or the command that printed it) and hand over the new one.
   Always pass back the signatures of what landed: the plan builds again only what did not.
+- **A Solana transaction with `signedBy`** (a proof, signed already by the fresh keys of the
+  accounts it creates) must be signed as it is. A wallet that rebuilds a transaction before signing
+  it (a fresh blockhash or fee payer) drops those signatures, and the cluster refuses it: when the
+  wallet's send fails that way, send that step with a signer that signs as given
+  (`sauce intent prove --keypair <keypair>`), or sign it with any key and `sauce send` it.
 - **Any other signer** (a KMS, a hardware wallet, another wallet's tool) signs the same fields; what
   it signed but does not send, `sauce send` broadcasts (below).
 

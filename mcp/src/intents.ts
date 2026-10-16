@@ -46,6 +46,7 @@ import {
   parseClaimant,
   parsePubkey,
   pastDeadline,
+  presignedNote,
   requireChain,
   requireSupported,
   showCommand,
@@ -385,6 +386,13 @@ const SOLANA_SIGNING = (feePayer: string): string =>
   `with ${feePayer} (the fee payer, last) and send it within about a minute, before its ` +
   "blockhash expires; build it again after that.";
 
+/** What a wallet must be told of transactions signed already by another key, if any is. */
+const presigned = (transactions: readonly object[]): string[] => {
+  const note = presignedNote(transactions);
+
+  return note === undefined ? [] : [note];
+};
+
 /**
  * The core's plan as a tool result. On an EVM chain no one in particular signs it — every step
  * after the fill is permissionless — so `from` is null; on Solana the fee payer the call named
@@ -409,7 +417,7 @@ function anyone(
       ...(!plan.ready
         ? []
         : solana && feePayer !== undefined
-          ? [SOLANA_SIGNING(feePayer)]
+          ? [SOLANA_SIGNING(feePayer), ...presigned(plan.transactions)]
           : [
               `Any account may send ${what}, in order, on the chain each transaction names; the ` +
                 "sender pays the gas and its value, and receives nothing.",
@@ -813,7 +821,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       notes.push(
         `Only ${args.from} may send these, in order, on each intent's destination: the Portal ` +
           "pulls what the route delivers from the account that calls fulfill.",
-        ...(solana ? [SOLANA_SIGNING(args.from)] : []),
+        ...(solana
+          ? [SOLANA_SIGNING(args.from), ...presigned(fills.flatMap((fill) => fill.transactions))]
+          : []),
       );
 
       return { json: { from: fills[0]?.from ?? args.from, intents: fills }, notes };
