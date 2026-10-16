@@ -280,17 +280,17 @@ describe(
         return found;
       }
 
-      it("buys from the cheapest pool up to maxPrice, refunds the rest, keeps the Pot's other USDC", async () => {
+      it("buys from the cheapest pool up to priceLimit, refunds the rest, keeps the Pot's other USDC", async () => {
         const [recipient, refundTo] = PEOPLE;
         const candidates = await pools();
         assert.ok(candidates.length > 0, "no SPCXon/USDC pool with liquidity at the pinned block");
         const cheapest = candidates.reduce((a, b) => (b.paid < a.paid ? b : a));
         // A cap 0.05% above what a share costs in the cheapest pool now: the pool fills only part
         // of the budget before its price reaches the cap, and the rest goes back.
-        const maxPrice = (cheapest.paid * 10_005n) / 10_000n;
+        const priceLimit = (cheapest.paid * 10_005n) / 10_000n;
         await fund(ethereum, "USDC", ethereum.env.pot, BUDGET + OTHER);
         const limit = sqrtPriceAt(
-          (maxPrice * BigInt(1_000_000 - cheapest.fee)) / 1_000_000n,
+          (priceLimit * BigInt(1_000_000 - cheapest.fee)) / 1_000_000n,
           ETH.USDC,
           ETH.SPCXon,
           ONE_SHARE,
@@ -299,7 +299,7 @@ describe(
 
         const returned = (await cook(ethereum, "buy-stock", [
           String(BUDGET),
-          String(maxPrice),
+          String(priceLimit),
           "1",
           recipient,
           refundTo,
@@ -311,11 +311,11 @@ describe(
         assert.ok(spent > 0n && spent < BUDGET, `a partial fill, not ${spent}`);
         assert.equal(await balanceOf(ethereum.env, ETH.USDC, refundTo), BUDGET - spent);
         assert.equal(await balanceOf(ethereum.env, ETH.USDC, ethereum.env.pot), OTHER);
-        // No share cost more than maxPrice, the fee included.
-        assert.ok(spent * ONE_SHARE <= quoted * maxPrice, "paid more than maxPrice on average");
+        // No share cost more than priceLimit, the fee included.
+        assert.ok(spent * ONE_SHARE <= quoted * priceLimit, "paid more than priceLimit on average");
       });
 
-      it("refuses when every pool is above maxPrice, and when fewer than minShares arrive", async () => {
+      it("refuses when every pool is above priceLimit, and when fewer than minShares arrive", async () => {
         const cheapest = (await pools()).reduce((a, b) => (b.paid < a.paid ? b : a));
         await fund(ethereum, "USDC", ethereum.env.pot, BUDGET);
         const [recipient, refundTo] = PEOPLE;
@@ -327,7 +327,7 @@ describe(
           refundTo,
         ]);
         assert.equal(below.ok, false);
-        assert.match(String(below.reason), /every pool is above maxPrice/);
+        assert.match(String(below.reason), /every pool is above priceLimit/);
         const short = await simulate(ethereum, "buy-stock", [
           String(BUDGET),
           String(cheapest.paid * 2n),
@@ -547,19 +547,19 @@ describe(
         return quotePrice(await sqrtPriceOf(base, pool), BASE.USDC, BASE.WETH, 10n ** 18n);
       }
 
-      it("buys a tranche below maxPrice, as the quoter quotes, and leaves the rest in the Pot", async () => {
+      it("buys a tranche below priceLimit, as the quoter quotes, and leaves the rest in the Pot", async () => {
         const now = await price();
-        const maxPrice = (now * 1_002n) / 1_000n;
+        const priceLimit = (now * 1_002n) / 1_000n;
         await fund(base, "USDC", base.env.pot, 1_000_000_000n);
         const limit = sqrtPriceAt(
-          (maxPrice * 999_500n) / 1_000_000n,
+          (priceLimit * 999_500n) / 1_000_000n,
           BASE.USDC,
           BASE.WETH,
           10n ** 18n,
         );
         const quoted = await quote(base, BASE.USDC, BASE.WETH, TRANCHE, 500, limit);
 
-        const tick = (await cook(base, "dca", [String(TRANCHE), String(maxPrice)])) as Record<
+        const tick = (await cook(base, "dca", [String(TRANCHE), String(priceLimit)])) as Record<
           string,
           string
         >;
@@ -570,10 +570,10 @@ describe(
           await balanceOf(base.env, BASE.USDC, base.env.pot),
           1_000_000_000n - BigInt(tick.spent!),
         );
-        assert.ok(BigInt(tick.spent!) * 10n ** 18n <= quoted * maxPrice, "paid above maxPrice");
+        assert.ok(BigInt(tick.spent!) * 10n ** 18n <= quoted * priceLimit, "paid above priceLimit");
       });
 
-      it("waits, without failing, above maxPrice or short of a tranche", async () => {
+      it("waits, without failing, above priceLimit or short of a tranche", async () => {
         const now = await price();
         await fund(base, "USDC", base.env.pot, 1_000_000_000n);
         const above = (await cook(base, "dca", [String(TRANCHE), String(now / 2n)])) as Record<

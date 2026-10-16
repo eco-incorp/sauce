@@ -326,8 +326,7 @@ with a 0.1% protocol fee, its fee is 0.15%. As sqrt prices, 2,713.5 USDC per WET
 **4127095293177970497328754** and 2,686.5 is **4106511148422261116904015**, the limits the program
 derives from those two `priceLimit` values. `sauce price --chain base WETH USDC 2713.5` prints a
 price's `sqrtPriceX96`, and `--sqrt-price-x96 <value>` reads a pool's back as a price. Its `buy`
-block gives that price in these units (`2713500000`), as `maxPrice` (this program's `priceLimit`)
-and `maxAvgPrice`; its
+block gives that price in these units (`2713500000`), as `priceLimit` and `maxAvgPrice`; its
 `minAvgPrice` runs the other way round, output per input, and is never a `maxAvgPrice`.
 
 ## Setting the price and the checks
@@ -335,8 +334,7 @@ and `maxAvgPrice`; its
 `priceLimit` is the one number that protects the trade. Set it from the market, close to it.
 
 - **The reference is the best price a buyer pays, fee included, among pools deep enough for the
-  order.** `sauce pools` prints it per pool, both ways round, and in `priceLimit`'s units at that
-  price, as `maxPrice`.
+  order.** `sauce pools` prints it per pool, both ways round, and as `priceLimit` at that price.
   Paying token1, a pool's price after its fee is its price divided by `1 − fee`; paying token0, the
   same upside down. Not a pool with no liquidity, whose price is stale, and not the deepest pool's
   mid price, which sits up to its fee away from the cheap pools.
