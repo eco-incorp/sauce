@@ -249,12 +249,13 @@ function keepSvm(store: IntentStore, landed: Extract<Landed, { kind: "svm" }>): 
   ];
   // Its own instructions, and those a program invoked: a fill another program makes through the
   // Portal is the Portal's fill all the same.
+  const base58 = getBase58Encoder();
   const invoked = [
     ...message.instructions,
     ...(landed.inner ?? []).flatMap((group) =>
       group.instructions.map((instruction) => ({
         programAddressIndex: instruction.programIdIndex,
-        data: new Uint8Array(getBase58Encoder().encode(instruction.data)),
+        data: new Uint8Array(base58.encode(instruction.data)),
       })),
     ),
   ];
