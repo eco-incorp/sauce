@@ -1,11 +1,11 @@
 // SpaceX for USDC over Solana's pools, as a limit order: up to `budget` USDC, never more than
 // `priceLimit` for any SPCX_US, fees included, and at least `minTokens` SPCX_US or nothing. SPCX_US
 // is Backpack's SpaceX share, a Token-2022 mint. The pools are found by key, as an EVM program finds
-// a Uniswap pool by its fee: Raydium's CLMM pools of the pair at fee 0.25% and 0.18%, then Byreal's
-// at 0.1%, the pair's pools on mainnet that trade at a price, the deepest first; a key with no pool
-// is skipped. Each pool is offered what is left of the budget and trades until its price, fee paid,
-// reaches priceLimit. Compiling adds each pool's accounts to main, read from the pool when the cook
-// is built, so the command is given no account.
+// a Uniswap pool by its fee: Raydium's CLMM pools of the pair at fee 0.25% and 0.18%, Byreal's at
+// 0.1% and PancakeSwap's at 0.08%, the pair's pools on mainnet that trade at a price, the deepest
+// first; a key with no pool is skipped. Each pool is offered what is left of the budget and trades
+// until its price, fee paid, reaches priceLimit. Compiling adds each pool's accounts to main, read
+// from the pool when the cook is built, so the command is given no account.
 //
 //   sauce run solana-distributed-swap.sauce.ts --chain <chain> --keypair <keypair> \
 //     --args <budget> <priceLimit> <minTokens> <maxAvgPrice> <recipient>
@@ -52,6 +52,14 @@ function main(
   }
   bought += Byreal.CLMM.swap(
     Byreal.CLMM.pool(USDC, SPCX_US, 1000),
+    USDC,
+    SPCX_US,
+    self.USDC - kept,
+    priceLimit,
+    0,
+  );
+  bought += Pancakeswap.CLMM.swap(
+    Pancakeswap.CLMM.pool(USDC, SPCX_US, 800),
     USDC,
     SPCX_US,
     self.USDC - kept,

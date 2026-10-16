@@ -11,7 +11,8 @@
  *   - A Raydium-layout pool's swap loads every account given as a tick array, so each must exist,
  *     and starts at the first holding liquidity in its direction: the arrays its bitmap (1,024 bits
  *     at 904, bit 512 the array starting at tick 0) marks, nearest its price that way in walk order,
- *     then the other way, then arrays near its price that exist with none.
+ *     then the other way, then arrays near its price that exist with none. A pool priced past its
+ *     own bitmap's reach takes its bitmap extension among them, in the first place.
  *   - A whirlpool's, DefiTuna's and Crema's tick arrays are the SDK venue adapters' windows for the
  *     direction; a whirlpool's `extra` is its oracle, Crema's its tick-array map. The adapters read
  *     a pool for an off-chain quote and refuse what they cannot quote, an adaptive fee tier or a
@@ -293,10 +294,22 @@ export async function svmClmmSlot(
   throw new Error(`${venue.name} is not a concentrated-liquidity venue`);
 }
 
+/** sha256("account:TickArrayBitmapExtension")[..8]. */
+const BITMAP_EXTENSION = [0x3c, 0x96, 0x24, 0xdb, 0x61, 0x80, 0x8b, 0x99];
+
 /**
- * A Raydium-layout pool's three tick arrays in its direction: the marked ones nearest its price that
- * way in walk order, then the other way, then the nearest that exist with no liquidity. An array is
- * the program address of `["tick_array", pool, start]`, `start` a big-endian i32.
+ * A Raydium-layout pool's three tick-array places in its direction. Its swap starts at the first
+ * array holding liquidity in the walk's direction and loads every account it is given, so these are
+ * the marked arrays nearest its price that way in walk order, then the other way, then the nearest
+ * that exist with no liquidity. An array is the program address of `["tick_array", pool, start]`,
+ * `start` a big-endian i32.
+ *
+ * The pool's own bitmap (1,024 bits at 904, bit 512 the array at 0) marks the arrays within 512 of
+ * zero each way; past that, its bitmap extension does (the program address of
+ * `["pool_tick_array_bitmap_extension", pool]`: 14 bitmaps of 512 arrays each way, the positive at
+ * 40 and the negative at 936), and the swap of a pool whose arrays lie there takes the extension
+ * among its tick arrays, wherever it is, or fails the whole transaction. Such a pool's three are the
+ * extension, then its two nearest arrays.
  */
 async function raydiumTickArrays(
   program: Address,
@@ -306,25 +319,42 @@ async function raydiumTickArrays(
   load: AccountLoader,
 ): Promise<[Address, Address, Address]> {
   const span = 60 * Number(le(data, 235, 2));
+  const edge = 512 * span; // the pool's own bitmap marks the arrays starting in [-edge, edge)
   const current = Math.floor(i32(data, 269) / span) * span;
   const bitmap = data.subarray(904, 904 + 128);
-  const marked = (start: number) => {
-    const bit = start / span + 512;
-    return bit >= 0 && bit < 1024 && ((bitmap[bit >> 3]! >> (bit & 7)) & 1) === 1;
+  const extension = await memoizedGetProgramDerivedAddress(program, [
+    new TextEncoder().encode("pool_tick_array_bitmap_extension"),
+    new Uint8Array(getAddressEncoder().encode(pool)),
+  ]);
+  let extended: Uint8Array | null | undefined;
+  const bit = (bytes: Uint8Array, at: number, index: number) =>
+    ((bytes[at + (index >> 3)]! >> (index & 7)) & 1) === 1;
+  const inside = (start: number) => start >= -edge && start < edge;
+  const marked = (start: number): boolean => {
+    if (inside(start)) return bit(bitmap, 0, start / span + 512);
+    if (extended === null || extended === undefined) return false;
+    // Raydium's own arithmetic: the bitmap past the first `edge` ticks, and the array's bit in it.
+    const magnitude = Math.abs(start);
+    let level = Math.floor(magnitude / edge) - 1;
+    if (start < 0 && magnitude % edge === 0) level -= 1;
+    if (level < 0 || level >= 14) return false;
+    const rest = magnitude % edge;
+    const index = start < 0 && rest !== 0 ? 512 - rest / span : rest / span;
+    return bit(extended, (start < 0 ? 936 : 40) + 64 * level, index);
   };
+  // Read the extension only for a pool whose price is past its own bitmap.
+  if (!inside(current)) {
+    const read = await load(extension);
+    extended = read !== null && BITMAP_EXTENSION.every((byte, i) => read[i] === byte) ? read : null;
+  }
+  // The search spans the bitmaps read: the pool's own, and past it the extension's 14 each way.
+  const reach = extended === undefined || extended === null ? edge : 15 * edge;
+  const within = (start: number) => start >= -reach && start < reach;
   const step = down ? -span : span;
   const starts: number[] = [];
-  for (
-    let start = current;
-    starts.length < 3 && Math.abs(start - current) <= 512 * span;
-    start += step
-  )
+  for (let start = current; starts.length < 3 && within(start); start += step)
     if (marked(start)) starts.push(start);
-  for (
-    let start = current - step;
-    starts.length < 3 && Math.abs(start - current) <= 512 * span;
-    start -= step
-  )
+  for (let start = current - step; starts.length < 3 && within(start); start -= step)
     if (marked(start)) starts.push(start);
   const at = (start: number) => {
     const seed = new Uint8Array(4);
@@ -335,25 +365,38 @@ async function raydiumTickArrays(
       seed,
     ]);
   };
-  const chosen = await Promise.all(starts.map(at));
-  // Fewer than three with liquidity: the nearest that exist with none, nearest first, every
-  // candidate read at once.
-  if (chosen.length < 3) {
+  const outside = !inside(current) || starts.some((start) => !inside(start));
+  if (outside && extended === undefined) {
+    const read = await load(extension);
+    extended = read !== null && BITMAP_EXTENSION.every((byte, i) => read[i] === byte) ? read : null;
+  }
+  if (outside && extended === null) {
+    throw new Error("its price is past its own tick bitmap, and it has no bitmap extension");
+  }
+  // Past the pool's own bitmap, the extension takes the first place.
+  const places = outside ? 2 : 3;
+  const chosen = await Promise.all(starts.slice(0, places).map(at));
+  // Fewer with liquidity than there are places: the nearest that exist with none, the price's own
+  // array and those behind it, nearest first, every candidate read at once. Never one past the price
+  // that way: the swap at a price stops where the furthest array it is given that way begins, which
+  // must be one its bitmap marks (`router.svm.js`).
+  if (chosen.length < places) {
     const candidates: number[] = [current];
-    for (let distance = 1; distance <= 8; distance++)
-      candidates.push(current + distance * span, current - distance * span);
+    for (let distance = 1; distance <= 16; distance++) candidates.push(current - distance * step);
     const unmarked = candidates.filter((start) => !starts.includes(start));
     const keys = await Promise.all(unmarked.map(at));
     const exist = await Promise.all(keys.map(async (key) => (await load(key)) !== null));
     for (const [i, key] of keys.entries()) {
-      if (chosen.length >= 3) break;
+      if (chosen.length >= places) break;
       if (exist[i]) chosen.push(key);
     }
   }
-  if (chosen.length < 3) {
-    throw new Error(`it has ${chosen.length} tick arrays near its price, and its swap takes three`);
+  if (chosen.length < places) {
+    throw new Error(
+      `it has ${chosen.length} tick arrays near its price, and its swap takes ${places}`,
+    );
   }
-  return chosen as [Address, Address, Address];
+  return (outside ? [extension, ...chosen] : chosen) as [Address, Address, Address];
 }
 
 /** A Phoenix market's slot, the same paying either token. */

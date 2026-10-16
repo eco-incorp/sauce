@@ -71,7 +71,10 @@
 // reads the pool's fee and moves `priceLimit`'s square root toward the trade by `√(1 − fee)`: the
 // pool's last unit, fee paid, then costs at most `priceLimit`, and every earlier unit less. A Phoenix
 // market charges its taker fee on top, so its limit price is `priceLimit ÷ (1 + fee)`, in the market's
-// ticks. A pool whose fee is more than one rate, which no such limit can hold, is skipped.
+// ticks. A pool whose fee is more than one rate, which no such limit can hold, is skipped. And no
+// concentrated-liquidity swap at a price walks past the tick arrays its slot gives it, where its
+// program would fail the whole transaction: its limit is held a tick inside them (below, "The window
+// a swap at a price walks").
 //
 // AT THE POOL'S OWN LIMIT. `limit` is the pool's own: the sqrt price its swap takes, as the pool
 // keeps it (a Q64.64 root on the concentrated-liquidity venues, a root times 10^24 on Invariant),
@@ -156,7 +159,8 @@ import { balanceOf } from "@sauce/token";
 // at or past the limit) or the input is dust. It reads the pool where its venue keeps them: its two
 // mints at `mintAAt` and `mintBAt`, its liquidity's 16 bytes at `liquidityAt` and its sqrt price's
 // right after, and its fee, in millionths and taken from the input, in `feeBytes` at `feeAt` of
-// `feeAccount`. Requires the two mints, in key order, to be the pair `trader` pays and buys.
+// `feeAccount`. Requires the two mints, in key order, to be the pair `trader` pays and buys. `stop`
+// is the window's last safe tick (biased), its tick at `tickOffset`: the limit is held a tick inside.
 function clmmOrder(
   pool: Account,
   mintAAt: Uint256,
@@ -168,6 +172,8 @@ function clmmOrder(
   trader: Account[],
   priceLimit: Uint256,
   amountIn: Uint256,
+  tickOffset: Uint256,
+  stop: Uint256,
 ): bytes {
   const pay = trader[2].address;
   const buy = trader[3].address;
@@ -187,7 +193,20 @@ function clmmOrder(
   // lower-key token pushes the price down, the other up. The root is rounded down, so the limit sits
   // a hair inside the exact one: the pool stops a little sooner, never later.
   const root = Math.sqrt((1000000 - fee) * 10 ** 30); // √(1 − fee), times 1e18
-  const own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
+  let own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
+  // No further than the window: a tick inside its last safe tick, measured from the price's own tick
+  // (the price lies within a tick above it). Paying the lower-key token the price falls, so the
+  // bound is a floor; none, the price itself, where the window leaves no room.
+  const tick = tickAt(pool, tickOffset);
+  let bound = price;
+  if (paysA ? stop + 1 < tick : stop > tick + 2) {
+    bound = paysA
+      ? ticksAway(price, tick - stop - 1, false)
+      : ticksAway(price, stop - tick - 2, true);
+  }
+  if (paysA ? own < bound : own > bound) {
+    own = bound;
+  }
   const better = paysA ? price > own : price < own;
   if (liquidity == 0 || !better || dust(paysA, price, fee, amountIn)) {
     return hex``;
@@ -232,6 +251,145 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
   const kept = (amountIn * (1000000 - fee)) / 1000000;
   const square = price * price; // a Q64.64 price is under 2^96, so its square fits
   return paysA ? kept * square < 1 << 128 : kept << 128 < square;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The window a swap at a price walks
+// ---------------------------------------------------------------------------------------------
+//
+// A concentrated-liquidity swap walks the tick arrays it is given and no further, and past them it
+// fails the whole transaction, every pool's trade with it. Raydium's code looks the next array its
+// bitmap marks up as soon as it has crossed the last initialized tick of the one it is in, before it
+// reads the limit (`NotEnoughTickArrayAccount` when its accounts hold no more, or
+// `MissingTickArrayBitmapExtensionAccount` when the lookup runs past the pool's own bitmap); a
+// whirlpool's swap stops at the far boundary of the third array of its window and fails on the step
+// after (`TickArraySequenceInvalidIndex`); Crema's past the last initialized tick of the arrays it
+// holds (`NextTickNotFound`). So each swap at a price stops at its window's last safe tick: these
+// return it, and `clmmOrder` holds the limit a tick inside it.
+//
+// For Raydium's code and Crema that is where the furthest array the slot gives that way begins,
+// since the swap reaches it by lookup and stops there; and when that array holds the price, the last
+// tick initialized in it that way. A tick is an i32 read with its sign bit flipped (biased), so that
+// ticks compare in order; 0 is no room at all.
+
+// The biased tick at `at` of `account`, an i32.
+function tickAt(account: Account, at: Uint256): Uint256 {
+  return svm.sload(account, at, 4).toLe() ^ 0x80000000;
+}
+
+// A Raydium-code pool's last safe tick paying the lower-key token (`down`) or the other. Its slot's
+// tick arrays (the bitmap extension and the arrays behind the price passed over) hold 60 ticks each:
+// a fixed array 168 bytes each at 44, a Byreal dynamic one the ticks it allocated at 216, each tick's
+// place among them, 1-based, in the 60 bytes at 48. A tick is initialized with liquidity: one holding
+// limit orders alone is taken as not, which stops the window sooner, never later.
+function raydiumStop(slot: Account[], down: bool): Uint256 {
+  const pool = slot[1];
+  const tick = tickAt(pool, 269);
+  const spacing = svm.sload(pool, 235, 2).toLe();
+  const span = 60 * spacing;
+  let far = 0;
+  let start = 0;
+  let dynamic = false;
+  for (let i = 6; i < 9; i = i + 1) {
+    const kind = svm.sload(slot[i], 0, 8).toBe();
+    if (kind == 0xc09b55cd31f9812a || kind == 0x6a8b98247599b838) {
+      const s = tickAt(slot[i], 40);
+      if ((down ? s <= tick : s + span > tick) && (far == 0 || (down ? s < start : s > start))) {
+        far = i;
+        start = s;
+        dynamic = kind == 0x6a8b98247599b838;
+      }
+    }
+  }
+  if (far == 0) {
+    return 0;
+  }
+  if (down ? start + span <= tick : start > tick) {
+    return down ? start + span : start;
+  }
+  // The array holding the price: its last initialized tick that way, from its far end.
+  const array = slot[far];
+  const here = (tick - start) / spacing;
+  for (let n = 0; n < 60; n = n + 1) {
+    const offset = down ? n : 59 - n;
+    if (down ? offset > here : offset <= here) {
+      return 0;
+    }
+    let at = 64 + offset * 168;
+    if (dynamic) {
+      const place = svm.sload(array, 48 + offset, 1).toLe();
+      at = place == 0 ? 0 : 216 + (place - 1) * 168 + 20;
+    }
+    if (at != 0 && svm.sload(array, at, 16).toLe() != 0) {
+      return start + offset * spacing;
+    }
+  }
+  return 0;
+}
+
+// A whirlpool's last safe tick (Orca's and Cropper's layout, its tick at 81 and spacing at 41;
+// DefiTuna's at 183 and 139): the far boundary of the third of the arrays of 88 ticks its program
+// lays out from the one holding its price, which its slot gives it.
+function whirlpoolStop(
+  pool: Account,
+  tickOffset: Uint256,
+  spacingOffset: Uint256,
+  down: bool,
+): Uint256 {
+  const tick = tickAt(pool, tickOffset);
+  const spacing = svm.sload(pool, spacingOffset, 2).toLe();
+  const span = 88 * spacing;
+  // The array holding the tick, rounded toward negative infinity: shifted by a multiple of the span
+  // past 2^31 so that the division is of a positive number.
+  const shift = ((0x80000000 + span - 1) / span) * span;
+  const base = ((tick + shift - 0x80000000) / span) * span + 0x80000000 - shift;
+  if (down) {
+    return base - 2 * span;
+  }
+  // Paying the higher-key token the window starts an array later where the tick is in the last
+  // spacing of its own.
+  const first = tick + spacing >= base + span ? base + span : base;
+  return first + 2 * span + 87 * spacing;
+}
+
+// Crema's last safe tick: its slot's leading tick arrays are those its map marks, in walk order, of
+// 64 ticks of 133 bytes at 44 each, initialized when its first byte is 1; an array's index at 8
+// counts arrays of 64 × spacing from the pool's least tick, −443636 rounded to the spacing.
+function cremaStop(slot: Account[], down: bool): Uint256 {
+  const pool = slot[1];
+  const tick = tickAt(pool, 206);
+  const spacing = svm.sload(pool, 168, 2).toLe();
+  const span = 64 * spacing;
+  const last = slot[7].address == 0 ? slot[6] : slot[8].address == 0 ? slot[7] : slot[8];
+  const start = 0x80000000 - 443636 + (443636 % spacing) + svm.sload(last, 8, 2).toLe() * span;
+  if (down ? start + span <= tick : start > tick) {
+    return down ? start + span : start;
+  }
+  const here = (tick - start) / spacing;
+  for (let n = 0; n < 64; n = n + 1) {
+    const offset = down ? n : 63 - n;
+    if (down ? offset > here : offset <= here) {
+      return 0;
+    }
+    if (svm.sload(last, 44 + offset * 133, 1).toLe() == 1) {
+      return start + offset * spacing;
+    }
+  }
+  return 0;
+}
+
+// The Q64.64 sqrt price `n` ticks from `price`, up or down: a tick is a factor of s = √1.0001. The
+// power is bounded by its first four binomial terms in x = s − 1 (rounded down, times 1e18), all
+// positive, so the result lies inside the exact one: under it going up, over it going down.
+function ticksAway(price: Uint256, n: Uint256, up: bool): Uint256 {
+  const x = 49998750062496;
+  const one = 10 ** 18;
+  const a = n * x;
+  const b = n > 1 ? (n - 1) * x : 0;
+  const c = n > 2 ? (n - 2) * x : 0;
+  const power =
+    one + a + Math.mulDiv(a, b, 2 * one) + Math.mulDiv(Math.mulDiv(a, b, one), c, 6 * one);
+  return up ? Math.mulDiv(price, power, one) : Math.mulDiv(price, one, power);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -936,11 +1094,28 @@ function swapRaydium(
   ) {
     return;
   }
-  const order = clmmOrder(pool, 73, 105, 237, slot[2], 47, 4, trader, priceLimit, amountIn);
+  const paysA = trader[2].address < trader[3].address;
+  const stop = raydiumStop(slot, paysA);
+  if (stop == 0) {
+    return;
+  }
+  const order = clmmOrder(
+    pool,
+    73,
+    105,
+    237,
+    slot[2],
+    47,
+    4,
+    trader,
+    priceLimit,
+    amountIn,
+    269,
+    stop,
+  );
   if (order.length == 0) {
     return;
   }
-  const paysA = trader[2].address < trader[3].address;
   const swapV2 = hex`2b04ed0b1ac91e62`;
   svm.call(
     slot[0],
@@ -981,11 +1156,12 @@ function swapWhirlpool(
   if (svm.sload(pool, 41, 2).toLe() != svm.sload(pool, 43, 2).toLe()) {
     return;
   }
-  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn);
+  const paysA = trader[2].address < trader[3].address;
+  const stop = whirlpoolStop(pool, 81, 41, paysA);
+  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn, 81, stop);
   if (order.length == 0) {
     return;
   }
-  const paysA = trader[2].address < trader[3].address;
   const mintA = paysA ? trader[2] : trader[3];
   const mintB = paysA ? trader[3] : trader[2];
   const token = trader[4];
@@ -1025,11 +1201,12 @@ function swapCropper(
   if (svm.sload(pool, 41, 2).toLe() != svm.sload(pool, 43, 2).toLe()) {
     return;
   }
-  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn);
+  const paysA = trader[2].address < trader[3].address;
+  const stop = whirlpoolStop(pool, 81, 41, paysA);
+  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn, 81, stop);
   if (order.length == 0) {
     return;
   }
-  const paysA = trader[2].address < trader[3].address;
   const swap = hex`f8c69e91e17587c8`;
   svm.call(
     slot[0],
@@ -1059,11 +1236,12 @@ function swapDefituna(
   recipient: Account,
 ): void {
   const pool = slot[1];
-  const order = clmmOrder(pool, 11, 43, 151, pool, 143, 2, trader, priceLimit, amountIn);
+  const paysA = trader[2].address < trader[3].address;
+  const stop = whirlpoolStop(pool, 183, 139, paysA);
+  const order = clmmOrder(pool, 11, 43, 151, pool, 143, 2, trader, priceLimit, amountIn, 183, stop);
   if (order.length == 0) {
     return;
   }
-  const paysA = trader[2].address < trader[3].address;
   const mintA = paysA ? trader[2] : trader[3];
   const mintB = paysA ? trader[3] : trader[2];
   const swap = hex`f8c69e91e17587c8`;
@@ -1102,11 +1280,15 @@ function swapCrema(
   if (svm.sload(pool, 747, 1).toLe() != 0) {
     return;
   }
-  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, priceLimit, amountIn);
+  const paysA = trader[2].address < trader[3].address;
+  const stop = cremaStop(slot, paysA);
+  if (stop == 0) {
+    return;
+  }
+  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, priceLimit, amountIn, 206, stop);
   if (order.length == 0) {
     return;
   }
-  const paysA = trader[2].address < trader[3].address;
   const swap = paysA ? hex`f8c69e91e17587c80101` : hex`f8c69e91e17587c80001`;
   const mintA = paysA ? trader[2] : trader[3];
   const mintB = paysA ? trader[3] : trader[2];

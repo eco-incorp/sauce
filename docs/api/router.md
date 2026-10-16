@@ -331,7 +331,8 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
   [`sauce pools`](../guides/cli-lookup.md#a-pairs-pools-sauce-pools) prints each pool's slot for the direction paid. Some
   venues take accounts past the nine: at its own limit, a Raydium-layout pool (Raydium CLMM,
   PancakeSwap CLMM, Byreal, Stabble CLMM) its tick-array bitmap extension tenth, which its swap reads
-  past the pool's default range (a slot of nine sends none, and so does every form at a price);
+  past the pool's default range (a slot of nine sends none). At a price, a pool priced past that
+  range carries the extension in its first tick-array place instead, where its swap finds it by key;
   Invariant its program's authority tenth (its `config` is the
   program's state, `extra` the pool's tickmap, its ticks the tick accounts the swap may cross);
   OpenBook v2 its two oracles, the program itself for one the market has not (its `config` is the
@@ -385,7 +386,10 @@ large for an order's 64-bit price. The price only worsens as a pool sells, so th
 most the input could buy: dust an earlier pool left (an atom, which the fee takes whole) is skipped,
 never handed to a venue that would keep it or refuse it. A Phoenix or OpenBook order whose book has
 no offer within its price is placed and fills nothing, so it returns `0` too, nothing having moved.
-A swap that ran returns at least 1, held to `minOut` and at least 1, and reverts below it. A failure
+A swap at a price also never walks past the tick arrays its slot gives it, where the venue's program
+would fail the transaction: its limit is held a tick inside them, so a `priceLimit` far past the
+pool's price buys up to the last of them and stops. A swap that ran returns at least 1, held to
+`minOut` and at least 1, and reverts below it. A failure
 the checks do not foresee, such as a tick array missing from the slot or an Invariant input past its
 limit, fails the transaction.
 

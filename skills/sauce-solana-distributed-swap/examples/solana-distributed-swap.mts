@@ -70,12 +70,13 @@ const CALLS = [
 check(
   LOOPS.map((loop) => `${loop.venue} by ${loop.key}: ${loop.keys.join(" ")}`).join() ===
     "Raydium.CLMM by fee: 2500 1800" &&
-    CALLS.map((call) => `${call.venue} ${call.keys.join()}`).join() === "Byreal.CLMM 1000",
-  "the program loops over Raydium's fees, then calls Byreal's pool at its fee",
+    CALLS.map((call) => `${call.venue} ${call.keys.join()}`).join() ===
+      "Byreal.CLMM 1000,Pancakeswap.CLMM 800",
+  "the program loops over Raydium's fees, then calls Byreal's and PancakeSwap's pools at theirs",
 );
 const program = routes.compileSauceProgram("solana", source);
 check(
-  /^import \{ raydiumClmm as __sauce_raydiumClmm, byreal as __sauce_byreal \} from "@sauce\/router";$/m.test(
+  /^import \{ raydiumClmm as __sauce_raydiumClmm, byreal as __sauce_byreal, pancakeswapClmm as __sauce_pancakeswapClmm \} from "@sauce\/router";$/m.test(
     program.source,
   ),
   "each venue's swap is its @sauce/router function",
@@ -339,7 +340,7 @@ check(
 );
 check(
   library.includes(
-    "const own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);",
+    "let own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);",
   ),
   "the library applies it",
 );
