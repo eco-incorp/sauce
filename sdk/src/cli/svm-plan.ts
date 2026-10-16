@@ -41,7 +41,6 @@ import {
   isAddress,
   isSignature,
   isSignerRole,
-  TRANSACTION_SIZE_LIMIT,
   type Address,
   type AddressesByLookupTableAddress,
   type Blockhash,
@@ -91,6 +90,7 @@ import {
   MAX_CODE_LEN,
   MAX_POT_LEN,
   recommendedComputeUnitLimit,
+  TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import { failureReason, svmTokenAccountsToCreate } from "./solana.js";

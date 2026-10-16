@@ -1420,18 +1420,18 @@ export async function intentStatus(
   const refund: Ability =
     source === undefined
       ? no(`needs ${sourceChain.slug}'s endpoint`)
-      : cancelProven
-        ? yes("the cancellation is proven: refundable now")
-        : proofHere
-          ? source.status === "Withdrawn" && source.holds.some((entry) => entry.holds > 0n)
-            ? yes("claimed: the vault's leftovers go back to the creator")
-            : no(
-                source.status === "Withdrawn"
-                  ? "claimed: the vault holds nothing to refund"
-                  : "proven: the reward is the claimant's",
-              )
-          : source.status === "Refunded" && source.holds.every((entry) => entry.holds === 0n)
-            ? no("the reward was refunded")
+      : source.status === "Refunded" && source.holds.every((entry) => entry.holds === 0n)
+        ? no("the reward was refunded")
+        : cancelProven
+          ? yes("the cancellation is proven: refundable now")
+          : proofHere
+            ? source.status === "Withdrawn" && source.holds.some((entry) => entry.holds > 0n)
+              ? yes("claimed: the vault's leftovers go back to the creator")
+              : no(
+                  source.status === "Withdrawn"
+                    ? "claimed: the vault holds nothing to refund"
+                    : "proven: the reward is the claimant's",
+                )
             : source.time < rewardDeadline
               ? no(`not before the reward's deadline, ${iso(rewardDeadline)}`, rewardDeadline)
               : yes(`the reward's deadline, ${iso(rewardDeadline)}, has passed`);

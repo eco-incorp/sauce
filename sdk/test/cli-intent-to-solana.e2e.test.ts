@@ -6,7 +6,7 @@
  * `svm/eco-routes-svm.ts`), reached through a JSON-RPC shim (`svm/rpc-shim.ts`).
  *
  *  1. A file paying a wallet USDC on Solana (`Solana(() => { USDC.transfer(recipient, amount) })`,
- *     the manual's `docs/examples/evm-to-solana.sauce.ts`): published from an Ethereum wallet, filled on
+ *     the manual's `docs/examples/ethereum-to-solana.sauce.ts`): published from an Ethereum wallet, filled on
  *     Solana (the route creating the recipient's token account), proven back through Hyperlane and
  *     claimed on Ethereum.
  *  2. The same intent made step by step (`sauce intent publish` with no file), its recipient and
@@ -90,9 +90,9 @@ const KITCHEN_FEE = 5_000n;
 const HYPERLANE_FEE = 7_777n;
 const MAILBOX = parseAbi(["function process(bytes, bytes)"]);
 
-/** The manual's example (docs/examples/evm-to-solana.sauce.ts): pays a Solana wallet USDC. */
+/** The manual's example (docs/examples/ethereum-to-solana.sauce.ts): pays a Solana wallet USDC. */
 const TRANSFER = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "../../docs/examples/evm-to-solana.sauce.ts"),
+  join(dirname(fileURLToPath(import.meta.url)), "../../docs/examples/ethereum-to-solana.sauce.ts"),
   "utf8",
 );
 
