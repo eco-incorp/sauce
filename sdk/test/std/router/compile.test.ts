@@ -381,7 +381,7 @@ describe("@sauce/router (SVM): every exact-input function compiles from run-time
 });
 
 describe("@sauce/router (SVM): the exports are the documented API", () => {
-  it("exports swap, the ten venues at a price, the eleven at their own limit, each instruction's data and Manifest's", () => {
+  it("exports swap, the nine venues at a price, the eleven at their own limit, each instruction's data and Manifest's", () => {
     const exported = [...routerSource("svm").matchAll(/^export function (\w+)\(/gm)].map(
       (m) => m[1],
     );
@@ -492,12 +492,11 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
   // An Anchor instruction's discriminator: the first 8 bytes of sha256("global:<name>").
   const discriminator = (name: string): string =>
     createHash("sha256").update(`global:${name}`).digest("hex").slice(0, 16);
-  const INSTRUCTIONS = ["swap_v2", "swap", "swap2", "place_take_order"] as const;
+  const INSTRUCTIONS = ["swap_v2", "swap", "place_take_order"] as const;
   // Each venue's id and the Anchor instructions its code carries, counted: Orca at its own limit
   // sends `swap` to a pool of SPL Token mints and `swap_v2` to the rest, and at a price `swap_v2` to
   // every pool; Crema's and Invariant's `swap` is written once per direction, whose flag follows it.
-  // Phoenix's and Manifest's are a one-byte tag. Meteora DLMM at a price sends `swap` to a pool of
-  // SPL Token mints and `swap2` to the rest; its instruction alone, its exact input's, `swap`.
+  // Phoenix's and Manifest's are a one-byte tag.
   const VENUES: [string, string, Partial<Record<(typeof INSTRUCTIONS)[number], number>>][] = [
     ["RaydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, { swap_v2: 1 }],
     ["PancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, { swap_v2: 1 }],
@@ -511,19 +510,16 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     ["Invariant", INVARIANT_PROGRAM_ID, { swap: 2 }],
     ["Manifest", MANIFEST_PROGRAM_ID, {}],
     ["OpenbookV2", OPENBOOK_V2_PROGRAM_ID, { place_take_order: 1 }],
-    ["MeteoraDlmm", METEORA_DLMM_PROGRAM_ID, { swap: 1, swap2: 1 }],
   ];
-  /** Each venue's functions: at a price (the ten), at its own limit, and its instruction alone. */
+  /** Each venue's functions: at a price (the nine), at its own limit, and its instruction alone. */
   const functionsOf = (venue: string): string[] =>
     venue === "Manifest"
       ? ["manifest", "manifestCpi"]
-      : venue === "MeteoraDlmm"
-        ? ["meteoraDlmm", "meteoraDlmmCpi"]
-        : [
-            ...((SVM_FUNCTIONS as readonly string[]).includes(lower(venue)) ? [lower(venue)] : []),
-            `${lower(venue)}AtLimit`,
-            `${lower(venue)}Cpi`,
-          ];
+      : [
+          ...((SVM_FUNCTIONS as readonly string[]).includes(lower(venue)) ? [lower(venue)] : []),
+          `${lower(venue)}AtLimit`,
+          `${lower(venue)}Cpi`,
+        ];
   const bytecode = (name: string): string =>
     hex(compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm").bytecode);
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
@@ -532,8 +528,7 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     VENUES.flatMap(([venue, id, ix]) => functionsOf(venue).map((fn) => [fn, id, ix] as const)),
   )("%s carries its venue's program id and instructions, and no other's", (fn, id, ix) => {
     const code = bytecode(fn);
-    const carried: typeof ix =
-      fn === "orcaWhirlpool" ? { swap_v2: 1 } : fn === "meteoraDlmmCpi" ? { swap: 1 } : ix;
+    const carried: typeof ix = fn === "orcaWhirlpool" ? { swap_v2: 1 } : ix;
     for (const [, other] of VENUES) expect(count(code, key(other))).toBe(other === id ? 1 : 0);
     for (const name of INSTRUCTIONS)
       expect(count(code, discriminator(name))).toBe(carried[name] ?? 0);
@@ -569,17 +564,16 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     for (const name of INSTRUCTIONS) expect(count(code, discriminator(name))).toBe(ix[name] ?? 0);
   });
 
-  it("swap carries the ten venues' program ids once, and each instruction once per venue code", () => {
+  it("swap carries the nine venues' program ids once, and each instruction once per venue code", () => {
     const code = bytecode("swap");
     for (const [venue, id] of VENUES)
       expect(count(code, key(id))).toBe(
         ["Invariant", "Manifest", "OpenbookV2"].includes(venue) ? 0 : 1,
       );
     // swap_v2: Raydium's code (four programs) and Orca's; swap: Cropper, DefiTuna, Crema's two
-    // directions and Meteora DLMM's; swap2: Meteora DLMM's.
+    // directions.
     expect(count(code, discriminator("swap_v2"))).toBe(2);
-    expect(count(code, discriminator("swap"))).toBe(5);
-    expect(count(code, discriminator("swap2"))).toBe(1);
+    expect(count(code, discriminator("swap"))).toBe(4);
   });
 });
 
@@ -713,8 +707,7 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       ...none,
       "a pool's program is not its owner": 1,
       "not a supported venue's pool": 1,
-      // The concentrated-liquidity pools' check, and Meteora DLMM's.
-      "pool is not the pair": 2,
+      "pool is not the pair": 1,
       "market is not the pair": 1,
       "below minOut": 1,
     });
@@ -736,10 +729,9 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
   ];
   const book = (venue: string): boolean => ["Phoenix", "Manifest", "OpenbookV2"].includes(venue);
 
-  it.each([
-    ...VENUE_REASONS.filter(([venue]) => !["Invariant", "OpenbookV2", "Manifest"].includes(venue)),
-    ["MeteoraDlmm", "not a Meteora DLMM pool"],
-  ])("%s at a price refuses another venue's pool as %j", (venue, reason) => {
+  it.each(
+    VENUE_REASONS.filter(([venue]) => !["Invariant", "OpenbookV2", "Manifest"].includes(venue)),
+  )("%s at a price refuses another venue's pool as %j", (venue, reason) => {
     const code = hex(compileStdRouter(svmProgramCalling(lower(venue)), "svm").bytecode);
     expect(code.split(Buffer.from(reason).toString("hex")).length - 1).toBe(1);
     const pair = book(venue) ? "market is not the pair" : "pool is not the pair";

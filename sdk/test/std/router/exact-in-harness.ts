@@ -74,8 +74,6 @@ export interface Trade {
   buy: Address;
   amountIn: bigint;
   minOut?: bigint;
-  /** A price-limit venue's `maxPrice`. */
-  maxPrice?: bigint;
   /** The token programs of the paying and the receiving accounts, Tokenkeg unless named. */
   payProgram?: Address;
   buyProgram?: Address;
@@ -398,9 +396,7 @@ export const cook = async (
         ? trade.amountIn
         : param.name === "minOut"
           ? (trade.minOut ?? 0n)
-          : param.name === "maxPrice"
-            ? (trade.maxPrice ?? 0n)
-            : 0n,
+          : 0n,
     ),
   );
   const payload = new Uint8Array(program.bytecode.length + args.length);

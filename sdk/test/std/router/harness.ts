@@ -155,14 +155,12 @@ export const SVM_LIMIT_VENUES = ["Invariant", "OpenbookV2"] as const;
 
 const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
 
-/** Every function of the SVM arm: `swap`; each of the ten venues at a price, Meteora DLMM's walked
- *  to it (its instruction forms are its exact input's); each of the others at its own limit, its
- *  instruction alone and its instruction's data (Orca's two: `swap`'s and `swap_v2`'s; OpenBook's
- *  two: from an amount and from lots); and Manifest's. */
+/** Every function of the SVM arm: `swap`; each of the nine venues at a price; each venue at its own
+ *  limit, its instruction alone and its instruction's data (Orca's two: `swap`'s and `swap_v2`'s;
+ *  OpenBook's two: from an amount and from lots); and Manifest's. */
 export const SVM_FUNCTIONS = [
   "swap",
   ...SVM_VENUES.map(lower),
-  "meteoraDlmm",
   ...[...SVM_VENUES, ...SVM_LIMIT_VENUES].flatMap((venue) => [
     `${lower(venue)}AtLimit`,
     `${lower(venue)}Cpi`,
@@ -327,6 +325,7 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   huma: 8,
   heliumTreasury: 6,
   solfiV1: 5,
+  meteoraDlmm: 9,
 };
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form
@@ -336,7 +335,6 @@ export const SVM_CPI_ONLY = [
   "pumpswap",
   "bonkswap",
   "guacswap",
-  "meteoraDlmm",
   "sarosDlmm",
   "raydiumLaunchlab",
   "runnerRodeo",
