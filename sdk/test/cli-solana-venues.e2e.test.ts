@@ -168,47 +168,55 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
   });
 
-  it("runs the sauce-swaps Solana example as its header says: the pool and amounts as --args", async () => {
-    restoreVenues(harness.svm);
-    const file = fileURLToPath(
-      new URL("../../skills/sauce-swaps/examples/solana-swap.sauce.ts", import.meta.url),
-    );
-    const header = readFileSync(file, "utf8")
-      .split("\n")
-      .filter((one) => one.startsWith("//"))
-      .map((one) => one.replace(/^\/\/\s*/, ""));
-    const first = header.findIndex((one) =>
-      one.startsWith("sauce run solana-swap.sauce.ts --chain solana"),
-    );
-    const line = header
-      .slice(first, first + 2)
-      .map((one) => one.replace(/\\$/, ""))
-      .join(" ");
-    const orca = pool("orca-whirlpool-sol-usdc");
-    const to = randomAddress();
-    const [toWsol] = await findAssociatedTokenPda({ owner: to, mint: WSOL, tokenProgram: TOKEN });
-    const filled: Record<string, string> = {
-      "<keypair>": owner.path,
-      "<pool>": orca.pool,
-      "<recipient>": to,
-    };
-    const argv = line
-      .split(/\s+/)
-      .filter((word) => word !== "")
-      .slice(1)
-      .map((word) => filled[word] ?? word);
-    expect(argv.slice(0, 2)).toEqual(["run", "solana-swap.sauce.ts"]);
-    expect(argv).not.toContain("--account");
-    argv[1] = file;
-    const before = tokenAmount(harness, potUsdc);
-    // The Pot's WSOL account, where the swap lands what it buys, does not exist yet: the run makes it.
-    expect(harness.svm.getAccount(potWsol).exists).toBe(false);
-    const out = json(await sauce(...argv, "--rpc-url", SOLANA_URL, "--json", "--yes"));
-    expect(out).toMatchObject({ cook: { status: "success" } });
-    // 100 USDC at a whirlpool near 118 USDC a SOL: the 0.4 SOL floor is met, and all of it forwarded.
-    expect(tokenAmount(harness, toWsol)).toBeGreaterThanOrEqual(400_000_000n);
-    expect(tokenAmount(harness, potUsdc)).toBe(before - 100_000_000n);
-  }, 300_000);
+  it.each([
+    ["the sauce-swaps skill's", "../../skills/sauce-swaps/examples/solana-swap.sauce.ts"],
+    ["the manual's", "../../docs/examples/solana-swap.sauce.ts"],
+  ])(
+    "runs %s Solana swap as its header says: the pool and amounts as --args",
+    async (whose, path) => {
+      restoreVenues(harness.svm);
+      const file = fileURLToPath(new URL(path, import.meta.url));
+      const header = readFileSync(file, "utf8")
+        .split("\n")
+        .filter((one) => one.startsWith("//"))
+        .map((one) => one.replace(/^\/\/\s*/, ""));
+      const first = header.findIndex((one) =>
+        one.startsWith("sauce run solana-swap.sauce.ts --chain solana"),
+      );
+      const line = header
+        .slice(first, first + 2)
+        .map((one) => one.replace(/\\$/, ""))
+        .join(" ");
+      const orca = pool("orca-whirlpool-sol-usdc");
+      const to = randomAddress();
+      const [toWsol] = await findAssociatedTokenPda({ owner: to, mint: WSOL, tokenProgram: TOKEN });
+      const filled: Record<string, string> = {
+        "<keypair>": owner.path,
+        "<pool>": orca.pool,
+        "<recipient>": to,
+      };
+      const argv = line
+        .split(/\s+/)
+        .filter((word) => word !== "")
+        .slice(1)
+        .map((word) => filled[word] ?? word);
+      expect(argv.slice(0, 2)).toEqual(["run", "solana-swap.sauce.ts"]);
+      expect(argv).not.toContain("--account");
+      argv[1] = file;
+      const before = tokenAmount(harness, potUsdc);
+      // The Pot's WSOL account, where the swap lands what it buys, does not exist before the first
+      // run: the run makes it.
+      if (whose === "the sauce-swaps skill's") {
+        expect(harness.svm.getAccount(potWsol).exists).toBe(false);
+      }
+      const out = json(await sauce(...argv, "--rpc-url", SOLANA_URL, "--json", "--yes"));
+      expect(out).toMatchObject({ cook: { status: "success" } });
+      // 100 USDC at a whirlpool near 118 USDC a SOL: the 0.4 SOL floor is met, and all of it forwarded.
+      expect(tokenAmount(harness, toWsol)).toBeGreaterThanOrEqual(400_000_000n);
+      expect(tokenAmount(harness, potUsdc)).toBe(before - 100_000_000n);
+    },
+    300_000,
+  );
 
   it("`sauce compile --json` lists the pool's slot and the trader's accounts with their derivations", async () => {
     const file = program(
@@ -361,6 +369,48 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     },
     300_000,
   );
+
+  it("Solana.trySwap takes a pool of any venue, and an empty slot, given by --args alone", async () => {
+    restoreVenues(harness.svm);
+    // Three slots, each a pool at whichever venue it is, or none: what a distributed swap takes.
+    const file = program(
+      "any-venue",
+      "function main(pool0: Address, pool1: Address, pool2: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
+        "  const first = Solana.trySwap(pool0, USDC, WSOL, amountIn, maxPrice, 0);\n" +
+        "  const second = Solana.trySwap(pool1, USDC, WSOL, amountIn, maxPrice, 0);\n" +
+        "  const third = Solana.trySwap(pool2, USDC, WSOL, amountIn, maxPrice, 0);\n" +
+        "  return first + second + third;\n}\n",
+    );
+    const compiled = json(await sauce("compile", file, "--chain", "solana", "--json")) as {
+      manifest: { accounts: { name: string; derive?: string }[] };
+      accountsToGive: unknown[];
+    };
+    // Every account derived: nothing to give.
+    expect(compiled.accountsToGive).toEqual([]);
+    expect(compiled.manifest.accounts.map((slot) => slot.derive)).toContain(
+      "slot:@pool1:USDC.vaultA",
+    );
+    const orca = pool("orca-whirlpool-sol-usdc");
+    const raydium = pool("raydium-clmm-sol-usdc");
+    const amount = 20n * 10n ** 6n;
+    const maxPrice = [priceAbove(orca.name), priceAbove(raydium.name)].reduce((a, b) =>
+      a > b ? a : b,
+    );
+    const empty = "11111111111111111111111111111111";
+    const args = ["--args", orca.pool, empty, raydium.pool, String(amount), String(maxPrice)];
+    const before = tokenAmount(harness, potUsdc);
+    const held = harness.svm.getAccount(potWsol).exists ? tokenAmount(harness, potWsol) : 0n;
+
+    const rehearsed = json(await simulate(file, ...args));
+    expect(rehearsed).toMatchObject({ ok: true });
+    const out = json(await run(file, ...args));
+    expect(out).toMatchObject({ cook: { status: "success" } });
+    // Two pools swapped, the empty slot skipped: what main returned is what arrived in the Pot.
+    const bought = tokenAmount(harness, potWsol) - held;
+    expect(bought).toBeGreaterThan(0n);
+    expect(BigInt(rehearsed.returned as string)).toBe(bought);
+    expect(tokenAmount(harness, potUsdc)).toBe(before - 2n * amount);
+  }, 300_000);
 
   it("refuses a pool no price-limit venue owns before the cook, and another venue's on chain", async () => {
     const file = program(

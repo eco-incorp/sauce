@@ -18,6 +18,7 @@ import {
   createAltWithAddresses,
   extendAlt,
   fetchAlt,
+  lookupTableAddresses,
   waitForAltActive,
 } from "./alt.js";
 import {
@@ -40,7 +41,12 @@ import {
 import type { AccountResolution } from "./resolve.js";
 import { recommendedComputeUnitLimit, sendExecute, simulateExecute } from "./send.js";
 import type { SendExecuteResult, SimulateExecuteResult } from "./send.js";
-import { buildExecuteTransaction } from "./transaction.js";
+import {
+  buildExecuteTransaction,
+  getTransactionSize,
+  measureExecuteTransaction,
+  TRANSACTION_SIZE_LIMIT,
+} from "./transaction.js";
 import type { SignedExecuteTransaction } from "./transaction.js";
 
 /**
@@ -113,6 +119,30 @@ export interface ExecuteOpts extends SimulateOpts {
   computeUnitLimit?: number | "auto";
 }
 
+/**
+ * How `execute` and `executeStaged` fit a cook whose accounts do not fit one transaction: through
+ * an address lookup table, where each account costs one byte rather than 32.
+ */
+export interface LookupTableOpts {
+  /**
+   * Unset (the default), a cook that does not fit one transaction goes through a lookup table the
+   * client creates for it: over exactly the accounts a table may hold (every account the cook lists
+   * but its signers and the programs it calls), owned by the payer, who pays its rent (about 0.0016
+   * SOL, and 0.00022 more per account) and the fees that create it, and usable before the cook is
+   * sent. A table's address reuses that table, extended with any account it lacks. `false` sends
+   * the cook as it is. A cook that fits, or one given `lookupTables`, takes no table. The table the
+   * cook went through is the result's `lookupTableAddress`, and an error's after the table was
+   * made, for a later cook naming the same accounts.
+   */
+  lookupTable?: Address | false;
+}
+
+/** `execute`'s options: a cook's, and the lookup table it may go through. */
+export interface SendOpts extends ExecuteOpts, LookupTableOpts {}
+
+/** What `cookLookupTable` makes ready: the cook's options, and the table's. */
+export type CookLookupTableOpts = ExecuteOpts & EnsureLookupTableOpts;
+
 /** A buffer staged by this client — carries the SDK-computed content hash (the execute pin). */
 export interface StagedBuffer {
   address: Address;
@@ -151,6 +181,12 @@ export interface SimulateStagedOpts extends SimulateOpts {
 export interface ExecuteStagedOpts extends SimulateStagedOpts {
   computeUnitLimit?: number | "auto";
 }
+
+/** `executeStaged`'s options: a staged cook's, and the lookup table it may go through. */
+export interface SendStagedOpts extends ExecuteStagedOpts, LookupTableOpts {}
+
+/** What `stagedCookLookupTable` makes ready: the staged cook's options, and the table's. */
+export type StagedCookLookupTableOpts = ExecuteStagedOpts & EnsureLookupTableOpts;
 
 /** An address lookup table this client created/extended, ready to compress a v0 transaction against. */
 export interface EnsuredLookupTable {
@@ -193,17 +229,43 @@ export interface SauceSvmClient {
     addresses: readonly Address[],
     opts?: EnsureLookupTableOpts,
   ): Promise<EnsuredLookupTable>;
+  /**
+   * The lookup table the cook `cookTransaction` builds from the same arguments needs, made ready:
+   * `undefined` when the cook fits one transaction as it is (or through `opts.lookupTables`);
+   * else `ensureLookupTable` over exactly the accounts a table may hold — every account the cook
+   * lists but its signers and the programs it calls — measured without a blockhash or a
+   * signature. Pass its `lookupTables` to `simulate` or `cookTransaction`; `execute` does all of
+   * this itself. Throws, sending nothing, when the cook would not fit even through a table: a
+   * program that large is staged (`executeStaged`).
+   */
+  cookLookupTable(
+    bytecode: Uint8Array,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: CookLookupTableOpts,
+  ): Promise<EnsuredLookupTable | undefined>;
+  /** `cookLookupTable` for a staged cook: the table `stagedCookTransaction`'s cook needs. */
+  stagedCookLookupTable(
+    buffer: Address | StagedBuffer,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: StagedCookLookupTableOpts,
+  ): Promise<EnsuredLookupTable | undefined>;
   simulate(
     bytecode: Uint8Array,
     manifest: AccountManifest,
     resolution: AccountResolution,
     opts?: SimulateOpts,
   ): Promise<SimulateExecuteResult>;
+  /**
+   * Builds the cook, sends it and confirms it. A cook too wide for one transaction goes through a
+   * lookup table the client makes ready first (`lookupTable`, on by default).
+   */
   execute(
     bytecode: Uint8Array,
     manifest: AccountManifest,
     resolution: AccountResolution,
-    opts?: ExecuteOpts,
+    opts?: SendOpts,
   ): Promise<SendExecuteResult>;
   /**
    * The signed cook transaction `execute` sends, built the same way, without sending it: for a
@@ -232,7 +294,7 @@ export interface SauceSvmClient {
     buffer: Address | StagedBuffer,
     manifest: AccountManifest,
     resolution: AccountResolution,
-    opts?: ExecuteStagedOpts,
+    opts?: SendStagedOpts,
   ): Promise<SendExecuteResult>;
   /** The signed `cook_from_account` transaction `executeStaged` sends, without sending it. */
   stagedCookTransaction(
@@ -324,6 +386,89 @@ export async function createSauceSvmClient({
     });
   }
 
+  /** The size of a transaction of the payer's `instructions`, through `lookupTables`, unsigned. */
+  const sizeOf = (
+    instructions: readonly Instruction[],
+    lookupTables?: AddressesByLookupTableAddress,
+  ): number =>
+    getTransactionSize(
+      measureExecuteTransaction({ feePayer: payer.address, instructions, lookupTables }),
+    );
+
+  /**
+   * Whether `instructions` fit one transaction with `addresses`, every account of theirs a table
+   * may hold, in one.
+   */
+  const fitsThroughTable = (
+    instructions: readonly Instruction[],
+    addresses: readonly Address[],
+  ): boolean =>
+    // Where a table will be is not known before it is created; any key measures the same.
+    sizeOf(instructions, { [payer.address]: [...addresses] }) <= TRANSACTION_SIZE_LIMIT;
+
+  /**
+   * Refuses to simulate a cook too large for one transaction, which the cluster would refuse
+   * opaquely — measured before a signer or the cluster is asked anything — saying what fits it.
+   */
+  function refuseTooLarge(
+    executeInstruction: Instruction,
+    prepends: readonly Instruction[],
+    lookupTables: AddressesByLookupTableAddress | undefined,
+    staged: boolean,
+  ): void {
+    const instructions = [buildHeapFramePrepend(), ...prepends, executeInstruction];
+    const plain = measureExecuteTransaction({ feePayer: payer.address, instructions });
+    const size =
+      lookupTables === undefined ? getTransactionSize(plain) : sizeOf(instructions, lookupTables);
+    if (size <= TRANSACTION_SIZE_LIMIT) return;
+    const prefix = `the cook is a ${size}-byte transaction, past Solana's ${TRANSACTION_SIZE_LIMIT}: `;
+    if (!staged && !fitsThroughTable(instructions, lookupTableAddresses(plain))) {
+      throw new Error(
+        `${prefix}the program itself is too large for one, so stage it in a code buffer and ` +
+          "simulateStaged it",
+      );
+    }
+    throw new Error(
+      `${prefix}${staged ? "executeStaged takes" : "execute and executeStaged take"} its accounts ` +
+        "through a lookup table it makes ready; to simulate it, pass the lookupTables " +
+        `${staged ? "stagedCookLookupTable" : "cookLookupTable"} returns`,
+    );
+  }
+
+  /** The cook's own instruction: the Kitchen's `cook`, or the engine's `cookAndPay`. */
+  function cookInstruction(
+    bytecode: Uint8Array,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts: SimulateOpts,
+  ): Instruction {
+    const accounts = resolveAccounts(manifest, resolution, payer.address, {
+      appendPayerSigner: opts.appendPayerSigner,
+    });
+    const cap = opts.maxExecutionFee ?? maxExecutionFee;
+
+    return via === "engine"
+      ? buildCookAndPayInstruction({
+          engineProgram: programId,
+          feeConfig,
+          feePayer: payer.address,
+          maxExecutionFee: cap,
+          bytecode,
+          tail: accounts,
+        })
+      : buildCookInstruction({
+          kitchen,
+          owner: payer.address,
+          engineProgram: programId,
+          potSalt,
+          pot,
+          feeConfig,
+          bytecode,
+          maxExecutionFee: cap,
+          tail: accounts,
+        });
+  }
+
   async function buildTransaction(
     bytecode: Uint8Array,
     manifest: AccountManifest,
@@ -331,33 +476,11 @@ export async function createSauceSvmClient({
     prepends: readonly Instruction[],
     opts: SimulateOpts,
   ): Promise<SignedExecuteTransaction> {
-    const accounts = resolveAccounts(manifest, resolution, payer.address, {
-      appendPayerSigner: opts.appendPayerSigner,
-    });
-    const cap = opts.maxExecutionFee ?? maxExecutionFee;
-    const executeInstruction =
-      via === "engine"
-        ? buildCookAndPayInstruction({
-            engineProgram: programId,
-            feeConfig,
-            feePayer: payer.address,
-            maxExecutionFee: cap,
-            bytecode,
-            tail: accounts,
-          })
-        : buildCookInstruction({
-            kitchen,
-            owner: payer.address,
-            engineProgram: programId,
-            potSalt,
-            pot,
-            feeConfig,
-            bytecode,
-            maxExecutionFee: cap,
-            tail: accounts,
-          });
-
-    return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
+    return signExecuteTransaction(
+      cookInstruction(bytecode, manifest, resolution, opts),
+      prepends,
+      opts.lookupTables,
+    );
   }
 
   async function simulate(
@@ -366,13 +489,14 @@ export async function createSauceSvmClient({
     resolution: AccountResolution,
     opts: SimulateOpts = {},
   ): Promise<SimulateExecuteResult> {
-    const transaction = await buildTransaction(
-      bytecode,
-      manifest,
-      resolution,
-      measuring(opts.prepends ?? []),
-      opts,
+    const prepends = measuring(opts.prepends ?? []);
+    refuseTooLarge(
+      cookInstruction(bytecode, manifest, resolution, opts),
+      prepends,
+      opts.lookupTables,
+      false,
     );
+    const transaction = await buildTransaction(bytecode, manifest, resolution, prepends, opts);
 
     return simulateExecute(
       rpc,
@@ -381,13 +505,13 @@ export async function createSauceSvmClient({
     );
   }
 
-  async function buildStagedTransaction(
+  /** A staged cook's own instruction: `cook_from_account`, or `cookAndPayFromAccountPinned`. */
+  async function stagedCookInstruction(
     buffer: Address | StagedBuffer,
     manifest: AccountManifest,
     resolution: AccountResolution,
-    prepends: readonly Instruction[],
     opts: SimulateStagedOpts,
-  ): Promise<SignedExecuteTransaction> {
+  ): Promise<Instruction> {
     const address = typeof buffer === "string" ? buffer : buffer.address;
     const accounts = resolveAccounts(manifest, resolution, payer.address, {
       appendPayerSigner: opts.appendPayerSigner,
@@ -397,31 +521,43 @@ export async function createSauceSvmClient({
     const pin = via === "engine" ? directPin(buffer, opts.expectedSha256) : undefined;
 
     const { address: code } = await deriveCodePda(kitchen, address);
-    const executeInstruction =
-      pin !== undefined
-        ? buildCookAndPayFromAccountPinnedInstruction({
-            engineProgram: programId,
-            code,
-            expectedSha256: pin,
-            feeConfig,
-            feePayer: payer.address,
-            maxExecutionFee: cap,
-            tail: accounts,
-          })
-        : buildCookFromAccountInstruction({
-            kitchen,
-            owner: payer.address,
-            codeBuffer: address,
-            code,
-            engineProgram: programId,
-            potSalt,
-            pot,
-            feeConfig,
-            maxExecutionFee: cap,
-            tail: accounts,
-          });
 
-    return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
+    return pin !== undefined
+      ? buildCookAndPayFromAccountPinnedInstruction({
+          engineProgram: programId,
+          code,
+          expectedSha256: pin,
+          feeConfig,
+          feePayer: payer.address,
+          maxExecutionFee: cap,
+          tail: accounts,
+        })
+      : buildCookFromAccountInstruction({
+          kitchen,
+          owner: payer.address,
+          codeBuffer: address,
+          code,
+          engineProgram: programId,
+          potSalt,
+          pot,
+          feeConfig,
+          maxExecutionFee: cap,
+          tail: accounts,
+        });
+  }
+
+  async function buildStagedTransaction(
+    buffer: Address | StagedBuffer,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    prepends: readonly Instruction[],
+    opts: SimulateStagedOpts,
+  ): Promise<SignedExecuteTransaction> {
+    return signExecuteTransaction(
+      await stagedCookInstruction(buffer, manifest, resolution, opts),
+      prepends,
+      opts.lookupTables,
+    );
   }
 
   async function simulateStaged(
@@ -430,13 +566,14 @@ export async function createSauceSvmClient({
     resolution: AccountResolution,
     opts: SimulateStagedOpts = {},
   ): Promise<SimulateExecuteResult> {
-    const transaction = await buildStagedTransaction(
-      buffer,
-      manifest,
-      resolution,
-      measuring(opts.prepends ?? []),
-      opts,
+    const prepends = measuring(opts.prepends ?? []);
+    refuseTooLarge(
+      await stagedCookInstruction(buffer, manifest, resolution, opts),
+      prepends,
+      opts.lookupTables,
+      true,
     );
+    const transaction = await buildStagedTransaction(buffer, manifest, resolution, prepends, opts);
 
     return simulateExecute(
       rpc,
@@ -540,6 +677,124 @@ export async function createSauceSvmClient({
     return { lookupTableAddress, lookupTables: await fetchAlt(rpc, lookupTableAddress) };
   }
 
+  /**
+   * The table a transaction of `cook` needs, made ready, or `undefined` when it fits without one.
+   * Measured as it is sent — the heap frame, then `prepends`, then the cook — with no blockhash and
+   * no signature, so no signer is asked for anything.
+   */
+  async function lookupTableFor(
+    cook: Instruction,
+    prepends: readonly Instruction[],
+    opts: CookLookupTableOpts,
+    staged: boolean,
+  ): Promise<EnsuredLookupTable | undefined> {
+    const instructions = [buildHeapFramePrepend(), ...prepends, cook];
+    // Compiled once: its size, and the accounts a table would hold.
+    const plain = measureExecuteTransaction({ feePayer: payer.address, instructions });
+    const size =
+      opts.lookupTables === undefined
+        ? getTransactionSize(plain)
+        : sizeOf(instructions, opts.lookupTables);
+    if (size <= TRANSACTION_SIZE_LIMIT) return undefined;
+    const addresses = lookupTableAddresses(plain);
+    if (addresses.length > LOOKUP_TABLE_MAX_ADDRESSES) {
+      throw new Error(
+        `the cook names ${addresses.length} accounts a lookup table may hold, more than one table ` +
+          `holds (${LOOKUP_TABLE_MAX_ADDRESSES})`,
+      );
+    }
+    if (!fitsThroughTable(instructions, addresses)) {
+      throw new Error(
+        `the cook is a transaction past Solana's ${TRANSACTION_SIZE_LIMIT} bytes even with every ` +
+          "account it names through a lookup table: " +
+          (staged
+            ? "it signs or calls too many accounts"
+            : "the program itself is too large for one, so stage it in a code buffer and " +
+              "executeStaged it"),
+      );
+    }
+
+    return ensureLookupTable(addresses, {
+      ...(opts.existing === undefined ? {} : { existing: opts.existing }),
+      ...(opts.commitment === undefined ? {} : { commitment: opts.commitment }),
+    });
+  }
+
+  /**
+   * The prepends a cook is sent with: a compute limit where one is asked for (`execute`), or, for a
+   * table a simulation goes through too, wherever `simulate` adds one (`measuring`).
+   */
+  const sentPrepends = (opts: ExecuteOpts, simulated: boolean): Instruction[] =>
+    simulated
+      ? measuring(opts.prepends ?? [])
+      : [
+          ...(opts.computeUnitLimit === undefined
+            ? []
+            : buildComputeBudgetPrepend({ unitLimit: ENGINE_GAS_LIMIT_CU })),
+          ...(opts.prepends ?? []),
+        ];
+
+  async function cookLookupTable(
+    bytecode: Uint8Array,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts: CookLookupTableOpts = {},
+  ): Promise<EnsuredLookupTable | undefined> {
+    return lookupTableFor(
+      cookInstruction(bytecode, manifest, resolution, opts),
+      sentPrepends(opts, true),
+      opts,
+      false,
+    );
+  }
+
+  async function stagedCookLookupTable(
+    buffer: Address | StagedBuffer,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts: StagedCookLookupTableOpts = {},
+  ): Promise<EnsuredLookupTable | undefined> {
+    return lookupTableFor(
+      await stagedCookInstruction(buffer, manifest, resolution, opts),
+      sentPrepends(opts, true),
+      opts,
+      true,
+    );
+  }
+
+  /** The table `opts.lookupTable` asks `execute` for, made ready where the cook needs one. */
+  const tableOptions = (opts: LookupTableOpts & SimulateOpts): EnsureLookupTableOpts | undefined =>
+    opts.lookupTable === false || opts.lookupTables !== undefined
+      ? undefined
+      : opts.lookupTable === undefined
+        ? {}
+        : { existing: opts.lookupTable };
+
+  /**
+   * Sends a cook through the table `execute` made ready for it, if any: its result names the table,
+   * and so does a failure after the table was made, which the payer has paid for and may reuse.
+   */
+  async function sendThrough(
+    table: EnsuredLookupTable | undefined,
+    transaction: () => Promise<SignedExecuteTransaction>,
+  ): Promise<SendExecuteResult> {
+    try {
+      const sent = await sendExecute({ rpc, rpcSubscriptions, transaction: await transaction() });
+
+      return table === undefined ? sent : { ...sent, lookupTableAddress: table.lookupTableAddress };
+    } catch (error) {
+      if (table === undefined || !(error instanceof Error)) throw error;
+      throw Object.assign(
+        new Error(
+          `${error.message} (the cook's lookup table ${table.lookupTableAddress} stays, for a ` +
+            "later cook: pass it as lookupTable)",
+          { cause: error },
+        ),
+        { lookupTableAddress: table.lookupTableAddress },
+      );
+    }
+  }
+
   async function cookTransaction(
     bytecode: Uint8Array,
     manifest: AccountManifest,
@@ -586,6 +841,8 @@ export async function createSauceSvmClient({
     via,
     executionFee: () => fetchExecutionFee(rpc, kitchen),
     ensureLookupTable,
+    cookLookupTable,
+    stagedCookLookupTable,
     simulate,
     cookTransaction,
 
@@ -593,11 +850,27 @@ export async function createSauceSvmClient({
       bytecode: Uint8Array,
       manifest: AccountManifest,
       resolution: AccountResolution,
-      opts: ExecuteOpts = {},
+      opts: SendOpts = {},
     ): Promise<SendExecuteResult> {
-      const transaction = await cookTransaction(bytecode, manifest, resolution, opts);
+      const wanted = tableOptions(opts);
+      const table =
+        wanted === undefined
+          ? undefined
+          : await lookupTableFor(
+              cookInstruction(bytecode, manifest, resolution, opts),
+              sentPrepends(opts, false),
+              { ...opts, ...wanted },
+              false,
+            );
 
-      return sendExecute({ rpc, rpcSubscriptions, transaction });
+      return sendThrough(table, () =>
+        cookTransaction(
+          bytecode,
+          manifest,
+          resolution,
+          table === undefined ? opts : { ...opts, lookupTables: table.lookupTables },
+        ),
+      );
     },
 
     simulateStaged,
@@ -607,11 +880,27 @@ export async function createSauceSvmClient({
       buffer: Address | StagedBuffer,
       manifest: AccountManifest,
       resolution: AccountResolution,
-      opts: ExecuteStagedOpts = {},
+      opts: SendStagedOpts = {},
     ): Promise<SendExecuteResult> {
-      const transaction = await stagedCookTransaction(buffer, manifest, resolution, opts);
+      const wanted = tableOptions(opts);
+      const table =
+        wanted === undefined
+          ? undefined
+          : await lookupTableFor(
+              await stagedCookInstruction(buffer, manifest, resolution, opts),
+              sentPrepends(opts, false),
+              { ...opts, ...wanted },
+              true,
+            );
 
-      return sendExecute({ rpc, rpcSubscriptions, transaction });
+      return sendThrough(table, () =>
+        stagedCookTransaction(
+          buffer,
+          manifest,
+          resolution,
+          table === undefined ? opts : { ...opts, lookupTables: table.lookupTables },
+        ),
+      );
     },
   };
 }

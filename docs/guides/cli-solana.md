@@ -22,7 +22,9 @@ sauce run pay.sauce.ts --chain solana --wallet me-solana --args <recipient> 400
 ```
 
 The Solana signers are `--wallet` with a Solana wallet, and `--keypair <path>` with a keypair file
-(`~/.config/solana/id.json`, say). An `Address` argument is a base58 public key.
+(`~/.config/solana/id.json`, say). A Solana key is base58, or the same 32 bytes as `0x` hex, as
+`sauce globals --chain solana --json` prints a token's address. An `Address` argument takes either,
+or a token as `USDC` (or `mint:USDC`) for its mint.
 
 ## The accounts
 
@@ -79,6 +81,14 @@ A value is an address, or one of these:
 `--accounts <json | file>` gives them all at once, as one JSON object of names to values. The
 [Solana guide](solana.md) has the language programs write their accounts in.
 
+Forgot one? The command stops before it reads anything, and lists each missing account with the
+values that suit it, plus the JSON to save as your `--accounts` file. `sauce compile --json` lists the
+same, as `accountsToGive`.
+
+A wallet is not a token account. Give a wallet where a program writes a token account
+(`dest=<wallet>`) and the cook fails; the command then says to give the wallet's token account,
+`dest=<wallet>:USDC`, which `run` creates where it is missing.
+
 ## What a run costs
 
 - **The Kitchen's fee**, in lamports, read from the cluster. Every output prints it as `fee`, and
@@ -87,6 +97,10 @@ A value is an address, or one of these:
 - **Rent**, the deposit Solana charges for each new account. Your Pot keeps 10 KB of storage, so
   its rent is the big one, paid once. A token account's is small.
 - **Transaction fees**, a fraction of a cent each.
+
+`sauce simulate` lists what a first run pays before the cook, under its lamport changes: the Pot's
+rent (about 0.072 SOL), each new token account's, the code buffer's (back once `run` closes it), a
+lookup table's, and the fees of the transactions before the cook. Then it says what you pay in all.
 
 ## A program too big for one transaction
 
@@ -146,7 +160,7 @@ Solana, where `sauce intent fill`, `prove` and `cancel` act on it
 
 The value language `--account` takes, and `derive` in the manifest uses:
 
-- an address in base58;
+- an address in base58, or as the same 32 bytes in `0x` hex;
 - `self`: the Pot, or the signer with `--via engine`; `pot`; `owner`; `system`: the System Program;
 - `@to`: `main`'s argument `to`;
 - `<holder>:<token>`: an associated token account. The holder is `pot`, `owner`, `self`, `@to` or a
@@ -164,16 +178,20 @@ The value language `--account` takes, and `derive` in the manifest uses:
   (`u8:7` to `u128:7`, or `u64:@index` from an argument) or hex bytes after `0x`.
 
 Whatever a derived account is made of must be known when the transaction is built. An `--account`
-for a derived slot replaces its derivation. A slot with no `--account` is named with the role it
-needs, and `simulate` notes each account it was given that the cluster does not have (a guard on it
-fails with no message of its own). With `--via engine` there is no Pot, so no `pot:` account, and
+for a derived slot replaces its derivation. A cook missing an account is refused before anything is
+read from the cluster: the refusal lists each one with the values that suit its role (`pot` or
+`owner` for a signer, `pot:<token>` for a token account, `program:<token>` for a token program) and
+the JSON object to save as the `--accounts` file. `simulate` notes each account it was given that
+the cluster does not have (a guard on it fails with no message of its own). Every Solana key the
+command takes (`--owner`, `--lookup-table`, a token in `--assume-balance`, a wallet policy) is
+base58 or `0x` hex. With `--via engine` there is no Pot, so no `pot:` account, and
 `NAME=pot` for a slot that must sign is refused, since nothing signs for a Pot there. The
 [Solana guide](solana.md#the-token-methods-every-account-derived) has what the lowering checks and
 requires.
 
 A `main` argument of type `Address` is a 32-byte public key: pass it in base58 (or as 32 bytes of
-hex), and the command encodes the whole key as the word the engine reads (ABI-v1 only, not under
-`--compact-args`).
+hex), or a token as `USDC` or `mint:USDC` for its mint, and the command encodes the whole key as the
+word the engine reads (ABI-v1 only, not under `--compact-args`).
 
 ### The Pot on Solana
 
@@ -209,8 +227,10 @@ program staged into a code buffer as `run` stages it, then the cook runs, its ac
 lookup table. There `--assume-balance TOKEN:amount` gives the account the cook spends that token
 from (the Pot's, or the owner's with `--via engine`) that balance, and a `pot:<token>` or
 `owner:<token>` account the cluster does not have yet is made empty, with a note: `run` creates it
-before the cook. An `--owner` that is not a wallet (a program's account, or one holding data) is
-refused, as it cannot pay. LiteSVM is installed the first time it is needed
+before the cook. What the copy does for nothing before the cook, a first run pays, so it is listed
+under the lamport changes with what it pays for, then what the owner pays in all (`setupCosts` and
+`payerPays` in `--json`). An `--owner` that is not a wallet (a program's account, or one holding
+data) is refused, as it cannot pay. LiteSVM is installed the first time it is needed
 ([Runtime packages](cli.md#runtime-packages)).
 
 ### Running on Solana

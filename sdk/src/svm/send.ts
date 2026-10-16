@@ -178,6 +178,12 @@ export interface SendExecuteResult {
   returnData?: Uint8Array;
   computeUnits?: bigint;
   logs: string[];
+  /**
+   * The address lookup table the cook went through, where the client made one ready for it (a
+   * cook too wide for one transaction): pass it as `lookupTable` to a later cook naming the same
+   * accounts.
+   */
+  lookupTableAddress?: Address;
 }
 
 /** Sends a signed execute transaction, confirms it, and reads back return data from the transaction meta. */

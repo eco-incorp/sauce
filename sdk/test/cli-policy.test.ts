@@ -162,6 +162,17 @@ describe("the policy file", () => {
     expect(policy.notes).toEqual([]);
   });
 
+  it("takes a Solana key in base58 or as the 32 bytes of hex the command prints, kept in base58", () => {
+    const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const usdcHex = "0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61";
+    const policy = parsePolicy(
+      JSON.stringify({ to: [usdc, usdcHex], tokens: { [usdcHex]: { perTransaction: "1" } } }),
+      "p.json",
+    );
+    expect(policy.to).toEqual([usdc, usdc]);
+    expect([...policy.tokens.keys()]).toEqual([usdc]);
+  });
+
   it("says when a bare integer of whole tokens reads like base units: a note, not a refusal", () => {
     const policy = parsePolicy(
       JSON.stringify({

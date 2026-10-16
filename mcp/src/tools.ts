@@ -285,10 +285,11 @@ function sourceInputs(local: boolean): {
 export const POT = {
   owner: z
     .string()
-    .max(64)
+    .max(66)
     .optional()
     .describe(
-      "The Pot's owner: a 0x address on an EVM chain, a base58 public key on Solana. With the " +
+      "The Pot's owner: a 0x address on an EVM chain; on Solana a public key, in base58 or as its " +
+        "32 bytes of 0x hex. With the " +
         "salt it derives the Pot; only the owner may cook on it. To simulate (sauce_simulate) any " +
         "address will do: nothing is signed, and a missing Pot or balance is supplied.",
     ),
@@ -350,10 +351,11 @@ const COOK = {
     ),
   args: ARGS,
   accounts: z
-    .record(z.string().min(1).max(64), z.string().max(64))
+    .record(z.string().min(1).max(64), z.string().max(256))
     .optional()
     .describe(
-      "Solana only: each Account parameter main takes, by name: a base58 address, `pot` (the " +
+      "Solana only: each Account parameter main takes, by name: an address (base58, or its 32 " +
+        "bytes as 0x hex), `pot` (the " +
         "Pot, signed for by the Kitchen), `owner`, `system` (the System Program), `pot:USDC` or `owner:USDC` (that holder's " +
         "associated account for a token, by symbol or mint), `@to:USDC` (that of main's " +
         "argument `to`), `mint:USDC` (the mint), `program:USDC` (its token program) or " +
@@ -387,7 +389,7 @@ const COOK = {
     .max(LIMITS.entries)
     .optional()
     .describe(
-      "Solana only: address lookup tables (base58) holding the cook's accounts, each read from " +
+      "Solana only: address lookup tables (base58 or 0x hex) holding the cook's accounts, each read from " +
         "the cluster. An account listed in the transaction costs 32 bytes and one through a table " +
         "one byte, so a cook naming more accounts than one transaction lists fits through one.",
     ),
@@ -1590,13 +1592,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         tokenA: z
           .string()
           .min(1)
-          .max(64)
+          .max(80)
           .describe(
             "One token of the pair, paid in the first side: a symbol the chain registers " +
               "(USDC, or a tokenized stock's such as SPCXc, in any case), or a 0x address (its " +
-              "decimals and symbol read from the token), or <0x address>:<decimals>.",
+              "decimals and symbol read from the token), or <0x address>:<decimals>; on Solana " +
+              "a mint, in base58 or as its 32 bytes of 0x hex.",
           ),
-        tokenB: z.string().min(1).max(64).describe("The other token, written the same ways."),
+        tokenB: z.string().min(1).max(80).describe("The other token, written the same ways."),
         v4Pools: z
           .array(z.string().min(3).max(16))
           .max(MAX_V4_KEYS)
@@ -1621,7 +1624,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         pay: z
           .string()
           .min(1)
-          .max(64)
+          .max(80)
           .optional()
           .describe(
             "Solana only: choose the pools a distributed swap paying this token (one of the " +
@@ -2164,9 +2167,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         `with sauce_send. ${UNSIGNED} Solana only. ${SUPPORTED_ONLY}`,
       input: {
         chain: chainRef,
-        owner: z.string().min(32).max(64).describe("The owner: a base58 public key."),
+        owner: z
+          .string()
+          .min(32)
+          .max(66)
+          .describe("The owner: a public key, in base58 or as its 32 bytes of 0x hex."),
         lookupTables: z
-          .array(z.string().min(32).max(64))
+          .array(z.string().min(32).max(66))
           .max(TABLES_PER_RUN)
           .optional()
           .describe(

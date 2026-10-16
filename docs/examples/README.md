@@ -44,6 +44,8 @@ read a chain do so only when your application calls them.
 | [router-swap.ts](router-swap.ts)                               | Compiling that program for Ethereum and appending its floor as `main`'s argument                                                             |
 | [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                                              |
 | [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                               |
+| [solana-swap.sauce.ts](solana-swap.sauce.ts)                   | One swap on Solana, at an Orca whirlpool: the pool and the amounts are `main`'s arguments, and every account the swap uses is found for you  |
+| [solana-swap.ts](solana-swap.ts)                               | Compiling that program for Solana, and how a cook works out each account it takes                                                            |
 | [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program (token symbols, a pool by key) compiled for two chains, with a runtime amount, and as an intent on Base |
 
 ## Compiling, reading a chain and signing

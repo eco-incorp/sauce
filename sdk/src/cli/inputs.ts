@@ -203,10 +203,11 @@ export function potTarget(given: PotGiven, signer?: Address): PotInput {
   };
 }
 
-/** A Pot's owner as given: a 0x address on an EVM chain, a base58 public key on Solana; with no
- *  chain, as it is written. */
+/** A Pot's owner as given: a 0x address on an EVM chain, a public key on Solana (base58, or its 32
+ *  bytes as 0x hex); with no chain, as it is written: 20 bytes are an EVM address. */
 export function potOwner(chain: CanonicalChain | undefined, raw: string): string {
-  return chain?.kind === "svm" || (chain === undefined && !raw.startsWith("0x"))
+  return chain?.kind === "svm" ||
+    (chain === undefined && (!raw.startsWith("0x") || /^0x[0-9a-fA-F]{64}$/.test(raw)))
     ? parsePubkey("owner", raw)
     : parseAddress("owner", raw);
 }

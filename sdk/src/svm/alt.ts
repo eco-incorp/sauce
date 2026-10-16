@@ -1,4 +1,9 @@
-import { getAddressEncoder, getU64Encoder, isSignerRole } from "@solana/kit";
+import {
+  getAddressEncoder,
+  getCompiledTransactionMessageDecoder,
+  getU64Encoder,
+  isSignerRole,
+} from "@solana/kit";
 import type {
   Address,
   AddressesByLookupTableAddress,
@@ -7,6 +12,7 @@ import type {
   GetSlotApi,
   Instruction,
   Rpc,
+  Transaction,
   TransactionSigner,
 } from "@solana/kit";
 import {
@@ -274,4 +280,24 @@ export async function fetchAlt(
   const account = await fetchAddressLookupTable(rpc, lookupTableAddress);
 
   return { [lookupTableAddress]: [...account.data.addresses] };
+}
+
+/**
+ * The accounts of `transaction` a lookup table may hold: every account its message lists, less the
+ * signers and the programs its instructions call, which a transaction must list itself. A table
+ * over exactly these is the one a cook too wide for one transaction goes through.
+ */
+export function lookupTableAddresses(transaction: Pick<Transaction, "messageBytes">): Address[] {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+    header: { numSignerAccounts: number };
+    staticAccounts: readonly Address[];
+    instructions: readonly { programAddressIndex: number }[];
+  };
+  const called = new Set(
+    message.instructions.map((instruction) => instruction.programAddressIndex),
+  );
+
+  return message.staticAccounts.filter(
+    (_, index) => index >= message.header.numSignerAccounts && !called.has(index),
+  );
 }

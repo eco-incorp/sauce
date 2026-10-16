@@ -421,10 +421,10 @@ function anyone(
 /** `from` as a Solana fee payer's key, for the steps a Solana destination takes. */
 const FEE_PAYER = z
   .string()
-  .max(64)
+  .max(66)
   .optional()
   .describe(
-    "On a Solana destination: the fee payer's base58 key, which signs the transaction last; " +
+    "On a Solana destination: the fee payer's key (base58, or 0x hex), which signs the transaction last; " +
       "required there. On an EVM destination any account may send it, and from is not needed.",
   );
 
@@ -646,12 +646,12 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         index: ONE.index,
         from: z
           .string()
-          .max(64)
+          .max(66)
           .optional()
           .describe(
             "The solver, which signs these. Needed unless dryRun. On an EVM destination its 0x " +
-              "address: its balances and standing allowances plan them. On Solana its base58 " +
-              "key, the transactions' fee payer.",
+              "address: its balances and standing allowances plan them. On Solana its key (base58, " +
+              "or 0x hex), the transactions' fee payer.",
           ),
         claimant: z
           .string()

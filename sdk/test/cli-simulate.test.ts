@@ -526,7 +526,7 @@ describe("sauce simulate --assume-balance, offline", () => {
     );
     expect(run.code).toBe(2);
     expect(run.stderr).toContain(
-      "--assume-balance ETH:1: ETH is not a mint solana registers: give its symbol (sauce globals --chain solana) or its base58 address",
+      "--assume-balance ETH:1: ETH is not a mint solana registers: give its symbol (sauce globals --chain solana) or its address",
     );
   });
 
