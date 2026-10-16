@@ -140,7 +140,7 @@ for (const [namespace, fn, id, venue] of VENUES) {
       ? "by its address"
       : /, fee: Uint256, tickSpacing\?: Uint256\)/.test(pool)
         ? "fee"
-        : /, tickSpacing: Uint256\)/.test(pool)
+        : /, tickSpacing: Uint256(?:, feeTierIndex\?: Uint256)?\)/.test(pool)
           ? "tick spacing"
           : "?";
   check(

@@ -328,7 +328,7 @@ for (const mint of mints) claim(mint, "a Solana mint symbol");
 // A Solana venue is its protocol's program (`Orca.Whirlpool`): its protocol a name of its own, or a
 // field of a protocol namespace or family of the same name (`Pancakeswap`).
 const venueFields = new Map();
-for (const [venue, { exact, key }] of Object.entries(SVM_VENUE_NAMESPACES)) {
+for (const [venue, { exact, key, refinement }] of Object.entries(SVM_VENUE_NAMESPACES)) {
   const [protocol, program] = venue.split(".");
   if (!ts.isIdentifierText(program, ts.ScriptTarget.Latest))
     fail(`'${venue}' (a Solana venue namespace) does not name a program`);
@@ -337,7 +337,9 @@ for (const [venue, { exact, key }] of Object.entries(SVM_VENUE_NAMESPACES)) {
     : key === "fee"
       ? "SauceSvmFeeVenueSource"
       : key === "tick spacing"
-        ? "SauceSvmSpacingVenueSource"
+        ? refinement === "feeTierIndex"
+          ? "SauceSvmTierVenueSource"
+          : "SauceSvmSpacingVenueSource"
         : "SauceSvmVenueSource";
   venueFields.set(protocol, [
     ...(venueFields.get(protocol) ?? []),
@@ -547,6 +549,15 @@ export interface SauceSvmExactVenueSource {
  */
 export interface SauceSvmSpacingVenueSource extends SauceSvmVenueSource {
   pool(tokenA: bigint, tokenB: bigint, tickSpacing: bigint): bigint;
+}
+
+/**
+ * A whirlpool venue, whose pools are found by tick spacing: \`pool(tokenA, tokenB, tickSpacing)\`,
+ * written as a swap's pool, with the fee tier's index after the spacing where the venue keeps a
+ * static and an adaptive-fee tier at it. Where there is none, the swap returns 0.
+ */
+export interface SauceSvmTierVenueSource extends SauceSvmVenueSource {
+  pool(tokenA: bigint, tokenB: bigint, tickSpacing: bigint, feeTierIndex?: bigint): bigint;
 }
 
 /**
