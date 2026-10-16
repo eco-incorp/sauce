@@ -499,8 +499,10 @@ Two intents built before either is filled would both try to create it, and the s
 be filled; its reward would come back to you after its deadline, and the command warns you.
 
 A program's bytecode travels inside the solver's one fill transaction, which Solana caps at 1,232
-bytes. The command refuses an intent whose fill would not fit, so you never publish one nobody can
-fill. Today that rules out most programs: pay with token transfers instead.
+bytes. When the fill's accounts make it too large, the solver first puts them in an address lookup
+table, where each costs one byte instead of 32; `sauce intent fill` does that for you. Even so, only
+a small program fits, such as one that checks a value and pays it on. The command refuses an intent
+whose fill would not fit, so you never publish one nobody can fill.
 
 ## Callbacks are compiled source
 

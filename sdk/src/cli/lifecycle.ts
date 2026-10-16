@@ -1026,10 +1026,16 @@ export async function buildFill(
     readonly from: string;
     readonly claimant?: Hex;
     readonly prove?: boolean;
+    /** A Solana fill too large for one transaction: the lookup table that holds its accounts
+     *  already (the one the first build's setup made). */
+    readonly lookupTable?: string;
   },
 ): Promise<{
   readonly from: string;
   readonly transactions: readonly AnyTxJson[];
+  /** A Solana fill that takes its accounts through a lookup table: the table, and how many of
+   *  `transactions` (the first) create and extend it. */
+  readonly lookupTable?: { readonly address: string; readonly setup: number };
   readonly proves: boolean;
   readonly fee: { readonly prover: string; readonly kitchen: string };
   readonly prover: ReturnType<typeof proverJson>;
@@ -2025,7 +2031,12 @@ function svmPayer(from: string | undefined, what: string): ReturnType<typeof svm
 async function buildSvmFill(
   intent: Intent,
   chains: Chains,
-  options: { readonly from: string; readonly claimant?: Hex; readonly prove?: boolean },
+  options: {
+    readonly from: string;
+    readonly claimant?: Hex;
+    readonly prove?: boolean;
+    readonly lookupTable?: string;
+  },
 ): ReturnType<typeof buildFill> {
   const destination = requireChain(Number(intent.destination));
   const sourceChain = requireChain(Number(intent.sourceChainId));
@@ -2041,8 +2052,21 @@ async function buildSvmFill(
     throw new CliError(`the fill cannot prove itself: ${prover.why}`);
   }
   const proves = options.prove !== false && prover.supported;
-  const plan = await planSvmFill(rpc, destination, intent, { solver, claimant });
+  const plan = await planSvmFill(rpc, destination, intent, {
+    solver,
+    claimant,
+    ...(options.lookupTable === undefined ? {} : { lookupTable: svmAddress(options.lookupTable) }),
+  });
   const notes = [...plan.notes];
+  if (plan.setup.length > 0) {
+    notes.push(
+      `The fill is too large for one transaction as it is, so it takes its accounts through the ` +
+        `lookup table ${plan.lookupTable!.address}, which the first ${plan.setup.length} ` +
+        "transaction(s) create and extend, the solver paying its rent. Send them, then the fill " +
+        "from the next slot: a table is usable the slot after it is extended. Close the table " +
+        "once the fill has landed to take its rent back (sauce reclaim --chain solana).",
+    );
+  }
   if (there.claimant !== null) {
     notes.push(
       isCancelled(there.claimant)
@@ -2054,7 +2078,7 @@ async function buildSvmFill(
     notes.push(`it is filled without its proof: ${prover.why}`);
   }
   const { intentHash } = hashIntent(intent);
-  const transactions: AnyTxJson[] = [plan.transaction];
+  const transactions: AnyTxJson[] = [...plan.setup, plan.transaction];
   if (proves) {
     transactions.push(
       await svmProveTransaction(
@@ -2069,8 +2093,8 @@ async function buildSvmFill(
       ),
     );
     notes.push(
-      "The second transaction proves the fill, so send it once the first has landed. It shares " +
-        "the first's blockhash, which lasts about a minute; past that, build the proof again " +
+      "The last transaction proves the fill, so send it once the fill has landed. It shares " +
+        "the fill's blockhash, which lasts about a minute; past that, build the proof again " +
         "(`sauce intent prove`).",
     );
   }
@@ -2078,6 +2102,9 @@ async function buildSvmFill(
   return {
     from: solver,
     transactions,
+    ...(plan.lookupTable === undefined
+      ? {}
+      : { lookupTable: { address: plan.lookupTable.address, setup: plan.setup.length } }),
     proves,
     fee: { prover: "0", kitchen: "0" },
     prover: proverJson(prover),

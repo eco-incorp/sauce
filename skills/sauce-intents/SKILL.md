@@ -156,8 +156,9 @@ sauce intent publish <file> --chain base --keystore <path> --intent-deadline <un
 - Any other body is a Solana program, cooked through the Kitchen on the Pot the Portal's executor
   owns; the route creates that Pot when it is missing, and the delivery (the intent's second
   argument) is moved into it first. Its bytecode rides in the solver's one fill transaction
-  (1,232 bytes), and the command refuses an intent whose fill would not fit, which today is most
-  programs.
+  (1,232 bytes); a fill too large as it is takes its accounts through an address lookup table the
+  solver creates first (`sauce intent fill` does, with `--send`), and the command refuses an
+  intent whose fill would not fit even then: keep such a program small.
 - The command reads Solana before building (which token accounts and Pot exist; with
   `--intent-execution-fee auto`, the Kitchen's fee in lamports), so it needs Solana's endpoint for
   a program body. Two program intents published before the Pot exists race: only the first filled

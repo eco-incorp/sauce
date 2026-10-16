@@ -16,6 +16,8 @@ import {
   address,
   appendTransactionMessageInstructions,
   compileTransaction,
+  compressTransactionMessageUsingAddressLookupTables,
+  createNoopSigner,
   createSolanaRpc,
   createTransactionMessage,
   generateKeyPairSigner,
@@ -28,7 +30,9 @@ import {
   pipe,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
+  isSignerRole,
   type Address as SvmAddress,
+  type AddressesByLookupTableAddress,
   type Blockhash,
   type Base64EncodedWireTransaction,
   type Instruction,
@@ -50,6 +54,7 @@ import {
   svmKeyOf,
 } from "../svm/portal.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
+import { fetchAlt, lookupTableBatches } from "../svm/alt.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
 import { buildHeapFramePrepend } from "../svm/prepends.js";
 import { CliError } from "./args.js";
@@ -214,18 +219,16 @@ export async function svmTransaction(
   feePayer: SvmAddress,
   instructions: readonly Instruction[],
   what: string,
+  /** Lookup tables its accounts are taken through. */
+  tables?: AddressesByLookupTableAddress,
 ): Promise<SvmTxJson> {
   const { value: blockhash } = await ask("the latest blockhash", () =>
     rpc.getLatestBlockhash().send(),
   );
-  const message = pipe(
-    createTransactionMessage({ version: 0 }),
-    (m) => setTransactionMessageFeePayer(feePayer, m),
-    (m) => appendTransactionMessageInstructions(instructions, m),
-    (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
-  );
   const transaction = getBase64EncodedWireTransaction(
-    await partiallySignTransactionMessageWithSigners(message),
+    await partiallySignTransactionMessageWithSigners(
+      messageOf(feePayer, instructions, blockhash, tables),
+    ),
   );
   const size = getBase64Encoder().encode(transaction).length;
   if (size > SVM_PACKET_BYTES) {
@@ -236,6 +239,62 @@ export async function svmTransaction(
   }
 
   return { chainId: chain.id, chain: chain.slug, feePayer, transaction, value: "0", what };
+}
+
+/** A v0 message of `instructions` from `feePayer`, through `tables` where given. */
+function messageOf(
+  feePayer: SvmAddress,
+  instructions: readonly Instruction[],
+  blockhash: { readonly blockhash: Blockhash; readonly lastValidBlockHeight: bigint },
+  tables?: AddressesByLookupTableAddress,
+) {
+  const message = pipe(
+    createTransactionMessage({ version: 0 }),
+    (m) => setTransactionMessageFeePayer(feePayer, m),
+    (m) => appendTransactionMessageInstructions(instructions, m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
+  );
+
+  return tables === undefined
+    ? message
+    : compressTransactionMessageUsingAddressLookupTables(message, tables);
+}
+
+/** The wire size of `instructions` from `feePayer`, through `tables` where given: what decides
+ *  whether they fit one transaction. Reads nothing. */
+function wireBytes(
+  feePayer: SvmAddress,
+  instructions: readonly Instruction[],
+  tables?: AddressesByLookupTableAddress,
+): number {
+  const message = messageOf(
+    feePayer,
+    instructions,
+    { blockhash: feePayer as unknown as Blockhash, lastValidBlockHeight: 0n },
+    tables,
+  );
+
+  return getTransactionEncoder().encode(compileTransaction(message)).length;
+}
+
+/**
+ * The accounts a lookup table can carry for `instructions`: every account but a signer and an
+ * instruction's own program, which the transaction lists itself, in first-seen order.
+ */
+function tableAddresses(instructions: readonly Instruction[]): SvmAddress[] {
+  const programs = new Set<string>(instructions.map((instruction) => instruction.programAddress));
+  const seen = new Set<string>();
+  const addresses: SvmAddress[] = [];
+  for (const instruction of instructions) {
+    for (const meta of instruction.accounts ?? []) {
+      if (!("address" in meta) || isSignerRole(meta.role)) continue;
+      if (programs.has(meta.address) || seen.has(meta.address)) continue;
+      seen.add(meta.address);
+      addresses.push(meta.address);
+    }
+  }
+
+  return addresses;
 }
 
 /** Why a Solana transaction failed: Anchor's error code where the logs give one. */
@@ -329,6 +388,12 @@ export interface SvmFillToken {
 }
 
 export interface SvmFillPlan {
+  /** What the fill needs sent first: the lookup table its accounts are taken through, created and
+   *  extended by the solver. Empty when the fill fits one transaction as it is, or the table is
+   *  given. */
+  readonly setup: readonly SvmTxJson[];
+  /** The lookup table the fill takes its accounts through, where it needs one. */
+  readonly lookupTable?: { readonly address: string; readonly addresses: readonly string[] };
   readonly transaction: SvmTxJson;
   readonly tokens: readonly SvmFillToken[];
   readonly nativeAmount: bigint;
@@ -340,12 +405,22 @@ export interface SvmFillPlan {
 /**
  * The fill of `intent` on Solana by `solver`, for `claimant` (32 bytes: who the source pays): one
  * `fulfill`, the solver its fee payer. Each route mint's token program is read off the mint.
+ *
+ * A route carries every instruction the fill runs, a program's bytecode included, and a fill whose
+ * accounts make it larger than one transaction takes them through an address lookup table: the
+ * solver's own, created and extended by the `setup` transactions, usable from the slot after the
+ * last of them. `lookupTable` names one that exists already (the one `setup` made), read from the
+ * cluster and held to every account the fill takes.
  */
 export async function planSvmFill(
   rpc: SvmRpc,
   chain: CanonicalChain,
   intent: Intent,
-  options: { readonly solver: SvmAddress; readonly claimant: Hex },
+  options: {
+    readonly solver: SvmAddress;
+    readonly claimant: Hex;
+    readonly lookupTable?: SvmAddress;
+  },
 ): Promise<SvmFillPlan> {
   const portal = svmKeyOf(intent.route.portal);
   // Each token's mint (whose owner is its token program), then the solver's account for it: two
@@ -392,19 +467,86 @@ export async function planSvmFill(
     ),
   ];
 
+  const instructions = fillInstructions(intent, fulfill);
+  const what = `Portal.fulfill(${hashIntent(intent).intentHash}, route, rewardHash, ${options.claimant}) on ${chain.slug}`;
+  const table = await fillTable(rpc, chain, options.solver, instructions, options.lookupTable);
+
   return {
+    setup: table?.setup ?? [],
+    ...(table === undefined
+      ? {}
+      : { lookupTable: { address: table.address, addresses: table.addresses } }),
     transaction: await svmTransaction(
       rpc,
       chain,
       options.solver,
-      fillInstructions(intent, fulfill),
-      `Portal.fulfill(${hashIntent(intent).intentHash}, route, rewardHash, ${options.claimant}) on ${chain.slug}`,
+      instructions,
+      what,
+      table === undefined ? undefined : { [table.address]: table.addresses },
     ),
     tokens,
     nativeAmount: intent.route.nativeAmount,
     touched,
     notes,
   };
+}
+
+/**
+ * The lookup table a fill takes its accounts through: none when it fits one transaction as it is;
+ * `given`, read from the cluster and held to the fill's accounts; else a new one the solver creates
+ * at a recent slot, with the transactions that create and extend it.
+ */
+async function fillTable(
+  rpc: SvmRpc,
+  chain: CanonicalChain,
+  solver: SvmAddress,
+  instructions: readonly Instruction[],
+  given: SvmAddress | undefined,
+): Promise<
+  | { readonly address: SvmAddress; readonly addresses: SvmAddress[]; readonly setup: SvmTxJson[] }
+  | undefined
+> {
+  if (given === undefined && wireBytes(solver, instructions) <= SVM_PACKET_BYTES) return undefined;
+  const addresses = tableAddresses(instructions);
+  if (given !== undefined) {
+    const held = await ask(`the lookup table ${given}`, () => fetchAlt(rpc, given));
+    const holds = new Set<string>(held[given] ?? []);
+    const missing = addresses.filter((key) => !holds.has(key));
+    if (missing.length > 0) {
+      throw new CliError(
+        `the lookup table ${given} does not hold ${missing.length} of the fill's accounts ` +
+          `(${missing.slice(0, 3).join(", ")}${missing.length > 3 ? ", …" : ""})`,
+      );
+    }
+
+    return { address: given, addresses: held[given] as SvmAddress[], setup: [] };
+  }
+  const recentSlot = await ask("a recent slot", () =>
+    rpc.getSlot({ commitment: "finalized" }).send(),
+  );
+  const signer = createNoopSigner(solver);
+  const { lookupTableAddress, batches } = await lookupTableBatches({
+    payer: signer,
+    authority: signer,
+    recentSlot,
+    addresses,
+  });
+  const setup = await Promise.all(
+    batches.map((batch, index) =>
+      svmTransaction(
+        rpc,
+        chain,
+        solver,
+        batch,
+        index === 0
+          ? `create the lookup table ${lookupTableAddress} the fill takes its accounts through`
+          : `extend the lookup table ${lookupTableAddress} with the fill's accounts ` +
+              `(${index} of ${batches.length - 1})`,
+      ),
+    ),
+  );
+
+  return { address: lookupTableAddress, addresses, setup };
 }
 
 /** A fill's instructions: its fulfill after the compute budget it needs. A route that cooks
@@ -419,11 +561,14 @@ function fillInstructions(intent: Intent, fulfill: Instruction): Instruction[] {
 }
 
 /**
- * The size of `intent`'s fill on the wire, as {@link planSvmFill} builds it for any solver: whether
- * a solver can send it in one transaction ({@link SVM_PACKET_BYTES}). Reads nothing: the solver is
- * a placeholder key, which changes no size.
+ * The size of `intent`'s fill on the wire, as {@link planSvmFill} builds it for any solver, and
+ * whether it takes its accounts through a lookup table to get there: whether a solver can send it
+ * in one transaction ({@link SVM_PACKET_BYTES}). Reads nothing: the solver and the table are
+ * placeholder keys, which change no size.
  */
-export async function svmFillBytes(intent: Intent): Promise<number> {
+export async function svmFillBytes(
+  intent: Intent,
+): Promise<{ readonly bytes: number; readonly table: boolean }> {
   const solver = (await generateKeyPairSigner()).address;
   const fulfill = await buildPortalFulfillInstruction({
     intent,
@@ -434,18 +579,16 @@ export async function svmFillBytes(intent: Intent): Promise<number> {
       intent.route.tokens.map((token) => [svmKeyOf(token.token), TOKEN_PROGRAM_ID]),
     ),
   });
-  const message = pipe(
-    createTransactionMessage({ version: 0 }),
-    (m) => setTransactionMessageFeePayer(solver, m),
-    (m) => appendTransactionMessageInstructions(fillInstructions(intent, fulfill), m),
-    (m) =>
-      setTransactionMessageLifetimeUsingBlockhash(
-        { blockhash: solver as unknown as Blockhash, lastValidBlockHeight: 0n },
-        m,
-      ),
-  );
+  const instructions = fillInstructions(intent, fulfill);
+  const plain = wireBytes(solver, instructions);
+  if (plain <= SVM_PACKET_BYTES) return { bytes: plain, table: false };
+  // Through a lookup table: its address is any key, its addresses the fill's.
+  const table = (await generateKeyPairSigner()).address;
 
-  return getTransactionEncoder().encode(compileTransaction(message)).length;
+  return {
+    bytes: wireBytes(solver, instructions, { [table]: tableAddresses(instructions) }),
+    table: true,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------

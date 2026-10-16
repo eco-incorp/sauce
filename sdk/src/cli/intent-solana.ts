@@ -140,34 +140,45 @@ export async function solanaIntentState(
       },
     },
   };
-  await refuseUnfillable(read, files, intents);
+  notes.push(...(await refuseUnfillable(read, files, intents)));
 
   return { input: read, notes };
 }
 
 /**
- * Refuses an intent to Solana whose fill does not fit one transaction: no solver could send it.
- * `probed` (built as if no account existed, so with every creation) is measured first; only where
- * one of those is too large is `input` compiled to measure the routes it really builds.
+ * Refuses an intent to Solana whose fill does not fit one transaction, even through a lookup table
+ * (`lifecycle-svm.ts#svmFillBytes`): no solver could send it. `probed` (built as if no account
+ * existed, so with every creation) is measured first; only where one of those needs a table is
+ * `input` compiled to measure the routes it really builds. A fill that needs a table is said so.
  */
 async function refuseUnfillable(
   input: ProgramInput,
   files: CliFiles,
   probed: readonly LoweredIntent[],
-): Promise<void> {
+): Promise<string[]> {
   const sizes = await Promise.all(probed.map((intent) => svmFillBytes(intent.intent)));
-  if (sizes.every((size) => size <= SVM_PACKET_BYTES)) return;
-  const built = compileProgram(input, files).intents.filter(
-    (intent) => intent.solana !== undefined,
-  );
+  const built = sizes.every((size) => !size.table)
+    ? probed
+    : compileProgram(input, files).intents.filter((intent) => intent.solana !== undefined);
+  const notes: string[] = [];
   for (const intent of built) {
     const size = await svmFillBytes(intent.intent);
-    if (size <= SVM_PACKET_BYTES) continue;
-    throw new CliError(
-      `the intent to ${intent.destination.slug} is filled by a ${size}-byte transaction, past ` +
-        `Solana's ${SVM_PACKET_BYTES}: no solver could send it. Its route carries everything the ` +
-        "fill runs, a program's bytecode included: pay with token transfers alone, or make the " +
-        "program smaller",
-    );
+    if (size.bytes > SVM_PACKET_BYTES) {
+      throw new CliError(
+        `the intent to ${intent.destination.slug} is filled by a ${size.bytes}-byte transaction ` +
+          `even through a lookup table, past Solana's ${SVM_PACKET_BYTES}: no solver could send ` +
+          "it. Its route carries everything the fill runs, a program's bytecode included: make " +
+          "the program smaller, or pay with token transfers alone",
+      );
+    }
+    if (size.table) {
+      notes.push(
+        `the fill of the intent to ${intent.destination.slug} is ${size.bytes} bytes only through ` +
+          "an address lookup table holding its accounts, which the solver creates first (sauce " +
+          "intent fill does)",
+      );
+    }
   }
+
+  return notes;
 }

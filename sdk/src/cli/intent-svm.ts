@@ -99,15 +99,67 @@ export async function svmFillCommand(
     const endpoints: Record<string, string> = { [String(chain.id)]: url };
     const source = context.endpoint(requireChain(record.source.chainId));
     if (source !== undefined) endpoints[String(record.source.chainId)] = source;
-    const build = () =>
+    const build = (lookupTable?: string) =>
       buildFill(record, endpoints, {
         from: solver,
         ...(input.claimant === undefined ? {} : { claimant: input.claimant }),
         ...(input.prove === undefined ? {} : { prove: input.prove }),
+        ...(lookupTable === undefined ? {} : { lookupTable }),
       });
     let fill = await build();
-    const fillTx = fill.transactions[0] as SvmTxJson;
     const rpc = createSolanaRpc(url);
+    // A fill too large for one transaction takes its accounts through a lookup table the solver
+    // creates first. It cannot be rehearsed before the table exists: with --send the table is made,
+    // then the fill rehearsed on it and sent.
+    const table = fill.lookupTable;
+    if (table !== undefined && table.setup > 0) {
+      const setup = fill.transactions.slice(0, table.setup) as SvmTxJson[];
+      const steps = [
+        `Filling ${record.intentHash} on ${chain.slug} from ${solver} takes its accounts through ` +
+          `the lookup table ${table.address}, which ${setup.length} transaction(s) create first:`,
+        ...fill.transactions.map((tx, index) => `  ${index + 1}. ${tx.what}`),
+      ];
+      if (!input.send) {
+        texts.push(
+          ...steps,
+          "The fill is rehearsed once the table exists: --send creates it, then rehearses the " +
+            "fill on it before sending.",
+        );
+        json.push({
+          intentHash: record.intentHash,
+          ok: true,
+          sent: false,
+          rehearsed: false,
+          solver,
+          lookupTable: table.address,
+          transactions: fill.transactions,
+        });
+        notes.push(...fill.notes);
+        continue;
+      }
+      const action = `create the lookup table ${table.address} for the fill of ${record.intentHash}, its rent paid by ${solver}`;
+      const answer = await context.approver.approve(
+        action,
+        `${steps.join("\n")}\nCreate the table? [y/N] `,
+      );
+      if (answer === undefined) throw unapproved([action], context.approver.why);
+      if (!answer) throw new CliError("not sent: you declined");
+      let last = 0n;
+      for (const tx of setup) {
+        const sent = await sendPlannedSvm(url, context.svmSigner!, tx);
+        if (!sent.ok) {
+          throw new CliError(`${tx.what} ${sent.signature} failed: ${sent.reason ?? "no reason"}`);
+        }
+        last = sent.slot ?? last;
+      }
+      // A table is usable from the slot after its last extension.
+      for (let tries = 0; tries < 30; tries++) {
+        if ((await rpc.getSlot({ commitment: "confirmed" }).send()) > last) break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      fill = await build(table.address);
+    }
+    const fillTx = fill.transactions[0] as SvmTxJson;
     const watch = writableAccounts(fillTx);
     const before = await rpc
       .getMultipleAccounts(
@@ -186,7 +238,7 @@ export async function svmFillCommand(
     if (answer === undefined) throw unapproved([action], context.approver.why);
     if (!answer) throw new CliError("not sent: you declined");
     // A Solana blockhash lasts about a minute: after a person's answer, build the fill again.
-    if (!context.approver.auto) fill = await build();
+    if (!context.approver.auto) fill = await build(fill.lookupTable?.address);
     // The fill and its proof are recorded as each lands, from the Portal's instructions (`keep.ts`).
     knowIntents([record]);
     const sent = await sendPlannedSvm(url, context.svmSigner!, fill.transactions[0] as SvmTxJson);
