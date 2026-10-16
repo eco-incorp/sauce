@@ -14,7 +14,8 @@ A test forks a real chain at a block you pin. The first run records every accoun
 the tests read into a state file you commit. Every later run, CI included, replays that file: no
 RPC, no network, and the same result every time.
 
-The kit is Node.js only, and runs EVM chains only. Solana is not covered yet.
+The kit is Node.js only. It runs EVM chains on `anvil`, and Solana in LiteSVM: see
+[Solana](#solana) for what differs there.
 
 ## Setup
 
@@ -27,6 +28,13 @@ curl -L https://foundry.paradigm.xyz | bash && foundryup
 
 `anvil` must be on `PATH`, or pass its path as the `anvil` option. The kit reads no environment
 variables: the RPC, the block and the state file are arguments you pass.
+
+To test on Solana, install LiteSVM too, at the version the package pins (the kit says which, if
+yours differs). Solana needs no Foundry:
+
+```sh
+npm i -D litesvm@1.2.1
+```
 
 ## A first test
 
@@ -206,4 +214,174 @@ const result = await chain.run(
 );
 // result.returned === 42n
 await chain.stop();
+```
+
+## Solana
+
+Think of Solana as a big shared notebook of accounts: who holds how many coins, which programs
+exist, what each pool holds. A real cook writes in the real notebook, costs real money, and cannot be
+taken back. So for a test, the kit makes a pretend notebook inside your test, on your computer. It
+holds the same Sauce engine and Kitchen as the real one and follows the same rules, but you can give
+your test accounts as much money as you like, run your program, and look at what changed. Nothing
+you do there reaches the real Solana, and it costs nothing.
+
+When a program needs something real, such as USDC or a pool to swap at, the pretend notebook copies
+that page from the real one the first time a test asks for it, and writes it down in a file. The
+next run reads the file instead. So after the first run your tests need no internet, and they give
+the same answer every time.
+
+The pretend notebook is [LiteSVM](https://github.com/LiteSVM/litesvm), which runs Solana's own
+runtime in your test's process: there is no node to start.
+
+### A first Solana test
+
+A program that pays USDC from the Pot, `pay.sauce.ts`:
+
+```js
+function main(to: Address, amount: Uint256) {
+  require(USDC.balanceOf(ctx.self()) >= amount, "not enough USDC");
+  USDC.transfer(to, amount);
+}
+```
+
+And its test:
+
+```ts
+import assert from "node:assert/strict";
+import { after, afterEach, before, beforeEach, describe, it } from "node:test";
+import { CookReverted, fork, type SolanaTestChain } from "@eco-incorp/sauce/testing";
+
+const PAY = new URL("./pay.sauce.ts", import.meta.url);
+
+describe("pay.sauce.ts on Solana", () => {
+  let solana: SolanaTestChain;
+  before(async () => {
+    solana = await fork("solana", {
+      state: "test/state/pay-solana.json.gz",
+      rpcUrl: process.env.SOLANA_RPC_URL, // read only when the state file is not there yet
+    });
+  });
+  after(() => solana.stop());
+  beforeEach(() => solana.snapshot());
+  afterEach(() => solana.revert());
+
+  it("pays USDC from the Pot", async () => {
+    const alice = solana.account(0);
+    const bob = solana.account(1).address;
+    await solana.fund(alice.pot, { USDC: "1" });
+    const result = await solana.run(PAY, { args: [bob, 400n] });
+
+    assert.equal(result.delta(bob, "USDC"), 400n);
+    assert.equal(result.delta(alice.pot, "USDC"), -400n);
+  });
+
+  it("refuses more than the Pot holds", async () => {
+    await assert.rejects(
+      solana.simulate(PAY, { args: [solana.account(1).address, 400n] }),
+      (error) => error instanceof CookReverted && error.reason === "not enough USDC",
+    );
+  });
+});
+```
+
+`fork` and `local` give a `SolanaTestChain` when the chain is `"solana"`. It runs `npx tsx --test`
+like any other test, and starts in well under a second.
+
+### Recording on Solana
+
+A Solana node only says what an account holds now: no endpoint can read one as it was at an earlier
+slot. So there is no `block` to pin. The recording is of the moment you record, and the state file
+keeps that slot, its time, and the cluster's rent and epochs; a replay runs there.
+
+What is recorded is every account the test's transactions named, as the cluster held it when first
+named, and each program's code among them. A Solana transaction must name every account it touches,
+so nothing else can be read. `mode`, `state` and `rpcUrl` work as on an EVM chain, and the file never
+contains the RPC URL. A replay that names an account the recording does not hold reads it as missing,
+and the error that follows says so: record again after changing what the tests read.
+
+The test accounts' keys are the same on every run, so a recording made with them replays with them.
+Use them, or fixed keys, as recipients: a key made up afresh in each run was never recorded.
+
+### The Solana chain
+
+| Call                                          | What it does                                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `account(i)`                                  | Test account `i` (0–9): `address`, `secretKey` (as `solana-keygen` writes one), and `pot`. |
+| `fund(holder, { USDC: "100", SOL: "1" })`     | Adds whole tokens (a string) or base units (a bigint) to `holder`.                         |
+| `balanceOf(holder, "USDC")`                   | A balance in base units. A token is a registry symbol, a mint, or `SOL`.                   |
+| `run(program, { from, args, accounts })`      | Sends the program as a cook from account `from`'s Pot, as `sauce run` sends it.            |
+| `simulate(program, { from, args, accounts })` | The same cook, and everything before it, run and undone.                                   |
+| `compile(program)`                            | The program compiled for Solana: bytecode, parameters, return type, the accounts it takes. |
+| `getAccount(key)`, `setAccount(key, account)` | Reads or writes any account: lamports, owner, data.                                        |
+| `snapshot()`, `revert()`                      | Saves the chain's state, and returns to it. They nest.                                     |
+| `increaseTime(seconds)`, `warp(slots)`        | Moves the clock and the slot together, 400 ms a slot.                                      |
+| `now()`, `slot()`                             | The time and the slot a program reads (`ctx.timestamp()`, `ctx.blockNumber()`).            |
+| `executionFee()`                              | The Kitchen's fee, which every cook's owner pays.                                          |
+| `stop()`                                      | Stops the chain, and writes a recording.                                                   |
+
+Each test account starts with 1,000 SOL, and account 0's Pot is created at start; another account's
+on its first cook. On a fork the Kitchen's fee is the cluster's, which the owner pays with each cook;
+pass `zeroFee: true` to clear it. An empty chain charges none.
+
+### The accounts a program takes
+
+A Solana program names every account it reads or writes. `accounts` gives them by name, in the words
+`sauce run --account` takes: `pot`, `owner`, `pot:USDC` (the Pot's USDC account), `@to:USDC` (that of
+`main`'s argument `to`), `<address>:USDC`, `mint:USDC`, `program:USDC`, or an address. The accounts
+compiling added for you, for `USDC.transfer(to, amount)` or a venue's swap, are worked out on their
+own, so `pay.sauce.ts` needs none:
+
+```ts
+// function main(tokenProgram: Account, source: Account<Writable>,
+//   destination: Account<Writable>, authority: Account<Signer>, mint: Address, amount: Uint256)
+await solana.run(new URL("./transfer.sauce.ts", import.meta.url), {
+  args: [mint, 1_000_000n],
+  accounts: {
+    tokenProgram: "program:USDC",
+    source: "pot:USDC",
+    destination: `${bob}:USDC`,
+    authority: "pot",
+  },
+});
+```
+
+A token account the cook names that does not exist yet, such as the recipient's, is created first,
+the owner paying its rent, as `sauce run` does. A program too large for one transaction is staged
+into a code buffer first, its accounts through a lookup table where they do not fit either, and the
+buffer is closed after: `result.staged` and `result.lookupTable` say which happened.
+
+`fund` writes a token's amount into the holder's associated token account, creating it first where
+it is missing; the mint's supply stays as it was. Token-2022 mints work the same way.
+
+### What a Solana cook returns
+
+`run` and `simulate` return:
+
+- `returned`: what `main` returned, read as it declares it. Integers are bigints, a key is base58.
+- `returnData`: the raw bytes.
+- `changes`: every balance the cook changed, as `{ holder, token, mint, amount }`: SOL by account,
+  and a token by the owner of the token account that holds it.
+- `delta(holder, token)`: how much `holder`'s balance changed. The owner's SOL includes the
+  transaction's fee and the Kitchen's.
+- `logs`: the transaction's program logs.
+- `computeUnits`, and `signature` after `run`.
+
+A cook that fails throws `CookReverted`. Its `reason` is the program's `require` or `throw` message,
+the engine's or the Kitchen's refusal by name, another program's in its own words, or the runtime's
+error; `data` is the program's revert data, and `logs` the program logs.
+
+### An empty Solana chain
+
+`local({ chain: "solana" })` starts an empty Solana: the engine and the Kitchen, the runtime's own
+programs, wrapped SOL, and nothing else. Use it for programs that call nothing; fork Solana for
+anything that moves a token or calls a program.
+
+```ts
+const solana = await local({ chain: "solana" });
+const result = await solana.run(
+  { source: "function main(a: Uint256): Uint256 {\n  return a * 2;\n}\n" },
+  { args: [21n] },
+);
+// result.returned === 42n
+await solana.stop();
 ```

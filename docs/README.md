@@ -39,8 +39,8 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
   it measured.
 - [Compiling programs](guides/compiling.md): compile a standalone program and pass it runtime
   arguments.
-- [Testing programs](guides/testing.md): run programs on a forked chain from `node:test`, recorded
-  once and replayed with no RPC.
+- [Testing programs](guides/testing.md): run programs on a forked chain, EVM or Solana, from
+  `node:test`, recorded once and replayed with no RPC.
 - [A distributed swap](guides/distributed-swap.md): one limit order spread over several
   price-limited pools.
 - [A distributed swap on Solana](guides/solana-distributed-swap.md): the same limit order over
