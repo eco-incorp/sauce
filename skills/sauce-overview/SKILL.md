@@ -31,11 +31,10 @@ and the map of the other skills. Every other fact has one owner in the map: load
 | Intent            | An offer: run this on another chain, and the reward escrowed here is yours. A solver decides whether to fill it (`sauce-intents`).                                                                                                                                                                                                                                        |
 | Shared intent Pot | The one Pot per destination chain that every intent's program body cooks on, driven by solvers. A leftover there belongs to the next intent (`sauce-intents`).                                                                                                                                                                                                            |
 
-A program has control flow, reads and checks, and the engine runs it as written.
-It is not a multicall, and it does not use a magic header.
-On Solana the Kitchen and the engine are programs, the
-Pot is the Kitchen's account for the owner and salt, and a cook is the Kitchen's `cook` instruction
-signed by the owner (`sauce-solana`).
+A program has control flow, reads and checks, and the engine runs it as written:
+it is not a multicall, and it does not use a magic header. On Solana the Kitchen and the engine are
+programs, the Pot is the Kitchen's account for the owner and salt, and a cook is the Kitchen's
+`cook` instruction signed by the owner (`sauce-solana`).
 
 ## The protocol with a user
 
