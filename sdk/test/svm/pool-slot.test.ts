@@ -214,6 +214,45 @@ describe("svmPoolSlot", () => {
     );
   });
 
+  it("searches a far-priced pool's whole extension both ways, then pads from behind the price or refuses", async () => {
+    // PancakeSwap's SPCX_US/USDC pool, its extension holding one mark: array 322, at 50,040, above the
+    // price. At tick spacing 1 the extension reaches 14 × 512 arrays past ±30,720 each way, so the
+    // search walks every array start from the price's own (49,800) to ±460,800: 6,850 up and 8,510
+    // down.
+    const p = pool("pancakeswap-clmm-spcx-usdc");
+    const extension = await bitmapExtension(p);
+    const one = new Uint8Array(BYTES.get(extension)!);
+    one.fill(0, 40);
+    one[40 + (322 >> 3)]! |= 1 << (322 & 7);
+    const marked =
+      (marks: Uint8Array, arrays: boolean): OwnedAccountLoader =>
+      async (at) =>
+        at === extension
+          ? { data: marks, owner: p.program }
+          : at === p.pool || arrays
+            ? load(at)
+            : null;
+    const started = performance.now();
+    // Paying USDC: 50,040 above the price; the second place the price's own array, 49,800, which
+    // exists and holds nothing (never one past the price that way).
+    expect((await svmPoolSlot(marked(one, true), p.pool, USDC)).ticks).toEqual([
+      extension,
+      await tickArray(p, 50040),
+      await tickArray(p, 49800),
+    ]);
+    // Nothing marked and no array there: every start searched, then refused, not half made.
+    const none = new Uint8Array(one);
+    none.fill(0, 40);
+    await expect(svmPoolSlot(marked(none, false), p.pool, USDC)).rejects.toThrow(
+      "it has 0 tick arrays near its price, and its swap takes 2",
+    );
+    await expect(svmPoolSlot(marked(none, false), p.pool, SPCX_US)).rejects.toThrow(
+      "it has 0 tick arrays near its price, and its swap takes 2",
+    );
+    // Four slots, each searching the whole extension: well under a second.
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it("reads an extension's negative bitmaps as Raydium does: the array 60 ticks under -30720 is bit 511", async () => {
     // Raydium's own arithmetic (`TickArrayBitmapExtension::get_bitmap_offset` and
     // `tick_array_offset_in_bitmap`): past -30720 at tick spacing 1, the first negative bitmap holds

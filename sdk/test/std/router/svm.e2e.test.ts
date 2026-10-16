@@ -400,7 +400,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   // whirlpools' `TickArraySequenceInvalidIndex`; Crema's `NextTickNotFound`). A swap at a price holds
   // its limit a tick inside its window's last safe tick, so an order with a limit at three times the
   // pool's price and the input to reach it stops there, its pool's price exactly the window's bound.
-  it.each(["RaydiumClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
+  // PancakeSwap's pool stops at its window on about 1,360,000 compute units; Byreal's fixture pool
+  // runs out of compute walking its own ticks before it reaches its window (at 1.6 times its price),
+  // and stops at its window in the cell for the price's own array below.
+  it.each(["RaydiumClmm", "PancakeswapClmm", "StabbleClmm", "Cropper", "Defituna", "Crema"])(
     "%s: a limit far past its window stops a tick inside it, where the cook used to fail",
     async (venue) => {
       const entry = VENUES.find((one) => one.venue === venue)!;
