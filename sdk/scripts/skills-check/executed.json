@@ -2,7 +2,10 @@
   "$comment": "The suites that EXECUTE each skills/*/examples/*.sauce.ts on an engine, beyond skills:check's compile and command lines, and the examples nothing runs yet, with why. skills:check (docs/scripts/example-programs.mjs) fails an example in neither list, an entry that is not an example, and a suite that does not exist, does not name the example, or is not one CI runs. Kept here, not in skills/, because the skills ship.",
   "executed": {
     "sauce-chains/examples/holdings.sauce.ts": ["actions/tests/holdings.mainnet.test.ts"],
-    "sauce-chains/examples/payout-solana.sauce.ts": ["sdk/test/cli-solana.e2e.test.ts"],
+    "sauce-chains/examples/payout-solana.sauce.ts": [
+      "sdk/test/cli-solana.e2e.test.ts",
+      "dev-tools/test/testing/solana-examples.test.ts"
+    ],
     "sauce-cli/examples/buy.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],
     "sauce-cli/examples/payout.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],
     "sauce-distributed-swap/examples/distributed-swap.sauce.ts": [
@@ -34,9 +37,17 @@
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
-    "sauce-solana/examples/pay.sauce.ts": ["sdk/test/cli-solana-token-methods.e2e.test.ts"],
+    "sauce-solana/examples/pay.sauce.ts": [
+      "sdk/test/cli-solana-token-methods.e2e.test.ts",
+      "dev-tools/test/testing/solana-examples.test.ts"
+    ],
+    "sauce-solana/examples/solana.sauce.ts": ["dev-tools/test/testing/solana-examples.test.ts"],
+    "sauce-solana/examples/token-2022.sauce.ts": ["dev-tools/test/testing/solana-examples.test.ts"],
     "sauce-solana/examples/wrap.sauce.ts": ["sdk/test/cli-solana-token-methods.e2e.test.ts"],
-    "sauce-swaps/examples/solana-swap.sauce.ts": ["sdk/test/cli-solana-venues.e2e.test.ts"],
+    "sauce-swaps/examples/solana-swap.sauce.ts": [
+      "sdk/test/cli-solana-venues.e2e.test.ts",
+      "dev-tools/test/testing/solana-examples.test.ts"
+    ],
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
@@ -51,8 +62,6 @@
     "sauce-intents/examples/cross-chain.sauce.ts": "compiled by intents.mts, which pins on which chain each name resolves; no suite fulfils the intent it opens",
     "sauce-protocols/examples/protocols.sauce.ts": "compiled by protocols.mts for chains with and without PancakeSwap V3; no suite executes it",
     "sauce-script/examples/twap.sauce.ts": "compiled by skills:check and by the MCP sauce_compile test; no suite executes it",
-    "sauce-solana/examples/solana.sauce.ts": "compiled by solana.mts, which checks its account manifest; no suite runs it in LiteSVM",
-    "sauce-solana/examples/token-2022.sauce.ts": "compiled by solana.mts, which checks its accounts; no suite runs it in LiteSVM",
     "sauce-swaps/examples/swap-leg.sauce.ts": "compiled by swaps.mts for Base and Arbitrum; no suite executes it"
   }
 }

@@ -422,26 +422,42 @@ Direct, the engine checks nothing about the code account — not its owner, not 
 
 ## SVM destinations in Eco intents
 
-**Build Solana execution with the SVM client (`createSauceSvmClient`), not the SVM route helpers.**
+**The easy way: write the intent in a program.** `Solana(() => { ... }).reward({ ... })` in a
+program published from Ethereum or Base builds the Solana route for you
+([Sending to Solana](intents.md#sending-to-solana)):
 
-`Solana(body, { execution, ... }).reward(...)`, `routes.compileSauceRoute()`,
-`buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an `execute_from_account`
-instruction carrying only its 8-byte discriminator. The engine needs 65 further
-bytes of Pot derivation material and a trailing Pot signer that the Kitchen
-supplies, so that instruction is not one it will run — and pointing the helper at
-a different engine id does not add the missing bytes.
+- a body that only pays wallets (`USDC.transfer(recipient, amount)`) becomes Solana's own token
+  transfers: the Associated Token Account program's `CreateIdempotent` for each wallet with no
+  account yet, the Portal's executor paying the rent, then `TransferChecked` from the executor's
+  account;
+- any other body is compiled for Solana and cooked through the Kitchen on the executor's Pot. The
+  route first creates that Pot if it is missing (`create_pot` needs its owner's signature, and only
+  the Portal signs for the executor, so only a route can), creates each token account the program
+  names that is missing, and moves what the solver delivered into the Pot.
+
+Which accounts exist decides the route, so it is read from the cluster first: with
+`compileSauceProgram`, pass it as `intents.svm` (`potExists`, the token accounts in `existing`,
+and the Kitchen's fee as `executionFee`). The `sauce` command reads it for you.
+
+**Building a route by hand.** `Solana(body, { execution, ... }).reward(...)` in TypeScript,
+`routes.compileSauceRoute()`, `buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an
+`execute_from_account` instruction carrying only its 8-byte discriminator. The engine needs 65
+further bytes of Pot derivation material and a trailing Pot signer that the Kitchen supplies, so
+that instruction is not one it will run — and pointing the helper at a different engine id does
+not add the missing bytes.
 
 The [SVM Portal's fulfillment](https://github.com/eco/eco-routes-svm/blob/5e544b72d368d9d1f0ee5269e2a1a5d2a9f8c2f2/programs/portal/src/instructions/fulfill.rs#L139-L192)
 forwards a route's instruction bytes to their target unchanged and signs each
 call for its own executor PDA. So the executor can own a Kitchen Pot and cook on
 it: the Solana counterpart of an EVM intent's cook on the Executor's shared Pot.
-`svm` builds that route:
+`svm` has the pieces the program path is built from:
 
 - `svmIntentPot({ portal, kitchen })` is the executor's Pot (the zero salt by
   convention), which every intent's cook through that Portal shares: send on in the
   program what the intent delivers.
 - `svmIntentPotInstruction(...)` is the Kitchen's `create_pot` with the executor as
-  owner and rent payer. One route carries it once, the rent its native amount.
+  owner and rent payer. One route carries it once, the rent its native amount; a
+  second route carrying it fails, the Pot existing.
 - `svmIntentCookInstruction({ portal, kitchen, engineProgram, bytecode, manifest,
 resolution, maxExecutionFee })` is the Kitchen's `cook` with the executor as owner
   and fee payer, the fee the route's native amount, the program's accounts resolved
@@ -453,12 +469,11 @@ resolution, maxExecutionFee })` is the Kitchen's `cook` with the executor as own
   committed writable everywhere, and the executor never as a signer. A route committed
   with each call's own flags is another intent, which no fill matches.
 
-Publish the route with the EVM Portal helpers (`routes.publishAndFundTx`); the
-intent syntax does not build it yet. Moving delivered tokens from the executor's
-token account into the Pot's is a route call before the cook (an SPL
-`TransferChecked`, the executor its authority). The fill must request the
-engine's heap frame, as every cook does; `sauce intent fill` adds it when a route
-call is the Kitchen's.
+Publish a hand-built route with the EVM Portal helpers (`routes.publishAndFundTx`).
+The fill must request the engine's heap frame, as every cook does; `sauce intent fill`
+adds it when a route call is the Kitchen's. The whole route rides in the solver's one
+fill transaction, which Solana caps at 1,232 bytes, and a program's bytecode is most
+of it.
 
 A route's program runs through the Kitchen, on the executor's Pot: that is what
 these builders make, and the `sauce intent` commands take no `--via`. The direct

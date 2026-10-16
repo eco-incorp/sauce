@@ -45,6 +45,13 @@ const ACTIONS_CI_SCRIPTS = ["test:unit", "test:mainnet"];
 function ranByCi(repository, suite) {
   if (/^sdk\/test\/.+\.test\.ts$/.test(suite)) return true;
   if (/^mcp\/test\/[^/]+\.test\.ts$/.test(suite)) return true;
+  // dev-tools' suites run as its `test` script lists them, CI's `pnpm --filter './dev-tools' test`.
+  if (suite.startsWith("dev-tools/test/")) {
+    const { scripts } = JSON.parse(
+      readFileSync(join(repository, "dev-tools/package.json"), "utf8"),
+    );
+    return scripts.test?.split(/\s+/).includes(suite.slice("dev-tools/".length)) === true;
+  }
   if (suite.startsWith("actions/tests/")) {
     const { scripts } = JSON.parse(readFileSync(join(repository, "actions/package.json"), "utf8"));
     const named = suite.slice("actions/".length);

@@ -75,6 +75,7 @@ import {
 } from "./portal.js";
 import { parseSauce } from "./parse.js";
 import { emitTemplate, splitByPlaceholders, type PlaceholderSpec } from "./template.js";
+import type { SvmIntentRoute } from "../svm/intent-route.js";
 import type { AddressInput, Intent } from "./types.js";
 
 /**
@@ -141,6 +142,27 @@ export interface IntentSugarDefaults {
   /** The destination Kitchen's current execution fee, in wei, paid on every cook. Required for a
    *  cook-based child: it is read from the chain and it changes. */
   readonly executionFee?: bigint;
+  /**
+   * For an intent to Solana: what its route is built against, read from the cluster before building
+   * (the `sauce` command reads it). See `svm/intent-route.ts`.
+   */
+  readonly svm?: IntentSvmState;
+}
+
+/** The state of Solana an intent's route there is built against. */
+export interface IntentSvmState {
+  /** The Kitchen's fee on Solana, in lamports, which a cook's route delivers. Defaults to
+   *  `executionFee`. */
+  readonly executionFee?: bigint;
+  /**
+   * Whether the Pot the Portal's executor owns exists. Required for a body that runs a program: a
+   * route creates that Pot when it does not (only a route can), and a route creating a Pot that
+   * exists, or cooking on one that does not, is one no solver can fill.
+   */
+  readonly potExists?: boolean;
+  /** Token accounts that exist already (base58), which the route does not create or pay rent
+   *  for. Any other it uses is created, its rent delivered. */
+  readonly existing?: readonly string[];
 }
 
 /** Everything the rewrite needs that is not in the source text. */
@@ -178,6 +200,33 @@ export interface IntentSugarContext {
     /** The destination Portal the child's route records — whose Executor must own the Pot. */
     destinationPortal: AddressInput,
   ) => CompiledChild;
+  /**
+   * The route of an intent to Solana whose body is token transfers to wallets (`svm/intent-route.ts`
+   * `svmTransferRoute`). Supplied by `sauce-route.ts`, which knows the chain's mints.
+   */
+  readonly svmTransfers?: (
+    chain: CanonicalChain,
+    portal: AddressInput,
+    transfers: readonly SvmTransferSpec[],
+  ) => SvmIntentRoute;
+  /**
+   * The route of an intent to Solana whose body is a program: compiled for Solana, re-entering the
+   * route pipeline as `compileChild` does, and cooked on the Portal executor's Pot
+   * (`svmCookRoute`). What the solver delivers is moved into the Pot first.
+   */
+  readonly svmProgram?: (
+    chain: CanonicalChain,
+    source: string,
+    portal: AddressInput,
+    delivered: readonly { readonly token: bigint; readonly amount: bigint }[],
+  ) => SvmIntentRoute;
+}
+
+/** One `transfer` of a token-only body on Solana: the mint, the wallet paid, the amount. */
+export interface SvmTransferSpec {
+  readonly mint: bigint;
+  readonly recipient: bigint;
+  readonly amount: bigint;
 }
 
 export interface CompiledChild {
@@ -206,6 +255,9 @@ export interface LoweredIntent {
   /** How the emitted program funds it: by transfer to its vault then `publish`, or
    *  `publishAndFund`. */
   readonly fundVia: IntentFundVia;
+  /** An intent to Solana: the accounts its route creates, and every account whose existence its
+   *  route was built against (`svm/intent-route.ts`). */
+  readonly solana?: Pick<SvmIntentRoute, "creates" | "accounts" | "pot">;
 }
 
 class SugarError extends Error {}
@@ -705,7 +757,71 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     const calls: { target: Hex; data: Hex; value: bigint }[] = [];
     const captureWords: { name: string; sentinel: bigint }[] = [];
 
-    if (!simple) {
+    // An intent to Solana: its route is Solana instructions, built whole here (`svm/intent-route.ts`).
+    // A value the enclosing program has only while it runs cannot reach one: an amount there is a
+    // little-endian u64 inside an instruction, not a word this lowering splices.
+    const known = (value: Value, what: string): bigint =>
+      "literal" in value
+        ? value.literal
+        : fail(
+            `${what} on ${site.chain.slug} is \`${value.capture}\`, which the program has only while ` +
+              "it runs, and a route on Solana is built whole before then: make it a literal, one of " +
+              "main's arguments or a top-level `const` of a literal",
+          );
+    let svmRoute: SvmIntentRoute | undefined;
+    if (site.chain.kind === "svm") {
+      if (isDirectCallBody(site.body, defines)) {
+        if (explicitDelivery !== undefined) {
+          fail(
+            "a body of token transfers delivers what it transfers: leave out the intent's second " +
+              "argument",
+          );
+        }
+        const transfers = site.body.map((statement) => {
+          const lowered = lowerStatement(statement, resolve, defines);
+          if (lowered.method !== "transfer") {
+            return fail(
+              `on ${site.chain.slug} an intent's token-only body pays wallets with \`transfer\`: an ` +
+                "`approve` by the Portal's executor outlives the fill, so it is not offered",
+            );
+          }
+
+          return {
+            mint: lowered.target,
+            recipient: known(lowered.args[0]!, "a transfer's recipient"),
+            amount: known(lowered.args[1]!, "a transfer's amount"),
+          };
+        });
+        if (context.svmTransfers === undefined) fail(`no route is built for ${site.chain.slug}`);
+        svmRoute = context.svmTransfers!(site.chain, destinationPortal, transfers);
+      } else {
+        const childModule = childProgram(
+          source,
+          program,
+          scope,
+          site,
+          site.body,
+          source.slice(site.bodyStart + 1, site.bodyEnd - 1),
+          new Set(defines.keys()),
+        );
+        if (childModule.captures.length > 0) {
+          known({ capture: childModule.captures[0]! }, "a value the body reads");
+        }
+        for (const name of childModule.carriedFunctions) carriedFunctions.add(name);
+        if (context.svmProgram === undefined) fail(`no route is built for ${site.chain.slug}`);
+        svmRoute = context.svmProgram!(
+          site.chain,
+          childModule.source,
+          destinationPortal,
+          (explicitDelivery ?? []).map((token) => ({
+            token: token.token,
+            amount: known(token.amount, "a delivered amount"),
+          })),
+        );
+      }
+    }
+
+    if (!simple && svmRoute === undefined) {
       // The body as a program of its own: the file's declarations it reaches, carried as written,
       // and `main` taking what it captures (`intent-body.ts`).
       //
@@ -820,20 +936,32 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     const child: Intent = {
       destination: BigInt(site.chain.id),
       sourceChainId: BigInt(context.source.id),
-      route: normalizeRoute({
-        salt: defaults.salt,
-        deadline: requireDeadline(defaults),
-        portal: destinationPortal,
-        // Native the route's own calls need: the Kitchen fee, once per cook.
-        nativeAmount: calls.reduce((sum, call) => sum + call.value, 0n),
-        // What the SOLVER delivers to run this intent, which is a different thing from the reward
-        // it collects for doing so.
-        tokens: (explicitDelivery ?? derivedDelivery).map((t) => ({
-          token: addressHex(t.token),
-          amount: sentinelFor(t.amount),
-        })),
-        calls,
-      }),
+      route: normalizeRoute(
+        svmRoute !== undefined
+          ? {
+              salt: defaults.salt,
+              deadline: requireDeadline(defaults),
+              portal: destinationPortal,
+              // On Solana a call carries no value: the route's lamports are its rents and fee.
+              nativeAmount: svmRoute.nativeAmount,
+              tokens: svmRoute.tokens,
+              calls: svmRoute.calls,
+            }
+          : {
+              salt: defaults.salt,
+              deadline: requireDeadline(defaults),
+              portal: destinationPortal,
+              // Native the route's own calls need: the Kitchen fee, once per cook.
+              nativeAmount: calls.reduce((sum, call) => sum + call.value, 0n),
+              // What the SOLVER delivers to run this intent, which is a different thing from the
+              // reward it collects for doing so.
+              tokens: (explicitDelivery ?? derivedDelivery).map((t) => ({
+                token: addressHex(t.token),
+                amount: sentinelFor(t.amount),
+              })),
+              calls,
+            },
+      ),
       reward: normalizeReward({
         deadline: rewardDeadline,
         // The executing Pot is the default refund recipient: the program funded this reward, so
@@ -927,6 +1055,15 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
       destination: site.chain,
       fundVia,
+      ...(svmRoute === undefined
+        ? {}
+        : {
+            solana: {
+              creates: svmRoute.creates,
+              accounts: svmRoute.accounts,
+              ...(svmRoute.pot === undefined ? {} : { pot: svmRoute.pot }),
+            },
+          }),
     });
     replacements.push({
       start: site.start,

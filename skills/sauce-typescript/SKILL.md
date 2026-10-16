@@ -18,7 +18,7 @@ manual, which starts at `node_modules/@eco-incorp/sauce/docs/README.md`, with th
 | A service compiles a program and builds its cook                  | yes  |                |
 | The raw compiler, compact arguments, a custom resolver, a browser | yes  |                |
 | The registry, actions, verification, Solana or intents from code  | yes  |                |
-| Tests that run programs on a forked chain                         | yes  |                |
+| Tests that run programs on a forked EVM chain or Solana           | yes  |                |
 | Writing the program                                               |      | `sauce-script` |
 | Running it by hand                                                |      | `sauce-cli`    |
 
@@ -213,6 +213,13 @@ rpcUrl })` forks a chain at a pinned block on a local anvil (replaying `state`, 
   `run(file, { args })` sends a cook and `simulate` runs one without sending it: what `main`
   returned (`returned`), each token's movement (`delta(holder, "WETH")`), or `CookReverted` with the
   program's `require` message. `snapshot()`/`revert()` isolate tests; write them with `node:test`.
+  It runs Solana too, in LiteSVM, which the project installs at the version the package pins (no
+  anvil): `fork("solana", { state, rpcUrl, mode })` records the accounts the test's transactions
+  name and replays them with no RPC, and `local({ chain: "solana" })` is an empty chain. There,
+  `run` and `simulate` take `accounts` in `--account`'s names (`pot:USDC`, `@to:USDC`,
+  `mint:PYUSD`), derive the rest, create the token accounts the cook names that are missing, and
+  stage a program too large for one transaction; `fund(holder, { USDC: "1", SOL: "1" })` writes
+  balances, and `CookReverted`'s `reason` is the program's `require` message.
   Reference: `node_modules/@eco-incorp/sauce/docs/guides/testing.md`.
 
 ## Pitfalls

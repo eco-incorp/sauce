@@ -207,6 +207,11 @@ const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]
   [/needs a `creator`/, () => "pass --intent-creator <address>"],
   [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [
+    /`intents\.svm\.executionFee`/,
+    () => "pass --intent-execution-fee auto, which reads it, or the fee in lamports",
+  ],
+  [/`intents\.svm\.potExists`/, () => "give Solana's endpoint (--config), not --offline"],
+  [
     /`([A-Za-z_$][\w$]*)` is not a declared variable/,
     (match) =>
       `if ${match[1]} is a value you supply, make it a parameter of main ` +

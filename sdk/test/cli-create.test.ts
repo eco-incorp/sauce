@@ -17,6 +17,7 @@ import {
   parseWhen,
   portalChains,
   publishableChains,
+  sourceChains,
   type CreateInput,
 } from "../src/cli/create.js";
 import { PreviewChainError } from "../src/cli/support.js";
@@ -43,6 +44,58 @@ describe("making an intent: sauce intent publish with no file", () => {
     writeText: (path, text) => writeFileSync(path, text),
     exists: (path) => existsSync(path),
     ...overrides,
+  });
+
+  it("writes an intent to Solana: a base58 wallet, Solana's token, a file that compiles", async () => {
+    const out = join(work, "to-solana.sauce.ts");
+    const wallet = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+    const given = {
+      source: "base",
+      destination: "solana",
+      // Solana's USDC by its mint: a registered one.
+      token: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      amount: "2",
+      recipient: wallet,
+      rewardToken: "USDC",
+      reward: "2.1",
+      prover: "HyperProver",
+      fillDeadline: "+1h",
+      rewardDeadline: "+2h",
+      out,
+    };
+    const created = await createIntent(input({ given }));
+    expect(created.destination.slug).toBe("solana");
+    const text = readFileSync(out, "utf8");
+    expect(text).toContain(`The recipient is the wallet ${wallet}`);
+    expect(text).toContain(
+      "USDC.transfer(0x7e8c088760bfde1dddcf32c17f209b8242ee52aaf131facd88d0ea2c6d0b06f2, 2000000);",
+    );
+    expect(text).toMatch(/^Solana\(\(\) => \{$/m);
+    // Solana's costs are not priced here, and it says so.
+    expect(created.summary.join("\n")).toMatch(/not priced here/);
+    const program = compileProgram(
+      {
+        file: out,
+        text,
+        chain: created.source,
+        compactArgs: false,
+        defines: {},
+        intents: { deadline: created.deadline, creator: ME, prover: created.prover },
+      },
+      nodeIo(),
+    );
+    expect(program.intents.map((intent) => intent.destination.slug)).toEqual(["solana"]);
+    // An EVM address, or a mint Solana does not register, is refused by name.
+    await expect(
+      createIntent(
+        input({ given: { ...given, recipient: RECIPIENT, out: join(work, "a.sauce.ts") } }),
+      ),
+    ).rejects.toThrow(
+      /--recipient: '0x6666666666666666666666666666666666666666' is not a solana address/,
+    );
+    await expect(
+      createIntent(input({ given: { ...given, token: wallet, out: join(work, "b.sauce.ts") } })),
+    ).rejects.toThrow(/--token: '9WzD.*' is not a token solana registers/);
   });
 
   it("writes an intent file from flags alone, which compiles as any intent file does", async () => {
@@ -134,8 +187,10 @@ describe("making an intent: sauce intent publish with no file", () => {
     );
     expect(script).toEqual([]);
     expect(asked[0]).toMatch(/^Source chain/);
-    // Only the supported chains with a Portal are offered: every other one is a preview chain.
-    expect(publishableChains().map((chain) => chain.slug)).toEqual(["ethereum", "base"]);
+    // Only the supported chains with a Portal are offered: every other one is a preview chain. A
+    // source is an EVM chain, whose wallet publishes; Solana is a destination.
+    expect(publishableChains().map((chain) => chain.slug)).toEqual(["ethereum", "base", "solana"]);
+    expect(sourceChains().map((chain) => chain.slug)).toEqual(["ethereum", "base"]);
     expect(portalChains().length).toBeGreaterThan(2);
     expect(asked[0]).toContain("Ethereum (1)");
     expect(asked[0]).toContain("Base (8453)");
@@ -189,7 +244,9 @@ describe("making an intent: sauce intent publish with no file", () => {
           given: { ...given, source: "solana", fillDeadline: "+2h", rewardDeadline: "+3h" },
         }),
       ),
-    ).rejects.toThrow(/solana has no eco-routes Portal recorded/);
+    ).rejects.toThrow(
+      /--source solana: an intent made here is published from a wallet on an EVM chain/,
+    );
     // A preview chain is refused before anything is asked of it or read from it.
     let read = false;
     await expect(

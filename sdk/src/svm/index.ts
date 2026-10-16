@@ -27,5 +27,6 @@ export * from "./venues/index.js";
 export * from "./recipes/index.js";
 export * from "./accessors.js";
 export * from "./portal.js";
+export * from "./intent-route.js";
 export * from "./router-accounts.js";
 export * from "./router-data.js";

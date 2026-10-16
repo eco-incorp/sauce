@@ -114,6 +114,8 @@ export function rewriteSvmTokenSyntax(
   source: string,
   tokens: ReadonlyMap<string, bigint>,
   rows: readonly SvmTokenRow[],
+  /** Compile-time values a holder may name, as a key (`SvmLowering`'s `keys`). */
+  keys?: ReadonlyMap<string, bigint>,
 ): SvmTokenRewriteResult {
   // Before parsing: a program that names neither `Token`, a symbol nor a venue has nothing to lower.
   // The scan stops at the first it meets; a mention in a comment only costs the parse.
@@ -126,7 +128,7 @@ export function rewriteSvmTokenSyntax(
   ) {
     return { source, rewrote: false, derived: {} };
   }
-  const lowering = new SvmLowering(source, tokens, rows);
+  const lowering = new SvmLowering(source, tokens, rows, keys);
   collectTokenMethods(lowering);
   collectVenueMethods(lowering);
   collectAccountExpressions(lowering);
