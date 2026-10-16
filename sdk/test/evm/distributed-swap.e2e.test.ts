@@ -12,8 +12,12 @@
  * immutable, the address it checks it runs at, set to that address), with liquidity added through
  * v4-core's own `PoolModifyLiquidityTest`, and read through `fixtures/StateView.sol` at Base's
  * StateView address: v4-periphery's `getSlot0`/`getLiquidity`, as `swap-on-base.e2e.test.ts` runs
- * them. The two tokens are `MockERC20` runtimes at Base's WETH and USDC addresses, so WETH is
- * token0, as on Base.
+ * them. The two tokens are `MockERC20` runtimes at Base's USDC and SPCXc addresses, so USDC is
+ * token0, as on Base, and the program runs as it ships, naming both. On Base, SPCXc is a B20 token
+ * built into the node, whose account holds the one byte `0xef` that anvil cannot run; CLAUDE.md
+ * keeps every execution suite off it. That is about Base's own state, forked or live. This chain
+ * forks nothing: SPCXc's address is an empty account here, as any other, and the mock etched at it
+ * is an ordinary ERC-20, which is all the program asks of the token it buys.
  *
  * Slipstream's own contracts cannot run on a local chain (its factory needs its voter, registry and
  * pool implementation), so its venue is a Uniswap V3 pool behind `fixtures/TickSpacingPoolFactory.sol`
@@ -24,11 +28,13 @@
  * spacing, the reads through `AerodromeSlipstream.Pool`, the fee read from the pool (a 0.3% pool at
  * spacing 10, so a fee assumed from the spacing would be wrong), and the swap by `uniswapV3`.
  *
- * The pools, in USDC per WETH: Slipstream at spacing 10, 0.3% at 2,703; Uniswap V3 none at fees
- * 100, 200, 300 and 400, 0.05% at 2,700 and 0.3% at 2,705 with liquidity, 1% at a stale 2,650 with
- * none; Uniswap V4's standard hookless keys none at 0.3%, 0.01% at 2,740 with no liquidity, 0.05%
- * at 2,702 with liquidity and a protocol fee of 0.1% paying token1 (0.02% paying token0), 1% at
- * 2,690 with liquidity, past its own limit both ways. What the skill says the program does, and
+ * The pools, in USDC per SPCXc: Slipstream at spacing 10, 0.3% at 150.15; Uniswap V3 none at fees
+ * 100, 200, 300 and 400, 0.05% at 150 and 0.3% at 150.25 with liquidity, 1% at a stale 147.25 with
+ * none; Uniswap V4's standard hookless keys none at 0.3%, 0.01% at 152.25 with no liquidity, 0.05%
+ * at 150.10 with liquidity and a protocol fee of 0.1% paying token0, USDC (0.02% paying token1),
+ * 1% at 149.40 with liquidity, past its own limit both ways. The program buys SPCXc with USDC,
+ * paying token0; the same program with the two symbols swapped sells SPCXc, paying token1, and
+ * runs the other direction's branches. What the skill says the program does, and
  * this holds it to: a missing pool, an empty one and one past its own limit are skipped; each pool
  * stops at its own limit, `priceLimit` moved by √(1 − fee) with the fee read from the pool (for V4,
  * this direction's protocol fee composed with the LP fee), so every fill costs at most `priceLimit`
@@ -144,21 +150,23 @@ const erc20 = parseAbi([
   "function balanceOf(address account) view returns (uint256)",
 ]);
 
-const WETH = getAddress(Base.WETH.address!);
 const USDC = getAddress(Base.USDC.address!);
-const PAIR = { baseDecimals: 18, quoteDecimals: 6, baseIsToken0: true };
-const sqrtAt = (usdcPerWeth: string): bigint => sqrtPriceX96FromPrice(usdcPerWeth, PAIR);
+const SPCXC = getAddress(Base.SPCXc.address!);
+/** SPCXc, 8 decimals, priced in USDC, 6: SPCXc is token1, USDC's address being the lower. */
+const PAIR = { baseDecimals: 8, quoteDecimals: 6, baseIsToken0: false };
+const sqrtAt = (usdcPerShare: string): bigint => sqrtPriceX96FromPrice(usdcPerShare, PAIR);
 const Q192 = 2n ** 192n;
 const E18 = 10n ** 18n;
 const ZERO = "0x0000000000000000000000000000000000000000";
 
-/** `priceLimit` buying WETH with USDC, for a price in tenths of a USDC: USDC units per WETH unit, times
- *  1e18, which for 6 and 18 decimals is the price times 1e6. */
-const usdcPerWeth = (tenths: bigint): bigint => tenths * 10n ** 5n;
-/** `priceLimit` buying USDC with WETH, for a price in USDC per WETH: WETH units per USDC unit. */
-const wethPerUsdc = (tenths: bigint): bigint => (E18 * E18 * 10n) / (tenths * 10n ** 6n);
-/** 2,713.5 USDC per WETH: the `priceLimit` most tests buy at, the skill's own. */
-const PRICE_LIMIT = usdcPerWeth(27_135n);
+/** `priceLimit` buying SPCXc with USDC, for a price in cents: USDC units per SPCXc unit, times 1e18,
+ *  which for 6 and 8 decimals is the price times 1e16. */
+const usdcPerShare = (cents: bigint): bigint => cents * 10n ** 14n;
+/** `priceLimit` selling SPCXc for USDC, for a price in cents of USDC per SPCXc: SPCXc units per USDC
+ *  unit, times 1e18, rounded down. */
+const sharesPerUsdc = (cents: bigint): bigint => (10n ** 8n * E18 * 100n) / (cents * 10n ** 6n);
+/** 150.75 USDC per SPCXc, 0.5% above 150: the `priceLimit` most tests buy at. */
+const PRICE_LIMIT = usdcPerShare(15_075n);
 
 interface Venue {
   kind: "v3" | "cl" | "v4";
@@ -166,7 +174,7 @@ interface Venue {
   fee: bigint;
   /** The pool's own tick spacing, for minting around its price. */
   spacing: number;
-  /** USDC per WETH, or none: no pool at this key. */
+  /** USDC per SPCXc, or none: no pool at this key. */
   price?: string;
   liquidity: bigint;
   /** The Slipstream tick spacing the pool stands at, behind the Slipstream lookup. */
@@ -174,37 +182,39 @@ interface Venue {
   /** A V4 pool's protocol fee: paying token0's in the low 12 bits, token1's in the next 12. */
   protocolFee?: number;
 }
+/** A pool's liquidity: about 5,200 USDC moves its price 1%, at 150 USDC per SPCXc. */
+const DEEP = 848n * 10n ** 9n;
 const VENUES: Venue[] = [
   {
     kind: "cl",
     fee: 3000n,
     spacing: 60,
-    price: "2703",
-    liquidity: 20n * 10n ** 15n,
+    price: "150.15",
+    liquidity: DEEP,
     slipstream: 10n,
   },
-  { kind: "v3", fee: 500n, spacing: 10, price: "2700", liquidity: 15n * 10n ** 15n },
-  { kind: "v3", fee: 3000n, spacing: 60, price: "2705", liquidity: 20n * 10n ** 15n },
-  { kind: "v3", fee: 10000n, spacing: 200, price: "2650", liquidity: 0n },
-  { kind: "v4", fee: 100n, spacing: 1, price: "2740", liquidity: 0n },
+  { kind: "v3", fee: 500n, spacing: 10, price: "150", liquidity: (DEEP * 3n) / 4n },
+  { kind: "v3", fee: 3000n, spacing: 60, price: "150.25", liquidity: DEEP },
+  { kind: "v3", fee: 10000n, spacing: 200, price: "147.25", liquidity: 0n },
+  { kind: "v4", fee: 100n, spacing: 1, price: "152.25", liquidity: 0n },
   {
     kind: "v4",
     fee: 500n,
     spacing: 10,
-    price: "2702",
-    liquidity: 20n * 10n ** 15n,
-    protocolFee: 200 | (1000 << 12),
+    price: "150.10",
+    liquidity: DEEP,
+    protocolFee: 1000 | (200 << 12),
   },
   { kind: "v4", fee: 3000n, spacing: 60, liquidity: 0n },
-  { kind: "v4", fee: 10000n, spacing: 200, price: "2690", liquidity: 20n * 10n ** 15n },
+  { kind: "v4", fee: 10000n, spacing: 200, price: "149.40", liquidity: DEEP },
 ];
 const venueName = (venue: Venue): string =>
   venue.kind === "cl" ? `cl:${venue.slipstream}` : `${venue.kind}:${venue.fee}`;
 
 /** A hookless V4 key of the pair, and its id: what the program hashes. */
 const keyOf = (venue: Venue) => ({
-  currency0: WETH,
-  currency1: USDC,
+  currency0: USDC,
+  currency1: SPCXC,
   fee: Number(venue.fee),
   tickSpacing: venue.spacing,
   hooks: ZERO as Address,
@@ -219,7 +229,7 @@ const idOf = (venue: Venue): Hex =>
         { type: "int24" },
         { type: "address" },
       ],
-      [WETH, USDC, Number(venue.fee), venue.spacing, ZERO],
+      [USDC, SPCXC, Number(venue.fee), venue.spacing, ZERO],
     ),
   );
 
@@ -308,18 +318,20 @@ const compiled = (source = PROGRAM) => {
   return programs.get(source)!;
 };
 
-/** main(payToken, buyToken, budget, priceLimit, minTokens, maxAvgPrice, recipient). */
-type Args = [Address, Address, bigint, bigint, bigint, bigint, Address];
-/** Buying WETH with `budget` USDC at most `priceLimit`, with no minimum and no average cap. */
+/** main(budget, priceLimit, minTokens, maxAvgPrice, recipient). */
+type Args = [bigint, bigint, bigint, bigint, Address];
+/** Buying SPCXc with `budget` USDC at most `priceLimit`, with no minimum and no average cap. */
 const buying = (budget: bigint, priceLimit = PRICE_LIMIT): Args => [
-  USDC,
-  WETH,
   budget,
   priceLimit,
   0n,
   0n,
   RECIPIENT,
 ];
+/** The same program selling SPCXc for USDC: its two symbols swapped, so it pays token1. */
+const SELLING = PROGRAM.replaceAll("USDC", "\u0000")
+  .replaceAll("SPCXc", "USDC")
+  .replaceAll("\u0000", "SPCXc");
 
 /** The cook of the program with `main`'s arguments, as `sauce tx` builds it. */
 const cookData = (args: Args, source = PROGRAM): Hex => {
@@ -439,10 +451,11 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
       creationCode,
     );
 
-    // The tokens, at Base's WETH and USDC addresses.
+    // The tokens, at Base's USDC and SPCXc addresses: an empty account here, SPCXc's included, so
+    // each takes the mock's code as any address would (no B20 runs on a chain that forks nothing).
     const token = await deploy(MOCK_ERC20.creationCode);
     const tokenCode = (await publicClient.getCode({ address: token }))!;
-    for (const at of [WETH, USDC]) {
+    for (const at of [USDC, SPCXC]) {
       await testClient.setCode({ address: at, bytecode: tokenCode });
       await call(at, erc20, "mint", [OWNER.address, 10n ** 30n]);
     }
@@ -476,7 +489,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
       address: slipstream,
       bytecode: (await publicClient.getCode({ address: await deploy(BY_SPACING.creationCode) }))!,
     });
-    for (const at of [WETH, USDC]) {
+    for (const at of [USDC, SPCXC]) {
       await call(at, erc20, "approve", [minter, maxUint256]);
       await call(at, erc20, "approve", [liquidityRouter, maxUint256]);
     }
@@ -502,18 +515,18 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
         continue;
       }
       const by = venue.kind === "cl" ? other : factory;
-      await call(by, FACTORY.abi, "createPool", [WETH, USDC, venue.fee]);
+      await call(by, FACTORY.abi, "createPool", [USDC, SPCXC, venue.fee]);
       const pool = getAddress(
         (await publicClient.readContract({
           abi: FACTORY.abi,
           address: by,
-          args: [WETH, USDC, venue.fee],
+          args: [USDC, SPCXC, venue.fee],
           functionName: "getPool",
         })) as Address,
       );
       v3Pools.set(venueName(venue), pool);
       if (venue.kind === "cl")
-        await call(slipstream, BY_SPACING.abi, "setPool", [WETH, USDC, venue.slipstream, pool]);
+        await call(slipstream, BY_SPACING.abi, "setPool", [USDC, SPCXC, venue.slipstream, pool]);
       await call(pool, POOL.abi, "initialize", [start]);
       if (venue.liquidity > 0n)
         await call(minter, MINTER.abi, "mint", [pool, tickLower, tickUpper, venue.liquidity]);
@@ -542,7 +555,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
       publicClient.readContract({
         abi: FACTORY.abi,
         address: getAddress(Base.UniswapV3.Factory.address!),
-        args: [WETH, USDC, fee],
+        args: [USDC, SPCXC, fee],
         functionName: "getPool",
       });
     expect(await lookup(100n)).toBe(ZERO);
@@ -584,16 +597,18 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const swapped = fills(receipt);
     // Slipstream first, to its own limit, then the 0.05% Uniswap V3 pool with the rest.
     expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500"]);
-    swapped.forEach((fill, i) => expectWithin(fill, PRICE_LIMIT, false, i < 1));
+    swapped.forEach((fill, i) => expectWithin(fill, PRICE_LIMIT, true, i < 1));
     expect([spent, unspent]).toEqual([budget, 0n]);
     expect(sum(swapped, "paid")).toBe(budget);
     expect(bought).toBe(sum(swapped, "got"));
-    expect(await balance(WETH, RECIPIENT)).toBe(bought);
+    expect(await balance(SPCXC, RECIPIENT)).toBe(bought);
     expect(await balance(USDC, sauce.pot)).toBe(0n);
     expect(await balance(USDC, RECIPIENT)).toBe(0n);
     // The empty 1% pool, priced inside its limit, was not touched.
     expect(await priceOf(venue("v3:10000"))).toBe(empty);
-    console.log(`full fill: gas ${receipt.gasUsed}, ${bought} WETH units for ${budget} USDC units`);
+    console.log(
+      `full fill: gas ${receipt.gasUsed}, ${bought} SPCXc units for ${budget} USDC units`,
+    );
   });
 
   it("returns { spent, bought, unspent }: the three words abi.encode gave, and simulate names them", async () => {
@@ -632,8 +647,6 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
         "--assume-balance",
         "USDC:2000",
         "--args",
-        USDC,
-        WETH,
         String(budget),
         String(PRICE_LIMIT),
         "0",
@@ -666,46 +679,46 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
     // In the program's order: Slipstream, Uniswap V3 by fee tier, then Uniswap V4. The 0.05% V4
-    // pool's fee is its LP fee and the 0.1% protocol fee for paying token1, composed.
+    // pool's fee is its LP fee and the 0.1% protocol fee for paying token0, composed.
     expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500", "v3:3000", "v4:500"]);
     expect(swapped[3]!.fee).toBe(1500n);
     // Every pool stopped at its own limit: every unit within priceLimit, the last at it.
-    for (const fill of swapped) expectWithin(fill, PRICE_LIMIT, false, true);
+    for (const fill of swapped) expectWithin(fill, PRICE_LIMIT, true, true);
     expect(spent).toBe(sum(swapped, "paid"));
     expect(spent + unspent).toBe(budget);
     expect(unspent).toBeGreaterThan(0n);
     // What the limits left of the budget goes to the recipient; the Pot's own stays.
     expect(await balance(USDC, RECIPIENT)).toBe(unspent);
     expect(await balance(USDC, sauce.pot)).toBe(kept);
-    expect(await balance(WETH, RECIPIENT)).toBe(bought);
+    expect(await balance(SPCXC, RECIPIENT)).toBe(bought);
     // The empty V3 pool, the empty V4 pool and the V4 pool past its own limit were not touched.
     expect(await Promise.all(untouched.map(priceOf))).toEqual(before);
     console.log(`partial fill: gas ${receipt.gasUsed}, spent ${spent} of ${budget}`);
   });
 
-  it("buys USDC with WETH the same way: paying token0, each pool down to its own limit", async () => {
-    const budget = 4n * 10n ** 18n;
-    const priceLimit = wethPerUsdc(26_865n); // at least 2,686.5 USDC for each WETH
-    await call(WETH, erc20, "mint", [sauce.pot, budget]);
+  it("sells SPCXc for USDC the same way, its symbols swapped: paying token1, each pool up to its own limit", async () => {
+    const budget = 70n * 10n ** 8n; // 70 SPCXc
+    const priceLimit = sharesPerUsdc(14_925n); // at least 149.25 USDC for each SPCXc
+    await call(SPCXC, erc20, "mint", [sauce.pot, budget]);
 
-    const receipt = await cook([WETH, USDC, budget, priceLimit, 0n, 0n, RECIPIENT]);
+    const receipt = await cook([budget, priceLimit, 0n, 0n, RECIPIENT], SELLING);
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
     expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500", "v3:3000", "v4:500"]);
-    // Paying token0, the V4 pool's protocol fee is the low 12 bits': 0.02%.
+    // Paying token1, the V4 pool's protocol fee is the next 12 bits': 0.02%.
     expect(swapped[3]!.fee).toBe(700n);
-    for (const fill of swapped) expectWithin(fill, priceLimit, true, true);
+    for (const fill of swapped) expectWithin(fill, priceLimit, false, true);
     const spent = sum(swapped, "paid");
-    expect(await balance(WETH, RECIPIENT)).toBe(budget - spent);
+    expect(await balance(SPCXC, RECIPIENT)).toBe(budget - spent);
     expect(await balance(USDC, RECIPIENT)).toBe(sum(swapped, "got"));
   });
 
   it("skips every pool already past its own limit, and sends the whole budget to the recipient", async () => {
     const budget = 1_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
-    // At most 2,700: each pool's own limit is below its price (the 0.05% V3 pool's is 2,698.65, the
-    // V4 pool's at 0.15% 2,695.95); handed such a limit, a pool reverts.
-    const args = buying(budget, usdcPerWeth(27_000n));
+    // At most 150: each pool's own limit is below its price (the 0.05% V3 pool's is 149.925, the
+    // V4 pool's at 0.15% 149.775); handed such a limit, a pool reverts.
+    const args = buying(budget, usdcPerShare(15_000n));
     expect(await returned(args)).toEqual({ spent: 0n, bought: 0n, unspent: budget });
     const receipt = await cook(args);
     expect(receipt.status).toBe("success");
@@ -716,15 +729,15 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
   it("minTokens at budget × 1e18 ÷ priceLimit, rounded up: all of the budget, or the cook reverts", async () => {
     const allOrNothing = (budget: bigint): Args => {
       const args = buying(budget);
-      args[4] = (budget * E18 + PRICE_LIMIT - 1n) / PRICE_LIMIT;
+      args[2] = (budget * E18 + PRICE_LIMIT - 1n) / PRICE_LIMIT;
       return args;
     };
     // 2,000 USDC fits within priceLimit: it is all spent, and buys more than the minimum.
     await call(USDC, erc20, "mint", [sauce.pot, 7_000n * 10n ** 6n]);
     const fits = allOrNothing(2_000n * 10n ** 6n);
     const { spent, bought } = await returned(fits);
-    expect(spent).toBe(fits[2]);
-    expect(bought).toBeGreaterThanOrEqual(fits[4]);
+    expect(spent).toBe(fits[0]);
+    expect(bought).toBeGreaterThanOrEqual(fits[2]);
     // 5,000 does not: the pools take about 3,700 within priceLimit, so the cook reverts.
     await expect(rehearse(allOrNothing(5_000n * 10n ** 6n))).rejects.toThrow(
       /bought below minTokens/,
@@ -737,16 +750,16 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const { bought } = await returned(buying(budget));
 
     const short = buying(budget);
-    short[4] = bought + 1n;
+    short[2] = bought + 1n;
     expect((await cook(short)).status).toBe("reverted");
     await expect(rehearse(short)).rejects.toThrow(/bought below minTokens/);
-    // Every unit cost under 2,713.5 and the first ones about 2,700: an average cap of 2,700 is
-    // below what was paid.
+    // Every unit cost under 150.75 and the first ones about 150: an average cap of 150 is below what
+    // was paid.
     const dear = buying(budget);
-    dear[5] = usdcPerWeth(27_000n);
+    dear[3] = usdcPerShare(15_000n);
     await expect(rehearse(dear)).rejects.toThrow(/average too high/);
     expect(await balance(USDC, sauce.pot)).toBe(budget);
-    expect(await balance(WETH, RECIPIENT)).toBe(0n);
+    expect(await balance(SPCXC, RECIPIENT)).toBe(0n);
   });
 
   it("maxAvgPrice halfway from the rehearsal's average to priceLimit: lands as rehearsed, reverts once the market moves", async () => {
@@ -755,8 +768,8 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const { spent, bought } = await returned(buying(budget));
     const average = (spent * E18) / bought; // priceLimit's units
     const capped = buying(budget);
-    capped[5] = (average + PRICE_LIMIT + 1n) / 2n;
-    expect(capped[5]).toBeLessThan(PRICE_LIMIT);
+    capped[3] = (average + PRICE_LIMIT + 1n) / 2n;
+    expect(capped[3]).toBeLessThan(PRICE_LIMIT);
     const rehearsal = await snapshotNow();
     expect((await cook(capped)).status).toBe("success");
 
@@ -767,7 +780,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect((await cook(buying(3_500n * 10n ** 6n))).status).toBe("success");
     await expect(rehearse(capped)).rejects.toThrow(/average too high/);
     const { spent: later, bought: fewer } = await returned(buying(budget));
-    expect(later * E18).toBeGreaterThan(capped[5] * fewer);
+    expect(later * E18).toBeGreaterThan(capped[3] * fewer);
   });
 
   it("refuses a budget that is not in the Pot", async () => {
@@ -784,7 +797,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(receipt.status).toBe("success");
     for (const name of ["v3:3000", "v4:500"]) {
       const pricier = fills(receipt).find((fill) => fill.venue === name)!;
-      const [cost, bound] = lastUnit(pricier, PRICE_LIMIT, false);
+      const [cost, bound] = lastUnit(pricier, PRICE_LIMIT, true);
       expect(cost).toBeGreaterThan(bound);
     }
   });
@@ -801,7 +814,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(receipt.status).toBe("success");
     const v4 = fills(receipt).find((fill) => fill.venue === "v4:500")!;
     expect(v4.fee).toBe(1500n);
-    const [cost, bound] = lastUnit(v4, PRICE_LIMIT, false);
+    const [cost, bound] = lastUnit(v4, PRICE_LIMIT, true);
     expect(cost).toBeGreaterThan(bound);
   });
 
@@ -814,9 +827,15 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
   it("without the liquidity check, an empty V3 pool is swapped for nothing, and a missing V4 key reverts", async () => {
     const budget = 5_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
-    // A V4 key with no pool reads as empty, at price 0: past nothing, so its liquidity check is
-    // what keeps the swap from reaching a pool that does not exist.
-    const unchecked = await cook(buying(budget), replacing("liquidity == 0 || "));
+    // A V4 key with no pool reads as empty, at price 0. Paying token1, as the program selling SPCXc
+    // does, price 0 is past nothing, so the liquidity check is what keeps the swap from reaching a
+    // pool that does not exist. (Paying token0, price 0 is past every limit as well.)
+    const shares = 70n * 10n ** 8n;
+    await call(SPCXC, erc20, "mint", [sauce.pot, shares]);
+    const unchecked = await cook(
+      [shares, sharesPerUsdc(14_925n), 0n, 0n, RECIPIENT],
+      SELLING.replace("liquidity == 0 || ", ""),
+    );
     expect(unchecked.status).toBe("reverted");
     // Taken out for the other venues only, the empty 1% V3 pool, priced inside its limit, is swapped.
     const empty = await priceOf(venue("v3:10000"));
@@ -842,7 +861,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
   it("what a lookup costs: one more tick spacing, fee tier or V4 key with no pool", async () => {
     const budget = 1_000n * 10n ** 6n;
     // Every pool past its own limit, so the cook swaps nothing and costs what it looks at.
-    const args = buying(budget, usdcPerWeth(27_000n));
+    const args = buying(budget, usdcPerShare(15_000n));
     const gasOf = async (source: string): Promise<bigint> => {
       const at = await snapshotNow();
       await call(USDC, erc20, "mint", [sauce.pot, budget]);
