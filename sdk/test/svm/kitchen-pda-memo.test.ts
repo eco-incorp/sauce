@@ -11,7 +11,7 @@
  * Fails on a tree where these helpers call kit's `getProgramDerivedAddress` directly: the memo
  * counters never move, so the first-call `misses` assertion is red.
  */
-import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, createNoopSigner, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import {
@@ -117,7 +117,7 @@ describe("Kitchen PDA helpers use the shared PDA memo", () => {
 describe("buildAtaPrepend uses the shared PDA memo", () => {
   it("is byte-identical to findAssociatedTokenPda; the second call derives nothing", async () => {
     __resetPdaMemoForTest();
-    const payer = { address: OTHER } as never;
+    const payer = createNoopSigner(OTHER);
     const first = await buildAtaPrepend({ payer, owner: OWNER, mint: MINT });
     expect(__pdaMemoStats().misses).toBe(1);
     const [expected] = await findAssociatedTokenPda({
