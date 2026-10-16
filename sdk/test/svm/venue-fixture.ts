@@ -127,7 +127,7 @@ export const LAYOUT: Record<
   crema: { price: 190, liquidity: 174, fee: (p) => le(BYTES.get(p.pool)!, 172, 2) },
 };
 
-/** A pool's price, fee included, in maxPrice's units: pay base units per buy base unit, × 1e18. */
+/** A pool's price, fee included, in priceLimit's units: pay base units per buy base unit, × 1e18. */
 export const allIn = (p: Pool, paysA: boolean): bigint => {
   const { price, fee } = LAYOUT[p.venue]!;
   const s = le(BYTES.get(p.pool)!, price, 16);
@@ -137,9 +137,9 @@ export const allIn = (p: Pool, paysA: boolean): bigint => {
     : (s * s * E18 * 1_000_000n) / (Q128 * kept);
 };
 
-/** The program's arithmetic: maxPrice as a sqrt price, then a pool's own limit for its fee. */
-export const ownLimit = (p: Pool, maxPrice: bigint, paysA: boolean): bigint => {
-  const limit = paysA ? isqrt((Q128 * E18) / maxPrice) : isqrt((maxPrice * Q128) / E18);
+/** The program's arithmetic: priceLimit as a sqrt price, then a pool's own limit for its fee. */
+export const ownLimit = (p: Pool, priceLimit: bigint, paysA: boolean): bigint => {
+  const limit = paysA ? isqrt((Q128 * E18) / priceLimit) : isqrt((priceLimit * Q128) / E18);
   const root = isqrt((1_000_000n - LAYOUT[p.venue]!.fee(p)) * 10n ** 30n);
   return paysA ? (limit * E18) / root : (limit * root) / E18;
 };
