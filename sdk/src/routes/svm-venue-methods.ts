@@ -22,9 +22,9 @@
  *
  * `pool(tokenA, tokenB, key)` is the pool the venue's program derives for the pair at the key — a
  * whirlpool's, DefiTuna's and Crema's tick spacing, a Raydium-code pool's fee (`svm/pool-keys.ts`),
- * with the tick spacing after a fee where the program keeps two configs at it, and the fee tier's
- * index after a whirlpool's spacing where it keeps two tiers at it — written as the swap's pool,
- * with the key a number written out. Where the venue has no pool at the key, the slot
+ * with the tick spacing after a fee where the program keeps two configs at it, and an adaptive-fee
+ * tier's index after a whirlpool's spacing — written as the swap's pool, with the key a number
+ * written out. Where the venue has no pool at the key, the slot
  * is empty and the swap returns 0. A loop over keys written out,
  *
  *   for (const spacing of [4, 1]) {
@@ -449,7 +449,7 @@ export function collectVenueMethods(l: SvmLowering): void {
         venue.refinement === "tickSpacing"
           ? "3 or 4 arguments (tokenA, tokenB, fee, and the tickSpacing where two configs charge the fee)"
           : venue.refinement === "feeTierIndex"
-            ? "3 or 4 arguments (tokenA, tokenB, tickSpacing, and the feeTierIndex where two fee tiers have the tick spacing)"
+            ? "3 or 4 arguments (tokenA, tokenB, tickSpacing, and the feeTierIndex of an adaptive-fee tier)"
             : "3 arguments (tokenA, tokenB, tickSpacing)";
       if (
         args.length < 3 ||

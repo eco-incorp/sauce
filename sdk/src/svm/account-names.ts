@@ -698,11 +698,10 @@ async function resolveSlot(
 }
 
 /**
- * The pool a key names, read from the cluster: of the pools the venue may keep at the key (one, for
- * a whirlpool one on each fee tier at the tick spacing, for a fee one under each config charging
- * it), the one there, or the System program where none is — no account, or one the venue does not
- * own (lamports anyone may send to the address a pool would have). More than one there is refused,
- * naming each with its fee tier or tick spacing.
+ * The pool a key names, read from the cluster: of the pools the venue may keep at the key (one, or
+ * for a fee one under each config charging it), the one there, or the System program where none is
+ * — no account, or one the venue does not own (lamports anyone may send to the address a pool
+ * would have). More than one there is refused, naming each with its tick spacing.
  */
 async function keyedPool(
   keyed: KeyedPool,
@@ -728,17 +727,6 @@ async function keyedPool(
   const there = candidates.filter((_, i) => accounts[i]?.owner === program);
   if (there.length > 1) {
     const [tokenA, tokenB] = keyed.text.slice(keyed.text.indexOf("(") + 1, -1).split(",");
-    if (there[0]!.feeTier !== undefined) {
-      const tier = ({ index, tickSpacing }: { index: number; tickSpacing: number }): string =>
-        `fee tier ${index}${index === tickSpacing ? "" : " (an adaptive fee)"}`;
-      throw new SvmAccountNameError(
-        `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}) finds ${there.length} pools, one ` +
-          `on each fee tier at that tick spacing: ${there
-            .map((one) => `${one.pool} on ${tier(one.feeTier!)}`)
-            .join(", ")}. Name the fee tier after the tick spacing: ` +
-          `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}, ${there[0]!.feeTier.index})`,
-      );
-    }
     const spacings = new Set(there.map((one) => one.config!.tickSpacing));
     if (spacings.size < there.length) {
       throw new SvmAccountNameError(

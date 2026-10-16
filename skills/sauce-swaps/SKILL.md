@@ -257,10 +257,10 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
   (`for (const spacing of [4, 1]) { … }`, one pool per key). Where the venue keeps two configs at
   one fee (Raydium's and PancakeSwap's 0.01% and 0.05%), the tick spacing follows the fee
   (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`), and the fee alone is refused for a pair with a pool
-  under both. Likewise where a whirlpool venue keeps a static and an adaptive-fee tier at one tick
-  spacing (Orca's 64 and 1025), the fee tier's index follows the spacing
-  (`Orca.Whirlpool.pool(SPCX_US, USDC, 64, 1025)`), and the spacing alone is refused for a pair
-  with a pool on both; an adaptive fee is more than one rate, so `swap` skips such a pool. Where
+  under both. A whirlpool venue's spacing alone names the pool on its static fee tier; a pool on
+  an adaptive-fee tier (Orca's 1025, at spacing 64) is named by the tier's index after the spacing
+  (`Orca.Whirlpool.pool(SPCX_US, USDC, 64, 1025)`), and `swap` skips it, as it skips a
+  Raydium-code pool with a dynamic fee: a fee of more than one rate takes no part at a price. Where
   the venue has no pool at the key, the swap returns `0`.
   `sauce pools --chain solana USDC WSOL` prints how a program finds each pool (`byKey`).
   Phoenix's markets are named by their address instead: a `main` parameter declared `Address`.

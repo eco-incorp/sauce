@@ -6,9 +6,9 @@
  *
  *   Orca.Whirlpool, Cropper.Whirlpool   "whirlpool", the program's WhirlpoolsConfig, the pair, the
  *                                       fee tier's index (u16, little-endian): a static tier's
- *                                       index is its tick spacing, and an adaptive-fee tier's
- *                                       (1024 and up) another number, so a program names the pool
- *                                       by its tick spacing, which each tier of it may derive
+ *                                       index is its tick spacing, which a program names; an
+ *                                       adaptive-fee tier's (1024 and up) is another number, which
+ *                                       a program adds after the spacing
  *   Defituna.Fusion                     "fusion_pool", the pair, the tick spacing
  *   Crema.CLMM                          "clmmpool", the program's config, the pair, the tick spacing
  *   Raydium.CLMM, Pancakeswap.CLMM,     "pool", the AmmConfig, the pair: the AmmConfig is the
@@ -18,11 +18,15 @@
  *
  * A Raydium-code program may keep two configs at one fee, at different tick spacings (Raydium's
  * 0.01% at spacing 1 and 10) or even the same: the fee then names a pool under each, and a program
- * may add the tick spacing (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`). A whirlpool program likewise
- * keeps a static and an adaptive-fee tier at one tick spacing (Orca's 64 and 1025): the spacing then
- * names a pool on each, and a program may add the fee tier's index
- * (`Orca.Whirlpool.pool(SPCX_US, USDC, 64, 1025)`). Which of them is there, the cook reads
- * (`svm/account-names.ts`): none is an empty slot, one is the pool, more is refused, naming each.
+ * may add the tick spacing (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`). Which of them is there, the
+ * cook reads (`svm/account-names.ts`): none is an empty slot, one is the pool, more is refused,
+ * naming each.
+ *
+ * A whirlpool program keeps a static and an adaptive-fee tier at most tick spacings (Orca's 64 and
+ * 1025), and a pair often has a pool on both. The spacing alone names the static tier's pool, the
+ * canonical one, and the only one a swap at a price trades: an adaptive fee is more than one rate.
+ * An adaptive tier's pool is named by its index after the spacing
+ * (`Orca.Whirlpool.pool(SPCX_US, USDC, 64, 1025)`).
  *
  * Phoenix's markets are not derived from their pair: a program names a market by its address.
  *
@@ -328,8 +332,8 @@ const tiersAt = (venue: SvmKeyedVenue, spacing: bigint, index?: bigint): SvmFeeT
  * Why `key` (and `refinement`, a Raydium-code pool's tick spacing beside its fee or a whirlpool's
  * fee tier index beside its tick spacing) names no pool at the venue's, or undefined: a fee must be
  * one of the program's configs, and a spacing given with it that config's; a whirlpool's tick
- * spacing one of its fee tiers', and an index given with it that tier's; any other tick spacing a
- * whole number from 1 to 65535.
+ * spacing alone its static tier's, and an index given with it one of its tiers'; any other tick
+ * spacing a whole number from 1 to 65535.
  */
 export function svmPoolKeyProblem(
   namespace: string,
@@ -349,8 +353,14 @@ export function svmPoolKeyProblem(
         `spacings are ${spacings.join(", ")}`
       );
     }
+    const indexes = tiers.map((one) => String(one.index));
+    if (refinement === undefined && tiersAt(venue, key, key).length === 0) {
+      return (
+        `${namespace} has no static fee tier at tick spacing ${key}, only adaptive ones: name one ` +
+        `after the spacing, pool(tokenA, tokenB, ${key}, ${indexes[0]})`
+      );
+    }
     if (refinement !== undefined && tiersAt(venue, key, refinement).length === 0) {
-      const indexes = tiers.map((one) => String(one.index));
       return `${namespace}'s fee tiers at tick spacing ${key} are ${listed(indexes)}, not ${refinement}`;
     }
 
@@ -382,9 +392,9 @@ export function svmPoolKeyProblem(
 
 /**
  * Every pool the key may name at the venue for the pair, which {@link svmPoolKeyProblem} accepts:
- * the one a tick spacing derives, one on each whirlpool fee tier at the spacing (the tier given, if
- * one is), or one under each config charging the fee (at the spacing, given one). Which of them is
- * there is the cluster's to say.
+ * the one a tick spacing derives (a whirlpool's on its static tier, or on the tier given), or one
+ * under each config charging the fee (at the spacing, given one). Which of them is there is the
+ * cluster's to say.
  */
 export function svmPoolCandidates(
   namespace: string,
@@ -402,7 +412,7 @@ export function svmPoolCandidates(
   const derive = (seed: number): Address =>
     memoizedFindProgramAddressSync(venue.program, venue.seeds(first, second, seed))[0];
   if (venue.feeTiers !== undefined) {
-    return tiersAt(venue, key, refinement).map((feeTier) => ({
+    return tiersAt(venue, key, refinement ?? key).map((feeTier) => ({
       pool: derive(feeTier.index),
       feeTier,
     }));

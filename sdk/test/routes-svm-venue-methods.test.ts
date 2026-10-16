@@ -268,7 +268,7 @@ describe("Solana's venue namespaces", () => {
       ).toThrow("Phoenix's markets are not found by key");
       expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL)")).toThrow(
         "`Orca.Whirlpool.pool(…)` takes 3 or 4 arguments (tokenA, tokenB, tickSpacing, and the " +
-          "feeTierIndex where two fee tiers have the tick spacing), got 2.",
+          "feeTierIndex of an adaptive-fee tier), got 2.",
       );
       expect(() =>
         compile(

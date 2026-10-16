@@ -97,14 +97,16 @@ describe("a venue's pool by key", () => {
       const [a, b] = venue.mints.map((at) => keyAt(data, at)) as [Address, Address];
       const { key, refinement } = keyOf(p.venue, data);
       expect(svmPoolKeyProblem(venue.namespace, key)).toBeUndefined();
-      // The pair either way round, the key alone or with its config's spacing or its fee tier.
+      // The pair either way round, the key alone or with its config's spacing or its fee tier; a
+      // whirlpool on an adaptive tier only with its tier.
+      const tierOnly = venue.mints[0] === 101 && refinement !== key;
       for (const [x, y] of [
         [a, b],
         [b, a],
       ] as const) {
-        expect(svmPoolCandidates(venue.namespace, x, y, key).map((one) => one.pool)).toContain(
-          p.pool,
-        );
+        const alone = svmPoolCandidates(venue.namespace, x, y, key).map((one) => one.pool);
+        if (tierOnly) expect(alone).not.toContain(p.pool);
+        else expect(alone).toContain(p.pool);
         if (refinement !== undefined)
           expect(
             svmPoolCandidates(venue.namespace, x, y, key, refinement).map((one) => one.pool),
@@ -236,43 +238,38 @@ describe("a venue's pool by key", () => {
     ).toBe(SYSTEM);
   });
 
-  it("finds a whirlpool on an adaptive fee tier by its tick spacing, and refuses two tiers' pools, naming each", async () => {
+  it("names a whirlpool's static tier by its tick spacing, and an adaptive tier by its index after it", async () => {
     const adaptive = pool("orca-whirlpool-adaptive");
     const data = BYTES.get(adaptive.pool)!;
     const [a, b] = [keyAt(data, 101), keyAt(data, 181)];
     // Tick spacing 256 on fee tier 1033: Orca's adaptive tier at that spacing, beside the static 256.
     expect([u16(data, 41), u16(data, 43)]).toEqual([256, 1033]);
-    const [fixed, tier] = svmPoolCandidates("Orca.Whirlpool", a, b, 256n);
-    expect([fixed!.feeTier, tier!.feeTier]).toEqual([
-      { index: 256, tickSpacing: 256 },
-      { index: 1033, tickSpacing: 256 },
+    const [fixed] = svmPoolCandidates("Orca.Whirlpool", a, b, 256n);
+    expect(svmPoolCandidates("Orca.Whirlpool", a, b, 256n)).toEqual([
+      { pool: fixed!.pool, feeTier: { index: 256, tickSpacing: 256 } },
     ]);
-    expect(tier!.pool).toBe(adaptive.pool);
+    expect(svmPoolCandidates("Orca.Whirlpool", a, b, 256n, 1033n)).toEqual([
+      { pool: adaptive.pool, feeTier: { index: 1033, tickSpacing: 256 } },
+    ]);
     const program = SVM_KEYED_VENUES["Orca.Whirlpool"]!.program;
-    const resolve = (name: string, more: Record<string, Address>) =>
+    const resolve = (name: string, more: Record<string, Address> = {}) =>
       resolveSvmAccountName(name, {
         chain: requireChain("solana"),
         owner: SYSTEM,
         pot: SYSTEM,
         load: loader(more),
       });
-    // The adaptive pool alone is there: the spacing finds it, and its slot reads.
-    const name = `slot:Orca.Whirlpool(${a},${b},256):${a}`;
-    expect((await resolve(`${name}.pool`, {})).value).toBe(adaptive.pool);
-    expect((await resolve(`${name}.vaultA`, {})).value).toBe(adaptive.vaultA);
-    // A pool on the static tier too: refused, naming each; given the tier, the one.
-    await expect(resolve(`${name}.pool`, { [fixed!.pool]: program })).rejects.toThrow(
-      `Orca.Whirlpool.pool(${a}, ${b}, 256) finds 2 pools, one on each fee tier at that tick ` +
-        `spacing: ${fixed!.pool} on fee tier 256, ${adaptive.pool} on fee tier 1033 (an adaptive ` +
-        `fee). Name the fee tier after the tick spacing: Orca.Whirlpool.pool(${a}, ${b}, 256, 256)`,
-    );
-    expect(
-      (
-        await resolve(`slot:Orca.Whirlpool(${a},${b},256,1033):${a}.pool`, {
-          [fixed!.pool]: program,
-        })
-      ).value,
-    ).toBe(adaptive.pool);
+    // The spacing alone is the static tier's pool, none here: an empty slot, though the adaptive
+    // one is there. Named by its tier, the adaptive pool, whose slot reads.
+    expect((await resolve(`slot:Orca.Whirlpool(${a},${b},256):${a}.pool`)).value).toBe(SYSTEM);
+    const named = `slot:Orca.Whirlpool(${a},${b},256,1033):${a}`;
+    expect((await resolve(`${named}.pool`)).value).toBe(adaptive.pool);
+    expect((await resolve(`${named}.vaultA`)).value).toBe(adaptive.vaultA);
+    // Both there: each name takes its own, and nothing is refused.
+    await expect(
+      resolve(`slot:Orca.Whirlpool(${a},${b},256):${a}.pool`, { [fixed!.pool]: program }),
+    ).rejects.toThrow(`pool ${fixed!.pool}'s slot paying mint ${a} could not be read`);
+    expect((await resolve(`${named}.pool`, { [fixed!.pool]: program })).value).toBe(adaptive.pool);
   });
 
   it("derives a config from its index big-endian: 256 is [1, 0]", () => {

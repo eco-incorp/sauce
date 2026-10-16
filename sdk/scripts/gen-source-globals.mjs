@@ -553,8 +553,8 @@ export interface SauceSvmSpacingVenueSource extends SauceSvmVenueSource {
 
 /**
  * A whirlpool venue, whose pools are found by tick spacing: \`pool(tokenA, tokenB, tickSpacing)\`,
- * written as a swap's pool, with the fee tier's index after the spacing where the venue keeps a
- * static and an adaptive-fee tier at it. Where there is none, the swap returns 0.
+ * written as a swap's pool, is the pool on the spacing's static fee tier, and an adaptive-fee
+ * tier's pool takes the tier's index after the spacing. Where there is none, the swap returns 0.
  */
 export interface SauceSvmTierVenueSource extends SauceSvmVenueSource {
   pool(tokenA: bigint, tokenB: bigint, tickSpacing: bigint, feeTierIndex?: bigint): bigint;
