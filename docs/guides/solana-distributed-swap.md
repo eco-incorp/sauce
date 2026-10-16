@@ -117,8 +117,9 @@ its pool takes and how to list a pair's pools are in [the venues, their pools an
 
 `solana-distributed-swap.sauce.ts` is one
 complete implementation of those rules, buying SpaceX's tokenized share, `SPCX_US` (a Token-2022
-mint), with USDC at the pair's pools that trade at a price: Raydium's at fee 0.25% and 0.18%, then
-Byreal's at 0.1%; its header gives every input with its units and how to run it. Each venue's byte layout,
+mint), with USDC at the pair's pools that trade at a price: Raydium's at fee 0.25% and 0.18%,
+Byreal's at 0.1% and PancakeSwap's at 0.08%; its header gives every input with its units and how to
+run it. Each venue's byte layout,
 instruction format and account order is `@sauce/router`'s, which every compile the package makes
 resolves with no option. Its code:
 
@@ -126,11 +127,11 @@ resolves with no option. Its code:
 // SpaceX for USDC over Solana's pools, as a limit order: up to `budget` USDC, never more than
 // `priceLimit` for any SPCX_US, fees included, and at least `minTokens` SPCX_US or nothing. SPCX_US
 // is Backpack's SpaceX share, a Token-2022 mint. The pools are found by key, as an EVM program finds
-// a Uniswap pool by its fee: Raydium's CLMM pools of the pair at fee 0.25% and 0.18%, then Byreal's
-// at 0.1%, the pair's pools on mainnet that trade at a price, the deepest first; a key with no pool
-// is skipped. Each pool is offered what is left of the budget and trades until its price, fee paid,
-// reaches priceLimit. Compiling adds each pool's accounts to main, read from the pool when the cook
-// is built, so the command is given no account.
+// a Uniswap pool by its fee: Raydium's CLMM pools of the pair at fee 0.25% and 0.18%, Byreal's at
+// 0.1% and PancakeSwap's at 0.08%, the pair's pools on mainnet that trade at a price, the deepest
+// first; a key with no pool is skipped. Each pool is offered what is left of the budget and trades
+// until its price, fee paid, reaches priceLimit. Compiling adds each pool's accounts to main, read
+// from the pool when the cook is built, so the command is given no account.
 //
 //   sauce run solana-distributed-swap.sauce.ts --chain <chain> --keypair <keypair> \
 //     --args <budget> <priceLimit> <minTokens> <maxAvgPrice> <recipient>
@@ -177,6 +178,14 @@ function main(
   }
   bought += Byreal.CLMM.swap(
     Byreal.CLMM.pool(USDC, SPCX_US, 1000),
+    USDC,
+    SPCX_US,
+    self.USDC - kept,
+    priceLimit,
+    0,
+  );
+  bought += Pancakeswap.CLMM.swap(
+    Pancakeswap.CLMM.pool(USDC, SPCX_US, 800),
     USDC,
     SPCX_US,
     self.USDC - kept,
@@ -279,9 +288,9 @@ nothing and sends the whole budget to the recipient, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 3.7 KB, past one transaction, so it runs from a code
+- **The program is staged.** It is about 4.2 KB, past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that ([Solana](solana.md)).
-- **The accounts go through a lookup table.** The program names 37 accounts, every one derived: nine
+- **The accounts go through a lookup table.** The program names 46 accounts, every one derived: nine
   for each key, the Pot's, the mints', the programs' and the recipient's two. A key with no pool
   names the System program nine times, one account; each pool found brings eight of its own. The
   cook names each account once; listed in the transaction they would be past its size, and through
@@ -290,8 +299,7 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
   the cook's own come to about 60 accounts of 64. Keys that find more are refused before anything is
   signed: the command names the pool each key found
   (`Raydium.CLMM.pool(USDC, SPCX_US, 2500) is <pool>`, `… finds none`), so drop the keys you want
-  least. Measured on the venues' own programs, buying SPCX_US: two pools that trade and a key with
-  none take about 640,000 of the 1,400,000 compute units, a token moved under Token-2022 costing
+  least. Measured on the venues' own programs, buying SPCX_US: three pools that trade and a key with none take about 885,000 of the 1,400,000 compute units, a token moved under Token-2022 costing
   more than one under SPL Token. Pools that share a program or a config cost fewer accounts.
 
 ## Running it
@@ -370,10 +378,10 @@ never a result. Buying SPCX_US with 2,000 USDC, Raydium's 0.25% pool deep enough
 addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 421555 compute units, returns <the same three words, in hex>
+The cook succeeds from <owner>: 449724 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
-Simulated in a local copy (LiteSVM) of the 25 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 3907-byte program staged into a code buffer in 7 transactions, as `sauce run` stages it
+Simulated in a local copy (LiteSVM) of the 34 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
+  the 4314-byte program staged into a code buffer in 7 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potUSDC, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC
@@ -462,7 +470,7 @@ all three must exist: a pool with fewer than three that way fills the rest with 
 other way, or with arrays holding no liquidity, which the swap loads and never walks into.
 
 The pool's own bitmap reaches 512 arrays each way from tick 0. A pool priced past that (tick
-spacing 1 and a price past tick ±30,720: PancakeSwap's SPCX_US/USDC pool, at tick 49,856) keeps
+spacing 1 and a price past tick ±30,720: PancakeSwap's SPCX_US/USDC pool, near tick 49,800) keeps
 its arrays' bits in its bitmap extension, the program address of
 `["pool_tick_array_bitmap_extension", pool]`: from 40, 14 bitmaps of 512 arrays (64 bytes each)
 past the pool's own, upward; from 936, the same downward. Bitmap `k` holds the array starting at

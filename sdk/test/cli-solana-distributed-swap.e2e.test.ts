@@ -203,7 +203,11 @@ describeSvm(
     });
 
     /** The pools of the program's keys the fixture holds; its other key finds none there. */
-    const FOUND = [pool("raydium-clmm-spcx-usdc"), pool("byreal-spcx-usdc")];
+    const FOUND = [
+      pool("raydium-clmm-spcx-usdc"),
+      pool("byreal-spcx-usdc"),
+      pool("pancakeswap-clmm-spcx-usdc"),
+    ];
     const priceLimit =
       (FOUND.map((p) => allIn(p, false)).reduce((a, b) => (a > b ? a : b)) * 10003n) / 10000n;
     const budget = 1_000_000n * 10n ** 6n;

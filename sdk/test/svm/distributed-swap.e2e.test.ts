@@ -85,7 +85,9 @@ const SPCX_US = address("SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb");
  *  0.18%, finds none there. */
 const RAYDIUM = pool("raydium-clmm-spcx-usdc");
 const BYREAL = pool("byreal-spcx-usdc");
-const FOUND = [RAYDIUM, BYREAL];
+/** Priced past its own tick bitmap: its slot takes its bitmap extension. */
+const PANCAKE = pool("pancakeswap-clmm-spcx-usdc");
+const FOUND = [RAYDIUM, BYREAL, PANCAKE];
 /** Orca's pool of the pair: on fee tier 1025, an adaptive fee at tick spacing 64. */
 const ORCA = pool("orca-whirlpool-spcx-usdc");
 
@@ -367,7 +369,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(outcome.size).toBeLessThanOrEqual(1232);
     console.log(
       `${program.entryParams.length} arguments, ${program.manifest!.accounts.length} accounts named, ` +
-        `two pools found: ${outcome.units} compute units, ${outcome.size}-byte transaction, ` +
+        `three pools found: ${outcome.units} compute units, ${outcome.size}-byte transaction, ` +
         `${outcome.accounts} accounts, ${program.bytecode.length}-byte program`,
     );
   }, 120_000);
@@ -380,40 +382,52 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(outcome.refunded).toBe(0n);
     expect(outcome.left).toBe(0n);
     expect(priceOf(RAYDIUM)).not.toBe(snapshotPrice(RAYDIUM));
-    expect(priceOf(BYREAL)).toBe(snapshotPrice(BYREAL));
+    for (const p of [BYREAL, PANCAKE]) expect(priceOf(p)).toBe(snapshotPrice(p));
   }, 120_000);
 
   it("skips a pool past its limit, an empty pool, and a remainder of dust, and completes", async () => {
     const budget = 1_000_000n * 10n ** 6n;
-    // A limit between the two pools' prices: the dearer sits out.
-    const [cheaper, dearer] = [...FOUND].sort((a, b) =>
+    // A limit between the cheapest pool's price and the dearest's: the dearest sits out.
+    const [cheapest, , dearest] = [...FOUND].sort((a, b) =>
       allIn(a, false) < allIn(b, false) ? -1 : 1,
-    ) as [Pool, Pool];
-    const between = (allIn(cheaper, false) + allIn(dearer, false)) / 2n;
-    expect(allIn(cheaper, false)).toBeLessThan(between);
-    expect(allIn(dearer, false)).toBeGreaterThan(between);
+    ) as [Pool, Pool, Pool];
+    const between = (allIn(cheapest, false) + allIn(dearest, false)) / 2n;
+    expect(allIn(cheapest, false)).toBeLessThan(between);
+    expect(allIn(dearest, false)).toBeGreaterThan(between);
     const one = succeeded(await cook({ budget, priceLimit: between }));
-    expect(priceOf(cheaper)).toBe(ownLimit(cheaper, between, false));
-    expect(priceOf(dearer)).toBe(snapshotPrice(dearer));
+    expect(priceOf(cheapest)).toBe(ownLimit(cheapest, between, false));
+    expect(priceOf(dearest)).toBe(snapshotPrice(dearest));
     expect(one.bought).toBeGreaterThan(0n);
 
-    // Raydium's pool emptied (no liquidity at its price): Byreal takes the order alone.
+    // Raydium's pool emptied (no liquidity at its price): the others take the order.
     const without = succeeded(await cook({ budget, priceLimit, edit: emptied(RAYDIUM) }));
     expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
-    expect(priceOf(BYREAL)).toBe(ownLimit(BYREAL, priceLimit, false));
+    for (const p of [BYREAL, PANCAKE]) expect(priceOf(p)).toBe(ownLimit(p, priceLimit, false));
     expect(without.bought).toBeGreaterThan(0n);
 
     // What Raydium's pool takes on its own, and one atom more: Byreal's pool is offered one atom of
     // USDC, which its fee takes whole, so it buys nothing there and is skipped rather than the cook
-    // reverted.
-    const alone = succeeded(await cook({ budget, priceLimit, edit: emptied(BYREAL) }));
+    // reverted; PancakeSwap's is offered nothing.
+    const alone = succeeded(await cook({ budget, priceLimit, edit: emptied(BYREAL, PANCAKE) }));
     const dust = succeeded(await cook({ budget: alone.spent + 1n, priceLimit }));
     expect(dust.spent).toBe(alone.spent);
     expect(dust.bought).toBe(alone.bought);
     expect(dust.unspent).toBe(1n);
     expect(dust.refunded).toBe(1n);
-    expect(priceOf(BYREAL)).toBe(snapshotPrice(BYREAL));
+    for (const p of [BYREAL, PANCAKE]) expect(priceOf(p)).toBe(snapshotPrice(p));
   }, 180_000);
+
+  it("trades PancakeSwap's pool, priced past its own tick bitmap, through its bitmap extension", async () => {
+    // Its slot paying USDC: the extension first, then the two arrays it marks above the price.
+    expect(PANCAKE.payB[0]).toBe(PANCAKE.more![0]);
+    // The other two pools emptied: PancakeSwap's alone takes the order, up to its own limit.
+    const alone = succeeded(
+      await cook({ budget: 1_000_000n * 10n ** 6n, priceLimit, edit: emptied(RAYDIUM, BYREAL) }),
+    );
+    expect(alone.bought).toBeGreaterThan(0n);
+    expect(priceOf(PANCAKE)).toBe(ownLimit(PANCAKE, priceLimit, false));
+    expect(alone.spent * E18).toBeLessThanOrEqual(priceLimit * alone.bought);
+  }, 120_000);
 
   it("finds Orca's pool on its adaptive fee tier by that tier, and skips it at a price", async () => {
     // Fee tier 1025 is an adaptive fee at tick spacing 64: the spacing alone is the static tier's
