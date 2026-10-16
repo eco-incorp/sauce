@@ -135,9 +135,12 @@ configure. Your own endpoint is optional, and faster ([Your own endpoints](#your
   of the same name. [Tools](mcp-tools.md) lists them.
 - **The skills.** The package's agent skills, as tools and resources, so the agent learns to write
   Sauce programs ([Agent skills](skills.md)).
-- **Wallets, if you want.** On your computer the server can keep wallets for your agent and send
-  from them, under a spending limit. Without them, everything comes back unsigned, for a signer you
-  hold. [What a local server keeps](mcp-local.md) explains both.
+- **Transactions for your wallet to sign.** Everything comes back unsigned, ready for your
+  wallet's own MCP server, such as Coinbase's or Phantom's, to sign as it is:
+  [Sign with your wallet's MCP server](wallet-mcp.md).
+- **Wallets for trying things out.** On your computer the server can also keep wallets for your
+  agent and send from them, under a spending limit. They are handy for experiments with small
+  amounts: [What a local server keeps](mcp-local.md).
 
 It builds transactions on **Ethereum**, **Base** and **Solana**. On every other chain an agent can
 still compile and simulate, and a tool that would build a transaction says so instead.

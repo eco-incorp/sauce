@@ -49,6 +49,8 @@ With the `sauce` command:
 With a coding agent:
 
 - [The MCP server](guides/mcp.md): set up Sauce's tools in your coding agent.
+- [Sign with your wallet's MCP server](guides/wallet-mcp.md): let Coinbase's or Phantom's wallet
+  sign what Sauce builds, so the key never reaches your agent.
 - [What a local server keeps](guides/mcp-local.md): let the server on your computer keep wallets,
   Pots and intents for your agent.
 - [Self-hosting over HTTP](guides/mcp-http.md): run one server for a team, behind your own login.

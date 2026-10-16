@@ -124,8 +124,11 @@ sauce run payout.sauce.ts --chain base --keystore <keystore> --args <recipient> 
 ```
 
 - `sauce tx` prints the cook unsigned, `{ chainId, to, data, value }`, for any wallet or signer,
-  with the Pot's deployment first while it has no code; `sauce send` broadcasts what that signer
-  signed.
+  with the Pot's deployment first while it has no code, each transaction and the batch beside them
+  (`sendCalls`) what a wallet's MCP server takes as they are; `sauce send` broadcasts what a signer
+  signed. A wallet's MCP
+  server (Coinbase Wallet MCP on Base and Ethereum, Phantom MCP on Solana) is the safer signer; the
+  command's own wallets are for experiments and development.
 - `sauce run` signs and sends it itself, deploying the Pot first when it is missing (it asks, or
   `--yes`).
 - The command, its install, its flags and its units (`--args` in base units, `--assume-balance` in
@@ -236,9 +239,9 @@ the owner rather than repeat it.
 
 ### `sauce-cli`
 
-- **Owns**: the `sauce` command: getting it, endpoints, signers, wallets and their policies, the
-  run in order (look up, compile, simulate, Pot, fund, run, check), unsigned transactions and
-  `sauce send`, arguments to `main`, and each command's MCP tool.
+- **Owns**: the `sauce` command: getting it, endpoints, signers, signing through a wallet's MCP
+  server, wallets and their policies, the run in order (look up, compile, simulate, Pot, fund, run,
+  check), unsigned transactions and `sauce send`, arguments to `main`, and each command's MCP tool.
 - **Load**: to compile, simulate, send or read back, or when a command refuses.
 
 ### `sauce-typescript`
@@ -268,6 +271,7 @@ the owner rather than repeat it.
 | Work on another chain                                   | `sauce-intents` → `sauce-chains` (both chains take intents) → `sauce-cli` |
 | Steps that arrive as JSON from a service                | `sauce-actions` → `sauce-cli`                                             |
 | Compile, simulate, send, read back; a wallet; a refusal | `sauce-cli`                                                               |
+| Sign through the user's wallet MCP server               | `sauce-cli` (Signing through a wallet's MCP server)                       |
 | The same from Node or a browser                         | `sauce-typescript`, with `sauce-script` for the program                   |
 
 ## Reading the skills over MCP

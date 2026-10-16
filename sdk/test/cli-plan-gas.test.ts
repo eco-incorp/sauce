@@ -142,7 +142,7 @@ describe("the gas sauce tx suggests for a plan's deployment and cook", () => {
         ...["--args-json", JSON.stringify([POT, "1"]), "--value", "1000"],
       ),
     ) as Record<string, unknown>;
-    expect(out).toMatchObject({ chainId: 1, value: "1000" });
+    expect(out).toMatchObject({ chainId: 1, value: "0x3e8" });
     expect(out.transactions).toBeUndefined();
     expect(out.gas).toBeUndefined();
   });

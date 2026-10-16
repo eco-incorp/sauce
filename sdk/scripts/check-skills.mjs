@@ -433,6 +433,12 @@ const UNDECLARED_NAMES = {
   "sauce-script": {
     arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
   },
+  "sauce-cli": {
+    get_wallets:
+      "Coinbase Wallet MCP's tool that gives the user's wallet addresses, a third-party MCP server's, not the package's",
+    wallet_addresses:
+      "Phantom MCP's tool that gives its wallet's addresses, a third-party MCP server's, not the package's",
+  },
   "sauce-chains": {
     getAccountInfo:
       "Solana's JSON-RPC method that reads an account, a node's API, not the package's",

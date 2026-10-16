@@ -32,8 +32,9 @@ The usual flow:
 4. `sauce_wallet_send` takes `sauce_tx`'s result, simulates it, checks it against the wallet's
    spending limit, signs it and sends it.
 
-These are hot wallets: keep small balances in them, and give each a
-[spending limit](cli-wallets.md#put-a-spending-limit-on-a-wallet).
+These are hot wallets, for experiments and development: keep small balances in them, and give each
+a [spending limit](cli-wallets.md#put-a-spending-limit-on-a-wallet). For real money, have your
+wallet's own MCP server sign instead ([Sign with your wallet's MCP server](wallet-mcp.md)).
 
 ### Wallets in detail
 

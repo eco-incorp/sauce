@@ -1164,11 +1164,14 @@ describe("sauce tx", () => {
     const cook = decodeFunctionData({ abi: v12Pot.abi, data: out.data as Hex });
     expect(cook.functionName).toBe("cook");
     expect(cook.args).toEqual([getAddress(v12EngineAddress()), program]);
+    const data = v12Pot.encodeCook(getAddress(v12EngineAddress()), program as Hex);
+    // What a wallet's own tool takes as it is: the value a hex quantity, and a batch of one.
     expect(out).toEqual({
       chainId: 1,
       to: pot,
-      data: v12Pot.encodeCook(getAddress(v12EngineAddress()), program as Hex),
-      value: "1234",
+      data,
+      value: "0x4d2",
+      sendCalls: { chain: "ethereum", calls: [{ to: pot, value: "0x4d2", data }] },
     });
     expect(run.stderr).toContain(`Pot ${pot} belongs to ${OWNER} (salt ${SAUCE_INTENT_POT_SALT}).`);
     expect(run.stderr).toContain(
@@ -1412,7 +1415,7 @@ describe("sauce tx", () => {
       "--value",
       "0",
     );
-    expect(JSON.parse(run.stdout)).toMatchObject({ to: pot, value: "0" });
+    expect(JSON.parse(run.stdout)).toMatchObject({ to: pot, value: "0x0" });
     expect(run.stderr).toContain("Send from the Pot's owner: cook() is onlyOwner.");
   });
 
@@ -1575,6 +1578,8 @@ describe("sauce intent publish, offline", () => {
     expect(out.chainId).toBe(1);
     const portal = ecoRoutesPortal("ethereum");
     const vault = routes.predictIntentVault(intent!.intent, { portal });
+    const transfer = routes.vaultTransferTxs(intent!.intent, vault)[0]!;
+    const publish = routes.publishTx(intent!.intent, { portal });
     expect(out.intents).toEqual([
       {
         intentHash: routes.hashIntent(intent!.intent).intentHash,
@@ -1585,19 +1590,25 @@ describe("sauce intent publish, offline", () => {
         transactions: [
           {
             what: expect.stringMatching(/^transfer 0x[0-9a-fA-F]{40} to the vault$/),
-            to: expect.stringMatching(/^0x/),
-            data: routes.vaultTransferTxs(intent!.intent, vault)[0]!.data,
-            value: "0",
+            chainId: 1,
+            to: getAddress(transfer.to),
+            data: transfer.data,
+            value: "0x0",
           },
-          {
-            what: "publish",
-            to: portal,
-            data: routes.publishTx(intent!.intent, { portal }).data,
-            value: "0",
-          },
+          { what: "publish", chainId: 1, to: portal, data: publish.data, value: "0x0" },
         ],
       },
     ]);
+    // Both, in order, as one batch for a wallet that sends them together.
+    expect(out).toMatchObject({
+      sendCalls: {
+        chain: "ethereum",
+        calls: [
+          { to: getAddress(transfer.to), value: "0x0", data: transfer.data },
+          { to: portal, value: "0x0", data: publish.data },
+        ],
+      },
+    });
     expect(run.stderr).toMatch(/Each vault is the SDK's offline derivation for the Portal/);
     expect(run.stderr).not.toMatch(/Approvals are planned/);
 
@@ -1611,7 +1622,7 @@ describe("sauce intent publish, offline", () => {
         .transactions,
     ).toEqual([
       expect.objectContaining({ what: expect.stringMatching(/^approve /) }),
-      expect.objectContaining({ what: "publishAndFund", value: "0" }),
+      expect.objectContaining({ what: "publishAndFund", value: "0x0" }),
     ]);
     expect(optedOut.stderr).toMatch(/Approvals are planned without reading the wallet's allowance/);
     const cast = await sauce(
@@ -1863,15 +1874,16 @@ describe("sauce pot", () => {
     const run = await sauce("pot", "--owner", OWNER, "--chain", "base", "--salt", "treasury");
     const out = JSON.parse(run.stdout) as Record<string, unknown>;
     const salt = potSalt("treasury");
+    const deploy = { to: v12KitchenAddress(), data: v12Kitchen.encodeDeployPot(OWNER, salt) };
     expect(out).toEqual({
       chainId: 8453,
       pot: v12PredictPot(OWNER, salt),
       owner: OWNER,
       salt,
       kitchen: v12KitchenAddress(),
-      to: v12KitchenAddress(),
-      data: v12Kitchen.encodeDeployPot(OWNER, salt),
-      value: "0",
+      ...deploy,
+      value: "0x0",
+      sendCalls: { chain: "base", calls: [{ ...deploy, value: "0x0" }] },
     });
     expect(run.stderr).toMatch(/Any account may send it/);
     const cast = await sauce("pot", "--owner", OWNER, "--chain", "base", "--format", "cast");
@@ -2136,7 +2148,7 @@ describe("flags in any order", () => {
       ),
     );
     expect(after).toEqual(before);
-    expect(before.value).toBe("7");
+    expect(before.value).toBe("0x7");
     // After `--`, a word that looks like a flag is an argument.
     const escaped = await sauce(
       "tx",

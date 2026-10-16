@@ -37,6 +37,7 @@ import {
 import { ecoRoutesSvm, programId } from "../../sdk/test/svm/eco-routes-svm.js";
 import { solanaShim, type SolanaShim } from "../../sdk/test/svm/rpc-shim.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
+import { signableBy } from "./wallet-mcp-schemas.js";
 
 /** SPL accounts placed in the bank directly, as the SDK's own Solana suites place them: a mint
  *  (82 bytes, decimals and initialized), and a token account (165 bytes: mint, owner, amount). */
@@ -297,6 +298,26 @@ describe("the intent tools on a Solana destination", () => {
     };
     assert.equal(filled.destination.claimant, pad(CLAIMANT).toLowerCase());
     assert.equal(filled.state, "filled");
+  });
+
+  it("builds the fill's proof with its message key signed: only the fee payer's signature is missing", async () => {
+    // The intent the test before filled, with prove false: its proof is the next step.
+    const intent = await record("01", NOW + 3600n);
+    const out = ok(
+      await mcp.call("sauce_intent_prove", { intent, from: solver.address, rpcUrls }),
+    ) as { transactions: Array<{ feePayer: string; transaction: string }> };
+    const [proof] = out.transactions;
+    assert.equal(proof!.feePayer, solver.address);
+    // What a wallet's send tool takes and signs as the fee payer, its last signature: Hyperlane's
+    // fresh message key signed already.
+    const { presigned } = await signableBy(proof!.transaction, solver.address);
+    assert.ok(presigned >= 1, "the fresh key the proof creates an account with signed it");
+    const signed = await partiallySignTransaction(
+      [solver.keyPair],
+      getTransactionDecoder().decode(getBase64Encoder().encode(proof!.transaction)),
+    );
+    const result = svm.sendTransaction(signed as never) as { constructor: { name: string } };
+    assert.notEqual(result.constructor.name, "FailedTransactionMetadata", "the proof landed");
   });
 
   it("takes the Solana fee payer for a cancellation, which also reads the source", async () => {

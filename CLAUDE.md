@@ -1280,6 +1280,29 @@ bare `sauce mcp` over stdio with a `HOME` of its own (wallet tools listed, `{ ge
 then a wallet), an agent-named `env`, a start flag and `--no-wallets`, and checks the HTTP server
 has no wallet tool. Every password and key in them is generated and thrown away.
 
+**Hand-offs to a wallet's own MCP server.** Every unsigned EVM transaction a command or tool
+returns is itself what a wallet's send-transaction tool takes: `{ chainId, to, data, value, gas? }`
+beside labels (`what`, `deploysPot`), `value` and `gas` hex quantities (`handoff.ts#hexQuantity`),
+the input of Phantom MCP's `evm_send`, whose schema refuses a decimal value, takes a numeric chain
+id and drops the labels. Each producer writes them so (`lifecycle.ts#txJson`, `commands.ts`'s
+`tx`/`pot` and the Pot's planned deployment, `publish.ts#stepJson`); reports — what was sent, a
+simulation's `transactions` with their `status` — keep decimal amounts, and so do Solana's
+lamports. Readers parse either (`BigInt`, `wallet-send.ts#valueOf`). `sendCalls` on a result is the
+input of Coinbase Wallet MCP's `send_calls` (`{ chain, calls: [{ to, value, data }] }`, one atomic
+batch), placed on the outermost part whose transactions are one chain's by `handoff.ts#handoff`,
+which reads a result the way `plannedTransactions` does and is applied at the two output
+boundaries: the MCP registrar for every tool whose description carries `UNSIGNED`, and the CLI's
+`render()` for commands marked `unsigned` (and the intent verbs' printed transactions). Nothing
+sent (`hash`), simulated (`status`), not ready, or a Pot already deployed gets one. Solana
+transactions are left as they are: base64, the fee payer first and its signature the only empty
+one, is already Phantom's `solana_send` input. `mcp/test/wallet-mcp-schemas.ts` copies both
+servers' input schemas, cited by package version and commit (update it, then the outputs, when
+either server changes); `handoff.e2e.test.ts` runs `sendCalls` through a contract wallet with
+Coinbase Smart Wallet's `executeBatch` shape (`sdk/test/evm/fixtures/BatchWallet.sol`), which owns
+the Pot one batch deploys and cooks on, and each transaction as eth_sendTransaction, on the
+released stack. Phantom's server registers its tools by command path (`evm_send`, `solana_send`):
+the `send_*_transaction` names its documentation uses are not what it lists.
+
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command

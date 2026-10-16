@@ -79,7 +79,9 @@ function valueOf(raw: unknown, where: string): bigint {
   if (raw === undefined || raw === null) return 0n;
   if (typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 0) return BigInt(raw);
   if (typeof raw === "string" && /^(?:\d+|0x[0-9a-fA-F]+)$/.test(raw)) return BigInt(raw);
-  throw new UsageError(`${where}.value is not an amount in base units (a decimal string)`);
+  throw new UsageError(
+    `${where}.value is not an amount in base units (a hex quantity, or a decimal string)`,
+  );
 }
 
 function chainIdOf(raw: unknown, inherited: number | undefined): number | undefined {

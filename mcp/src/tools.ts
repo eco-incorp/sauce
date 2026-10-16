@@ -51,6 +51,7 @@ import {
   type ForkSnapshot,
   fundingFor,
   globalsCommand,
+  handoff,
   inspectCommand,
   inspectFile,
   intentRecord,
@@ -1055,9 +1056,19 @@ export function refusable<Shape extends z.ZodRawShape>(
   };
 }
 
+/**
+ * What a wallet's own MCP server takes from a result that carries transactions (`handoff.ts`):
+ * passed whole, with nothing to convert.
+ */
+export const HANDOFF =
+  "Each EVM transaction is itself the input of a wallet's send-transaction tool, such as " +
+  "Phantom's evm_send ({ chainId, to, data, value, gas }, value and gas hex quantities), and the " +
+  "result's `sendCalls` is the input of Coinbase Wallet's send_calls (every transaction in " +
+  "order, as one atomic batch); a Solana `transaction` is what Phantom's solana_send takes.";
+
 /** The sentence every tool that builds a transaction ends on. */
 export const UNSIGNED =
-  "Nothing is signed or sent: the caller signs and sends with its own wallet or signer.";
+  "Nothing is signed or sent: the caller signs and sends with its own wallet or signer. " + HANDOFF;
 
 /** What every tool that builds a transaction says about where it builds one. */
 export const SUPPORTED_ONLY =
@@ -1069,8 +1080,9 @@ export const SUPPORTED_ONLY =
 
 /** That sentence on a server with wallets (over stdio, unless `--no-wallets`). */
 export const WALLET_UNSIGNED =
-  "Nothing is signed or sent here: pass the result to sauce_wallet_send to send it from one of " +
-  "this server's wallets, or sign it with any other wallet.";
+  "Nothing is signed or sent here: sign it with the user's own wallet. " +
+  HANDOFF +
+  " For experiments, sauce_wallet_send sends the whole result from one of this server's wallets.";
 
 // ---------------------------------------------------------------------------------------------
 // The tools
@@ -1153,8 +1165,10 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
   const { endpoints, guard, stores } = context;
 
   return (name, config, run) => {
-    // A tool that builds a transaction, on a server that can send it: the result says how.
-    const sendable = context.wallets !== undefined && config.description.includes(UNSIGNED);
+    // A tool that builds a transaction: its result carries what a wallet's own tool takes, and on
+    // a server that can send it, says how.
+    const unsigned = config.description.includes(UNSIGNED);
+    const sendable = context.wallets !== undefined && unsigned;
     server.registerTool(
       name,
       {
@@ -1182,8 +1196,11 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
               : keeping({ stores, say: (line) => kept.push(line) }, call)),
             reach,
           );
-          const keptOutput =
-            kept.length === 0 ? output : { ...output, notes: [...(output.notes ?? []), ...kept] };
+          const keptOutput = {
+            ...output,
+            ...(unsigned ? { json: handoff(output.json) } : {}),
+            ...(kept.length === 0 ? {} : { notes: [...(output.notes ?? []), ...kept] }),
+          };
 
           return result(
             sendable && (args as { dryRun?: unknown }).dryRun !== true
@@ -1955,7 +1972,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Builds the transaction that runs a program on its Pot, unsigned, for the Pot's owner to " +
         "sign — the last step, once sauce_compile succeeds (and, ideally, sauce_simulate). On " +
         "an EVM chain it returns { chainId, to: the Pot, data: Pot.cook(engine, program ++ " +
-        "arguments), value }; only the owner may send it, and value (wei) is the Kitchen's fee " +
+        "arguments), value }; only the owner may send it, and value (wei, hex) is the Kitchen's fee " +
         "plus any native the program spends — give it, or an endpoint to read the fee from, " +
         "which also says whether the Pot is deployed. When the endpoint shows the Pot has no " +
         "code yet, it returns { chainId, pot, transactions } instead: first Kitchen.deployPot " +

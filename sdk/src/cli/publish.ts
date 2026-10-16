@@ -36,6 +36,7 @@ import {
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
+import type { CanonicalChain } from "../chains/canonical.js";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
 import { isTypeDeclaration } from "../routes/ast-walk.js";
@@ -59,6 +60,7 @@ import { CliError, UsageError } from "./args.js";
 import { mergeOverrides } from "../evm/balance-slot.js";
 import { assumeTokenBalance } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent, type TxRequest } from "./chain.js";
+import { hexQuantity } from "./handoff.js";
 import { linkLines, txLinks } from "./links.js";
 import {
   castSend,
@@ -408,11 +410,13 @@ async function walletBalances(
   };
 }
 
-const stepJson = (step: Step): Record<string, string> => ({
+/** A step as a wallet's send tool takes it (`handoff.ts`), with what it does. */
+const stepJson = (chain: CanonicalChain, step: Step): Record<string, string | number> => ({
   what: step.what,
+  chainId: chain.id,
   to: step.to,
   data: step.data,
-  value: step.value.toString(),
+  value: hexQuantity(step.value),
 });
 
 /** An intent as each output names it: its hash, where it goes, how it is funded, and the vault. */
@@ -477,7 +481,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
       intents: plans.map((plan) => ({
         ...intentJson(plan),
         vaultFrom: plan.vaultFrom,
-        transactions: plan.steps.map(stepJson),
+        transactions: plan.steps.map((step) => stepJson(input.chain, step)),
       })),
     };
     const transfers = plans.some((plan) => plan.fundVia === "transfer");
@@ -577,7 +581,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
           const result = results[index];
 
           return {
-            ...stepJson(step),
+            ...stepJson(input.chain, step),
             status: result?.status ?? "not run",
             ...(result?.status === "success" && result.gasUsed !== undefined
               ? { gasUsed: result.gasUsed.toString() }

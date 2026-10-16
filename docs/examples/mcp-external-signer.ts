@@ -10,8 +10,8 @@ export type CallTool = (
   args: Record<string, unknown>,
 ) => Promise<Record<string, unknown>>;
 
-/** One transaction as the server returns it, unsigned: EVM `{ chainId, to, data, value }`, or
- *  Solana `{ transaction }` in base64, for its fee payer. */
+/** One transaction as the server returns it, unsigned: EVM `{ chainId, to, data, value, gas }`,
+ *  `value` and `gas` hex quantities, or Solana `{ transaction }` in base64, for its fee payer. */
 export interface Unsigned {
   readonly what?: string;
   readonly chainId?: number;

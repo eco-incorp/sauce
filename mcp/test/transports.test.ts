@@ -169,7 +169,10 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         tools.map((tool) => tool.name),
         toolsOf({ wallets: true, pots: true, intents: true }),
       );
-      assert.match(received[0]!, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
+      assert.match(
+        received[0]!,
+        /THIS SERVER ALSO SIGNS, WITH THE WALLETS IN ITS WALLET DIRECTORY/,
+      );
       assert.match(received[0]!, /call sauce_wallet_enable once/);
       const listed = structured(await client.callTool({ name: "sauce_wallet_list" }));
       assert.deepEqual(listed, {
@@ -288,7 +291,10 @@ describe("stdio: sauce mcp as an agent launches it", () => {
         tools.map((tool) => tool.name),
         toolsOf({ wallets: true, pots: true, intents: true }),
       );
-      assert.match(received[0]!, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
+      assert.match(
+        received[0]!,
+        /THIS SERVER ALSO SIGNS, WITH THE WALLETS IN ITS WALLET DIRECTORY/,
+      );
       assert.match(received[0]!, /--password-env SAUCE_TEST_WALLET_PASSWORD/);
       const created = await client.callTool({
         name: "sauce_wallet_create",
