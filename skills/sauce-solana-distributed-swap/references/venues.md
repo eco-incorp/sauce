@@ -1,10 +1,10 @@
 # The venues, their pools and their slots
 
 Every venue the distributed swap trades on, with its swap in a program and its function in
-`@sauce/router`, where its pool keeps what that function reads, the nine accounts a swap at the
-pool takes (its slot), and how to find a pair's pools. A program never names these accounts:
-compiling it adds them for each pool it is given, and the command reads them from the pool as it
-builds the cook. Offsets are bytes from the start of the account; integers are little-endian, keys
+`@sauce/router`, where its pool keeps what that function reads, how its program derives a pool
+from its key, the nine accounts a swap at the pool takes (its slot), and how to list a pair's
+pools. A program never names these accounts: compiling it adds them for each pool it names, and
+the command reads them from the pool as it builds the cook. Offsets are bytes from the start of the account; integers are little-endian, keys
 32 bytes. A slot's accounts are, in order:
 
 | #   | Slot account | What it is                                                              |
@@ -124,14 +124,34 @@ Base and quote are not in key order: the program reads which one it pays. The or
 immediate-or-cancel at the limit price: it takes every offer at or better than the limit, leaves
 the rest on the book, and fills nothing when the best offer is past the limit.
 
-## Finding a pair's pools
+## A pool by its key
+
+A program names a pool as `<Venue>.pool(tokenA, tokenB, key)`: the program address its venue's
+program derives from the pair, the lower key first whichever way it is written, and the key. The
+command derives it as it builds the cook and reads the pool there; no pool there is an empty slot.
+
+| Venue                                      | Key                    | Seeds                                                                                                  |
+| ------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| Orca Whirlpools                            | tick spacing (u16, LE) | `"whirlpool"`, the WhirlpoolsConfig `2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ`, lower, higher, key |
+| Cropper                                    | tick spacing (u16, LE) | `"whirlpool"`, the WhirlpoolsConfig `2CmCWqXhw7f3jCnvJg74t4vsm62DTUbKQPWL7NX8oCpL`, lower, higher, key |
+| DefiTuna                                   | tick spacing (u16, LE) | `"fusion_pool"`, lower, higher, key                                                                    |
+| Crema                                      | tick spacing (u16, LE) | `"clmmpool"`, the config `2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox`, lower, higher, key            |
+| Raydium CLMM, PancakeSwap, Byreal, Stabble | fee, in millionths     | `"pool"`, the `AmmConfig` charging that fee, lower, higher                                             |
+
+A whirlpool's key is its fee tier's index, at 43: its tick spacing for every pool whose fee is
+fixed, and another number for an adaptive fee, which the swap skips. A Raydium-code program keeps
+one `AmmConfig` per fee, the program address of `["amm_config", index]` (a big-endian u16), its
+fee at 47 of that account: the program names the fee, and the SDK knows the config of each fee its
+venue charges.
+
+## Listing a pair's pools
 
 A venue's pools are its program's accounts, so `getProgramAccounts` on the venue's program finds
 them, with the pool's size and the pair at its mints' offsets as filters: for the
 concentrated-liquidity venues the lower key at the first offset and the higher at the second, for
 Phoenix the base and quote in either order. Then read each pool's liquidity, price and fee at the
 offsets above, drop the empty ones and those whose fee is more than one rate, and keep the deepest
-and cheapest. `sauce pools` does all of this, and `--pay` gives the pools chosen in slot order.
+and cheapest. `sauce pools` does all of this, and gives each pool's `key`: how a program finds it.
 
 | Venue                                      | Size  | First mint | Second mint |
 | ------------------------------------------ | ----- | ---------- | ----------- |

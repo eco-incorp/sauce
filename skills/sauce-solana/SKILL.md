@@ -49,8 +49,8 @@ is `sauce-solana-distributed-swap`'s.
   `sauce run` does.
 - **No protocol namespaces**: a program calls another program with `svm.call`; the price-limit
   venues are namespaces of their own, their protocol then their program
-  (`Orca.Whirlpool.swap(pool, …)`), and `Solana.swap(pool, …)` swaps at a pool of any of them
-  (`sauce-swaps`). `sauce globals --chain solana` lists the
+  (`Orca.Whirlpool.swap(pool, …)`), each finding its pools by key
+  (`Orca.Whirlpool.pool(USDC, WSOL, 4)`, `sauce-swaps`). `sauce globals --chain solana` lists the
   mints (devnet's too), the venues and the account expressions.
 
 | The account                                                                           | Write                                                                                                             |

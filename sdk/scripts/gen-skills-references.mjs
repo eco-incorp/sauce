@@ -1176,13 +1176,19 @@ function renderChain(chain, supported, site) {
       "",
       "Each venue whose swap a price limit stops, by the namespace a program swaps at one of its pools",
       "with, its protocol then its program: `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn,",
-      "maxPrice, minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts",
-      "below `minOut`; `Solana.swap(…)` takes a pool of any of them. The pool's accounts, and the",
+      "priceLimit, minOut)`, which returns 0 having moved nothing where the pool cannot trade and",
+      "reverts below `minOut`. Its pool is found by key, `Orca.Whirlpool.pool(USDC, WSOL, 4)`, where",
+      "the venue finds pools by one: a key with no pool there is skipped. The pool's accounts, and the",
       "Pot's, are derived when the cook is built (`sauce-swaps`).",
       "",
-      "| Namespace | Venue | Program |",
-      "| --- | --- | --- |",
-      ...chain.venues.map((v) => `| \`${v.namespace}\` | ${v.name} | \`${v.program}\` |`),
+      "| Namespace | Venue | Program | Pool by key |",
+      "| --- | --- | --- | --- |",
+      ...chain.venues.map((v) => {
+        const pool = v.methods.find((method) => method.startsWith("pool("));
+        const key =
+          pool === undefined ? "by its address" : /, fee: /.test(pool) ? "fee" : "tick spacing";
+        return `| \`${v.namespace}\` | ${v.name} | \`${v.program}\` | ${key} |`;
+      }),
       "",
     );
   }
@@ -2044,7 +2050,6 @@ export function renderDocsReference(data, skillFiles) {
         skillFiles.solanaDistributedSwapExample,
         {
           "examples/solana-distributed-swap.sauce.ts": ["`solana-distributed-swap.sauce.ts`"],
-          "examples/solana-distributed-swap-5.sauce.ts": ["`solana-distributed-swap-5.sauce.ts`"],
           "examples/solana-distributed-swap.mts": ["`solana-distributed-swap.mts`"],
           "references/venues.md": [
             "the venues, their pools and their slots",

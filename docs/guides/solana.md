@@ -88,54 +88,54 @@ It runs with `sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 
 
 ## Venues by namespace
 
-A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain. This program is [solana-swap.sauce.ts](../examples/solana-swap.sauce.ts), and [solana-swap.ts](../examples/solana-swap.ts) compiles it and lists the accounts every cook derives for it:
+A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain, and its pool is found by its key, as an EVM program asks a Uniswap factory for the pool at a fee. This program is [solana-swap.sauce.ts](../examples/solana-swap.sauce.ts), and [solana-swap.ts](../examples/solana-swap.ts) compiles it and lists the accounts every cook derives for it:
 
 ```ts
-// Solana: buy WSOL with up to `amountIn` of the Pot's USDC at one Orca whirlpool, never paying more
-// than `maxPrice` for any unit, and send what arrived to `to`. The pool is main's argument, and
-// compiling adds every account the swap takes to main — the pool's nine, read from the pool when the
-// cook is built, and the Pot's own — so the command is given none. A pool already past `maxPrice` is
+// Solana: buy WSOL with up to `amountIn` of the Pot's USDC at Orca's SOL/USDC whirlpool of tick
+// spacing 4, never paying more than `priceLimit` for any unit, and send what arrived to `to`. The
+// pool is found by its key, as an EVM program finds a Uniswap pool by its fee, and compiling adds
+// every account the swap takes to main — the pool's nine, read from the pool when the cook is
+// built, and the Pot's own — so the command is given none. A pool already past `priceLimit` is
 // skipped (`swap` returns 0, and nothing moves); below `minOut` the whole transaction reverts.
 //
 //   sauce run solana-swap.sauce.ts --chain <chain> --keypair <keypair> \
-//     --args <pool> <to> <amountIn> <maxPrice> <minOut>
+//     --args <to> <amountIn> <priceLimit> <minOut>
 //
-//   pool: Address       an Orca whirlpool trading USDC and WSOL (sauce pools --chain solana USDC WSOL)
-//   to: Address         who gets the WSOL bought: a wallet's key
-//   amountIn: Uint256   the most USDC to pay, in its smallest units (6 decimals): 100000000 is 100
-//   maxPrice: Uint256   the most one WSOL may cost, fee included: USDC base units per WSOL base unit,
-//                       times 10^18 (sauce pools prints each pool's own as maxPrice)
-//   minOut: Uint256     the least WSOL to receive, in its smallest units (9 decimals)
+//   to: Address           who gets the WSOL bought: a wallet's key
+//   amountIn: Uint256     the most USDC to pay, in its smallest units (6 decimals): 100000000 is 100
+//   priceLimit: Uint256   the most one WSOL may cost, fee included: USDC base units per WSOL base
+//                         unit, times 10^18 (sauce pools prints each pool's own as priceLimit)
+//   minOut: Uint256       the least WSOL to receive, in its smallest units (9 decimals)
 //
 // On Solana, 100 USDC at up to 200 USDC per SOL, for at least 0.4 SOL:
 //
 //   sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
-//     --args <pool> <recipient> 100000000 200000000000000000 400000000
-function main(
-  pool: Address,
-  to: Address,
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-): Uint256 {
-  const got = Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut);
+//     --args <recipient> 100000000 200000000000000000 400000000
+function main(to: Address, amountIn: Uint256, priceLimit: Uint256, minOut: Uint256): Uint256 {
+  const got = Orca.Whirlpool.swap(
+    Orca.Whirlpool.pool(USDC, WSOL, 4),
+    USDC,
+    WSOL,
+    amountIn,
+    priceLimit,
+    minOut,
+  );
   if (got > 0) WSOL.transfer(to, got);
   return got;
 }
 ```
 
-Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. Each has one method, `swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)`. It returns what arrived. Where the pool cannot trade (it is empty, paused, or already past `maxPrice`), it returns 0 and moves nothing. Below `minOut` the whole transaction reverts. `maxPrice` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
+Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. Each has a `swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)`. It returns what arrived. Where the pool cannot trade (there is no pool at the key, or it is empty, paused, or already past `priceLimit`), it returns 0 and moves nothing. Below `minOut` the whole transaction reverts. `priceLimit` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
 
-- **One venue's function.** Each call compiles to that venue's own `@sauce/router` function (`orcaWhirlpool`), never the router's all-venue `swap`, and keeps that function's checks: the venue's program, the pool's owner, the pair, `minOut`.
+- **The pool by its key.** `pool(tokenA, tokenB, key)` is the pool the venue's program keeps for the pair at that key, either token first. The key is a tick spacing at Orca, Cropper, DefiTuna and Crema, and a fee in millionths (400 is 0.04%) at Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble. It is written as the swap's pool, the key a number written out, or the variable of a loop over numbers written out: `for (const spacing of [1, 4, 64]) { … }` swaps at one pool per key. A Phoenix market is not derived from its pair, so a program takes it as a parameter of `main` declared `Address`.
+- **One venue's function.** Each call compiles to that venue's own `@sauce/router` function (`orcaWhirlpool`) and keeps that function's checks: the venue's program, the pool's owner, the pair, `minOut`.
 - **The accounts are added to `main`.**
-  - The pool's nine (`slot:@pool:USDC.program` through `ticks2`) are read from the pool on the cluster as the cook is built. Its tick arrays follow the token paid, so the slot is that direction's (`svm.svmPoolSlot`, the same `sauce pools --chain solana` lists).
+  - The pool's nine (`slot:Orca.Whirlpool(USDC,WSOL,4):USDC.program` through `ticks2`) are read from the pool on the cluster as the cook is built. Its tick arrays follow the token paid, so the slot is that direction's (`svm.svmPoolSlot`, the same `sauce pools --chain solana` lists). A key with no pool there is an empty slot: its nine are the System Program.
   - The trader's are the Pot's.
   - What is bought lands in the Pot's own account for `tokenOut`, which `sauce run` creates when it is missing.
-- **What must be known.** The pool and both tokens are each a parameter of `main` declared `Address`, a 32-byte key, or (a token) a registered symbol. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
+- **What must be known.** The tokens are each a registered symbol, a parameter of `main` declared `Address`, or a 32-byte key; the pool is found by its key, or is such a parameter or key. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
 
-`Solana.swap` takes the same arguments at a pool of any of the nine: the venue is read from the pool's owner as the program runs, so a program can take its pools as `main`'s arguments without knowing their venues, and still name no account. Each such call carries every venue's code, about 4.4 KB, a larger program than one venue's. A pool given as the System Program, `11111111111111111111111111111111`, is an empty slot, for which `swap` returns 0.
-
-`sauce globals --chain solana` lists the namespaces under Venues. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools, `main`'s arguments, with one `Solana.swap` call each.
+`sauce globals --chain solana` lists the namespaces under Venues, each with the key it finds pools by, and `sauce pools --chain solana USDC WSOL` lists a pair's pools with each one's key. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools, found by key in a loop over each venue's keys.
 
 ## Compile an SPL transfer
 

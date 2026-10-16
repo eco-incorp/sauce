@@ -279,29 +279,29 @@ chain.
 
 ## On Solana
 
-A program that knows its pool needs none of these functions directly: the venue's namespace,
-`Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, minOut)`, compiles to that venue's
-`orcaWhirlpool` below, and `Solana.swap(pool, …)`, at a pool of any of the nine, compiles to `swap`.
-Either way the slot and the trader are added to `main` and derived when the cook is built
+A program needs none of these functions directly: the venue's namespace,
+`Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, minOut)`,
+compiles to that venue's `orcaWhirlpool` below, with the slot and the trader added to `main` and
+derived when the cook is built
 ([Solana: venues by namespace](../guides/solana.md#venues-by-namespace)).
 
 On Solana `@sauce/router` swaps at the venues whose swap takes a price limit that stops it and
 leaves the rest of the input, the venues of [the distributed swap on Solana](../guides/solana-distributed-swap.md),
 and at Manifest's book. Each venue's swap comes in four forms:
 
-| Form                                      | Takes                                                   | Returns                      |
-| ----------------------------------------- | ------------------------------------------------------- | ---------------------------- |
-| at a price: `<venue>`                     | `(slot, trader, amountIn, maxPrice, minOut, recipient)` | what the recipient received  |
-| at the pool's own limit: `<venue>AtLimit` | `(slot, trader, amountIn, limit, minOut, recipient)`    | what the recipient received  |
-| the instruction alone: `<venue>Cpi`       | `(program, accounts, source, amountIn, limit, …)`       | what the paying account paid |
-| the instruction's data: `<venue>Data`     | `(amountIn, limit, …)`                                  | the data, to send yourself   |
+| Form                                      | Takes                                                     | Returns                      |
+| ----------------------------------------- | --------------------------------------------------------- | ---------------------------- |
+| at a price: `<venue>`                     | `(slot, trader, amountIn, priceLimit, minOut, recipient)` | what the recipient received  |
+| at the pool's own limit: `<venue>AtLimit` | `(slot, trader, amountIn, limit, minOut, recipient)`      | what the recipient received  |
+| the instruction alone: `<venue>Cpi`       | `(program, accounts, source, amountIn, limit, …)`         | what the paying account paid |
+| the instruction's data: `<venue>Data`     | `(amountIn, limit, …)`                                    | the data, to send yourself   |
 
 The first two return `0`, having moved nothing, where the pool cannot trade (below). Every form
 sends the same instruction for the same amount, limit and floor, Orca's excepted: at a price every
 pool's swap is `swap_v2`, and at its own limit a pool of two SPL Token mints takes the classic
 `swap`. The `…AtLimit` forms build it with the venue's `…Data`. The forms at a price write it
 themselves and check none of its fields: their floor is 0 and their limit fits its field, so no
-check of `…Data`'s could fail there, and every program calling `swap` would carry them. `…Cpi`
+check of `…Data`'s could fail there, and every program swapping at a price would carry them. `…Cpi`
 writes the same bytes itself too, because a call into `…Data` would cost it about 2k compute units
 (Phoenix's excepted, which is cheaper through `phoenixData`).
 
@@ -320,11 +320,10 @@ writes the same bytes itself too, because a call into `…Data` would cost it ab
 | OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                   | `openbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`, `openbookV2LotsData`     |
 | Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                   | `manifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
 
-and `swap`, which takes a pool at any of the nine venues priced the first way and reads its venue
-from the program that owns it.
+The forms at a price take:
 
 ```text
-swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: Account): Uint256
+orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account): Uint256
 ```
 
 - **`slot`** is the pool's accounts, the System program for any the venue does not take:
@@ -346,10 +345,10 @@ swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: 
   other than `main` keeps at most about sixteen values in use at once. Manifest and OpenBook take the
   authority as their payer, so for them it must be writable.
 - **`amountIn`** is the most the pool may take. The rest of it stays in `source`.
-- **`maxPrice`** is the most one unit bought may cost, fee included: payToken base units per
+- **`priceLimit`** is the most one unit bought may cost, fee included: payToken base units per
   buyToken base unit, times 1e18. The function reads the pool's fee and gives the pool its own
-  limit, so its last unit, fee paid, costs `maxPrice`: a concentrated-liquidity pool's sqrt price
-  limit moved by `√(1 − fee)`, a Phoenix order's price `maxPrice ÷ (1 + fee)` in ticks.
+  limit, so its last unit, fee paid, costs `priceLimit`: a concentrated-liquidity pool's sqrt price
+  limit moved by `√(1 − fee)`, a Phoenix order's price `priceLimit ÷ (1 + fee)` in ticks.
 - **`limit`** is the pool's own: the sqrt price its swap takes as the pool keeps it (a Q64.64 root;
   on Invariant a root times 10^24), Phoenix's order price in its market's ticks, OpenBook's in its
   lots (`priceLots`, then `orders`, the most resting orders it may match). No fee is read for it, so
@@ -369,10 +368,9 @@ swap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipient: 
   authority's own.
 
 Each venue's function requires the slot's program to be its venue's and the pool's owner before it
-reads the pool, because the authority signs the swap; `swap` requires the slot's program to own
-the pool and that owner to be one of the nine. These are the caller's accounts, so each reverts
-rather than skips: a slot naming another program, a pool of another venue (`not a Crema pool`, …)
-or of none (`not a supported venue's pool`), a pool that is not the pair, and a limit an order cannot
+reads the pool, because the authority signs the swap. These are the caller's accounts, so each
+reverts rather than skips: a slot naming another program, a pool of another venue or of none
+(`not a Crema pool`, …), a pool that is not the pair, and a limit an order cannot
 carry (a sqrt price limit past its 128 bits, which cut to its field would be no limit at all; Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
 itself as the pool is a missing slot, which is skipped.
 
@@ -392,10 +390,10 @@ the checks do not foresee, such as a tick array missing from the slot or an Inva
 limit, fails the transaction.
 
 ```js
-import { swap } from "@sauce/router";
+import { orcaWhirlpool } from "@sauce/router";
 
-// One pool, any of the nine venues: up to amountIn of payMint for buyMint, never more than maxPrice
-// a unit with the fee, and at least minOut, else the whole transaction reverts.
+// One Orca pool: up to amountIn of payMint for buyMint, never more than priceLimit a unit with the
+// fee, and at least minOut, else the whole transaction reverts.
 function main(
   program: Account,
   pool: Account<Writable>,
@@ -415,12 +413,12 @@ function main(
   memo: Account,
   output: Account<Writable>,
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
 ): Uint256 {
   const slot = [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2];
   const trader = [authority, source, payMint, buyMint, tokenProgram, token2022, memo];
-  return swap(slot, trader, amountIn, maxPrice, minOut, output);
+  return orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, output);
 }
 ```
 
@@ -606,10 +604,9 @@ const { prefix, suffix, divisor } = routerSvmDataTemplate("defituna", {
 
 A program carries the venues it calls and no other: one venue's function at a price or at a limit
 is about 0.9 to 1.7 KB of program, its instruction alone about 0.4 to 0.5 KB, its data alone about
-0.2 to 0.4 KB, `swap` all nine about 4.4 KB. A program that knows its venue calls that venue's
-function, and keeps `swap` for slots whose venue it learns as it runs. Past one transaction a
-program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
-is one `Solana.swap` call per pool, each compiled to `swap`.
+0.2 to 0.4 KB. Past one transaction a program is staged in a code buffer, as `sauce run` does.
+[The distributed swap on Solana](../guides/solana-distributed-swap.md) is one venue call per pool
+its keys find, each compiled to that venue's function.
 
 Reading an account out of an array is among the dearest steps in a program, so a form that takes a
 slot pays for every account it lays out; `…Cpi` and `…Data` read none, and `…Data` does not even

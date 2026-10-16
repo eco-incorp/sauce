@@ -160,12 +160,9 @@ const functions = solana.slice(solana.indexOf("### The functions"));
 const priced = [
   ...functions.slice(0, functions.indexOf("Every one takes")).matchAll(/`([a-z]\w+)`/g),
 ].map((m) => m[1]!);
-check(
-  priced.length === 10 && priced.includes("swap"),
-  "the skill names nine venues' functions and swap",
-);
+check(priced.length === 9, "the skill names nine venues' functions");
 const atLimit = [
-  ...priced.filter((name) => name !== "swap").map((name) => `${name}AtLimit`),
+  ...priced.map((name) => `${name}AtLimit`),
   "invariantAtLimit",
   "openbookV2AtLimit",
   "manifest",
@@ -191,8 +188,11 @@ check(
     .join() === [...limit].sort().join(),
   "the SVM arm exports those and each venue's instruction alone and its data",
 );
-const signature = "slot, trader, amountIn, maxPrice, minOut, recipient";
-check(solana.includes(`swap(${signature}): Uint256`), "the skill gives swap's arguments");
+const signature = "slot, trader, amountIn, priceLimit, minOut, recipient";
+check(
+  solana.includes(`orcaWhirlpool(${signature}): Uint256`),
+  "the skill gives the functions' arguments",
+);
 check(
   solana.replace(/\s+/g, " ").includes("(slot, trader, amountIn, limit, minOut, recipient)") &&
     solana.includes("`<venue>Cpi(program, accounts, source, amountIn, …)`") &&
@@ -250,24 +250,22 @@ for (const [, name, args] of svmExports.filter((m) => !limit.has(m[1]!)))
         : argsOf(args!) === exactSignature,
     `${name}'s arguments`,
   );
-// What a program carries: one venue's function, or all nine through swap.
+// What a program carries: the venues it calls, one venue's function and no other's.
+check(!svmText.includes("export function swap("), "no function takes a pool of any venue");
 const block = [...solana.matchAll(/```sauce chain=solana\n([\s\S]*?)```/g)]
   .map((match) => match[1]!)
   .find((code) => code.includes('from "@sauce/router"'))!;
 const one = routes.compileSauceProgram("solana", block).bytecode.length;
-const all = routes.compileSauceProgram("solana", block.replaceAll("orcaWhirlpool", "swap")).bytecode
-  .length;
 const kb = (bytes: number) => (bytes / 1000).toFixed(1);
 check(
-  solana.includes(`about ${kb(one)} KB of program`) &&
-    solana.replace(/\s+/g, " ").includes(`all nine, about ${kb(all)} KB`),
-  `one venue's function is ${one} bytes of program, swap ${all}`,
+  solana.includes(`about ${kb(one)} KB of program`),
+  `one venue's function is ${one} bytes of program`,
 );
-console.log(`@sauce/router on Solana: ${priced.join(", ")}; ${one} and ${all} bytes`);
+console.log(`@sauce/router on Solana: ${priced.join(", ")}; ${one} bytes`);
 
 // A venue by its namespace: the skill names every venue `sauce globals --chain solana` lists, and
-// the example compiles to that venue's own function, never swap, its pool's nine accounts and the
-// Pot's added to main with how each is derived.
+// the example compiles to that venue's own function, the pool its key finds read for its nine
+// accounts and the Pot's added to main with how each is derived.
 const namespaces = routes.sourceGlobals("solana").venues.map((venue) => venue.namespace);
 for (const namespace of namespaces)
   check(solana.includes(`\`${namespace}\``), `the skill names ${namespace}`);
@@ -276,24 +274,43 @@ const example = routes.compileSauceProgram(
   readFileSync(new URL("./solana-swap.sauce.ts", import.meta.url), "utf8"),
 );
 check(
-  example.source.includes("__sauce_orcaWhirlpool(") && !example.source.includes("{ swap as"),
+  example.source.includes("__sauce_orcaWhirlpool("),
   "Orca.Whirlpool.swap compiles to orcaWhirlpool",
 );
 const derived = example.derivedAccounts ?? {};
 for (const part of ["program", "pool", "vaultA", "ticks2"])
   check(
-    Object.values(derived).includes(`slot:@pool:USDC.${part}`),
-    `the pool's ${part} is derived`,
+    Object.values(derived).includes(`slot:Orca.Whirlpool(USDC,WSOL,4):USDC.${part}`),
+    `the pool's ${part} is derived from the pool its key finds`,
   );
 check(
   derived.potWSOL === "self:WSOL" && derived.toWSOL === "@to:WSOL",
   "what is bought lands in the Pot's WSOL account, and goes on to to's",
 );
-check(solana.includes("`slot:@pool:USDC.vaultA`"), "the skill shows a slot derivation");
 check(
-  example.entryParams.map((param) => param.name).join() === "pool,to,amountIn,maxPrice,minOut",
-  "the example's arguments are its own; the accounts are none of them",
+  solana.includes("`slot:Orca.Whirlpool(USDC,WSOL,4):USDC.vaultA`"),
+  "the skill shows a slot derivation",
 );
+check(
+  example.entryParams.map((param) => param.name).join() === "to,amountIn,priceLimit,minOut",
+  "the example's arguments are its own; the pool and the accounts are none of them",
+);
+// Each venue that finds pools by key has its `pool`, the key the skill says: a tick spacing or a fee.
+for (const venue of routes.sourceGlobals("solana").venues) {
+  const pool = venue.methods.find((method) => method.startsWith("pool("));
+  const by =
+    venue.namespace === "Phoenix.Market"
+      ? undefined
+      : /^(Raydium|Pancakeswap|Byreal|Stabble)\./.test(venue.namespace)
+        ? "fee"
+        : "tickSpacing";
+  check(
+    by === undefined
+      ? pool === undefined
+      : pool === `pool(tokenA: Address, tokenB: Address, ${by}: Uint256): Address`,
+    `${venue.namespace} finds its pools ${by === undefined ? "by address" : `by ${by}`}`,
+  );
+}
 console.log(
   `Solana venues by namespace: ${namespaces.join(", ")}; the example ${example.bytecode.length} bytes`,
 );

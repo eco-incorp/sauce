@@ -215,9 +215,9 @@ the owner rather than repeat it.
 
 ### `sauce-solana-distributed-swap`
 
-- **Owns**: the same order on Solana: pools as `main`'s `Address` arguments found with
-  `sauce pools`, each swapped with `Solana.swap` at whichever venue owns it, the program used whole,
-  what fits in one cook, running it.
+- **Owns**: the same order on Solana: a program for one request, its pools found by key
+  (`Orca.Whirlpool.pool(USDC, WSOL, spacing)`) in loops over the keys, each swapped at its venue,
+  choosing the keys with `sauce pools`, what fits in one cook, running it.
 - **Load**: for a split or limit order on Solana, with `sauce-solana`.
 
 ### `sauce-intents`

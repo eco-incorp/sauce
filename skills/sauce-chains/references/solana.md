@@ -54,21 +54,22 @@ of `main`, given to `--args` as the mint's base58 address:
 
 Each venue whose swap a price limit stops, by the namespace a program swaps at one of its pools
 with, its protocol then its program: `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn,
-maxPrice, minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts
-below `minOut`; `Solana.swap(…)` takes a pool of any of them. The pool's accounts, and the
+priceLimit, minOut)`, which returns 0 having moved nothing where the pool cannot trade and
+reverts below `minOut`. Its pool is found by key, `Orca.Whirlpool.pool(USDC, WSOL, 4)`, where
+the venue finds pools by one: a key with no pool there is skipped. The pool's accounts, and the
 Pot's, are derived when the cook is built (`sauce-swaps`).
 
-| Namespace | Venue | Program |
-| --- | --- | --- |
-| `Raydium.CLMM` | Raydium CLMM | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
-| `Pancakeswap.CLMM` | PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` |
-| `Byreal.CLMM` | Byreal | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2` |
-| `Stabble.CLMM` | Stabble CLMM | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` |
-| `Orca.Whirlpool` | Orca Whirlpools | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` |
-| `Cropper.Whirlpool` | Cropper | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` |
-| `Defituna.Fusion` | DefiTuna | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9` |
-| `Crema.CLMM` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` |
-| `Phoenix.Market` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` |
+| Namespace | Venue | Program | Pool by key |
+| --- | --- | --- | --- |
+| `Raydium.CLMM` | Raydium CLMM | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` | fee |
+| `Pancakeswap.CLMM` | PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` | fee |
+| `Byreal.CLMM` | Byreal | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2` | fee |
+| `Stabble.CLMM` | Stabble CLMM | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` | fee |
+| `Orca.Whirlpool` | Orca Whirlpools | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` | tick spacing |
+| `Cropper.Whirlpool` | Cropper | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` | tick spacing |
+| `Defituna.Fusion` | DefiTuna | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9` | tick spacing |
+| `Crema.CLMM` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | tick spacing |
+| `Phoenix.Market` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` | by its address |
 
 ## Accounts
 
