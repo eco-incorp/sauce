@@ -78,7 +78,7 @@ import { rehearse } from "./rehearse.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
-import { svmCookSize, svmPayload } from "./solana.js";
+import { svmAccountsToGive, svmCookSize, svmPayload } from "./solana.js";
 import type { Funding } from "./funding.js";
 import {
   intentDestinations,
@@ -394,6 +394,12 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           program.derivedAccounts,
         )
       : undefined;
+  // On Solana, the accounts main takes that no cook derives, each given by name: what suits each, as
+  // a cook command refuses a cook without them.
+  const toGive =
+    program.manifest === undefined
+      ? []
+      : svmAccountsToGive(program.manifest, program.derivedAccounts, input.accounts, input.via);
   const cooks = intentCooks(program.intents);
   const pots: readonly PotCheck[] =
     input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
@@ -439,7 +445,9 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
-      ...(program.manifest === undefined ? {} : { manifest: manifestJson(program) }),
+      ...(program.manifest === undefined
+        ? {}
+        : { manifest: manifestJson(program), accountsToGive: toGive }),
     },
     ...(notes.length === 0 ? {} : { notes }),
   };

@@ -738,6 +738,67 @@ describe("sauce compile", () => {
     expect(run.stderr).toMatch(/past Solana's 1232: `sauce run` stages the program/);
   });
 
+  it("names each account a Solana cook cannot derive, what suits it, and the file that gives them all", async () => {
+    const program = file(
+      "sweep.sauce.ts",
+      [
+        "function main(tokenProgram: Account, source: Account<Writable>, dest: Account<Writable>, authority: Account<Signer>, mint: Address, amount: Uint256) {",
+        "  transfer(mint, tokenProgram, source, dest, authority, amount);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const compiled = await sauce("compile", program, "--chain", "solana", "--json");
+    expect(json(compiled).accountsToGive).toEqual([
+      { name: "tokenProgram", requires: "readonly", forms: ["program:<token>", "<address>"] },
+      {
+        name: "source",
+        requires: "writable",
+        forms: ["pot:<token>", "owner:<token>", "@<argument>:<token>", "<address>"],
+      },
+      {
+        name: "dest",
+        requires: "writable",
+        forms: ["pot:<token>", "owner:<token>", "@<argument>:<token>", "<address>"],
+      },
+      { name: "authority", requires: "readonly_signer", forms: ["pot", "owner"] },
+    ]);
+    // Cooked directly, nothing signs for a Pot, and no Pot holds a token account.
+    const direct = json(
+      await sauce("compile", program, "--chain", "solana", "--json", "--via", "engine"),
+    ).accountsToGive as { name: string; forms: string[] }[];
+    expect(direct.find((slot) => slot.name === "authority")!.forms).toEqual(["owner"]);
+    expect(direct.find((slot) => slot.name === "source")!.forms[0]).toBe("owner:<token>");
+
+    // A cook is refused for them before any endpoint is read, with the file to fill in.
+    const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const owner = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+    const cook = ["tx", program, "--chain", "solana", "--owner", owner];
+    const unreachable = ["--rpc-url", "http://127.0.0.1:1", "--args", usdc, "400"];
+    const missing = await sauce(...cook, ...unreachable);
+    expect(missing.code).toBe(2);
+    expect(missing.stderr).toContain(
+      "main takes 4 accounts the cook cannot derive, so each is given by name:\n" +
+        "  tokenProgram (readonly)      program:<token> (a token's program), <address>\n",
+    );
+    const skeleton =
+      '{"tokenProgram":"program:<token>","source":"pot:<token>","dest":"pot:<token>","authority":"pot"}';
+    expect(missing.stderr).toContain(
+      `--accounts <file>, a JSON object of each name to its value: ${skeleton}\n`,
+    );
+    expect(missing.stderr).toContain(
+      "  authority (readonly_signer)  pot (the Pot, which the Kitchen",
+    );
+    // That file, filled in, is taken as it is: the cook gets past its accounts to the endpoint.
+    const filled = file(
+      "accounts.json",
+      skeleton.replace(/<token>/g, "USDC").replace('"dest":"pot:USDC"', '"dest":"owner:USDC"'),
+    );
+    const given = await sauce(...cook, "--accounts", filled, ...unreachable);
+    expect(given.stderr).not.toContain("cannot derive");
+    expect(given.stderr).toContain("reading the Kitchen's fee config failed");
+  });
+
   it("takes a Solana key as the 32 bytes of hex it prints one in, wherever it takes base58", async () => {
     const owner = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
     const hexOf = (key: string): string =>

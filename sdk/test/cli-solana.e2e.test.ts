@@ -1118,11 +1118,12 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(failed.stdout).toMatch(/insufficient funds/i);
     // Nothing was sent by either.
     expect(rpc.sent.length).toBe(1);
-    // A slot the program takes, left out, is named with the role it needs.
+    // A slot the program takes, left out, is named with the role it needs and what suits it.
     const missing = await sauce(...base, "--salt", "vault", "--rpc-url", RPC_URL, "--args", "1");
     expect(missing.stderr).toMatch(
-      /missing --account for tokenProgram \(readonly\), source \(writable\)/,
+      /cannot derive, so each is given by name:\n {2}tokenProgram \(readonly\) +program:<token>/,
     );
+    expect(missing.stderr).toMatch(/\n {2}source \(writable\) +pot:<token>/);
   }, 60_000);
 
   it("`sauce simulate` shows what the cook moved, from the accounts as it leaves them", async () => {

@@ -896,6 +896,121 @@ export async function resolveTokenAccounts(
   return { accounts, named };
 }
 
+/** One account of a program's that a cook cannot derive: what to give it, by its role. */
+export interface SvmAccountToGive {
+  readonly name: string;
+  /** The role the program declares: `readonly`, `writable`, `readonly_signer`, `writable_signer`. */
+  readonly requires: string;
+  /** The values that suit the role, as `--account` takes them, the likeliest first. */
+  readonly forms: readonly string[];
+}
+
+/**
+ * The values that suit a slot of `requires`, as `--account` takes them, the likeliest first: its
+ * name only orders them (`tokenProgram`, a program; `mint`, a mint), as the program alone says what
+ * the account is.
+ */
+function formsFor(name: string, requires: string, via: CookVia): string[] {
+  if (/signer/.test(requires)) return via === "engine" ? ["owner"] : ["pot", "owner"];
+  const holders =
+    via === "engine"
+      ? ["owner:<token>", "@<argument>:<token>"]
+      : ["pot:<token>", "owner:<token>", "@<argument>:<token>"];
+  if (requires === "writable") return [...holders, "<address>"];
+  if (/system/i.test(name)) return ["system", "<address>"];
+  if (/program$/i.test(name)) return ["program:<token>", "<address>"];
+  if (/mint$/i.test(name)) return ["mint:<token>", "<address>"];
+
+  return ["<address>", ...holders, "mint:<token>", "program:<token>"];
+}
+
+/**
+ * The accounts of `manifest` no derivation fills and `given` does not name, in the program's
+ * order: what a cook must be told. `derived` is the program's own (`derivedAccounts`): the accounts
+ * it names where it uses them, which every cook fills by itself.
+ */
+export function svmAccountsToGive(
+  manifest: AccountManifest,
+  derived: Readonly<Record<string, string>> | undefined,
+  given: Readonly<Record<string, string>> = {},
+  via: CookVia = "kitchen",
+): SvmAccountToGive[] {
+  return manifest.accounts.flatMap((entry) =>
+    entry.kind !== "slot" ||
+    Object.hasOwn(given, entry.name) ||
+    Object.hasOwn(derived ?? {}, entry.name)
+      ? []
+      : [
+          {
+            name: entry.name,
+            requires: entry.requires,
+            forms: formsFor(entry.name, entry.requires, via),
+          },
+        ],
+  );
+}
+
+/** What each value form is, for a person. */
+const FORM_MEANS: Readonly<Record<string, string>> = {
+  pot: "the Pot, which the Kitchen signs for",
+  owner: "the signer",
+  "pot:<token>": "the Pot's account for a token",
+  system: "the System Program",
+  "program:<token>": "a token's program",
+  "mint:<token>": "a token's mint",
+};
+
+/**
+ * Why a cook cannot be built yet, and how to say each account: one line per account the program
+ * takes that nothing derives, then a file `--accounts` takes them all from, to fill in.
+ */
+export function svmAccountsToGiveMessage(missing: readonly SvmAccountToGive[]): string {
+  const width = Math.max(...missing.map((slot) => `${slot.name} (${slot.requires})`.length));
+  const lines = missing.map((slot) => {
+    const forms = slot.forms.map((form) =>
+      FORM_MEANS[form] === undefined ? form : `${form} (${FORM_MEANS[form]})`,
+    );
+
+    return `  ${`${slot.name} (${slot.requires})`.padEnd(width)}  ${forms.join(", ")}`;
+  });
+  const file = JSON.stringify(
+    Object.fromEntries(missing.map((slot) => [slot.name, slot.forms[0]])),
+  );
+
+  return (
+    `main takes ${missing.length === 1 ? "an account" : `${missing.length} accounts`} the cook ` +
+    `cannot derive, so ${missing.length === 1 ? "it is" : "each is"} given by name:\n` +
+    `${lines.join("\n")}\n` +
+    "Give each with --account NAME=<value>, or all at once with --accounts <file>, a JSON object " +
+    `of each name to its value: ${file}\n` +
+    "A token is a symbol (sauce globals --chain solana) or a mint's address. Or name the account " +
+    "where the program uses it, and every cook derives it: USDC.accountOf(Solana.self).writable(), " +
+    "USDC.mint, USDC.tokenProgram, Solana.pda(program, [seeds])."
+  );
+}
+
+/**
+ * Refuses a cook whose `--account`s name an account the program does not take, or leave out one
+ * nothing derives — before anything is read from a cluster, so the refusal needs no endpoint.
+ */
+export function requireSvmAccounts(
+  manifest: AccountManifest,
+  derived: Readonly<Record<string, string>> | undefined,
+  given: Readonly<Record<string, string>>,
+  via: CookVia = "kitchen",
+): void {
+  const names = manifest.accounts.flatMap((entry) => (entry.kind === "slot" ? [entry.name] : []));
+  const unknown = Object.keys(given).filter((name) => !names.includes(name));
+  if (unknown.length > 0) {
+    throw new UsageError(
+      `--account ${unknown[0]}: the program has no account by that name` +
+        (names.length === 0 ? "" : `; it takes ${names.join(", ")}`),
+    );
+  }
+  const missing = svmAccountsToGive(manifest, derived, given, via);
+  if (missing.length > 0) throw new UsageError(svmAccountsToGiveMessage(missing));
+}
+
 /**
  * Each slot of the manifest resolved from `--account`. The Pot goes in unsigned: the Kitchen signs
  * for it — and, cooked directly (`via` engine), nothing does, so a slot that must sign cannot be
@@ -916,21 +1031,7 @@ function resolution(
         "attach yet: build that cook with the SDK's Solana client",
     );
   }
-  const names = slots.map((slot) => slot.name);
-  const unknown = Object.keys(given).filter((name) => !names.includes(name));
-  if (unknown.length > 0) {
-    throw new UsageError(
-      `--account ${unknown[0]}: the program has no account by that name` +
-        (names.length === 0 ? "" : `; it takes ${names.join(", ")}`),
-    );
-  }
-  const missing = slots.filter((slot) => !Object.hasOwn(given, slot.name));
-  if (missing.length > 0) {
-    throw new UsageError(
-      `missing --account for ${missing.map((slot) => `${slot.name} (${slot.requires})`).join(", ")}: ` +
-        "pass --account NAME=<address | pot | owner> for each",
-    );
-  }
+  requireSvmAccounts(manifest, undefined, given, via);
   const resolved: AccountResolution = {};
   for (const slot of slots) {
     const value = given[slot.name]!;
@@ -1322,6 +1423,7 @@ async function prepare(
   const program = compileProgram(input, files);
   const bytecode = svmPayload(program, input.args);
   const manifest = program.manifest ?? { accounts: [] };
+  requireSvmAccounts(manifest, program.derivedAccounts, input.accounts, via);
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
   // The slots the token methods added that no `--account` gave: the command derives each.
