@@ -483,6 +483,17 @@ describe("sauce compile", () => {
       ...["--args", "4295128740"],
     );
     expect(fine.stderr).toBe("");
+    // A price in a token's units, named priceLimit, is no sqrt price: no note, whatever its size.
+    const units = await sauce(
+      "compile",
+      file(
+        "units.sauce.ts",
+        "function main(priceLimit: Uint256) {\n  require(priceLimit > 0);\n}\n",
+      ),
+      ...["--chain", "base", "--args", "2713500000"],
+    );
+    expect(units.code).toBe(0);
+    expect(units.stderr).toBe("");
   });
 
   it("refuses an intent deadline that has passed, which no solver could ever fill", async () => {

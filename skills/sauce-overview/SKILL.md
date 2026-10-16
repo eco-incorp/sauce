@@ -208,7 +208,7 @@ the owner rather than repeat it.
 ### `sauce-distributed-swap`
 
 - **Owns**: one exact-input order over several price-limited pools under one maximum price: the
-  rules, `maxPrice`, `minTokens` and `maxAvgPrice`, setting the price, simulating it, and the
+  rules, `priceLimit`, `minTokens` and `maxAvgPrice`, setting the price, simulating it, and the
   complete program for EVM chains.
 - **Load**: when an order should take the best of several pools or stop at a price, on an EVM
   chain.
