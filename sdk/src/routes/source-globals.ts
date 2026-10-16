@@ -8,7 +8,7 @@
  *   bare `USDC` resolve. On Solana they are the cluster's mints: a bare `USDC` is the mint's 32-byte
  *   key, and the token syntax adds the accounts it moves through to `main`.
  * - **venues**: on Solana, each price-limit venue a program swaps at by its namespace
- *   (`OrcaWhirlpool.swap(pool, …)`, `svm-venue-methods.ts`).
+ *   (`Orca.Whirlpool.swap(pool, …)`, `svm-venue-methods.ts`).
  * - **accounts**: on Solana, the accounts a program writes where it uses them (`Solana.pda(…)`,
  *   `USDC.accountOf(holder)`, `svm-account-expressions.ts`).
  * - **protocols**: every `<Protocol>[.<Contract>]` reference the protocol-accessor rewrite resolves
@@ -149,7 +149,7 @@ export interface SourceModule {
   readonly functions: readonly string[];
 }
 
-/** A Solana venue a program swaps at by its namespace (`OrcaWhirlpool.swap(pool, …)`). */
+/** A Solana venue a program swaps at by its namespace (`Orca.Whirlpool.swap(pool, …)`). */
 export interface SourceVenue {
   readonly namespace: string;
   /** The venue's name for a person. */

@@ -22,7 +22,7 @@ async function swapOn(chain: SolanaTestChain) {
     {
       source:
         "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  return OrcaWhirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+        "  return Orca.Whirlpool.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
     },
     { args: [pinnedPool("orca-whirlpool-sol-usdc"), 100_000_000n, 10n ** 30n] },
   );
