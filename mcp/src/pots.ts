@@ -44,8 +44,11 @@ const POTS_OUTPUT = {
 
 const OWNER = z
   .string()
-  .max(64)
-  .describe("A Pot's owner: a 0x address on an EVM chain, a base58 public key on Solana.");
+  .max(66)
+  .describe(
+    "A Pot's owner: a 0x address on an EVM chain; on Solana a public key, in base58 or as its 32 " +
+      "bytes of 0x hex.",
+  );
 
 export function registerPotTools(server: McpServer, context: ToolContext, store: PotStore): void {
   const tool = toolRegistrar(server, context);

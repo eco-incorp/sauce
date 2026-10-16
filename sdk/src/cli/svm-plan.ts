@@ -86,6 +86,7 @@ import {
   GROWTH_STEP,
   KITCHEN_DISCRIMINATORS,
   LOOKUP_TABLE_MAX_ADDRESSES,
+  lookupTableAddresses,
   lookupTableBatches,
   MAX_CODE_LEN,
   MAX_POT_LEN,
@@ -640,25 +641,6 @@ async function sizeOf(
   return getTransactionSize(transaction);
 }
 
-/**
- * The accounts of `transaction` a lookup table may hold: every account its message lists, less the
- * signers and the programs its instructions call, which a transaction must list itself.
- */
-export function tableAddresses(transaction: Transaction): Address[] {
-  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
-    header: { numSignerAccounts: number };
-    staticAccounts: readonly Address[];
-    instructions: readonly { programAddressIndex: number }[];
-  };
-  const called = new Set(
-    message.instructions.map((instruction) => instruction.programAddressIndex),
-  );
-
-  return message.staticAccounts.filter(
-    (_, index) => index >= message.header.numSignerAccounts && !called.has(index),
-  );
-}
-
 export interface NewPlanInput {
   readonly owner: Address;
   readonly salt: Hex;
@@ -736,7 +718,7 @@ export async function newSvmPlan(input: NewPlanInput): Promise<SvmPlan> {
         "give a table holding every account the cook names, or none and one is created",
     );
   }
-  const addresses = tableAddresses(
+  const addresses = lookupTableAddresses(
     await buildExecuteTransaction({
       payer: signer,
       instructions,

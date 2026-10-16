@@ -1,15 +1,19 @@
 import {
   appendTransactionMessageInstructions,
   assertIsTransactionWithBlockhashLifetime,
+  compileTransaction,
   compressTransactionMessageUsingAddressLookupTables,
   createTransactionMessage,
   pipe,
+  setTransactionMessageFeePayer,
   setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners,
 } from "@solana/kit";
 import type {
+  Address,
   AddressesByLookupTableAddress,
+  Blockhash,
   BlockhashLifetimeConstraint,
   Instruction,
   SendableTransaction,
@@ -59,4 +63,41 @@ export async function buildExecuteTransaction({
   assertIsTransactionWithBlockhashLifetime(transaction);
 
   return transaction;
+}
+
+/** A blockhash for a transaction only measured: its size and its accounts do not depend on it. */
+const MEASURING_BLOCKHASH: BlockhashLifetimeConstraint = {
+  blockhash: "11111111111111111111111111111111" as Blockhash,
+  lastValidBlockHeight: 0n,
+};
+
+export interface MeasureExecuteTransactionInput {
+  feePayer: Address;
+  instructions: readonly Instruction[];
+  lookupTables?: AddressesByLookupTableAddress;
+}
+
+/**
+ * The transaction `buildExecuteTransaction` builds from the same fee payer, instructions and
+ * tables, compiled with no signature and a placeholder blockhash: what it measures
+ * (`getTransactionSize`) and the accounts it lists (`lookupTableAddresses`), known without a
+ * blockhash and without asking any signer for anything.
+ */
+export function measureExecuteTransaction({
+  feePayer,
+  instructions,
+  lookupTables,
+}: MeasureExecuteTransactionInput): Transaction {
+  const message = pipe(
+    createTransactionMessage({ version: 0 }),
+    (m) => setTransactionMessageFeePayer(feePayer, m),
+    (m) => appendTransactionMessageInstructions(instructions, m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash(MEASURING_BLOCKHASH, m),
+  );
+
+  return compileTransaction(
+    lookupTables
+      ? compressTransactionMessageUsingAddressLookupTables(message, lookupTables)
+      : message,
+  );
 }

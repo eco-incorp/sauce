@@ -14,6 +14,7 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { basename, dirname } from "node:path";
 
 import {
   AccountRole,
@@ -29,7 +30,6 @@ import {
   getSignatureFromTransaction,
   getTransactionDecoder,
   getTransactionSize,
-  isAddress,
   signTransaction,
   lamports,
   type Address,
@@ -60,6 +60,7 @@ import {
   isSvmAccountName,
   resolveSvmAccountName,
   SvmAccountNameError,
+  svmPublicKey,
   SYSTEM_HOLDER,
   type ResolvedSvmAccountName,
   type SvmMintProgramOf,
@@ -92,6 +93,7 @@ import {
   type EngineFault,
   engineFaultName,
   fetchAlt,
+  lookupTableAddresses,
   GROWTH_STEP,
   MAX_POT_LEN,
   resolveAccounts,
@@ -102,6 +104,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   TRANSACTION_SIZE_LIMIT,
+  associatedTokenAccountLength,
 } from "../svm/index.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
@@ -134,6 +137,7 @@ import {
   svmLeftInPotJson,
   svmLeftInPotLines,
   svmMovedJson,
+  type SvmSetupCost,
   svmMovedLines,
   writableAccounts,
 } from "./svm-effects.js";
@@ -145,7 +149,6 @@ import {
   nextStep,
   planBuffer,
   signableStep,
-  tableAddresses,
   unsignedSigner,
   type CookHandedOut,
   type PlanStep,
@@ -159,13 +162,19 @@ import {
 const kitchen = (): Address => address(v12SvmKitchenProgramId());
 const engine = (): Address => address(v12SvmEngineProgramId());
 
-/** A Solana public key from a flag, or a usage error naming the flag. */
+/**
+ * A Solana public key from a flag, in base58 or as the 32 bytes of hex the command prints a key in
+ * too (`svmPublicKey`), or a usage error naming the flag.
+ */
 export function parsePubkey(flag: string, raw: string): Address {
-  if (!isAddress(raw)) {
-    throw new UsageError(`--${flag}: '${raw}' is not a Solana address (a base58 public key)`);
+  const key = svmPublicKey(raw);
+  if (key === undefined) {
+    throw new UsageError(
+      `--${flag}: '${raw}' is not a Solana address (a base58 public key, or its 32 bytes as 0x hex)`,
+    );
   }
 
-  return address(raw);
+  return key;
 }
 
 /**
@@ -182,6 +191,7 @@ export async function loadKeypair(path: string, files: CliFiles): Promise<KeyPai
   }
   secret(text.trim());
   let bytes: Uint8Array | undefined;
+  let wallet = false;
   try {
     const parsed = JSON.parse(text) as unknown;
     if (
@@ -191,8 +201,22 @@ export async function loadKeypair(path: string, files: CliFiles): Promise<KeyPai
     ) {
       bytes = Uint8Array.from(parsed as number[]);
     }
+    // A wallet `sauce wallet` keeps: the same keypair, encrypted under its password.
+    wallet =
+      typeof parsed === "object" &&
+      parsed !== null &&
+      (parsed as { kind?: unknown }).kind === "solana" &&
+      typeof (parsed as { crypto?: unknown }).crypto === "object";
   } catch {
     // Reported below, without the text.
+  }
+  if (wallet) {
+    const name = basename(path).replace(/\.json$/, "");
+    throw new UsageError(
+      `--keypair ${path} is a sauce wallet, its keypair encrypted: sign with --wallet ${name} ` +
+        `--wallets ${dirname(path)} (--wallet ${name} alone for one in ~/.sauce/wallets), which ` +
+        "unlocks it with its password",
+    );
   }
   if (bytes === undefined) {
     throw new UsageError(
@@ -803,10 +827,8 @@ export function svmKeyArguments(
       return;
     }
     if (param.type !== "Address" || typeof value !== "string") return;
-    if (isAddress(value)) keys[param.name] = address(value);
-    else if (/^0x[0-9a-fA-F]{64}$/.test(value)) {
-      keys[param.name] = getBase58Decoder().decode(hexToBytes(value as Hex)) as Address;
-    }
+    const key = svmArgumentKey(value, program.chain);
+    if (key !== undefined) keys[param.name] = key;
   });
 
   return { keys, integers };
@@ -891,6 +913,121 @@ export async function resolveTokenAccounts(
   return { accounts, named };
 }
 
+/** One account of a program's that a cook cannot derive: what to give it, by its role. */
+export interface SvmAccountToGive {
+  readonly name: string;
+  /** The role the program declares: `readonly`, `writable`, `readonly_signer`, `writable_signer`. */
+  readonly requires: string;
+  /** The values that suit the role, as `--account` takes them, the likeliest first. */
+  readonly forms: readonly string[];
+}
+
+/**
+ * The values that suit a slot of `requires`, as `--account` takes them, the likeliest first: its
+ * name only orders them (`tokenProgram`, a program; `mint`, a mint), as the program alone says what
+ * the account is.
+ */
+function formsFor(name: string, requires: string, via: CookVia): string[] {
+  if (/signer/.test(requires)) return via === "engine" ? ["owner"] : ["pot", "owner"];
+  const holders =
+    via === "engine"
+      ? ["owner:<token>", "@<argument>:<token>"]
+      : ["pot:<token>", "owner:<token>", "@<argument>:<token>"];
+  if (requires === "writable") return [...holders, "<address>"];
+  if (/system/i.test(name)) return ["system", "<address>"];
+  if (/program$/i.test(name)) return ["program:<token>", "<address>"];
+  if (/mint$/i.test(name)) return ["mint:<token>", "<address>"];
+
+  return ["<address>", ...holders, "mint:<token>", "program:<token>"];
+}
+
+/**
+ * The accounts of `manifest` no derivation fills and `given` does not name, in the program's
+ * order: what a cook must be told. `derived` is the program's own (`derivedAccounts`): the accounts
+ * it names where it uses them, which every cook fills by itself.
+ */
+export function svmAccountsToGive(
+  manifest: AccountManifest,
+  derived: Readonly<Record<string, string>> | undefined,
+  given: Readonly<Record<string, string>> = {},
+  via: CookVia = "kitchen",
+): SvmAccountToGive[] {
+  return manifest.accounts.flatMap((entry) =>
+    entry.kind !== "slot" ||
+    Object.hasOwn(given, entry.name) ||
+    Object.hasOwn(derived ?? {}, entry.name)
+      ? []
+      : [
+          {
+            name: entry.name,
+            requires: entry.requires,
+            forms: formsFor(entry.name, entry.requires, via),
+          },
+        ],
+  );
+}
+
+/** What each value form is, for a person. */
+const FORM_MEANS: Readonly<Record<string, string>> = {
+  pot: "the Pot, which the Kitchen signs for",
+  owner: "the signer",
+  "pot:<token>": "the Pot's account for a token",
+  system: "the System Program",
+  "program:<token>": "a token's program",
+  "mint:<token>": "a token's mint",
+};
+
+/**
+ * Why a cook cannot be built yet, and how to say each account: one line per account the program
+ * takes that nothing derives, then a file `--accounts` takes them all from, to fill in.
+ */
+export function svmAccountsToGiveMessage(missing: readonly SvmAccountToGive[]): string {
+  const width = Math.max(...missing.map((slot) => `${slot.name} (${slot.requires})`.length));
+  const lines = missing.map((slot) => {
+    const forms = slot.forms.map((form) =>
+      FORM_MEANS[form] === undefined ? form : `${form} (${FORM_MEANS[form]})`,
+    );
+
+    return `  ${`${slot.name} (${slot.requires})`.padEnd(width)}  ${forms.join(", ")}`;
+  });
+  const file = JSON.stringify(
+    Object.fromEntries(missing.map((slot) => [slot.name, slot.forms[0]])),
+  );
+
+  return (
+    `main takes ${missing.length === 1 ? "an account" : `${missing.length} accounts`} the cook ` +
+    `cannot derive, so ${missing.length === 1 ? "it is" : "each is"} given by name:\n` +
+    `${lines.join("\n")}\n` +
+    "Give each with --account NAME=<value>, or all at once with --accounts <file>, a JSON object " +
+    `of each name to its value: ${file}\n` +
+    "A token is a symbol (sauce globals --chain solana) or a mint's address. Or name the account " +
+    "where the program uses it, and every cook derives it: USDC.accountOf(Solana.self).writable(), " +
+    "USDC.mint, USDC.tokenProgram, Solana.pda(program, [seeds])."
+  );
+}
+
+/**
+ * Refuses a cook whose `--account`s name an account the program does not take, or leave out one
+ * nothing derives — before anything is read from a cluster, so the refusal needs no endpoint.
+ */
+export function requireSvmAccounts(
+  manifest: AccountManifest,
+  derived: Readonly<Record<string, string>> | undefined,
+  given: Readonly<Record<string, string>>,
+  via: CookVia = "kitchen",
+): void {
+  const names = manifest.accounts.flatMap((entry) => (entry.kind === "slot" ? [entry.name] : []));
+  const unknown = Object.keys(given).filter((name) => !names.includes(name));
+  if (unknown.length > 0) {
+    throw new UsageError(
+      `--account ${unknown[0]}: the program has no account by that name` +
+        (names.length === 0 ? "" : `; it takes ${names.join(", ")}`),
+    );
+  }
+  const missing = svmAccountsToGive(manifest, derived, given, via);
+  if (missing.length > 0) throw new UsageError(svmAccountsToGiveMessage(missing));
+}
+
 /**
  * Each slot of the manifest resolved from `--account`. The Pot goes in unsigned: the Kitchen signs
  * for it — and, cooked directly (`via` engine), nothing does, so a slot that must sign cannot be
@@ -911,21 +1048,7 @@ function resolution(
         "attach yet: build that cook with the SDK's Solana client",
     );
   }
-  const names = slots.map((slot) => slot.name);
-  const unknown = Object.keys(given).filter((name) => !names.includes(name));
-  if (unknown.length > 0) {
-    throw new UsageError(
-      `--account ${unknown[0]}: the program has no account by that name` +
-        (names.length === 0 ? "" : `; it takes ${names.join(", ")}`),
-    );
-  }
-  const missing = slots.filter((slot) => !Object.hasOwn(given, slot.name));
-  if (missing.length > 0) {
-    throw new UsageError(
-      `missing --account for ${missing.map((slot) => `${slot.name} (${slot.requires})`).join(", ")}: ` +
-        "pass --account NAME=<address | pot | owner> for each",
-    );
-  }
+  requireSvmAccounts(manifest, undefined, given, via);
   const resolved: AccountResolution = {};
   for (const slot of slots) {
     const value = given[slot.name]!;
@@ -1074,6 +1197,57 @@ async function missingAccounts(
   });
 }
 
+/**
+ * For a cook that failed: each writable account `--account` gave as a wallet — the owner, or an
+ * address the System Program owns that holds no data — where a token account was likely meant,
+ * since a token program refuses a wallet as one (InvalidAccountData). Each says the form that
+ * names the wallet's token account. Read only once a cook fails: a wallet is right for SOL.
+ */
+async function walletHints(prepared: Prepared, input: SvmCookInput): Promise<string[]> {
+  const writable = new Set(
+    prepared.manifest.accounts.flatMap((entry) =>
+      entry.kind === "slot" && /writable/.test(entry.requires) ? [entry.name] : [],
+    ),
+  );
+  // Each as given and as resolved: `self` is the Pot through the Kitchen, the owner directly.
+  const plain = Object.entries(input.accounts).flatMap(([name, value]) => {
+    const resolved = prepared.given.accounts[name];
+    if (!writable.has(name) || prepared.derived.has(name) || prepared.given.named.has(name)) {
+      return [];
+    }
+    const key = resolved === "owner" ? input.owner : svmPublicKey(resolved ?? "");
+
+    return key === undefined ? [] : [{ name, value, key, owner: resolved === "owner" }];
+  });
+  if (plain.length === 0) return [];
+  let found: readonly ({ owner: string; data: readonly string[] } | null)[];
+  try {
+    ({ value: found } = await prepared.rpc
+      .getMultipleAccounts(
+        plain.map((one) => one.key),
+        { encoding: "base64" },
+      )
+      .send());
+  } catch {
+    // A hint, never a failure of its own.
+    return [];
+  }
+
+  return plain.flatMap(({ name, value, owner }, index) => {
+    const account = found[index];
+    const wallet =
+      owner || (account != null && account.owner === SYSTEM_PROGRAM && account.data[0] === "");
+    if (!wallet) return [];
+
+    return [
+      `--account ${name}=${value}: ${owner ? "the owner" : value} is a wallet, which ` +
+        "holds SOL and no token. Where the program moves or reads a token through " +
+        `${name}, give the wallet's token account instead: --account ${name}=${value}:<token> ` +
+        `(${value}:USDC for its USDC account), which sauce run creates where it is missing`,
+    ];
+  });
+}
+
 /** How a note names a slot: by the `--account` that gave it, or as an account the SDK derived. */
 const slotLabel = (name: string, derived: ReadonlySet<string>): string =>
   derived.has(name) ? `the account ${name}` : `--account ${name}`;
@@ -1093,29 +1267,49 @@ const createPotInstruction = (target: SvmTarget, pot: Address): Instruction =>
   });
 
 /**
- * A value of `type` with every `Address` in it as the word the engine reads on Solana: the public
- * key's 32 bytes, whole. A key is given in base58, or as 32 bytes of hex.
+ * The key main's `Address` argument `value` gives on Solana: a public key in base58 or as 32 bytes
+ * of hex, or a token `chain` registers — by its symbol (`USDC`, a stock's in any case), or as
+ * `mint:USDC`, the name `--account` gives a mint by — as its mint. `undefined` for anything else.
  */
-function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
+export function svmArgumentKey(value: string, chain: CanonicalChain): Address | undefined {
+  const key = svmPublicKey(value);
+  if (key !== undefined) return key;
+  const token = value.startsWith("mint:") ? value.slice("mint:".length) : value;
+  const row = svmTokenRows(chain).find(
+    (candidate) => candidate.symbol.toUpperCase() === token.toUpperCase(),
+  );
+
+  return row === undefined ? svmPublicKey(token) : address(row.mint);
+}
+
+/**
+ * A value of `type` with every `Address` in it as the word the engine reads on Solana: the public
+ * key's 32 bytes, whole, from any spelling `svmArgumentKey` takes.
+ */
+function keyWords(
+  type: EntryType,
+  value: EntryValue,
+  at: string,
+  chain: CanonicalChain,
+): EntryValue {
   switch (type.kind) {
     case "address": {
-      if (typeof value === "string" && isAddress(value)) {
-        return bytesToHex(new Uint8Array(getAddressEncoder().encode(address(value))));
-      }
-      if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)) return value;
+      const key = typeof value === "string" ? svmArgumentKey(value, chain) : undefined;
+      if (key !== undefined) return bytesToHex(new Uint8Array(getAddressEncoder().encode(key)));
       throw new TypeError(
-        `${at}: ${JSON.stringify(value)} is not a Solana public key (base58, or 32 bytes of hex)`,
+        `${at}: ${JSON.stringify(value)} is not a Solana public key (base58, or 32 bytes of hex), ` +
+          `nor a token ${chain.slug} registers (USDC, or mint:USDC, for its mint)`,
       );
     }
     case "array":
       return Array.isArray(value)
-        ? value.map((item, index) => keyWords(type.of, item, `${at}[${index}]`))
+        ? value.map((item, index) => keyWords(type.of, item, `${at}[${index}]`, chain))
         : value;
     case "tuple": {
       if (Array.isArray(value)) {
         return value.map((item, index) =>
           index < type.fields.length
-            ? keyWords(type.fields[index]!.type, item, `${at}.${type.fields[index]!.name}`)
+            ? keyWords(type.fields[index]!.type, item, `${at}.${type.fields[index]!.name}`, chain)
             : item,
         );
       }
@@ -1126,7 +1320,10 @@ function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
         Object.entries(record).map(([name, item]) => {
           const field = type.fields.find((candidate) => candidate.name === name);
 
-          return [name, field === undefined ? item : keyWords(field.type, item, `${at}.${name}`)];
+          return [
+            name,
+            field === undefined ? item : keyWords(field.type, item, `${at}.${name}`, chain),
+          ];
         }),
       );
     }
@@ -1167,7 +1364,7 @@ export function svmPayload(program: CompiledSauceProgram, args: ArgsInput | unde
 
               return param === undefined
                 ? value
-                : keyWords(parseEntryType(param.type), value, `${param.name}`);
+                : keyWords(parseEntryType(param.type), value, `${param.name}`, program.chain);
             }),
           })
         : undefined,
@@ -1241,13 +1438,13 @@ export function svmAssumedBalances(raws: readonly string[], chain: CanonicalChai
       );
     }
     const row = rows.find((candidate) => candidate.symbol.toUpperCase() === token.toUpperCase());
-    if (row === undefined && !isAddress(token)) {
+    const mint = row === undefined ? svmPublicKey(token) : address(row.mint);
+    if (mint === undefined) {
       throw new UsageError(
         `--assume-balance ${raw}: ${token} is not a mint ${chain.slug} registers: give its symbol ` +
-          "(sauce globals --chain solana) or its base58 address",
+          "(sauce globals --chain solana) or its address",
       );
     }
-    const mint = address(row?.mint ?? token);
     if (seen.has(mint)) throw new UsageError(`--assume-balance names ${token} twice: give it once`);
     seen.add(mint);
 
@@ -1317,6 +1514,7 @@ async function prepare(
   const program = compileProgram(input, files);
   const bytecode = svmPayload(program, input.args);
   const manifest = program.manifest ?? { accounts: [] };
+  requireSvmAccounts(manifest, program.derivedAccounts, input.accounts, via);
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
   // The slots the token methods added that no `--account` gave: the command derives each.
@@ -1691,6 +1889,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
     };
   }
   const short = await ownerShort(prepared, input, !created);
+  const wallets = await walletHints(prepared, input);
 
   return {
     text: [
@@ -1700,9 +1899,9 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
       ...result.logs.map((l) => `  ${l}`),
     ].join("\n"),
     json,
-    ...(short === undefined && missing.length === 0
+    ...(short === undefined && missing.length === 0 && wallets.length === 0
       ? {}
-      : { notes: [...missing, ...(short === undefined ? [] : [short])] }),
+      : { notes: [...missing, ...wallets, ...(short === undefined ? [] : [short])] }),
     exitCode: 1,
   };
 }
@@ -1800,10 +1999,27 @@ async function stagedRehearsal(
     );
   }
   const notes: string[] = [];
+  // What the first run pays before the cook that the copy does for nothing, for the result to add.
+  const setup: SvmSetupCost[] = [];
+  let made = 0;
   // A Pot's or owner's token account the cluster does not have yet is made, empty, in the copy:
   // `sauce run` does not make it, so the note says to.
   for (const [name, token] of prepared.given.named) {
     if (token.account === undefined || fork.account(token.address) !== null) continue;
+    // The run creates it with the Associated Token Account program, which sizes a Token-2022
+    // account for the extensions its mint requires.
+    made++;
+    setup.push({
+      what: `creating ${token.label}, ${token.address}: its rent`,
+      lamports: fork.svm.minimumBalanceForRentExemption(
+        BigInt(
+          associatedTokenAccountLength(
+            fork.account(token.account.mint)?.data ?? new Uint8Array(),
+            token.account.program === TOKEN_2022_PROGRAM_ID,
+          ),
+        ),
+      ),
+    });
     fork.tokenAccount(
       token.address,
       token.account.mint,
@@ -1859,9 +2075,22 @@ async function stagedRehearsal(
       );
     }
   };
-  if (!created) await send([createPotInstruction(input, prepared.pot)], "creating the Pot");
+  const funded = fork.svm.getBalance(owner) ?? 0n;
+  let potRent = 0n;
+  if (!created) {
+    await send([createPotInstruction(input, prepared.pot)], "creating the Pot");
+    potRent = fork.account(prepared.pot)?.lamports ?? 0n;
+    setup.push({ what: "creating the Pot: its rent", lamports: potRent });
+  }
+  const potPaid = funded - (fork.svm.getBalance(owner) ?? 0n);
   for (const [index, batch] of staging.entries())
     await send(batch, index === 0 ? "creating the code buffer" : "staging the program");
+  // A cook that fits one transaction is not staged by the run: the copy stages it all the same.
+  const stagingPaid = funded - potPaid - (fork.svm.getBalance(owner) ?? 0n);
+  const bufferRent =
+    (fork.account(codeBuffer)?.lamports ?? 0n) + (fork.account(code)?.lamports ?? 0n);
+  /** What one transaction from the owner costs in fees, as the copy charged the staging. */
+  const feeEach = (stagingPaid - bufferRent) / BigInt(staging.length);
   const tracked = [
     ...new Set(
       (cook.accounts ?? [])
@@ -1879,7 +2108,45 @@ async function stagedRehearsal(
     ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
     cook,
   ];
-  const lookupTables = fork.table(tableAddresses(await transactionOf(instructions)));
+  const unpacked = await transactionOf(instructions);
+  const lookupTables = fork.table(lookupTableAddresses(unpacked));
+  if (!fitsOne) {
+    setup.push({
+      what: "staging the program: the code buffer's rent",
+      lamports: bufferRent,
+      back: "when sauce run closes the buffer after the cook",
+    });
+    // The run takes the cook's accounts through a table of its own where they do not fit without
+    // one, and none was given.
+    const table = lookupTableAddresses(unpacked);
+    const tableTransactions =
+      getTransactionSize(unpacked) > TRANSACTION_SIZE_LIMIT &&
+      Object.keys(prepared.lookupTables).length === 0
+        ? 1 + Math.ceil(table.length / 30)
+        : 0;
+    if (tableTransactions > 0) {
+      setup.push({
+        what: `the lookup table for the cook's ${table.length} accounts: its rent`,
+        lamports: fork.svm.minimumBalanceForRentExemption(BigInt(56 + 32 * table.length)),
+        back: "when sauce reclaim closes the table",
+      });
+    }
+    // A staged cook's Pot is created in a transaction of its own; one that fits may ride along.
+    const transactions =
+      (created ? 0 : 1) + (made > 0 ? 1 : 0) + staging.length + tableTransactions;
+    setup.push({
+      what: `the fees of the ${transactions} transactions before the cook`,
+      lamports:
+        potPaid -
+        potRent +
+        feeEach * BigInt((made > 0 ? 1 : 0) + staging.length + tableTransactions),
+    });
+  } else if (made > 0) {
+    setup.push({
+      what: "the fee of the transaction that creates the token accounts",
+      lamports: feeEach,
+    });
+  }
   const cookTransaction = await buildExecuteTransaction({
     payer: signer,
     instructions,
@@ -1893,9 +2160,13 @@ async function stagedRehearsal(
   const failed = !simulated.ok;
   const { logs, units, returnData, after } = simulated;
   const labels = await accountLabels(input, prepared.pot, prepared.given);
-  const moved = failed
+  const cooked = failed
     ? undefined
     : await movedBy(prepared.rpc, input.chain, tracked, before, after, labels, owner);
+  const moved =
+    cooked === undefined
+      ? undefined
+      : { ...cooked, setup: setup.filter((cost) => cost.lamports > 0n) };
   // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
   const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
   // What main returned stands even when the transaction then fails on its own (a rent check, say):
@@ -2383,11 +2654,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   }
   if (step.wait !== undefined) throw new CliError(`${step.wait}${await closedAgain()}`);
   if (step.fails !== undefined) {
+    const wallets = await walletHints(prepared, input);
     throw new CliError(
       `the cook would fail, so it was not sent: ${step.fails.reason}` +
         (step.fails.logs.length === 0
           ? ""
           : `\nProgram logs:\n${step.fails.logs.map((l) => `  ${l}`).join("\n")}`) +
+        wallets.map((hint) => `\n${hint}`).join("") +
         (await closedAgain()),
     );
   }

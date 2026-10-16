@@ -88,9 +88,29 @@ It runs with `sauce run wrap.sauce.ts --chain solana --keypair <keypair> --args 
 
 ## Venues by namespace
 
-A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain:
+A swap at one pool of a venue whose swap stops at a price limit is that venue's namespace, as a protocol's is on an EVM chain. This program is [solana-swap.sauce.ts](../examples/solana-swap.sauce.ts), and [solana-swap.ts](../examples/solana-swap.ts) compiles it and lists the accounts every cook derives for it:
 
 ```ts
+// Solana: buy WSOL with up to `amountIn` of the Pot's USDC at one Orca whirlpool, never paying more
+// than `maxPrice` for any unit, and send what arrived to `to`. The pool is main's argument, and
+// compiling adds every account the swap takes to main — the pool's nine, read from the pool when the
+// cook is built, and the Pot's own — so the command is given none. A pool already past `maxPrice` is
+// skipped (`trySwap` returns 0, and nothing moves); below `minOut` the whole transaction reverts.
+//
+//   sauce run solana-swap.sauce.ts --chain <chain> --keypair <keypair> \
+//     --args <pool> <to> <amountIn> <maxPrice> <minOut>
+//
+//   pool: Address       an Orca whirlpool trading USDC and WSOL (sauce pools --chain solana USDC WSOL)
+//   to: Address         who gets the WSOL bought: a wallet's key
+//   amountIn: Uint256   the most USDC to pay, in its smallest units (6 decimals): 100000000 is 100
+//   maxPrice: Uint256   the most one WSOL may cost, fee included: USDC base units per WSOL base unit,
+//                       times 10^18 (sauce pools prints each pool's own as maxPrice)
+//   minOut: Uint256     the least WSOL to receive, in its smallest units (9 decimals)
+//
+// On Solana, 100 USDC at up to 200 USDC per SOL, for at least 0.4 SOL:
+//
+//   sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
+//     --args <pool> <recipient> 100000000 200000000000000000 400000000
 function main(
   pool: Address,
   to: Address,
@@ -112,6 +132,8 @@ The namespaces are `RaydiumClmm`, `PancakeswapClmm`, `Byreal`, `StabbleClmm`, `O
   - The trader's are the Pot's.
   - What is bought lands in the Pot's own account for `tokenOut`, which `sauce run` creates when it is missing.
 - **What must be known.** The pool and both tokens are each a parameter of `main` declared `Address`, a 32-byte key, or (a token) a registered symbol. A pool no price-limit venue owns is refused before the cook; another venue's pool reverts on chain.
+
+`Solana.swap` and `Solana.trySwap` take the same arguments at a pool of any of the nine: the venue is read from the pool's owner as the program runs, so a program can take its pools as `main`'s arguments without knowing their venues, and still name no account. Each such call carries every venue's code, a larger program than one venue's. A pool given as the System Program, `11111111111111111111111111111111`, is an empty slot, which `trySwap` skips.
 
 `sauce globals --chain solana` lists the namespaces under Venues. [The distributed swap on Solana](solana-distributed-swap.md) spreads one order over several pools whose venues its program reads as it runs, and takes their accounts itself.
 
@@ -266,7 +288,39 @@ Pass `{ accounts: [...] }` to `simulate` to see what the cook would move: the re
 holds each one's state after the transaction (`lamports`, `owner`, `data`), or `null` where it no
 longer exists, read without sending anything.
 
-After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it. Lookup-table helpers can create or extend an address lookup table and wait until it is usable.
+After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it.
+
+### When the accounts do not fit
+
+A Solana transaction holds at most 1,232 bytes, and every account it lists takes 32 of them, so a cook that names about thirty accounts no longer fits. An address lookup table is the way around it: a list of addresses kept on chain, which a transaction points into for one byte per account instead of 32. You write no code for it:
+
+- `client.execute` and `client.executeStaged` measure the cook first. When it does not fit, they create a lookup table holding exactly the accounts a table may hold (every account the cook lists except its signers and the programs it calls), wait until the table can be used, and send the cook through it. The payer pays the table's rent and owns it. The result's `lookupTableAddress` names the table: pass it as `lookupTable` to a later cook with the same accounts, and the client uses it again, adding any account it lacks. `lookupTable: false` sends the cook as it is.
+- To simulate such a cook first, or to build its transaction yourself, ask for its table with `client.cookLookupTable(bytecode, manifest, resolution)` (`stagedCookLookupTable` for a staged program). It returns `undefined` when the cook fits without one, and otherwise the ready table, whose `lookupTables` you pass on. `simulate` refuses a cook that does not fit and says so.
+
+```ts
+import type { CompileResult } from "@eco-incorp/sauce/compiler";
+import type { AccountResolution, SauceSvmClient } from "@eco-incorp/sauce/svm";
+
+export async function simulateThenSend(
+  client: SauceSvmClient,
+  compiled: CompileResult,
+  accounts: AccountResolution,
+) {
+  if (!compiled.manifest) throw new Error("Expected an SVM account manifest");
+  const table = await client.cookLookupTable(compiled.bytecode, compiled.manifest, accounts);
+  const simulated = await client.simulate(compiled.bytecode, compiled.manifest, accounts, {
+    ...(table === undefined ? {} : { lookupTables: table.lookupTables }),
+  });
+  if (!simulated.ok) throw new Error(`The cook would fail: ${JSON.stringify(simulated.err)}`);
+
+  return client.execute(compiled.bytecode, compiled.manifest, accounts, {
+    computeUnitLimit: "auto",
+    ...(table === undefined ? {} : { lookupTable: table.lookupTableAddress }),
+  });
+}
+```
+
+`ensureLookupTable(addresses)` is the step underneath, for a table of addresses you choose.
 
 ### Select the released programs and quote the fee
 

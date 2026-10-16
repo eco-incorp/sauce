@@ -133,6 +133,35 @@ describe("Solana's venue namespaces", () => {
     });
   });
 
+  it("Solana.swap and Solana.trySwap take a pool of any venue: the router's own, reading it", () => {
+    for (const method of ["swap", "trySwap"] as const) {
+      const program = compile(
+        `function main(pool: Address): Uint256 {\n  return Solana.${method}(pool, USDC, WSOL, 5, 10, 1);\n}\n`,
+      );
+      expect(program.source).toContain(
+        `import { ${method} as __sauce_${method} } from "@sauce/router";`,
+      );
+      expect(program.derivedAccounts).toMatchObject({
+        poolProgram: "slot:@pool:USDC.program",
+        poolAccount: "slot:@pool:USDC.pool",
+        potWSOL: "self:WSOL",
+      });
+    }
+    // Two pools, one trader: each pool its own nine, the Pot's accounts shared.
+    const two = compile(
+      "function main(a: Address, b: Address): Uint256 {\n" +
+        "  return Solana.trySwap(a, USDC, WSOL, 5, 10, 0) + Solana.trySwap(b, USDC, WSOL, 5, 10, 0);\n}\n",
+    );
+    const names = two.manifest!.accounts.map((slot) => (slot as { name: string }).name);
+    expect(names.filter((name) => name.startsWith("a") || name.startsWith("b"))).toHaveLength(18);
+    expect(names.filter((name) => name === "potUSDC")).toHaveLength(1);
+    // The chain's other members are left to the account expressions.
+    const pda = compile(
+      'function main(): Uint256 {\n  const state = Solana.pda(Solana.systemProgram, ["s"]);\n  return state.dataLen;\n}\n',
+    );
+    expect(pda.derivedAccounts).toMatchObject({ statePda: expect.stringMatching(/^pda:/) });
+  });
+
   it("leaves a program that declares the namespace itself as it is", () => {
     const own =
       "function OrcaWhirlpool(x: Uint256): Uint256 {\n  return x;\n}\nfunction main(): Uint256 {\n  return OrcaWhirlpool(1);\n}\n";

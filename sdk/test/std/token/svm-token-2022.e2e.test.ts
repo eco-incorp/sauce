@@ -43,7 +43,10 @@ import {
   svmTokenReceived,
   svmTokenToSend,
 } from "../../../src/svm/token-accounts.js";
-import { parseMintExtensions } from "../../../src/svm/token-extensions.js";
+import {
+  associatedTokenAccountLength,
+  parseMintExtensions,
+} from "../../../src/svm/token-extensions.js";
 import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
 import {
   expectOk,
@@ -332,6 +335,30 @@ describeToken2022("@sauce/token e2e: Token-2022 on the real token program", () =
 
     return { mint, source, dest };
   };
+
+  it("associatedTokenAccountLength is the size the ATA program gives a mint's account", async () => {
+    // Every extension an account takes from its mint, each alone and together, and PYUSD as
+    // mainnet holds it: the ATA program asks Token-2022 for the size, as a run does.
+    const images = [
+      mintImage(harness.payer.address),
+      mintImage(harness.payer.address, [transferFee(25, 5_000n)]),
+      mintImage(harness.payer.address, [transferHook()]),
+      mintImage(harness.payer.address, [pausable(false)]),
+      mintImage(harness.payer.address, [extension(9, new Uint8Array())]),
+      mintImage(harness.payer.address, [transferFee(25, 5_000n), transferHook(), pausable(false)]),
+      realImage(PYUSD, harness.payer.address),
+    ];
+    for (const image of images) {
+      const mint = plant(harness, image);
+      const ata = await tokenAccount(harness, mint, randomAddress());
+      expect(dataOf(harness, ata).length).toBe(associatedTokenAccountLength(image, true));
+    }
+    const legacy = plant(harness, mintImage(harness.payer.address), TOKEN_PROGRAM);
+    const ata = await tokenAccount(harness, legacy, randomAddress(), 0n, TOKEN_PROGRAM);
+    expect(dataOf(harness, ata).length).toBe(
+      associatedTokenAccountLength(new Uint8Array(82), false),
+    );
+  });
 
   describe("reads", () => {
     it("balanceOf, ownerOf, totalSupply and decimals read an extensionless Token-2022 mint's accounts", async () => {

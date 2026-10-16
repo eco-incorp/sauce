@@ -8,7 +8,16 @@
 import { address, generateKeyPairSigner, getAddressDecoder, some } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
-import { createSauceSvmClient } from "../../src/svm/index.js";
+import {
+  createSauceSvmClient,
+  deriveExecutionFeeConfigPda,
+  derivePotPda,
+  lookupTableAddresses,
+  measureExecuteTransaction,
+  TRANSACTION_SIZE_LIMIT,
+  type AccountResolution,
+} from "../../src/svm/index.js";
+import { getTransactionSize } from "../../src/svm/transaction.js";
 
 const RPC_URL = "http://127.0.0.1:65535/";
 const TABLE = address("11111111111111111111111111111112");
@@ -134,6 +143,140 @@ describe("ensureLookupTable on an existing table", () => {
     } finally {
       stub.restore();
     }
+  });
+});
+
+/** A program taking `count` read-only accounts, each its own address. */
+function wide(count: number): {
+  manifest: { accounts: { kind: "slot"; index: number; name: string; requires: "readonly" }[] };
+  resolution: AccountResolution;
+  accounts: Address[];
+} {
+  // Past the 250 a test table holds: none of them is in it unless it is put there.
+  const accounts = distinctAddresses(300 + count).slice(300);
+
+  return {
+    manifest: {
+      accounts: accounts.map((_, index) => ({
+        kind: "slot" as const,
+        index,
+        name: `a${index}`,
+        requires: "readonly" as const,
+      })),
+    },
+    resolution: Object.fromEntries(accounts.map((account, index) => [`a${index}`, account])),
+    accounts,
+  };
+}
+
+describe("cookLookupTable: the table a cook too wide for one transaction goes through", () => {
+  const client = async (payer: Awaited<ReturnType<typeof generateKeyPairSigner>>) =>
+    createSauceSvmClient({
+      rpcUrl: RPC_URL,
+      programId: ENGINE_PROGRAM,
+      kitchen: KITCHEN_PROGRAM,
+      payer,
+    });
+  const BYTECODE = new Uint8Array(16).fill(0xa5);
+
+  it("needs none for a cook that fits, and asks the cluster nothing to say so", async () => {
+    const payer = await generateKeyPairSigner();
+    const stub = fetchStub(encodeLookupTable(payer.address, []));
+    stub.install();
+    try {
+      const { manifest, resolution } = wide(8);
+      expect(
+        await (await client(payer)).cookLookupTable(BYTECODE, manifest, resolution),
+      ).toBeUndefined();
+      expect(stub.methods()).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("holds exactly the accounts the cook lists but its signers and the programs it calls", async () => {
+    const payer = await generateKeyPairSigner();
+    const { manifest, resolution, accounts } = wide(40);
+    // A table that already holds every account the cook needs it to — the program's, and the
+    // Kitchen cook's own that are no signer and not called: nothing is sent.
+    const { address: pot } = await derivePotPda(KITCHEN_PROGRAM, payer.address, new Uint8Array(32));
+    const { address: feeConfig } = await deriveExecutionFeeConfigPda(KITCHEN_PROGRAM);
+    const cooks = [pot, feeConfig, address("11111111111111111111111111111111"), ENGINE_PROGRAM];
+    const held = [...distinctAddresses(250).slice(0, 200), ...accounts, ...cooks];
+    const stub = fetchStub(encodeLookupTable(payer.address, held));
+    stub.install();
+    try {
+      const sauce = await client(payer);
+      const table = await sauce.cookLookupTable(BYTECODE, manifest, resolution, {
+        existing: TABLE,
+      });
+      expect(table?.lookupTableAddress).toBe(TABLE);
+      expect(stub.methods()).toEqual(["getAccountInfo", "getAccountInfo"]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("refuses to simulate a program too large for one transaction, saying to stage it", async () => {
+    const payer = await generateKeyPairSigner();
+    const stub = fetchStub(encodeLookupTable(payer.address, []));
+    stub.install();
+    try {
+      const { manifest, resolution } = wide(2);
+      await expect(
+        (await client(payer)).simulate(new Uint8Array(1200), manifest, resolution),
+      ).rejects.toThrow(
+        /the program itself is too large for one, so stage it in a code buffer and simulateStaged it/,
+      );
+      expect(stub.methods()).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("refuses, sending nothing, a cook too large even through a table: the program is staged", async () => {
+    const payer = await generateKeyPairSigner();
+    const stub = fetchStub(encodeLookupTable(payer.address, []));
+    stub.install();
+    try {
+      const { manifest, resolution } = wide(40);
+      await expect(
+        (await client(payer)).cookLookupTable(new Uint8Array(1100), manifest, resolution),
+      ).rejects.toThrow(
+        /past Solana's 1232 bytes even with every account it names through a lookup table: the program itself is too large for one, so stage it in a code buffer and executeStaged it/,
+      );
+      expect(stub.methods()).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+describe("measureExecuteTransaction and lookupTableAddresses", () => {
+  it("measure a transaction unsigned, and list what a table may hold", async () => {
+    const payer = await generateKeyPairSigner();
+    const [program, writable, readonly] = distinctAddresses(3);
+    const instructions = [
+      {
+        programAddress: program!,
+        accounts: [
+          { address: payer.address, role: 3 },
+          { address: writable!, role: 1 },
+          { address: readonly!, role: 0 },
+        ],
+        data: new Uint8Array(4),
+      },
+    ];
+    const transaction = measureExecuteTransaction({ feePayer: payer.address, instructions });
+    // Neither the signer nor the program called: the two accounts only.
+    expect(new Set(lookupTableAddresses(transaction))).toEqual(new Set([writable, readonly]));
+    const through = measureExecuteTransaction({
+      feePayer: payer.address,
+      instructions,
+      lookupTables: { [TABLE]: [writable!, readonly!] },
+    });
+    expect(getTransactionSize(through)).toBeLessThan(getTransactionSize(transaction));
+    expect(getTransactionSize(transaction)).toBeLessThanOrEqual(TRANSACTION_SIZE_LIMIT);
   });
 });
 

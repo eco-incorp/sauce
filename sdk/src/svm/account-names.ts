@@ -6,7 +6,10 @@
  *   pot | owner          the cook's Pot, or its owner (the signer)
  *   self                 the authority the program acts with: the Pot, cooked through the Kitchen;
  *                        the owner, cooked directly on the engine (`via: "engine"`)
- *   <base58>             that address
+ *   <key>                that address: base58, or its 32 bytes as `0x` and 64 hex digits — the
+ *                        spelling a program holds a key in, and `sauce globals` prints a mint's
+ *                        `address` and the release its `key` in (`svmPublicKey`); wherever a name
+ *                        below takes a base58 key, it takes this spelling too
  *   system               the System program
  *   @<param>             the key given as main's argument `<param>`
  *   <holder>:<token>     the holder's associated token account for the mint, under the token
@@ -18,7 +21,8 @@
  *                        one of the nine accounts `@sauce/router`'s swap at a price takes for the
  *                        pool (base58, or `@<param>`) paying the token: `program`, `pool`, `config`,
  *                        `vaultA`, `vaultB`, `extra`, `ticks0`, `ticks1`, `ticks2`, read from the
- *                        pool's own state through `load` (`svm/pool-slot.ts`)
+ *                        pool's own state through `load` (`svm/pool-slot.ts`); a pool that is the
+ *                        System Program is an empty slot, whose nine are the System Program
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
@@ -35,7 +39,13 @@
  * The derivation is the ADDRESS the transaction attaches; what a program does with the account is
  * its own to check (the token methods check each holder's account on chain).
  */
-import { address, getAddressEncoder, isAddress, type Address } from "@solana/kit";
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  isAddress,
+  type Address,
+} from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
@@ -141,19 +151,39 @@ type Parsed =
 
 const PARAM = /^@([A-Za-z_$][A-Za-z0-9_$]*)$/;
 const SYMBOL = /^[A-Za-z0-9_]+$/;
+const HEX_KEY = /^0x[0-9a-fA-F]{64}$/;
+
+/**
+ * A Solana public key in either spelling the SDK writes one in: base58, or its 32 bytes as `0x`
+ * and 64 hex digits — how a program holds a key (an `Address` value), and how `sauce globals`
+ * prints a mint's `address` and deployments.json a program's `key`. The key in base58, which every
+ * Solana client takes; `undefined` for any other text.
+ */
+export function svmPublicKey(text: string): Address | undefined {
+  if (HEX_KEY.test(text)) {
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) bytes[i] = parseInt(text.slice(2 + 2 * i, 4 + 2 * i), 16);
+
+    return getAddressDecoder().decode(bytes);
+  }
+
+  return isAddress(text) ? address(text) : undefined;
+}
 
 function parseHolder(text: string): Holder | undefined {
   if (text === "pot" || text === "owner" || text === "self") return { kind: text };
   const param = PARAM.exec(text);
   if (param !== null) return { kind: "arg", param: param[1]! };
+  const key = svmPublicKey(text);
 
-  return isAddress(text) ? { kind: "address", key: text } : undefined;
+  return key === undefined ? undefined : { kind: "address", key };
 }
 
 function parseToken(text: string): Token | undefined {
   const param = PARAM.exec(text);
   if (param !== null) return { kind: "arg", param: param[1]! };
-  if (isAddress(text)) return { kind: "address", key: text };
+  const key = svmPublicKey(text);
+  if (key !== undefined) return { kind: "address", key };
 
   return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
 }
@@ -564,6 +594,10 @@ async function resolveSlot(
       ? argument(parsed.pool.param, ctx)
       : address((parsed.pool as { key: string }).key);
   const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
+  // An empty slot, which `@sauce/router`'s `trySwap` skips: nothing to read.
+  if (pool === SYSTEM_PROGRAM) {
+    return { value: pool, label: `an empty slot (${parsed.part})`, kind: "address" };
+  }
   const load = ctx.load;
   if (load === undefined) {
     throw new SvmAccountNameError(
