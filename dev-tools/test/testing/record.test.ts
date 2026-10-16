@@ -99,6 +99,17 @@ async function nodeOf(url: string) {
   };
 }
 
+/** The block, as hex, that `url`'s node mined transaction `hash` in, waiting until it has. */
+async function minedIn(url: string, hash: unknown): Promise<string> {
+  for (;;) {
+    const receipt = (await rpc(url, "eth_getTransactionReceipt", [hash])) as {
+      blockNumber: string;
+    } | null;
+    if (receipt !== null) return receipt.blockNumber;
+    await new Promise((ok) => setTimeout(ok, 10));
+  }
+}
+
 /**
  * A node recorded into `dir` by `startForkNode`, from an upstream at an Ethereum block of 2024, which
  * a fork runs as Cancun (anvil infers the hardfork from the block it forks, and runs its own default
@@ -129,10 +140,17 @@ async function recordNode(dir: string) {
   ]);
   try {
     const [sender] = (await rpc(upstream.url, "eth_accounts")) as string[];
+    // Pinned at the block the second transaction was mined in, read from its receipt: anvil answers
+    // `eth_sendTransaction` before its automine has mined it, so "latest" read at once may not hold
+    // it yet, and the fork would see account 0's nonce at 1.
+    const mined: string[] = [];
     for (const value of ["0x1", "0x2"]) {
-      await rpc(upstream.url, "eth_sendTransaction", [{ from: sender, to: sender, value }]);
+      const hash = await rpc(upstream.url, "eth_sendTransaction", [
+        { from: sender, to: sender, value },
+      ]);
+      mined.push(await minedIn(upstream.url, hash));
     }
-    const pinned = (await rpc(upstream.url, "eth_getBlockByNumber", ["latest", false])) as {
+    const pinned = (await rpc(upstream.url, "eth_getBlockByNumber", [mined.at(-1), false])) as {
       number: string;
       baseFeePerGas: string;
     };
