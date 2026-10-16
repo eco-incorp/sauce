@@ -544,8 +544,12 @@ export function argumentValues(params: readonly EntryParam[], args: ArgsInput): 
   });
 }
 
-/** A define or parameter whose name says it is a pool's price limit. */
-const LIMIT_NAME = /sqrt.*price|price.*limit|sqrt.*limit/i;
+/**
+ * A define or parameter whose name says it is a pool's sqrt price limit (`sqrtPriceLimitX96`,
+ * `SQRT_PRICE_LIMIT_X96`). A price in a token's units (the distributed swap's `priceLimit`) is not
+ * one, and is never held to the sqrt price's bounds.
+ */
+const LIMIT_NAME = /sqrt.*(?:price|limit)|(?:price|limit).*x96/i;
 
 /**
  * A note for each price limit — a define or one of `main`'s arguments named like one
