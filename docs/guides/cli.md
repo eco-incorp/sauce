@@ -1477,14 +1477,16 @@ USDC/SPCXc on base at block 36120411: 3 pools with liquidity, deepest first (by 
 
 On Solana, `sauce pools --chain solana USDC WSOL` finds the pair's pools with
 `getProgramAccounts` on the program of each venue whose swap stops at a price limit: Raydium CLMM,
-PancakeSwap CLMM, Byreal and Stabble CLMM, Orca Whirlpools and Cropper, DefiTuna, Crema, and
-Phoenix's markets. A Solana program takes its pools as accounts, so beside each pool's fee,
-liquidity and price both ways (`sides`, as above) it gives `slots`: by the token paid, the nine
-accounts [the distributed swap on Solana](solana-distributed-swap.md) takes for the pool — its
-program, the pool, its config, its two vaults, one more account its swap takes, and the three tick
-arrays its walk crosses that way, each unused one the System program. A pool the distributed swap
-skips (no liquidity, swaps switched off, a fee that is more than one rate, paused, a market not open
-for taking) is listed under `skipped` with why. `--pay <token>` chooses a distributed swap's slots:
+PancakeSwap CLMM, Byreal and Stabble CLMM, Orca Whirlpools and Cropper, DefiTuna, Crema,
+Phoenix's markets, and Meteora DLMM, whose bins the swap walks to its limit. A Solana program takes
+its pools as accounts, so beside each pool's fee, liquidity and price both ways (`sides`, as above;
+a DLMM pool's at its active bin) it gives `slots`: by the token paid, the nine accounts
+[the distributed swap on Solana](solana-distributed-swap.md) takes for the pool — its program, the
+pool, its config, its two vaults, one more account its swap takes, and the three tick arrays its
+walk crosses that way (a DLMM pool's two bin arrays), each unused one the System program. A pool the
+distributed swap skips (no liquidity, swaps switched off, a fee that is more than one rate or taken
+from the token bought, paused, not active yet, a market not open for taking) is listed under
+`skipped` with why. `--pay <token>` chooses a distributed swap's slots:
 the deepest pools whose price with the fee is within `--max-price`, one a venue with
 `--per-venue`, as many as `--slots` (4), printed as `chosen` and as `accounts`, the slots'
 accounts as `--accounts` takes them. A venue that could not be read leaves the listing partial: a

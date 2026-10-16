@@ -1584,9 +1584,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "read is at one block, `block` (the latest, or the one given): pass it to " +
         "sauce_simulate's block to simulate on the prices a maxPrice was taken from. On Solana " +
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
-        "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
+        "Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix and Meteora DLMM (SOL naming WSOL), each with its fee, " +
         "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts a swap " +
-        "at the pool takes (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
+        "at the pool takes (program, pool, config, vaultA, vaultB, extra, ticks: tick or bin arrays), unused ones the " +
         "System program, which a program given the pool as an Address argument derives itself; " +
         "`skipped` lists the pools the distributed swap skips, with why. With pay, `chosen` and " +
         "`poolArgs`: the pools a distributed swap takes, in slot order, padded with the System " +
