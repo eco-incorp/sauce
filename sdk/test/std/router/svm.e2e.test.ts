@@ -33,6 +33,7 @@ import {
   buildHeapFramePrepend,
 } from "../../../src/svm/index.js";
 import { fetchPhoenixConfig } from "../../../src/svm/venues/phoenix/index.js";
+import { raydiumSqrtPriceAtTick } from "../../../src/svm/venues/raydium-clmm/tick-math.js";
 import {
   describeSvm,
   fabricateAlt,
@@ -59,6 +60,7 @@ import {
   pool,
   restoreVenues,
   windowBound,
+  windowStop,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
@@ -423,6 +425,36 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     },
     120_000,
   );
+
+  // Crema's window is wide: tick spacing 50, arrays of 3,200 ticks, its edge about 6,300 ticks from
+  // the price. The limit is held a tick inside that edge, within a millionth of its exact sqrt price
+  // and never past it.
+  it("Crema: a limit far past its wide window is held within a millionth of its edge", async () => {
+    const entry = VENUES.find((one) => one.venue === "Crema")!;
+    const base = await orderFor(entry);
+    const p = base.pool;
+    const paysA = key(USDC) < key(base.buy);
+    const data = BYTES.get(p.pool)!;
+    const tick = new DataView(data.buffer, data.byteOffset).getInt32(206, true);
+    const price = le(data, 190, 16);
+    const stop = windowStop(p, paysA)!;
+    expect(Math.abs(stop - tick)).toBeGreaterThan(6000);
+    // A tick inside the stop, less the part of a tick the price may lie past its own.
+    const exact = paysA
+      ? (price * raydiumSqrtPriceAtTick(tick)) / raydiumSqrtPriceAtTick(stop + 1)
+      : (price * raydiumSqrtPriceAtTick(stop - 2)) / raydiumSqrtPriceAtTick(tick);
+    const bound = windowBound(p, paysA);
+    expect(paysA ? bound >= exact : bound <= exact).toBe(true);
+    const gap = paysA ? bound - exact : exact - bound;
+    expect(gap * 1_000_000n).toBeLessThan(exact);
+    const order = {
+      ...base,
+      priceLimit: allIn(p, paysA) * 3n,
+      amountIn: 10_000_000_000n * 10n ** 6n,
+    };
+    const outcome = succeeded(await cook(compiled(lower("Crema")), order));
+    expect(outcome.price).toBe(bound);
+  }, 120_000);
 
   // Where the furthest array a slot gives that way is the one holding the price, the window ends at
   // its last initialized tick that way, read from a fixed array (Raydium's) or a dynamic one

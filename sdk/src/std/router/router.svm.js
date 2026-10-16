@@ -200,9 +200,12 @@ function clmmOrder(
   const tick = tickAt(pool, tickOffset);
   let bound = price;
   if (paysA ? stop + 1 < tick : stop > tick + 2) {
-    bound = paysA
-      ? ticksAway(price, tick - stop - 1, false)
-      : ticksAway(price, stop - tick - 2, true);
+    const n = paysA ? tick - stop - 1 : stop - tick - 2;
+    bound = ticksAway(price, n, !paysA);
+    // A limit past it is held to a closer bound, worked out only then.
+    if (paysA ? own < bound : own > bound) {
+      bound = closer(price, n, !paysA);
+    }
   }
   if (paysA ? own < bound : own > bound) {
     own = bound;
@@ -378,17 +381,37 @@ function cremaStop(slot: Account[], down: bool): Uint256 {
   return 0;
 }
 
-// The Q64.64 sqrt price `n` ticks from `price`, up or down: a tick is a factor of s = √1.0001. The
-// power is bounded by its first four binomial terms in x = s − 1 (rounded down, times 1e18), all
-// positive, so the result lies inside the exact one: under it going up, over it going down.
-function ticksAway(price: Uint256, n: Uint256, up: bool): Uint256 {
+// √1.0001^n times 1e18, bounded below by its first four binomial terms in x = √1.0001 − 1 (rounded
+// down, times 1e18), all positive: exact to n = 3, and short by 2·10^-3 at 10,800 ticks, 10^-1 at
+// 36,000.
+function binomial(n: Uint256): Uint256 {
   const x = 49998750062496;
   const one = 10 ** 18;
   const a = n * x;
   const b = n > 1 ? (n - 1) * x : 0;
   const c = n > 2 ? (n - 2) * x : 0;
-  const power =
-    one + a + Math.mulDiv(a, b, 2 * one) + Math.mulDiv(Math.mulDiv(a, b, one), c, 6 * one);
+  return one + a + Math.mulDiv(a, b, 2 * one) + Math.mulDiv(Math.mulDiv(a, b, one), c, 6 * one);
+}
+
+// The Q64.64 sqrt price `n` ticks from `price`, up or down, by `binomial`'s power: inside the exact
+// one, under it going up, over it going down.
+function ticksAway(price: Uint256, n: Uint256, up: bool): Uint256 {
+  const one = 10 ** 18;
+  const power = binomial(n);
+  return up ? Math.mulDiv(price, power, one) : Math.mulDiv(price, one, power);
+}
+
+// `ticksAway` with a closer power: the bound of a sixteenth of `n` squared four times, times the
+// rest's, each rounded down: still never above the exact power, and short of it by 10^-6 at 10,800
+// ticks, 10^-4 at 36,000.
+function closer(price: Uint256, n: Uint256, up: bool): Uint256 {
+  const one = 10 ** 18;
+  let power = binomial(n >> 4);
+  power = Math.mulDiv(power, power, one);
+  power = Math.mulDiv(power, power, one);
+  power = Math.mulDiv(power, power, one);
+  power = Math.mulDiv(power, power, one);
+  power = Math.mulDiv(power, binomial(n & 15), one);
   return up ? Math.mulDiv(price, power, one) : Math.mulDiv(price, one, power);
 }
 
