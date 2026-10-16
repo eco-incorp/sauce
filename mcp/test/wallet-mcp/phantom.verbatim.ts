@@ -5,10 +5,37 @@
 //   @phantom/cli-3.0.0.tgz    sha256 ade1b68dacd3754008a8c5c732f222ffc08676b992fc22ef4493aa35419a39c8
 //   @phantom/mcp-server-1.2.9 sha256 a6a9a1aa906a5e17046f7e5975914c891023162fff2b032ca377005f9bff5d17
 //
+// The published tarball carries no license field or file. Its source is packages/cli of
+// github.com/phantom/phantom-connect-sdk (version 3.0.0 at daa18efa5d653baf254bc8c010260a2cf2d6ba0a,
+// these files byte for byte the tarball's), which is under the MIT License, reproduced here as it
+// asks:
+//
+//   MIT License
+//
+//   Copyright (c) 2024 Phantom Technologies, Inc
+//
+//   Permission is hereby granted, free of charge, to any person obtaining a copy
+//   of this software and associated documentation files (the "Software"), to deal
+//   in the Software without restriction, including without limitation the rights
+//   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//   copies of the Software, and to permit persons to whom the Software is
+//   furnished to do so, subject to the following conditions:
+//
+//   The above copyright notice and this permission notice shall be included in all
+//   copies or substantial portions of the Software.
+//
+//   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//   SOFTWARE.
+//
 // Each block names the file it comes from. Changed, and only these: `z` is zod's (the package takes
-// it from `incur`, which re-exports zod 4), `NetworkId` is the two members the code reads (from
-// `@phantom/constants` 2.0.4), and the actions' `options` objects are exported under their own
-// names. The server registers the tools by their command path (`incur` names a tool
+// it from `incur`, which re-exports zod 4), `NetworkId` is the members the code reads (from
+// `@phantom/constants` 2.0.4, packages/constants of the same repository), and the actions' `options`
+// objects are exported under their own names. The server registers the tools by their command path (`incur` names a tool
 // `mcp.name ?? path.join("_")`, and the actions set only `mcp.command`): `evm send` is `evm_send`,
 // `solana send` is `solana_send`. Phantom's documentation calls them `send_evm_transaction` and
 // `send_solana_transaction`. Its zod objects are not strict: a field they do not declare is dropped.
