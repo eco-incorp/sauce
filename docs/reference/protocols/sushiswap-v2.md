@@ -2,6 +2,8 @@
 
 # SushiSwap V2 (`sushiswap-v2`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
 > SushiSwap V2 is an exchange: people swap one token for another in its pools. This page lists the
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.

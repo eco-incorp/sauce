@@ -2,6 +2,8 @@
 
 # Protocols
 
+**Reference** · [Documentation](../README.md)
+
 > Every protocol a program can call by name, grouped by what it does: exchanges, lending markets,
 > bridges, staking and more. Each one has a page with where it is deployed and the name a program
 > writes for each of its contracts.

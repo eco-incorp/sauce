@@ -2,6 +2,8 @@
 
 # Gains Network (`gains-network`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
 > Gains Network is a perpetuals exchange: bet on a price, with leverage and no expiry date. This
 > page lists the chains it is deployed on, the name a program writes for each of its contracts, and
 > the functions a program can call.

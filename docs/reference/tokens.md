@@ -2,6 +2,8 @@
 
 # Tokens
 
+**Reference** · [Documentation](../README.md)
+
 > Tokens are the coins a program moves, such as USDC and WETH. In a program you write a token's
 > symbol, and Sauce puts in its address on the chain the program runs on. This page lists every
 > chain's tokens, the tokenized stocks among them, and the token functions.

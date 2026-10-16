@@ -2,6 +2,8 @@
 
 # Base
 
+**Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
+
 > Everything a program can name on Base: its tokens, and every protocol deployed there with the name
 > a program writes for each contract. The `sauce` command builds and sends transactions on Base.
 

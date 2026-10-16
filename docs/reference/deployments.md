@@ -2,6 +2,8 @@
 
 # Deployments
 
+**Reference** · [Documentation](../README.md)
+
 > Sauce's own contracts and programs: the Kitchen that makes Pots, the engine that runs programs,
 > and the Routers that help with swaps. They sit at the same address on every chain, so this one
 > page lists them. You rarely need them: the `sauce` command and the SDK fill them in for you.

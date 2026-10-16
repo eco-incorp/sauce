@@ -2049,7 +2049,7 @@ export function renderDocsReference(data, skillFiles) {
   for (const path of Object.keys(files)) {
     if (intros[path] === undefined)
       throw new Error(`no plain-words intro for docs/reference/${path}`);
-    files[path] = introduced(files[path], intros[path]);
+    files[path] = introduced(files[path], path, intros[path]);
   }
 
   return files;
@@ -2099,14 +2099,31 @@ function wrapped(text, width) {
   return lines;
 }
 
-/** `page` with `intro` as a blockquote right after its title. */
-function introduced(page, intro) {
+/**
+ * `page`, at `path` (relative to `docs/reference/`), with the line every page of the manual has
+ * under its title, the part of the manual it belongs to (`docs:check`): a guide rendered from a
+ * skill is a how-to, the rest reference. Then `intro`, as a blockquote.
+ */
+function introduced(page, path, intro) {
   const lines = page.split("\n");
   const title = lines.findIndex((line) => line.startsWith("# "));
   if (title < 0) throw new Error("a manual page with no title has nowhere to put its intro");
+  const at = posix.join("reference", path);
+  const link = (label, to) => `[${label}](${posix.relative(posix.dirname(at), to)})`;
+  const up = {
+    chains: link("Chains", "reference/chains.md"),
+    protocols: link("Protocols", "reference/protocols.md"),
+  }[posix.dirname(path)];
+  const crumb = [
+    path.startsWith("../guides/") ? "**How-to guide**" : "**Reference**",
+    link("Documentation", "README.md"),
+    ...(up === undefined ? [] : [up]),
+  ].join(" · ");
 
   return [
     ...lines.slice(0, title + 1),
+    "",
+    crumb,
     "",
     ...wrapped(intro, 98).map((line) => `> ${line}`),
     ...lines.slice(title + 1),

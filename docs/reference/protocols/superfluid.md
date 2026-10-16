@@ -2,6 +2,8 @@
 
 # Superfluid (`superfluid`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
 > Superfluid is a payments protocol: payments streamed or scheduled over time. This page lists the
 > chains it is deployed on, the name a program writes for each of its contracts, and the functions a
 > program can call.

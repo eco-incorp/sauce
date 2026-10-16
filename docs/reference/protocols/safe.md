@@ -2,6 +2,8 @@
 
 # Safe (`safe`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
 > Safe is a building block that other protocols are built on. This page lists the chains it is
 > deployed on, the name a program writes for each of its contracts, and the functions a program can
 > call.

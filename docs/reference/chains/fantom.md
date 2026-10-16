@@ -2,6 +2,8 @@
 
 # Fantom
 
+**Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
+
 > Everything a program can name on Fantom: its tokens, and every protocol deployed there with the
 > name a program writes for each contract. Fantom is a preview chain: programs compile and simulate
 > here, and the `sauce` command sends nothing.

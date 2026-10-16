@@ -2,6 +2,8 @@
 
 # Command reference
 
+**Reference** · [Documentation](../README.md)
+
 > This is the `sauce` command's manual page: every command and every flag, word for word as `--help`
 > prints it. The guides explain what each one is for; come here to look up an exact flag.
 

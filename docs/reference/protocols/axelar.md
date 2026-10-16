@@ -2,6 +2,8 @@
 
 # Axelar (`axelar`)
 
+**Reference** · [Documentation](../../README.md) · [Protocols](../protocols.md)
+
 > Axelar is a messenger between chains: it carries messages and tokens from one to another. This
 > page lists the chains it is deployed on, the name a program writes for each of its contracts, and
 > the functions a program can call.

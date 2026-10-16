@@ -2,6 +2,8 @@
 
 # Celo
 
+**Reference** · [Documentation](../../README.md) · [Chains](../chains.md)
+
 > Everything a program can name on Celo: its tokens, and every protocol deployed there with the name
 > a program writes for each contract. Celo is a preview chain: programs compile and simulate here,
 > and the `sauce` command sends nothing.

@@ -2,6 +2,8 @@
 
 # SauceScript reference
 
+**Reference** · [Documentation](../README.md)
+
 > SauceScript is the language programs are written in: a small, strict TypeScript. This page is its
 > dictionary: every type, statement and built-in function, and which chains allow each. Learning the
 > language? Start with [Writing SauceScript](../concepts/saucescript.md).
