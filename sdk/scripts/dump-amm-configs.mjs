@@ -103,24 +103,30 @@ async function configsOf(program) {
         )[0],
     ),
   );
+  // Every chunk of 100 read at once; the configs kept in index order.
+  const starts = Array.from({ length: Math.ceil(INDEXES / 100) }, (_, k) => k * 100);
+  const reads = await Promise.all(
+    starts.map((start) =>
+      rpc("getMultipleAccounts", [
+        keys.slice(start, start + 100),
+        { encoding: "base64", commitment: "finalized" },
+      ]),
+    ),
+  );
   const configs = [];
-  for (let start = 0; start < INDEXES; start += 100) {
-    const chunk = keys.slice(start, start + 100);
-    const { value } = await rpc("getMultipleAccounts", [
-      chunk,
-      { encoding: "base64", commitment: "finalized" },
-    ]);
+  reads.forEach(({ value }, k) =>
     value.forEach((account, i) => {
       if (account === null || account.owner !== program) return;
+      const index = starts[k] + i;
       configs.push({
-        index: start + i,
-        address: chunk[i],
+        index,
+        address: keys[index],
         owner: account.owner,
         lamports: String(account.lamports),
         base64Data: account.data[0],
       });
-    });
-  }
+    }),
+  );
 
   return configs;
 }
