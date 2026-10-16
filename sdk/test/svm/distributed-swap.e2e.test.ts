@@ -1,13 +1,17 @@
 /**
  * The `sauce-solana-distributed-swap` skill's program, executed: staged and cooked through the
  * released Kitchen on the harness Pot, against the venues' own mainnet programs and the pools'
- * mainnet accounts (`test/fixtures/svm-venues/`, written by `scripts/dump-svm-venues.mjs`). It proves
- * what the skill says the program does: one exact-input order split over price-limited pools, each
- * stopping exactly at its own fee-adjusted limit; a missing slot, a pool past its limit, an empty
- * pool, a pool whose fee is more than one rate, a paused pool and a market whose book is past the
- * limit skipped; the minimum-output and average-price checks; only the unspent budget refunded and
- * the paying account's other balance untouched; and the refusals of a pool that is not the pair, a
- * venue the program does not take, and a slot whose program does not own its pool.
+ * mainnet accounts (`test/fixtures/svm-venues/`, written by `scripts/dump-svm-venues.mjs`). The
+ * program takes its pools as `Address` arguments, and every account it names is derived
+ * (`derivedAccounts`): each is filled here from the fixture as the command would read it from the
+ * cluster. It proves what the skill says the program does: one exact-input order split over
+ * price-limited pools, each stopping exactly at its own fee-adjusted limit; an empty slot, a pool
+ * past its limit, an empty pool, a pool whose fee is more than one rate, a paused pool and a market
+ * whose book is past the limit skipped; the minimum-output and average-price checks; only the
+ * unspent budget refunded and the Pot's other balance untouched; what was bought and the rest kept
+ * in the Pot when the recipient and refund are the Pot; and the refusals of a budget the Pot does
+ * not hold, a pool that is not the pair, a venue the program does not take, a slot whose program
+ * does not own its pool, and a recipient's account another wallet holds.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -45,15 +49,11 @@ import {
   le,
   loadVenues,
   manifest,
-  MEMO,
   NONE,
   ownLimit,
   pool,
   restoreVenues,
-  SLOT_NAMES,
   SYSTEM,
-  TOKEN,
-  TOKEN_2022,
   USDC,
   USDT,
   WSOL,
@@ -74,6 +74,19 @@ const PROGRAM_5 = fileURLToPath(
   ),
 );
 
+/** A slot's nine accounts, in the order its derivations name them. */
+const PARTS = [
+  "program",
+  "pool",
+  "config",
+  "vaultA",
+  "vaultB",
+  "extra",
+  "ticks0",
+  "ticks1",
+  "ticks2",
+];
+
 interface Order {
   slots: Pool[];
   pay: Address;
@@ -82,10 +95,14 @@ interface Order {
   maxPrice: bigint;
   minTokens?: bigint;
   maxAvgPrice?: bigint;
-  /** Of the pay token, in the paying account beside the budget: never spent, never refunded. */
+  /** Of the pay token, in the Pot's account beside the budget: never spent, never refunded. */
   kept?: bigint;
-  /** Less than the budget in the paying account. */
+  /** Less than the budget in the Pot's account. */
   short?: boolean;
+  /** The recipient and the refund are the Pot itself: what was bought and the rest stay there. */
+  keepInPot?: boolean;
+  /** The recipient's token account held by another wallet than the recipient. */
+  strangerRecipient?: boolean;
   /** Bytes to change in an account before the cook, for one case: a pool emptied, paused. */
   edit?: { address: Address; offset: number; bytes: number[] };
 }
@@ -98,7 +115,7 @@ type Outcome =
       unspent: bigint;
       refunded: bigint;
       received: bigint;
-      /** What stays in the Pot's account of the bought token: nothing, it all went on. */
+      /** What stays in the Pot's account of the bought token: nothing, unless it is kept there. */
       kept: bigint;
       left: bigint;
       units: bigint;
@@ -106,6 +123,9 @@ type Outcome =
       accounts: number;
     }
   | { ok: false; reason: string; logs: string[] };
+
+/** A key as the engine reads an `Address` argument on Solana: its 32 bytes, as one word. */
+const word = (at: Address): bigint => key(at);
 
 describeSvm("the Solana distributed swap, on the venues' own programs and pools", () => {
   const source = readFileSync(PROGRAM, "utf8");
@@ -123,64 +143,104 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
   const cook = async (order: Order, compiled = program): Promise<Outcome> => {
     restoreVenues(harness.svm, order.edit);
     const kept = order.kept ?? 0n;
-    const source = setTokenAccount(
+    const programOf = (mint: Address): Address => {
+      const account = harness.svm.getAccount(mint);
+      if (!account.exists) throw new Error(`the fixture has no mint ${mint}`);
+      return account.programAddress;
+    };
+    // The Pot's accounts for the two tokens, and the recipient's and the refund's: any token
+    // account of the right holder, which the program checks.
+    const potPay = setTokenAccount(
       harness,
       randomAddress(),
       order.pay,
       harness.pot,
       (order.short ? order.budget - 1n : order.budget) + kept,
+      programOf(order.pay),
     );
-    const output = setTokenAccount(harness, randomAddress(), order.buy, harness.pot, 0n);
-    const recipient = setTokenAccount(harness, randomAddress(), order.buy, randomAddress(), 0n);
-    const refund = setTokenAccount(harness, randomAddress(), order.pay, randomAddress(), 0n);
+    const potBuy = setTokenAccount(
+      harness,
+      randomAddress(),
+      order.buy,
+      harness.pot,
+      0n,
+      programOf(order.buy),
+    );
+    const to = order.keepInPot ? harness.pot : randomAddress();
+    const back = order.keepInPot ? harness.pot : randomAddress();
+    const recipient = order.keepInPot
+      ? potBuy
+      : setTokenAccount(
+          harness,
+          randomAddress(),
+          order.buy,
+          order.strangerRecipient ? randomAddress() : to,
+          0n,
+          programOf(order.buy),
+        );
+    const refund = order.keepInPot
+      ? potPay
+      : setTokenAccount(harness, randomAddress(), order.pay, back, 0n, programOf(order.pay));
     const paysA = key(order.pay) < key(order.buy);
-
-    const w = AccountRole.WRITABLE;
-    const r = AccountRole.READONLY;
-    const named: Record<string, { address: Address; role: AccountRole }> = {
-      authority: { address: harness.pot, role: r }, // the Kitchen signs for the Pot
-      source: { address: source, role: w },
-      output: { address: output, role: w },
-      recipient: { address: recipient, role: w },
-      refund: { address: refund, role: w },
-      payMint: { address: order.pay, role: r },
-      buyMint: { address: order.buy, role: r },
-      tokenProgram: { address: TOKEN, role: r },
-      token2022: { address: TOKEN_2022, role: r },
-      memo: { address: MEMO, role: r },
-    };
+    const slotCount = compiled.entryParams.filter((param) => /^pool\d+$/.test(param.name)).length;
     const slots = [...order.slots];
-    const slotCount = compiled.manifest!.accounts.filter(
-      (entry) => entry.kind === "slot" && /^program\d+$/.test(entry.name),
-    ).length;
     while (slots.length < slotCount) slots.push(NONE);
-    slots.forEach((p, k) => {
-      const ticks = paysA ? p.payA : p.payB;
-      const accounts = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra, ...ticks];
-      SLOT_NAMES(k).forEach((name, j) => {
-        // The program and config are read; the rest a swap writes. The System program is never
-        // writable, and stands in for every account a slot does not use.
-        const writable = accounts[j] !== SYSTEM && j !== 0 && j !== 2;
-        named[name] = { address: accounts[j]!, role: writable ? w : r };
-      });
-    });
+
+    // Each account the program names, from its derivation: what the command reads from the cluster.
+    const resolve = (derivation: string): Address => {
+      const slot = /^slot:@pool(\d+):@pay\.(\w+)$/.exec(derivation);
+      if (slot !== null) {
+        const p = slots[Number(slot[1])]!;
+        const each = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra];
+        return [...each, ...(paysA ? p.payA : p.payB)][PARTS.indexOf(slot[2]!)]!;
+      }
+      const fixed: Record<string, Address> = {
+        self: harness.pot,
+        "self:@pay": potPay,
+        "self:@buy": potBuy,
+        "mint:@pay": order.pay,
+        "mint:@buy": order.buy,
+        "program:@pay": programOf(order.pay),
+        "program:@buy": programOf(order.buy),
+        "@recipient:@buy": recipient,
+        "@refund:@pay": refund,
+      };
+      if (fixed[derivation] !== undefined) return fixed[derivation];
+      if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(derivation)) return derivation as Address;
+      throw new Error(`no account for the derivation ${derivation}`);
+    };
+    const derived = compiled.derivedAccounts as Readonly<Record<string, string>>;
     const tail = compiled.manifest!.accounts.map((entry) => {
       if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
-      return (
-        named[entry.name] ??
-        (() => {
-          throw new Error(`no account for ${entry.name}`);
-        })()
-      );
+      const derivation = derived[entry.name];
+      if (derivation === undefined) throw new Error(`${entry.name} is not derived`);
+      const at = resolve(derivation);
+      // The Kitchen signs for the Pot; the System program, which stands in for every account a
+      // slot does not use, is never writable.
+      const writable = entry.requires === "writable" && at !== SYSTEM;
+      return { address: at, role: writable ? AccountRole.WRITABLE : AccountRole.READONLY };
     });
 
     // The cook carries the program and its arguments staged in a code buffer, and its accounts
-    // through a lookup table: as `sauce run` stages a program too large for one transaction.
-    const args = encodeEntryArguments(compiled, [
+    // through a lookup table: as `sauce run` stages a program too large for one transaction. An
+    // `Address` argument is its key's 32 bytes, one word, as the command encodes it.
+    const keyed = {
+      ...compiled,
+      entryParams: compiled.entryParams.map((param) => ({
+        ...param,
+        type: param.type.replace(/\bAddress\b/g, "Uint256"),
+      })),
+    };
+    const args = encodeEntryArguments(keyed, [
+      word(order.pay),
+      word(order.buy),
+      ...slots.map((p) => word(p.pool)),
       order.budget,
       order.maxPrice,
       order.minTokens ?? 0n,
       order.maxAvgPrice ?? 0n,
+      word(to),
+      word(back),
     ]);
     const payload = new Uint8Array(compiled.bytecode.length + args.length);
     payload.set(compiled.bytecode);
@@ -234,18 +294,18 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       };
     }
     const returned = result.returnData().data();
-    const word = (i: number): bigint =>
+    const at = (i: number): bigint =>
       BigInt(`0x${Buffer.from(returned.subarray(32 * i, 32 * i + 32)).toString("hex")}`);
 
     return {
       ok: true,
-      spent: word(0),
-      bought: word(1),
-      unspent: word(2),
-      refunded: tokenAmount(harness, refund),
-      received: tokenAmount(harness, recipient),
-      kept: tokenAmount(harness, output),
-      left: tokenAmount(harness, source),
+      spent: at(0),
+      bought: at(1),
+      unspent: at(2),
+      refunded: order.keepInPot ? 0n : tokenAmount(harness, refund),
+      received: order.keepInPot ? 0n : tokenAmount(harness, recipient),
+      kept: tokenAmount(harness, potBuy),
+      left: tokenAmount(harness, potPay),
       units: result.computeUnitsConsumed(),
       size: getTransactionSize(transaction),
       // The payer, the compute-budget program, the lookup table and every key it holds.
@@ -551,11 +611,31 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     );
   }, 180_000);
 
-  it("refuses a budget not in the account, a pool that is not the pair, and a venue it does not take", async () => {
+  it("keeps what was bought and the rest of the budget in the Pot when recipient and refund are the Pot", async () => {
+    const budget = 1_000_000n * 10n ** 6n;
+    const outcome = succeeded(
+      await cook({
+        slots: DEEP,
+        pay: USDC,
+        buy: WSOL,
+        budget,
+        maxPrice,
+        kept: 7n,
+        keepInPot: true,
+      }),
+    );
+    expect(outcome.bought).toBeGreaterThan(0n);
+    expect(outcome.unspent).toBeGreaterThan(0n);
+    // Nothing moved on: the Pot holds what it bought, and its USDC is the rest and its own 7.
+    expect(outcome.kept).toBe(outcome.bought);
+    expect(outcome.left).toBe(outcome.unspent + 7n);
+  }, 120_000);
+
+  it("refuses a budget not in the Pot, a pool that is not the pair, and a venue it does not take", async () => {
     const budget = 1_000n * 10n ** 6n;
     expect(
       refused(await cook({ slots: DEEP, pay: USDC, buy: WSOL, budget, maxPrice, short: true })),
-    ).toBe("budget is not in source");
+    ).toBe("budget is not in the Pot");
     expect(
       refused(
         await cook({
@@ -590,5 +670,19 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         }),
       ),
     ).toBe("a pool's program is not its owner");
+    // A recipient's token account another wallet holds: the transfer is refused after it, by the
+    // check that binds the account to the recipient.
+    expect(
+      refused(
+        await cook({
+          slots: DEEP,
+          pay: USDC,
+          buy: WSOL,
+          budget,
+          maxPrice,
+          strangerRecipient: true,
+        }),
+      ),
+    ).toBe("wrong recipient account");
   }, 180_000);
 });

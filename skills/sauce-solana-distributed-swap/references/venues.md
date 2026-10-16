@@ -1,28 +1,32 @@
 # The venues, their pools and their slots
 
-Every venue the distributed swap trades on, with its function in `@sauce/router`, where its pool
-keeps what that function reads, the nine accounts its slot takes, and how to find a pair's pools. Offsets are bytes from the start of
-the account; integers are little-endian, keys 32 bytes. A slot's accounts are, in order:
+Every venue the distributed swap trades on, with its swap in a program and its function in
+`@sauce/router`, where its pool keeps what that function reads, the nine accounts a swap at the
+pool takes (its slot), and how to find a pair's pools. A program never names these accounts:
+compiling it adds them for each pool it is given, and the command reads them from the pool as it
+builds the cook. Offsets are bytes from the start of the account; integers are little-endian, keys
+32 bytes. A slot's accounts are, in order:
 
 | #   | Slot account | What it is                                                              |
 | --- | ------------ | ----------------------------------------------------------------------- |
-| 0   | `program<k>` | the venue's program, which must own the pool                            |
-| 1   | `pool<k>`    | the pool (a market, on Phoenix)                                         |
-| 2   | `config<k>`  | the account the venue keeps the pool's settings in, where it has one    |
-| 3   | `vaultA<k>`  | the pool's vault for its first token (token 0, token A, Phoenix's base) |
-| 4   | `vaultB<k>`  | the pool's vault for its second token                                   |
-| 5   | `extra<k>`   | one more account the venue's swap takes                                 |
-| 6–8 | `ticks<k>0`… | the three tick arrays the swap walks, in walk order                     |
+| 0   | `program`    | the venue's program, which must own the pool                            |
+| 1   | `pool`       | the pool (a market, on Phoenix)                                         |
+| 2   | `config`     | the account the venue keeps the pool's settings in, where it has one    |
+| 3   | `vaultA`     | the pool's vault for its first token (token 0, token A, Phoenix's base) |
+| 4   | `vaultB`     | the pool's vault for its second token                                   |
+| 5   | `extra`      | one more account the venue's swap takes                                 |
+| 6–8 | `ticks`      | the three tick arrays the swap walks, in walk order                     |
 
 An account a venue does not take is the System program, `11111111111111111111111111111111`, and so
-is every account of an unused slot. The concentrated-liquidity venues keep the pair in the order of
+is every account of an empty slot. The concentrated-liquidity venues keep the pair in the order of
 the two mints' 32-byte keys, the lower first: paying the lower-key token pushes the price down,
 paying the other pushes it up, and the tick arrays the swap walks depend on which.
 
 ## Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble CLMM
 
-One pool layout (1,544 bytes) and one swap, `swap_v2`, on four programs: `tryRaydiumClmm`,
-`tryPancakeswapClmm`, `tryByreal` and `tryStabbleClmm`.
+One pool layout (1,544 bytes) and one swap, `swap_v2`, on four programs: `Raydium.CLMM.swap`,
+`Pancakeswap.CLMM.swap`, `Byreal.CLMM.swap` and `Stabble.CLMM.swap` (`raydiumClmm`,
+`pancakeswapClmm`, `byreal` and `stabbleClmm`).
 
 | Read                                    | Where                                                                             |
 | --------------------------------------- | --------------------------------------------------------------------------------- |
@@ -49,8 +53,8 @@ whose price is far from 1 may also need its bitmap extension, the program addres
 
 ## Orca Whirlpools and Cropper
 
-One pool layout (653 bytes): Orca's `swap_v2` (`tryOrcaWhirlpool`), and Cropper's `swap`, the
-same without Token-2022 (`tryCropper`).
+One pool layout (653 bytes): Orca's `swap_v2` (`Orca.Whirlpool.swap`, `orcaWhirlpool`), and
+Cropper's `swap`, the same without Token-2022 (`Cropper.Whirlpool.swap`, `cropper`).
 
 | Read                                 | Where                                            |
 | ------------------------------------ | ------------------------------------------------ |
@@ -68,7 +72,8 @@ arrays that do not exist yet as empty; Cropper needs every array its walk reache
 
 ## DefiTuna
 
-A pool of 423 bytes, a whirlpool's fields in another order, and its `swap` (`tryDefituna`):
+A pool of 423 bytes, a whirlpool's fields in another order, and its `swap`
+(`Defituna.Fusion.swap`, `defituna`):
 
 | Read                                 | Where                             |
 | ------------------------------------ | --------------------------------- |
@@ -83,7 +88,7 @@ swap fills at their tick's price: within the limit, like the rest.
 
 ## Crema
 
-A pool of 748 bytes and its `swap` (`tryCrema`):
+A pool of 748 bytes and its `swap` (`Crema.CLMM.swap`, `crema`):
 
 | Read                                 | Where                             |
 | ------------------------------------ | --------------------------------- |
@@ -102,8 +107,8 @@ as the map's bitmap marks them (array 0 starts at tick `−443636 + (443636 mod 
 
 ## Phoenix
 
-An order book (`tryPhoenix`): a market account (its size varies with the book's) whose header
-holds:
+An order book (`Phoenix.Market.swap`, `phoenix`): a market account (its size varies with the
+book's) whose header holds:
 
 | Read                                                           | Where         |
 | -------------------------------------------------------------- | ------------- |
@@ -126,7 +131,7 @@ them, with the pool's size and the pair at its mints' offsets as filters: for th
 concentrated-liquidity venues the lower key at the first offset and the higher at the second, for
 Phoenix the base and quote in either order. Then read each pool's liquidity, price and fee at the
 offsets above, drop the empty ones and those whose fee is more than one rate, and keep the deepest
-and cheapest, with the accounts its slot takes for the direction of the trade.
+and cheapest. `sauce pools` does all of this, and `--pay` gives the pools chosen in slot order.
 
 | Venue                                      | Size  | First mint | Second mint |
 | ------------------------------------------ | ----- | ---------- | ----------- |

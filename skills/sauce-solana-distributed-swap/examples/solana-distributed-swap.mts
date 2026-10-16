@@ -1,11 +1,12 @@
 // Compiles solana-distributed-swap.sauce.ts for Solana the way `sauce compile` does, and checks
 // that the SKILL.md shows the program's own code; that each venue `@sauce/router` swaps at is the
 // program id the SDK records for it, written beside its key, and listed in the skill's table with
-// its function, which takes the arguments the skill gives; that the pool offsets the library reads
-// are the SDK's own for each venue; that the program's accounts are the ones its header and the
-// skill name, in order; and that `maxPrice`, `minTokens`, `maxAvgPrice` and the simulation's average
-// the skill and the header give are what the arithmetic gives. Asserts what can be checked offline;
-// sends nothing.
+// the name a program calls it by, which the SDK gives that program, and its function, which takes
+// the arguments `swap` does; that the pool offsets the library reads are the SDK's own for each
+// venue; that the program takes its pools as `Address` arguments and every account it names is
+// derived, the ones the skill counts; and that `maxPrice`, `minTokens`, `maxAvgPrice` and the
+// simulation's average the skill and the header give are what the arithmetic gives. Asserts what
+// can be checked offline; sends nothing.
 //
 //   node solana-distributed-swap.mts
 import { readFileSync } from "node:fs";
@@ -43,14 +44,31 @@ const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
 const venues = readFileSync(new URL("../references/venues.md", import.meta.url), "utf8");
 const prose = skill.replace(/\s+/g, " ");
 
-// The SKILL.md shows the program's code exactly: the file less its header comment.
-const code = source.slice(source.indexOf("// The swaps are"));
+// The SKILL.md shows the program's code exactly: the file from its first code comment on, past the
+// header and the blank line after it.
+const header = source.slice(0, source.indexOf("\n\n") + 1);
+const code = source.slice(header.length + 1);
+check(code.startsWith("// "), "the program's code opens with a comment");
 const shown = /```sauce chain=solana\n([\s\S]*?)```/.exec(skill);
 check(shown !== null && shown[1] === code, "the SKILL.md's program is the example file's code");
 
-// The program swaps through `@sauce/router`'s `trySwap`, and the library the package serves for it
-// on Solana is its SVM arm.
-check(/^import \{ trySwap \} from "@sauce\/router";$/m.test(code), "the program imports trySwap");
+// The program imports nothing: each slot is one `Solana.swap` at the pool `main` is given, in
+// order, paying `pay` for `buy`, which compiles to `@sauce/router`'s `swap`, the library the
+// package serves for it on Solana being its SVM arm.
+check(!/^import /m.test(code), "the program imports nothing");
+const SLOTS = [0, 1, 2, 3];
+check(
+  [...code.matchAll(/^ {2}Solana\.swap\(pool(\d), pay, buy, /gm)]
+    .map((m) => Number(m[1]))
+    .join() === SLOTS.join(),
+  "the program swaps at pool0 to pool3 in turn, one Solana.swap each",
+);
+const program = routes.compileSauceProgram("solana", source);
+check(
+  /^import \{ swap as __sauce_swap \} from "@sauce\/router";$/m.test(program.source) &&
+    (program.source.match(/__sauce_swap\(/g) ?? []).length === SLOTS.length,
+  "each Solana.swap is @sauce/router's swap",
+);
 const entry = resolveSdkPackage("@sauce/router");
 if (entry === undefined) throw new Error("the SDK serves @sauce/router");
 const served = resolveSdkModule(entry.replace(/\.js$/, ".svm.js"));
@@ -70,32 +88,35 @@ const params = (name: string) =>
     .join(", ");
 
 // Each venue the library swaps at is the SDK's program id: its 32-byte key, the base58 id written
-// beside it in `trySwap` and above its own function, and a row of the skill's table naming that
-// function, which takes `trySwap`'s arguments, as the skill says.
+// beside it in `swap` and above its own function, and a row of the skill's table naming the venue's
+// name in a program (the SDK's, for that program) and that function, which takes `swap`'s
+// arguments, as the skill says.
 const key = (id: string) =>
   `0x${Buffer.from(getAddressEncoder().encode(id as never)).toString("hex")}`;
-const VENUES: [string, string, string][] = [
-  ["tryRaydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, "Raydium CLMM"],
-  ["tryPancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, "PancakeSwap CLMM"],
-  ["tryByreal", BYREAL_PROGRAM_ID, "Byreal"],
-  ["tryStabbleClmm", STABBLE_CLMM_PROGRAM_ID, "Stabble CLMM"],
-  ["tryOrcaWhirlpool", ORCA_WHIRLPOOL_PROGRAM_ID, "Orca Whirlpools"],
-  ["tryCropper", CROPPER_PROGRAM_ID, "Cropper"],
-  ["tryDefituna", DEFITUNA_PROGRAM_ID, "DefiTuna"],
-  ["tryCrema", CREMA_PROGRAM_ID, "Crema"],
-  ["tryPhoenix", PHOENIX_PROGRAM_ID, "Phoenix"],
+const VENUES: [string, string, string, string][] = [
+  ["Raydium.CLMM", "raydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, "Raydium CLMM"],
+  ["Pancakeswap.CLMM", "pancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, "PancakeSwap CLMM"],
+  ["Byreal.CLMM", "byreal", BYREAL_PROGRAM_ID, "Byreal"],
+  ["Stabble.CLMM", "stabbleClmm", STABBLE_CLMM_PROGRAM_ID, "Stabble CLMM"],
+  ["Orca.Whirlpool", "orcaWhirlpool", ORCA_WHIRLPOOL_PROGRAM_ID, "Orca Whirlpools"],
+  ["Cropper.Whirlpool", "cropper", CROPPER_PROGRAM_ID, "Cropper"],
+  ["Defituna.Fusion", "defituna", DEFITUNA_PROGRAM_ID, "DefiTuna"],
+  ["Crema.CLMM", "crema", CREMA_PROGRAM_ID, "Crema"],
+  ["Phoenix.Market", "phoenix", PHOENIX_PROGRAM_ID, "Phoenix"],
 ];
 const ARGS = "slot, trader, amountIn, maxPrice, minOut, recipient";
+check(params("swap") === ARGS, `swap takes (${ARGS})`);
+const named = routes.sourceGlobals("solana").venues;
 check(
-  params("trySwap") === ARGS && prose.includes(`\`(${ARGS})\``),
-  `trySwap takes (${ARGS}), as the skill gives them`,
+  named.map((one) => `${one.namespace} ${one.program}`).join() ===
+    VENUES.map(([namespace, , id]) => `${namespace} ${id}`).join(),
+  "the SDK names the nine venues as the skill does, each for its program",
 );
-check(params("swap") === ARGS, "and so does swap");
-const dispatch = body("trySwap");
-for (const [fn, id, venue] of VENUES) {
+const dispatch = body("swap");
+for (const [namespace, fn, id, venue] of VENUES) {
   check(
     dispatch.includes(`${key(id)}`) && dispatch.includes(`// ${venue}, ${id}`),
-    `trySwap takes ${venue}'s pools, ${id}`,
+    `swap takes ${venue}'s pools, ${id}`,
   );
   check(
     new RegExp(`// ${venue}, ${id}[^\\n]*\\n(?://[^\\n]*\\n)*export function ${fn}\\(`).test(
@@ -103,17 +124,23 @@ for (const [fn, id, venue] of VENUES) {
     ) && body(fn).includes(key(id)),
     `${fn} takes ${venue}'s pools, ${id}`,
   );
-  const plain = fn.charAt(3).toLowerCase() + fn.slice(4);
-  check(params(fn) === ARGS && params(plain) === ARGS, `${fn} and ${plain} take (${ARGS})`);
+  check(params(fn) === ARGS, `${fn} takes (${ARGS})`);
   check(
-    new RegExp(`\\| ${venue} +\\| \`${id}\` +\\|[^\\n]*\\| \`${fn}\` +\\|`).test(skill),
-    `the skill's table lists ${venue}, ${id}, ${fn}`,
+    !library.includes(`export function try${fn.charAt(0).toUpperCase()}${fn.slice(1)}(`),
+    `${fn} is the one swap at ${venue}`,
+  );
+  check(
+    new RegExp(
+      `\\| ${venue} +\\| \`${id}\` +\\|[^\\n]*\\| \`${namespace.replace(".", "\\.")}\\.swap\` +\\| \`${fn}\` +\\|`,
+    ).test(skill),
+    `the skill's table lists ${venue}, ${id}, ${namespace}.swap, ${fn}`,
   );
 }
 check(
   (dispatch.match(/0x[0-9a-f]{64}/g) ?? []).length === VENUES.length,
-  "trySwap takes those venues and no other",
+  "swap takes those venues and no other",
 );
+check(!library.includes("export function trySwap("), "swap is the one swap at any venue");
 for (const left of ["Invariant", "Meteora DLMM", "Bonkswap", "Saros DLMM", "Manifest"])
   check(
     prose.includes(`**${left}**`) || prose.includes(left),
@@ -146,28 +173,78 @@ for (const row of [
 ])
   check(venues.replace(/ +/g, " ").includes(row), `the venues reference has ${row}`);
 
-// The accounts: the header's and the skill's names, in the manifest's order, nine to a slot.
-const program = routes.compileSauceProgram("solana", source);
-const names = (program.manifest?.accounts ?? []).map((entry) =>
-  entry.kind === "slot" ? entry.name : "…",
-);
-const shared = ["authority", "source", "output", "recipient", "refund", "payMint", "buyMint"];
-const slot = (k: number) =>
-  ["program", "pool", "config", "vaultA", "vaultB", "extra"]
-    .map((name) => `${name}${k}`)
-    .concat([0, 1, 2].map((i) => `ticks${k}${i}`));
-const expected = [...shared, "tokenProgram", "token2022", "memo", ...[0, 1, 2, 3].flatMap(slot)];
-check(names.join() === expected.join(), `the program takes ${expected.length} accounts in order`);
+// The inputs: main's arguments, the ones the header and the skill name, in order; and the accounts,
+// every one derived, none left to give: each pool's nine read from it for the token paid, the
+// Pot's, the mints', the programs' and the settle's.
+const ARGUMENTS = (pools: number) => [
+  "pay",
+  "buy",
+  ...Array.from({ length: pools }, (_, k) => `pool${k}`),
+  ...["budget", "maxPrice", "minTokens", "maxAvgPrice", "recipient", "refund"],
+];
 check(
-  prose.includes(`slots and the shared accounts are ${expected.length} accounts`),
+  program.entryParams.map((param) => `${param.name}: ${param.type}`).join() ===
+    ARGUMENTS(4)
+      .map(
+        (name) =>
+          `${name}: ${/^(pay|buy|pool\d|recipient|refund)$/.test(name) ? "Address" : "Uint256"}`,
+      )
+      .join(),
+  `main's arguments are ${ARGUMENTS(4).join(", ")}`,
+);
+for (const name of ARGUMENTS(4))
+  check(new RegExp(`\\b${name}\\b`).test(header), `the header names the argument ${name}`);
+check(
+  prose.includes(
+    "`main`'s arguments, in order: `pay`, `buy`, `pool0` to `pool3`, `budget`, `maxPrice`, " +
+      "`minTokens`, `maxAvgPrice`, `recipient` and `refund`",
+  ),
+  "the skill gives them in order",
+);
+const SLOT = [
+  "program",
+  "pool",
+  "config",
+  "vaultA",
+  "vaultB",
+  "extra",
+  "ticks0",
+  "ticks1",
+  "ticks2",
+];
+const derivations = (pools: number) => [
+  "self:@pay",
+  "self",
+  "self:@buy",
+  ...SLOT.map((part) => `slot:@pool0:@pay.${part}`),
+  "mint:@pay",
+  "mint:@buy",
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+  ...Array.from({ length: pools - 1 }, (_, k) =>
+    SLOT.map((part) => `slot:@pool${k + 1}:@pay.${part}`),
+  ).flat(),
+  "program:@buy",
+  "@recipient:@buy",
+  "program:@pay",
+  "@refund:@pay",
+];
+const derivedOf = (compiled: typeof program): string[] =>
+  (compiled.manifest?.accounts ?? []).map((slot) =>
+    slot.kind === "slot"
+      ? ((compiled.derivedAccounts as Record<string, string> | undefined)?.[slot.name] ??
+        `${slot.name}, not derived`)
+      : "…",
+  );
+const expected = derivations(4);
+check(
+  derivedOf(program).join() === expected.join(),
+  `the program names ${expected.length} accounts, every one derived`,
+);
+check(
+  prose.includes(`The program names ${expected.length} accounts, every one derived`),
   "the skill counts them",
-);
-const header = source.slice(0, source.indexOf("// The swaps are"));
-for (const name of [...shared, "tokenProgram", "token2022", "memo"])
-  check(new RegExp(`\\b${name}\\b`).test(header), `the header names the account ${name}`);
-check(
-  program.entryParams.map((param) => param.name).join() === "budget,maxPrice,minTokens,maxAvgPrice",
-  "main's arguments are budget, maxPrice, minTokens, maxAvgPrice",
 );
 console.log(
   `solana: ${program.bytecode.length}-byte program, ${expected.length} accounts, ${program.entryParams.length} arguments`,
@@ -176,36 +253,42 @@ check(
   prose.includes(`It is about ${(program.bytecode.length / 1000).toFixed(1)} KB`),
   "the skill gives the program's size",
 );
-
-// The five-slot program is this one with a fifth slot: main the same but for slot 4's nine accounts
-// and its trySwap call.
-const five = readFileSync(new URL("./solana-distributed-swap-5.sauce.ts", import.meta.url), "utf8");
-const slot4 =
-  /\n {2}program4: Account,\n(?: {2}\w+4\d?: Account(?:<Writable>)?,\n){8}/.exec(five)?.[0] ?? "";
-const call4 = /\n {2}trySwap\(\n {4}\[program4,[^;]*;/.exec(five)?.[0] ?? "";
+// The simulation the skill reads stages the program with its arguments, each one 32-byte word.
 check(
-  slot4 !== "" &&
-    call4 !== "" &&
-    five.slice(five.indexOf("// The swaps are")).replace(slot4, "\n").replace(call4, "") === code,
-  "the five-slot program is this one with slot 4's accounts and call",
+  skill.includes(
+    `the ${program.bytecode.length + 32 * program.entryParams.length}-byte program staged`,
+  ),
+  "the skill's simulation stages the program and its arguments",
+);
+
+// The five-slot program is this one with a fifth slot: main the same but for one more pool
+// argument and one more swap.
+const five = readFileSync(new URL("./solana-distributed-swap-5.sauce.ts", import.meta.url), "utf8");
+const fiveCode = five.slice(five.indexOf("\n\n") + 2);
+const call4 =
+  "\n  Solana.swap(pool4, pay, buy, Token(pay).balanceOf(ctx.self()) - kept, maxPrice, 0);";
+check(
+  fiveCode.includes("\n  pool4: Address,") &&
+    fiveCode.includes(call4) &&
+    fiveCode.replace("\n  pool4: Address,", "").replace(call4, "") === code,
+  "the five-slot program is this one with pool4's argument and swap",
+);
+check(
+  prose.includes(`declare \`pool4: Address\` after \`pool3\``) &&
+    prose.includes(call4.trim().replace(/;$/, "")),
+  "the skill adds the fifth slot the same way",
 );
 const program5 = routes.compileSauceProgram("solana", five);
-const names5 = (program5.manifest?.accounts ?? []).map((entry) =>
-  entry.kind === "slot" ? entry.name : "…",
-);
-const expected5 = [...expected, ...slot(4)];
 check(
-  names5.join() === expected5.join(),
-  `the five-slot program takes ${expected5.length} accounts`,
+  program5.entryParams.map((param) => param.name).join() === ARGUMENTS(5).join(),
+  "the five-slot program takes the fifth pool after the fourth",
 );
 check(
-  (five.match(/^ {2}trySwap\(/gm) ?? []).length === 5,
-  "and trades each of its five slots in turn",
+  derivedOf(program5).join() === derivations(5).join(),
+  `the five-slot program names ${derivations(5).length} accounts, every one derived`,
 );
-check(
-  program5.entryParams.map((param) => param.name).join() ===
-    "budget,maxPrice,minTokens,maxAvgPrice",
-  "with the same arguments",
+console.log(
+  `solana, five slots: ${program5.bytecode.length}-byte program, ${derivations(5).length} accounts`,
 );
 
 // maxPrice: the price in whole tokens times 10^(18 + payDecimals − buyDecimals). USDC has 6
@@ -237,14 +320,18 @@ check(maxAvg === 119_750_000_000_000_000n, "maxAvgPrice halfway between 119.5 an
 for (const value of [buySol, floorSol, sellSol, maxAvg])
   check(skill.includes(`**${value}**`), `the skill quotes ${value}`);
 check(skill.includes(`\`${minTokens}\``), `the skill quotes minTokens ${minTokens}`);
-// The commands pass them: the simulation, and the run with its checks set.
+// The commands pass them, after the tokens and the pools: the simulation, the run with its checks
+// set, and the header's example line.
+const pools = "--args USDC WSOL <pool0> <pool1> <pool2> <pool3> \\ ";
 check(
-  prose.includes(`--args ${budget} ${buySol} 0 0`) &&
-    prose.includes(`--args ${budget} ${buySol} ${minTokens} ${maxAvg}`),
+  prose.includes(`${pools}${budget} ${buySol} 0 0 <recipient> <refund>`) &&
+    prose.includes(`${pools}${budget} ${buySol} ${minTokens} ${maxAvg} <recipient> <refund>`),
   "the skill's commands pass those values",
 );
 check(
-  source.includes(`--args ${budget} ${buySol} ${minTokens} 0`),
+  header
+    .replace(/\s+/g, " ")
+    .includes(`${pools}// ${budget} ${buySol} ${minTokens} 0 <recipient> <refund>`),
   "and the header's example line",
 );
 

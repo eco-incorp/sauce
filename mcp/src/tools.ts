@@ -1584,9 +1584,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "sauce_simulate's block to simulate on the prices a maxPrice was taken from. On Solana " +
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
         "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
-        "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts the distributed swap " +
-        "takes for the pool (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
-        "System program; `skipped` lists the pools the distributed swap skips, with why.",
+        "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts a swap " +
+        "at the pool takes (program, pool, config, vaultA, vaultB, extra, ticks), unused ones the " +
+        "System program, which a program given the pool as an Address argument derives itself; " +
+        "`skipped` lists the pools the distributed swap skips, with why. With pay, `chosen` and " +
+        "`poolArgs`: the pools a distributed swap takes, in slot order, padded with the System " +
+        "program (an empty slot), ready for its args.",
       input: {
         chain: chainRef,
         tokenA: z
@@ -1628,8 +1631,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .optional()
           .describe(
             "Solana only: choose the pools a distributed swap paying this token (one of the " +
-              "pair) takes, and return `chosen` and `accounts`, the program's slots' accounts " +
-              "(program0 … ticks32), every slot past the last chosen the System program.",
+              "pair) takes, and return `chosen`, `poolArgs` (those pools in slot order for the " +
+              "program's args, every slot past the last chosen the System program) and " +
+              "`accounts` (their slots' accounts, program0 … ticks32, for a program that takes " +
+              "its slots as accounts).",
           ),
         maxPrice: z
           .string()
