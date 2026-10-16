@@ -48,9 +48,10 @@ describe("waiting for a fill's lookup table", () => {
         },
       }),
     } as never;
-    const refusal = tableReady(failing, "solana", "T", 10n, FAST);
-    await expect(refusal).rejects.toThrow(
-      /reading solana's slot, to wait for the lookup table T, failed: fetch failed for <endpoint>/,
-    );
+    const said =
+      /reading solana's slot, to wait for the lookup table T, failed: fetch failed for <endpoint>/;
+    await expect(tableReady(failing, "solana", "T", 10n, FAST)).rejects.toThrow(said);
+    // Where the send reported no slot, the first read is the one that fails.
+    await expect(tableReady(failing, "solana", "T", undefined, FAST)).rejects.toThrow(said);
   });
 });
