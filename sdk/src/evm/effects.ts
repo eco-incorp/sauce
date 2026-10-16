@@ -22,6 +22,7 @@ import {
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
 import { chains } from "../chains/index.js";
 import { PortalABI } from "../protocols/eco-routes/abis.js";
+import { ecoRoutesDeployment } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
 import { intentFromPublished, predictIntentVault } from "../routes/portal.js";
 import { sourceGlobals } from "../routes/source-globals.js";
@@ -82,7 +83,8 @@ export interface IntentEffect {
   /** The chain it goes to, as the SDK knows it; `undefined` for one it does not. */
   readonly destination?: CanonicalChain;
   readonly intent: Intent;
-  /** Its vault, where its reward is held: the Portal's derivation. */
+  /** Its vault, where its reward is held: the Portal's derivation, for the chain's eco-routes
+   *  Portal; absent for an intent another contract announced. */
   readonly vault?: Address;
   /** Whether the cook's own logs say the Portal counted it funded (`IntentFunded`, complete). A
    *  reward paid into the vault before a plain `publish` logs no such event. */
@@ -199,10 +201,12 @@ export async function effectsOf(
     const amount = amountOf(log.data);
     const topic = topic0?.toLowerCase();
     const intent = portalIntent(log, chain);
+    const funding = topic === INTENT_FUNDED ? fundedIntent(log) : undefined;
     if (intent !== undefined) {
       published.push({ ...intent, portal: emitter });
-    } else if (topic === INTENT_FUNDED && fundedIntent(log) !== undefined) {
-      if (fundedIntent(log)!.complete) funded.add(`${emitter}:${fundedIntent(log)!.intentHash}`);
+    } else if (funding !== undefined) {
+      // Only a complete funding counts: `complete` false is a reward short of what it offers.
+      if (funding.complete) funded.add(`${emitter}:${funding.intentHash}`);
     } else if (topic === TRANSFER && log.topics.length === 3 && amount !== undefined) {
       const parties = { from: topicAddress(one!), to: topicAddress(two!), amount };
       const move: Movement =
@@ -270,13 +274,14 @@ export async function effectsOf(
 
   // Each intent with its vault, which names the vault in what moved: the reward going into it.
   const named = new Map(labels);
+  // A vault is derived for the chain's eco-routes Portal, whose vaults the SDK knows how to derive;
+  // another contract announcing an intent names none.
+  const registered = ecoRoutesDeployment(chain)?.Portal;
   const intents = published.map(({ intent, intentHash, portal }): IntentEffect => {
-    let vault: Address | undefined;
-    try {
-      vault = getAddress(predictIntentVault(intent, { portal }));
-    } catch {
-      vault = undefined;
-    }
+    const vault =
+      registered !== undefined && getAddress(registered) === portal
+        ? getAddress(predictIntentVault(intent, { portal }))
+        : undefined;
     if (vault !== undefined && !named.has(vault)) {
       named.set(vault, `the vault of intent ${shortHash(intentHash)}`);
     }
