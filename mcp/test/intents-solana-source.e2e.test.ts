@@ -174,11 +174,10 @@ describe("the intent tools on a Solana source", () => {
     const funded = ok(
       await mcp.call("sauce_intent_status", { intent: intent!.record, rpcUrls }),
     ) as { state: string; source: { chain: string; funded: boolean } };
-    assert.deepEqual([funded.state, funded.source.chain, funded.source.funded], [
-      "funded",
-      "solana",
-      true,
-    ]);
+    assert.deepEqual(
+      [funded.state, funded.source.chain, funded.source.funded],
+      ["funded", "solana", true],
+    );
 
     // The proof Solana's HyperProver records when Hyperlane delivers the fill's, as it writes it:
     // the account's discriminator, the chain it was filled on, the claimant.
