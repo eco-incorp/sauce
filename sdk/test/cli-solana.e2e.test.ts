@@ -1373,6 +1373,23 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(unread.stderr).toMatch(/warning: \w+ created a Pot, whose record could not be made: /);
     expect(harness.svm.getAccount(await potOf(hexToBytes(potSalt("unread")))).exists).toBe(true);
     expect(stored()).toEqual(before);
+    // The same for a cook whose own transaction creates its Pot: the cook lands, the Pot is there,
+    // and only its record is said to be missing.
+    const unreadCook = await potOf(hexToBytes(potSalt("unread cook")));
+    const { dest: paid, flags: unreadFlags } = accountsFor(unreadCook, 100n);
+    const ran = await recorded(
+      ...["run", sweep, "--define", mintDefine, "--salt", "unread cook"],
+      ...["--rpc-url", "http://127.0.0.1:65533/", "--keypair", owner.path],
+      ...[...unreadFlags, "--args", "50"],
+    );
+    expect(ran.code).toBe(0);
+    expect(ran.stdout).toContain(
+      `created Pot ${unreadCook} in the cook's own transaction, ahead of the cook`,
+    );
+    expect(ran.stderr).toMatch(/warning: \w+ created a Pot, whose record could not be made: /);
+    expect(harness.svm.getAccount(unreadCook).exists).toBe(true);
+    expect(tokenAmount(harness, paid)).toBe(50n);
+    expect(stored()).toEqual(before);
   }, 120_000);
 
   it("asks before creating a Pot whose creation does not fit in the cook's transaction; -y creates it", async () => {
