@@ -31,7 +31,10 @@ every account a pool takes is read from it as the cook is built, and what fits i
   Orca's program keeps for the pair at tick spacing 4, as `UniswapV3.Factory.getPool(USDC, WETH,
 500)` is Uniswap's at fee 500. The key is each venue's own: a tick spacing for Orca, Cropper,
   DefiTuna and Crema, a fee in millionths for Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble.
-  A loop over keys written out (`for (const spacing of [1, 4, 64])`) finds one pool per key.
+  A loop over keys written out (`for (const spacing of [4, 1])`) finds one pool per key. Where a
+  venue keeps two configs at one fee (Raydium's and PancakeSwap's 0.01% and 0.05%), the tick
+  spacing follows the fee (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`); the fee alone is refused for
+  a pair with a pool under both, naming each.
 - **Every account is derived.** A Solana transaction lists every account it touches before it
   runs, so the key must be known when the program compiles, and compiling adds the accounts a swap
   at each pool takes to `main`. The command reads each pool from the cluster as it builds the cook,
@@ -115,8 +118,9 @@ its pool takes and how to list a pair's pools are in [references/venues.md](refe
 ## The program
 
 [examples/solana-distributed-swap.sauce.ts](examples/solana-distributed-swap.sauce.ts) is one
-complete implementation of those rules, buying SOL with USDC at Orca's and Raydium's pools of the
-pair; its header gives every input with its units and how to run it. Each venue's byte layout,
+complete implementation of those rules, buying SOL with USDC at the four deepest pools of the pair:
+Orca's at tick spacing 4 and 1, Raydium's at fee 0.04% and 0.02%; its header gives every input with
+its units and how to run it. Each venue's byte layout,
 instruction format and account order is `@sauce/router`'s, which every compile the package makes
 resolves with no option. Its code:
 
@@ -138,7 +142,7 @@ function main(
 
   // Each pool in turn, offered what is left of the budget.
   let bought = 0;
-  for (const spacing of [1, 4, 64]) {
+  for (const spacing of [4, 1]) {
     bought += Orca.Whirlpool.swap(
       Orca.Whirlpool.pool(USDC, WSOL, spacing),
       USDC,
@@ -148,7 +152,7 @@ function main(
       0,
     );
   }
-  for (const fee of [400]) {
+  for (const fee of [400, 200]) {
     bought += Raydium.CLMM.swap(
       Raydium.CLMM.pool(USDC, WSOL, fee),
       USDC,
@@ -200,7 +204,7 @@ function main(
   prints by name.
 
 **Other pools.** Each venue is one loop over its keys, or one call with its key written in: add a
-venue as one more loop (`for (const fee of [100]) { bought += Pancakeswap.CLMM.swap(
+venue as one more loop (`for (const fee of [300]) { bought += Pancakeswap.CLMM.swap(
 Pancakeswap.CLMM.pool(USDC, WSOL, fee), USDC, WSOL, self.USDC - kept, priceLimit, 0); }`), and a
 key by adding it to its list. Another pair is the symbols in every call and in `self.USDC`. Keep
 to what fits in one cook (below).
@@ -343,7 +347,7 @@ never a result. Buying SOL with 2,000 USDC, Orca's spacing-4 pool deep enough fo
 addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 340680 compute units, returns <the same three words, in hex>
+The cook succeeds from <owner>: 338536 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 25 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
   the 3837-byte program staged into a code buffer in 7 transactions, as `sauce run` stages it

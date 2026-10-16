@@ -140,9 +140,12 @@ command derives it as it builds the cook and reads the pool there; no pool there
 
 A whirlpool's key is its fee tier's index, at 43: its tick spacing for every pool whose fee is
 fixed, and another number for an adaptive fee, which the swap skips. A Raydium-code program keeps
-one `AmmConfig` per fee, the program address of `["amm_config", index]` (a big-endian u16), its
-fee at 47 of that account: the program names the fee, and the SDK knows the config of each fee its
-venue charges.
+its `AmmConfig`s at the program address of `["amm_config", index]` (a big-endian u16), each one's
+fee at 47 and tick spacing at 51 of that account: the program names the fee, and the SDK knows
+every config of each venue. Some fees have two configs, at different tick spacings (Raydium's and
+PancakeSwap's 0.01% and 0.05%): the fee then names a pool under each, the command takes the one
+there, and refuses the fee alone where both are, naming each, for the spacing to follow the fee
+(`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`).
 
 ## Listing a pair's pools
 

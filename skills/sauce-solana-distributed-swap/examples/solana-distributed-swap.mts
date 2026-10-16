@@ -134,7 +134,7 @@ for (const [namespace, fn, id, venue] of VENUES) {
   const by =
     pool === undefined
       ? "by its address"
-      : /, fee: Uint256\)/.test(pool)
+      : /, fee: Uint256, tickSpacing\?: Uint256\)/.test(pool)
         ? "fee"
         : /, tickSpacing: Uint256\)/.test(pool)
           ? "tick spacing"

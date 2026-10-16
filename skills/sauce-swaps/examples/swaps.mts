@@ -307,7 +307,10 @@ for (const venue of routes.sourceGlobals("solana").venues) {
   check(
     by === undefined
       ? pool === undefined
-      : pool === `pool(tokenA: Address, tokenB: Address, ${by}: Uint256): Address`,
+      : pool ===
+          (by === "fee"
+            ? "pool(tokenA: Address, tokenB: Address, fee: Uint256, tickSpacing?: Uint256): Address"
+            : "pool(tokenA: Address, tokenB: Address, tickSpacing: Uint256): Address"),
     `${venue.namespace} finds its pools ${by === undefined ? "by address" : `by ${by}`}`,
   );
 }

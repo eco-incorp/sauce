@@ -1,7 +1,8 @@
 // SOL for USDC over Solana's pools, as a limit order: up to `budget` USDC, never more than
 // `priceLimit` for any SOL, fees included, and at least `minTokens` SOL or nothing. The pools are
 // found by key, as an EVM program finds a Uniswap pool by its fee: Orca's whirlpools of the pair at
-// tick spacing 1, 4 and 64, then Raydium's CLMM pools at fee 0.04%. A key with no pool is skipped.
+// tick spacing 4 and 1, then Raydium's CLMM pools at fee 0.04% and 0.02%, the deepest of each
+// first. A key with no pool is skipped.
 // Each pool is offered what is left of the budget and trades until its price, fee paid, reaches
 // priceLimit. Compiling adds each pool's accounts to main, read from the pool when the cook is
 // built, so the command is given no account.
@@ -38,7 +39,7 @@ function main(
 
   // Each pool in turn, offered what is left of the budget.
   let bought = 0;
-  for (const spacing of [1, 4, 64]) {
+  for (const spacing of [4, 1]) {
     bought += Orca.Whirlpool.swap(
       Orca.Whirlpool.pool(USDC, WSOL, spacing),
       USDC,
@@ -48,7 +49,7 @@ function main(
       0,
     );
   }
-  for (const fee of [400]) {
+  for (const fee of [400, 200]) {
     bought += Raydium.CLMM.swap(
       Raydium.CLMM.pool(USDC, WSOL, fee),
       USDC,

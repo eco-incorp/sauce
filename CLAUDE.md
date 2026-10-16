@@ -875,8 +875,12 @@ price-limit venues, protocol then program as on an EVM chain: `Raydium.CLMM`, `P
 `Crema.CLMM`, `Phoenix.Market`; ONE swap, and a `try` spelling is refused; there is no chain-level
 `Solana.swap`) with its pool found by key, `<Protocol>.<Program>.pool(tokenA, tokenB, key)`, as an
 EVM factory's `getPool` (`svm/pool-keys.ts`: the PDA of the pair, lower key first, and a tick
-spacing for Orca/Cropper/DefiTuna/Crema or a fee for the Raydium-code four, each fee mapped to its
-`AmmConfig` index by a table pinned to the fixtures' configs; Phoenix has no `pool`), written as the
+spacing for Orca/Cropper/DefiTuna/Crema or a fee for the Raydium-code four, each fee its `AmmConfig`s
+from a table of every config the four programs keep, pinned to
+`test/fixtures/svm-pool-keys/amm-configs.json`, which `scripts/dump-amm-configs.mjs --redump|--check
+--rpc-config <file>` reads from mainnet; a fee two configs charge (Raydium's and PancakeSwap's 0.01%
+and 0.05%) names a pool under each, the cook taking the one there and refusing two, naming each, for
+the tick spacing to follow the fee, `pool(USDC, WSOL, 100, 1)`; Phoenix has no `pool`), written as the
 swap's pool with its key a literal or a `for…of` variable over literal keys, which
 `unrollPoolKeyLoops` writes out once per key (`if (true) { const k = 4; … }`; a loop that `continue`s
 stays a one-key loop; `break` and a label are refused), are lowered by `routes/svm-lowering.ts`, one

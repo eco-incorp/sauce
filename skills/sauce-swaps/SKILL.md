@@ -254,8 +254,11 @@ sauce run solana-swap.sauce.ts --chain solana --keypair <keypair> \
   `Crema.CLMM`) or a fee in millionths (`Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`,
   `Stabble.CLMM`: 400 is 0.04%), either token first. It is written as the swap's pool, its key a
   number written out or a loop's variable over numbers written out
-  (`for (const spacing of [1, 4, 64]) { … }`, one pool per key). Where the venue has no pool at the
-  key, the swap returns `0`. `sauce pools --chain solana USDC WSOL` prints each pool's key.
+  (`for (const spacing of [4, 1]) { … }`, one pool per key). Where the venue keeps two configs at
+  one fee (Raydium's and PancakeSwap's 0.01% and 0.05%), the tick spacing follows the fee
+  (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`), and the fee alone is refused for a pair with a pool
+  under both. Where the venue has no pool at the key, the swap returns `0`.
+  `sauce pools --chain solana USDC WSOL` prints how a program finds each pool (`byKey`).
   Phoenix's markets are named by their address instead: a `main` parameter declared `Address`.
 - **Each call compiles to that venue's function below** (`orcaWhirlpool`), keeping every check: the
   venue's program, the pool's owner, the pair, `minOut`. A pool of another venue reverts on chain
