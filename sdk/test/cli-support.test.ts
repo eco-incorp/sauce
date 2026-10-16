@@ -370,7 +370,6 @@ describe("refused on a preview chain, before any network call", () => {
       file: "to-arbitrum.sauce.ts",
       text: TO_ARBITRUM,
       chain: requireChain("base"),
-      compactArgs: false,
       defines: { RECIPIENT: BigInt(RECIPIENT) },
       intents: { deadline: 2_000_000_000n, creator: CREATOR },
     };

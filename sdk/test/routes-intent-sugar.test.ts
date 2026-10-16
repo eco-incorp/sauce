@@ -56,7 +56,7 @@ const context = (overrides: Record<string, unknown> = {}) =>
     compileChild: (_chain: unknown, _source: string, captures: readonly string[]) => ({
       call: {
         target: "0x4444444444444444444444444444444444444444",
-        // Each sentinel as the 32-byte left-padded word a real compact-v1 argument tail carries.
+        // Each sentinel as the 32-byte left-padded word a real ABI-v1 argument tail carries.
         data: `0x${"cd".repeat(4)}${captures
           .map(
             (_, i) =>

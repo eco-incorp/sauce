@@ -39,7 +39,6 @@ function recordOf(source: string, chain: string): Record<string, unknown> {
       file: "intent.sauce.ts",
       text: source,
       chain: requireChain(chain),
-      compactArgs: false,
       defines: { RECIPIENT: BigInt(RECIPIENT) },
       intents: { deadline: 2_000_000_000n, creator: OWNER },
     },

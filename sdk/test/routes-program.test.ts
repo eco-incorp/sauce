@@ -12,7 +12,6 @@ import {
   type Hex,
 } from "viem";
 
-import { encodeCompactArguments } from "../src/compact-arguments.js";
 import { decodeEntryArguments, encodeEntryArguments, mainParams } from "../src/routes/entry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
@@ -50,7 +49,6 @@ describe("compileSauceProgram", () => {
     expect(bytesToHex(base.bytecode)).toContain(usdc("base"));
     expect(bytesToHex(arbitrum.bytecode)).toContain(usdc("arbitrum"));
     expect(bytesToHex(base.bytecode)).not.toContain(usdc("arbitrum"));
-    expect(base.entryEncoding).toBe("abi-v1");
     expect(base.entryParams).toEqual([
       { name: "token", type: "Address" },
       { name: "recipients", type: "Address[]" },
@@ -123,14 +121,10 @@ describe("compileSauceProgram", () => {
     expect(bytesToHex(optedOut.bytecode)).toContain(publishAndFund.data.slice(10, 200));
   });
 
-  it("reports compact-v1 with its schema, and on Solana the accounts apart from the arguments", () => {
-    const compact = compileSauceProgram("base", SPLIT, { compactArgs: true });
-    expect(compact.entryEncoding).toBe("compact-v1");
-    expect(compact.entrySchema).toBeInstanceOf(Uint8Array);
+  it("reports on Solana the accounts apart from the arguments", () => {
     const svm = compileSauceProgram(
       "solana",
       "function main(vault: Account<Writable>, amount: Uint256) {\n  require(vault.dataLen > amount);\n}\n",
-      { compactArgs: true },
     );
     expect(svm.entryParams).toEqual([{ name: "amount", type: "Uint256" }]);
     expect(svm.manifest).toEqual({
@@ -223,7 +217,7 @@ describe("encodeEntryArguments", () => {
   it("encodes ABI-v1 as abi.encode of the parameters, with no selector", () => {
     const untupled = params.filter((param) => param.name !== "leg");
     const encoded = encodeEntryArguments(
-      { entryEncoding: "abi-v1", entryParams: untupled },
+      { entryParams: untupled },
       values.filter((_, index) => params[index]!.name !== "leg"),
     );
     const expected = encodeAbiParameters(
@@ -246,7 +240,6 @@ describe("encodeEntryArguments", () => {
     ];
     const word = (value: bigint): Hex => numberToHex(value, { size: 32 });
     const program = {
-      entryEncoding: "abi-v1" as const,
       entryParams: [
         { name: "amount", type: "Uint256" },
         { name: "leg", type: "{ amount: Uint256, to: Address }" },
@@ -269,31 +262,9 @@ describe("encodeEntryArguments", () => {
     );
 
     // Inside an array, as inside another tuple, such a tuple is inline, as abi.encode writes it.
-    const legs = {
-      entryEncoding: "abi-v1" as const,
-      entryParams: [{ name: "legs", type: "{ amount: Uint256, to: Address }[]" }],
-    };
+    const legs = { entryParams: [{ name: "legs", type: "{ amount: Uint256, to: Address }[]" }] };
     expect(bytesToHex(encodeEntryArguments(legs, [[{ amount: 5n, to: PROVER }]]))).toBe(
       encodeAbiParameters([{ type: "tuple[]", components: LEG }], [[{ amount: 5n, to: PROVER }]]),
-    );
-  });
-
-  it("encodes compact-v1 against the program's own schema", () => {
-    const program = compileSauceProgram(
-      "base",
-      "function main(token: Address, recipients: Address[], amount: Uint256, alsoUsdc: bool, leg: { amount: Uint256, to: Address }, memo: bytes) {}",
-      { compactArgs: true },
-    );
-    expect(program.entryParams).toEqual(params);
-    expect(encodeEntryArguments(program, values)).toEqual(
-      encodeCompactArguments(program.entrySchema!, [
-        RECIPIENT,
-        [RECIPIENT, CREATOR],
-        1000n,
-        true,
-        [5n, PROVER],
-        hexToBytes("0xbeef"),
-      ]),
     );
   });
 
@@ -314,7 +285,7 @@ describe("encodeEntryArguments", () => {
   });
 
   it("names the parameter and what it takes when a value is wrong", () => {
-    const program = { entryEncoding: "abi-v1" as const, entryParams: params };
+    const program = { entryParams: params };
     const at = (index: number, value: unknown) => {
       const wrong = [...values];
       wrong[index] = value as never;
@@ -336,10 +307,7 @@ describe("encodeEntryArguments", () => {
     expect(at(4, [5])).toThrow(/a tuple of 2 fields \(amount, to\)/);
     expect(at(5, "0xbee")).toThrow(/argument 6 \(memo: bytes\).*is not bytes/);
     expect(() =>
-      encodeEntryArguments(
-        { entryEncoding: "abi-v1", entryParams: [{ name: "x", type: "Point" }] },
-        [1],
-      ),
+      encodeEntryArguments({ entryParams: [{ name: "x", type: "Point" }] }, [1]),
     ).toThrow(/'Point' is not a type an entry argument can be encoded for/);
   });
 });

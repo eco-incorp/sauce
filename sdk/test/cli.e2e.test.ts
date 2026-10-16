@@ -719,7 +719,6 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
       /building the cook transaction is refused: it involves arbitrum/,
     );
     for (const out of [base, ethereum, arbitrum]) {
-      expect(out.entryEncoding).toBe("abi-v1");
       expect(out.entryParams).toEqual([
         { name: "token", type: "Address" },
         { name: "recipients", type: "Address[]" },

@@ -6,8 +6,7 @@
  * `main`'s parameters one head word, so a tuple parameter is behind an offset even when every field
  * is fixed-size, where `abi.encode` writes those fields inline. Encoding and decoding with this
  * package's own two functions shows only that they agree with each other. This suite runs the
- * encoded arguments through a real Pot and compares what `main` returns with what it was passed, in
- * both encodings.
+ * encoded arguments through a real Pot and compares what `main` returns with what it was passed.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure without
  * it in CI.
@@ -21,8 +20,10 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  decodeFunctionData,
   hexToBigInt,
   http,
+  numberToHex,
   sliceHex,
   size,
   type Hex,
@@ -34,6 +35,7 @@ import {
   encodeEntryArguments,
   type EntryValue,
 } from "../src/routes/entry.js";
+import { v12PotAbi } from "../src/evm/engine.js";
 import { compileSauceProgram, type CompiledSauceProgram } from "../src/routes/sauce-route.js";
 import { startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
 import { freePortSync, spawnAnvil } from "./anvil-process.js";
@@ -190,18 +192,66 @@ describeEvm("main's arguments, encoded by the SDK and read by the compiled progr
     );
   };
 
-  for (const encoding of ["abi-v1", "compact-v1"] as const) {
-    for (const { name, source, values, read } of CASES) {
-      it(`${encoding}: ${name}`, async () => {
-        const program = compileSauceProgram("base", source, {
-          compactArgs: encoding === "compact-v1",
-        });
-        expect(program.entryEncoding).toBe(encoding);
+  for (const { name, source, values, read } of CASES) {
+    it(
+      name,
+      async () => {
+        const program = compileSauceProgram("base", source);
         const encoded = encodeEntryArguments(program, values);
         // Compared in decimal: jest cannot report a failed comparison of bigints from a worker.
         expect(await returned(program, encoded)).toEqual(read.map(String));
         expect(decodeEntryArguments(program, encoded)).toEqual(values);
-      }, 30_000);
-    }
+      },
+      30_000,
+    );
   }
+
+  it("an intent's body reads what the enclosing program captured, spliced into its argument words", async () => {
+    // A body that is a program takes each value it captures as one of main's arguments: one ABI
+    // word after its bytecode, holding a sentinel until the enclosing program writes the value.
+    const source = [
+      "function main(first: Uint256, second: Uint256) {",
+      "  Base(() => {",
+      '    require(first == 12345, "first");',
+      '    require(second == 777, "second");',
+      "  }).reward({ tokens: [{ token: USDC, amount: first }] });",
+      "}",
+    ].join("\n");
+    const outer = compileSauceProgram("ethereum", source, {
+      intents: {
+        deadline: 4_000_000_000n,
+        creator: TO,
+        pot: sauce.pot,
+        engine: sauce.engine,
+        executionFee: sauce.fee,
+      },
+    });
+    const [lowered] = outer.intents;
+    const [call] = lowered!.intent.route.calls;
+    const cook = decodeFunctionData({ abi: v12PotAbi, data: call!.data as Hex });
+    const child = cook.args![1] as Hex;
+    const word = (value: bigint): string => numberToHex(value, { size: 32 }).slice(2);
+    // The reward's amount has a sentinel of its own, in the publish; these are the program's.
+    const argumentWords = lowered!.sentinels.filter(({ sentinel }) =>
+      child.includes(word(sentinel)),
+    );
+    const spliced = (values: Record<string, bigint>): Hex =>
+      argumentWords.reduce(
+        (program, { sentinel, capture }) => program.replace(word(sentinel), word(values[capture]!)),
+        child,
+      ) as Hex;
+    const run = (program: Hex) =>
+      publicClient.call({
+        account: DEPLOYER.address,
+        to: sauce.pot,
+        data: sauce.cookData(program),
+        gas: GAS_LIMIT,
+      });
+
+    expect(argumentWords.map(({ capture }) => capture).sort()).toEqual(["first", "second"]);
+    // One word each, closing the payload: the program's arguments.
+    expect(child.endsWith(argumentWords.map(({ sentinel }) => word(sentinel)).join(""))).toBe(true);
+    await expect(run(spliced({ first: 12345n, second: 777n }))).resolves.toBeDefined();
+    await expect(run(spliced({ first: 12345n, second: 778n }))).rejects.toThrow();
+  }, 30_000);
 });

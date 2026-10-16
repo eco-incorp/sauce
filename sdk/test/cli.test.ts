@@ -71,7 +71,6 @@ import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { svmTokenRows } from "../src/routes/token-registry.js";
 import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
-import { encodeCompactArguments } from "../src/compact-arguments.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
@@ -361,9 +360,7 @@ describe("sauce compile", () => {
       bytecode: expect.stringMatching(/^0x[0-9a-f]+$/),
       size: ((out.bytecode as string).length - 2) / 2,
       payload: { size: ((out.bytecode as string).length - 2) / 2, argumentsSize: 0 },
-      entryEncoding: "abi-v1",
       entryParams: [],
-      entrySchema: null,
       returnType: null,
       defines: [
         { name: "AMOUNT", value: "1000", source: "user", chain: "ethereum" },
@@ -424,7 +421,6 @@ describe("sauce compile", () => {
       text: PAY,
       chain: requireChain("base"),
       defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT: 1000n },
-      compactArgs: false,
       intents: { deadline: 1728432000n },
     };
     const past = /--intent-deadline 1728432000 \(2024-10-09T00:00:00\.000Z\) has passed/;
@@ -1350,29 +1346,16 @@ describe("sauce tx", () => {
       return (JSON.parse(run.stdout) as { data: Hex }).data;
     };
 
-    it("reports main's parameters and their encoding", async () => {
+    it("reports main's parameters", async () => {
       const out = json(
         await sauce("compile", file("split.sauce.ts", SPLIT), "--chain", "base", "--json"),
       );
-      expect(out.entryEncoding).toBe("abi-v1");
       expect(out.entryParams).toEqual([
         { name: "token", type: "Address" },
         { name: "recipients", type: "Address[]" },
         { name: "amount", type: "Uint256" },
         { name: "alsoUsdc", type: "bool" },
       ]);
-      const compact = json(
-        await sauce(
-          "compile",
-          file("split.sauce.ts", SPLIT),
-          "--chain",
-          "base",
-          "--compact-args",
-          "--json",
-        ),
-      );
-      expect(compact.entryEncoding).toBe("compact-v1");
-      expect(compact.entrySchema).toMatch(/^0x94/);
     });
 
     it("appends the encoded values to the program the cook runs", async () => {
@@ -1394,19 +1377,6 @@ describe("sauce tx", () => {
         JSON.stringify([OWNER, [RECIPIENT, CREATOR], "1000", true]),
       );
       expect(dataOf(await tx("--args-json", argsFile))).toBe(data);
-    });
-
-    it("encodes compact-v1 for a program compiled for it", async () => {
-      const data = dataOf(await tx("--compact-args", "--args", ...ARGS));
-      const program = compileSauceProgram("base", SPLIT, { compactArgs: true });
-      const cook = decodeFunctionData({ abi: v12Pot.abi, data });
-      const args = encodeCompactArguments(program.entrySchema!, [
-        OWNER,
-        [RECIPIENT, CREATOR],
-        1000n,
-        true,
-      ]);
-      expect(cook.args[1]).toBe(`${bytesToHex(program.bytecode)}${bytesToHex(args).slice(2)}`);
     });
 
     it("names what is wrong with them, exiting 2", async () => {

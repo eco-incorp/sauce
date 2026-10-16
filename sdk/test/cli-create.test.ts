@@ -78,7 +78,6 @@ describe("making an intent: sauce intent publish with no file", () => {
         file: out,
         text,
         chain: created.source,
-        compactArgs: false,
         defines: {},
         intents: { deadline: created.deadline, creator: ME, prover: created.prover },
       },
@@ -137,7 +136,6 @@ describe("making an intent: sauce intent publish with no file", () => {
         text,
         chain: created.source,
         defines: {},
-        compactArgs: false,
         intents: {
           deadline: created.deadline,
           rewardDeadline: created.rewardDeadline,

@@ -35,24 +35,18 @@ describe("main's parameters", () => {
     );
   });
 
-  it.each([false, true])(
-    "an unannotated parameter is the program an annotated `Uint256` one is (compactArgs %s)",
-    (compactArgs) => {
-      // Why nothing has to be added: the compiler reads an unannotated parameter as a number, the
-      // same program and the same entry schema as one written `: Uint256`.
-      const plain = compileWithRs({
-        source: "function main(amount): void { require(amount > 0n); }",
-        target: "v12",
-        compactArgs,
-      });
-      const annotated = compileWithRs({
-        source: "function main(amount: Uint256): void { require(amount > 0n); }",
-        target: "v12",
-        compactArgs,
-      });
+  it("an unannotated parameter is the program an annotated `Uint256` one is", () => {
+    // Why nothing has to be added: the compiler reads an unannotated parameter as a number, the
+    // same program as one written `: Uint256`.
+    const plain = compileWithRs({
+      source: "function main(amount): void { require(amount > 0n); }",
+      target: "v12",
+    });
+    const annotated = compileWithRs({
+      source: "function main(amount: Uint256): void { require(amount > 0n); }",
+      target: "v12",
+    });
 
-      expect(Array.from(plain.bytecode[0]!)).toEqual(Array.from(annotated.bytecode[0]!));
-      expect(plain.entrySchema).toEqual(annotated.entrySchema);
-    },
-  );
+    expect(Array.from(plain.bytecode[0]!)).toEqual(Array.from(annotated.bytecode[0]!));
+  });
 });

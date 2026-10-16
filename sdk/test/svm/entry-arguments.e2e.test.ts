@@ -100,18 +100,13 @@ describeSvm("main's arguments on Solana, as the compiled program reads them", ()
     );
   };
 
-  for (const encoding of ["abi-v1", "compact-v1"] as const) {
-    for (const { name, source, values, read } of CASES) {
-      it(`${encoding}: ${name}`, async () => {
-        const program = compileSauceProgram("solana", source, {
-          compactArgs: encoding === "compact-v1",
-        });
-        expect(program.entryEncoding).toBe(encoding);
-        const encoded = encodeEntryArguments(program, values);
-        // Compared in decimal: jest cannot report a failed comparison of bigints from a worker.
-        expect(await returned(program.bytecode, encoded)).toEqual(read.map(String));
-        expect(decodeEntryArguments(program, encoded)).toEqual(values);
-      });
-    }
+  for (const { name, source, values, read } of CASES) {
+    it(name, async () => {
+      const program = compileSauceProgram("solana", source);
+      const encoded = encodeEntryArguments(program, values);
+      // Compared in decimal: jest cannot report a failed comparison of bigints from a worker.
+      expect(await returned(program.bytecode, encoded)).toEqual(read.map(String));
+      expect(decodeEntryArguments(program, encoded)).toEqual(values);
+    });
   }
 });

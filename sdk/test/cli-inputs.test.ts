@@ -203,7 +203,6 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
     text,
     chain: requireChain("ethereum"),
     defines,
-    compactArgs: false,
     intents: {},
   });
   const args = (...values: string[]) => ({ from: "--args" as const, values });

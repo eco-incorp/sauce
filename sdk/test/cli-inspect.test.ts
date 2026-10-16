@@ -854,28 +854,23 @@ describe("decodeEntryArguments: encodeEntryArguments, inverted", () => {
   ];
   const values = [RECIPIENT, [1n, 2n ** 200n], "0xdeadbeef", "hello", { a: 9n, b: true }];
 
-  it("reads back exactly what was encoded, ABI-v1 and compact-v1", () => {
-    const abi = { entryEncoding: "abi-v1" as const, entryParams: params };
+  it("reads back exactly what was encoded", () => {
+    const abi = { entryParams: params };
     expect(decodeEntryArguments(abi, encodeEntryArguments(abi, values))).toEqual(values);
     const compiled = compileSauceProgram(
       "base",
       "function main(who: Address, amounts: Uint256[], memo: bytes, label: string, pair: { a: Uint256, b: bool }) { require(pair.b); }",
-      { compactArgs: true },
     );
-    expect(compiled.entryEncoding).toBe("compact-v1");
     expect(decodeEntryArguments(compiled, encodeEntryArguments(compiled, values))).toEqual(values);
   });
 
   it("refuses bytes that are not the one canonical encoding", () => {
-    const abi = { entryEncoding: "abi-v1" as const, entryParams: params };
+    const abi = { entryParams: params };
     const encoded = encodeEntryArguments(abi, values);
     expect(() => decodeEntryArguments(abi, new Uint8Array([...encoded, 0]))).toThrow(
       /not the canonical encoding/,
     );
-    const word = {
-      entryEncoding: "abi-v1" as const,
-      entryParams: [{ name: "who", type: "Address" }],
-    };
+    const word = { entryParams: [{ name: "who", type: "Address" }] };
     // An address word with dirty upper bytes decodes, but is not what an address encodes to.
     const dirty = hexToBytes(numberToHex((1n << 200n) | BigInt(RECIPIENT), { size: 32 }));
     expect(() => decodeEntryArguments(word, dirty)).toThrow();

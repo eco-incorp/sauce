@@ -44,7 +44,7 @@ function recording() {
       const sentinel = (i: number) =>
         `5aceb10c${"00".repeat(14)}${i.toString(16).padStart(4, "0")}`;
       return {
-        // Each sentinel as the left-padded word a real compact-v1 argument tail carries.
+        // Each sentinel as the left-padded word a real ABI-v1 argument tail carries.
         call: {
           target: "0x4444444444444444444444444444444444444444",
           data: `0x${captures.map((_, i) => `${"00".repeat(12)}${sentinel(i)}`).join("")}`,
