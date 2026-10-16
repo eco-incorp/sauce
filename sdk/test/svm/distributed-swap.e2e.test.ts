@@ -481,6 +481,37 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(priceOf(PANCAKE)).toBe(bound);
   }, 120_000);
 
+  it("gives the deepest pool its whole walk, holds the next within what is left, and skips the shallowest", async () => {
+    // At 1.1 times the dearest pool's price the three pools' walks cost more compute units than the
+    // cook has: with no stops it runs out and fails. The deepest pool, Raydium's, walks its whole
+    // way; Byreal's is held a tick inside the first initialized tick what is left does not pay to
+    // cross; PancakeSwap's, the shallowest, is left too little for its swap and is skipped, its price
+    // where it was.
+    const wide = (dearest * 11000n) / 10000n;
+    const budget = 10_000_000n * 10n ** 6n;
+    const unheld = await cook({
+      budget,
+      priceLimit: wide,
+      stops: program.derivedValues!.map(() => 0n),
+    });
+    expect(!unheld.ok && unheld.logs.some((line) => line.includes("exceeded CUs meter"))).toBe(
+      true,
+    );
+    const outcome = succeeded(await cook({ budget, priceLimit: wide }));
+    const of = (p: Pool) => outcome.stops!.stops.find((stop) => stop.pool === p.pool)!;
+    expect([of(RAYDIUM).rank, of(BYREAL).rank, of(PANCAKE).rank]).toEqual([0, 1, 2]);
+    expect(of(RAYDIUM).share).toBe(of(RAYDIUM).estimatedUnits);
+    expect(of(RAYDIUM).stopTick).toBeUndefined();
+    expect(of(BYREAL).stopTick).toBeDefined();
+    expect(of(BYREAL).share).toBeLessThan(of(BYREAL).estimatedUnits);
+    expect(of(PANCAKE).stop).toBe(1n);
+    expect(priceOf(RAYDIUM)).toBe(ownLimit(RAYDIUM, wide, false));
+    expect(priceOf(BYREAL)).toBeLessThan(ownLimit(BYREAL, wide, false));
+    expect(priceOf(PANCAKE)).toBe(snapshotPrice(PANCAKE));
+    expect(outcome.bought).toBeGreaterThan(0n);
+    expect(outcome.units).toBeLessThan(1_400_000n);
+  }, 120_000);
+
   it("finds Orca's pool on its adaptive fee tier by that tier, and skips it at a price", async () => {
     // Fee tier 1025 is an adaptive fee at tick spacing 64: the spacing alone is the static tier's
     // pool, which the pair does not have, and the tier after it is this one.
