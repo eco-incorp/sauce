@@ -9,14 +9,13 @@
 // limit. Every swap is EXACT INPUT up to the limit: nothing here can express an exact-output swap.
 // Every function takes RUN-TIME arguments. There are four forms of each venue's swap:
 //
-//   <venue>(slot, trader, amountIn, maxPrice, minOut, recipient)          at a price
+//   <venue>(slot, trader, amountIn, priceLimit, minOut, recipient)        at a price
 //   <venue>AtLimit(slot, trader, amountIn, limit, minOut, recipient)      at the pool's own limit
 //   <venue>Cpi(program, accounts, source, amountIn, limit, …)             its instruction alone
 //   <venue>Data(amountIn, limit, …)                                       its instruction's data
 //
-// and `swap`, which takes a pool at any of the nine venues of the first form and reads its venue
-// from `pool.owner`. The first form is the nine venues' (Raydium CLMM,
-// PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix); the
+// The first form is the nine venues' (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca
+// Whirlpools, Cropper, DefiTuna, Crema, Phoenix); the
 // other three are theirs and Invariant's and OpenBook v2's, which take `priceLots` and `orders` in
 // place of `limit`; Manifest's swap takes no limit, so its functions (`manifest`, `manifestCpi`,
 // `manifestData`) take none. Orca has two data functions, its classic `swap`'s
@@ -28,7 +27,7 @@
 // swap is `swap_v2`, and at its own limit a pool of two SPL Token mints takes the classic `swap`. The
 // `…AtLimit` forms build it with `…Data`. The forms at a price write it themselves and check none
 // of its fields: their floor is 0 and their limit fits, so no check of `…Data`'s could fail there,
-// and every program calling `swap` would carry them. `…Cpi` writes the same bytes itself too,
+// and every program swapping at a price would carry them. `…Cpi` writes the same bytes itself too,
 // because a call into `…Data` would cost it about 2k compute units (Phoenix's excepted, which is
 // cheaper through `phoenixData`).
 //
@@ -65,13 +64,13 @@
 // `amountIn` is in the paid token's base units, and `minOut` the least the recipient may receive from
 // a swap that ran; below it the whole program reverts.
 //
-// AT A PRICE. `maxPrice` is the most one unit bought may cost, fee included, as payToken base units
+// AT A PRICE. `priceLimit` is the most one unit bought may cost, fee included, as payToken base units
 // per buyToken base unit times 1e18. A concentrated-liquidity pool's price is a Q64.64 square root of
 // the higher-key token per lower-key token (the pair in the order of the mints' 32-byte keys), and it
 // takes its fee from the input, so its last unit costs its price divided by `1 − fee`. Each function
-// reads the pool's fee and moves `maxPrice`'s square root toward the trade by `√(1 − fee)`: the
-// pool's last unit, fee paid, then costs at most `maxPrice`, and every earlier unit less. A Phoenix
-// market charges its taker fee on top, so its limit price is `maxPrice ÷ (1 + fee)`, in the market's
+// reads the pool's fee and moves `priceLimit`'s square root toward the trade by `√(1 − fee)`: the
+// pool's last unit, fee paid, then costs at most `priceLimit`, and every earlier unit less. A Phoenix
+// market charges its taker fee on top, so its limit price is `priceLimit ÷ (1 + fee)`, in the market's
 // ticks. A pool whose fee is more than one rate, which no such limit can hold, is skipped.
 //
 // AT THE POOL'S OWN LIMIT. `limit` is the pool's own: the sqrt price its swap takes, as the pool
@@ -125,11 +124,10 @@
 // moved nothing either way is a skip too: a Phoenix or OpenBook order whose book has no offer within
 // its price fills nothing, which only the paying account's balance tells. A failure the checks do not
 // foresee still aborts the transaction: a tick array missing from the slot, and an Invariant input
-// past its limit. A slot that is not the
-// pair, whose program is not the venue's or not the pool's owner, or whose pool no venue here owns
-// (`swap`: "not a supported venue's pool"; a venue's own function: "not a <venue> pool"), and a
-// limit or a floor its order cannot carry, revert: those are the caller's, not the pool's state. Only
-// a missing slot, the System program itself as its pool, is skipped.
+// past its limit. A slot that is not the pair, whose program is not the venue's or not the pool's
+// owner ("not a <venue> pool"), and a limit or a floor its order cannot carry, revert: those are the
+// caller's, not the pool's state. Only a missing slot, the System program itself as its pool, is
+// skipped.
 //
 // Every venue's swap is its own instruction, called with `svm.call`. Its data is a few fixed bytes
 // around little-endian integers, packed into one word and written with one `toBytesLe`, each field
@@ -139,13 +137,10 @@
 //
 // SIZE. A Solana program rides in transactions, so the arm shares code through functions (each
 // venue's data, its accounts from a slot, its checks, `clmmOrder`, `settled`) where the EVM arm keeps
-// each function flat, and only the functions a program calls are compiled into it. `swap` takes
-// any of the nine, so it carries all nine venues' code: a program calling it is about 4.4 KB, one
-// calling a single venue's function about 0.9 to 1.7 KB, its instruction alone about 0.4 to 0.5 KB,
-// its data alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `swap` is
-// for slots whose venue is only known when the program runs. Each venue's functions check its own program id, so a direct call never
-// signs into a program the caller names; only `swap`'s internal path relies on its one read of the
-// pool's owner.
+// each function flat, and only the functions a program calls are compiled into it: a program calling
+// one venue's function is about 0.9 to 1.7 KB, its instruction alone about 0.4 to 0.5 KB, its data
+// alone about 0.2 to 0.4 KB. Each venue's functions check its own program id, so a call never signs
+// into a program the caller names.
 //
 // No module-level `const` here: a compile-time define replaces a same-named `const` in every module,
 // this one included.
@@ -155,7 +150,7 @@ import { balanceOf } from "@sauce/token";
 // The concentrated-liquidity limit
 // ---------------------------------------------------------------------------------------------
 
-// A concentrated-liquidity pool's order for `maxPrice`: the 32 bytes each venue's swap carries for an
+// A concentrated-liquidity pool's order for `priceLimit`: the 32 bytes each venue's swap carries for an
 // exact input of `amountIn` with no least out, up to the pool's own limit, a Q64.64 sqrt price — or
 // none when the pool has nothing to sell within it (no liquidity at its price, or its price already
 // at or past the limit) or the input is dust. It reads the pool where its venue keeps them: its two
@@ -171,7 +166,7 @@ function clmmOrder(
   feeAt: Uint256,
   feeBytes: Uint256,
   trader: Account[],
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   amountIn: Uint256,
 ): bytes {
   const pay = trader[2].address;
@@ -183,12 +178,12 @@ function clmmOrder(
   const fee = svm.sload(feeAccount, feeAt, feeBytes).toLe();
   const paysA = pay < buy;
   require(mintA == (paysA ? pay : buy) && mintB == (paysA ? buy : pay), "pool is not the pair");
-  // maxPrice as a sqrt price: the higher-key token per lower-key token, times 2^64. Paying the
+  // priceLimit as a sqrt price: the higher-key token per lower-key token, times 2^64. Paying the
   // lower-key token it is upside down. Only the root the direction needs is taken.
   const limit = paysA
-    ? Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, maxPrice))
-    : Math.sqrt(Math.mulDiv(maxPrice, 1 << 128, 10 ** 18));
-  // Moved by √(1 − fee), so that the pool's last unit, fee paid, costs exactly maxPrice. Paying the
+    ? Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, priceLimit))
+    : Math.sqrt(Math.mulDiv(priceLimit, 1 << 128, 10 ** 18));
+  // Moved by √(1 − fee), so that the pool's last unit, fee paid, costs exactly priceLimit. Paying the
   // lower-key token pushes the price down, the other up. The root is rounded down, so the limit sits
   // a hair inside the exact one: the pool stops a little sooner, never later.
   const root = Math.sqrt((1000000 - fee) * 10 ** 30); // √(1 − fee), times 1e18
@@ -909,13 +904,13 @@ function cpiOpenbookV2(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Each venue's swap at a price: the pool's checks and its own limit for `maxPrice`, then its swap
+// Each venue's swap at a price: the pool's checks and its own limit for `priceLimit`, then its swap
 // with no least out. The caller has required the slot's program to be the venue's and the pool's
 // owner, and measures what moved.
 //
 // Each writes its instruction itself, from `clmmOrder`'s bytes (Phoenix's from its ticks), and checks
 // none of its fields: its floor is 0 and its limit fits, so no check of `…Data`'s could fail here,
-// and every program calling `swap` would carry them. Its accounts are a slot's nine: Raydium's code
+// and every program swapping at a price would carry them. Its accounts are a slot's nine: Raydium's code
 // with no bitmap extension, and Orca's `swap_v2` for every pool. Each sends the bytes its `…Data`
 // writes for the same amount and limit and a floor of 0.
 // ---------------------------------------------------------------------------------------------
@@ -927,7 +922,7 @@ function swapRaydium(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   recipient: Account,
 ): void {
   const pool = slot[1];
@@ -941,7 +936,7 @@ function swapRaydium(
   ) {
     return;
   }
-  const order = clmmOrder(pool, 73, 105, 237, slot[2], 47, 4, trader, maxPrice, amountIn);
+  const order = clmmOrder(pool, 73, 105, 237, slot[2], 47, 4, trader, priceLimit, amountIn);
   if (order.length == 0) {
     return;
   }
@@ -979,14 +974,14 @@ function swapWhirlpool(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   recipient: Account,
 ): void {
   const pool = slot[1];
   if (svm.sload(pool, 41, 2).toLe() != svm.sload(pool, 43, 2).toLe()) {
     return;
   }
-  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, maxPrice, amountIn);
+  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn);
   if (order.length == 0) {
     return;
   }
@@ -1023,14 +1018,14 @@ function swapCropper(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   recipient: Account,
 ): void {
   const pool = slot[1];
   if (svm.sload(pool, 41, 2).toLe() != svm.sload(pool, 43, 2).toLe()) {
     return;
   }
-  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, maxPrice, amountIn);
+  const order = clmmOrder(pool, 101, 181, 49, pool, 45, 2, trader, priceLimit, amountIn);
   if (order.length == 0) {
     return;
   }
@@ -1060,11 +1055,11 @@ function swapDefituna(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   recipient: Account,
 ): void {
   const pool = slot[1];
-  const order = clmmOrder(pool, 11, 43, 151, pool, 143, 2, trader, maxPrice, amountIn);
+  const order = clmmOrder(pool, 11, 43, 151, pool, 143, 2, trader, priceLimit, amountIn);
   if (order.length == 0) {
     return;
   }
@@ -1100,14 +1095,14 @@ function swapCrema(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   recipient: Account,
 ): void {
   const pool = slot[1];
   if (svm.sload(pool, 747, 1).toLe() != 0) {
     return;
   }
-  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, maxPrice, amountIn);
+  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, priceLimit, amountIn);
   if (order.length == 0) {
     return;
   }
@@ -1187,7 +1182,7 @@ function swapPhoenix(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   recipient: Account,
 ): void {
   const pool = slot[1];
@@ -1201,7 +1196,7 @@ function swapPhoenix(
   const fee = svm.sload(pool, 856, 8).toLe();
   const baseLot = svm.sload(pool, 112, 8).toLe();
   const quoteLot = svm.sload(pool, 192, 8).toLe();
-  // One tick, in maxPrice's units: quote atoms per base atom, times 10^18.
+  // One tick, in priceLimit's units: quote atoms per base atom, times 10^18.
   const tick = Math.mulDiv(
     svm.sload(pool, 840, 8).toLe() * quoteLot,
     10 ** 18,
@@ -1209,9 +1204,9 @@ function swapPhoenix(
   );
   // Buying base: the most a base atom may cost before the fee. Selling it: the least it must fetch
   // before the fee is taken, rounded up.
-  let ticks = Math.mulDiv(maxPrice, 10000, (10000 + fee) * tick);
+  let ticks = Math.mulDiv(priceLimit, 10000, (10000 + fee) * tick);
   if (paysBase) {
-    ticks = Math.mulDiv(10 ** 36, 10000, maxPrice * (10000 - fee) * tick) + 1;
+    ticks = Math.mulDiv(10 ** 36, 10000, priceLimit * (10000 - fee) * tick) + 1;
   }
   // Every lot of the input, of the token it pays: base lots selling base, quote lots buying it. The
   // order's price is 64 bits, and a limit past them would be cut to some other price: no order. A
@@ -1261,63 +1256,6 @@ function settled(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Any of the nine venues, read from the pool's owner
-// ---------------------------------------------------------------------------------------------
-
-// A pool at any of the nine venues, or nothing: the venue is the program that owns the pool, and a
-// pool no venue here owns reverts. Skipped as SKIPS above says.
-export function swap(
-  slot: Account[],
-  trader: Account[],
-  amountIn: Uint256,
-  maxPrice: Uint256,
-  minOut: Uint256,
-  recipient: Account,
-): Uint256 {
-  const pool = slot[1];
-  if (pool.address == 0 || amountIn == 0) {
-    return 0;
-  }
-  const venue = pool.owner;
-  require(slot[0].address == venue, "a pool's program is not its owner");
-  const held = balanceOf(trader[2].address, trader[1]);
-  const before = balanceOf(trader[3].address, recipient);
-  if (
-    venue == 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e || // Raydium CLMM, CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK
-    venue == 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8 || // PancakeSwap CLMM, HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq
-    venue == 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb || // Byreal, REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2
-    venue == 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3 // Stabble CLMM, 6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6
-  ) {
-    swapRaydium(slot, trader, amountIn, maxPrice, recipient);
-  } else if (venue == 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9) {
-    // Orca Whirlpools, whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc
-    swapWhirlpool(slot, trader, amountIn, maxPrice, recipient);
-  } else if (venue == 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f) {
-    // Cropper, H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt
-    swapCropper(slot, trader, amountIn, maxPrice, recipient);
-  } else if (venue == 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6) {
-    // DefiTuna, fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9
-    swapDefituna(slot, trader, amountIn, maxPrice, recipient);
-  } else if (venue == 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6) {
-    // Crema, CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR
-    swapCrema(slot, trader, amountIn, maxPrice, recipient);
-  } else if (venue == 0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb) {
-    // Phoenix, PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY
-    swapPhoenix(slot, trader, amountIn, maxPrice, recipient);
-  } else {
-    throw "not a supported venue's pool";
-  }
-  // `settled`, written out: the distributed swap calls this once per slot, and the call costs bytes
-  // every program that takes `swap` carries.
-  if (svm.sload(trader[1], 64, 8).toLe() == held) {
-    return 0;
-  }
-  const received = svm.sload(recipient, 64, 8).toLe() - before;
-  require(received > 0 && received >= minOut, "below minOut");
-  return received;
-}
-
-// ---------------------------------------------------------------------------------------------
 // One venue each
 // ---------------------------------------------------------------------------------------------
 
@@ -1326,7 +1264,7 @@ export function raydiumClmm(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1338,7 +1276,7 @@ export function raydiumClmm(
   require(owned && slot[0].address == pool.owner, "not a Raydium CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(slot, trader, amountIn, maxPrice, recipient);
+  swapRaydium(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1347,7 +1285,7 @@ export function pancakeswapClmm(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1359,7 +1297,7 @@ export function pancakeswapClmm(
   require(owned && slot[0].address == pool.owner, "not a PancakeSwap CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(slot, trader, amountIn, maxPrice, recipient);
+  swapRaydium(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1368,7 +1306,7 @@ export function byreal(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1380,7 +1318,7 @@ export function byreal(
   require(owned && slot[0].address == pool.owner, "not a Byreal pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(slot, trader, amountIn, maxPrice, recipient);
+  swapRaydium(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1389,7 +1327,7 @@ export function stabbleClmm(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1401,7 +1339,7 @@ export function stabbleClmm(
   require(owned && slot[0].address == pool.owner, "not a Stabble CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapRaydium(slot, trader, amountIn, maxPrice, recipient);
+  swapRaydium(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1410,7 +1348,7 @@ export function orcaWhirlpool(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1422,7 +1360,7 @@ export function orcaWhirlpool(
   require(owned && slot[0].address == pool.owner, "not an Orca whirlpool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapWhirlpool(slot, trader, amountIn, maxPrice, recipient);
+  swapWhirlpool(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1432,7 +1370,7 @@ export function cropper(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1444,7 +1382,7 @@ export function cropper(
   require(owned && slot[0].address == pool.owner, "not a Cropper pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapCropper(slot, trader, amountIn, maxPrice, recipient);
+  swapCropper(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1453,7 +1391,7 @@ export function defituna(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1465,7 +1403,7 @@ export function defituna(
   require(owned && slot[0].address == pool.owner, "not a DefiTuna pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapDefituna(slot, trader, amountIn, maxPrice, recipient);
+  swapDefituna(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1474,7 +1412,7 @@ export function crema(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1486,7 +1424,7 @@ export function crema(
   require(owned && slot[0].address == pool.owner, "not a Crema pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapCrema(slot, trader, amountIn, maxPrice, recipient);
+  swapCrema(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1496,7 +1434,7 @@ export function phoenix(
   slot: Account[],
   trader: Account[],
   amountIn: Uint256,
-  maxPrice: Uint256,
+  priceLimit: Uint256,
   minOut: Uint256,
   recipient: Account,
 ): Uint256 {
@@ -1508,7 +1446,7 @@ export function phoenix(
   require(owned && slot[0].address == pool.owner, "not a Phoenix market");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
-  swapPhoenix(slot, trader, amountIn, maxPrice, recipient);
+  swapPhoenix(slot, trader, amountIn, priceLimit, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -1519,7 +1457,7 @@ export function phoenix(
 // ---------------------------------------------------------------------------------------------
 //
 // `…AtLimit` takes a slot and the trader like the functions above, and the pool's
-// own limit in place of `maxPrice`: no fee is read for it and no root taken, and the instruction is
+// own limit in place of `priceLimit`: no fee is read for it and no root taken, and the instruction is
 // the one a caller would build by hand for that limit, `minOut` in the venue's own floor where its
 // instruction has one. `…Cpi` is that instruction alone, on the accounts the caller lists in the
 // venue's own order: it checks nothing but the program, reads nothing but the paying account, and

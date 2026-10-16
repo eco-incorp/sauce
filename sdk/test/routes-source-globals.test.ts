@@ -123,15 +123,17 @@ test("declarations cover every registry token and every protocol namespace, in b
     .map((match) => match[1]);
   expect(new Set(names)).toEqual(new Set(NAMESPACE_KEYS));
   // Each Solana venue, its protocol then its program: a field of its protocol's own global, or of
-  // the namespace or family of that name (`Pancakeswap.CLMM`).
-  for (const venue of Object.keys(SVM_VENUE_NAMESPACES)) {
+  // the namespace or family of that name (`Pancakeswap.CLMM`), typed with its `pool` by the key it
+  // finds pools by (`Phoenix.Market` has none).
+  for (const [venue, { key }] of Object.entries(SVM_VENUE_NAMESPACES)) {
     const [protocol, program] = venue.split(".") as [string, string];
     const global = new RegExp(`^ {2}const ${protocol}: (\\w+)Source;`, "m").exec(generated);
     expect(global).not.toBeNull();
     const fields = new RegExp(`export interface ${global![1]}Source[^{]*\\{([^}]*)\\}`).exec(
       generated,
     )![1];
-    expect(fields).toContain(`readonly ${program}: SauceSvmVenueSource;`);
+    const type = key === "fee" ? "Fee" : key === "tick spacing" ? "Spacing" : "";
+    expect(fields).toContain(`readonly ${program}: SauceSvm${type}VenueSource;`);
   }
   for (const link of CONTRACT_LINKS) {
     const namespace = link.protocol

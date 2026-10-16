@@ -76,7 +76,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["pool"], input: "pool" },
   { flags: ["v4-key"], input: "v4Pools" },
   { flags: ["pay"], input: "pay" },
-  { flags: ["max-price"], input: "maxPrice" },
+  { flags: ["price-limit"], input: "priceLimit" },
   { flags: ["per-venue"], input: "perVenue" },
   { flags: ["slots"], input: "slots" },
   { flags: ["expect-revert"], input: "expectRevert" },

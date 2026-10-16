@@ -227,7 +227,7 @@ export function sauceScriptDeclarations(): string {
     "",
     ...chains.map((chain) =>
       chain.kind === "svm"
-        ? `declare const ${chain.key}: SauceChain & ${sources}.SauceSolanaAccounts & ${sources}.SauceSvmVenueSource;`
+        ? `declare const ${chain.key}: SauceChain & ${sources}.SauceSolanaAccounts;`
         : `declare const ${chain.key}: SauceChain;`,
     ),
     "",

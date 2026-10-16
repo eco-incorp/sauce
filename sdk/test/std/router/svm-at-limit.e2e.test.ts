@@ -775,11 +775,11 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         // slot of nine (it takes no bitmap extension's slot of its own past them).
         let priced: number | undefined;
         if (LAYOUT[t.venue] !== undefined && w.p.venue !== "invariant") {
-          const maxPrice = (allIn(w.p, key(w.pay) < key(w.buy)) * 10005n) / 10000n;
+          const priceLimit = (allIn(w.p, key(w.pay) < key(w.buy)) * 10005n) / 10000n;
           const atPrice = await w.viaAtLimit({
             name: lower(VENUE[t.venue]!.fn),
             slot: w.slot.slice(0, 9),
-            args: [amountIn, maxPrice, 0n],
+            args: [amountIn, priceLimit, 0n],
           });
           // An adaptive-fee pool is one it skips.
           if (atPrice.ok && atPrice.paid > 0n) priced = atPrice.units;

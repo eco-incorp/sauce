@@ -246,14 +246,16 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     text.push(
       "",
       `Venues (${globals.venues.length}): <Protocol>.<Program>.swap(pool, tokenIn, tokenOut, ` +
-        "amountIn, maxPrice, minOut), which returns 0 having moved nothing where the pool cannot " +
+        "amountIn, priceLimit, minOut), which returns 0 having moved nothing where the pool cannot " +
         "trade and reverts below minOut; the pool's accounts, and the Pot's, are derived when the " +
-        "cook is built",
-      ...globals.venues.map(
-        (venue) => `  ${venue.namespace.padEnd(width)}  ${venue.program}  (${venue.name})`,
-      ),
-      "  Solana.swap(…) takes a pool of any of them, its venue read from the pool's owner as the " +
-        "program runs; the System Program as the pool is an empty slot, which it skips",
+        "cook is built. Its pool by key, <Protocol>.<Program>.pool(tokenA, tokenB, key), where the " +
+        "venue has one: a key with no pool there is an empty slot, which the swap skips",
+      ...globals.venues.map((venue) => {
+        const pool = venue.methods.find((method) => method.startsWith("pool("));
+        const key = pool === undefined ? "by address" : `by ${/, (\w+): Uint256\)/.exec(pool)![1]}`;
+
+        return `  ${venue.namespace.padEnd(width)}  ${venue.program}  (${venue.name}; pools ${key})`;
+      }),
       "Protocols: none. Protocol namespaces are EVM contracts.",
     );
   } else if (showProtocols) {

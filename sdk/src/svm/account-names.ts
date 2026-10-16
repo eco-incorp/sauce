@@ -22,7 +22,10 @@
  *                        pool (base58, or `@<param>`) paying the token: `program`, `pool`, `config`,
  *                        `vaultA`, `vaultB`, `extra`, `ticks0`, `ticks1`, `ticks2`, read from the
  *                        pool's own state through `load` (`svm/pool-slot.ts`); a pool that is the
- *                        System Program is an empty slot, whose nine are the System Program
+ *                        System Program is an empty slot, whose nine are the System Program. The
+ *                        pool may be a venue's pool by key, `<Venue>(<token>,<token>,<key>)`
+ *                        (`Orca.Whirlpool(USDC,WSOL,4)`, `svm/pool-keys.ts`): the address the venue
+ *                        derives for the pair, and an empty slot where no pool is there
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
@@ -49,6 +52,7 @@ import {
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
+import { svmPoolByKey, svmPoolKeyProblem, SVM_KEYED_VENUES } from "./pool-keys.js";
 import { svmPoolSlot, SVM_SLOT_PARTS, type SvmSlot, type SvmSlotPart } from "./pool-slot.js";
 import { svmTokenAccount } from "./token-accounts.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
@@ -92,6 +96,11 @@ export interface SvmAccountNameContext {
    * Without it each name reads its slot.
    */
   readonly slots?: Map<string, Promise<SvmSlot>>;
+  /**
+   * The pools by key this resolution found, by their spelling (`Orca.Whirlpool(USDC,WSOL,4)`): the
+   * pool, or `null` where the venue has none at that key. For a message about the cook's pools.
+   */
+  readonly found?: Map<string, Address | null>;
 }
 
 /** One name, resolved. */
@@ -124,6 +133,16 @@ type Token =
   | { readonly kind: "address"; readonly key: string }
   | { readonly kind: "arg"; readonly param: string };
 
+/** A venue's pool by key: `Orca.Whirlpool(USDC,WSOL,4)`. */
+interface KeyedPool {
+  readonly kind: "keyed";
+  readonly venue: string;
+  readonly tokens: readonly [Token, Token];
+  readonly key: bigint;
+  /** As written, for a message. */
+  readonly text: string;
+}
+
 /** One seed of a program-derived address. */
 type Seed =
   | { readonly kind: "text"; readonly text: string }
@@ -138,7 +157,7 @@ type Parsed =
   | { readonly kind: "mint" | "program"; readonly token: Token }
   | {
       readonly kind: "slot";
-      readonly pool: Holder;
+      readonly pool: Holder | KeyedPool;
       readonly token: Token;
       readonly part: SvmSlotPart;
     }
@@ -188,15 +207,35 @@ function parseToken(text: string): Token | undefined {
   return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
 }
 
+/** `<Venue>(<token>,<token>,<key>)`, a venue's pool by key. */
+function parseKeyedPool(text: string): KeyedPool | undefined {
+  const parts = /^([A-Za-z]+\.[A-Za-z]+)\(([^,()]+),([^,()]+),(\d+)\)$/.exec(text);
+  if (parts === null || SVM_KEYED_VENUES[parts[1]!] === undefined) return undefined;
+  const tokenA = parseToken(parts[2]!);
+  const tokenB = parseToken(parts[3]!);
+  if (tokenA === undefined || tokenB === undefined) return undefined;
+
+  return {
+    kind: "keyed",
+    venue: parts[1]!,
+    tokens: [tokenA, tokenB],
+    key: BigInt(parts[4]!),
+    text,
+  };
+}
+
 /** `slot:<pool>:<token>.<part>`. */
 function parseSlot(value: string): Parsed | undefined {
   const parts = /^slot:([^:]+):([^:.]+)\.([A-Za-z0-9]+)$/.exec(value);
   if (parts === null) return undefined;
-  const pool = parseHolder(parts[1]!);
+  const holder = parseHolder(parts[1]!);
+  const pool =
+    holder !== undefined && (holder.kind === "arg" || holder.kind === "address")
+      ? holder
+      : parseKeyedPool(parts[1]!);
   const token = parseToken(parts[2]!);
   const part = SVM_SLOT_PARTS.find((one) => one === parts[3]);
-  if (pool === undefined || (pool.kind !== "arg" && pool.kind !== "address")) return undefined;
-  if (token === undefined || part === undefined) return undefined;
+  if (pool === undefined || token === undefined || part === undefined) return undefined;
 
   return { kind: "slot", pool, token, part };
 }
@@ -589,12 +628,15 @@ async function resolveSlot(
   ctx: SvmAccountNameContext,
   rows: readonly SvmTokenRow[],
 ): Promise<ResolvedSvmAccountName> {
+  const keyed = parsed.pool.kind === "keyed" ? parsed.pool : undefined;
   const pool =
-    parsed.pool.kind === "arg"
-      ? argument(parsed.pool.param, ctx)
-      : address((parsed.pool as { key: string }).key);
+    keyed !== undefined
+      ? keyedPool(keyed, ctx, rows)
+      : parsed.pool.kind === "arg"
+        ? argument(parsed.pool.param, ctx)
+        : address((parsed.pool as { key: string }).key);
   const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
-  // An empty slot, which `@sauce/router`'s `swap` skips: nothing to read.
+  // An empty slot, which `@sauce/router`'s swaps skip: nothing to read.
   if (pool === SYSTEM_PROGRAM) {
     return { value: pool, label: `an empty slot (${parsed.part})`, kind: "address" };
   }
@@ -607,7 +649,16 @@ async function resolveSlot(
   const key = `${pool}:${mint}`;
   let slot = ctx.slots?.get(key);
   if (slot === undefined) {
-    slot = svmPoolSlot(load, pool, mint);
+    // A pool by key that is not there is an empty slot, its nine the System program: no account,
+    // or one the venue does not own (lamports anyone may send to the address it would have).
+    slot =
+      keyed === undefined
+        ? svmPoolSlot(load, pool, mint)
+        : load(pool).then((account) => {
+            const there = account?.owner === SVM_KEYED_VENUES[keyed.venue]!.program;
+            ctx.found?.set(keyed.text, there ? pool : null);
+            return there ? svmPoolSlot(load, pool, mint) : EMPTY_SLOT;
+          });
     ctx.slots?.set(key, slot);
   }
   let resolved: SvmSlot;
@@ -619,6 +670,13 @@ async function resolveSlot(
     );
   }
   const index = SVM_SLOT_PARTS.indexOf(parsed.part);
+  if (resolved === EMPTY_SLOT) {
+    return {
+      value: address(SYSTEM_PROGRAM),
+      label: `an empty slot: no pool at ${keyed!.text} (${parsed.part})`,
+      kind: "address",
+    };
+  }
   const value = [
     resolved.program,
     resolved.pool,
@@ -630,6 +688,34 @@ async function resolveSlot(
   ][index]!;
 
   return { value, label: `pool ${pool}'s ${parsed.part}, paying ${what}`, kind: "address" };
+}
+
+/** The slot of a pool by key that is not there: the System program in all nine places. */
+const EMPTY_SLOT: SvmSlot = {
+  program: address(SYSTEM_PROGRAM),
+  pool: address(SYSTEM_PROGRAM),
+  config: address(SYSTEM_PROGRAM),
+  vaultA: address(SYSTEM_PROGRAM),
+  vaultB: address(SYSTEM_PROGRAM),
+  extra: address(SYSTEM_PROGRAM),
+  ticks: [address(SYSTEM_PROGRAM), address(SYSTEM_PROGRAM), address(SYSTEM_PROGRAM)],
+};
+
+/** The address a venue derives for a pool by key, its pair the mints its tokens name. */
+function keyedPool(
+  keyed: KeyedPool,
+  ctx: SvmAccountNameContext,
+  rows: readonly SvmTokenRow[],
+): Address {
+  const problem = svmPoolKeyProblem(keyed.venue, keyed.key);
+  if (problem !== undefined) throw new SvmAccountNameError(problem);
+  const [a, b] = keyed.tokens.map((token) => mintOf(token, "slot", ctx, rows).mint) as [
+    Address,
+    Address,
+  ];
+  if (a === b) throw new SvmAccountNameError(`${keyed.text} names one mint twice`);
+
+  return svmPoolByKey(keyed.venue, a, b, keyed.key);
 }
 
 /** main's integer argument `param`. */

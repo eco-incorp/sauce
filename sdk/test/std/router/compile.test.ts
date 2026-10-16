@@ -563,18 +563,6 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     for (const [, id] of VENUES) expect(count(code, key(id))).toBe(0);
     for (const name of INSTRUCTIONS) expect(count(code, discriminator(name))).toBe(ix[name] ?? 0);
   });
-
-  it("swap carries the nine venues' program ids once, and each instruction once per venue code", () => {
-    const code = bytecode("swap");
-    for (const [venue, id] of VENUES)
-      expect(count(code, key(id))).toBe(
-        ["Invariant", "Manifest", "OpenbookV2"].includes(venue) ? 0 : 1,
-      );
-    // swap_v2: Raydium's code (four programs) and Orca's; swap: Cropper, DefiTuna, Crema's two
-    // directions.
-    expect(count(code, discriminator("swap_v2"))).toBe(2);
-    expect(count(code, discriminator("swap"))).toBe(4);
-  });
 });
 
 describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
@@ -679,8 +667,6 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
 
 describe("@sauce/router (SVM): the reasons its checks revert with", () => {
   const REASONS = [
-    "a pool's program is not its owner",
-    "not a supported venue's pool",
     "pool is not the pair",
     "market is not the pair",
     "below minOut",
@@ -699,19 +685,6 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
     );
   };
   const none = Object.fromEntries(REASONS.map((reason) => [reason, 0]));
-
-  it("swap refuses a slot whose program is not its pool's owner, a pool of no venue here, a pool or market not the pair, and a swap below its floor", () => {
-    // And no field of its instructions: at a price the floor is 0 and the limit fits, so it carries
-    // none of the range checks each venue's `…Data` makes.
-    expect(reasons("swap")).toEqual({
-      ...none,
-      "a pool's program is not its owner": 1,
-      "not a supported venue's pool": 1,
-      "pool is not the pair": 1,
-      "market is not the pair": 1,
-      "below minOut": 1,
-    });
-  });
 
   const VENUE_REASONS: [string, string][] = [
     ["RaydiumClmm", "not a Raydium CLMM pool"],
@@ -873,14 +846,16 @@ describe("@sauce/router: packaging", () => {
     const evmOnly =
       'import { woofi } from "@sauce/router";\nfunction main(): Uint256 { return 1n; }';
     const svmOnly =
-      'import { swap } from "@sauce/router";\nfunction main(): Uint256 { return 1n; }';
+      'import { orcaWhirlpool } from "@sauce/router";\nfunction main(): Uint256 { return 1n; }';
     expect(() => compileStdRouter(evmOnly, "svm")).toThrow("`woofi` is not exported by module");
     expect(() => compileWithRs({ source: evmOnly, target: "svm" })).toThrow(
       "`woofi` is not exported by module",
     );
-    expect(() => compileStdRouter(svmOnly, "evm")).toThrow("`swap` is not exported by module");
+    expect(() => compileStdRouter(svmOnly, "evm")).toThrow(
+      "`orcaWhirlpool` is not exported by module",
+    );
     expect(() => compileWithRs({ source: svmOnly, target: "v12" })).toThrow(
-      "`swap` is not exported by module",
+      "`orcaWhirlpool` is not exported by module",
     );
     expect(() => compileStdRouter(evmOnly, "evm")).not.toThrow();
     expect(() => compileStdRouter(svmOnly, "svm")).not.toThrow();

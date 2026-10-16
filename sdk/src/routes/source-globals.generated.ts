@@ -56,10 +56,27 @@ export interface SauceSolanaAccounts {
  * A Solana venue's swap at one pool, in a program compiled for Solana: the pool and both tokens are
  * known when the cook is built, which reads the pool's accounts from it; what arrives lands in the
  * Pot's own account for the token bought. It returns 0, having moved nothing, where the pool cannot
- * trade (past `maxPrice`, empty, paused, no pool), and reverts below `minOut`.
+ * trade (past `priceLimit`, empty, paused, no pool), and reverts below `minOut`.
  */
 export interface SauceSvmVenueSource {
-  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
+  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, priceLimit: bigint, minOut: bigint): bigint;
+}
+
+/**
+ * A Solana venue whose pools are found by tick spacing: `pool(tokenA, tokenB, tickSpacing)` is
+ * the pool its program keeps for the pair at that spacing, written as a swap's pool, the spacing a
+ * number written out (or a loop's over numbers written out). Where there is none, the swap returns 0.
+ */
+export interface SauceSvmSpacingVenueSource extends SauceSvmVenueSource {
+  pool(tokenA: bigint, tokenB: bigint, tickSpacing: bigint): bigint;
+}
+
+/**
+ * A Solana venue whose pools are found by fee, in millionths (400 is 0.04%), as an EVM pool's:
+ * `pool(tokenA, tokenB, fee)`, written as a swap's pool. Where there is none, the swap returns 0.
+ */
+export interface SauceSvmFeeVenueSource extends SauceSvmVenueSource {
+  pool(tokenA: bigint, tokenB: bigint, fee: bigint): bigint;
 }
 
 /** A collection returned by Sauce, whose length is a Sauce scalar. */
@@ -2370,7 +2387,7 @@ export interface PancakeswapFamilySource {
   readonly NonfungiblePositionManager: PancakeswapV3Source["NonfungiblePositionManager"];
   readonly SmartRouter: PancakeswapV3Source["SmartRouter"];
   readonly Pool: PancakeswapV3Source["Pool"];
-  readonly CLMM: SauceSvmVenueSource;
+  readonly CLMM: SauceSvmFeeVenueSource;
 }
 
 export interface SushiswapFamilySource {
@@ -2419,31 +2436,31 @@ export interface YearnFamilySource {
 }
 
 export interface RaydiumSvmVenuesSource {
-  readonly CLMM: SauceSvmVenueSource;
+  readonly CLMM: SauceSvmFeeVenueSource;
 }
 
 export interface ByrealSvmVenuesSource {
-  readonly CLMM: SauceSvmVenueSource;
+  readonly CLMM: SauceSvmFeeVenueSource;
 }
 
 export interface StabbleSvmVenuesSource {
-  readonly CLMM: SauceSvmVenueSource;
+  readonly CLMM: SauceSvmFeeVenueSource;
 }
 
 export interface OrcaSvmVenuesSource {
-  readonly Whirlpool: SauceSvmVenueSource;
+  readonly Whirlpool: SauceSvmSpacingVenueSource;
 }
 
 export interface CropperSvmVenuesSource {
-  readonly Whirlpool: SauceSvmVenueSource;
+  readonly Whirlpool: SauceSvmSpacingVenueSource;
 }
 
 export interface DefitunaSvmVenuesSource {
-  readonly Fusion: SauceSvmVenueSource;
+  readonly Fusion: SauceSvmSpacingVenueSource;
 }
 
 export interface CremaSvmVenuesSource {
-  readonly CLMM: SauceSvmVenueSource;
+  readonly CLMM: SauceSvmSpacingVenueSource;
 }
 
 export interface PhoenixSvmVenuesSource {

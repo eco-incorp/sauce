@@ -71,7 +71,7 @@ import {
   type SvmLoweringResult,
   type TokenRef,
 } from "./svm-lowering.js";
-import { collectVenueMethods, isVenueProtocol } from "./svm-venue-methods.js";
+import { collectVenueMethods, isVenueProtocol, unrollPoolKeyLoops } from "./svm-venue-methods.js";
 import { ACCOUNT_EXPRESSION_ROOT, collectAccountExpressions } from "./svm-account-expressions.js";
 import { TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
@@ -128,7 +128,7 @@ export function rewriteSvmTokenSyntax(
   ) {
     return { source, rewrote: false, derived: {} };
   }
-  const lowering = new SvmLowering(source, tokens, rows, keys);
+  const lowering = new SvmLowering(unrollPoolKeyLoops(source), tokens, rows, keys);
   collectTokenMethods(lowering);
   collectVenueMethods(lowering);
   collectAccountExpressions(lowering);
