@@ -199,8 +199,8 @@ describeSvm(
     it("creates the token accounts it names, stages the program, creates a lookup table for its accounts, and cooks", async () => {
       restoreVenues(harness.svm);
       const source = await potAccount(USDC, budget + 3n);
-      // The Pot's WSOL account, which the cook buys into, does not exist yet, nor does the
-      // recipient's WSOL account: the run creates them.
+      // The Pot's WSOL account, which the cook buys into, does not exist yet, nor do the
+      // recipient's WSOL and USDC accounts: the run creates them.
       const output = await ata(pot, WSOL);
       expect(harness.svm.getAccount(output).exists).toBe(false);
       const recipient = randomAddress();
@@ -218,18 +218,20 @@ describeSvm(
       expect(out.createTokenAccounts?.accounts).toEqual(
         expect.arrayContaining([`the Pot's WSOL account, ${output}`]),
       );
-      expect(out.createTokenAccounts?.accounts).toHaveLength(2);
+      expect(out.createTokenAccounts?.accounts).toHaveLength(3);
       expect(out.cook.status).toBe("success");
       expect(out.staged?.transactions.length).toBeGreaterThan(1);
       expect(out.lookupTable?.accounts).toBeGreaterThan(25);
       for (const p of FOUND) expect(priceOf(p)).toBe(ownLimit(p, priceLimit, false));
       const bought = tokenAmount(harness, await ata(recipient, WSOL));
+      const refunded = tokenAmount(harness, await ata(recipient, USDC));
       expect(bought).toBeGreaterThan(0n);
-      // What is left of the budget and the Pot's own 3 USDC stay; nothing bought stays.
-      const left = tokenAmount(harness, source);
-      expect(left).toBeGreaterThan(3n);
+      expect(refunded).toBeGreaterThan(0n);
+      // What was bought and what is left of the budget went to the recipient: the Pot keeps only
+      // its own 3 USDC, and nothing bought.
+      expect(tokenAmount(harness, source)).toBe(3n);
       expect(tokenAmount(harness, output)).toBe(0n);
-      expect((budget + 3n - left) * E18).toBeLessThanOrEqual(priceLimit * bought);
+      expect((budget - refunded) * E18).toBeLessThanOrEqual(priceLimit * bought);
 
       // The table stays: a second cook naming the same accounts takes it, and creates none.
       restoreVenues(harness.svm);
@@ -246,7 +248,7 @@ describeSvm(
       expect(second.createTokenAccounts).toBeUndefined();
     }, 300_000);
 
-    it("keeps what it bought in the Pot, given the Pot's own address", async () => {
+    it("keeps what it bought and the rest of the budget in the Pot, given the Pot's own address", async () => {
       restoreVenues(harness.svm);
       const source = await potAccount(USDC, budget);
       const output = await potAccount(WSOL, 0n);

@@ -8,9 +8,9 @@
  * It proves what the skill says the program does: one exact-input order split over the pools its keys
  * find, each stopping exactly at its own fee-adjusted limit; a key with no pool, a pool past its
  * limit, an empty pool and a remainder of dust skipped; the minimum-output and average-price checks;
- * what is left of the budget kept in the Pot and the Pot's other balance untouched; what was bought
- * kept in the Pot when the recipient is the Pot; and the refusals of a budget the Pot does not hold
- * and a recipient's account another wallet holds.
+ * what was bought and what is left of the budget sent to the recipient, and the Pot's other balance
+ * untouched; both kept in the Pot when the recipient is the Pot; and the refusals of a budget the Pot
+ * does not hold and a recipient's account another wallet holds.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -85,7 +85,7 @@ interface Order {
   kept?: bigint;
   /** Less than the budget in the Pot's account. */
   short?: boolean;
-  /** The recipient is the Pot itself: what was bought stays there. */
+  /** The recipient is the Pot itself: what was bought and the rest of the budget stay there. */
   keepInPot?: boolean;
   /** The recipient's token account held by another wallet than the recipient. */
   strangerRecipient?: boolean;
@@ -100,6 +100,8 @@ type Outcome =
       bought: bigint;
       unspent: bigint;
       received: bigint;
+      /** The recipient's USDC: what is left of the budget. */
+      refunded: bigint;
       /** The Pot's WSOL: nothing, unless the recipient is the Pot. */
       kept: bigint;
       /** The Pot's USDC after the cook. */
@@ -155,6 +157,9 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
           order.strangerRecipient ? randomAddress() : to,
           0n,
         );
+    const refund = order.keepInPot
+      ? potPay
+      : setTokenAccount(harness, await ata(to, USDC), USDC, to, 0n);
 
     // Each account the program names, from its derivation, as the command resolves it.
     const slots = new Map<string, Promise<SvmSlot>>();
@@ -259,6 +264,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       bought: at(1),
       unspent: at(2),
       received: order.keepInPot ? 0n : tokenAmount(harness, recipient),
+      refunded: order.keepInPot ? 0n : tokenAmount(harness, refund),
       kept: tokenAmount(harness, potBuy),
       left: tokenAmount(harness, potPay),
       units: result.computeUnitsConsumed(),
@@ -299,8 +305,10 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(outcome.bought).toBe(outcome.received);
     expect(outcome.kept).toBe(0n);
     expect(outcome.spent + outcome.unspent).toBe(budget);
-    // What is left of the budget stays in the Pot, beside its own 7.
-    expect(outcome.left).toBe(outcome.unspent + 7n);
+    // What is left of the budget goes to the recipient; the Pot keeps only its own 7.
+    expect(outcome.unspent).toBeGreaterThan(0n);
+    expect(outcome.refunded).toBe(outcome.unspent);
+    expect(outcome.left).toBe(7n);
     expect(outcome.spent * E18).toBeLessThanOrEqual(priceLimit * outcome.bought);
     expect(outcome.units).toBeLessThan(1_400_000);
     expect(outcome.accounts).toBeLessThanOrEqual(64);
@@ -317,6 +325,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     const outcome = succeeded(await cook({ budget, priceLimit }));
     expect(outcome.spent).toBe(budget);
     expect(outcome.unspent).toBe(0n);
+    expect(outcome.refunded).toBe(0n);
     expect(outcome.left).toBe(0n);
     expect(priceOf(ORCA)).not.toBe(snapshotPrice(ORCA));
     expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
@@ -365,6 +374,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(dust.spent).toBe(orcaAlone.spent);
     expect(dust.bought).toBe(orcaAlone.bought);
     expect(dust.unspent).toBe(1n);
+    expect(dust.refunded).toBe(1n);
     expect(priceOf(RAYDIUM)).toBe(snapshotPrice(RAYDIUM));
   }, 180_000);
 
@@ -389,7 +399,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     );
   }, 180_000);
 
-  it("keeps what was bought in the Pot when the recipient is the Pot", async () => {
+  it("keeps what was bought and the rest of the budget in the Pot when the recipient is the Pot", async () => {
     const budget = 1_000_000n * 10n ** 6n;
     const outcome = succeeded(await cook({ budget, priceLimit, kept: 7n, keepInPot: true }));
     expect(outcome.bought).toBeGreaterThan(0n);

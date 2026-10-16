@@ -237,6 +237,7 @@ check(
       "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
       "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
       "@recipient:WSOL",
+      "@recipient:USDC",
     ]
       .sort()
       .join(),

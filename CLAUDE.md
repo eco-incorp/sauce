@@ -747,8 +747,8 @@ shared through internal functions
 the pool at its venue's offsets, ~250 bytes smaller and ~5k CU a pool dearer than reading at
 each call site — `clmmCan`, `settled`): a program carries only the venues it calls (one venue's
 function ~0.9–1.7 KB, its `…Cpi` ~0.4–0.5 KB, its `…Data` ~0.2–0.4 KB; the distributed swap, its
-pools found by key in loops over Orca's spacings and Raydium's fees, 3,677 bytes and 45 accounts
-named, cooks two trading pools and two keys with none in about 517,000 CU). `compile.test.ts` pins its exports, each family's argument order, each venue's
+pools found by key in loops over Orca's spacings and Raydium's fees, 3,955 bytes and 46 accounts
+named, cooks two trading pools and two keys with none in about 535,000 CU). `compile.test.ts` pins its exports, each family's argument order, each venue's
 program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
 revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
 in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from

@@ -40,8 +40,7 @@ programs, the Pot is the Kitchen's account for the owner and salt, and a cook is
 
 1. **Write the program yourself**, in SauceScript, for the task as asked. The skills teach the
    language, the names and the patterns; their examples show idioms and are not templates. Never
-   ask the user which example or existing file to begin with. The one exception is the Solana
-   distributed swap, whose program is used whole (`sauce-solana-distributed-swap`).
+   ask the user which example or existing file to begin with.
 2. **Ask only what the request leaves open**: an amount, a price limit, a recipient, the chain, and
    **where the results end**. Before writing a program that produces assets (a swap's output, a
    lending market's aTokens, a vault's shares, what a bridge delivers), ask whether they should end

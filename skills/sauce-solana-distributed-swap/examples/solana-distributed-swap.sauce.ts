@@ -1,11 +1,11 @@
 // SOL for USDC over Solana's pools, as a limit order: up to `budget` USDC, never more than
 // `priceLimit` for any SOL, fees included, and at least `minTokens` SOL or nothing. The pools are
 // found by key, as an EVM program finds a Uniswap pool by its fee: Orca's whirlpools of the pair at
-// tick spacing 4 and 1, then Raydium's CLMM pools at fee 0.04% and 0.02%, the deepest of each
-// first. A key with no pool is skipped.
-// Each pool is offered what is left of the budget and trades until its price, fee paid, reaches
-// priceLimit. Compiling adds each pool's accounts to main, read from the pool when the cook is
-// built, so the command is given no account.
+// tick spacing 4 and 1, then Raydium's CLMM pools at fee 0.04% and 0.02%. The keys are chosen for
+// SOL/USDC, its four deepest pools on mainnet, the deepest of each venue first; a key with no pool
+// is skipped. Each pool is offered what is left of the budget and trades until its price, fee
+// paid, reaches priceLimit. Compiling adds each pool's accounts to main, read from the pool when the
+// cook is built, so the command is given no account.
 //
 //   sauce run solana-distributed-swap.sauce.ts --chain <chain> --keypair <keypair> \
 //     --args <budget> <priceLimit> <minTokens> <maxAvgPrice> <recipient>
@@ -16,7 +16,7 @@
 //                         times 10^18; 120 USDC a SOL is 120000000000000000
 //   minTokens: Uint256    the least SOL to buy, in lamports; less reverts the cook
 //   maxAvgPrice: Uint256  the most the average may cost, in priceLimit's units; 0 turns it off
-//   recipient: Address    receives the SOL bought, as wrapped SOL
+//   recipient: Address    receives the SOL bought, as wrapped SOL, and the USDC left unspent
 //
 //   All of 1,000 USDC or nothing, at most 120 USDC a SOL, simulated with no key:
 //   sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
@@ -64,9 +64,8 @@ function main(
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
-  // The SOL bought goes to the recipient; what is left of the budget stays in the Pot.
-  if (bought > 0) {
-    WSOL.transfer(recipient, bought);
-  }
+  // The SOL bought and what is left of the budget both go to the recipient.
+  if (bought > 0) WSOL.transfer(recipient, bought);
+  if (unspent > 0) USDC.transfer(recipient, unspent);
   return { spent, bought, unspent };
 }
