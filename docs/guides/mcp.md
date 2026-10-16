@@ -506,7 +506,7 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
   `system` or an account named by its token (`pot:USDC`, `@to:USDC`), by a pool
   (`slot:@pool:USDC.vaultA`) or by the seeds a program derives it from (`pda:<program>:<seeds>`).
   The accounts the token methods and the venue namespaces add to `main` (`USDC.transfer(to,
-amount)`, `OrcaWhirlpool.swap(pool, …)`), and those a program writes where it uses them
+amount)`, `Orca.Whirlpool.swap(pool, …)`), and those a program writes where it uses them
   (`Solana.pda(program, [seeds])`, `USDC.accountOf(holder)`; `sauce_globals` lists them as
   `accounts`), are derived from the cook, so a call names them only to replace one;
   `sauce_compile`'s manifest shows each one's `derive`.

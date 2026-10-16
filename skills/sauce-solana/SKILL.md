@@ -35,6 +35,10 @@ is `sauce-solana-distributed-swap`'s.
   refused.
 - **Each derived account is checked on chain**, because a transaction built another way (a solver
   filling the cook) could attach another account in its slot.
+- **A Solana key is base58 or its 32 bytes as 0x hex** wherever the command takes one: `--owner`,
+  `--account` and every key in its names, `--lookup-table`, a mint in `--assume-balance` and
+  `sauce pools`, a wallet policy's `to` and `tokens`, and the MCP tools' `owner`, `from` and
+  `accounts`. The hex is how `sauce globals --chain solana --json` prints a token's `address`.
 - **The Pot** is the Kitchen's program address for `"pot"`, its owner and a 32-byte salt (zero
   unless `--salt` names another). `ctx.self()` alone is the engine's program id, which owns every
   Pot account, **not the Pot**; as a token's holder (`USDC.balanceOf(ctx.self())`) it is the Pot.
@@ -44,7 +48,9 @@ is `sauce-solana-distributed-swap`'s.
 - **A transaction is at most 1,232 bytes**; a program that does not fit is staged first, which
   `sauce run` does.
 - **No protocol namespaces**: a program calls another program with `svm.call`; the price-limit
-  venues are namespaces of their own (`sauce-swaps`). `sauce globals --chain solana` lists the
+  venues are namespaces of their own, their protocol then their program
+  (`Orca.Whirlpool.swap(pool, …)`), and `Solana.swap(pool, …)` swaps at a pool of any of them
+  (`sauce-swaps`). `sauce globals --chain solana` lists the
   mints (devnet's too), the venues and the account expressions.
 
 | The account                                                                           | Write                                                                                                             |
@@ -211,7 +217,12 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - **Roles.** `Account` is read-only; `Account<Writable>` and `Account<Signer>` declare the role the
   transaction must grant. The manifest records `readonly`, `writable`, `readonly_signer` or
   `writable_signer` per slot. Roles are the author's declaration; nothing infers them from what a
-  CPI needs. A missing slot is named with the role it needs.
+  CPI needs.
+- **A missing `Account` is refused before anything is read.** A cook not given one of `main`'s
+  `Account` parameters is refused with each missing account, the values that suit its role (`pot`
+  or `owner` for a signer, `pot:<token>` for a token account, `program:<token>` for a token
+  program) and the JSON object `--accounts <file>` takes them all from, to fill in.
+  `sauce compile --json` lists the same, each account's name, role and forms, under accountsToGive.
 - **An `Account` compares by identity** (`tokenProgram.address == splToken`, with the SPL Token
   program an `Address` argument, or its 32-byte hex
   `0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9` as a literal) and exposes
@@ -222,8 +233,9 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   lamports with a System Program CPI.
 - **Scalar parameters are runtime arguments** (`--args`); `Account` parameters are not encoded. A
   32-byte key the program is given, such as a mint, is an `Address` argument passed as a base58
-  public key and encoded as one ABI word (not with `--compact-args`), or an `Account` parameter when
-  the program reads or writes that account. A registered symbol (`USDC`) is mainnet's mint; for
+  public key (or its 0x hex), or as a registered token, `USDC` or `mint:USDC`, meaning its mint; it
+  is encoded as one ABI word (not with `--compact-args`). It is an `Account` parameter when the
+  program reads or writes that account. A registered symbol (`USDC`) is mainnet's mint; for
   devnet's, pass the key `sauce globals --chain solana` lists.
 - **`ctx` on Solana**: `ctx.msgSender()` is the first signer among the accounts the engine receives
   (the Pot, when a `pot` slot is attached as the Pot), not proof of who sent the transaction;
@@ -234,7 +246,7 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 ### `--account` names
 
 Each slot is passed by its name, `--account NAME=<value>`, or all of them in one JSON object with
-`--accounts <file>`. A value is an address or one of:
+`--accounts <file>`. A value is an address or one of (every key in these forms may also be 0x hex):
 
 | Value                        | The account                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -534,6 +546,9 @@ LiteSVM (`sauce-typescript` says where they are).
 - **The amount sent taken as the amount received** for a mint with a transfer fee. Measure the
   delta.
 - **The Pot's own account passed as its token account.** `pot` is the Pot; its USDC is `pot:USDC`.
+- **A wallet passed where a token account goes.** A token program refuses a wallet as a token
+  account (InvalidAccountData); a failed cook says so. Give the wallet's associated token account,
+  `--account dest=<wallet>:USDC`, which `sauce run` creates where it is missing.
 - **An SPL derivation for a Token-2022 account.** An ATA derives under the mint's own token program.
 - **`--fund` or `sauce intent publish` on Solana.** Both are EVM only: fund the Pot's token account by
   a transfer; open intents from Ethereum or Base (`sauce-intents`).
