@@ -159,12 +159,14 @@ describe("the sauce command's flags as the tools' inputs", () => {
     }
   });
 
-  it("says it in the server's instructions and in the MCP guide, one table", () => {
+  it("says it in the server's instructions and in the MCP tools guide, one table", () => {
     const instructions = mcp.client.getInstructions() ?? "";
     for (const line of flagInputLines()) assert.ok(instructions.includes(line), line);
     assert.match(instructions, /`sauce <command>` is the tool sauce_<command>/);
-    const guide = readFileSync(new URL("../../docs/guides/mcp.md", import.meta.url), "utf8");
-    const section = guide.slice(guide.indexOf("### The command's flags as inputs"));
+    const guide = readFileSync(new URL("../../docs/guides/mcp-tools.md", import.meta.url), "utf8");
+    const at = guide.indexOf("### The command's flags as inputs");
+    assert.ok(at >= 0, "the MCP tools guide has its flags table");
+    const section = guide.slice(at);
     const rows = [...section.matchAll(/^\| (`--[^|]+?) +\| `([^`]+)` +\|$/gm)].map(
       ([, flags, input]) => ({
         flags: flags!.split(", ").map((flag) => flag.replace(/^`--|`$/g, "")),
