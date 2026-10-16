@@ -1291,6 +1291,21 @@ Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions doc
 contract ABI, a JSON array, that a program beside it imports — and `.mts` runners) and, for six of
 them, `references/`.
 
+- **One shape, one owner per fact.** Every `SKILL.md` opens with a scope paragraph saying what the
+  skill owns, then `## When to use` (a table: this skill, or which neighbour instead) and
+  `## Core model`, then its body (decision tables, numbered steps with exact commands, API tables),
+  and ends with `## Pitfalls` (mistake, then what to do) and `## Files` (each example and reference,
+  and what it pins). Each fact has one owning skill, and the others point at it rather than repeat
+  it: which chains take transactions and the chain-support request links are `sauce-overview`'s,
+  the program header `sauce-script`'s, Solana's accounts and running `sauce-solana`'s, namespace
+  members, aliases and `available(...)` `sauce-globals`'s, the units of each flag `sauce-cli`'s,
+  intents `sauce-intents`'s. `sauce-overview` is the router: the model, the protocol with a user,
+  the rules, the chain policy, and the skill map in layers (Start, Write, Build, Compose, Target,
+  Run, Index) with routes by need. `skills:check` holds the first two and last two sections of
+  every `SKILL.md` (`TEMPLATE_FIRST`, `TEMPLATE_LAST`) and fails any skill but `sauce-overview` that
+  links the chain-support requests (`CHAIN_POLICY_SKILL`). The directory names are stable: the MCP
+  prompts, the generators, the tests and the manual name them, so a change of ownership moves
+  prose, not directories.
 - **One set of protocol documents.** `skills/sauce-protocols/references/*.md` is the only copy of
   the per-protocol documents. `gen-embedded-sources.mjs` embeds them (top-level `*.md` only) for
   `src/skills/loader.ts`, so the `/skills` export (`getProtocolSkill`, unchanged API) returns
@@ -1325,7 +1340,8 @@ them, `references/`.
   `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
   issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
   byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
-  rendered as a guide (its example's whole file in place of the code the skill quotes). The two
+  rendered as a guide (its example's whole file in place of the code the skill quotes, and its
+  agent-only sections, When to use and Files, left out: `AGENT_SECTIONS`). The two
   renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
   manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
   never sent into `skills/`, nor an agent into `docs/`. `docs/reference/` is generated whole (a page
