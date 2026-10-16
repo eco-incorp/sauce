@@ -71,6 +71,7 @@ export {
   svmTokenAccount,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TRANSACTION_SIZE_LIMIT,
   type AccountResolution,
   type ResolvedSvmAccountName,
 } from "../../../sdk/dist/svm/index.js";

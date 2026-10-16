@@ -33,7 +33,7 @@ To test on Solana, install LiteSVM too, at the version the package pins (the kit
 yours differs). Solana needs no Foundry:
 
 ```sh
-npm i -D litesvm@1.2.1
+npm i -D litesvm@1.6.0
 ```
 
 ## A first test
