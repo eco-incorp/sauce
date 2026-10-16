@@ -11,7 +11,12 @@
  * Fails on a tree where these helpers call kit's `getProgramDerivedAddress` directly: the memo
  * counters never move, so the first-call `misses` assertion is red.
  */
-import { address, createNoopSigner, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import {
+  address,
+  createNoopSigner,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import {
