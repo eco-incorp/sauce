@@ -52,24 +52,30 @@ check(code.startsWith("// "), "the program's code opens with a comment");
 const shown = /```sauce chain=solana\n([\s\S]*?)```/.exec(skill);
 check(shown !== null && shown[1] === code, "the SKILL.md's program is the example file's code");
 
-// The program imports nothing and writes no address: each venue is one loop over the keys it finds
-// pools by, each swap at the pool its key finds, paying USDC for WSOL, which compiles to that
-// venue's `@sauce/router` function.
+// The program imports nothing and writes no address: each venue's swaps are one loop over the keys
+// it finds pools by, or one call with its key written in, each swap at the pool its key finds, paying
+// USDC for SPCX_US, which compiles to that venue's `@sauce/router` function.
 check(!/^import /m.test(code), "the program imports nothing");
 check(!/0x[0-9a-fA-F]{64}|[1-9A-HJ-NP-Za-km-z]{32,44}/.test(code), "the program writes no address");
 const LOOPS = [
   ...code.matchAll(
-    /for \(const (\w+) of \[([\d, ]+)\]\) \{\n {4}bought \+= (\w+\.\w+)\.swap\(\n {6}\3\.pool\(USDC, WSOL, \1\),\n {6}USDC,\n {6}WSOL,\n {6}self\.USDC - kept,\n {6}priceLimit,\n {6}0,\n {4}\);\n {2}\}/g,
+    /for \(const (\w+) of \[([\d, ]+)\]\) \{\n {4}bought \+= (\w+\.\w+)\.swap\(\n {6}\3\.pool\(USDC, SPCX_US, \1\),\n {6}USDC,\n {6}SPCX_US,\n {6}self\.USDC - kept,\n {6}priceLimit,\n {6}0,\n {4}\);\n {2}\}/g,
   ),
-].map((m) => ({ key: m[1]!, keys: m[2]!.split(", ").map(Number), venue: m[3]! }));
+].map((m) => ({ venue: m[3]!, key: m[1]!, keys: m[2]!.split(", ").map(Number) }));
+const CALLS = [
+  ...code.matchAll(
+    /\n {2}bought \+= (\w+\.\w+)\.swap\(\n {4}\1\.pool\(USDC, SPCX_US, (\d+)\),\n {4}USDC,\n {4}SPCX_US,\n {4}self\.USDC - kept,\n {4}priceLimit,\n {4}0,\n {2}\);/g,
+  ),
+].map((m) => ({ venue: m[1]!, keys: [Number(m[2]!)] }));
 check(
-  LOOPS.map((loop) => `${loop.venue} by ${loop.key}`).join() ===
-    "Orca.Whirlpool by spacing,Raydium.CLMM by fee",
-  "the program loops over Orca's tick spacings, then Raydium's fees",
+  LOOPS.map((loop) => `${loop.venue} by ${loop.key}: ${loop.keys.join(" ")}`).join() ===
+    "Raydium.CLMM by fee: 2500 1800" &&
+    CALLS.map((call) => `${call.venue} ${call.keys.join()}`).join() === "Byreal.CLMM 1000",
+  "the program loops over Raydium's fees, then calls Byreal's pool at its fee",
 );
 const program = routes.compileSauceProgram("solana", source);
 check(
-  /^import \{ orcaWhirlpool as __sauce_orcaWhirlpool, raydiumClmm as __sauce_raydiumClmm \} from "@sauce\/router";$/m.test(
+  /^import \{ raydiumClmm as __sauce_raydiumClmm, byreal as __sauce_byreal \} from "@sauce\/router";$/m.test(
     program.source,
   ),
   "each venue's swap is its @sauce/router function",
@@ -218,8 +224,10 @@ check(
   ),
   "every account the program names is derived",
 );
-const keyed = LOOPS.flatMap((loop) =>
-  loop.keys.flatMap((k) => SLOT.map((part) => `slot:${loop.venue}(USDC,WSOL,${k}):USDC.${part}`)),
+const keyed = [...LOOPS, ...CALLS].flatMap((swap) =>
+  swap.keys.flatMap((k) =>
+    SLOT.map((part) => `slot:${swap.venue}(USDC,SPCX_US,${k}):USDC.${part}`),
+  ),
 );
 check(
   keyed.every((one) => derived.includes(one)),
@@ -230,13 +238,13 @@ check(
     [
       "self",
       "self:USDC",
-      "self:WSOL",
+      "self:SPCX_US",
       "mint:USDC",
-      "mint:WSOL",
+      "mint:SPCX_US",
       "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
       "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
-      "@recipient:WSOL",
+      "@recipient:SPCX_US",
       "@recipient:USDC",
     ]
       .sort()
@@ -263,48 +271,52 @@ check(
   "the skill's simulation stages the program and its arguments",
 );
 
-// priceLimit: the price in whole tokens times 10^(18 + payDecimals − buyDecimals). USDC has 6
-// decimals on Solana and SOL 9.
-const decimalsOf = (symbol: string) =>
-  routes.SVM_TOKEN_REGISTRY["mainnet-beta"]!.find((row) => row.symbol === symbol)!.decimals;
-const usdc = decimalsOf("USDC");
-const sol = decimalsOf("WSOL");
-check(usdc === 6 && sol === 9, "USDC has 6 decimals on Solana, and SOL 9");
+// priceLimit: the price in whole tokens times 10^(18 + payDecimals − buyDecimals). USDC and SPCX_US
+// both have 6 decimals on Solana, and SPCX_US is a Token-2022 mint.
+const rowOf = (symbol: string) =>
+  routes.SVM_TOKEN_REGISTRY["mainnet-beta"]!.find((row) => row.symbol === symbol)!;
+const usdc = rowOf("USDC").decimals;
+const spcx = rowOf("SPCX_US").decimals;
+check(usdc === 6 && spcx === 6, "USDC and SPCX_US have 6 decimals on Solana");
+check(
+  rowOf("SPCX_US").tokenProgram === "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  "SPCX_US is a Token-2022 mint",
+);
 const E18 = 10n ** 18n;
-const buySol = 120n * 10n ** BigInt(18 + usdc - sol); // at most 120 USDC a SOL
-const sellSol = (10n ** BigInt(sol) * E18) / (118n * 10n ** BigInt(usdc)); // at least 118 USDC a SOL
+const buy = 150n * 10n ** BigInt(18 + usdc - spcx); // at most 150 USDC a share
+const sell = (10n ** BigInt(spcx) * E18) / (140n * 10n ** BigInt(usdc)); // at least 140 USDC a share
 const budget = 1000n * 10n ** BigInt(usdc);
 const ceil = (a: bigint, b: bigint) => (a + b - 1n) / b;
-const minTokens = ceil(budget * E18, buySol);
-const maxAvg = ceil((1195n * 10n ** BigInt(18 + usdc - sol)) / 10n + buySol, 2n); // halfway, 119.5 to 120
-// A floor in SOL per USDC turned over, rounded down: 10^15 ÷ 0.0084.
-const floorSol = (10n ** BigInt(18 + usdc - sol) * 10_000n) / 84n;
+const minTokens = ceil(budget * E18, buy);
+const maxAvg = ceil((1495n * 10n ** BigInt(18 + usdc - spcx)) / 10n + buy, 2n); // halfway, 149.5 to 150
+// A floor in shares per USDC turned over, rounded down: 10^18 ÷ 0.0068.
+const floor = (10n ** BigInt(18 + usdc - spcx) * 10_000n) / 68n;
 check(
-  floorSol === 119_047_619_047_619_047n,
-  "priceLimit buying SOL at a floor of 0.0084 SOL per USDC",
+  floor === 147_058_823_529_411_764_705n,
+  "priceLimit buying SPCX_US at a floor of 0.0068 per USDC",
 );
-check(buySol === 120_000_000_000_000_000n, "priceLimit buying SOL at most 120 USDC");
-check(sellSol === 8_474_576_271_186_440_677n, "priceLimit selling SOL at least 118 USDC");
-check(minTokens === 8_333_333_334n, "minTokens for all of 1,000 USDC at 120");
-check(maxAvg === 119_750_000_000_000_000n, "maxAvgPrice halfway between 119.5 and 120");
-for (const value of [buySol, floorSol, sellSol, maxAvg])
+check(buy === 150_000_000_000_000_000_000n, "priceLimit buying SPCX_US at most 150 USDC");
+check(sell === 7_142_857_142_857_142n, "priceLimit selling SPCX_US at least 140 USDC");
+check(minTokens === 6_666_667n, "minTokens for all of 1,000 USDC at 150");
+check(maxAvg === 149_750_000_000_000_000_000n, "maxAvgPrice halfway between 149.5 and 150");
+for (const value of [buy, floor, sell, maxAvg])
   check(skill.includes(`**${value}**`), `the skill quotes ${value}`);
 check(skill.includes(`\`${minTokens}\``), `the skill quotes minTokens ${minTokens}`);
 // The commands pass them: the simulation, the run with its checks set, and the header's example.
 check(
-  prose.includes(`--args ${budget} ${buySol} 0 0 <recipient>`) &&
-    prose.includes(`--args ${budget} ${buySol} ${minTokens} 0 <recipient> \\ --expect-revert`) &&
-    prose.includes(`--args ${budget} ${buySol} ${minTokens} ${maxAvg} <recipient>`),
+  prose.includes(`--args ${budget} ${buy} 0 0 <recipient>`) &&
+    prose.includes(`--args ${budget} ${buy} ${minTokens} 0 <recipient> \\ --expect-revert`) &&
+    prose.includes(`--args ${budget} ${buy} ${minTokens} ${maxAvg} <recipient>`),
   "the skill's commands pass those values",
 );
 check(
-  header.replace(/\s+/g, " ").includes(`--args ${budget} ${buySol} ${minTokens} 0 <recipient>`),
+  header.replace(/\s+/g, " ").includes(`--args ${budget} ${buy} ${minTokens} 0 <recipient>`),
   "and the header's example line",
 );
 
-// The simulation the skill reads: 2,000 USDC for 16.983900131 SOL, and its average.
+// The simulation the skill reads: 2,000 USDC for 13.618205 SPCX_US, and its average.
 const spent = 2000n * 10n ** BigInt(usdc);
-const bought = 16_983_900_131n;
+const bought = 13_618_205n;
 check(
   skill.includes(`{ spent: ${spent}, bought: ${bought}, unspent: 0 }`),
   "the skill shows main's return",
@@ -312,12 +324,12 @@ check(
 const average = (spent * E18) / bought;
 check(skill.includes(`**${average}**`), `the skill gives its average, ${average}`);
 
-// Each pool's own limit is the caller's moved by √(1 − fee): paying the lower-key token (SOL, whose
-// key is lower than USDC's) it is limit ÷ √(1 − fee), paying the other limit × √(1 − fee).
+// Each pool's own limit is the caller's moved by √(1 − fee): paying the lower-key token (SPCX_US,
+// whose key is lower than USDC's) it is limit ÷ √(1 − fee), paying the other limit × √(1 − fee).
 check(
-  key("So11111111111111111111111111111111111111112") <
+  key("SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb") <
     key("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  "SOL's key is lower than USDC's",
+  "SPCX_US's key is lower than USDC's",
 );
 check(
   prose.includes(

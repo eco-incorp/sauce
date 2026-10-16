@@ -161,16 +161,21 @@ export const loadVenues = (svm: LiteSVM): void => {
   for (const venue of manifest.programs) svm.addProgram(venue.programId, program(venue.file));
 };
 
-/** Every fixture account back as the snapshot has it, `edit` applied: each cook starts from the
- *  same chain. */
-export const restoreVenues = (
-  svm: LiteSVM,
-  edit?: { address: Address; offset: number; bytes: number[] },
-): void => {
+/** Bytes to change in a fixture account before a cook. */
+export interface Edit {
+  address: Address;
+  offset: number;
+  bytes: number[];
+}
+
+/** Every fixture account back as the snapshot has it, each edit applied: each cook starts from
+ *  the same chain. */
+export const restoreVenues = (svm: LiteSVM, edits?: Edit | readonly Edit[]): void => {
+  const changes = edits === undefined ? [] : Array.isArray(edits) ? edits : [edits as Edit];
   for (const [at, data] of BYTES) {
     const account = SNAPSHOT.get(at)!;
     const copy = new Uint8Array(data);
-    if (edit !== undefined && edit.address === at) copy.set(edit.bytes, edit.offset);
+    for (const edit of changes) if (edit.address === at) copy.set(edit.bytes, edit.offset);
     // An earlier fixture that recorded no lamports holds the rent exemption, and a wrapped-SOL
     // token account its amount on top, which the token program moves with it.
     const rent = svm.minimumBalanceForRentExemption(BigInt(copy.length));
