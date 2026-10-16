@@ -105,6 +105,18 @@ const venue = (namespace: string, name: string, swap: string, exact?: true): Svm
   };
 };
 
+/** The concentrated-liquidity venues, whose swap at a price takes a `stop` after its recipient. */
+export const SVM_STOPPED_VENUES: ReadonlySet<string> = new Set([
+  "Raydium.CLMM",
+  "Pancakeswap.CLMM",
+  "Byreal.CLMM",
+  "Stabble.CLMM",
+  "Orca.Whirlpool",
+  "Cropper.Whirlpool",
+  "Defituna.Fusion",
+  "Crema.CLMM",
+]);
+
 /** Each venue's namespace, its protocol then its program, as a program writes it. */
 export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> = {
   "Raydium.CLMM": venue("Raydium.CLMM", "Raydium CLMM", "raydiumClmm"),
@@ -408,12 +420,13 @@ export function collectVenueMethods(l: SvmLowering): void {
     ];
     const recipient = l.tokenAccount({ kind: "self" }, tokenOut, true, spelled).account;
     const fn = SVM_VENUE_NAMESPACES[namespace]!.swap;
+    const stop = SVM_STOPPED_VENUES.has(namespace) ? ", 0" : "";
     l.spliceCall(
       site,
       amountIn,
       minOut,
       `${l.use(ROUTER, fn, `__sauce_${fn}`)}([${slot.join(", ")}], [${trader.join(", ")}], `,
-      `, ${recipient})`,
+      `, ${recipient}${stop})`,
     );
   }
 

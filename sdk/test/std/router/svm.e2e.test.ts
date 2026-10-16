@@ -84,6 +84,8 @@ interface Order {
   edit?: { address: Address; offset: number; bytes: number[] };
   /** The slot's tick arrays, where a case names fewer than the pool's three. */
   ticks?: Address[];
+  /** The swap's `stop`: 0 none (the default), 1 skip, else a sqrt price it goes no further than. */
+  stop?: bigint;
 }
 
 type Outcome =
@@ -180,9 +182,15 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     // transaction.
     const args = encodeEntryArguments(
       program,
-      program.entryParams.length === 3
-        ? [order.amountIn, order.priceLimit, order.minOut ?? 0n]
-        : [order.amountIn, order.priceLimit],
+      program.entryParams.map(
+        (param) =>
+          ({
+            amountIn: order.amountIn,
+            priceLimit: order.priceLimit,
+            minOut: order.minOut ?? 0n,
+            stop: order.stop ?? 0n,
+          })[param.name]!,
+      ),
     );
     const payload = new Uint8Array(program.bytecode.length + args.length);
     payload.set(program.bytecode);
