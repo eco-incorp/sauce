@@ -607,7 +607,7 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
     text: [
       `${file} for ${program.chain.slug} (${program.chain.kind})`,
       ...indent(described.lines),
-      `  main(${params})${program.entryParams.length === 0 ? "" : `, arguments ${program.entryEncoding}`}`,
+      `  main(${params})`,
       ...(program.manifest === undefined
         ? []
         : [
@@ -631,7 +631,6 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
       chainId: program.chain.id,
       program: {
         ...described.json,
-        entryEncoding: program.entryEncoding,
         entryParams: program.entryParams,
         ...(program.manifest === undefined ? {} : { manifest: manifestJson(program) }),
       },

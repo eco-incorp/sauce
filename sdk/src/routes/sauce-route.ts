@@ -17,7 +17,7 @@
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
 import { getAddressDecoder, type Address as SvmAddress } from "@solana/kit";
-import { bytesToHex, hexToBytes } from "viem";
+import { bytesToHex, concatHex, hexToBytes, numberToHex } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
@@ -36,7 +36,6 @@ import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protoco
 import { rewriteAvailability } from "./available.js";
 import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
-import { encodeCompactArguments } from "../compact-arguments.js";
 import {
   v12KitchenAddress,
   v12SvmEngineProgramId,
@@ -122,10 +121,6 @@ export interface SauceCompileOptions {
    * no safe defaults and are reported by name when missing.
    */
   intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
-  /** Compile for compact-v1 entry arguments. Set by the intent lowering for a child program whose
-   *  captured values arrive at run time; a caller wanting entry arguments generally uses the raw
-   *  compiler. */
-  compactArgs?: boolean;
 }
 
 export interface SauceEvmExecutionInput {
@@ -288,10 +283,8 @@ function compileTimeValues(
  * it, so an intent opened within an intent is lowered by the same code at every depth. It is handed
  * the options and scope `levelOn` gives its chain, so its chain-scoped names are its own chain's.
  *
- * Captured values arrive as compact-v1 entry arguments at a DECLARED width. Minimal encoding would
- * move the payload's length with the values, leaving nothing at a fixed offset to splice; a
- * declared width keeps exactly one encoding per value and a constant length, which is the property
- * `compact-arguments.ts`'s `scalarWidth` exists for.
+ * Captured values arrive as ABI-v1 entry arguments: one 32-byte word each, at a fixed offset after
+ * the bytecode, which the parent splices without moving anything else in the payload.
  */
 function compileIntentChild(
   destination: ChainRefResolved,
@@ -321,24 +314,15 @@ function compileIntentChild(
     destination,
     childSource,
     { pot, engine, value: intents.executionFee },
-    { ...options, compactArgs: captures.length > 0 },
+    options,
     scope,
   );
 
-  let program: Hex = bytesToHex(compiled.compiled.bytecode[0]!);
-  const captureSentinels: bigint[] = [];
-  if (captures.length > 0) {
-    const schema = compiled.compiled.entrySchema;
-    if (schema === undefined) {
-      throw new Error(
-        "intent sugar: the child program takes captured values but the compiler returned no entry " +
-          "schema — its arguments cannot be encoded.",
-      );
-    }
-    captures.forEach((_, index) => captureSentinels.push(childCaptureSentinel(index)));
-    const args = encodeCompactArguments(schema, captureSentinels, { scalarWidth: 32 });
-    program = `${program}${bytesToHex(args).slice(2)}` as Hex;
-  }
+  const captureSentinels = captures.map((_, index) => childCaptureSentinel(index));
+  const program = concatHex([
+    bytesToHex(compiled.compiled.bytecode[0]!),
+    ...captureSentinels.map((sentinel) => numberToHex(sentinel, { size: 32 })),
+  ]);
 
   const call = buildSauceEvmCall({
     pot,
@@ -420,7 +404,7 @@ function compileSvmIntentChild(
   const program = compileForChain(
     destination,
     childSource,
-    { ...options, target: undefined, compactArgs: false },
+    { ...options, target: undefined },
     level.scope,
   );
   const manifest = program.manifest ?? { accounts: [] };
@@ -555,12 +539,8 @@ export interface CompiledSauceProgram {
   readonly chain: CanonicalChain;
   /** The program. `Pot.cook(engine, program)` runs it, with any entry arguments appended. */
   readonly bytecode: Uint8Array;
-  /** How `main`'s arguments are encoded: `abi-v1`, or `compact-v1` under `compactArgs`. */
-  readonly entryEncoding: "abi-v1" | "compact-v1";
-  /** With compact-v1, the schema its arguments are encoded against. */
-  readonly entrySchema?: Uint8Array;
   /** `main`'s runtime parameters, in order — on Solana without the `Account` slots, which the
-   *  manifest carries. `encodeEntryArguments` encodes values for them. */
+   *  manifest carries. `encodeEntryArguments` encodes values for them, ABI-v1. */
   readonly entryParams: readonly EntryParam[];
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
@@ -645,10 +625,6 @@ export function compileSauceProgram(
   return {
     chain: resolved,
     bytecode: program.compiled.bytecode[0]!,
-    entryEncoding: program.entryEncoding,
-    ...(program.compiled.entrySchema === undefined
-      ? {}
-      : { entrySchema: program.compiled.entrySchema }),
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     ...(program.derivedAccounts === undefined ? {} : { derivedAccounts: program.derivedAccounts }),
@@ -757,7 +733,6 @@ function compileForChain(
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
   readonly source: string;
-  readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
   readonly derivedAccounts?: Readonly<Record<string, string>>;
   readonly intents: readonly LoweredIntent[];
@@ -898,7 +873,6 @@ function compileForChain(
       ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
       ambient: options.ambient,
-      compactArgs: options.compactArgs,
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call
@@ -916,7 +890,7 @@ function compileForChain(
       ) ?? error
     );
   }
-  const { manifest, entryEncoding, ...compiled } = rs;
+  const { manifest, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
@@ -927,7 +901,6 @@ function compileForChain(
     chain,
     compiled,
     source,
-    entryEncoding,
     ...(manifest === undefined ? {} : { manifest }),
     ...(derivedAccounts === undefined ? {} : { derivedAccounts }),
     intents,

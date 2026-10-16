@@ -28,10 +28,7 @@
  * word over an amount changes no offset, no length, and no other field. (Borsh is the same for a
  * FIXED-width integer field — a `u64` amount is 8 bytes wherever it sits — which is why `width`/
  * `littleEndian` exist here rather than 32-byte-big-endian being hardcoded; see `nest-dynamic.ts`
- * for the SVM-destination child that needs them.) The one encoding this CANNOT template is the
- * compiler's own `compact-v1` argument payload, whose scalars are minimally encoded so both the
- * width and the length prefix move with the value — see `../compact-arguments.ts`'s `scalarWidth`
- * option, which exists precisely to give that format a fixed-offset form too.
+ * for the SVM-destination child that needs them.)
  *
  * Pure: no compiler import, no chain knowledge, no `Intent` knowledge — matching `nest.ts`'s
  * posture. `nest-dynamic.ts` is the layer that knows what a child intent is.

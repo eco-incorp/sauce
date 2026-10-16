@@ -5,12 +5,11 @@
  * The SDK's passes parse SauceScript with its annotations (`parse.ts`), so a typed `main` reaches
  * the compiler exactly as written; this only reads it.
  *
- * ENTRY ARGUMENTS. A value for a parameter arrives at run time, appended to the program: ABI-v1
- * (`abi.encode` of the parameters in order, no selector, except that a tuple parameter is always
- * behind an offset — `encodeAbiEntry`) by default, compact-v1 under `compactArgs`.
- * `encodeEntryArguments` checks each value against the type the program declares and encodes it in
- * the encoding the program was compiled for. Only annotations are types here: a parameter without
- * one is a `Uint256`, as the compiler reads it.
+ * ENTRY ARGUMENTS. A value for a parameter arrives at run time, appended to the program, ABI-v1:
+ * `abi.encode` of the parameters in order, no selector, except that a tuple parameter is always
+ * behind an offset (`encodeAbiEntry`). `encodeEntryArguments` checks each value against the type the
+ * program declares and encodes it. Only annotations are types here: a parameter without one is a
+ * `Uint256`, as the compiler reads it.
  */
 import { address as svmAddress, getAddressEncoder, isAddress as isSvmKey } from "@solana/kit";
 import {
@@ -30,11 +29,6 @@ import {
   type Hex,
 } from "viem";
 
-import {
-  decodeCompactArguments,
-  encodeCompactArguments,
-  type CompactValue,
-} from "../compact-arguments.js";
 import type { AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import { blankLiterals } from "./rs-compile.js";
@@ -61,7 +55,7 @@ export type EntryValue =
   | { readonly [field: string]: EntryValue };
 
 /** What `encodeEntryArguments` reads of a compiled program. */
-type ProgramEntry = Pick<CompiledSauceProgram, "entryEncoding" | "entrySchema" | "entryParams">;
+type ProgramEntry = Pick<CompiledSauceProgram, "entryParams">;
 
 // ---------------------------------------------------------------------------------------------
 // Finding `main`'s signature
@@ -359,10 +353,10 @@ const shown = (value: unknown): string =>
         ? "a byte array"
         : (JSON.stringify(value) ?? String(value));
 
-/** Normalized for both encoders: scalars as bigint, addresses and bytes as hex, tuples as arrays. */
-type Normalized = bigint | boolean | string | Uint8Array | Normalized[];
+/** Normalized for the encoder: scalars as bigint, addresses and bytes as hex, tuples as arrays. */
+type Normalized = bigint | boolean | string | Normalized[];
 
-function normalize(type: EntryType, value: EntryValue, at: string, compact: boolean): Normalized {
+function normalize(type: EntryType, value: EntryValue, at: string): Normalized {
   const fail = (what: string): never => {
     throw new TypeError(`${at}: ${shown(value)} is not ${what}`);
   };
@@ -394,21 +388,15 @@ function normalize(type: EntryType, value: EntryValue, at: string, compact: bool
           ? value === "true"
           : fail("a bool: true or false");
     case "bytes":
-      if (value instanceof Uint8Array) return compact ? value : bytesToHex(value);
+      if (value instanceof Uint8Array) return bytesToHex(value);
       return typeof value === "string" && isHex(value) && value.length % 2 === 0
-        ? compact
-          ? hexToBytes(value as Hex)
-          : value
+        ? value
         : fail("bytes: a Uint8Array or even-length 0x-prefixed hex");
     case "string":
-      return typeof value === "string"
-        ? compact
-          ? new TextEncoder().encode(value)
-          : value
-        : fail("a string");
+      return typeof value === "string" ? value : fail("a string");
     case "array":
       return Array.isArray(value)
-        ? value.map((item, index) => normalize(type.of, item, `${at}[${index}]`, compact))
+        ? value.map((item, index) => normalize(type.of, item, `${at}[${index}]`))
         : fail("an array");
     case "tuple": {
       const { fields } = type;
@@ -420,7 +408,7 @@ function normalize(type: EntryType, value: EntryValue, at: string, compact: bool
         }
 
         return fields.map((field, index) =>
-          normalize(field.type, value[index]!, `${at}.${field.name}`, compact),
+          normalize(field.type, value[index]!, `${at}.${field.name}`),
         );
       }
       if (value === null || typeof value !== "object" || value instanceof Uint8Array) {
@@ -435,7 +423,7 @@ function normalize(type: EntryType, value: EntryValue, at: string, compact: bool
       }
 
       return fields.map((field) =>
-        normalize(field.type, record[field.name]!, `${at}.${field.name}`, compact),
+        normalize(field.type, record[field.name]!, `${at}.${field.name}`),
       );
     }
   }
@@ -550,7 +538,7 @@ export function entryConstant(
   if (parsed.kind === "address" && typeof value === "string" && isSvmKey(value)) {
     return BigInt(bytesToHex(new Uint8Array(getAddressEncoder().encode(svmAddress(value)))));
   }
-  const normalized = normalize(parsed, value, at, false);
+  const normalized = normalize(parsed, value, at);
 
   return typeof normalized === "string" ? BigInt(normalized) : (normalized as bigint | boolean);
 }
@@ -618,8 +606,8 @@ export function bindEntryArguments(
 
 /**
  * The encoded entry arguments for `program`: `values` checked against `main`'s declared parameters,
- * in their order, and encoded as the program was compiled to read them. Append them to the program's
- * bytecode; that whole payload is the `program` of `Pot.cook(engine, program)`.
+ * in their order, and encoded ABI-v1. Append them to the program's bytecode; that whole payload is
+ * the `program` of `Pot.cook(engine, program)`.
  *
  * Throws, naming the parameter and what it takes, on a wrong count or a value that is not of the
  * declared type.
@@ -635,23 +623,14 @@ export function encodeEntryArguments(
       `main takes ${params.length} argument${params.length === 1 ? "" : "s"} (${signature}), got ${values.length}`,
     );
   }
-  const compact = program.entryEncoding === "compact-v1";
   const types = params.map((param) => parseEntryType(param.type));
   const normalized = params.map((param, index) =>
     normalize(
       types[index]!,
       values[index]!,
       `argument ${index + 1} (${param.name}: ${param.type})`,
-      compact,
     ),
   );
-  if (compact) {
-    if (program.entrySchema === undefined) {
-      throw new Error("encodeEntryArguments: a compact-v1 program carries its entrySchema");
-    }
-
-    return encodeCompactArguments(program.entrySchema, normalized as CompactValue);
-  }
   if (params.length === 0) return new Uint8Array();
 
   return hexToBytes(
@@ -671,25 +650,20 @@ function typed(type: EntryType, value: unknown): EntryValue {
       return value as bigint;
     case "address":
     case "account":
-      return getAddress(
-        typeof value === "bigint" ? numberToHex(value, { size: 20 }) : (value as string),
-      );
+      return getAddress(value as string);
     case "bool":
       return value as boolean;
     case "bytes":
-      return value instanceof Uint8Array ? bytesToHex(value) : (value as Hex);
+      return value as Hex;
     case "string":
-      return value instanceof Uint8Array ? new TextDecoder().decode(value) : (value as string);
+      return value as string;
     case "array":
       return (value as readonly unknown[]).map((item) => typed(type.of, item));
     case "tuple":
       return Object.fromEntries(
-        type.fields.map((field, index) => [
+        type.fields.map((field) => [
           field.name,
-          typed(
-            field.type,
-            Array.isArray(value) ? value[index] : (value as Record<string, unknown>)[field.name],
-          ),
+          typed(field.type, (value as Record<string, unknown>)[field.name]),
         ]),
       );
   }
@@ -704,20 +678,11 @@ function typed(type: EntryType, value: unknown): EntryValue {
 export function decodeEntryArguments(program: ProgramEntry, encoded: Uint8Array): EntryValue[] {
   const params = program.entryParams;
   const types = params.map((param) => parseEntryType(param.type));
-  let raw: readonly unknown[];
-  if (program.entryEncoding === "compact-v1") {
-    if (program.entrySchema === undefined) {
-      throw new Error("decodeEntryArguments: a compact-v1 program carries its entrySchema");
-    }
-    // Strict already: minimal scalars, canonical booleans, no trailing bytes.
-    raw = decodeCompactArguments(program.entrySchema, encoded) as readonly unknown[];
-  } else {
-    raw = decodeAbiEntry(
-      types.map((type, index) => abiParam(type, params[index]!.name)),
-      types,
-      encoded,
-    );
-  }
+  const raw = decodeAbiEntry(
+    types.map((type, index) => abiParam(type, params[index]!.name)),
+    types,
+    encoded,
+  );
   const values = types.map((type, index) => typed(type, raw[index]));
   const again = encodeEntryArguments(program, values);
   if (again.length !== encoded.length || again.some((byte, index) => byte !== encoded[index])) {

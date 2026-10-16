@@ -460,10 +460,6 @@ const PROGRAM: FlagSpecs = {
     value: "<transfer|publishAndFund>",
     help: "…how their reward is funded: paid into the vault (default), or publishAndFund",
   },
-  "compact-args": {
-    type: "boolean",
-    help: "Take main's arguments as compact-v1, not ABI-v1",
-  },
   "source-dir": {
     type: "string",
     value: "<dir>",
@@ -803,7 +799,6 @@ async function programInput(
     ...(stdin ? { stdin } : {}),
     ...(sourceDir === undefined ? {} : { sourceDir }),
     chain,
-    compactArgs: args.values["compact-args"] === true,
     defines,
     intents: {
       ...(deadline === undefined
@@ -871,7 +866,6 @@ function actionsOperand(args: ParsedArgs, file: string, text: string): ActionsIn
     file,
     text,
     ...(chain === undefined ? {} : { chain }),
-    compactArgs: args.values["compact-args"] === true,
   };
 }
 
@@ -1436,7 +1430,6 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
       file: created.file,
       text: created.text,
       chain: created.source,
-      compactArgs: false,
       defines: {},
       intents: {
         deadline: created.deadline,
@@ -2843,7 +2836,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   actions: {
-    usage: "sauce actions <file | -> [--chain <slug|id>] [--compact-args] [--json]",
+    usage: "sauce actions <file | -> [--chain <slug|id>] [--json]",
     summary: "Lower an actions document to SauceScript for a chain; print the source and bytecode",
     flags: {
       chain: {
@@ -2851,7 +2844,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "<slug|id>",
         help: "The chain to compile for (default: the document's chainId)",
       },
-      "compact-args": PROGRAM["compact-args"]!,
       json: {
         type: "boolean",
         help: "Print JSON: the document, source, bytecode and main's parameters",

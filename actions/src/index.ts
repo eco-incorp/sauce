@@ -6,7 +6,6 @@ export type { JsonSchema } from "./schema.js";
 
 export { compileProgram, programIntent } from "./compose.js";
 export type {
-  ArgumentEncoding,
   ArgumentValues,
   CompiledProgram,
   CompileOptions,

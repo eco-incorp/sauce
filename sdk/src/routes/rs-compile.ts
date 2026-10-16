@@ -247,14 +247,11 @@ export interface RsCompileInput {
   /** Module specifiers broadcast into every module with no `import` line -- see this file's own
    *  header for why this option only exists here, not on the TS path. */
   ambient?: string[];
-  /** Compile for compact-v1 entry arguments, returning the schema they must be encoded against. */
-  compactArgs?: boolean;
 }
 
-/** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
- *  arguments are encoded, and the SVM account manifest when the compiler returned one. */
+/** The seam's `CompileResult`, plus the SVM account manifest when the compiler returned one, which
+ *  `compileSauceProgram` reports beyond it. */
 export interface RsCompileResult extends CompileResult {
-  entryEncoding: "abi-v1" | "compact-v1";
   manifest?: AccountManifest;
 }
 
@@ -276,15 +273,9 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
     defines: toRsDefines(input.defines, input.baseDefines),
-    compactArgs: input.compactArgs,
   });
 
-  const compiled: RsCompileResult = {
-    bytecode: [result.bytecode],
-    warnings: [],
-    entrySchema: result.entrySchema,
-    entryEncoding: result.entryEncoding,
-  };
+  const compiled: RsCompileResult = { bytecode: [result.bytecode], warnings: [] };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 
   return compiled;

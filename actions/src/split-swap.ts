@@ -197,7 +197,7 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   const source =
     routerImport([...router].sort()) + [...quoteFns, quoteAny, swapAny, main].join("\n\n") + "\n";
 
-  return compiled(source, contractsFor(bindings), [], {}, chain);
+  return compiled(source, contractsFor(bindings), [], chain);
 }
 
 /** The split's chain, an EVM one the SDK knows. */

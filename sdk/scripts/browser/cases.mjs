@@ -3,12 +3,7 @@
 // does, so what runs is the package's public `exports`. Kept free of anything environment-specific:
 // the same text is the Node run and the browser run.
 import { ready, routes, deposit } from "@eco-incorp/sauce";
-import {
-  compile,
-  decodeCompactArguments,
-  encodeCompactArguments,
-  resolveSdkModule,
-} from "@eco-incorp/sauce/compiler";
+import { compile, resolveSdkModule } from "@eco-incorp/sauce/compiler";
 import { settleSource } from "@eco-incorp/sauce/recipes";
 import { compileProgram, parseProgram } from "@eco-incorp/sauce/actions";
 
@@ -48,18 +43,22 @@ export async function run(source) {
   // Imported only now, because building the route compiles it.
   const { built } = await import("./readme-route.mjs");
 
-  // A raw compile with compact entry arguments, on both targets, round-tripped through the codec.
+  // A raw compile on both targets, and main's arguments round-tripped through the ABI-v1 codec.
   const raw = {};
   const entry = utf8("function main(x: Uint256, y: Uint256): Uint256 { return x * y + 1n; }");
+  const params = {
+    entryParams: [
+      { name: "x", type: "Uint256" },
+      { name: "y", type: "Uint256" },
+    ],
+  };
   for (const target of ["evm", "svm"]) {
-    const artifact = compile({ target, compactArgs: true, resolve: () => entry });
-    const payload = encodeCompactArguments(artifact.entrySchema, [6n, 7n]);
+    const artifact = compile({ target, resolve: () => entry });
+    const payload = routes.encodeEntryArguments(params, [6n, 7n]);
     raw[target] = {
       bytecode: hex(artifact.bytecode),
-      entryEncoding: artifact.entryEncoding,
-      entrySchema: hex(artifact.entrySchema),
       payload: hex(payload),
-      decoded: decodeCompactArguments(artifact.entrySchema, payload).map(String),
+      decoded: routes.decodeEntryArguments(params, payload).map(String),
       manifest: artifact.manifest ?? null,
     };
   }

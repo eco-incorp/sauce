@@ -59,7 +59,6 @@ export const DEV_TOPICS: ReadonlyArray<{
       "compiling",
       "compilesauceprogram",
       "bytecode",
-      "compact",
       "arguments",
       "defines",
       "entry",

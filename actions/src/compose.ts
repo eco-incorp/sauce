@@ -3,9 +3,9 @@
  *
  * STANDALONE (`compileProgram`). One compiled program; its `argument` actions are `main`
  * parameters, so the same bytecode serves every amount and the amounts travel as argument bytes
- * appended to it. ABI-v1 arguments are 32-byte words; compact-v1 arguments are smaller, and with a
- * declared `scalarWidth` each sits at a fixed offset (`argumentOffset`), which is what lets a caller
- * splice a number measured at runtime into an otherwise precompiled payload.
+ * appended to it. ABI-v1 arguments are 32-byte words, each at a fixed offset (`argumentOffset`),
+ * which is what lets a caller splice a number measured at runtime into an otherwise precompiled
+ * payload.
  *
  * INTENT (`programIntent`). The program is the route body on its chain: the SDK compiles it there,
  * puts its cook in the route, and `.reward(...)` / `.nest(...)` work on it like on any other. A
@@ -26,7 +26,6 @@ import {
   type CanonicalChain,
   type ChainRef,
 } from "../../sdk/dist/chains/canonical.js";
-import { encodeCompactArguments } from "../../sdk/dist/compact-arguments.js";
 import {
   compileSauceProgram,
   openRoute,
@@ -51,20 +50,10 @@ export interface CompileOptions {
    * that chain only.
    */
   readonly chain?: ChainRef;
-  /** Encode the runtime arguments compact-v1 instead of ABI-v1. Default `false`. */
-  readonly compactArgs?: boolean;
 }
 
 /** Runtime argument values, by `argument` name. Each is a uint256. */
 export type ArgumentValues = Readonly<Record<string, bigint | number | string>>;
-
-export interface ArgumentEncoding {
-  /**
-   * Compact-v1 only: encode every argument in exactly this many bytes (1..32) instead of the
-   * minimal width, so each sits at a fixed offset whatever its value.
-   */
-  readonly scalarWidth?: number;
-}
 
 export interface CompiledProgram {
   readonly bytecode: Uint8Array;
@@ -77,17 +66,13 @@ export interface CompiledProgram {
   readonly contracts: ActionContracts;
   /** The `argument` names, in the order `main` takes them. Empty when there are none. */
   readonly parameters: readonly string[];
-  readonly entryEncoding: "abi-v1" | "compact-v1";
-  /** The compact-v1 argument schema; present with `compactArgs`. */
-  readonly entrySchema?: Uint8Array;
-  /** `bytecode` followed by the encoded arguments — the `program` a Pot's `cook(engine, program)` takes. */
-  payload(values?: ArgumentValues, encoding?: ArgumentEncoding): Uint8Array;
+  /** `bytecode` followed by the ABI-v1 arguments — the `program` a Pot's `cook(engine, program)` takes. */
+  payload(values?: ArgumentValues): Uint8Array;
   /**
-   * Where argument `name`'s big-endian value starts in `payload(...)`, for splicing a number into
-   * a payload built earlier: its 32-byte word under ABI-v1, its `scalarWidth` bytes under
-   * compact-v1 (which requires a `scalarWidth`).
+   * Where argument `name`'s 32-byte big-endian word starts in `payload(...)`, for splicing a number
+   * into a payload built earlier.
    */
-  argumentOffset(name: string, encoding?: ArgumentEncoding): number;
+  argumentOffset(name: string): number;
 }
 
 /** An action program checked for one chain and lowered: what both compiles start from. */
@@ -196,7 +181,7 @@ export function compileProgram(
 ): CompiledProgram {
   const { chain, lowered } = lowerProgram(program, options.chain);
 
-  return compiled(renderProgram(lowered), lowered.contracts, lowered.parameters, options, chain);
+  return compiled(renderProgram(lowered), lowered.contracts, lowered.parameters, chain);
 }
 
 /**
@@ -207,16 +192,12 @@ export function compiled(
   source: string,
   contracts: ActionContracts,
   parameters: readonly string[],
-  options: CompileOptions = {},
   chain?: CanonicalChain,
 ): CompiledProgram {
   const result =
     chain === undefined
-      ? compileEvm(source, contracts, { compactArgs: options.compactArgs })
-      : compileSauceProgram(chain, source, {
-          contracts,
-          ...(options.compactArgs === true ? { compactArgs: true } : {}),
-        });
+      ? compileEvm(source, contracts)
+      : compileSauceProgram(chain, source, { contracts });
   const { bytecode } = result;
 
   const positional = (values: ArgumentValues = {}): bigint[] => {
@@ -240,19 +221,8 @@ export function compiled(
     });
   };
 
-  const encodeArguments = (
-    values?: ArgumentValues,
-    encoding: ArgumentEncoding = {},
-  ): Uint8Array => {
+  const encodeArguments = (values?: ArgumentValues): Uint8Array => {
     const args = positional(values);
-    if (result.entryEncoding === "compact-v1") {
-      return encodeCompactArguments(result.entrySchema!, args, {
-        scalarWidth: encoding.scalarWidth,
-      });
-    }
-    if (encoding.scalarWidth !== undefined) {
-      throw new Error("`scalarWidth` applies to compact-v1 arguments; compile with `compactArgs`");
-    }
     if (args.length === 0) return new Uint8Array();
 
     return hexToBytes(
@@ -268,19 +238,12 @@ export function compiled(
     source,
     contracts,
     parameters,
-    entryEncoding: result.entryEncoding,
-    entrySchema: result.entrySchema,
-    payload: (values, encoding) => concatBytes([bytecode, encodeArguments(values, encoding)]),
-    argumentOffset(name, encoding = {}) {
+    payload: (values) => concatBytes([bytecode, encodeArguments(values)]),
+    argumentOffset(name) {
       const index = parameters.indexOf(name);
       if (index < 0) throw new Error(`no argument named '${name}'`);
-      if (result.entryEncoding === "abi-v1") return bytecode.length + 32 * index;
-      const width = encoding.scalarWidth;
-      if (width === undefined) {
-        throw new Error("a compact-v1 argument has a fixed offset only under a `scalarWidth`");
-      }
-      // "SA" + version (1) + flags (0), then per scalar a one-byte width and its value bytes.
-      return bytecode.length + 4 + index * (1 + width) + 1;
+
+      return bytecode.length + 32 * index;
     },
   };
 }

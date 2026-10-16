@@ -1108,8 +1108,7 @@ async function runUsage(where, file, argv, chain, header = false) {
     } else if (flag === "--account") {
       accounts.push(value.split("=")[0]);
       i++;
-    } else if (flag === "--compact-args") kept.push(flag);
-    else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
+    } else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
   if (/\.reward\(/.test(read(file)) && !kept.includes("--intent-deadline"))
     fail(

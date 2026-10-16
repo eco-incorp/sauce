@@ -82,7 +82,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
       --account NAME=<address>                     Solana: an account main takes (an address, pot, owner, self, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook
@@ -133,11 +132,10 @@ Examples:
 ```text
 Lower an actions document to SauceScript for a chain; print the source and bytecode.
 
-Usage: sauce actions <file | -> [--chain <slug|id>] [--compact-args] [--json]
+Usage: sauce actions <file | -> [--chain <slug|id>] [--json]
 
 Options:
       --chain <slug|id>  The chain to compile for (default: the document's chainId)
-      --compact-args     Take main's arguments as compact-v1, not ABI-v1
       --json             Print JSON: the document, source, bytecode and main's parameters
   -h, --help             Show this help
       --no-update-check  No notice of a newer sauce, and no registry read for one
@@ -176,7 +174,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --owner <address>                            The Pot's owner, which derives the Pot with the salt (default 0)
       --salt <label>                               Name one of the owner's Pots: salt = keccak256(label)
@@ -302,7 +299,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --owner <address>                            The Pot's owner, which derives the Pot with the salt (default 0)
       --salt <label>                               Name one of the owner's Pots: salt = keccak256(label)
@@ -477,7 +473,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
       --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
@@ -602,7 +597,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
       --rpc-url <url>                              Your own endpoint for the destination chain (one destination only)
@@ -707,7 +701,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
@@ -772,7 +765,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
@@ -839,7 +831,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
@@ -903,7 +894,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
@@ -973,7 +963,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --rpc-url <url>                              Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>                              Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
@@ -1262,7 +1251,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --owner <address>                            The Pot's owner, which derives the Pot with the salt (default 0)
       --salt <label>                               Name one of the owner's Pots: salt = keccak256(label)
@@ -1781,7 +1769,6 @@ Options:
       --intent-prover <address>                    …their prover (default: the registry's for the pair)
       --intent-execution-fee <wei|auto>            …the destination Kitchen's fee, when one runs a program; auto reads it
       --intent-fund-via <transfer|publishAndFund>  …how their reward is funded: paid into the vault (default), or publishAndFund
-      --compact-args                               Take main's arguments as compact-v1, not ABI-v1
       --source-dir <dir>                           Resolve the program's relative imports here (default: beside it; from stdin, .)
       --args-json <json|file>                      main's arguments as a JSON array, inline or in a file
       --source <file>                              The program a cook was compiled from: decode its arguments

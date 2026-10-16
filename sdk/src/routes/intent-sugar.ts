@@ -846,9 +846,8 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       // and `main` taking what it captures (`intent-body.ts`).
       //
       // Captured values reach the program as ENTRY ARGUMENTS. They cannot be folded in: their
-      // values do not exist when it is compiled. Declared as `main`'s parameters, encoded
-      // compact-v1 at a declared width so the payload's length does not move with them, and spliced
-      // by the parent at a fixed offset -- which is the property `scalarWidth` exists for. Left
+      // values do not exist when it is compiled. Declared as `main`'s parameters, encoded ABI-v1,
+      // one 32-byte word each at a fixed offset, and spliced there by the parent. Left
       // unannotated: the compiler reads an unannotated parameter as a number, which a spliced
       // 32-byte word is.
       const childModule = childProgram(

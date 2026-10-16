@@ -167,8 +167,6 @@ export interface ProgramInput {
   /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
    *  report shows as one. */
   readonly addressDefines?: readonly string[];
-  /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
-  readonly compactArgs: boolean;
   /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
   readonly intents: {
     readonly deadline?: bigint;
@@ -279,7 +277,6 @@ function compileOptions(
   return {
     defines: input.defines,
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
-    ...(input.compactArgs ? { compactArgs: true } : {}),
     // The intents the program opens compile with these options too, so this hears their contracts.
     ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
@@ -478,9 +475,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           ? null
           : { size: payload.length, argumentsSize: payload.length - program.bytecode.length },
       ...(cook === undefined ? {} : { cook }),
-      entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
-      entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
       returnType: mainReturnType(input.text) ?? null,
       defines,

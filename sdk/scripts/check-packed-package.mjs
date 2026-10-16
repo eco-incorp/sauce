@@ -321,19 +321,21 @@ try {
     import { dirname, join, resolve } from 'node:path';
     import { fileURLToPath } from 'node:url';
     import { keccak256 } from 'viem';
-    import { compile, encodeCompactArguments, decodeCompactArguments, resolveSdkModule } from '${name}/compiler';
+    import { routes } from '${name}';
+    import { compile, resolveSdkModule } from '${name}/compiler';
     import { settleSource } from '${name}/recipes';
     import { SETTLE_PROGRAM, SETTLE_WIRE } from '${name}/verify';
     const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
+    const params = { entryParams: [{ name: 'x', type: 'Uint256' }] };
     for (const target of ['evm', 'svm']) {
-      const a = compile({ target, compactArgs: true, resolve: () => source });
+      const a = compile({ target, resolve: () => source });
       assert.equal(a.isaRevision, 'stack-compact-v2');
-      assert.equal(a.entryEncoding, 'compact-v1');
-      const data = encodeCompactArguments(a.entrySchema, [7n]);
-      assert.deepEqual(decodeCompactArguments(a.entrySchema, data), [7n]);
-      assert.throws(() => decodeCompactArguments(a.entrySchema, data.slice(0, -1)));
+      assert.equal(a.entryEncoding, 'abi-v1');
+      const data = routes.encodeEntryArguments(params, [7n]);
+      assert.deepEqual(routes.decodeEntryArguments(params, data), [7n]);
+      assert.throws(() => routes.decodeEntryArguments(params, data.slice(0, -1)));
     }
-    console.log('Clean package install: the compact compiler and codec resolve and round-trip');
+    console.log('Clean package install: the compiler and the argument codec resolve and round-trip');
 
     // The settle recipe, compiled the way ./recipes documents it to partners, from the shipped
     // source and the shipped IERC20 artifact. A pin the tarball cannot reproduce rejects every
