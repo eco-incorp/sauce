@@ -6,6 +6,20 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
+The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
+**Tutorials** (learn by doing: the EVM quick start `docs/guides/quick-start.md`, the Solana quick
+start and the first intent, on `docs/examples/pay.sauce.ts` and `cross-chain-intent.sauce.ts`),
+**How-to guides** (one task a page), **Concepts** (explanation: what a Pot is, why atomic) and
+**Reference** (flags, API, the generated pages). `docs/README.md` is the map: every page is listed
+under exactly one of its four `##` sections, and says which on its breadcrumb line (`**How-to
+guide** · ` before its links); `docs:check` holds both. A page stays in its mode: a
+how-to does not wander into a concept essay, a concept page lists no flags, and a fact has one
+owning page that the others link instead of repeating. No history or changelog prose. Every page
+then opens with a short plain-words intro in a blockquote: a few short sentences and an everyday
+analogy, any Sauce word in it explained on the spot (the [glossary](docs/concepts/glossary.md) maps
+each to a familiar one). The real content follows it, examples before rules, edge cases in a section
+at the end. Say "simulate", never "rehearse".
+
 ## What this repo is
 
 **Sauce** — the developer-facing package for the **Sauce protocol**, whose on-chain bytecode engines
@@ -1012,6 +1026,14 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 `eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
+`cli-intent-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.sauce.ts`
+the same way from an Ethereum anvil, published with `sauce intent publish` (with LiteSVM running the
+released engine and Kitchen, for the program bodies that cook on the Portal executor's Pot). jest
+(`moduleNameMapper`) and `sdk/tsconfig.test.json` (`paths`) map `@eco-incorp/sauce`, `/svm` and
+`/protocols/*` to `src`, so a suite may import a manual example, which imports the package by its
+name, with no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
+header's lines say in `cli-examples.e2e.test.ts` (Base, from the wallet `me` the page makes) and
+`cli-solana-token-methods.e2e.test.ts` (Solana, from `me-solana`).
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 `cli-solana-distributed-swap.e2e.test.ts`) and `@sauce/router`'s SVM arm's
 (`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way: the

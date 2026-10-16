@@ -16,6 +16,12 @@ module.exports = {
   extensionsToTreatAsEsm: [".ts"],
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
+    // A manual example imports the package by its name, as an application does. A suite that runs
+    // one resolves the entry points it uses to their source, as the package's exports resolve them
+    // to the build.
+    "^@eco-incorp/sauce$": "<rootDir>/src/index.ts",
+    "^@eco-incorp/sauce/svm$": "<rootDir>/src/svm/index.ts",
+    "^@eco-incorp/sauce/protocols/([a-z0-9-]+)$": "<rootDir>/src/protocols/$1/index.ts",
   },
   transform: {
     "^.+\\.ts$": [

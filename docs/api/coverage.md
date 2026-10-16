@@ -1,6 +1,10 @@
 # What is actually registered
 
-[API reference](README.md) · [Chains](../reference/chains.md) · [Protocols](../reference/protocols.md) · [Tokens](../reference/tokens.md)
+**Reference** · [API reference](README.md) · [Chains](../reference/chains.md) · [Protocols](../reference/protocols.md) · [Tokens](../reference/tokens.md)
+
+> Sauce carries several lists: the protocols it knows about, the names a program can use, and where
+> each one is deployed. They answer different questions. This page says which list to ask which
+> question.
 
 The SDK carries several registries, and they answer different questions. "Is this protocol in the
 catalog?" is not "can I call it by name in a program?", and neither is "is it deployed on my chain?".

@@ -1,6 +1,11 @@
 # The sauce command
 
-[Documentation](../README.md) · [Compiling programs](compiling.md) · [Create an intent](intents.md)
+**How-to guide** · [Documentation](../README.md) · [Compiling programs](compiling.md) · [Create an intent](intents.md)
+
+> `sauce` is a command you type in a terminal. Think of it as the remote control for your Pot: it
+> turns a program file into a transaction, tries it for free, signs it and sends it. It also has
+> buttons for wallets, for intents, and for looking things up on a chain. This page lists every
+> button. To start, do the [quick start](quick-start.md) instead.
 
 `@eco-incorp/sauce` installs a `sauce` command. It compiles a program file exactly as the SDK
 compiles a route body, deploys the Pot the program runs on, simulates the cook, signs it, sends it

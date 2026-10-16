@@ -1,6 +1,11 @@
 # Writing SauceScript
 
-[Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
+**Concept** · [Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
+
+> SauceScript is the language you write programs in. It looks like TypeScript, but it is smaller and
+> stricter, like a recipe card with a fixed set of words: the compiler checks every line before
+> anything runs. Once your program is running on the chain, it cannot ask your app for anything, so
+> whatever it needs, you hand it at the start.
 
 SauceScript is a checked subset of TypeScript. It has the familiar things —
 variables, functions, conditions, loops, arrays, records — but it does not run in
