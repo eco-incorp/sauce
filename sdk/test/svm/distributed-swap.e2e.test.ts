@@ -387,15 +387,18 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
 
   it("skips a pool past its limit, an empty pool, and a remainder of dust, and completes", async () => {
     const budget = 1_000_000n * 10n ** 6n;
-    // A limit between the cheapest pool's price and the dearest's: the dearest sits out.
-    const [cheapest, , dearest] = [...FOUND].sort((a, b) =>
+    // A limit between the cheapest pool's price and the dearest's: the dearest sits out, and the
+    // middle one, under the limit too, trades up to its own limit as the cheapest does.
+    const [cheapest, middle, dearest] = [...FOUND].sort((a, b) =>
       allIn(a, false) < allIn(b, false) ? -1 : 1,
     ) as [Pool, Pool, Pool];
     const between = (allIn(cheapest, false) + allIn(dearest, false)) / 2n;
     expect(allIn(cheapest, false)).toBeLessThan(between);
+    expect(allIn(middle, false)).toBeLessThan(between);
     expect(allIn(dearest, false)).toBeGreaterThan(between);
     const one = succeeded(await cook({ budget, priceLimit: between }));
     expect(priceOf(cheapest)).toBe(ownLimit(cheapest, between, false));
+    expect(priceOf(middle)).toBe(ownLimit(middle, between, false));
     expect(priceOf(dearest)).toBe(snapshotPrice(dearest));
     expect(one.bought).toBeGreaterThan(0n);
 
