@@ -247,7 +247,7 @@ The Permit2 signature is EIP-712 over `PermitTransferFrom(TokenPermissions permi
 spender, uint256 nonce, uint256 deadline)`, with `TokenPermissions(address token, uint256 amount)`,
 in Permit2's domain: name `Permit2`, the chain id, and Permit2's address. Permit2's nonces are
 unordered: any unused one will do. The `sauce` command's `run --fund` makes the signature and the
-pull for you ([Funding a run](cli.md#funding-a-run---fund)).
+pull for you ([Funding a run](cli-run.md#put-tokens-in-your-pot)).
 
 ## Route source and host JavaScript
 

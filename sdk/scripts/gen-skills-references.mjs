@@ -773,7 +773,7 @@ const DOCS_SITE = {
     "`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and",
     "every read. What they refuse there, before any endpoint is reached or any key is read, is",
     "building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)",
-    "and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent",
+    "and [the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. An intent",
     "publishes only when its source and every destination it opens are supported; the later levels",
     "of a cascade (an intent opened inside another's body) are not checked, so keep every level on a",
     "supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a",
@@ -1950,6 +1950,31 @@ function renderSkillGuide(source, skill, example, links, from) {
   return [renderedFrom(source), "", ...docsProse(lines, from)].join("\n");
 }
 
+/**
+ * The manual's command reference: every command's `--help` as the built `sauce` prints it, so the
+ * page is never behind the command. A command with verbs (`sauce intent`) is followed by each verb.
+ */
+function renderCommandReference(commands) {
+  const fence = (text) => ["```text", text, "```", ""];
+  const [top, ...rest] = commands;
+  const lines = [
+    "<!-- Generated from the sauce command's --help. Do not edit. -->",
+    "",
+    "# Command reference",
+    "",
+    "Every command of `sauce`, and every flag it takes, as `sauce <command> --help` prints it. The",
+    "guides show the commands in use: [the sauce command](../guides/cli.md) lists them.",
+    "",
+    "## `sauce`",
+    "",
+    ...fence(top.help),
+  ];
+  for (const { name, help } of rest)
+    lines.push(`${name.includes(" ") ? "###" : "##"} \`sauce ${name}\``, "", ...fence(help));
+
+  return lines.join("\n");
+}
+
 /** The note a page rendered from a skill opens with: its source, so an edit goes there. */
 const renderedFrom = (file) =>
   `<!-- Generated from ${relative(join(SDK, ".."), file)} for the manual. Edit that file, not this one. -->`;
@@ -1970,6 +1995,7 @@ export function renderDocsReference(data, skillFiles) {
     [site.protocolIndex]: renderProtocolIndex(data, site),
     [site.deployments]: renderDeploymentsPage(data),
     "tokens.md": renderTokens(data, skillFiles.globals),
+    "cli.md": renderCommandReference(data.commands),
     // Byte for byte below its note: its anchors are the skill's, and it links nothing outside itself.
     "saucescript.md": `${copiedFrom(BUILTINS)}\n\n${skillFiles.builtins}`,
     // A how-to rather than a reference, so it sits among the guides; this generator owns it.
@@ -2110,6 +2136,10 @@ function docsIntros(data) {
       "Tokens are the coins a program moves, such as USDC and WETH. In a program you write a " +
       "token's symbol, and Sauce puts in its address on the chain the program runs on. This page " +
       "lists every chain's tokens, the tokenized stocks among them, and the token functions.",
+    "cli.md":
+      "This is the `sauce` command's manual page: every command and every flag, word for word as " +
+      "`--help` prints it. The guides explain what each one is for; come here to look up an exact " +
+      "flag.",
     "saucescript.md":
       "SauceScript is the language programs are written in: a small, strict TypeScript. This page " +
       "is its dictionary: every type, statement and built-in function, and which chains allow " +
@@ -2167,8 +2197,48 @@ export async function loadApi(importFrom) {
 async function referenceData(dir, sdkRoot) {
   const api = await loadApi((path) => import(pathToFileURL(join(sdkRoot, path)).href));
   const documents = join(dir, "sauce-protocols", "references");
+  const data = await skillsReferences(api, (slug) => existsSync(join(documents, `${slug}.md`)));
+  const { runCli } = await import(pathToFileURL(join(sdkRoot, "cli", "run.js")).href);
 
-  return skillsReferences(api, (slug) => existsSync(join(documents, `${slug}.md`)));
+  return { ...data, commands: await commandHelp(runCli) };
+}
+
+/**
+ * Every command's `--help`, as the built `sauce` prints it: `sauce --help` first (`name` empty),
+ * then each command it lists, each followed by the verbs its own help lists (`intent publish`).
+ * Run in process; a help reads nothing and writes nothing, and the io refuses both.
+ */
+async function commandHelp(runCli) {
+  const help = async (argv) => {
+    let out = "";
+    const refuse = () => {
+      throw new Error("a command's --help reads and writes nothing");
+    };
+    await runCli([...argv, "--help"], {
+      stdout: (text) => void (out += text),
+      stderr: () => {},
+      readText: refuse,
+      readModule: refuse,
+      writeText: refuse,
+      run: refuse,
+      promptPassword: () => Promise.reject(new Error("no terminal")),
+      confirm: async () => undefined,
+    });
+    if (!out.trim()) throw new Error(`sauce ${argv.join(" ")} --help printed nothing`);
+
+    return out.trimEnd();
+  };
+  const top = await help([]);
+  const commands = [{ name: "", help: top }];
+  for (const [, name] of top.matchAll(/^ {2}([a-z]+) {2,}/gm)) {
+    const own = await help([name]);
+    commands.push({ name, help: own });
+    const verbs = /^Verbs\b.*\n((?: {2}[a-z]+ {2,}.*\n?)+)/m.exec(own)?.[1] ?? "";
+    for (const [, verb] of verbs.matchAll(/^ {2}([a-z]+) {2,}/gm))
+      commands.push({ name: `${name} ${verb}`, help: await help([name, verb]) });
+  }
+
+  return commands;
 }
 
 /** The hand-written skill files the manual's reference renders, from the skills directory `dir`. */

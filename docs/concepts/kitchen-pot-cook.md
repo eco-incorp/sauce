@@ -183,6 +183,6 @@ private Pot. An intent's executor-owned Pot is private even though several inten
 | Read the fee                | read by `sauce run` and `sauce tx`              | `destinationExecutionFee()`                                                      |
 | Find the Kitchen and engine | `sauce pot` prints the Kitchen                  | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments` |
 
-The [CLI guide's EVM flow](../guides/cli.md#the-flow-on-an-evm-chain) runs a program on your own Pot
+The [CLI guide's EVM flow](../guides/cli-run.md) runs a program on your own Pot
 from start to finish, and [cross-chain-intent.ts](../examples/cross-chain-intent.ts) builds the same
 cook from TypeScript.

@@ -125,4 +125,4 @@ PYUSD and tokenized stocks are in the [Solana guide](solana.md).
   [ethereum-to-solana.ts](../examples/ethereum-to-solana.ts) builds that intent, and
   [your first cross-chain intent](first-intent.md) explains intents.
 - Swap at Solana pools by name: [the Solana guide](solana.md#venues-by-namespace).
-- Every command and flag for Solana: [the sauce command](cli.md#solana).
+- Every command and flag for Solana: [the sauce command](cli-solana.md).

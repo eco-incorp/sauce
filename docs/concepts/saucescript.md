@@ -35,7 +35,7 @@ mean something to the Sauce compiler and nothing to `tsc`. A source error points
 a location and span; an error about an option, a resolver or an unavailable
 target feature has nothing to point at. An editor learns SauceScript's names from the
 `tsconfig.json` that `sauce init` writes beside a directory of programs
-([In an editor](../guides/cli.md#in-an-editor)).
+([In an editor](../guides/cli-programs.md#in-an-editor)).
 
 A function declared `: void` can finish without returning a value. Other
 functions must return on every path. Annotate helper functions returning arrays,

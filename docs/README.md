@@ -49,8 +49,26 @@ Every page of this manual is listed below, once.
   run a program.
 - [Verification](guides/verification.md): check that a settlement someone hands you is what it
   claims to be.
-- [The sauce command](guides/cli.md): every command and flag, wallets and their spending limits.
+- [The sauce command](guides/cli.md): install it, what each command does, which chains it sends
+  on, and your own endpoints.
+- [Run a program](guides/cli-run.md): compile, simulate and run, read what came back, and get
+  tokens into your Pot.
+- [Programs and arguments](guides/cli-programs.md): the program file, `--args`, compile errors,
+  your editor, and JSON actions documents.
+- [Wallets and signing](guides/cli-wallets.md): wallets, passwords, spending limits, and signing
+  with a key kept somewhere else.
+- [Solana from the command line](guides/cli-solana.md): accounts, costs, large programs, leftovers
+  and running without a Pot.
+- [Intents from the command line](guides/cli-intents.md): publish, follow, fill, prove, claim,
+  cancel and refund.
+- [Look things up](guides/cli-lookup.md): a chain's names, prices, pools, and taking transactions
+  apart.
 - [The MCP server](guides/mcp.md): give a coding agent Sauce's tools.
+- [The MCP server's tools](guides/mcp-tools.md): every tool, its inputs, and the flags each one
+  stands for.
+- [What a local server keeps](guides/mcp-local.md): the wallets, Pots and intents a server on your
+  computer keeps for your agent.
+- [Self-hosting over HTTP](guides/mcp-http.md): run one server for a team, behind your own login.
 - [Agent skills](guides/skills.md): install the instructions that teach a coding agent to write
   and run programs.
 
@@ -71,6 +89,7 @@ Every page of this manual is listed below, once.
   how a program names each one.
 - [Tokens](reference/tokens.md): every chain's tokens and tokenized stocks, and the token functions.
 - [SauceScript reference](reference/saucescript.md): every type, statement, builtin and limit.
+- [Command reference](reference/cli.md): every `sauce` command and flag, as `--help` prints it.
 - [API entry points](api/README.md): every published import and what it contains.
 - [Routes](api/routes.md): the TypeScript intent builder, its options and what it returns.
 - [Contracts and tokens](api/contracts.md): every protocol namespace and token, in a program and in

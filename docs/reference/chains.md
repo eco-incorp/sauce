@@ -23,7 +23,7 @@ On a preview chain the `sauce` command and the MCP server still simulate and rea
 `sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and
 every read. What they refuse there, before any endpoint is reached or any key is read, is
 building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)
-and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent
+and [the server's](../guides/mcp-tools.md#supported-and-preview-chains) lists name each one. An intent
 publishes only when its source and every destination it opens are supported; the later levels
 of a cascade (an intent opened inside another's body) are not checked, so keep every level on a
 supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a
