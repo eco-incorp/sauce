@@ -1,6 +1,6 @@
 # Actions
 
-[Documentation](../README.md) · [Intents](intents.md) · [Nested intents](nested-intents.md) · [Compiling](compiling.md)
+**How-to guide** · [Documentation](../README.md) · [Intents](intents.md) · [Nested intents](nested-intents.md) · [Compiling](compiling.md)
 
 > Actions are the steps of a program written as a list instead of code, like a shopping list: "swap
 > 100 USDC for ETH on Uniswap, then deposit the ETH in Aave". Sauce turns the list into a program and

@@ -1,6 +1,6 @@
 # `@sauce/router`
 
-[Documentation](../README.md) · [SauceScript](../concepts/saucescript.md) · [Actions](../guides/actions.md)
+**Reference** · [Documentation](../README.md) · [SauceScript](../concepts/saucescript.md) · [Actions](../guides/actions.md)
 
 > `@sauce/router` is the swap toolbox for programs: one function for each kind of exchange pool, from
 > Uniswap to Curve. Give it a pool, two tokens and an amount, and it swaps and tells you how much you

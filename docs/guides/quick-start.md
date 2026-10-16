@@ -1,6 +1,6 @@
 # Quick start
 
-[Documentation](../README.md) · [Solana quick start](solana-quick-start.md) · [Glossary](../concepts/glossary.md)
+**Tutorial** · [Documentation](../README.md) · [Solana quick start](solana-quick-start.md) · [Glossary](../concepts/glossary.md)
 
 > You are going to write a tiny program that pays someone 1 USDC, try it for free, and then run it
 > for real on Base. Think of the program as a recipe. Sauce gives you your own kitchen counter on
@@ -18,6 +18,16 @@ You need [Node.js](https://nodejs.org) 24 or newer (`node --version` tells you).
 ```sh
 npm install -g @eco-incorp/sauce
 sauce --version
+```
+
+Want your editor to understand Sauce programs too? Start a project, and work in its `programs/`
+folder, which your editor checks as SauceScript:
+
+```sh
+sauce init my-app
+cd my-app
+npm install
+cd programs
 ```
 
 ## 2. Make a wallet

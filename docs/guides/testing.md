@@ -1,6 +1,6 @@
 # Testing programs
 
-[Documentation](../README.md) · [Compiling programs](compiling.md) · [The sauce command](cli.md)
+**How-to guide** · [Documentation](../README.md) · [Compiling programs](compiling.md) · [The sauce command](cli.md)
 
 > Before you trust a program with money, test it. The testing kit starts a private copy of a chain on
 > your computer, gives you test accounts with Pots and tokens, runs your program, and lets you check

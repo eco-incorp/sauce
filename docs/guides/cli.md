@@ -1,6 +1,6 @@
 # The sauce command
 
-[Documentation](../README.md) · [Compiling programs](compiling.md) · [Create an intent](intents.md)
+**How-to guide** · [Documentation](../README.md) · [Compiling programs](compiling.md) · [Create an intent](intents.md)
 
 > `sauce` is a command you type in a terminal. Think of it as the remote control for your Pot: it
 > turns a program file into a transaction, tries it for free, signs it and sends it. It also has

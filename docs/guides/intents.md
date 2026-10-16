@@ -1,6 +1,6 @@
 # Create and fund an Eco intent
 
-[Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
+**How-to guide** · [Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
 
 > An intent is a job posting with a bounty: "do this on that chain, and the reward waiting here is
 > yours". Solvers watch for jobs, do the work with their own money, and collect the reward once they

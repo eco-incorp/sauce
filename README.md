@@ -38,15 +38,22 @@ npm install -g @eco-incorp/sauce
 sauce --version
 ```
 
-You need Node.js 24 or newer. Then:
+You need Node.js 24 or newer. Then do the [quick start](docs/guides/quick-start.md): write the
+program above, try it for free, and run it on Base, in about ten minutes.
 
-1. [Quick start](docs/guides/quick-start.md): write the program above, try it for free, and run it
-   on Base. About ten minutes.
-2. [Solana quick start](docs/guides/solana-quick-start.md): the same program on Solana.
-3. [Your first cross-chain intent](docs/guides/first-intent.md): post a job on another chain.
+## The manual
 
-The [glossary](docs/concepts/glossary.md) puts each Sauce word next to one you already know, and the
-[documentation](docs/README.md) lists every page.
+The [documentation](docs/README.md) has four parts, and every page says at its top which one it is:
+
+- **Tutorials** teach by doing: the [quick start](docs/guides/quick-start.md), the
+  [Solana quick start](docs/guides/solana-quick-start.md) and
+  [your first cross-chain intent](docs/guides/first-intent.md).
+- **[How-to guides](docs/README.md#how-to-guides)** each get one task done: run a program, call a
+  protocol, publish an intent, set up a coding agent.
+- **[Concepts](docs/README.md#concepts)** explain how Sauce works. The
+  [glossary](docs/concepts/glossary.md) puts each Sauce word next to one you already know.
+- **[Reference](docs/README.md#reference)** lists the facts: every chain, protocol, token, function
+  and option.
 
 ## Three words you will see
 

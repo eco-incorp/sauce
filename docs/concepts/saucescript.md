@@ -1,6 +1,6 @@
 # Writing SauceScript
 
-[Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
+**Concept** · [Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
 
 > SauceScript is the language you write programs in. It looks like TypeScript, but it is smaller and
 > stricter, like a recipe card with a fixed set of words: the compiler checks every line before

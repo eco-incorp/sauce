@@ -1,6 +1,6 @@
 # Executable examples
 
-[Documentation](../README.md) · [Quick start](../guides/quick-start.md)
+**Reference** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md)
 
 > These are complete, working programs you can copy. Every one of them is run automatically each
 > time a new version is released, and if one stops working, that version does not ship. Start with

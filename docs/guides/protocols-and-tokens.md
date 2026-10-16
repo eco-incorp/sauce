@@ -1,6 +1,6 @@
 # Protocols and tokens
 
-[Documentation](../README.md) · [Quick start](quick-start.md) · [Tokens](../reference/tokens.md) · [Protocols](../reference/protocols.md)
+**How-to guide** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Tokens](../reference/tokens.md) · [Protocols](../reference/protocols.md)
 
 > Sauce carries an address book of tokens and protocols on every chain. In a program you write
 > `USDC` or `UniswapV3.Factory` instead of a long address, and Sauce fills in the right one for the

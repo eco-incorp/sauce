@@ -1,6 +1,6 @@
 # Nested intents
 
-[Documentation](../README.md) · [Create an intent](intents.md) · [Routes API](../api/routes.md)
+**How-to guide** · [Documentation](../README.md) · [Create an intent](intents.md) · [Routes API](../api/routes.md)
 
 > A nested intent is a job that posts the next job when it is done, like a relay race. The first
 > runner finishes on Base and hands over the baton, the amount it ended up with, to the next runner on

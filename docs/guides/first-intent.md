@@ -1,6 +1,6 @@
 # Your first cross-chain intent
 
-[Documentation](../README.md) · [Quick start](quick-start.md) · [Create an intent](intents.md)
+**Tutorial** · [Documentation](../README.md) · [Quick start](quick-start.md) · [Create an intent](intents.md)
 
 > Sometimes what you want happens on another chain. An **intent** is a job you post: "pay this person
 > 1 USDC on Ethereum, and the reward waiting here on Base is yours." Someone called a **solver** sees
