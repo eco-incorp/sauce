@@ -1,5 +1,5 @@
-// @sauce/router — SVM arm. One function per Solana venue whose swap takes a price limit, and
-// Manifest's book.
+// @sauce/router — SVM arm. One function per Solana venue whose swap takes a price limit, Meteora
+// DLMM's walked to one here, and Manifest's book.
 //
 // Every swap here is a LIMIT ORDER at one pool: it offers the pool up to `amountIn` of the token
 // paid and lets the pool trade until its price reaches the limit; the pool takes only what it
@@ -14,12 +14,14 @@
 //   <venue>Cpi(program, accounts, source, amountIn, limit, …)             its instruction alone
 //   <venue>Data(amountIn, limit, …)                                       its instruction's data
 //
-// and `swap`, which takes a pool at any of the nine venues of the first form and reads its venue
-// from `pool.owner`. The first form is the nine venues' (Raydium CLMM,
-// PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix); the
-// other three are theirs and Invariant's and OpenBook v2's, which take `priceLots` and `orders` in
-// place of `limit`; Manifest's swap takes no limit, so its functions (`manifest`, `manifestCpi`,
-// `manifestData`) take none. Orca has two data functions, its classic `swap`'s
+// and `swap`, which takes a pool at any of the ten venues of the first form and reads its venue
+// from `pool.owner`. The first form is the ten venues' (Raydium CLMM,
+// PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix,
+// Meteora DLMM); the other three are the first nine's and Invariant's and OpenBook v2's, which take
+// `priceLots` and `orders` in place of `limit`. Meteora DLMM's swap has no limit of its own, so it
+// has no `…AtLimit`, and its `…Cpi` and `…Data` are its exact input's (below). Manifest's swap
+// takes no limit, so its functions (`manifest`, `manifestCpi`, `manifestData`) take none. Orca has
+// two data functions, its classic `swap`'s
 // (`orcaWhirlpoolData`) and `swap_v2`'s (`orcaWhirlpoolV2Data`), and OpenBook a second that takes
 // the order in lots, divided already (`openbookV2LotsData`). The first two forms return what the
 // recipient received, or 0 having moved nothing (SKIPS, below); `…Cpi` what the paying account
@@ -55,7 +57,12 @@
 // swap refuses a
 // tick array its map does not mark, and Invariant's takes only the ticks it crosses, so each is passed
 // its slot's first tick array and each after it until a System program. Manifest's `config` is the
-// System program, which its swap takes.
+// System program, which its swap takes. A Meteora DLMM pool's `config` is its program's event
+// authority, `D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6`; its vaults are its reserves of token X
+// and token Y, the pool's own order, which need not be the keys'; `extra` is its oracle; and its
+// ticks are its bin arrays, the arrays its bitmap marks from the active bin's in walk order. Its
+// swap takes the first two (the first alone, for a pool with a Token-2022 mint), so the third is
+// the System program.
 //
 // `trader` is the accounts every swap shares: the authority that signs for the paying account (the
 // Pot, through the Kitchen), the paying token account (`source`), the two mints (`payMint`, then
@@ -73,6 +80,12 @@
 // pool's last unit, fee paid, then costs at most `maxPrice`, and every earlier unit less. A Phoenix
 // market charges its taker fee on top, so its limit price is `maxPrice ÷ (1 + fee)`, in the market's
 // ticks. A pool whose fee is more than one rate, which no such limit can hold, is skipped.
+// A Meteora DLMM pool's swap takes no limit, so its bins are walked here, its fee in each as its
+// swap charges it (a base, and a volatility term that grows with the bin's distance from the pool's
+// reference bin), and its swap is offered what drains each bin within `maxPrice` and no more: it
+// stops with the last of them drained. A bin is within it when what drains it, fee paid, over what
+// it holds is at most `maxPrice`. The walk goes at most twelve bins: each costs about 26,000 compute
+// units, the venue's own share included.
 //
 // AT THE POOL'S OWN LIMIT. `limit` is the pool's own: the sqrt price its swap takes, as the pool
 // keeps it (a Q64.64 root on the concentrated-liquidity venues, a root times 10^24 on Invariant),
@@ -120,7 +133,11 @@
 // most it could buy, as the price only worsens: dust an earlier pool left, which a venue would take
 // for nothing or refuse; at its own limit, judged at the pool's base fee), an input smaller than one
 // of a market's lots, and, at a price, a fee that is more than one rate and a market limit too large
-// for an order's 64-bit price. A swap that ran returns at least 1: it is held to the floor afterwards
+// for an order's 64-bit price; and a Meteora DLMM pool not active yet, one that takes its fee from
+// the token bought, and one whose active bin is past its own bitmap, whose swap would read the
+// bitmap extension the slot does not give. A DLMM walk stops, rather than abort, before a bin array
+// its swap would need that the slot does not give. A swap that ran returns at least 1: it is held
+// to the floor afterwards
 // — `minOut`, and at least 1 — and reverts below it, so `0` always means skipped. A swap that ran and
 // moved nothing either way is a skip too: a Phoenix or OpenBook order whose book has no offer within
 // its price fills nothing, which only the paying account's balance tells. A failure the checks do not
@@ -140,8 +157,9 @@
 // SIZE. A Solana program rides in transactions, so the arm shares code through functions (each
 // venue's data, its accounts from a slot, its checks, `clmmOrder`, `settled`) where the EVM arm keeps
 // each function flat, and only the functions a program calls are compiled into it. `swap` takes
-// any of the nine, so it carries all nine venues' code: a program calling it is about 4.4 KB, one
-// calling a single venue's function about 0.9 to 1.7 KB, its instruction alone about 0.4 to 0.5 KB,
+// any of the ten, so it carries all ten venues' code: a program calling it is about 6.9 KB, one
+// calling a single venue's function about 0.9 to 1.7 KB (Meteora DLMM's, which walks its bins, about
+// 3.1 KB), its instruction alone about 0.4 to 0.5 KB,
 // its data alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `swap` is
 // for slots whose venue is only known when the program runs. Each venue's functions check its own program id, so a direct call never
 // signs into a program the caller names; only `swap`'s internal path relies on its one read of the
@@ -1242,6 +1260,256 @@ function swapPhoenix(
   );
 }
 
+// Meteora DLMM's layout. Its swap takes no price limit, so its limit is the amount: the bins are
+// walked here as the swap walks them, fee and all, from the active bin in the trade's direction
+// through the slot's bin arrays, and the swap is offered what drains each bin within `maxPrice` and
+// no more, so it stops with the last of them drained. A bin's price is Q64.64 token Y per token X;
+// its fee is the pool's base fee and a volatility term that grows with the bin's distance from the
+// pool's reference bin, taken from the input, in billionths. The pool's bitmap marks the bin arrays
+// that hold liquidity, and the swap goes from one marked array to the next: the walk stops before
+// an array the slot does not give, and after twelve bins.
+//
+// Bin ids are i32s, read here biased by 70 · 2^25: every one positive, and a bin array's first a
+// multiple of 70, so a bin's array is its id over 70, numbered from 2^25 for the array at 0.
+function swapDlmm(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  maxPrice: Uint256,
+  recipient: Account,
+): void {
+  const terms = dlmmTerms(slot[1], trader[2].address, trader[3].address);
+  if (terms == 0) {
+    return;
+  }
+  const paysX = (terms & 1) == 1;
+  // maxPrice above 2^128 is past every price, and the swap's amount is a u64: held under both, the
+  // products of the walk fit, and both ride in one word.
+  const input = amountIn < 0xffffffffffffffff ? amountIn : 0xffffffffffffffff;
+  const bound = ((maxPrice < 1 << 128 ? maxPrice : 1 << 128) << 64) | input;
+  let at = terms >> 220;
+  let left = input;
+  let open = true;
+  let budget = 12;
+  let k = 6;
+  // `swap` takes the slot's first two bin arrays, `swap2` (a Token-2022 mint) its first.
+  const token = trader[4].address;
+  const reach = trader[2].owner == token && trader[3].owner == token ? 8 : 7;
+  while (open && k < reach) {
+    const bins = slot[k];
+    k = k + 1;
+    open = bins.address != 0;
+    if (open) {
+      const lo = (svm.sload(bins, 8, 8).toLe() * 70 + 2348810240) & 0xffffffffffffffff;
+      // Inside the pool's bitmap. An array behind the walk is never reached; to reach one ahead of
+      // it, the swap would pass every array between, from the walk's own: each must be unmarked.
+      open = lo / 70 + 512 >= 33554432 && lo / 70 < 33554432 + 512;
+      if (open && (paysX ? at > lo + 69 : at < lo)) {
+        open = dlmmUnmarked(slot[1], paysX ? lo / 70 + 1 : at / 70, paysX ? at / 70 : lo / 70 - 1);
+        at = paysX ? lo + 69 : lo;
+      }
+      if (open && at >= lo && at <= lo + 69) {
+        // At most `budget` bins in all: each costs compute.
+        let count = paysX ? at - lo + 1 : lo + 70 - at;
+        if (count > budget) {
+          count = budget;
+        }
+        budget = budget - count;
+        const walked = dlmmBins(bins, at, lo, count, terms, bound, left);
+        if (walked == 1) {
+          return;
+        }
+        left = walked >> 2;
+        open = (walked & 2) == 2 && budget > 0;
+        at = paysX ? lo - 1 : lo + 70;
+      }
+    }
+  }
+  if (left < input) {
+    cpiDlmm(slot, trader, paysX, input - left, recipient);
+  }
+}
+
+// A DLMM pool's terms for a swap paying `pay` for `buy`, in one word, or 0 to skip it: whether it
+// pays token X (bit 0); its base fee (1–27) and volatility fee control (28–59); then, times its bin
+// step, its volatility floor (60–107) as `update_references` leaves it at the swap's start, the
+// volatility a bin's distance from the reference adds (108–137) and the most volatility (138–185);
+// then its reference bin (186–219) and its active bin (220 up). Requires the pool to be the pair.
+function dlmmTerms(pool: Account, pay: Uint256, buy: Uint256): Uint256 {
+  const x = svm.sload(pool, 88, 32).toBe();
+  const y = svm.sload(pool, 120, 32).toBe();
+  require((x == pay && y == buy) || (x == buy && y == pay), "pool is not the pair");
+  // Its fee's settings (bytes 8 to 36), its volatility (40 to 63), and its active bin, bin step,
+  // status and activation type (76 to 87), each in one read.
+  const fees = svm.sload(pool, 8, 29).toLe();
+  const volatility = svm.sload(pool, 40, 24).toLe();
+  const head = svm.sload(pool, 76, 12).toLe();
+  const point = svm.sload(pool, 816, 8).toLe();
+  const now = ctx.timestamp();
+  const at = ((head & 0xffffffff) ^ 0x80000000) + 201326592;
+  if (
+    ((head >> 48) & 0xff) != 0 ||
+    ((fees >> 224) & 0xff) != 0 ||
+    (point != 0 && (((head >> 80) & 0xff) == 0 ? ctx.blockNumber() : now) < point) ||
+    at / 70 + 512 < 33554432 ||
+    at / 70 >= 33554432 + 512
+  ) {
+    return 0;
+  }
+  // `update_references`, as the swap runs it first: past the filter period the reference is the
+  // active bin, and the volatility's floor decays to nothing by the decay period.
+  const last = (volatility >> 128) & 0xffffffffffffffff;
+  const elapsed = now > last ? now - last : 0;
+  let reference = (((volatility >> 64) & 0xffffffff) ^ 0x80000000) + 201326592;
+  let floor = (volatility >> 32) & 0xffffffff;
+  if (elapsed >= ((fees >> 16) & 0xffff)) {
+    reference = at;
+    floor = 0;
+    if (elapsed < ((fees >> 32) & 0xffff)) {
+      floor = ((volatility & 0xffffffff) * ((fees >> 48) & 0xffff)) / 10000;
+    }
+  }
+  const step = (head >> 32) & 0xffff;
+  // The whole fee is at most a tenth, so a base past it is a tenth.
+  let base = (fees & 0xffff) * step * 10 * 10 ** ((fees >> 208) & 0xff);
+  if (base > 100000000) {
+    base = 100000000;
+  }
+  return (
+    (x == pay ? 1 : 0) |
+    (base << 1) |
+    (((fees >> 64) & 0xffffffff) << 28) |
+    ((floor * step) << 60) |
+    ((step * 10000) << 108) |
+    ((((fees >> 96) & 0xffffffff) * step) << 138) |
+    (reference << 186) |
+    (at << 220)
+  );
+}
+
+// Walks `count` bins of one array, `lo` its first, from `at` in the trade's direction, as far as
+// the bins within maxPrice (`bound`'s high bits) take what of the input (its low 64) is `left`:
+// returns what is still to place, times 4, plus 2 when the walk goes on — or 1 for an input that
+// buys nothing in the first bin, after its fee: dust an earlier pool left.
+function dlmmBins(
+  bins: Account,
+  at: Uint256,
+  lo: Uint256,
+  count: Uint256,
+  terms: Uint256,
+  bound: Uint256,
+  left: Uint256,
+): Uint256 {
+  const paysX = (terms & 1) == 1;
+  const base = (terms >> 1) & 0x7ffffff;
+  const control = (terms >> 28) & 0xffffffff;
+  const floor = (terms >> 60) & 0xffffffffffff;
+  const step = (terms >> 108) & 0x3fffffff;
+  const most = (terms >> 138) & 0xffffffffffff;
+  const reference = (terms >> 186) & 0x3ffffffff;
+  while (count > 0) {
+    // The bin's two amounts and its price, in one read.
+    const cell = svm.sload(bins, 56 + (at - lo) * 144, 32).toLe();
+    const amount = (paysX ? cell >> 64 : cell) & 0xffffffffffffffff;
+    if (amount != 0) {
+      const price = cell >> 128;
+      // Its fee: the base and the volatility term, the volatility at its distance from the
+      // reference and at most the pool's most, the whole at most a tenth.
+      let crossed = floor + (reference > at ? reference - at : at - reference) * step;
+      if (crossed > most) {
+        crossed = most;
+      }
+      let fee = base + (control * crossed * crossed + 99999999999) / 100000000000;
+      if (fee > 100000000) {
+        fee = 100000000;
+      }
+      // What drains it, as the swap rounds: its amount at its price, rounded up, and the fee on
+      // that, rounded up. A price the bin has not stored ends the walk.
+      let drain = 1 << 64;
+      if (price != 0) {
+        drain = paysX
+          ? ((amount << 64) + price - 1) / price
+          : (amount * price + 0xffffffffffffffff) >> 64;
+      }
+      const keep = 1000000000 - fee;
+      const drains = drain + (drain * fee + keep - 1) / keep;
+      // Past maxPrice, a unit bought here costing, fee paid, what drains it over its amount, the
+      // walk ends; so does an input a u64 cannot hold.
+      if (drain > 0xffffffffffffffff || drains * 10 ** 18 > (bound >> 64) * amount) {
+        return left << 2;
+      }
+      if (left <= drains) {
+        if (left == (bound & 0xffffffffffffffff) && left < drains) {
+          const kept = left - (left * fee + 999999999) / 1000000000;
+          if ((paysX ? (price * kept) >> 64 : (kept << 64) / price) == 0) {
+            return 1;
+          }
+        }
+        return 0;
+      }
+      left = left - drains;
+    }
+    at = paysX ? at - 1 : at + 1;
+    count = count - 1;
+  }
+  return (left << 2) | 2;
+}
+
+// Whether the bin arrays numbered `from` to `to` (2^25 the array at 0) are all unmarked in the
+// pool's bitmap of 1,024 arrays (bit 512 the array at 0, at byte 584), and all inside it: past it the
+// swap reads the bitmap extension, which the slot does not give.
+function dlmmUnmarked(pool: Account, from: Uint256, to: Uint256): bool {
+  if (from + 512 < 33554432 || to >= 33554432 + 512 || to - from > 200) {
+    return false;
+  }
+  const first = from + 512 - 33554432;
+  const byte = first / 8;
+  const word = svm.sload(pool, 584 + byte, (to + 512 - 33554432) / 8 - byte + 1).toLe();
+  return ((word >> (first - byte * 8)) & ((1 << (to - from + 1)) - 1)) == 0;
+}
+
+// Meteora DLMM's swap of `amount`, a least out of 0: the pool, its bitmap extension (the program,
+// for none: the walk stays inside the pool's own bitmap), its X and Y reserves, the paying and
+// receiving accounts, mints X and Y, the oracle, the host fee account (the program, for none), the
+// authority, X's and Y's token programs, then the event authority, the program and the slot's first
+// two bin arrays (a System program among them is passed over) for `swap`, which takes two SPL Token
+// mints; for `swap2`, which takes Token-2022 too, the memo program before them, no transfer-hook
+// accounts, and the first bin array alone. Seventeen accounts, filled in place: more than a function
+// holds at once.
+function cpiDlmm(
+  slot: Account[],
+  trader: Account[],
+  paysX: bool,
+  amount: Uint256,
+  recipient: Account,
+): void {
+  const mintX = paysX ? trader[2] : trader[3];
+  const mintY = paysX ? trader[3] : trader[2];
+  const token = trader[4].address;
+  const swap2 = mintX.owner != token || mintY.owner != token;
+  const p = slot[0];
+  const accounts = [p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p];
+  accounts[0] = slot[1];
+  accounts[2] = slot[3];
+  accounts[3] = slot[4];
+  accounts[4] = trader[1];
+  accounts[5] = recipient;
+  accounts[6] = mintX;
+  accounts[7] = mintY;
+  accounts[8] = slot[5];
+  accounts[10] = trader[0];
+  accounts[11] = mintX.owner == token ? trader[4] : trader[5];
+  accounts[12] = mintY.owner == token ? trader[4] : trader[5];
+  accounts[13] = swap2 ? trader[6] : slot[2];
+  accounts[14] = swap2 ? slot[2] : slot[0];
+  accounts[15] = swap2 ? slot[0] : slot[6];
+  accounts[16] = swap2 ? slot[6] : slot[7];
+  // `swap2`'s data ends with the transfer-hook accounts' count, 0.
+  const swap = swap2 ? hex`414b3f4ceb5b5b88` : hex`f8c69e91e17587c8`;
+  const word = amount & 0xffffffffffffffff;
+  svm.call(slot[0], accounts, swap.concat(word.toBytesLe(swap2 ? 20 : 16)));
+}
+
 // What a swap moved: 0 when `source` paid nothing (`held` is its balance before), else
 // what the recipient received over `before`, held to the floor — `minOut`, and at least 1. A swap
 // cannot change a token account's owner or mint, so these reads take the amount alone.
@@ -1304,6 +1572,9 @@ export function swap(
   } else if (venue == 0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb) {
     // Phoenix, PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY
     swapPhoenix(slot, trader, amountIn, maxPrice, recipient);
+  } else if (venue == 0x04e9e12fbc84e826c932cce9e2640cce15590c1c6273b0925708ba3b8520b0bc) {
+    // Meteora DLMM, LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo
+    swapDlmm(slot, trader, amountIn, maxPrice, recipient);
   } else {
     throw "not a supported venue's pool";
   }
@@ -1509,6 +1780,27 @@ export function phoenix(
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapPhoenix(slot, trader, amountIn, maxPrice, recipient);
+  return settled(trader[1], recipient, held, before, minOut);
+}
+
+// Meteora DLMM, LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo: its bins, walked to `maxPrice`.
+export function meteoraDlmm(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  maxPrice: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  const owned = pool.owner == 0x04e9e12fbc84e826c932cce9e2640cce15590c1c6273b0925708ba3b8520b0bc;
+  require(owned && slot[0].address == pool.owner, "not a Meteora DLMM pool");
+  const held = balanceOf(trader[2].address, trader[1]);
+  const before = balanceOf(trader[3].address, recipient);
+  swapDlmm(slot, trader, amountIn, maxPrice, recipient);
   return settled(trader[1], recipient, held, before, minOut);
 }
 
@@ -4443,8 +4735,9 @@ export function meteoraDlmmData(amountIn: Uint256, minOut: Uint256): bytes {
 
 // Meteora DLMM, LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo: `swap`, exact input held to the
 // venue's own floor, with no price limit: the swap crosses the bins it needs, up to the end of the
-// bin arrays it is given. It takes more accounts than a function can list, so it has only its `Cpi`
-// form. `accounts`: the pool, its bin-array bitmap extension (the program itself when the pool has
+// bin arrays it is given. An exact input across every bin array the swap may cross takes more
+// accounts than a function can list, so here it has only its `Cpi` form; `meteoraDlmm`, above,
+// swaps from a slot at a price. `accounts`: the pool, its bin-array bitmap extension (the program itself when the pool has
 // none), its X and Y reserves, the authority's paying and receiving token accounts, mints X and Y,
 // the oracle, the host fee account (the program itself for none), the authority, X's and Y's token
 // programs, the event authority, the program, then the bin arrays the swap crosses, from the active

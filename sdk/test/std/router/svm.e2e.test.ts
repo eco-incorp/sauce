@@ -588,14 +588,14 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
           expect(refused(await cook(compiled(lower(venue)), orca))).toBe(reason);
     }, 120_000);
 
-    // A pool no venue here owns is the caller's mistake, never a skip: a Meteora pool under its own
-    // program, and an account the System program owns that is not the System program itself, which
-    // alone stands for a missing slot.
+    // A pool no venue here owns is the caller's mistake, never a skip: a Manifest market under its
+    // own program, whose swap takes no price, and an account the System program owns that is not
+    // the System program itself, which alone stands for a missing slot.
     it("a pool no venue here owns reverts, through every function", async () => {
       const orca = await orderFor(VENUES[4]!);
-      const dlmm = { ...orca, pool: pool("meteora-dlmm-sol-usdc") };
+      const book = { ...orca, pool: pool("manifest-sol-usdc") };
       const nobody = { ...orca, pool: { ...NONE, pool: randomAddress() } };
-      for (const order of [dlmm, nobody]) {
+      for (const order of [book, nobody]) {
         expect(refused(await cook(compiled("swap"), order))).toBe("not a supported venue's pool");
         for (const [venue, reason] of Object.entries(REASONS))
           expect(refused(await cook(compiled(lower(venue)), order))).toBe(reason);

@@ -650,7 +650,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(
       refused(
         await cook({
-          slots: [pool("meteora-dlmm-sol-usdc")],
+          slots: [pool("manifest-sol-usdc")],
           pay: USDC,
           buy: WSOL,
           budget,
