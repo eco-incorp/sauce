@@ -2475,7 +2475,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "dryRun works on every chain; the transactions only where the source and every " +
         "destination are supported. From Solana (chain solana): two Solana transactions an " +
         "intent for `from`, Portal.fund (the reward into the vault Solana's Portal derives) then " +
-        "Portal.publish, each rehearsed first; the route must fit one Solana transaction (token " +
+        "Portal.publish, each simulated first; the route must fit one Solana transaction (token " +
         `transfers, not a program body). ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...PROGRAM,
@@ -2515,7 +2515,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (chain.kind === "svm") {
         if (args.assumeBalance !== undefined) {
           throw new UsageError(
-            "assumeBalance overrides an EVM chain's state: a Solana rehearsal runs on the accounts " +
+            "assumeBalance overrides an EVM chain's state: a Solana simulation runs on the accounts " +
               "as they are",
           );
         }

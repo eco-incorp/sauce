@@ -1309,7 +1309,7 @@ async function publishFromSolana(
   }
   if (assumedBalancesOf(args, program.chain).length > 0) {
     throw new UsageError(
-      "--assume-balance overrides an EVM chain's state for a simulation: a Solana rehearsal runs " +
+      "--assume-balance overrides an EVM chain's state for a simulation: a Solana simulation runs " +
         "on the accounts as they are",
     );
   }
@@ -1826,7 +1826,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "From Solana (--chain solana), the wallet is a Solana one (--keypair, or a Solana --wallet)",
       "and Solana's Portal escrows the reward: two transactions an intent, Portal.fund (the reward",
-      "into the vault the Portal derives) then Portal.publish, each rehearsed on the cluster first.",
+      "into the vault the Portal derives) then Portal.publish, each simulated on the cluster first.",
       "The reward's names are Solana's, and --intent-creator is a Solana key. --format json prints",
       "them unsigned for --from <key>. The route travels whole in one Solana transaction: a body of",
       "token transfers fits, a program body does not.",

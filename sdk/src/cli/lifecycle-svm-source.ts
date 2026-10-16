@@ -343,8 +343,8 @@ export interface SvmFunderHold {
  * `IntentPublished`). Two because together they are past Solana's transaction size for the
  * smallest route: `publish` carries the route whole, and `fund` the reward again. A `publish` that
  * fails after its `fund` leaves the reward in the vault, where publishing again or a refund after
- * the reward's deadline recovers it. Each is rehearsed: `ok` false, with the reason, where the
- * cluster would refuse one (`publish` reads nothing, so it rehearses alone).
+ * the reward's deadline recovers it. Each is simulated: `ok` false, with the reason, where the
+ * cluster would refuse one (`publish` reads nothing, so it is simulated alone).
  */
 export async function svmPublishPlan(
   rpc: SvmRpc,
@@ -442,8 +442,8 @@ export async function svmPublishPlan(
         "transfers, not a program",
     );
   }
-  const rehearsals = [await rehearseSvm(rpc, fund, []), await rehearseSvm(rpc, publish, [])];
-  const failed = rehearsals.find((rehearsal) => !rehearsal.ok);
+  const simulations = [await rehearseSvm(rpc, fund, []), await rehearseSvm(rpc, publish, [])];
+  const failed = simulations.find((simulation) => !simulation.ok);
 
   return {
     transactions: [fund, publish],

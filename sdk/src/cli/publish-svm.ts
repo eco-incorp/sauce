@@ -8,7 +8,7 @@
  * differs is the publication: no program runs on Solana to open an intent, so the wallet calls the
  * Portal itself, one transaction an intent: `fund` (the reward moved from the wallet into the
  * intent's vault, which `fund` derives, so no vault can be wrong) then `publish` (the intent
- * announced). Rehearsed on the cluster first; nothing is sent where the rehearsal fails.
+ * announced). Simulated on the cluster first; nothing is sent where the simulation fails.
  *
  * Its fill, proof and cancellation happen on the destination as for any intent (`sauce intent fill`,
  * `prove`, `cancel`), the proof carried to Solana's HyperProver; its claim and refund are Solana's
@@ -40,7 +40,7 @@ import { intentDestinations, requireSupported } from "./support.js";
 export interface SvmPublishInput extends ProgramInput {
   /** Print the unsigned transactions instead of sending them. */
   readonly format?: "json";
-  /** Rehearse each transaction on the cluster, and send nothing. */
+  /** Simulate each transaction on the cluster, and send nothing. */
   readonly dryRun: boolean;
   /** Solana's endpoint. */
   readonly rpcUrl: string;
@@ -59,7 +59,7 @@ const holdText = (entry: SvmFunderHold, what: "holds" | "reward"): string => {
     : `${formatUnits(amount, entry.decimals)} ${symbol}`;
 };
 
-/** `sauce intent publish` from Solana: send, rehearse or print each intent's `fund` and
+/** `sauce intent publish` from Solana: send, simulate or print each intent's `fund` and
  *  `publish`. */
 export async function publishSvmCommand(
   input: SvmPublishInput,
@@ -160,7 +160,7 @@ export async function publishSvmCommand(
       },
       notes: [
         ...notes,
-        `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +
+        `This simulates publishing on ${input.chain.slug} only. What the intent does runs on ` +
           `${[...new Set(plans.map((plan) => plan.lowered.destination.slug))].join(" and ")}, when ` +
           "a solver fills it: `sauce intent fill` with the intent's hash and the destination's " +
           "endpoint simulates that.",

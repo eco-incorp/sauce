@@ -1315,8 +1315,8 @@ sauce intent claim 0x<intent hash> --keypair ~/.config/solana/solver.json
   account Solana's Portal derives from the intent's hash. Then `publish` announces the intent so
   solvers can find it. They are two transactions because together they are larger than one Solana
   transaction can be. If the second fails, the reward waits in the vault: publish again, or refund
-  it after the reward's deadline. Both are rehearsed on the cluster first, and nothing is sent if
-  either would fail. `--dry-run` only rehearses; `--format json` prints them unsigned, for the
+  it after the reward's deadline. Both are simulated on the cluster first, and nothing is sent if
+  either would fail. `--dry-run` only simulates; `--format json` prints them unsigned, for the
   wallet that `--from <key>` names. `--intent-creator` is a Solana key: the account a refund pays.
 - The route has to fit in one Solana transaction, because the Portal takes it whole. Plain token
   transfers fit; a program body does not.
