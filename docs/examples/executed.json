@@ -7,6 +7,7 @@
     "nested-swap.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"],
     "router-route.sauce.ts": ["actions/tests/docs-examples.mainnet.test.ts"],
     "router-swap.sauce.ts": ["actions/tests/docs-examples.mainnet.test.ts"],
+    "solana-swap.sauce.ts": ["sdk/test/cli-solana-venues.e2e.test.ts"],
     "venue-where-deployed.sauce.ts": ["actions/tests/docs-examples.mainnet.test.ts"]
   }
 }
