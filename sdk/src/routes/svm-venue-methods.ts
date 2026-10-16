@@ -16,11 +16,12 @@
  *   Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0)
  *
  * `pool(tokenA, tokenB, key)` is the pool the venue's program derives for the pair at the key — a
- * whirlpool's, DefiTuna's and Crema's tick spacing, a Raydium-code pool's fee (`svm/pool-keys.ts`) —
- * written as the swap's pool, with the key a number written out. Where the venue has no pool at the
- * key, the slot is empty and the swap returns 0. A loop over keys written out,
+ * whirlpool's, DefiTuna's and Crema's tick spacing, a Raydium-code pool's fee (`svm/pool-keys.ts`),
+ * with the tick spacing after it where the program keeps two configs at that fee — written as the
+ * swap's pool, with the key a number written out. Where the venue has no pool at the key, the slot
+ * is empty and the swap returns 0. A loop over keys written out,
  *
- *   for (const spacing of [1, 4, 64]) {
+ *   for (const spacing of [4, 1]) {
  *     bought += Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, spacing), …);
  *   }
  *
@@ -107,7 +108,9 @@ export function svmVenueMethods(namespace: string): readonly string[] {
     ...(key === undefined
       ? []
       : [
-          `pool(tokenA: Address, tokenB: Address, ${key === "fee" ? "fee" : "tickSpacing"}: Uint256): Address`,
+          key === "fee"
+            ? "pool(tokenA: Address, tokenB: Address, fee: Uint256, tickSpacing?: Uint256): Address"
+            : "pool(tokenA: Address, tokenB: Address, tickSpacing: Uint256): Address",
         ]),
   ];
 }
@@ -156,9 +159,9 @@ function integerLiteral(node: AstNode, source: string): bigint | undefined {
 }
 
 /**
- * Writes out each loop over pool keys once per key: `for (const k of [1, 4, 64]) { … }` whose body
+ * Writes out each loop over pool keys once per key: `for (const k of [4, 1]) { … }` whose body
  * finds a pool by `k` (`Orca.Whirlpool.pool(USDC, WSOL, k)`) becomes, for each key,
- * `if (true) { const k = 1; … }` with the key written into each such `pool(…)`, so each key's pool is
+ * `if (true) { const k = 4; … }` with the key written into each such `pool(…)`, so each key's pool is
  * a slot of its own. A loop whose body takes `continue` stays a loop of one key each; one whose body
  * `break`s out of it, or that is labelled, is refused: written out, a `break` would end one key.
  */
@@ -412,12 +415,18 @@ export function collectVenueMethods(l: SvmLowering): void {
       }
       const args = (call.site.call as { arguments?: AstNode[] }).arguments ?? [];
       const keyName = venue.key === "fee" ? "fee" : "tickSpacing";
-      if (args.length !== 3 || args.some((arg) => arg.type === "SpreadElement")) {
-        throw new Error(
-          `\`${namespace}.pool(…)\` takes 3 arguments (tokenA, tokenB, ${keyName}), got ${args.length}.`,
-        );
+      const takes =
+        venue.key === "fee"
+          ? "3 or 4 arguments (tokenA, tokenB, fee, and the tickSpacing where two configs charge the fee)"
+          : "3 arguments (tokenA, tokenB, tickSpacing)";
+      if (
+        args.length < 3 ||
+        args.length > (venue.key === "fee" ? 4 : 3) ||
+        args.some((arg) => arg.type === "SpreadElement")
+      ) {
+        throw new Error(`\`${namespace}.pool(…)\` takes ${takes}, got ${args.length}.`);
       }
-      const [aArg, bArg, keyArg] = args as [AstNode, AstNode, AstNode];
+      const [aArg, bArg, keyArg, spacingArg] = args as [AstNode, AstNode, AstNode, AstNode?];
       const of = (arg: AstNode): string => l.source.slice(arg.start, arg.end);
       const a = l.tokenOf(aArg, of(aArg), `\`${namespace}.pool(…)\``);
       const b = l.tokenOf(bArg, of(bArg), `\`${namespace}.pool(…)\``);
@@ -433,16 +442,26 @@ export function collectVenueMethods(l: SvmLowering): void {
         throw new Error(
           `\`${text}\` on Solana: its ${keyName} must be known when the program compiles, each ` +
             "key's pool a slot of its own: a number written out, or the variable of a loop over " +
-            `numbers written out (for (const ${keyName} of [1, 4, 64]) { … }).`,
+            `numbers written out (for (const ${keyName} of ${keyName === "fee" ? "[400, 200]" : "[4, 1]"}) { … }).`,
         );
       }
-      const problem = svmPoolKeyProblem(namespace, key);
+      const spacing = spacingArg === undefined ? undefined : integerLiteral(spacingArg, l.source);
+      if (spacingArg !== undefined && spacing === undefined) {
+        throw new Error(
+          `\`${text}\` on Solana: its tickSpacing must be known when the program compiles: a ` +
+            "number written out.",
+        );
+      }
+      const problem = svmPoolKeyProblem(namespace, key, spacing);
       if (problem !== undefined) throw new Error(`\`${text}\` on Solana: ${problem}`);
       const [protocol, program] = namespace.split(".") as [string, string];
+      const tail = spacing === undefined ? "" : `,${spacing}`;
 
       return {
-        name: `${namespace}(${a.name},${b.name},${key})`,
-        stem: `${protocol.charAt(0).toLowerCase()}${protocol.slice(1)}${capitalized(program.toLowerCase())}${key}`,
+        name: `${namespace}(${a.name},${b.name},${key}${tail})`,
+        stem:
+          `${protocol.charAt(0).toLowerCase()}${protocol.slice(1)}` +
+          `${capitalized(program.toLowerCase())}${key}${spacing === undefined ? "" : `x${spacing}`}`,
       };
     }
     if (node.type === "Identifier" && l.param(nameOf(node))?.kind === "address") {

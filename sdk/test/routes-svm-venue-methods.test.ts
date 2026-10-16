@@ -168,6 +168,14 @@ describe("Solana's venue namespaces", () => {
     });
     // No pool argument: the pools are the program's own.
     expect(program.entryParams.map((param) => param.name)).toEqual(["amountIn", "priceLimit"]);
+    // A fee two configs charge takes the tick spacing after it.
+    const spaced = compile(
+      "function main(): Uint256 {\n" +
+        "  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 100, 1), USDC, WSOL, 5, 10, 0);\n}\n",
+    );
+    expect(spaced.derivedAccounts).toMatchObject({
+      raydiumClmm100x1Account: "slot:Raydium.CLMM(USDC,WSOL,100,1):USDC.pool",
+    });
   });
 
   it("writes a loop over keys out once per key, each key's pool its own slot", () => {
@@ -253,6 +261,14 @@ describe("Solana's venue namespaces", () => {
         ),
       ).toThrow(
         "Raydium.CLMM's key is a pool's fee, in millionths (400 is 0.04%), and it has no config at 123",
+      );
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 100, 60), USDC, WSOL, 5, 10, 1);\n}\n",
+        ),
+      ).toThrow("Raydium.CLMM's configs at fee 100 have tick spacing 10 and 1, not 60");
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 4, 4)")).toThrow(
+        "`Orca.Whirlpool.pool(…)` takes 3 arguments (tokenA, tokenB, tickSpacing), got 4.",
       );
     });
 

@@ -28,7 +28,12 @@ import type { Address } from "@solana/kit";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows } from "../routes/token-registry.js";
 import { svmPublicKey } from "../svm/account-names.js";
-import { svmPoolByKey, svmPoolKeyProblem, SVM_KEYED_VENUES } from "../svm/pool-keys.js";
+import {
+  svmAmmConfig,
+  svmPoolCandidates,
+  svmPoolKeyProblem,
+  SVM_KEYED_VENUES,
+} from "../svm/pool-keys.js";
 import { coalescingAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
 import {
   PHOENIX_BASE_MINT_AT,
@@ -542,7 +547,7 @@ async function clmmPool(
     fee = le(data, 172, 2);
   }
   if (liquidity === 0n || sqrt === 0n) return { why: "no liquidity at its price" };
-  const key = keyOf(venue, pool, data, venue.layout === "raydium" ? fee : undefined, first, second);
+  const key = keyOf(venue, pool, data, first, second);
   const slots: Record<string, SvmSlot> = {};
   const unfilled: Record<string, string> = {};
   for (const pay of [first, second]) {
@@ -568,29 +573,39 @@ async function clmmPool(
 }
 
 /**
- * How a program finds `pool` by key, `<Venue>.pool(<first>, <second>, <key>)`: its key read from its
- * own bytes (a Raydium-code pool's from its config, its `fee`), where it is the pool the venue
- * derives for that key. None where the SDK does not know the key (a fee whose config it has not
- * read).
+ * How a program finds `pool` by key, `<Venue>.pool(<first>, <second>, <key>)`: a whirlpool's,
+ * DefiTuna's and Crema's tick spacing from its own bytes, a Raydium-code pool's fee from its config,
+ * with the config's tick spacing after it where the venue keeps another config at that fee. Only
+ * where that key derives this pool; none where the SDK does not know the pool's config.
  */
 function keyOf(
   venue: SvmVenue,
   pool: Address,
   data: Uint8Array,
-  fee: bigint | undefined,
   first: Mint,
   second: Mint,
 ): string | undefined {
-  const namespace = Object.values(SVM_KEYED_VENUES).find(
-    (one) => one.program === venue.program,
-  )?.namespace;
-  if (namespace === undefined) return undefined;
-  const at = { whirlpool: 43, defituna: 139, crema: 168 }[venue.layout as string];
-  const key = fee ?? (at === undefined ? undefined : le(data, at, 2));
-  if (key === undefined || svmPoolKeyProblem(namespace, key) !== undefined) return undefined;
-  if (svmPoolByKey(namespace, first.mint, second.mint, key) !== pool) return undefined;
+  const keyed = Object.values(SVM_KEYED_VENUES).find((one) => one.program === venue.program);
+  if (keyed === undefined) return undefined;
+  let key: bigint;
+  let spacing: bigint | undefined;
+  if (keyed.configs !== undefined) {
+    const config = keyAt(data, 9);
+    const at = keyed.configs.find((one) => svmAmmConfig(keyed.program, one.index) === config);
+    if (at === undefined) return undefined;
+    key = BigInt(at.fee);
+    if (keyed.configs.filter((one) => one.fee === at.fee).length > 1)
+      spacing = BigInt(at.tickSpacing);
+  } else {
+    const offset = { whirlpool: 43, defituna: 139, crema: 168 }[venue.layout as string];
+    if (offset === undefined) return undefined;
+    key = le(data, offset, 2);
+  }
+  if (svmPoolKeyProblem(keyed.namespace, key, spacing) !== undefined) return undefined;
+  const candidates = svmPoolCandidates(keyed.namespace, first.mint, second.mint, key, spacing);
+  if (!candidates.some((one) => one.pool === pool)) return undefined;
 
-  return `${namespace}.pool(${first.symbol}, ${second.symbol}, ${key})`;
+  return `${keyed.namespace}.pool(${first.symbol}, ${second.symbol}, ${key}${spacing === undefined ? "" : `, ${spacing}`})`;
 }
 
 /** A Phoenix market: skipped, or listed with its sides (its best offer each way) and slots. */

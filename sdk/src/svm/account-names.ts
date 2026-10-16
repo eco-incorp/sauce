@@ -24,8 +24,10 @@
  *                        pool's own state through `load` (`svm/pool-slot.ts`); a pool that is the
  *                        System Program is an empty slot, whose nine are the System Program. The
  *                        pool may be a venue's pool by key, `<Venue>(<token>,<token>,<key>)`
- *                        (`Orca.Whirlpool(USDC,WSOL,4)`, `svm/pool-keys.ts`): the address the venue
- *                        derives for the pair, and an empty slot where no pool is there
+ *                        (`Orca.Whirlpool(USDC,WSOL,4)`; a fee may take a tick spacing after it,
+ *                        `Raydium.CLMM(USDC,WSOL,100,1)`, `svm/pool-keys.ts`): the pool the venue
+ *                        derives for the pair, an empty slot where none is there, and refused
+ *                        where the key names more than one
  *   pda:<program>:<seeds> the address `<program>` (base58, or `@<param>`) derives for the seeds,
  *                        comma-separated, each one of:
  *                          "text", or a bare word that is none of the below: its UTF-8 bytes
@@ -52,7 +54,7 @@ import {
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
-import { svmPoolByKey, svmPoolKeyProblem, SVM_KEYED_VENUES } from "./pool-keys.js";
+import { svmPoolCandidates, svmPoolKeyProblem, SVM_KEYED_VENUES } from "./pool-keys.js";
 import { svmPoolSlot, SVM_SLOT_PARTS, type SvmSlot, type SvmSlotPart } from "./pool-slot.js";
 import { svmTokenAccount } from "./token-accounts.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
@@ -133,12 +135,14 @@ type Token =
   | { readonly kind: "address"; readonly key: string }
   | { readonly kind: "arg"; readonly param: string };
 
-/** A venue's pool by key: `Orca.Whirlpool(USDC,WSOL,4)`. */
+/** A venue's pool by key: `Orca.Whirlpool(USDC,WSOL,4)`, `Raydium.CLMM(USDC,WSOL,100,1)`. */
 interface KeyedPool {
   readonly kind: "keyed";
   readonly venue: string;
   readonly tokens: readonly [Token, Token];
   readonly key: bigint;
+  /** A Raydium-code pool's tick spacing, beside its fee. */
+  readonly spacing?: bigint;
   /** As written, for a message. */
   readonly text: string;
 }
@@ -207,9 +211,9 @@ function parseToken(text: string): Token | undefined {
   return SYMBOL.test(text) ? { kind: "symbol", symbol: text } : undefined;
 }
 
-/** `<Venue>(<token>,<token>,<key>)`, a venue's pool by key. */
+/** `<Venue>(<token>,<token>,<key>[,<tick spacing>])`, a venue's pool by key. */
 function parseKeyedPool(text: string): KeyedPool | undefined {
-  const parts = /^([A-Za-z]+\.[A-Za-z]+)\(([^,()]+),([^,()]+),(\d+)\)$/.exec(text);
+  const parts = /^([A-Za-z]+\.[A-Za-z]+)\(([^,()]+),([^,()]+),(\d+)(?:,(\d+))?\)$/.exec(text);
   if (parts === null || SVM_KEYED_VENUES[parts[1]!] === undefined) return undefined;
   const tokenA = parseToken(parts[2]!);
   const tokenB = parseToken(parts[3]!);
@@ -220,6 +224,7 @@ function parseKeyedPool(text: string): KeyedPool | undefined {
     venue: parts[1]!,
     tokens: [tokenA, tokenB],
     key: BigInt(parts[4]!),
+    ...(parts[5] === undefined ? {} : { spacing: BigInt(parts[5]) }),
     text,
   };
 }
@@ -629,18 +634,25 @@ async function resolveSlot(
   rows: readonly SvmTokenRow[],
 ): Promise<ResolvedSvmAccountName> {
   const keyed = parsed.pool.kind === "keyed" ? parsed.pool : undefined;
+  const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
+  const load = ctx.load;
   const pool =
     keyed !== undefined
-      ? keyedPool(keyed, ctx, rows)
+      ? await keyedPool(keyed, ctx, rows)
       : parsed.pool.kind === "arg"
         ? argument(parsed.pool.param, ctx)
         : address((parsed.pool as { key: string }).key);
-  const { mint, what } = mintOf(parsed.token, "slot", ctx, rows);
-  // An empty slot, which `@sauce/router`'s swaps skip: nothing to read.
+  // An empty slot, which `@sauce/router`'s swaps skip: nothing to read. A key with no pool is one.
   if (pool === SYSTEM_PROGRAM) {
-    return { value: pool, label: `an empty slot (${parsed.part})`, kind: "address" };
+    return {
+      value: address(SYSTEM_PROGRAM),
+      label:
+        keyed === undefined
+          ? `an empty slot (${parsed.part})`
+          : `an empty slot: no pool at ${keyed.text} (${parsed.part})`,
+      kind: "address",
+    };
   }
-  const load = ctx.load;
   if (load === undefined) {
     throw new SvmAccountNameError(
       `pool ${pool}'s slot is read from the cluster, which this resolution has no way to do`,
@@ -649,16 +661,7 @@ async function resolveSlot(
   const key = `${pool}:${mint}`;
   let slot = ctx.slots?.get(key);
   if (slot === undefined) {
-    // A pool by key that is not there is an empty slot, its nine the System program: no account,
-    // or one the venue does not own (lamports anyone may send to the address it would have).
-    slot =
-      keyed === undefined
-        ? svmPoolSlot(load, pool, mint)
-        : load(pool).then((account) => {
-            const there = account?.owner === SVM_KEYED_VENUES[keyed.venue]!.program;
-            ctx.found?.set(keyed.text, there ? pool : null);
-            return there ? svmPoolSlot(load, pool, mint) : EMPTY_SLOT;
-          });
+    slot = svmPoolSlot(load, pool, mint);
     ctx.slots?.set(key, slot);
   }
   let resolved: SvmSlot;
@@ -670,13 +673,6 @@ async function resolveSlot(
     );
   }
   const index = SVM_SLOT_PARTS.indexOf(parsed.part);
-  if (resolved === EMPTY_SLOT) {
-    return {
-      value: address(SYSTEM_PROGRAM),
-      label: `an empty slot: no pool at ${keyed!.text} (${parsed.part})`,
-      kind: "address",
-    };
-  }
   const value = [
     resolved.program,
     resolved.pool,
@@ -690,32 +686,56 @@ async function resolveSlot(
   return { value, label: `pool ${pool}'s ${parsed.part}, paying ${what}`, kind: "address" };
 }
 
-/** The slot of a pool by key that is not there: the System program in all nine places. */
-const EMPTY_SLOT: SvmSlot = {
-  program: address(SYSTEM_PROGRAM),
-  pool: address(SYSTEM_PROGRAM),
-  config: address(SYSTEM_PROGRAM),
-  vaultA: address(SYSTEM_PROGRAM),
-  vaultB: address(SYSTEM_PROGRAM),
-  extra: address(SYSTEM_PROGRAM),
-  ticks: [address(SYSTEM_PROGRAM), address(SYSTEM_PROGRAM), address(SYSTEM_PROGRAM)],
-};
-
-/** The address a venue derives for a pool by key, its pair the mints its tokens name. */
-function keyedPool(
+/**
+ * The pool a key names, read from the cluster: of the pools the venue may keep at the key (one, or
+ * for a fee one under each config charging it), the one there, or the System program where none is
+ * — no account, or one the venue does not own (lamports anyone may send to the address a pool
+ * would have). More than one there is refused, naming each with its tick spacing.
+ */
+async function keyedPool(
   keyed: KeyedPool,
   ctx: SvmAccountNameContext,
   rows: readonly SvmTokenRow[],
-): Address {
-  const problem = svmPoolKeyProblem(keyed.venue, keyed.key);
+): Promise<Address> {
+  const problem = svmPoolKeyProblem(keyed.venue, keyed.key, keyed.spacing);
   if (problem !== undefined) throw new SvmAccountNameError(problem);
   const [a, b] = keyed.tokens.map((token) => mintOf(token, "slot", ctx, rows).mint) as [
     Address,
     Address,
   ];
   if (a === b) throw new SvmAccountNameError(`${keyed.text} names one mint twice`);
+  const load = ctx.load;
+  if (load === undefined) {
+    throw new SvmAccountNameError(
+      `${keyed.text} is read from the cluster, which this resolution has no way to do`,
+    );
+  }
+  const program = SVM_KEYED_VENUES[keyed.venue]!.program;
+  const candidates = svmPoolCandidates(keyed.venue, a, b, keyed.key, keyed.spacing);
+  const accounts = await Promise.all(candidates.map((one) => load(one.pool)));
+  const there = candidates.filter((_, i) => accounts[i]?.owner === program);
+  if (there.length > 1) {
+    const [tokenA, tokenB] = keyed.text.slice(keyed.text.indexOf("(") + 1, -1).split(",");
+    const spacings = new Set(there.map((one) => one.config!.tickSpacing));
+    if (spacings.size < there.length) {
+      throw new SvmAccountNameError(
+        `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}) finds ${there.length} pools, ` +
+          `under configs alike in fee and tick spacing: ${there.map((one) => one.pool).join(", ")}. ` +
+          "Name the pool by its address.",
+      );
+    }
+    throw new SvmAccountNameError(
+      `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}) finds ${there.length} pools, one ` +
+        `under each config charging that fee: ${there
+          .map((one) => `${one.pool} at tick spacing ${one.config!.tickSpacing}`)
+          .join(", ")}. Name the tick spacing after the fee: ` +
+        `${keyed.venue}.pool(${tokenA}, ${tokenB}, ${keyed.key}, ${there[0]!.config!.tickSpacing})`,
+    );
+  }
+  const pool = there[0]?.pool ?? null;
+  ctx.found?.set(keyed.text, pool);
 
-  return svmPoolByKey(keyed.venue, a, b, keyed.key);
+  return pool ?? address(SYSTEM_PROGRAM);
 }
 
 /** main's integer argument `param`. */

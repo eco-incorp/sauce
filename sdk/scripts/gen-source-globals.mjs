@@ -541,10 +541,11 @@ export interface SauceSvmSpacingVenueSource extends SauceSvmVenueSource {
 
 /**
  * A Solana venue whose pools are found by fee, in millionths (400 is 0.04%), as an EVM pool's:
- * \`pool(tokenA, tokenB, fee)\`, written as a swap's pool. Where there is none, the swap returns 0.
+ * \`pool(tokenA, tokenB, fee)\`, written as a swap's pool, with the tick spacing after the fee
+ * where the venue keeps two configs at it. Where there is none, the swap returns 0.
  */
 export interface SauceSvmFeeVenueSource extends SauceSvmVenueSource {
-  pool(tokenA: bigint, tokenB: bigint, fee: bigint): bigint;
+  pool(tokenA: bigint, tokenB: bigint, fee: bigint, tickSpacing?: bigint): bigint;
 }
 
 /** A collection returned by Sauce, whose length is a Sauce scalar. */

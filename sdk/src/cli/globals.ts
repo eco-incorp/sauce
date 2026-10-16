@@ -252,7 +252,8 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
         "venue has one: a key with no pool there is an empty slot, which the swap skips",
       ...globals.venues.map((venue) => {
         const pool = venue.methods.find((method) => method.startsWith("pool("));
-        const key = pool === undefined ? "by address" : `by ${/, (\w+): Uint256\)/.exec(pool)![1]}`;
+        const key =
+          pool === undefined ? "by address" : /, fee: /.test(pool) ? "by fee" : "by tick spacing";
 
         return `  ${venue.namespace.padEnd(width)}  ${venue.program}  (${venue.name}; pools ${key})`;
       }),

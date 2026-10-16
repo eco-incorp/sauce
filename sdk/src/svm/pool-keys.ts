@@ -13,10 +13,16 @@
  *                                       a program names it by its trade fee, in millionths (400 is
  *                                       0.04%), as an EVM pool's fee is written
  *
+ * A Raydium-code program may keep two configs at one fee, at different tick spacings (Raydium's
+ * 0.01% at spacing 1 and 10) or even the same: the fee then names a pool under each, and a program
+ * may add the tick spacing (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`). Which of them is there, the
+ * cook reads (`svm/account-names.ts`): none is an empty slot, one is the pool, more is refused,
+ * naming each.
+ *
  * Phoenix's markets are not derived from their pair: a program names a market by its address.
  *
- * Nothing here reads the cluster. The address is derived; whether a pool is there, the cook reads
- * as it is built (`svm/account-names.ts`), and a key with no pool is an empty slot.
+ * Nothing here reads the cluster. The addresses are derived; whether a pool is there, the cook reads
+ * as it is built.
  */
 import { address, getAddressEncoder, type Address } from "@solana/kit";
 
@@ -35,19 +41,29 @@ import { memoizedFindProgramAddressSync } from "./venues/pda-memo.js";
 /** What a venue's key is: a whirlpool's tick spacing, or a Raydium-code pool's fee. */
 export type SvmPoolKind = "tick spacing" | "fee";
 
+/** One of a Raydium-code program's AmmConfigs: its index, trade fee (millionths) and spacing. */
+export interface SvmAmmConfig {
+  readonly index: number;
+  readonly fee: number;
+  readonly tickSpacing: number;
+}
+
 /** A venue whose pools a program finds by key. */
 export interface SvmKeyedVenue {
   /** The namespace a program writes, its protocol then its program (`Orca.Whirlpool`). */
   readonly namespace: string;
   readonly program: Address;
   readonly key: SvmPoolKind;
-  /**
-   * For a fee: each fee the SDK knows a config of, and that config's index. A fee missing here is
-   * refused as the program compiles, naming the fees there are.
-   */
-  readonly configs?: ReadonlyMap<number, number>;
-  /** The pool's seeds, past its prefix: from the pair, lower key first, and the key. */
+  /** For a fee: the program's configs, each fee one a program may name. */
+  readonly configs?: readonly SvmAmmConfig[];
+  /** The pool's seeds: from the pair, lower key first, and the key (a config's index, for a fee). */
   readonly seeds: (lower: Uint8Array, higher: Uint8Array, key: number) => readonly Uint8Array[];
+}
+
+/** A pool a key may name: its address, and for a fee the config it is under. */
+export interface SvmPoolCandidate {
+  readonly pool: Address;
+  readonly config?: SvmAmmConfig;
 }
 
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
@@ -72,19 +88,19 @@ const whirlpool = (namespace: string, program: Address, config: Address): SvmKey
   ],
 });
 
-/** A Raydium-code pool's: `["pool", ammConfig, lower, higher]`, its config found by its fee. */
+/** A Raydium-code pool's: `["pool", ammConfig, lower, higher]`, its configs `[index, fee, spacing]`. */
 const raydium = (
   namespace: string,
   program: Address,
-  configs: readonly (readonly [fee: number, index: number])[],
+  configs: readonly (readonly [index: number, fee: number, tickSpacing: number])[],
 ): SvmKeyedVenue => ({
   namespace,
   program,
   key: "fee",
-  configs: new Map(configs),
-  seeds: (lower, higher, fee) => [
+  configs: configs.map(([index, fee, tickSpacing]) => ({ index, fee, tickSpacing })),
+  seeds: (lower, higher, index) => [
     text("pool"),
-    key32(svmAmmConfig(program, new Map(configs).get(fee)!)),
+    key32(svmAmmConfig(program, index)),
     lower,
     higher,
   ],
@@ -92,14 +108,98 @@ const raydium = (
 
 /**
  * Each venue a program finds pools at by key, by its namespace. A Raydium-code program's configs
- * are the ones the SDK has read, each pinned by its account in the venue fixtures
- * (`test/svm/pool-keys.test.ts`).
+ * are every one it kept at indexes 0 to 199 when read, each pinned by its account in
+ * `test/fixtures/svm-pool-keys/amm-configs.json` (`scripts/dump-amm-configs.mjs`).
  */
 export const SVM_KEYED_VENUES: Readonly<Record<string, SvmKeyedVenue>> = {
-  "Raydium.CLMM": raydium("Raydium.CLMM", RAYDIUM_CLMM_PROGRAM_ID, [[400, 8]]),
-  "Pancakeswap.CLMM": raydium("Pancakeswap.CLMM", PANCAKESWAP_CLMM_PROGRAM_ID, [[100, 0]]),
-  "Byreal.CLMM": raydium("Byreal.CLMM", BYREAL_PROGRAM_ID, [[3000, 50]]),
-  "Stabble.CLMM": raydium("Stabble.CLMM", STABBLE_CLMM_PROGRAM_ID, [[50, 1]]),
+  "Raydium.CLMM": raydium("Raydium.CLMM", RAYDIUM_CLMM_PROGRAM_ID, [
+    [0, 100, 10],
+    [1, 2500, 60],
+    [2, 500, 10],
+    [3, 10000, 120],
+    [4, 100, 1],
+    [5, 500, 1],
+    [6, 200, 1],
+    [7, 300, 1],
+    [8, 400, 1],
+    [9, 20000, 120],
+    [10, 1000, 10],
+    [11, 1500, 10],
+    [12, 1600, 10],
+    [13, 1800, 10],
+    [14, 2000, 10],
+    [15, 4000, 60],
+    [16, 6000, 60],
+    [17, 8000, 60],
+    [18, 30000, 120],
+    [19, 40000, 120],
+    [20, 5000, 60],
+  ]),
+  "Pancakeswap.CLMM": raydium("Pancakeswap.CLMM", PANCAKESWAP_CLMM_PROGRAM_ID, [
+    [0, 100, 10],
+    [1, 2500, 60],
+    [2, 500, 10],
+    [3, 10000, 120],
+    [4, 100, 1],
+    [5, 500, 1],
+    [6, 200, 1],
+    [7, 300, 1],
+    [8, 400, 1],
+    [9, 20000, 120],
+    [10, 1000, 10],
+    [11, 1500, 10],
+    [12, 1600, 10],
+    [13, 1800, 10],
+    [14, 2000, 10],
+    [15, 4000, 60],
+    [16, 6000, 60],
+    [17, 8000, 60],
+    [18, 30000, 120],
+    [19, 40000, 120],
+    [20, 3000, 60],
+    [21, 800, 1],
+  ]),
+  "Byreal.CLMM": raydium("Byreal.CLMM", BYREAL_PROGRAM_ID, [
+    [1, 100, 1],
+    [2, 500, 1],
+    [3, 4000, 60],
+    [4, 5000, 60],
+    [5, 6000, 60],
+    [6, 400, 1],
+    [7, 2500, 60],
+    [8, 200, 1],
+    [9, 300, 1],
+    [10, 1000, 10],
+    [11, 2000, 10],
+    [12, 10000, 120],
+    [20, 20000, 120],
+    [21, 200, 10],
+    [22, 100, 120],
+    [50, 3000, 60],
+    [51, 8000, 60],
+    [52, 1, 1],
+    [53, 50, 1],
+  ]),
+  "Stabble.CLMM": raydium("Stabble.CLMM", STABBLE_CLMM_PROGRAM_ID, [
+    [0, 50, 1],
+    [1, 50, 1],
+    [2, 60, 1],
+    [3, 70, 1],
+    [4, 80, 1],
+    [5, 90, 1],
+    [6, 100, 1],
+    [7, 250, 1],
+    [8, 500, 1],
+    [9, 750, 1],
+    [10, 1000, 1],
+    [11, 2500, 1],
+    [12, 5000, 1],
+    [13, 7500, 1],
+    [14, 10000, 1],
+    [15, 12500, 1],
+    [16, 17500, 1],
+    [17, 20000, 1],
+  ]),
   "Orca.Whirlpool": whirlpool(
     "Orca.Whirlpool",
     ORCA_WHIRLPOOL_PROGRAM_ID,
@@ -135,44 +235,71 @@ export function svmAmmConfig(program: Address, index: number): Address {
   return memoizedFindProgramAddressSync(program, [text("amm_config"), u16(index, false)])[0];
 }
 
+/** The configs a fee (and a tick spacing, given one) names at a Raydium-code venue. */
+const configsAt = (venue: SvmKeyedVenue, fee: bigint, spacing?: bigint): SvmAmmConfig[] =>
+  (venue.configs ?? []).filter(
+    (one) =>
+      BigInt(one.fee) === fee && (spacing === undefined || BigInt(one.tickSpacing) === spacing),
+  );
+
 /**
- * Why `key` names no pool at the venue's, or undefined: a tick spacing is a whole number from 1 to
- * 65535; a fee must be one the SDK knows a config of.
+ * Why `key` (and `spacing`, a Raydium-code pool's tick spacing beside its fee) names no pool at the
+ * venue's, or undefined: a tick spacing is a whole number from 1 to 65535; a fee must be one of the
+ * program's configs, and a spacing given with it that config's.
  */
-export function svmPoolKeyProblem(namespace: string, key: bigint): string | undefined {
+export function svmPoolKeyProblem(
+  namespace: string,
+  key: bigint,
+  spacing?: bigint,
+): string | undefined {
   const venue = SVM_KEYED_VENUES[namespace];
   if (venue === undefined) return `${namespace} finds no pool by key`;
   if (venue.configs === undefined) {
+    if (spacing !== undefined) {
+      return `${namespace}'s pool is found by its tick spacing alone: pool(tokenA, tokenB, tickSpacing)`;
+    }
     return key >= 1n && key <= 0xffffn
       ? undefined
       : `${namespace}'s key is a tick spacing, from 1 to 65535, and ${key} is not one`;
   }
-  if (key <= BigInt(Number.MAX_SAFE_INTEGER) && venue.configs.has(Number(key))) return undefined;
-  const fees = [...venue.configs.keys()].sort((a, b) => a - b);
+  if (configsAt(venue, key).length === 0) {
+    const fees = [...new Set(venue.configs.map((one) => one.fee))].sort((a, b) => a - b);
+    return (
+      `${namespace}'s key is a pool's fee, in millionths (400 is 0.04%), and it has no config at ` +
+      `${key}: its fees are ${fees.join(", ")}`
+    );
+  }
+  if (spacing !== undefined && configsAt(venue, key, spacing).length === 0) {
+    const spacings = configsAt(venue, key).map((one) => one.tickSpacing);
+    return `${namespace}'s configs at fee ${key} have tick spacing ${spacings.join(" and ")}, not ${spacing}`;
+  }
 
-  return (
-    `${namespace}'s key is a pool's fee, in millionths (400 is 0.04%), and it has no config at ` +
-    `${key}: its fees are ${fees.join(", ")}`
-  );
+  return undefined;
 }
 
-/** The pool the venue derives for the pair at `key`, which {@link svmPoolKeyProblem} accepts. */
-export function svmPoolByKey(
+/**
+ * Every pool the key may name at the venue for the pair, which {@link svmPoolKeyProblem} accepts:
+ * the one a tick spacing derives, or one under each config charging the fee (at the spacing, given
+ * one). Which of them is there is the cluster's to say.
+ */
+export function svmPoolCandidates(
   namespace: string,
   tokenA: Address,
   tokenB: Address,
   key: bigint,
-): Address {
-  const problem = svmPoolKeyProblem(namespace, key);
+  spacing?: bigint,
+): SvmPoolCandidate[] {
+  const problem = svmPoolKeyProblem(namespace, key, spacing);
   if (problem !== undefined) throw new Error(problem);
   const venue = SVM_KEYED_VENUES[namespace]!;
   const [a, b] = [key32(tokenA), key32(tokenB)];
   const lower = compare(a, b) < 0;
+  const [first, second] = lower ? [a, b] : [b, a];
+  const derive = (seed: number): Address =>
+    memoizedFindProgramAddressSync(venue.program, venue.seeds(first, second, seed))[0];
+  if (venue.configs === undefined) return [{ pool: derive(Number(key)) }];
 
-  return memoizedFindProgramAddressSync(
-    venue.program,
-    venue.seeds(lower ? a : b, lower ? b : a, Number(key)),
-  )[0];
+  return configsAt(venue, key, spacing).map((config) => ({ pool: derive(config.index), config }));
 }
 
 /** Two keys compared byte by byte, as the venues order a pair. */

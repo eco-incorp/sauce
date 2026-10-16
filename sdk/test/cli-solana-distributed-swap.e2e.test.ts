@@ -385,7 +385,7 @@ describeSvm(
       // key a program finds it by where its venue finds pools by key.
       for (const [name, key] of [
         ["raydium-clmm-sol-usdc", "Raydium.CLMM.pool(USDC, WSOL, 400)"],
-        ["pancakeswap-clmm-sol-usdc", "Pancakeswap.CLMM.pool(USDC, WSOL, 100)"],
+        ["pancakeswap-clmm-sol-usdc", "Pancakeswap.CLMM.pool(USDC, WSOL, 100, 10)"],
         ["orca-whirlpool-sol-usdc", "Orca.Whirlpool.pool(USDC, WSOL, 4)"],
         ["cropper-sol-usdc", "Cropper.Whirlpool.pool(USDC, WSOL, 2)"],
         ["defituna-sol-usdc", "Defituna.Fusion.pool(USDC, WSOL, 4)"],
