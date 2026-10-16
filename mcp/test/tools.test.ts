@@ -1359,6 +1359,27 @@ describe("sauce_intent_publish", () => {
     );
   });
 
+  it("builds an intent paying a Solana wallet, given in base58, as the command does", async () => {
+    const out = ok(
+      await mcp.call("sauce_intent_publish", {
+        source: [
+          "function main(recipient: Address, amount: Uint256) {",
+          "  Solana(() => {",
+          "    USDC.transfer(recipient, amount);",
+          "  }).reward({ tokens: [{ token: USDC, amount: 2000000 }] });",
+          "}",
+        ].join("\n"),
+        chain: "base",
+        args: ["9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", "1000000"],
+        intentDeadline: 2_000_000_000,
+        intentCreator: CREATOR,
+      }),
+    ) as Published;
+    assert.equal(out.intents[0]!.destination, "solana");
+    // With no Solana endpoint, the wallet's token account is created whether or not it exists.
+    assert.ok(out.notes.some((note) => /no solana endpoint: the route creates each/.test(note)));
+  });
+
   it("refuses a program that does more than open fixed intents", async () => {
     assert.match(
       failed(

@@ -87,6 +87,7 @@ import {
   programChains,
   type ProgramInput,
   publishCommand,
+  solanaIntentState,
   readPoolAt,
   reclaimCommand,
   TABLES_PER_RUN,
@@ -2498,7 +2499,20 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = boundProgram(args);
+      // An intent to Solana is built against the cluster's state, read as the command reads it,
+      // through the server's endpoint; the Kitchen's fee there too, unless the call gives one.
+      const bound = boundProgram(args);
+      const solana = await solanaIntentState(
+        bound.input,
+        bound.files,
+        (on) => reach.endpoint(on, undefined),
+        { autoFee: args.intentExecutionFee === undefined },
+      );
+      const program: Program = { ...bound, input: solana.input };
+      const noted = (output: CommandOutput): CommandOutput =>
+        solana.notes.length === 0
+          ? output
+          : { ...output, notes: [...solana.notes, ...(output.notes ?? [])] };
       const chain = program.input.chain;
       const from = args.from === undefined ? undefined : parseAddress("from", args.from);
       const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
@@ -2513,15 +2527,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
 
         return withRecords(
           program,
-          await publishCommand(
-            {
-              ...program.input,
-              dryRun: true,
-              rpcUrl: await reach.require(chain, args.rpcUrl, "A dry run"),
-              from,
-              ...(assume.length === 0 ? {} : { assume }),
-            },
-            program.files,
+          noted(
+            await publishCommand(
+              {
+                ...program.input,
+                dryRun: true,
+                rpcUrl: await reach.require(chain, args.rpcUrl, "A dry run"),
+                from,
+                ...(assume.length === 0 ? {} : { assume }),
+              },
+              program.files,
+            ),
           ),
         );
       }
@@ -2531,15 +2547,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
 
       return withRecords(
         program,
-        await publishCommand(
-          {
-            ...program.input,
-            format: "json",
-            dryRun: false,
-            ...(from === undefined ? {} : { from }),
-            ...(rpcUrl === undefined ? {} : { rpcUrl }),
-          },
-          program.files,
+        noted(
+          await publishCommand(
+            {
+              ...program.input,
+              format: "json",
+              dryRun: false,
+              ...(from === undefined ? {} : { from }),
+              ...(rpcUrl === undefined ? {} : { rpcUrl }),
+            },
+            program.files,
+          ),
         ),
       );
     },
