@@ -60,6 +60,7 @@ describe("Solana's venue namespaces", () => {
         "Crema.CLMM",
         "Cropper.Whirlpool",
         "Defituna.Fusion",
+        "Meteora.DLMM",
         "Orca.Whirlpool",
         "Pancakeswap.CLMM",
         "Phoenix.Market",

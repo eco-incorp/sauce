@@ -11,6 +11,8 @@
  *     fee and all, receives at least every unit they held, and leaves the pool at the last of them,
  *     the next bin untouched: both ways, into the second bin array, at three clocks (the
  *     volatility's reference kept, its floor decayed, and reset), and through `swap`;
+ *   - what a swap stopped at maxPrice receives is what the venue's own swap of the amount it paid
+ *     receives, from the same state (`meteoraDlmmCpi`, its exact input);
  *   - a smaller input is swapped whole; the walk stops after eight bins;
  *   - a pool with a Token-2022 mint is swapped through `swap2`, on its first bin array;
  *   - it returns 0 having moved nothing for every skip its comment names, and stops before a bin
@@ -19,6 +21,9 @@
  *     not its pool's owner is refused.
  *
  * It logs the compute units each cook used: the cook's, the engine's, and the venue's within them.
+ *
+ * The walk is the one eco-incorp/sauce-recipes' Meteora DLMM ladder replicates for its quotes
+ * (`update_references`, then each bin's volatility from its distance to the reference).
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
@@ -34,13 +39,14 @@ import {
   cook,
   editFrozen,
   freeze,
+  instruction,
   refused,
   succeeded,
   SYSTEM,
   TOKEN,
   TOKEN_2022,
 } from "./exact-in-harness.js";
-import type { Compiled, SlotAccount, Trade } from "./exact-in-harness.js";
+import type { Compiled, CpiAccount, SlotAccount, Trade } from "./exact-in-harness.js";
 import { SVM_TRADER } from "./harness.js";
 
 const PROGRAM = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo" as Address;
@@ -276,6 +282,48 @@ describeSvm("@sauce/router's Meteora DLMM swap at a price, on the venue's own pr
       },
       120_000,
     );
+
+    it("receives at maxPrice what the venue's own swap of the amount it paid does", async () => {
+      const stopped = succeeded(
+        await run("meteoraDlmm", trade(paysX, 10n ** 15n, between(bins, 4))),
+      );
+      expect(stopped.paid).toBe(sum(bins.slice(0, 5), "drains"));
+      // The venue's `swap` of exactly that amount, from the same state, its accounts listed whole.
+      const w = true;
+      const list: CpiAccount[] = [
+        { address: PAIR, writable: w },
+        { address: PROGRAM },
+        { address: RESERVE_X, writable: w },
+        { address: RESERVE_Y, writable: w },
+        { address: "source", writable: w },
+        { address: "recipient", writable: w },
+        { address: WSOL },
+        { address: USDC },
+        { address: ORACLE, writable: w },
+        { address: PROGRAM },
+        { address: "authority" },
+        { address: TOKEN },
+        { address: TOKEN },
+        { address: EVENT_AUTHORITY },
+        { address: PROGRAM },
+        ...arrays.map((index): CpiAccount => ({ address: ARRAYS[index]!, writable: w })),
+      ];
+      const own = succeeded(
+        await cook(
+          harness,
+          instruction("Cpi", "meteoraDlmm", list.length),
+          {
+            ...trade(paysX, stopped.paid, 0n),
+            minOut: 1n,
+            slot: [],
+            cpi: { program: PROGRAM, accounts: list },
+          },
+          PROGRAM,
+        ),
+      );
+      expect([own.paid, own.received]).toEqual([stopped.paid, stopped.received]);
+      expect(activeId()).toBe(bins[4]!.id);
+    }, 120_000);
 
     it("swaps a smaller input whole", async () => {
       const amountIn = bins[0]!.drains + bins[1]!.drains / 2n;
