@@ -33,6 +33,7 @@ import {
   buildHeapFramePrepend,
 } from "../../../src/svm/index.js";
 import { fetchPhoenixConfig } from "../../../src/svm/venues/phoenix/index.js";
+import { raydiumSqrtPriceAtTick } from "../../../src/svm/venues/raydium-clmm/tick-math.js";
 import {
   describeSvm,
   fabricateAlt,
@@ -425,39 +426,35 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     120_000,
   );
 
-  // The window takes the furthest array's liquidity too: it ends at that array's last initialized
-  // tick that way, past where the array begins.
-  it.each(["RaydiumClmm", "Crema"])(
-    "%s: a limit far past its window walks into its furthest array, to its last initialized tick",
-    async (venue) => {
-      const entry = VENUES.find((one) => one.venue === venue)!;
-      const base = await orderFor(entry);
-      const p = base.pool;
-      const paysA = key(USDC) < key(base.buy);
-      const ticks = (paysA ? p.payA : p.payB).filter((at) => at !== SYSTEM);
-      const spacing = Number(le(BYTES.get(p.pool)!, venue === "Crema" ? 168 : 235, 2));
-      const span = (venue === "Crema" ? 64 : 60) * spacing;
-      const starts = ticks.map((at) => {
-        const data = BYTES.get(at)!;
-        return venue === "Crema"
-          ? -443636 + (443636 % spacing) + Number(le(data, 8, 2)) * span
-          : new DataView(data.buffer, data.byteOffset).getInt32(40, true);
-      });
-      const furthest = paysA ? Math.min(...starts) : Math.max(...starts);
-      const stop = windowStop(p, paysA)!;
-      // Inside the furthest array that way, past where the walk enters it.
-      expect(stop >= furthest && stop < furthest + span).toBe(true);
-      expect(stop).not.toBe(paysA ? furthest + span : furthest);
-      const order = {
-        ...base,
-        priceLimit: allIn(p, paysA) * 3n,
-        amountIn: 10_000_000_000n * 10n ** 6n,
-      };
-      const outcome = succeeded(await cook(compiled(lower(venue)), order));
-      expect(outcome.price).toBe(windowBound(p, paysA));
-    },
-    120_000,
-  );
+  // Crema's window is wide: tick spacing 50, arrays of 3,200 ticks, its edge about 6,300 ticks from
+  // the price. The limit is held a tick inside that edge, within a millionth of its exact sqrt price
+  // and never past it.
+  it("Crema: a limit far past its wide window is held within a millionth of its edge", async () => {
+    const entry = VENUES.find((one) => one.venue === "Crema")!;
+    const base = await orderFor(entry);
+    const p = base.pool;
+    const paysA = key(USDC) < key(base.buy);
+    const data = BYTES.get(p.pool)!;
+    const tick = new DataView(data.buffer, data.byteOffset).getInt32(206, true);
+    const price = le(data, 190, 16);
+    const stop = windowStop(p, paysA)!;
+    expect(Math.abs(stop - tick)).toBeGreaterThan(6000);
+    // A tick inside the stop, less the part of a tick the price may lie past its own.
+    const exact = paysA
+      ? (price * raydiumSqrtPriceAtTick(tick)) / raydiumSqrtPriceAtTick(stop + 1)
+      : (price * raydiumSqrtPriceAtTick(stop - 2)) / raydiumSqrtPriceAtTick(tick);
+    const bound = windowBound(p, paysA);
+    expect(paysA ? bound >= exact : bound <= exact).toBe(true);
+    const gap = paysA ? bound - exact : exact - bound;
+    expect(gap * 1_000_000n).toBeLessThan(exact);
+    const order = {
+      ...base,
+      priceLimit: allIn(p, paysA) * 3n,
+      amountIn: 10_000_000_000n * 10n ** 6n,
+    };
+    const outcome = succeeded(await cook(compiled(lower("Crema")), order));
+    expect(outcome.price).toBe(bound);
+  }, 120_000);
 
   // Where the furthest array a slot gives that way is the one holding the price, the window ends at
   // its last initialized tick that way, read from a fixed array (Raydium's) or a dynamic one

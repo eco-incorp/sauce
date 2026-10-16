@@ -276,7 +276,7 @@ nothing and sends the whole budget to the recipient, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 5.2 KB, past one transaction, so it runs from a code
+- **The program is staged.** It is about 5.4 KB, past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that (`sauce-solana`).
 - **The accounts go through a lookup table.** The program names 46 accounts, every one derived: nine
   for each key, the Pot's, the mints', the programs' and the recipient's two. A key with no pool
@@ -287,7 +287,7 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
   the cook's own come to about 60 accounts of 64. Keys that find more are refused before anything is
   signed: the command names the pool each key found
   (`Raydium.CLMM.pool(USDC, SPCX_US, 2500) is <pool>`, `… finds none`), so drop the keys you want
-  least. Measured on the venues' own programs, buying SPCX_US: three pools that trade and a key with none take about 1,076,000 of the 1,400,000 compute units, a token moved under Token-2022 costing
+  least. Measured on the venues' own programs, buying SPCX_US: three pools that trade and a key with none take about 1,085,000 of the 1,400,000 compute units, a token moved under Token-2022 costing
   more than one under SPL Token. Pools that share a program or a config cost fewer accounts.
 
 ## Running it
@@ -366,10 +366,10 @@ never a result. Buying SPCX_US with 2,000 USDC, Raydium's 0.25% pool deep enough
 addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 529263 compute units, returns <the same three words, in hex>
+The cook succeeds from <owner>: 519966 compute units, returns <the same three words, in hex>
 main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 34 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 5396-byte program staged into a code buffer in 8 transactions, as `sauce run` stages it
+  the 5528-byte program staged into a code buffer in 9 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potUSDC, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC

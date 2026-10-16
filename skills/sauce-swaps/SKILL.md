@@ -368,7 +368,7 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 2.0 KB of program, past
+A program carries only the venues it calls: one venue's function is about 2.1 KB of program, past
 one transaction, so the program is staged (`sauce-solana`).
 
 ## Exact input on Solana
