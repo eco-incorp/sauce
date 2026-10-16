@@ -2500,7 +2500,7 @@ describe("sauce price", () => {
       token1: "USDC",
       sqrtPriceX96: sqrt.toString(),
       units: PRICE_UNITS,
-      // Selling WETH: as the distributed swap's maxPrice, WETH units paid per USDC unit bought,
+      // Selling WETH: as the distributed swap's priceLimit, WETH units paid per USDC unit bought,
       // 1e18 / 2700e6 times 1e18, rounded down; as minAvgPrice, 2700e6 USDC units per 1e18 WETH
       // units, times 1e18.
       sell: {
@@ -2509,11 +2509,11 @@ describe("sauce price", () => {
         zeroForOne: true,
         sqrtPriceLimitX96: sqrt.toString(),
         limit: "floor",
-        maxPrice: (10n ** 36n / (2700n * 10n ** 6n)).toString(),
+        priceLimit: (10n ** 36n / (2700n * 10n ** 6n)).toString(),
         maxAvgPrice: (10n ** 36n / (2700n * 10n ** 6n)).toString(),
         minAvgPrice: "2700000000",
       },
-      // Buying WETH: maxPrice is USDC units paid per WETH unit, times 1e18 — 2700 x 10^(18 + 6 -
+      // Buying WETH: priceLimit is USDC units paid per WETH unit, times 1e18 — 2700 x 10^(18 + 6 -
       // 18) — and minAvgPrice the other way round, WETH units per USDC unit, rounded up.
       buy: {
         tokenIn: "USDC",
@@ -2521,7 +2521,7 @@ describe("sauce price", () => {
         zeroForOne: false,
         sqrtPriceLimitX96: sqrt.toString(),
         limit: "ceiling",
-        maxPrice: "2700000000",
+        priceLimit: "2700000000",
         maxAvgPrice: "2700000000",
         minAvgPrice: ((10n ** 36n + 2700n * 10n ** 6n - 1n) / (2700n * 10n ** 6n)).toString(),
       },
@@ -2533,7 +2533,7 @@ describe("sauce price", () => {
     expect(text.stdout).toContain(`sqrtPriceX96  ${sqrt}`);
     // Each number says which way round it is, and which the distributed swap takes.
     expect(text.stdout).toMatch(
-      /Buying WETH \(USDC in, WETH out\):\n.*\n {2}maxPrice +2700000000 +USDC units paid per WETH unit bought, times 1e18: the distributed swap's maxPrice\n {2}maxAvgPrice +2700000000 +the same, as its maxAvgPrice/,
+      /Buying WETH \(USDC in, WETH out\):\n.*\n {2}priceLimit +2700000000 +USDC units paid per WETH unit bought, times 1e18: the distributed swap's priceLimit\n {2}maxAvgPrice +2700000000 +the same, as its maxAvgPrice/,
     );
     expect(text.stdout).toMatch(
       /minAvgPrice +2700000000 +the other way round, USDC units received per WETH unit, times 1e18: a floor for out \* 1e18 >= minAvgPrice \* spent, never a maxAvgPrice/,

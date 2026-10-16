@@ -81,9 +81,9 @@ export function instructions(
         ]
       : []),
     "3. sauce_pools for a pair's pools, their prices and depth, before a swap; sauce_price for",
-    "   a swap's price limits (with pool, from the pool now). The distributed swap's maxPrice",
-    "   and maxAvgPrice are input paid per output bought: sauce_pools' sides[].maxPrice, or",
-    "   sauce_price's buy.maxPrice. minAvgPrice runs the other way round and is never a",
+    "   a swap's price limits (with pool, from the pool now). The distributed swap's priceLimit",
+    "   and maxAvgPrice are input paid per output bought: sauce_pools' sides[].priceLimit, or",
+    "   sauce_price's buy.priceLimit. minAvgPrice runs the other way round and is never a",
     "   maxAvgPrice. Simulate at the block sauce_pools read.",
     "4. sauce_pot for the owner's Pot: its address, whether it exists, the Kitchen's fee and what",
     "   the Pot holds. A Pot with no code yet needs no step of its own: sauce_tx plans its",

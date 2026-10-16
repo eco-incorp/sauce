@@ -91,10 +91,10 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
           pool: address,
           rpcUrl: chain.rpcUrl,
         }),
-      ) as { pool: Record<string, unknown>; buy: { maxPrice: string } };
+      ) as { pool: Record<string, unknown>; buy: { priceLimit: string } };
       assert.equal(out.pool.address, address);
       assert.equal(out.pool.venue, venue);
-      assert.match(out.buy.maxPrice, /^\d+$/);
+      assert.match(out.buy.priceLimit, /^\d+$/);
     }
   });
 

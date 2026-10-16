@@ -1413,16 +1413,16 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "The numbers a swap program takes, for a pair on an EVM chain: the pool's sqrtPriceX96 " +
         "for the pair's order (token0 is the lower address) — which is also a swap's " +
         "sqrtPriceLimitX96 — and, for selling (`sell`) and for buying (`buy`) the base token: " +
-        "`maxPrice` and `maxAvgPrice`, input paid per output bought in base units times 1e18 " +
+        "`priceLimit` and `maxAvgPrice`, input paid per output bought in base units times 1e18 " +
         "(the price times 10^(18 + tokenIn decimals - tokenOut decimals)), which are the " +
-        "distributed swap's maxPrice and maxAvgPrice — `buy` for buying the base token with the " +
+        "distributed swap's priceLimit and maxAvgPrice — `buy` for buying the base token with the " +
         "quote token; and `minAvgPrice`, the other way round (output received per input, a " +
         "floor for out * 1e18 >= minAvgPrice * spent), never to be passed as a maxAvgPrice. " +
         "`units` says each. Give the price one of three ways: `price` (a decimal), " +
         "`sqrtPriceX96` (to read it back), or `pool` with an endpoint, which reads that V3-style " +
         "pool (Uniswap V3, PancakeSwap V3, Aerodrome Slipstream) now and names its venue. With " +
         "slippageBps, `limits` gives each direction's sqrtPriceLimitX96 that far from the price, " +
-        "and a maxPrice, maxAvgPrice and minAvgPrice that also pay the pool's fee (feePpm, or " +
+        "and a priceLimit, maxAvgPrice and minAvgPrice that also pay the pool's fee (feePpm, or " +
         "the pool's own). Uniswap V3 and V4 and their forks share the arithmetic. Use it to set " +
         "a swap's limits, then pass them as defines or arguments.",
       input: {
@@ -1539,7 +1539,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         const buyFloor = at({
           decimal: scaled(price, (10_000n + bps) * 1_000_000n, 10_000n * (1_000_000n - fee)),
         });
-        // maxPrice is fee-inclusive, as the distributed swap's: the floor's price, read as input
+        // priceLimit is fee-inclusive, as the distributed swap's: the floor's price, read as input
         // paid per output.
         json.limits = {
           slippageBps: args.slippageBps,
@@ -1547,14 +1547,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           sell: {
             price: sellLimit.json.price,
             sqrtPriceLimitX96: side(sellLimit, "sell").sqrtPriceLimitX96,
-            maxPrice: side(sellFloor, "sell").maxPrice,
+            priceLimit: side(sellFloor, "sell").priceLimit,
             maxAvgPrice: side(sellFloor, "sell").maxAvgPrice,
             minAvgPrice: side(sellFloor, "sell").minAvgPrice,
           },
           buy: {
             price: buyLimit.json.price,
             sqrtPriceLimitX96: side(buyLimit, "buy").sqrtPriceLimitX96,
-            maxPrice: side(buyFloor, "buy").maxPrice,
+            priceLimit: side(buyFloor, "buy").priceLimit,
             maxAvgPrice: side(buyFloor, "buy").maxAvgPrice,
             minAvgPrice: side(buyFloor, "buy").minAvgPrice,
           },
@@ -1581,12 +1581,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "in millionths read from the pool (a V4 pool's LP fee and protocolFee), tickSpacing, " +
         "liquidity, tick and sqrtPriceX96, and two `sides`, paying tokenA for tokenB then the " +
         "reverse: `mid` and `taker` (pay tokens per buy token, before and with the fee), " +
-        "`maxPrice` (the taker price as the distributed swap's maxPrice argument: pay base " +
+        "`priceLimit` (the taker price as the distributed swap's priceLimit argument: pay base " +
         "units per buy base unit times 1e18) and `depth1Pct` (pay tokens, fee included, that " +
         "move the price 1% against the taker, through its ticks). `empty` lists the pools with " +
         "no liquidity at their price, which a swap skips; `checked`, what was looked at. Every " +
         "read is at one block, `block` (the latest, or the one given): pass it to " +
-        "sauce_simulate's block to simulate on the prices a maxPrice was taken from. On Solana " +
+        "sauce_simulate's block to simulate on the prices a priceLimit was taken from. On Solana " +
         "(tokenA paid first): every pool at Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, " +
         "Orca Whirlpools, Cropper, DefiTuna, Crema and Phoenix (SOL naming WSOL), each with its fee, " +
         "liquidity, sides as above but for depth1Pct, and `slots`: by the token paid, the nine accounts a swap " +
@@ -1687,7 +1687,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                 buy: z.string(),
                 mid: z.string(),
                 taker: z.string(),
-                maxPrice: z.string(),
+                maxPrice: z.string().optional(),
+                priceLimit: z.string().optional(),
               }),
             ),
             slots: z.record(z.string(), z.looseObject({})).optional(),

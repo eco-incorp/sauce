@@ -30,7 +30,7 @@ Commands:
   reclaim   List the code buffers and lookup tables a Solana owner left open, and close them
   pot       Predict a Pot's address, deploy it, and list the Pots you deployed
   globals   List the tokens, protocols and other names a program on a chain can use
-  price     Turn a price into a pool's sqrtPriceX96 and a swap's limits, maxPrice included
+  price     Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
   pools     List a pair's price-limit pools on a chain, deepest first, with their prices
   inspect   Take a cook, a Portal or Kitchen call, a program or a file apart
   verify    Check that a payload, cook or intent runs the audited settle program
@@ -1636,7 +1636,7 @@ Examples:
 ## `sauce price`
 
 ```text
-Turn a price into a pool's sqrtPriceX96 and a swap's limits, maxPrice included.
+Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included.
 
 Usage: sauce price --chain <slug|id> <price> <quote> per <base> [--offline] [--json]
        sauce price --chain <slug|id> <base> <quote> (<price> | --sqrt-price-x96 <value>) [--json]
@@ -1663,9 +1663,9 @@ for the pair's order on the chain (token0 is the lower address), and for each di
 (selling the base token, then buying it):
   sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a
                      ceiling when selling token1
-  maxPrice           input units paid per output unit bought, times 1e18, rounded down:
+  priceLimit         input units paid per output unit bought, times 1e18, rounded down:
                      the price times 10^(18 + input decimals - output decimals), the
-                     distributed swap's maxPrice, as sauce pools prints it
+                     distributed swap's priceLimit, as sauce pools prints it
   maxAvgPrice        the same number, as the distributed swap's maxAvgPrice
   minAvgPrice        the other way round, output units received per input unit times
                      1e18, rounded up, for a check out * 1e18 >= minAvgPrice * spent
@@ -1724,7 +1724,7 @@ which is in the same units at every venue for one pair. For each: the venue and 
 contract a program finds it through, its address (a V4 pool's id and key), its fee read
 from the pool (a V4 pool's LP fee and protocol fee, from StateView), tick spacing,
 liquidity, tick and sqrtPriceX96, and both ways round: what one token costs in the other
-before and with the fee, the distributed swap's maxPrice at that price (pay base units per
+before and with the fee, the distributed swap's priceLimit at that price (pay base units per
 buy base unit times 1e18: the price times 10^(18 + pay decimals - buy decimals)), and about
 how much of the paid token, fee included, moves the price 1% against the taker, walked
 through the pool's ticks. Pools with no liquidity at their price are listed after them, as
@@ -1732,7 +1732,7 @@ skipped. Then what was looked at.
 
 It reads the chain in five requests, each one eth_call for every read in it, all at one
 block, which it names: --block, or the latest when it starts. Pass that block to sauce
-simulate --block to run on the prices maxPrice was taken from.
+simulate --block to run on the prices priceLimit was taken from.
 
 On Solana: every pool of the pair at each venue whose swap takes a price limit that stops
 it (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper,
