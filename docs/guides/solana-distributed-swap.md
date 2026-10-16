@@ -8,16 +8,6 @@ does the splitting, no sorting, the two checks on the total) is that skill's. Th
 Solana changes: the pools reach the program as slots of accounts found before the cook, a venue is
 read from its pool's owner, the program is used whole, and what fits in one transaction.
 
-## When to use
-
-| Task                                                  | Here                    | Elsewhere                                     |
-| ----------------------------------------------------- | ----------------------- | --------------------------------------------- |
-| Buy or sell up to a price across several Solana pools | yes                     |                                               |
-| Find a pair's pools and fill the slots                | yes, with `sauce pools` |                                               |
-| One swap at one known Solana pool                     |                         | [the `@sauce/router` reference](../api/router.md) (`OrcaWhirlpool.swap(pool, …)`) |
-| The method and its arithmetic in depth                |                         | [the distributed swap](distributed-swap.md)                      |
-| Accounts, staging, simulation in a local copy, plans  |                         | [Solana](solana.md)                                |
-
 ## Core model
 
 - **Pools are accounts, found before the cook.** A Solana transaction lists every account it
@@ -502,19 +492,6 @@ Token balance changes:
 - **More slots than fit.** Four, or five with the fifth slot; more is more than one cook.
 - **A program's account as `--owner`** (a pool, a mint). The owner signs and pays: a wallet, or an
   address with no account.
-
-## Files
-
-- `solana-distributed-swap.sauce.ts`: the
-  program, four slots.
-- `solana-distributed-swap-5.sauce.ts`: the
-  same with a fifth slot.
-- `solana-distributed-swap.mts` compiles the program
-  for Solana and pins this page to it: the code above, the venues, their program ids and functions
-  in `@sauce/router`, the pool layouts it reads, `maxPrice`, `minTokens` and `maxAvgPrice`, and the
-  accounts.
-- [the venues, their pools and their slots](#the-venues-their-pools-and-their-slots): each venue's pool layout, the nine accounts its
-  slot takes, and how to find its pools.
 
 ## The venues, their pools and their slots
 

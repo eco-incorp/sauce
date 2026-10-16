@@ -8,16 +8,6 @@ next pool. This skill owns that method, its arithmetic (`maxPrice`, `minTokens`,
 to set and simulate it, and the complete program for EVM chains. One swap is [the `@sauce/router` reference](../api/router.md)'s; the
 same order on Solana is [the distributed swap on Solana](solana-distributed-swap.md)'s, on these rules.
 
-## When to use
-
-| Task                                                                     | Here | Elsewhere                       |
-| ------------------------------------------------------------------------ | ---- | ------------------------------- |
-| Buy (or sell) up to a price across every pool of a pair, on an EVM chain | yes  |                                 |
-| Work out `maxPrice`, `minTokens`, `maxAvgPrice` for any decimals         | yes  |                                 |
-| One swap at one pool                                                     |      | [the `@sauce/router` reference](../api/router.md)                   |
-| The same order on Solana                                                 |      | [the distributed swap on Solana](solana-distributed-swap.md) |
-| The order as the body of an intent on another chain                      |      | [intents](intents.md)                 |
-
 ## Core model
 
 - **The price does the splitting.** The program never computes an amount per pool and never sorts:
@@ -500,12 +490,3 @@ differently gets its own `venue` value and branch in `trade`.
 - **A V4 pool id as an `Address`.** It is a 256-bit `Uint256`.
 - **Lookups for venues that never hold the pair.** Each costs gas on every cook; walk what
   `sauce pools` lists.
-
-## Files
-
-- `distributed-swap.sauce.ts`: the program, its header
-  buying SPCXc and WETH with USDC on Base.
-- `distributed-swap.mts` compiles it for Base and pins this
-  page to it: the code above, the venues and lookups, a V4 pool id held as a `Uint256`, `maxPrice`
-  and the limits it gives, each pool's own limit, `minTokens` and `maxAvgPrice`, and the commands'
-  arguments.
