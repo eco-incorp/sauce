@@ -1396,9 +1396,9 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     };
   }
   if (created.destination.kind === "svm") {
-    // Solana's simulation takes no state overrides: a fill rehearses from a solver's own accounts.
+    // Solana's simulation takes no state overrides: a fill is simulated from a solver's own accounts.
     io.stderr(
-      `Filling on ${created.destination.slug} is rehearsed from a solver's accounts, once ` +
+      `Filling on ${created.destination.slug} is simulated from a solver's accounts, once ` +
         "published: sauce intent fill <intent hash> --solver <solana key> --claimant <address>\n\n",
     );
   } else if (lookup(created.destination) !== undefined) {
