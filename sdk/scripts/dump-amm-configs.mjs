@@ -8,12 +8,15 @@
 //   - every fee tier of Orca's and Cropper's WhirlpoolsConfig, the program address of
 //     `["fee_tier", config, index]` (u16 little-endian): a whirlpool is the address of
 //     `["whirlpool", config, mintA, mintB, index]`, and a program finds it by its tick spacing,
-//     which a static tier's index is and an adaptive-fee tier's (at 1024 and up) is not.
+//     which a static tier's index is and an adaptive-fee tier's (at 1024 and up) is not. A static
+//     tier is 44 bytes, its tick spacing a u16 at 40; an adaptive one 256, its index a u16 at 40 and
+//     its tick spacing at 42.
 //
 //   node scripts/dump-amm-configs.mjs --redump --rpc-config rpc.config.json
 //   node scripts/dump-amm-configs.mjs --check --rpc-config rpc.config.json
 //
-// `--redump` reads AmmConfig indexes 0 to 199 and fee tier indexes 0 to 4095 and rewrites the
+// `--redump` reads AmmConfig indexes 0 to 199 and fee tier indexes 0 to 4095, and the static tier at
+// each tick spacing past those an adaptive tier names (Orca's full-range 32896), and rewrites the
 // fixture with every account there: its index, address, owner, lamports and data. `--check` reads
 // the same and reports each one added, gone or changed since the fixture, writing nothing. A config
 // or a tier a program adds is a key the tables may take: redump, then add its row to
@@ -109,12 +112,14 @@ const index16 = (index, littleEndian = false) => {
   return bytes;
 };
 
-/** Each account `program` keeps at `seedsOf(index)` for indexes 0 to `count` − 1, in index order. */
-async function accountsAt(program, count, seedsOf) {
+/** The indexes 0 to `count` − 1. */
+const upTo = (count) => Array.from({ length: count }, (_, index) => index);
+
+/** Each account `program` keeps at `seedsOf(index)` for each of `indexes`, in their order. */
+async function accountsAt(program, indexes, seedsOf) {
   const keys = await Promise.all(
-    Array.from(
-      { length: count },
-      async (_, index) =>
+    indexes.map(
+      async (index) =>
         (
           await getProgramDerivedAddress({
             programAddress: address(program),
@@ -124,7 +129,7 @@ async function accountsAt(program, count, seedsOf) {
     ),
   );
   // Every chunk of 100 read at once; the accounts kept in index order.
-  const starts = Array.from({ length: Math.ceil(count / 100) }, (_, k) => k * 100);
+  const starts = Array.from({ length: Math.ceil(indexes.length / 100) }, (_, k) => k * 100);
   const reads = await Promise.all(
     starts.map((start) =>
       rpc("getMultipleAccounts", [
@@ -137,10 +142,9 @@ async function accountsAt(program, count, seedsOf) {
   reads.forEach(({ value }, k) =>
     value.forEach((account, i) => {
       if (account === null || account.owner !== program) return;
-      const index = starts[k] + i;
       found.push({
-        index,
-        address: keys[index],
+        index: indexes[starts[k] + i],
+        address: keys[starts[k] + i],
         owner: account.owner,
         lamports: String(account.lamports),
         base64Data: account.data[0],
@@ -155,18 +159,31 @@ const read = { venues: {}, whirlpools: {} };
 for (const [venue, program] of Object.entries(PROGRAMS)) {
   read.venues[venue] = {
     program,
-    configs: await accountsAt(program, INDEXES, (index) => [text("amm_config"), index16(index)]),
+    configs: await accountsAt(program, upTo(INDEXES), (index) => [
+      text("amm_config"),
+      index16(index),
+    ]),
   };
 }
 for (const [venue, { program, config }] of Object.entries(WHIRLPOOLS)) {
-  read.whirlpools[venue] = {
-    program,
-    config,
-    feeTiers: await accountsAt(program, FEE_TIERS, (index) => [
+  const tiersAt = (indexes) =>
+    accountsAt(program, indexes, (index) => [
       text("fee_tier"),
       new Uint8Array(getAddressEncoder().encode(address(config))),
       index16(index, true),
-    ]),
+    ]);
+  const feeTiers = await tiersAt(upTo(FEE_TIERS));
+  // An adaptive tier's spacing past them, where a static tier would be at that index.
+  const past = feeTiers
+    .map(({ base64Data }) => Buffer.from(base64Data, "base64"))
+    .filter((data) => data.length !== 44)
+    .map((data) => data.readUInt16LE(42))
+    .filter((spacing, i, all) => spacing >= FEE_TIERS && all.indexOf(spacing) === i)
+    .sort((a, b) => a - b);
+  read.whirlpools[venue] = {
+    program,
+    config,
+    feeTiers: [...feeTiers, ...(past.length === 0 ? [] : await tiersAt(past))],
   };
 }
 
