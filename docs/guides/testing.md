@@ -2,6 +2,10 @@
 
 [Documentation](../README.md) · [Compiling programs](compiling.md) · [The sauce command](cli.md)
 
+> Before you trust a program with money, test it. The testing kit starts a private copy of a chain on
+> your computer, gives you test accounts with Pots and tokens, runs your program, and lets you check
+> what moved. Nothing real is touched, and a test recorded once replays with no network.
+
 `@eco-incorp/sauce/testing` runs your programs on a local chain from a test. It starts Foundry's
 `anvil`, makes the released engine, Router and Kitchen ready there, and gives you test accounts with
 Pots. You fund an account or a Pot, run a program as a cook, and assert on what `main` returned and

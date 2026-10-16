@@ -2,6 +2,10 @@
 
 [Documentation](../README.md) · [Protocol calls](protocols-and-tokens.md) · [Compiler](../api/compiler.md)
 
+> Sometimes your app already knows what it wants: a token, an amount, a vault. Builders are forms
+> that fill in a program for you from those facts. You get the program's text back, and compile it
+> like any other.
+
 Sometimes a program is not something you write — it is something your application assembles from
 data it already has: a token and an amount, a vault and a deposit. The builders on this page take
 that data and emit SauceScript source you compile like any other program.

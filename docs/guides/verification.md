@@ -2,6 +2,10 @@
 
 [Documentation](../README.md) · [Intents](intents.md) · [Compiler API](../api/compiler.md)
 
+> Someone hands you an intent and says "this settles your swap". Verification is the label check: it
+> confirms that the program inside is the real settlement program, and reads its settings. It does
+> not check everything around it. That part is still yours.
+
 Somebody hands you an intent and says it settles a swap to your address. These helpers answer one
 question about it: **is the program inside really the settlement program, and with what parameters?**
 

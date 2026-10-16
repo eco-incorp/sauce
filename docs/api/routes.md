@@ -2,6 +2,10 @@
 
 [Documentation](../README.md) · [Create an intent](../guides/intents.md) · [Compiler](compiler.md)
 
+> This is the reference for building intents from TypeScript: the chain functions such as `Base(...)`,
+> their options, and what you get back. [Create an intent](../guides/intents.md) explains intents;
+> this page lists every setting.
+
 `routes` is the namespace behind every chain accessor: the intent builder, the encoders and hashes,
 the Portal helpers and the nesting modes. Import it from the package root, next to the chains you use:
 

@@ -1,5 +1,8 @@
 # API reference
 
+> This is the index of everything you can import from the package, like the index at the back of a
+> book. Each line says which import holds what.
+
 Install `@eco-incorp/sauce` and import through the package's public entry points. All paths below
 are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 

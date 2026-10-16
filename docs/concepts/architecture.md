@@ -2,6 +2,11 @@
 
 [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [SauceScript](saucescript.md)
 
+> You write a program in words you can read. The compiler translates it into a compact code card.
+> On the chain, the engine is the cook who reads that card and follows it, inside your Pot. This
+> package is your toolbox around them: it knows where every token and protocol lives on every chain,
+> and it packs the card into a transaction. This page says which piece does which job.
+
 Sauce turns a program into one atomic on-chain execution. Three pieces divide that work, and knowing
 which piece owns a problem is most of what this page is for.
 

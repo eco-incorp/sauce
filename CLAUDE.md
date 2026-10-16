@@ -6,6 +6,14 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
+The manual is written for people and the skills for agents. Every hand-written page of the manual
+opens, after its breadcrumb line, with a short plain-words intro in a blockquote: a few short
+sentences and an everyday analogy, any Sauce word in it explained on the spot (the
+[glossary](docs/concepts/glossary.md) maps each to a familiar one). The real content follows it,
+examples before rules, edge cases in a section at the end. Its starting path is the EVM quick start
+(`docs/guides/quick-start.md`), the Solana quick start and the first intent, all on
+`docs/examples/pay.sauce.ts` and `cross-chain-intent.sauce.ts`. Say "simulate", never "rehearse".
+
 ## What this repo is
 
 **Sauce** — the developer-facing package for the **Sauce protocol**, whose on-chain bytecode engines
@@ -1012,6 +1020,13 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 `eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
+`docs-ethereum-to-solana.e2e.test.ts` runs the manual's `docs/examples/ethereum-to-solana.ts` the
+same way from an Ethereum anvil, importing the example for its exact transactions: jest
+(`moduleNameMapper`) and `sdk/tsconfig.test.json` (`paths`) map `@eco-incorp/sauce`, `/svm` and
+`/protocols/*` to `src` for a manual example, which imports the package by its name, so the SDK's
+typecheck, which CI runs before its build, needs no `dist`. The manual's quick start program, `docs/examples/pay.sauce.ts`, runs as its
+header's lines say in `cli-examples.e2e.test.ts` (Base, from the wallet `me` the page makes) and
+`cli-solana-token-methods.e2e.test.ts` (Solana, from `me-solana`).
 The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 `cli-solana-distributed-swap.e2e.test.ts`) and `@sauce/router`'s SVM arm's
 (`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs the same way: the

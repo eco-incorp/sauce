@@ -153,6 +153,26 @@ console.log(`Manual links: ${manual.length} files checked`);
     if (times !== 1)
       shape.push(`docs/README.md: lists ${path} ${times} times; the index lists each page once`);
   }
+  // Every page written by hand opens with a plain-words intro, a blockquote after its title and its
+  // breadcrumb line, before anything else: the manual is for people (CLAUDE.md).
+  for (const file of markdownFiles(docs)) {
+    const text = readFileSync(file, "utf8");
+    if (text.startsWith("<!-- Generated")) continue;
+    const lines = text.split("\n");
+    let at = 1;
+    const skipBlank = () => {
+      while (lines[at] === "") at++;
+    };
+    skipBlank();
+    if (/^\[[^\]]*\]\([^)]*\)( · |$)/.test(lines[at] ?? "")) {
+      at++;
+      skipBlank();
+    }
+    if (!(lines[at] ?? "").startsWith("> "))
+      shape.push(
+        `${page(file)}: opens with no plain-words intro; begin with a short blockquote after its title and breadcrumb`,
+      );
+  }
   // A page that is mostly links sends its reader on instead of telling them. The indexes are lists.
   const lists = new Set([
     "docs/README.md",

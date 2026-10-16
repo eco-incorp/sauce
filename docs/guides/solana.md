@@ -2,6 +2,12 @@
 
 [Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
 
+> On Solana, a transaction must list every account it will touch before it starts: every wallet,
+> every token balance, every program. Sauce works that list out for the usual things, such as paying
+> and reading tokens. This page is for everything else: calling other Solana programs, Token-2022
+> tokens, Solana's pools, programs too big for one transaction, and running a program without a Pot.
+> New to Solana? Start with the [Solana quick start](solana-quick-start.md).
+
 Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 
 A registered token symbol has the same methods it has on an EVM chain, and the SDK writes the accounts they need for you, as it does for any account a program writes where it uses it (`Solana.pda(program, [seeds])`, below). `USDC.transfer(to, amount)`, `approve`, `transferFrom`, `balanceOf` and `Token(mint)` lower to the `@sauce/token` functions, and every account those take is added to `main` as an `Account` parameter. Protocol members are EVM-only: on Solana there is no contract address to fold in, and no account slot to put one in. A symbol alone is a value. Compiled for `solana` (`sauce compile --chain solana`, `routes.compileSauceProgram("solana", source)`), `USDC` is the mint's 32-byte key, which the `@sauce/token` functions take first (`balanceOf(USDC, account)`); `routes.SVM_TOKEN_REGISTRY` lists the mints, mainnet's and devnet's. For a program whose accounts you write yourself, use `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.

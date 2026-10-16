@@ -2,6 +2,10 @@
 
 [Documentation](../README.md) · [Compiling programs](../guides/compiling.md)
 
+> The compiler is the translator: it takes your program's text and turns it into the bytecode the
+> chain runs. This page is its exact interface for TypeScript: every option you can pass, and
+> everything it gives back.
+
 `@eco-incorp/sauce/compiler` is the SauceScript compiler and the codec for its compact
 argument format. Both ship with the SDK; there is nothing extra to install. It runs in
 Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
