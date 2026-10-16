@@ -164,7 +164,7 @@ The [Solana guide](../guides/solana.md) covers accounts, staging and both ways t
 
 ## Other kinds of Pot
 
-The SDK's convenience helpers use **private Pots**. Kitchen 1.2.0 also exposes
+The SDK's convenience helpers use **private Pots**. The Kitchen also exposes
 `deployPot(owner, salt, true)` for a private Pot with an immutable Router, and
 `deploySharedPot(salt)` for an ownerless **Shared Pot** whose Router is always immutable. Anyone
 can cook on an ownerless Shared Pot and spend its funds; fund and consume it within one transaction.

@@ -274,7 +274,7 @@ The Pot's deployment and the cook stay two transactions, and the deployment goes
 signer, wallet policy and checks as the cook. `sauce pot --deploy` still deploys a Pot by hand. Every
 transaction a run sends before its cook is asked about the same way: deploying a missing Pot,
 approving Permit2 for a token `--fund` pulls, and approving the Pot for an amount under
-`--fund-mode allowance`. `--auto-approve` is `--yes`'s older name. On Solana a missing Pot is
+`--fund-mode allowance`. `--auto-approve` does the same as `--yes`. On Solana a missing Pot is
 created in the cook's own transaction, ahead of the cook and with nothing asked, when the two fit
 in one; where they do not (a large program), it is asked about like the rest.
 

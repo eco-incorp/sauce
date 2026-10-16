@@ -143,7 +143,7 @@ stays in the Pot is not in the owner's wallet
 
 ### Supported and preview chains
 
-For the initial release the server builds transactions only on the chains the release supports:
+The server builds transactions only on the chains Sauce supports:
 Ethereum, Base and Solana. Every other chain is a preview chain; [Chains](../reference/chains.md) has
 the policy and every chain. `sauce_chains` gives each chain's `support`, `"supported"` or
 `"preview"`.

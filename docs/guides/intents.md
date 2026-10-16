@@ -31,7 +31,7 @@ what the route's calls spend, and resolves registered token and protocol address
 deadlines and the creator, read the Kitchen fee, fund the reward and submit. A solver then decides
 whether to fulfill it; the SDK does not price the reward or promise a fill.
 
-The SDK builds an intent between any two registry chains. For the initial release, Sauce supports
+The SDK builds an intent between any two registry chains. Sauce sends
 transactions on Ethereum, Base and Solana, and the [`sauce` command](cli.md) and the
 [MCP server](mcp.md) publish an intent only when its source and every destination it opens, nested
 ones included, are among them; each step after publishing is refused on a preview chain by the
