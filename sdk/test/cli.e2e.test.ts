@@ -183,11 +183,14 @@ describeEvm("sauce, sent to a chain", () => {
         ethereum.rpcUrl,
       );
       const out = jsonOf(run);
+      const fee = `0x${FEE.toString(16)}`;
       expect(out).toEqual({
         chainId: 1,
         to: pot,
         data: expect.stringMatching(/^0x[0-9a-f]+$/),
         value: FEE.toString(),
+        sendTransaction: { chainId: "0x1", to: pot, data: out.data, value: fee },
+        sendCalls: { chain: "ethereum", calls: [{ to: pot, value: fee, data: out.data }] },
       });
       expect(run.stderr).toContain("It is deployed.");
       const kitchenBefore = await ethereum.publicClient.getBalance({

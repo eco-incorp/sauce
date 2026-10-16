@@ -1579,6 +1579,8 @@ describe("sauce intent publish, offline", () => {
     expect(out.chainId).toBe(1);
     const portal = ecoRoutesPortal("ethereum");
     const vault = routes.predictIntentVault(intent!.intent, { portal });
+    const transfer = routes.vaultTransferTxs(intent!.intent, vault)[0]!;
+    const publish = routes.publishTx(intent!.intent, { portal });
     expect(out.intents).toEqual([
       {
         intentHash: routes.hashIntent(intent!.intent).intentHash,
@@ -1589,19 +1591,36 @@ describe("sauce intent publish, offline", () => {
         transactions: [
           {
             what: expect.stringMatching(/^transfer 0x[0-9a-fA-F]{40} to the vault$/),
-            to: expect.stringMatching(/^0x/),
-            data: routes.vaultTransferTxs(intent!.intent, vault)[0]!.data,
+            to: getAddress(transfer.to),
+            data: transfer.data,
             value: "0",
+            sendTransaction: {
+              chainId: "0x1",
+              to: getAddress(transfer.to),
+              data: transfer.data,
+              value: "0x0",
+            },
           },
           {
             what: "publish",
             to: portal,
-            data: routes.publishTx(intent!.intent, { portal }).data,
+            data: publish.data,
             value: "0",
+            sendTransaction: { chainId: "0x1", to: portal, data: publish.data, value: "0x0" },
           },
         ],
       },
     ]);
+    // Both, in order, as one batch for a wallet that sends them together.
+    expect(out).toMatchObject({
+      sendCalls: {
+        chain: "ethereum",
+        calls: [
+          { to: getAddress(transfer.to), value: "0x0", data: transfer.data },
+          { to: portal, value: "0x0", data: publish.data },
+        ],
+      },
+    });
     expect(run.stderr).toMatch(/Each vault is the SDK's offline derivation for the Portal/);
     expect(run.stderr).not.toMatch(/Approvals are planned/);
 
@@ -1867,15 +1886,17 @@ describe("sauce pot", () => {
     const run = await sauce("pot", "--owner", OWNER, "--chain", "base", "--salt", "treasury");
     const out = JSON.parse(run.stdout) as Record<string, unknown>;
     const salt = potSalt("treasury");
+    const deploy = { to: v12KitchenAddress(), data: v12Kitchen.encodeDeployPot(OWNER, salt) };
     expect(out).toEqual({
       chainId: 8453,
       pot: v12PredictPot(OWNER, salt),
       owner: OWNER,
       salt,
       kitchen: v12KitchenAddress(),
-      to: v12KitchenAddress(),
-      data: v12Kitchen.encodeDeployPot(OWNER, salt),
+      ...deploy,
       value: "0",
+      sendTransaction: { chainId: "0x2105", ...deploy, value: "0x0" },
+      sendCalls: { chain: "base", calls: [{ ...deploy, value: "0x0" }] },
     });
     expect(run.stderr).toMatch(/Any account may send it/);
     const cast = await sauce("pot", "--owner", OWNER, "--chain", "base", "--format", "cast");

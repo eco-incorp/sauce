@@ -1280,6 +1280,26 @@ bare `sauce mcp` over stdio with a `HOME` of its own (wallet tools listed, `{ ge
 then a wallet), an agent-named `env`, a start flag and `--no-wallets`, and checks the HTTP server
 has no wallet tool. Every password and key in them is generated and thrown away.
 
+**Hand-offs to a wallet's own MCP server.** Every result that hands out unsigned EVM transactions
+carries, beside its own fields (amounts decimal), what a wallet's MCP server takes whole:
+`sendTransaction` on each transaction (`{ chainId, to, data, value, gas? }`, every amount a hex
+quantity: the eth_sendTransaction object, Phantom MCP's `evm_send` input) and `sendCalls` on the
+outermost part whose transactions are one chain's (`{ chain, calls: [{ to, value, data }] }`,
+Coinbase Wallet MCP's `send_calls` input, run as one atomic batch). `sdk/src/cli/handoff.ts`
+derives both from a result read the way `plannedTransactions` reads one, and is applied at the two
+output boundaries, never inside a command: the MCP registrar for every tool whose description
+carries `UNSIGNED`, and the CLI's `render()` for commands marked `unsigned` (and the intent verbs'
+printed transactions). So a command that rewrites a transaction's fields cannot leave a stale
+hand-off. Nothing sent (`hash`), simulated (`status`), not ready, or a Pot already deployed gets
+one. Solana transactions are left as they are: base64, the fee payer first and its signature the
+only empty one, is already Phantom's `solana_send` input. `mcp/test/wallet-mcp-schemas.ts` copies
+both servers' input schemas, cited by package version and commit (update it, then the hand-off,
+when either server changes); `handoff.e2e.test.ts` runs `sendCalls` through a contract wallet with
+Coinbase Smart Wallet's `executeBatch` shape (`sdk/test/evm/fixtures/BatchWallet.sol`), which owns
+the Pot one batch deploys and cooks on, and each `sendTransaction` as eth_sendTransaction, on the
+released stack. Phantom's server registers its tools by command path (`evm_send`, `solana_send`):
+the `send_*_transaction` names its documentation uses are not what it lists.
+
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
 and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command

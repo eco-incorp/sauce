@@ -428,7 +428,14 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       const tx = jsonOf(
         await sauce("tx", BUY, "--chain", "base", "--owner", KEYED.address, ...rpc(), ...buyArgs()),
       );
-      expect(Object.keys(tx)).toEqual(["chainId", "to", "data", "value"]);
+      expect(Object.keys(tx)).toEqual([
+        "chainId",
+        "to",
+        "data",
+        "value",
+        "sendTransaction",
+        "sendCalls",
+      ]);
       expect(tx).toMatchObject({ chainId: 8453, to: keyedPot });
       // Sent as printed, by any signer: here the test's own client.
       await base.send(base.owner, tx.to as Address, tx.data as Hex, BigInt(tx.value as string));
