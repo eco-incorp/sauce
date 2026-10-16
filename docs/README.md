@@ -1,83 +1,92 @@
 # Sauce documentation
 
-Sauce is a programmable-transaction runtime. A Sauce program compiles to bytecode that an on-chain
-engine executes atomically inside one transaction — every step lands or none does. `@eco-incorp/sauce`
-is the package you build those programs with. One install carries the compiler and the chains,
-tokens and protocols a program calls by name; you write the program, not a contract of your own.
+> Sauce lets you write a short program that does several things on a blockchain in one go: swap,
+> pay, lend, bridge. Either every step happens or none does. You write the program in a small, safe
+> slice of TypeScript, and Sauce turns it into one transaction on Ethereum, Base or Solana. There is
+> no smart contract to write, and no address to look up.
 
-A program runs on a **Pot**: an account on chain, a contract whose owner alone runs programs on it,
-which holds what those programs spend and makes every call they make. A **cook** is the transaction
-that runs one program on a Pot, every step or none. The **Kitchen** is the contract that creates
-Pots and sets the fee each cook pays. Read [Kitchen, Pot and cook](concepts/kitchen-pot-cook.md)
-first: every page below uses the three words.
+New here? Do the quick start. It takes about ten minutes, and trying a program costs nothing. When a
+word is new, the glossary puts it next to one you know.
 
-**Routes** are the layer above: a route packages a program as an Eco intent, so it can be executed
-on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
+The manual has four parts, and every page says at its top which part it belongs to:
 
-For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**. Every
-other chain is a preview chain, where a program compiles and simulates but the `sauce` command and
-the MCP server build no transaction; [Chains](reference/chains.md) has the policy, every chain, and
-how to request one.
+- **Tutorials** teach by doing. Follow one from start to finish.
+- **How-to guides** each get one task done, for when you know what you want.
+- **Concepts** explain how Sauce works, and why.
+- **Reference** lists the facts: every chain, protocol, token, function and option.
 
-Every page of this manual is listed below, once. The agent skills the package ships teach a coding
-agent the same facts, from the same sources: [Agent skills](guides/skills.md).
+Sauce sends transactions on **Ethereum**, **Base** and **Solana**. Every other chain it knows is a
+preview chain, where programs compile and simulate but nothing is sent.
 
-## Start
+## Tutorials
 
-- [Kitchen, Pot and cook](concepts/kitchen-pot-cook.md): the account a program runs as, the
-  transaction that runs it, and the contract that creates the account.
-- [Quick start](guides/quick-start.md): install the package and build a first intent, offline.
-- [Examples](examples/README.md): complete programs, typechecked and run on every release.
+- [Quick start](guides/quick-start.md): install, write a program that pays someone, try it for free,
+  then run it on Base.
+- [Solana quick start](guides/solana-quick-start.md): the same program on Solana, every account
+  worked out for you.
+- [Your first cross-chain intent](guides/first-intent.md): post a job on another chain, with a
+  reward for whoever does it.
 
-## Guides
+## How-to guides
+
+With the `sauce` command:
+
+- [The sauce command](guides/cli.md): every command and flag, wallets and their spending limits.
+- [The MCP server](guides/mcp.md): give a coding agent Sauce's tools.
+- [Agent skills](guides/skills.md): install the instructions that teach a coding agent to write and
+  run programs.
+
+Writing programs:
 
 - [Protocols and tokens](guides/protocols-and-tokens.md): call tokens and protocols by name inside a
   program, in SauceScript and in TypeScript.
-- [Create an intent](guides/intents.md): construct, fund, submit and follow an intent to another
-  chain.
-- [Nested intents](guides/nested-intents.md): open an intent inside another's body, from an amount
-  it measured.
-- [Compiling programs](guides/compiling.md): compile a standalone program and pass it runtime
-  arguments.
-- [Testing programs](guides/testing.md): run programs on a forked chain from `node:test`, recorded
-  once and replayed with no RPC.
-- [A distributed swap](guides/distributed-swap.md): one limit order spread over several
-  price-limited pools.
+- [A distributed swap](guides/distributed-swap.md): one limit order spread over several pools.
 - [A distributed swap on Solana](guides/solana-distributed-swap.md): the same limit order over
-  the pools of every Solana venue whose swap stops at a price limit, each pool's accounts from
-  `sauce pools`.
-- [Actions](guides/actions.md): write protocol actions as JSON, then run them or make an intent.
-- [Builders](guides/builders-and-actions.md): generate programs from structured data.
-- [Solana](guides/solana.md): plan accounts, stage code and execute on Solana.
-- [Verification](guides/verification.md): check what a settlement payload contains.
-- [The sauce command](guides/cli.md): compile, simulate, run and publish from a terminal, with agent
-  wallets and their policies.
-- [The MCP server](guides/mcp.md): give a coding agent Sauce's tools.
-- [Agent skills](guides/skills.md): install the skills that teach a coding agent to write and run
-  programs.
+  Solana's pools.
+- [Solana](guides/solana.md): accounts, Token-2022, Solana's pools, large programs and the two ways
+  to run a program.
+- [Actions](guides/actions.md): write the steps as JSON instead of code, then run them or make an
+  intent.
+
+From your application, in TypeScript:
+
+- [Compiling programs](guides/compiling.md): compile a program and pass it arguments.
+- [Create an intent](guides/intents.md): every option of an intent, and how to fund, publish and
+  follow it.
+- [Nested intents](guides/nested-intents.md): an intent whose program posts the next one, from an
+  amount it measured.
+- [Builders](guides/builders-and-actions.md): generate programs from data your application already
+  has.
+- [Testing programs](guides/testing.md): run your programs on a local copy of a chain from your
+  tests, recorded once and replayed offline.
+- [Verification](guides/verification.md): check that a settlement someone hands you is what it
+  claims to be.
 
 ## Concepts
 
-- [Architecture](concepts/architecture.md): how the package, the compiler and the on-chain engine
-  divide the work.
-- [Writing SauceScript](concepts/saucescript.md): what runs on chain, what the compiler accepts,
-  and how values reach a program.
+- [Glossary](concepts/glossary.md): each Sauce word next to the one you already know.
+- [Kitchen, Pot and cook](concepts/kitchen-pot-cook.md): your own account on chain, the transaction
+  that runs a program on it, and who may do what.
+- [Architecture](concepts/architecture.md): what the package, the compiler and the on-chain engine
+  each do.
+- [Writing SauceScript](concepts/saucescript.md): the language, what the compiler accepts, and how
+  values reach a program.
 
 ## Reference
 
-- [Chains](reference/chains.md): every chain, whether the release supports it, its ids, its intent
-  deployment, its tokens and every protocol on it.
-- [Deployments](reference/deployments.md): the Sauce release, its versions and the addresses of its
-  contracts and programs, the same on every chain.
+- [Examples](examples/README.md): complete programs, checked and run on every release.
+- [Chains](reference/chains.md): every chain, whether Sauce sends transactions there, and its tokens
+  and protocols.
+- [Deployments](reference/deployments.md): the addresses of Sauce's own contracts and programs,
+  the same on every chain.
 - [Protocols](reference/protocols.md): every protocol by category, how to choose between them, and
-  each one's deployments, names in a program and ABI.
+  how a program names each one.
 - [Tokens](reference/tokens.md): every chain's tokens and tokenized stocks, and the token functions.
-- [SauceScript reference](reference/saucescript.md): every type, statement, builtin and limit, per
-  target.
+- [SauceScript reference](reference/saucescript.md): every type, statement, builtin and limit.
 - [API entry points](api/README.md): every published import and what it contains.
-- [Routes](api/routes.md): chain entry points, intent options, built intents, nesting.
+- [Routes](api/routes.md): the TypeScript intent builder, its options and what it returns.
 - [Contracts and tokens](api/contracts.md): every protocol namespace and token, in a program and in
   TypeScript.
-- [Compiler](api/compiler.md): `compile()` options and result, and the compact argument codec.
-- [`@sauce/router`](api/router.md): the SauceScript swap library, one function per venue.
+- [Compiler](api/compiler.md): `compile()`'s options and result, and the compact argument format.
+- [`@sauce/router`](api/router.md): the swap library, one function per kind of pool.
 - [Coverage](api/coverage.md): how the registries differ, and what each answers.

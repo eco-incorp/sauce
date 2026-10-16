@@ -1,6 +1,12 @@
 # Solana programs and execution
 
-[Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
+**How-to guide** · [Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
+
+> On Solana, a transaction must list every account it will touch before it starts: every wallet,
+> every token balance, every program. Sauce works that list out for the usual things, such as paying
+> and reading tokens. This page is for everything else: calling other Solana programs, Token-2022
+> tokens, Solana's pools, programs too big for one transaction, and running a program without a Pot.
+> New to Solana? Start with the [Solana quick start](solana-quick-start.md).
 
 Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 

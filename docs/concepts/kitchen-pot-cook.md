@@ -1,11 +1,13 @@
 # Kitchen, Pot and cook
 
-[Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Architecture](architecture.md)
+**Concept** · [Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [Architecture](architecture.md)
 
-A Sauce program runs on chain through three things, named for a kitchen: the **Kitchen** makes
-**Pots**, you put what a program needs into your Pot, and a **cook** runs the program in it. Every
-guide in this manual uses the three words. This page says what each one does, and who may do what
-with it.
+> Your program is a recipe. Your **Pot** is your own kitchen counter on the blockchain: it holds your
+> ingredients (tokens) and follows your recipe step by step. A **cook** is one go at the recipe, and
+> if any step fails, nothing happens at all, as if you never started. The **Kitchen** is the shop
+> that builds the counters and charges a small fee for each go.
+
+This page says what each of the three does, and who may do what with it.
 
 |             | What it is                                                                      | What it does for you                                                                        |
 | ----------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -20,13 +22,6 @@ released one.
 
 Up to [On Solana](#on-solana), this page describes an EVM chain. Solana has the same three roles,
 and that section gives its details.
-
-The SDK's convenience helpers use **private Pots**. Kitchen 1.2.0 also exposes
-`deployPot(owner, salt, true)` for a private Pot with an immutable Router, and
-`deploySharedPot(salt)` for an ownerless **Shared Pot** whose Router is always immutable. Anyone
-can cook on an ownerless Shared Pot and spend its funds; fund and consume it within one transaction.
-Use `v12KitchenAbi` for these variants. The lifecycle and permissions below describe the default
-private Pot. An intent's executor-owned Pot is private even though several intents share it.
 
 ## A Pot's life
 
@@ -166,6 +161,15 @@ The three roles are the same; Solana's account model changes the details.
   signers its transaction gives it.
 
 The [Solana guide](../guides/solana.md) covers accounts, staging and both ways to cook.
+
+## Other kinds of Pot
+
+The SDK's convenience helpers use **private Pots**. Kitchen 1.2.0 also exposes
+`deployPot(owner, salt, true)` for a private Pot with an immutable Router, and
+`deploySharedPot(salt)` for an ownerless **Shared Pot** whose Router is always immutable. Anyone
+can cook on an ownerless Shared Pot and spend its funds; fund and consume it within one transaction.
+Use `v12KitchenAbi` for these variants. The lifecycle and permissions above describe the default
+private Pot. An intent's executor-owned Pot is private even though several intents share it.
 
 ## In code
 

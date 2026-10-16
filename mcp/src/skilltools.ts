@@ -39,9 +39,16 @@ export const DEV_TOPICS: ReadonlyArray<{
 }> = [
   {
     topic: "start",
-    about: "install the package and build a first intent from TypeScript",
-    keywords: ["start", "install", "quick", "first", "hello", "begin", "typescript"],
-    files: ["guides/quick-start.md", "examples/first-intent.ts"],
+    about:
+      "install the package, run a first program on Base and on Solana, and build a first intent; the glossary",
+    keywords: ["start", "install", "quick", "first", "hello", "begin", "typescript", "glossary"],
+    files: [
+      "guides/quick-start.md",
+      "guides/solana-quick-start.md",
+      "guides/first-intent.md",
+      "concepts/glossary.md",
+      "examples/first-intent.ts",
+    ],
   },
   {
     topic: "compile",
@@ -82,6 +89,7 @@ export const DEV_TOPICS: ReadonlyArray<{
       "api/routes.md",
       "examples/cross-chain-intent.ts",
       "examples/cross-chain-intent.sauce.ts",
+      "examples/ethereum-to-solana.ts",
     ],
   },
   {
