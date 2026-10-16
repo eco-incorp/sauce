@@ -320,10 +320,11 @@ writes the same bytes itself too, because a call into `…Data` would cost it ab
 | OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                   | `openbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`, `openbookV2LotsData`     |
 | Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                   | `manifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
 
-The forms at a price take:
+The forms at a price take, the eight concentrated-liquidity ones with a `stop` last (Phoenix's
+takes none):
 
 ```text
-orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account): Uint256
+orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account, stop): Uint256
 ```
 
 - **`slot`** is the pool's accounts, the System program for any the venue does not take:
@@ -367,6 +368,13 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
   recipient balance is held to it.
 - **`recipient`** is the token account the output lands in; Crema and Phoenix pay only into the
   authority's own.
+- **`stop`** keeps a pool's swap within what the transaction can pay for. Crossing an initialized
+  tick costs a pool's program compute units (about 7,000 on Orca, 9,000 on Raydium, 13,000 to
+  16,000 on the others), and one Solana transaction has 1,400,000: a walk long enough fails the
+  whole transaction. A program written with the venue namespaces (`Orca.Whirlpool.swap(…)`) gets
+  each swap's stop from the `sauce` command, which works it out from the pool's tick arrays as it
+  builds the transaction (see [Stops](#stops)). A program calling these functions itself passes `0`,
+  none.
 
 Each venue's function requires the slot's program to be its venue's and the pool's owner before it
 reads the pool, because the authority signs the swap. These are the caller's accounts, so each
@@ -422,8 +430,43 @@ function main(
 ): Uint256 {
   const slot = [program, pool, config, vaultA, vaultB, extra, ticks0, ticks1, ticks2];
   const trader = [authority, source, payMint, buyMint, tokenProgram, token2022, memo];
-  return orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, output);
+  return orcaWhirlpool(slot, trader, amountIn, priceLimit, minOut, output, 0);
 }
+```
+
+### Stops
+
+A swap at a price on a concentrated-liquidity pool walks from one initialized tick to the next until
+its price reaches its limit or its input runs out, and the pool's program charges compute units for
+each tick it crosses. A deep pool with a generous limit can cross a hundred or more, and the
+transaction then runs out of units and fails, every other pool's trade with it. The router cannot
+read how many units are left, so the `sauce` command decides each pool's walk ahead of time:
+
+1. It reads each pool's tick arrays, the ones its slot passes, and counts the initialized ticks
+   between the pool's price and its limit.
+2. It prices that walk from a table of each venue's cost, measured on the venues' own programs: a
+   fixed amount for the swap and an amount for each tick crossed, with 15% kept back for prices that
+   move before the transaction lands.
+3. It gives the transaction's units to the pools deepest first, by their liquidity at their price.
+   Each walks its whole way while the units last. The pool that the rest no longer covers is held a
+   tick short of the first initialized tick it cannot pay to cross; a pool left too little for its
+   swap at all is skipped.
+
+The result is the swap's `stop`: `0` for none, `1` to skip, else the tick to hold the swap a tick
+inside of. A stop further than where the router's own window ends (on Raydium's code and Crema, the
+start of the furthest tick array) takes the swap on into that array, to its last initialized tick,
+which the router checks with one read before it trusts it.
+
+`sauce tx` takes the stops from the cost table. `sauce simulate` and `sauce run` check them in a
+simulation first: a cook that succeeds with a pool held is worked out again against the units the
+simulation measured; one that still runs out is worked out again with less, twice, then refused.
+Each prints a line for a pool a stop held or skipped, and gives every pool's stop in `computeStops`.
+Here the SpaceX order of the distributed swap is simulated at 1.1 times the dearest pool's price:
+Raydium's pool, the deepest, walks its whole way, and the other two share what is left.
+
+```text
+Byreal.CLMM.pool(USDC, SPCX_US, 1000) stops at 155.05 USDC per SPCX_US, short of its limit: reaching it would cross 22 initialized ticks, about 468,740 compute units, past its share of 377,890
+Pancakeswap.CLMM.pool(USDC, SPCX_US, 800) is skipped: the deeper pools leave too few compute units for its swap (about 100,050 to its limit, 2 initialized ticks)
 ```
 
 ### The instruction alone

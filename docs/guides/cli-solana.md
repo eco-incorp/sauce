@@ -232,6 +232,14 @@ under the lamport changes with what it pays for, then what the owner pays in all
 data) is refused, as it cannot pay. LiteSVM is installed the first time it is needed
 ([Runtime packages](cli.md#runtime-packages)).
 
+A program that swaps at a price through the venue namespaces (`Orca.Whirlpool.swap(…)`) gets a stop
+for each swap, so that no pool walks the cook out of compute units: `simulate`, `run` and `tx` read
+each pool's tick arrays and work out how far each may walk, the deepest pool first
+([Stops](../api/router.md#stops)). Each prints a line for a pool it held short of its limit or
+skipped, and `--json` gives every pool's in `computeStops`. `tx` takes them from a table of each
+venue's costs; `simulate` and `run` check them in a simulation first, and tighten them if the cook
+would still run out.
+
 ### Running on Solana
 
 `run` signs with `--wallet` or `--keypair`, confirms by polling the endpoint (no websocket to
