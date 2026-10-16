@@ -81,6 +81,15 @@ export interface SauceSvmSpacingVenueSource extends SauceSvmVenueSource {
 }
 
 /**
+ * A whirlpool venue, whose pools are found by tick spacing: `pool(tokenA, tokenB, tickSpacing)`,
+ * written as a swap's pool, is the pool on the spacing's static fee tier, and an adaptive-fee
+ * tier's pool takes the tier's index after the spacing. Where there is none, the swap returns 0.
+ */
+export interface SauceSvmTierVenueSource extends SauceSvmVenueSource {
+  pool(tokenA: bigint, tokenB: bigint, tickSpacing: bigint, feeTierIndex?: bigint): bigint;
+}
+
+/**
  * A Solana venue whose pools are found by fee, in millionths (400 is 0.04%), as an EVM pool's:
  * `pool(tokenA, tokenB, fee)`, written as a swap's pool, with the tick spacing after the fee
  * where the venue keeps two configs at it. Where there is none, the swap returns 0.
@@ -2458,11 +2467,11 @@ export interface StabbleSvmVenuesSource {
 }
 
 export interface OrcaSvmVenuesSource {
-  readonly Whirlpool: SauceSvmSpacingVenueSource;
+  readonly Whirlpool: SauceSvmTierVenueSource;
 }
 
 export interface CropperSvmVenuesSource {
-  readonly Whirlpool: SauceSvmSpacingVenueSource;
+  readonly Whirlpool: SauceSvmTierVenueSource;
 }
 
 export interface DefitunaSvmVenuesSource {

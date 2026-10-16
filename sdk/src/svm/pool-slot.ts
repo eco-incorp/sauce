@@ -13,7 +13,11 @@
  *     at 904, bit 512 the array starting at tick 0) marks, nearest its price that way in walk order,
  *     then the other way, then arrays near its price that exist with none.
  *   - A whirlpool's, DefiTuna's and Crema's tick arrays are the SDK venue adapters' windows for the
- *     direction; a whirlpool's `extra` is its oracle, Crema's its tick-array map.
+ *     direction; a whirlpool's `extra` is its oracle, Crema's its tick-array map. The adapters read
+ *     a pool for an off-chain quote and refuse what they cannot quote, an adaptive fee tier or a
+ *     Token-2022 mint, though the accounts depend on neither: they are shown a whirlpool's fee tier
+ *     as its tick spacing, and Orca's and DefiTuna's mints, whose swaps take Token-2022's, as
+ *     unread (which they take as SPL Token's).
  *   - A Phoenix market's slot is the same paying either token: its log authority as `config`, its
  *     base and quote vaults, and the System program in the four places it takes nothing.
  *   - A Meteora DLMM pool's slot has its program's event authority as `config`, its reserves of
@@ -237,11 +241,21 @@ export async function svmClmmSlot(
   }
   const window = (windows: { aToB: { tickArrays: Address[] }; bToA: { tickArrays: Address[] } }) =>
     (paysLower ? windows.aToB : windows.bToA).tickArrays as unknown as [Address, Address, Address];
+  const { mintA, mintB } =
+    SVM_CLMM_LAYOUT[venue.layout as Exclude<SvmPoolLayout, "phoenix" | "dlmm">];
+  const unread =
+    program === ORCA_WHIRLPOOL_PROGRAM_ID || program === DEFITUNA_PROGRAM_ID
+      ? [keyAt(data, mintA), keyAt(data, mintB)]
+      : [];
+  const shown = new Uint8Array(data);
+  if (venue.layout === "whirlpool") shown.set(data.subarray(41, 43), 43); // fee tier := tick spacing
+  const adapted: AccountLoader = async (at) =>
+    at === pool ? shown : unread.includes(at) ? null : load(at);
   if (venue.layout === "whirlpool") {
     const cfg =
       program === CROPPER_PROGRAM_ID
-        ? await fetchCropperConfig(load, pool)
-        : await fetchOrcaWhirlpoolConfig(load, pool);
+        ? await fetchCropperConfig(adapted, pool)
+        : await fetchOrcaWhirlpoolConfig(adapted, pool);
     return {
       program,
       pool,
@@ -253,7 +267,7 @@ export async function svmClmmSlot(
     };
   }
   if (venue.layout === "defituna") {
-    const cfg = await fetchDefiTunaPoolConfig(load, pool);
+    const cfg = await fetchDefiTunaPoolConfig(adapted, pool);
     return {
       program,
       pool,

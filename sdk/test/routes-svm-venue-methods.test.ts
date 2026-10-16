@@ -179,6 +179,14 @@ describe("Solana's venue namespaces", () => {
     expect(spaced.derivedAccounts).toMatchObject({
       raydiumClmm100x1Account: "slot:Raydium.CLMM(USDC,WSOL,100,1):USDC.pool",
     });
+    // A tick spacing two fee tiers have takes the fee tier's index after it.
+    const tiered = compile(
+      "function main(): Uint256 {\n" +
+        "  return Orca.Whirlpool.swap(Orca.Whirlpool.pool(SPCX_US, USDC, 64, 1025), USDC, SPCX_US, 5, 10, 0);\n}\n",
+    );
+    expect(tiered.derivedAccounts).toMatchObject({
+      orcaWhirlpool64x1025Account: "slot:Orca.Whirlpool(SPCX_US,USDC,64,1025):USDC.pool",
+    });
   });
 
   it("writes a loop over keys out once per key, each key's pool its own slot", () => {
@@ -259,7 +267,15 @@ describe("Solana's venue namespaces", () => {
         ),
       ).toThrow("Phoenix's markets are not found by key");
       expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL)")).toThrow(
-        "`Orca.Whirlpool.pool(…)` takes 3 arguments (tokenA, tokenB, tickSpacing), got 2.",
+        "`Orca.Whirlpool.pool(…)` takes 3 or 4 arguments (tokenA, tokenB, tickSpacing, and the " +
+          "feeTierIndex of an adaptive-fee tier), got 2.",
+      );
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  return Defituna.Fusion.swap(Defituna.Fusion.pool(USDC, WSOL, 4, 4), USDC, WSOL, 5, 10, 1);\n}\n",
+        ),
+      ).toThrow(
+        "`Defituna.Fusion.pool(…)` takes 3 arguments (tokenA, tokenB, tickSpacing), got 4.",
       );
     });
 
@@ -268,8 +284,13 @@ describe("Solana's venue namespaces", () => {
         "its tickSpacing must be known when the program compiles",
       );
       expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 0)")).toThrow(
-        "Orca.Whirlpool's key is a tick spacing, from 1 to 65535, and 0 is not one",
+        "Orca.Whirlpool's key is a pool's tick spacing, and it has no fee tier at 0",
       );
+      expect(() =>
+        compile(
+          "function main(): Uint256 {\n  return Defituna.Fusion.swap(Defituna.Fusion.pool(USDC, WSOL, 0), USDC, WSOL, 5, 10, 1);\n}\n",
+        ),
+      ).toThrow("Defituna.Fusion's key is a tick spacing, from 1 to 65535, and 0 is not one");
       expect(() =>
         compile(
           "function main(): Uint256 {\n  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 123), USDC, WSOL, 5, 10, 1);\n}\n",
@@ -282,8 +303,11 @@ describe("Solana's venue namespaces", () => {
           "function main(): Uint256 {\n  return Raydium.CLMM.swap(Raydium.CLMM.pool(USDC, WSOL, 100, 60), USDC, WSOL, 5, 10, 1);\n}\n",
         ),
       ).toThrow("Raydium.CLMM's configs at fee 100 have tick spacing 10 and 1, not 60");
-      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 4, 4)")).toThrow(
-        "`Orca.Whirlpool.pool(…)` takes 3 arguments (tokenA, tokenB, tickSpacing), got 4.",
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 4, 5)")).toThrow(
+        "Orca.Whirlpool's fee tiers at tick spacing 4 are 4 and 1028, not 5",
+      );
+      expect(() => swapAt("Orca.Whirlpool.pool(USDC, WSOL, 4, k)")).toThrow(
+        "its feeTierIndex must be known when the program compiles",
       );
     });
 

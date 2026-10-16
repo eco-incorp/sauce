@@ -295,21 +295,27 @@ check(
   example.entryParams.map((param) => param.name).join() === "to,amountIn,priceLimit,minOut",
   "the example's arguments are its own; the pool and the accounts are none of them",
 );
-// Each venue that finds pools by key has its `pool`, the key the skill says: a tick spacing or a fee.
+// Each venue that finds pools by key has its `pool`, the key the skill says: a tick spacing or a
+// fee, with a whirlpool's fee tier after its spacing and a config's spacing after its fee.
 for (const venue of routes.sourceGlobals("solana").venues) {
   const pool = venue.methods.find((method) => method.startsWith("pool("));
   const by = ["Phoenix.Market", "Meteora.DLMM"].includes(venue.namespace)
     ? undefined
     : /^(Raydium|Pancakeswap|Byreal|Stabble)\./.test(venue.namespace)
       ? "fee"
-      : "tickSpacing";
+      : /\.Whirlpool$/.test(venue.namespace)
+        ? "tickSpacing and feeTierIndex"
+        : "tickSpacing";
   check(
     by === undefined
       ? pool === undefined
       : pool ===
-          (by === "fee"
-            ? "pool(tokenA: Address, tokenB: Address, fee: Uint256, tickSpacing?: Uint256): Address"
-            : "pool(tokenA: Address, tokenB: Address, tickSpacing: Uint256): Address"),
+          {
+            fee: "pool(tokenA: Address, tokenB: Address, fee: Uint256, tickSpacing?: Uint256): Address",
+            "tickSpacing and feeTierIndex":
+              "pool(tokenA: Address, tokenB: Address, tickSpacing: Uint256, feeTierIndex?: Uint256): Address",
+            tickSpacing: "pool(tokenA: Address, tokenB: Address, tickSpacing: Uint256): Address",
+          }[by],
     `${venue.namespace} finds its pools ${by === undefined ? "by address" : `by ${by}`}`,
   );
 }

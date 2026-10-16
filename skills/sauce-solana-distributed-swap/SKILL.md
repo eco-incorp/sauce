@@ -1,6 +1,6 @@
 ---
 name: sauce-solana-distributed-swap
-description: A Sauce program for Solana that spreads one exact-input swap over several price-limited pools as a limit order, never paying more than a price limit for any unit, fees included, and never stranding input. A program for one request (tokens by symbol, venues by namespace, pools found by key with Orca.Whirlpool.pool(USDC, WSOL, spacing) and Raydium.CLMM.pool(USDC, WSOL, fee) in loops over the keys, as an EVM program loops over fee tiers; a key with no pool skipped), every account derived as the cook is built, the venues whose swap stops at a price limit (Raydium CLMM, PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix) and those left out, priceLimit, minTokens and maxAvgPrice, choosing keys with sauce pools, what fits in one cook, and running it with --args alone. Use when asked for a distributed, split or multi-venue swap on Solana, "swap across Raydium and Orca", "buy SOL up to a price", a limit order, or one trade routed through several Solana pools.
+description: A Sauce program for Solana that spreads one exact-input swap over several price-limited pools as a limit order, never paying more than a price limit for any unit, fees included, and never stranding input. A program for one request (tokens by symbol, venues by namespace, pools found by key, Raydium.CLMM.pool(USDC, SPCX_US, fee), in loops over the keys as an EVM program loops over fee tiers; a key with no pool skipped), its example buying SpaceX shares (SPCX_US, Token-2022) with USDC, every account derived as the cook is built, the venues whose swap stops at a price limit (Raydium CLMM and its forks, Orca, Cropper, DefiTuna, Crema, Phoenix) and those left out, priceLimit, minTokens and maxAvgPrice, choosing keys with sauce pools, what fits in one cook, and running it with --args alone. Use when asked for a distributed, split or multi-venue swap on Solana, "swap across Raydium and Orca", "buy SOL up to a price", "buy SpaceX stock with USDC", a limit order, or one trade routed through several Solana pools.
 ---
 
 # A distributed swap on Solana
@@ -23,18 +23,22 @@ every account a pool takes is read from it as the cook is built, and what fits i
 
 ## Core model
 
-- **A program for one request.** It names its tokens by symbol (`USDC`, `WSOL`), its venues by
-  namespace (`Orca.Whirlpool`, `Raydium.CLMM`) and its pools by key, written in; the amounts and
-  the recipient are `main`'s arguments, passed with `--args`. Another pair, venue or key is an edit
-  to the program.
-- **Pools are found by key, as on an EVM chain.** `Orca.Whirlpool.pool(USDC, WSOL, 4)` is the pool
-  Orca's program keeps for the pair at tick spacing 4, as
+- **A program for one request.** It names its tokens by symbol (`USDC`, `SPCX_US`), its venues by
+  namespace (`Raydium.CLMM`, `Byreal.CLMM`) and its pools by key, written in; the amounts and the
+  recipient are `main`'s arguments, passed with `--args`. Another pair, venue or key is an edit to
+  the program.
+- **Pools are found by key, as on an EVM chain.** `Raydium.CLMM.pool(USDC, SPCX_US, 2500)` is the
+  pool Raydium's program keeps for the pair at fee 0.25%, as
   `UniswapV3.Factory.getPool(USDC, WETH, 500)` is Uniswap's at fee 500. The key is each venue's
   own: a tick spacing for Orca, Cropper, DefiTuna and Crema, a fee in millionths for Raydium CLMM,
-  PancakeSwap CLMM, Byreal and Stabble. A loop over keys written out (`for (const spacing of [4, 1])`) finds one pool per key. Where a venue
-  keeps two configs at one fee (Raydium's and PancakeSwap's 0.01% and 0.05%), the tick spacing
-  follows the fee (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`); the fee alone is refused for a pair
-  with a pool under both, naming each.
+  PancakeSwap CLMM, Byreal and Stabble. A loop over keys written out
+  (`for (const fee of [2500, 1800])`) finds one pool per key. Where a venue keeps two configs at
+  one fee (Raydium's and PancakeSwap's 0.01% and 0.05%), the tick spacing follows the fee
+  (`Raydium.CLMM.pool(USDC, WSOL, 100, 1)`); the fee alone is refused for a pair with a pool under
+  both, naming each. At Orca and Cropper the spacing alone names the pool on the static fee tier,
+  and a pool on an adaptive-fee tier is named by the tier's index after the spacing
+  (`Orca.Whirlpool.pool(USDC, SPCX_US, 64, 1025)`): an adaptive-fee Orca pool, like a
+  Raydium-code pool with a dynamic fee, takes no part at a price.
 - **Every account is derived.** A Solana transaction lists every account it touches before it
   runs, so the key must be known when the program compiles, and compiling adds the accounts a swap
   at each pool takes to `main`. The command reads each pool from the cluster as it builds the cook,
@@ -119,18 +123,18 @@ its pool takes and how to list a pair's pools are in [references/venues.md](refe
 ## The program
 
 [examples/solana-distributed-swap.sauce.ts](examples/solana-distributed-swap.sauce.ts) is one
-complete implementation of those rules, buying SOL with USDC at the four deepest pools of the pair:
-Orca's at tick spacing 4 and 1, Raydium's at fee 0.04% and 0.02%; its header gives every input with
-its units and how to run it. Each venue's byte layout,
+complete implementation of those rules, buying SpaceX's tokenized share, `SPCX_US` (a Token-2022
+mint), with USDC at the pair's pools that trade at a price: Raydium's at fee 0.25% and 0.18%, then
+Byreal's at 0.1%; its header gives every input with its units and how to run it. Each venue's byte layout,
 instruction format and account order is `@sauce/router`'s, which every compile the package makes
 resolves with no option. Its code:
 
 ```sauce chain=solana
-// Each pool is found by its key: `Orca.Whirlpool.pool(USDC, WSOL, 4)` is the pool Orca's program
-// keeps for the pair at tick spacing 4, and a loop over keys finds one pool for each. Each swap is
-// `@sauce/router`'s at that venue: it returns 0 having moved nothing for a key with no pool, a spent
-// budget, an empty or past-limit pool and one whose fee is not one rate, else offers the pool the
-// amount it is given up to its own fee-adjusted limit, and returns what arrived in the Pot.
+// Each pool is found by its key: `Raydium.CLMM.pool(USDC, SPCX_US, 2500)` is the pool Raydium's
+// program keeps for the pair at fee 0.25%, and a loop over keys finds one pool for each. Each swap
+// is `@sauce/router`'s at that venue: it returns 0 having moved nothing for a key with no pool, a
+// spent budget, an empty or past-limit pool and one whose fee is not one rate, else offers the pool
+// the amount it is given up to its own fee-adjusted limit, and returns what arrived in the Pot.
 function main(
   budget: Uint256,
   priceLimit: Uint256,
@@ -143,33 +147,31 @@ function main(
 
   // Each pool in turn, offered what is left of the budget.
   let bought = 0;
-  for (const spacing of [4, 1]) {
-    bought += Orca.Whirlpool.swap(
-      Orca.Whirlpool.pool(USDC, WSOL, spacing),
-      USDC,
-      WSOL,
-      self.USDC - kept,
-      priceLimit,
-      0,
-    );
-  }
-  for (const fee of [400, 200]) {
+  for (const fee of [2500, 1800]) {
     bought += Raydium.CLMM.swap(
-      Raydium.CLMM.pool(USDC, WSOL, fee),
+      Raydium.CLMM.pool(USDC, SPCX_US, fee),
       USDC,
-      WSOL,
+      SPCX_US,
       self.USDC - kept,
       priceLimit,
       0,
     );
   }
+  bought += Byreal.CLMM.swap(
+    Byreal.CLMM.pool(USDC, SPCX_US, 1000),
+    USDC,
+    SPCX_US,
+    self.USDC - kept,
+    priceLimit,
+    0,
+  );
 
   const unspent = self.USDC - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
-  // The SOL bought and what is left of the budget both go to the recipient.
-  if (bought > 0) WSOL.transfer(recipient, bought);
+  // The SPCX_US bought and what is left of the budget both go to the recipient.
+  if (bought > 0) SPCX_US.transfer(recipient, bought);
   if (unspent > 0) USDC.transfer(recipient, unspent);
   return { spent, bought, unspent };
 }
@@ -182,9 +184,11 @@ function main(
   how it is derived (`sauce compile --json` lists them): each key's nine, read from the pool it
   finds for the token paid (its tick arrays depend on the direction); the Pot, its accounts for
   the two tokens and the two mints; the token programs and the memo program; and the recipient's
-  account for the token bought. The command fills every one, so it is given none.
+  accounts. The command fills every one, so it is given none. SPCX_US's accounts are Token-2022's,
+  which the command derives from the mint's program; the swaps and the transfer of a Token-2022
+  token take the mint too.
 - **The paying side.** Through the Kitchen the program acts as the Pot: the budget is in the Pot's
-  USDC account, what is bought lands in its WSOL account, and `self.USDC` is the Pot's USDC
+  USDC account, what is bought lands in its SPCX_US account, and `self.USDC` is the Pot's USDC
   balance. `kept` is whatever else of it the Pot holds, so only the budget is ever offered.
 - **Each pool** is offered all of the budget still unspent, `self.USDC - kept`, with a floor of
   `0`: the totals are checked once, after the pools.
@@ -198,54 +202,53 @@ function main(
   upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it; the
   root is rounded down, so the pool stops a little sooner, never later.
 - **Settle.** A `require` reverts the whole cook, every swap included. What was bought goes from
-  the Pot to the recipient's WSOL account, and what is left of the budget to the recipient's USDC
+  the Pot to the recipient's SPCX_US account, and what is left of the budget to the recipient's USDC
   account; given the Pot's own address (`sauce pot --chain solana --owner <owner>` prints it), both
   stay in the Pot. Each transfer is checked: the account it pays must be the recipient's own.
   `main` returns `{ spent, bought, unspent }`, which `sauce simulate` prints by name.
 
 **Other pools.** Each venue is one loop over its keys, or one call with its key written in. A venue
-is one more loop of the same shape after the others, its namespace and keys in Raydium's place:
-`Pancakeswap.CLMM.swap(Pancakeswap.CLMM.pool(USDC, WSOL, fee), …)` in `for (const fee of [300])`
-adds PancakeSwap's 0.03% pool. A key is one more in its list. Another pair is the symbols in every
-call and in `self.USDC`. The keys here are chosen for SOL/USDC: `sauce pools` gives another pair's.
-Keep to what fits in one cook (below).
+is one more loop or call of the same shape after the others, its namespace and keys in Raydium's or
+Byreal's place, and a key is one more in its list. Another pair is the symbols in every call and in
+`self.USDC`. The keys here are chosen for SPCX_US/USDC: `sauce pools` gives another pair's. Keep to
+what fits in one cook (below).
 
 ## Inputs and units
 
 `main`'s arguments, in order: `budget`, `priceLimit`, `minTokens`, `maxAvgPrice` and `recipient`,
 every amount in a token's base units. `recipient` is a wallet, paid what was bought into its own
-WSOL account and what is left of the budget into its own USDC account, or the Pot's own address to
-keep both in the Pot.
+SPCX_US account and what is left of the budget into its own USDC account, or the Pot's own address
+to keep both in the Pot.
 
-On Solana USDC has 6 decimals and SOL 9, so `1000000000` is 1,000 USDC and also 1 SOL. A pool
-holds SOL wrapped, the mint the registry names `WSOL` (`sauce pools` takes `SOL` for it too).
-Selling one token for another is buying the other with it: a program selling SOL for USDC pays
-WSOL and buys USDC.
+On Solana USDC and SPCX_US both have 6 decimals, so `1000000000` is 1,000 USDC and also 1,000
+SPCX_US; SOL has 9, and a pool holds it wrapped, the mint the registry names `WSOL` (`sauce pools`
+takes `SOL` for it too). Selling one token for another is buying the other with it: a program
+selling SPCX_US for USDC pays SPCX_US and buys USDC.
 
 **`priceLimit`** is payToken base units per buyToken base unit, times 1e18:
 `priceLimit = price × 10^(18 + payDecimals − buyDecimals)`, with `price` in whole payToken per
-whole buyToken. Paying USDC (6) for SOL (9), that is the price × 10^15.
+whole buyToken. Paying USDC (6) for SPCX_US (6), that is the price × 10^18.
 
-| Trade                                   | Price                    | `priceLimit`            |
-| --------------------------------------- | ------------------------ | ----------------------- |
-| Buy SOL with USDC                       | at most 120 USDC         | **120000000000000000**  |
-| Buy SOL with USDC, at a floor           | at least 0.0084 SOL each | **119047619047619047**  |
-| Buy USDC with SOL (sell SOL at a floor) | at least 118 USDC        | **8474576271186440677** |
+| Trade                                           | Price                        | `priceLimit`              |
+| ----------------------------------------------- | ---------------------------- | ------------------------- |
+| Buy SPCX_US with USDC                           | at most 150 USDC             | **150000000000000000000** |
+| Buy SPCX_US with USDC, at a floor               | at least 0.0068 SPCX_US each | **147058823529411764705** |
+| Buy USDC with SPCX_US (sell SPCX_US at a floor) | at least 140 USDC            | **7142857142857142**      |
 
 **A floor is a ceiling turned over.** `priceLimit` is always what one unit bought may cost, in the
-token paid. A limit given as the least bought per unit paid ("never below 0.0084 SOL per USDC") is
-its inverse, `priceLimit = 10^(18 + payDecimals − buyDecimals) ÷ floor`, rounded down so no unit
-fills below the floor: paying USDC for SOL at 0.0084, `10^15 ÷ 0.0084`, 119.047619 USDC per SOL.
-The third row is the same: 1 SOL for at least 118 USDC is at most `1 ÷ 118` SOL per USDC, so
-`10^9 × 1e18 ÷ (118 × 10^6)`, rounded down.
+token paid. A limit given as the least bought per unit paid ("never below 0.0068 SPCX_US per
+USDC") is its inverse, `priceLimit = 10^(18 + payDecimals − buyDecimals) ÷ floor`, rounded down so
+no unit fills below the floor: paying USDC for SPCX_US at 0.0068, `10^18 ÷ 0.0068`, 147.058823
+USDC per SPCX_US. The third row is the same: 1 SPCX_US for at least 140 USDC is at most `1 ÷ 140`
+SPCX_US per USDC, so `10^6 × 1e18 ÷ (140 × 10^6)`, rounded down.
 
 **`minTokens`** is `budget × 1e18 ÷ priceLimit`, rounded up, to spend all of the budget or nothing:
-buying SOL with 1,000 USDC at most 120, `8333333334` (8.333333334 SOL); less (or `0`) to take what
-fills within `priceLimit` and send the rest of the budget to the recipient.
+buying SPCX_US with 1,000 USDC at most 150, `6666667` (6.666667 SPCX_US); less (or `0`) to take
+what fills within `priceLimit` and send the rest of the budget to the recipient.
 
 **`maxAvgPrice`**, in `priceLimit`'s units (`0` off), is halfway from a simulation's average
-(`spent × 1e18 ÷ bought`) to `priceLimit`, rounded up: a simulation averaging 119.5 USDC per SOL
-with `priceLimit` 120 gives 119.75, **119750000000000000**.
+(`spent × 1e18 ÷ bought`) to `priceLimit`, rounded up: a simulation averaging 149.5 USDC per
+SPCX_US with `priceLimit` 150 gives 149.75, **149750000000000000000**.
 
 **The reference price** is the best a buyer pays, fee included, among pools deep enough for the
 order: a pool's price divided by `1 − fee` paying the higher-key token, the same upside down paying
@@ -258,21 +261,20 @@ nothing and sends the whole budget to the recipient, without reverting.
 
 A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400,000 compute units.
 
-- **The program is staged.** It is about 4.0 KB, past one transaction, so it runs from a code
+- **The program is staged.** It is about 3.7 KB, past one transaction, so it runs from a code
   buffer it is written into first; `sauce run` does that (`sauce-solana`).
-- **The accounts go through a lookup table.** The program names 46 accounts, every one derived: nine
+- **The accounts go through a lookup table.** The program names 37 accounts, every one derived: nine
   for each key, the Pot's, the mints', the programs' and the recipient's two. A key with no pool
   names the System program nine times, one account; each pool found brings eight of its own. The
   cook names each account once; listed in the transaction they would be past its size, and through
   an address lookup table they are one byte each.
 - **About five pools fit.** Keys that find five pools, the Pot's and the recipient's accounts and
   the cook's own come to about 60 accounts of 64. Keys that find more are refused before anything is
-  signed: the command names the pool each key found (`Orca.Whirlpool.pool(USDC, WSOL, 4) is <pool>`,
-  `… finds none`), so drop the keys you want least. Measured on the venues' own programs: about
-  110,000 compute units for the program around its pools, each pool that trades about 190,000, each
-  pool skipped after its reads about 90,000 to 100,000, each key with no pool about 13,000; two
-  trading pools and two keys with none take about 535,000 of the 1,400,000. Pools that share a
-  program or a config cost fewer accounts.
+  signed: the command names the pool each key found
+  (`Raydium.CLMM.pool(USDC, SPCX_US, 2500) is <pool>`, `… finds none`), so drop the keys you want
+  least. Measured on the venues' own programs, buying SPCX_US: two pools that trade and a key with
+  none take about 640,000 of the 1,400,000 compute units, a token moved under Token-2022 costing
+  more than one under SPL Token. Pools that share a program or a config cost fewer accounts.
 
 ## Running it
 
@@ -280,9 +282,9 @@ Three steps, each a `sauce` command, every input on `--args`. Every amount is ba
 command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tokens
 (`USDC:1000000000n`, with a trailing `n`, the same in base units).
 
-1. **Choose the keys.** `sauce pools --chain solana USDC WSOL --json` reads every pool of the pair
-   at the venues above, deepest first, each with its `venue`, `pool`, `byKey` (how a program finds
-   it: `Orca.Whirlpool.pool(USDC, WSOL, 4)`), `fee`, `liquidity`, and its price both ways with the
+1. **Choose the keys.** `sauce pools --chain solana USDC SPCX_US --json` reads every pool of the
+   pair at the venues above, deepest first, each with its `venue`, `pool`, `byKey` (how a program
+   finds it: `Raydium.CLMM.pool(USDC, SPCX_US, 2500)`), `fee`, `liquidity`, and its price both ways with the
    fee (`sides[].taker`, and as `priceLimit`). A pool the program would skip is under `skipped`,
    with `why`; `checked` names each venue read. A venue that could not be read (an endpoint
    refusing the scan) leaves the listing partial, said in a note, and the command exits 1: run it
@@ -290,7 +292,7 @@ command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tok
    whose price is within the limit in the program's lists, the deepest venue first.
 
    ```sh
-   sauce pools --chain solana USDC WSOL --json
+   sauce pools --chain solana USDC SPCX_US --json
    ```
 
    A pool deep enough may take the whole order, and the pools after it then trade nothing: that is
@@ -306,7 +308,7 @@ command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tok
 
    ```sh
    sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
-     --assume-balance USDC:1000 --args 1000000000 120000000000000000 0 0 <recipient>
+     --assume-balance USDC:1000 --args 1000000000 150000000000000000000 0 0 <recipient>
    ```
 
    Simulate once with `minTokens` and `maxAvgPrice` 0 to read what fills and its average, once with
@@ -317,27 +319,28 @@ command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tok
 
    ```sh
    sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
-     --assume-balance USDC:1000 --args 1000000000 120000000000000000 8333333334 0 <recipient> \
+     --assume-balance USDC:1000 --args 1000000000 150000000000000000000 6666667 0 <recipient> \
      --expect-revert "bought below minTokens"
    ```
 
    and `--expect-revert "average too high"` for the average. Over MCP, `sauce_simulate`'s
    `scenarios`, each with its own `expectRevert`, simulate all three in local copies of one read of
    the cluster, at one slot. A token account the cluster does not have yet, such as a new Pot's
-   WSOL account or the recipient's, the copy makes empty and a note names; `sauce run` creates it
+   SPCX_US account or the recipient's, the copy makes empty and a note names; `sauce run` creates it
    before the cook.
 
 3. **Send** with `sauce run`, signed by the owner's `--keypair` (or `--wallet`), the budget already
    in the Pot's USDC account (a transfer into it from any wallet). `sauce run` creates the Pot and
-   the token accounts the cook names that do not exist yet, the Pot's WSOL account and the
-   recipient's WSOL and USDC accounts (asking first, or with `--yes`; the owner pays their rent),
+   the token accounts the cook names that do not exist yet, the Pot's SPCX_US account and the
+   recipient's SPCX_US and USDC accounts, each under its mint's token program (asking first, or
+   with `--yes`; the owner pays their rent),
    stages the program in a code buffer, creates an address lookup table holding the cook's accounts
    (it prints its address; a later cook naming the same accounts reuses it with
    `--lookup-table <address>`), simulates the staged cook, sends it, and closes the buffer:
 
    ```sh
    sauce run solana-distributed-swap.sauce.ts --chain solana --keypair <keypair> \
-     --args 1000000000 120000000000000000 8333333334 119750000000000000 <recipient>
+     --args 1000000000 150000000000000000000 6666667 149750000000000000000 <recipient>
    ```
 
    For another signer, `sauce tx` prints the cook as a plan of steps (setup, cook, the buffer's
@@ -345,24 +348,25 @@ command's token amounts: `--assume-balance USDC:1000` is 1,000 USDC in whole tok
 
 **Reading a simulation.** **A simulation counts only when it succeeds and `bought` is above 0**:
 anything else (a failure, a revert, nothing bought) is a failed simulation to fix and run again,
-never a result. Buying SOL with 2,000 USDC, Orca's spacing-4 pool deep enough for all of it, the
+never a result. Buying SPCX_US with 2,000 USDC, Raydium's 0.25% pool deep enough for all of it, the
 addresses as placeholders:
 
 ```text
-The cook succeeds from <owner>: 349251 compute units, returns <the same three words, in hex>
-main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 16983900131, unspent: 0 }
+The cook succeeds from <owner>: 421555 compute units, returns <the same three words, in hex>
+main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: { spent: 2000000000, bought: 13618205, unspent: 0 }
 Simulated in a local copy (LiteSVM) of the 25 accounts the cook names, read from solana at slot <slot>, with the released engine and Kitchen: the cook does not fit one transaction, and no cluster can stage a program without sending. Nothing was signed or sent:
-  the 4115-byte program staged into a code buffer in 7 transactions, as `sauce run` stages it
+  the 3907-byte program staged into a code buffer in 7 transactions, as `sauce run` stages it
   the cook from that buffer, from the owner <owner>, which pays the Kitchen's execution fee of <fee> lamports
 Token balance changes:
   <account> (potUSDC, the Pot's USDC account), owned by <Pot> (the Pot): -2000 USDC
-  <vault> (orcaWhirlpool4VaultA, pool <pool>'s vaultA, paying USDC), owned by <pool> (orcaWhirlpool4Account, …): -16.983900131 WSOL
-  <vault> (orcaWhirlpool4VaultB, pool <pool>'s vaultB, paying USDC), owned by <pool> (orcaWhirlpool4Account, …): +2000 USDC
-  <account> (recipientWSOL, main's argument recipient's WSOL account), owned by <recipient>: +16.983900131 WSOL
+  <vault> (raydiumClmm2500VaultA, pool <pool>'s vaultA, paying USDC), owned by <pool> (raydiumClmm2500Account, …): -13.618205 SPCX_US
+  <vault> (raydiumClmm2500VaultB, pool <pool>'s vaultB, paying USDC), owned by <pool> (raydiumClmm2500Account, …): +2000 USDC
+  <account> (recipientSPCX_US, main's argument recipient's SPCX_US account), owned by <recipient>: +13.618205 SPCX_US
 ```
 
-- **`main returns`** names the three values: 2,000 USDC spent, 16.983900131 SOL bought, nothing
-  unspent; the average, `spent × 1e18 ÷ bought`, is **117758582220433806**, 117.76 USDC per SOL.
+- **`main returns`** names the three values: 2,000 USDC spent, 13.618205 SPCX_US bought, nothing
+  unspent; the average, `spent × 1e18 ÷ bought`, is **146862233311952639867**, 146.86 USDC per
+  SPCX_US.
 - **Each pool that traded** shows its two vaults, named for its venue and key. A key you gave and
   do not see sat out: no pool there, empty, skipped, past its limit, or the budget ran out first.
 - **A partial fill** sends what is left of the budget from the Pot's USDC account to the
