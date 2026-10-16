@@ -48,6 +48,8 @@ import {
   namingAccount,
   parseAccounts,
   resolveTokenAccounts,
+  svmArgumentKey,
+  svmPayload,
 } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
@@ -834,6 +836,27 @@ describe("sauce compile", () => {
     const refused = await sauce("pot", "--chain", "solana", "--owner", `0x${"ab".repeat(20)}`);
     expect(refused.stderr).toContain(
       "is not a Solana address (a base58 public key, or its 32 bytes as 0x hex)",
+    );
+  });
+
+  it("takes a token for a Solana Address argument: its symbol, or mint:<token>, as its mint", () => {
+    const solana = requireChain("solana");
+    const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    for (const spelled of ["USDC", "usdc", "mint:USDC", `mint:${usdc}`, usdc]) {
+      expect(svmArgumentKey(spelled, solana)).toBe(usdc);
+    }
+    expect(svmArgumentKey("USDX", solana)).toBeUndefined();
+    const program = compileSauceProgram(
+      "solana",
+      "function main(mint: Address, amount: Uint256): Uint256 {\n  return amount;\n}\n",
+    );
+    const payload = (first: string) =>
+      bytesToHex(svmPayload(program, { from: "--args", values: [first, "5"] }));
+    expect(payload("mint:USDC")).toBe(payload(usdc));
+    expect(payload("USDC")).toBe(payload(usdc));
+    expect(() => payload("pot:USDC")).toThrow(
+      'mint: "pot:USDC" is not a Solana public key (base58, or 32 bytes of hex), nor a token ' +
+        "solana registers (USDC, or mint:USDC, for its mint)",
     );
   });
 

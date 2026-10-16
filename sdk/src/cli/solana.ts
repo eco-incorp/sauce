@@ -29,7 +29,6 @@ import {
   getSignatureFromTransaction,
   getTransactionDecoder,
   getTransactionSize,
-  isAddress,
   signTransaction,
   lamports,
   type Address,
@@ -810,7 +809,7 @@ export function svmKeyArguments(
       return;
     }
     if (param.type !== "Address" || typeof value !== "string") return;
-    const key = svmPublicKey(value);
+    const key = svmArgumentKey(value, program.chain);
     if (key !== undefined) keys[param.name] = key;
   });
 
@@ -1199,29 +1198,49 @@ const createPotInstruction = (target: SvmTarget, pot: Address): Instruction =>
   });
 
 /**
- * A value of `type` with every `Address` in it as the word the engine reads on Solana: the public
- * key's 32 bytes, whole. A key is given in base58, or as 32 bytes of hex.
+ * The key main's `Address` argument `value` gives on Solana: a public key in base58 or as 32 bytes
+ * of hex, or a token `chain` registers — by its symbol (`USDC`, a stock's in any case), or as
+ * `mint:USDC`, the name `--account` gives a mint by — as its mint. `undefined` for anything else.
  */
-function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
+export function svmArgumentKey(value: string, chain: CanonicalChain): Address | undefined {
+  const key = svmPublicKey(value);
+  if (key !== undefined) return key;
+  const token = value.startsWith("mint:") ? value.slice("mint:".length) : value;
+  const row = svmTokenRows(chain).find(
+    (candidate) => candidate.symbol.toUpperCase() === token.toUpperCase(),
+  );
+
+  return row === undefined ? svmPublicKey(token) : address(row.mint);
+}
+
+/**
+ * A value of `type` with every `Address` in it as the word the engine reads on Solana: the public
+ * key's 32 bytes, whole, from any spelling `svmArgumentKey` takes.
+ */
+function keyWords(
+  type: EntryType,
+  value: EntryValue,
+  at: string,
+  chain: CanonicalChain,
+): EntryValue {
   switch (type.kind) {
     case "address": {
-      if (typeof value === "string" && isAddress(value)) {
-        return bytesToHex(new Uint8Array(getAddressEncoder().encode(address(value))));
-      }
-      if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)) return value;
+      const key = typeof value === "string" ? svmArgumentKey(value, chain) : undefined;
+      if (key !== undefined) return bytesToHex(new Uint8Array(getAddressEncoder().encode(key)));
       throw new TypeError(
-        `${at}: ${JSON.stringify(value)} is not a Solana public key (base58, or 32 bytes of hex)`,
+        `${at}: ${JSON.stringify(value)} is not a Solana public key (base58, or 32 bytes of hex), ` +
+          `nor a token ${chain.slug} registers (USDC, or mint:USDC, for its mint)`,
       );
     }
     case "array":
       return Array.isArray(value)
-        ? value.map((item, index) => keyWords(type.of, item, `${at}[${index}]`))
+        ? value.map((item, index) => keyWords(type.of, item, `${at}[${index}]`, chain))
         : value;
     case "tuple": {
       if (Array.isArray(value)) {
         return value.map((item, index) =>
           index < type.fields.length
-            ? keyWords(type.fields[index]!.type, item, `${at}.${type.fields[index]!.name}`)
+            ? keyWords(type.fields[index]!.type, item, `${at}.${type.fields[index]!.name}`, chain)
             : item,
         );
       }
@@ -1232,7 +1251,10 @@ function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
         Object.entries(record).map(([name, item]) => {
           const field = type.fields.find((candidate) => candidate.name === name);
 
-          return [name, field === undefined ? item : keyWords(field.type, item, `${at}.${name}`)];
+          return [
+            name,
+            field === undefined ? item : keyWords(field.type, item, `${at}.${name}`, chain),
+          ];
         }),
       );
     }
@@ -1273,7 +1295,7 @@ export function svmPayload(program: CompiledSauceProgram, args: ArgsInput | unde
 
               return param === undefined
                 ? value
-                : keyWords(parseEntryType(param.type), value, `${param.name}`);
+                : keyWords(parseEntryType(param.type), value, `${param.name}`, program.chain);
             }),
           })
         : undefined,
