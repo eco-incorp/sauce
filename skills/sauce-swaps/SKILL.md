@@ -186,11 +186,10 @@ unspent:
 1. Pass a `minOut` that is a `main` input, so a short fill reverts the whole transaction. In a real
    run never pass `0`.
 2. Pay the output to its recipient (`recipient` does it), or keep it in the Pot for the next step.
-3. Account for the rest of the input: `amountIn` less what the swap took (the input balance before
-   minus after), never the Pot's whole balance of the token, which may hold more of it for other
-   uses. Send it back to the user or a refund address, or leave it in the owner's Pot where the
-   user keeps funds there, and return how much. A full sweep is only for an intent's body on the
-   shared intent Pot (`sauce-intents`), where nothing may stay.
+3. Send the rest of the input back to the user or a refund address: `amountIn` less what the swap
+   took (the input balance before minus after), never the Pot's whole balance of the token, which
+   may hold more of it for other uses. A full sweep is only for an intent's body on the shared
+   intent Pot (`sauce-intents`).
 
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
 Simulate it, then run it, with the input in the Pot or pulled in with `--fund`:
