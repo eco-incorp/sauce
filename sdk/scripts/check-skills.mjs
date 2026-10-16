@@ -18,13 +18,13 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, and nothing that
-//      tells the reader to copy, adapt or start from an example (the agent writes each program
-//      itself: COPY_FRAMING), no skill named in code (`sauce-<name>`) that the package does not
-//      ship; the command is written `sauce …`, `sauce-cli` says in one paragraph how to get it
-//      and why never a bare `npx sauce`, and no other line in the skills writes a bare
-//      `npx sauce`; and every protocol document with a swap template opens with the one pointer
-//      to `sauce-swaps`;
+//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, no "rehearse"
+//      for a simulation, and nothing that tells the reader to copy, adapt or start from an
+//      example (the agent writes each program itself: COPY_FRAMING), no skill named in code
+//      (`sauce-<name>`) that the package does not ship; the command is written `sauce …`,
+//      `sauce-cli` says in one paragraph how to get it and why never a bare `npx sauce`, and no
+//      other line in the skills writes a bare `npx sauce`; and every protocol document with a
+//      swap template opens with the one pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
 //      is checked on there, one of them at least a chain the release supports; a contract's ABI
@@ -99,6 +99,7 @@ import {
   registryNames,
 } from "../../docs/scripts/example-programs.mjs";
 import { bigintLiteralProblems } from "../../docs/scripts/integer-literals.mjs";
+import { simulateWordingProblems } from "../../docs/scripts/simulate-wording.mjs";
 import {
   DEPLOYMENTS_FILE,
   releaseAddresses,
@@ -624,6 +625,8 @@ const SKILL_NAMES = new Set(skills.map((skill) => skill.dir));
 function wording(skill, file) {
   const text = read(file);
   const where = (i) => `${rel(file)}:${i + 1}`;
+  // A run with no key and nothing sent is a simulation, comments included (`simulate-wording.mjs`).
+  failures.push(...simulateWordingProblems({ where: rel(file), text }));
   text.split("\n").forEach((line, i) => {
     for (const [pattern, what] of VERSION_TALK)
       if (pattern.test(line)) fail(where(i), `mentions ${what}; state the fact without it`);

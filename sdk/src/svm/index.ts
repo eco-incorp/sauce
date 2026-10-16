@@ -1,5 +1,4 @@
-// Built against @solana/kit ^6 (not ^7): every @solana-program/* companion
-// package peer-requires kit ^6.x — no kit-7-compatible releases exist yet.
+// Built against @solana/kit ^8, which every @solana-program/* companion package peer-requires.
 export * from "./engine.js";
 // `engine-artifacts.js` is deliberately NOT re-exported: it hands a local LiteSVM harness filesystem
 // paths, which only Node has, and this barrel runs in a browser too. It is the Node-only

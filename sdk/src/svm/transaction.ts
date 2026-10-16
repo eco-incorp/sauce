@@ -21,6 +21,12 @@ import type {
 /** Byte length of the encoded wire transaction (kit's own measure; limit is 1232). */
 export { getTransactionSize } from "@solana/kit";
 
+/**
+ * The largest legacy or v0 transaction on the wire, in bytes — every transaction the SDK builds is
+ * one. Kit keeps its own copy of the number private since its v1 transactions, which allow more.
+ */
+export const TRANSACTION_SIZE_LIMIT = 1232;
+
 export type SignedExecuteTransaction = SendableTransaction &
   Transaction &
   TransactionWithBlockhashLifetime;
