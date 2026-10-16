@@ -17,6 +17,16 @@
  * calldata — and the plugins built on it, which hex-encode a decimal value before passing it
  * (`skills/base-mcp/plugins/kyberswap.md`: `"0x" + BigInt(transactionValue).toString(16)`).
  */
+import assert from "node:assert/strict";
+
+import {
+  address,
+  getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
+  getPublicKeyFromAddress,
+  getTransactionDecoder,
+  verifySignature,
+} from "@solana/kit";
 import { getAddress } from "viem";
 import * as z from "zod";
 
@@ -123,3 +133,42 @@ export const coinbaseSendCalls = z
       .min(1),
   })
   .strict();
+
+// --- What send_solana_transaction signs ----------------------------------------------------------
+
+/**
+ * Holds `transaction` to what Phantom's `send_solana_transaction` signs: standard base64 its schema
+ * takes, a message whose first account, the fee payer, is `feePayer` and is the one signature
+ * missing (all zero: the KMS adds it), and every other signer's signature there and valid over the
+ * message — the fresh keys a transaction creates accounts with sign before it is handed out.
+ * Returns the message's version and how many signed already.
+ */
+export async function signableBy(
+  transaction: string,
+  feePayer: string,
+): Promise<{ readonly version: number | "legacy"; readonly presigned: number }> {
+  phantomSendSolanaTransaction.parse({ transaction });
+  const decoded = getTransactionDecoder().decode(getBase64Encoder().encode(transaction));
+  const message = getCompiledTransactionMessageDecoder().decode(decoded.messageBytes);
+  assert.equal(message.staticAccounts[0], feePayer, "the fee payer is the first account");
+  const signatures = Object.entries(decoded.signatures);
+  assert.equal(signatures.length, message.header.numSignerAccounts);
+  assert.equal(signatures[0]![0], feePayer);
+  assert.ok(
+    signatures[0]![1] === null || signatures[0]![1].every((byte) => byte === 0),
+    "the fee payer's signature is left empty",
+  );
+  for (const [signer, signature] of signatures.slice(1)) {
+    assert.ok(signature !== null && signature.some((byte) => byte !== 0), `${signer} signed`);
+    assert.ok(
+      await verifySignature(
+        await getPublicKeyFromAddress(address(signer)),
+        signature,
+        decoded.messageBytes,
+      ),
+      `${signer}'s signature is over this message`,
+    );
+  }
+
+  return { version: message.version, presigned: signatures.length - 1 };
+}

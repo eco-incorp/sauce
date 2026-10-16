@@ -22,6 +22,7 @@ import {
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { resolveSvmAccountName } from "../../sdk/dist/svm/account-names.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
+import { signableBy } from "./wallet-mcp-schemas.js";
 
 const OWNER = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
 const KITCHEN = "SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot";
@@ -247,6 +248,46 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
         out.transactions.map((tx) => tx.what),
         ["creating the token accounts"],
       );
+    } finally {
+      tokenAccountsThere = true;
+    }
+  });
+
+  it("hands the owner a transaction a wallet's send tool signs: fee payer first, its signature empty", async () => {
+    const to = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+    const source =
+      "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
+    asked.length = 0;
+    const cook = ok(
+      await mcp.call("sauce_tx", {
+        source,
+        chain: "solana",
+        owner: OWNER,
+        args: [to, "400"],
+        rpcUrl: url,
+      }),
+    ) as { feePayer: string; transaction: string };
+    assert.equal(cook.feePayer, OWNER);
+    // A versioned transaction the owner alone signs: no key of anyone else's is needed.
+    assert.deepEqual(await signableBy(cook.transaction, OWNER), { version: 0, presigned: 0 });
+    // A plan's step, the same, each transaction of it.
+    asked.length = 0;
+    tokenAccountsThere = false;
+    try {
+      const plan = ok(
+        await mcp.call("sauce_tx", {
+          source,
+          chain: "solana",
+          owner: OWNER,
+          args: [to, "400"],
+          rpcUrl: url,
+        }),
+      ) as { transactions: Array<{ feePayer: string; transaction: string }> };
+      assert.ok(plan.transactions.length > 0);
+      for (const tx of plan.transactions) {
+        assert.equal(tx.feePayer, OWNER);
+        await signableBy(tx.transaction, OWNER);
+      }
     } finally {
       tokenAccountsThere = true;
     }
