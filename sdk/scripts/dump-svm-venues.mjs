@@ -7,6 +7,7 @@
 //
 //   node scripts/dump-svm-venues.mjs --redump --rpc-config rpc.config.json
 //   node scripts/dump-svm-venues.mjs --add --rpc-config rpc.config.json
+//   node scripts/dump-svm-venues.mjs --refresh <pool>[,<pool>…] --rpc-config rpc.config.json
 //   node scripts/dump-svm-venues.mjs --check --rpc-config rpc.config.json
 //
 // Build first (`pnpm --filter './sdk' build`): the accounts a pool's swap takes (its config, vaults,
@@ -23,7 +24,10 @@
 // `--add` dumps only what the fixture lacks — a program, a pool, or a slot account past a held
 // pool's nine (`more`) — and writes nothing it holds: every account it pins, and every file already
 // on disk, stays as it is, so the suites' existing state does not move. Each pool it adds records
-// the `slot` and `unixTimestamp` it was read at.
+// the `slot` and `unixTimestamp` it was read at. `--refresh` reads the pools it names (by their name
+// in `POOLS`) again, with every account of their slots but the mints and configs they share with
+// other pools, all at one slot, and rewrites them: for a pool whose slot the SDK now reads
+// differently.
 //
 // The endpoint comes only from the `--rpc-config` file (chain id -> URL), under Solana's chain id
 // 1399811149, as in `dump-eco-routes-svm.mjs`: no default, no fallback, nothing read from the
@@ -44,7 +48,8 @@ import {
 } from "./lib/svm-venue-fixture.mjs";
 
 const USAGE =
-  "usage: node scripts/dump-svm-venues.mjs (--redump | --add | --check) --rpc-config <path>";
+  "usage: node scripts/dump-svm-venues.mjs (--redump | --add | --check | --refresh <pool,…>) " +
+  "--rpc-config <path>";
 const SOLANA = "1399811149";
 const LOADER = "BPFLoaderUpgradeab1e11111111111111111111111";
 /** `UpgradeableLoaderState::ProgramData`: a u32 tag, the deploy slot, an `Option<Pubkey>`. */
@@ -63,14 +68,19 @@ try {
       redump: { type: "boolean", default: false },
       add: { type: "boolean", default: false },
       check: { type: "boolean", default: false },
+      refresh: { type: "string" },
       "rpc-config": { type: "string" },
     },
   });
 } catch (error) {
   fail(`${error.message}\n${USAGE}`);
 }
-if ([cli.values.redump, cli.values.add, cli.values.check].filter(Boolean).length !== 1)
-  fail(`give one of --redump, --add and --check\n${USAGE}`);
+const refresh = cli.values.refresh?.split(",").filter(Boolean);
+if (
+  [cli.values.redump, cli.values.add, cli.values.check, refresh !== undefined].filter(Boolean)
+    .length !== 1
+)
+  fail(`give one of --redump, --add, --check and --refresh\n${USAGE}`);
 if (cli.values["rpc-config"] === undefined) fail(`pass --rpc-config <path>\n${USAGE}`);
 let config;
 try {
@@ -564,6 +574,58 @@ const slotAccounts = (pool) => [
 ];
 /** A pool as the manifest records it: its slot, without the mints read for the dump. */
 const recorded = ({ mints: _mints, ...pool }) => pool;
+
+if (refresh !== undefined) {
+  if (!existsSync(MANIFEST)) fail("no manifest.json to refresh: --redump first");
+  const before = JSON.parse(readFileSync(MANIFEST, "utf8"));
+  const specs = refresh.map((name) => {
+    const spec = POOLS.find((one) => one.name === name);
+    if (spec === undefined || spec.only || spec.keep) fail(`no pool ${name} to refresh in POOLS`);
+    if (!before.pools.some((one) => one.name === name)) fail(`the fixture holds no pool ${name}`);
+    return spec;
+  });
+  const pools = [];
+  for (const spec of specs)
+    pools.push({ name: spec.name, venue: spec.venue, ...(await slotOf(spec)) });
+  // Each account of the pools' slots but the programs, the mints and the configs, read again at one
+  // slot at least as late as the decoders' reads, and written over the files that hold them.
+  const shared = new Set(pools.flatMap((pool) => [...(pool.mints ?? []), pool.config]));
+  const venueOf = new Map();
+  for (const pool of pools)
+    for (const at of slotAccounts(pool))
+      if (at !== SYSTEM && !Object.values(PROGRAMS).includes(at) && !shared.has(at))
+        if (!venueOf.has(at)) venueOf.set(at, pool.venue);
+  const fresh = [...venueOf.keys()];
+  for (const at of fresh) read.delete(at);
+  await fetchAll(fresh);
+  const time = await rpc("getBlockTime", [slot]);
+  const accounts = fresh.flatMap((at) => {
+    const account = read.get(at);
+    return account === null
+      ? []
+      : [
+          {
+            address: at,
+            owner: account.owner,
+            lamports: account.lamports,
+            data: account.data,
+            venue: venueOf.get(at),
+            keep: false,
+          },
+        ];
+  });
+  addToVenueFixture(SDK, {
+    before,
+    programs: [],
+    pools: pools.map((pool) => ({ ...recorded(pool), slot, unixTimestamp: time })),
+    extended: [],
+    accounts,
+  });
+  console.log(
+    `dump-svm-venues: refreshed ${pools.length} pools, ${accounts.length} accounts at slot ${slot}`,
+  );
+  process.exit(0);
+}
 
 if (cli.values.add) {
   if (!existsSync(MANIFEST)) fail("no manifest.json to add to: --redump first");
