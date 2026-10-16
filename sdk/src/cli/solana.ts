@@ -135,6 +135,7 @@ import {
   svmLeftInPotJson,
   svmLeftInPotLines,
   svmMovedJson,
+  type SvmSetupCost,
   svmMovedLines,
   writableAccounts,
 } from "./svm-effects.js";
@@ -1981,10 +1982,22 @@ async function stagedRehearsal(
     );
   }
   const notes: string[] = [];
+  // What the first run pays before the cook that the copy does for nothing, for the result to add.
+  const setup: SvmSetupCost[] = [];
+  let made = 0;
   // A Pot's or owner's token account the cluster does not have yet is made, empty, in the copy:
   // `sauce run` does not make it, so the note says to.
   for (const [name, token] of prepared.given.named) {
     if (token.account === undefined || fork.account(token.address) !== null) continue;
+    // The run creates it with the Associated Token Account program, which gives a Token-2022
+    // account its ImmutableOwner extension: 170 bytes, where SPL Token's is 165.
+    made++;
+    setup.push({
+      what: `creating ${token.label}, ${token.address}: its rent`,
+      lamports: fork.svm.minimumBalanceForRentExemption(
+        token.account.program === TOKEN_2022_PROGRAM_ID ? 170n : 165n,
+      ),
+    });
     fork.tokenAccount(
       token.address,
       token.account.mint,
@@ -2040,9 +2053,22 @@ async function stagedRehearsal(
       );
     }
   };
-  if (!created) await send([createPotInstruction(input, prepared.pot)], "creating the Pot");
+  const funded = fork.svm.getBalance(owner) ?? 0n;
+  let potRent = 0n;
+  if (!created) {
+    await send([createPotInstruction(input, prepared.pot)], "creating the Pot");
+    potRent = fork.account(prepared.pot)?.lamports ?? 0n;
+    setup.push({ what: "creating the Pot: its rent", lamports: potRent });
+  }
+  const potPaid = funded - (fork.svm.getBalance(owner) ?? 0n);
   for (const [index, batch] of staging.entries())
     await send(batch, index === 0 ? "creating the code buffer" : "staging the program");
+  // A cook that fits one transaction is not staged by the run: the copy stages it all the same.
+  const stagingPaid = funded - potPaid - (fork.svm.getBalance(owner) ?? 0n);
+  const bufferRent =
+    (fork.account(codeBuffer)?.lamports ?? 0n) + (fork.account(code)?.lamports ?? 0n);
+  /** What one transaction from the owner costs in fees, as the copy charged the staging. */
+  const feeEach = (stagingPaid - bufferRent) / BigInt(staging.length);
   const tracked = [
     ...new Set(
       (cook.accounts ?? [])
@@ -2060,7 +2086,45 @@ async function stagedRehearsal(
     ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
     cook,
   ];
-  const lookupTables = fork.table(lookupTableAddresses(await transactionOf(instructions)));
+  const unpacked = await transactionOf(instructions);
+  const lookupTables = fork.table(lookupTableAddresses(unpacked));
+  if (!fitsOne) {
+    setup.push({
+      what: "staging the program: the code buffer's rent",
+      lamports: bufferRent,
+      back: "when sauce run closes the buffer after the cook",
+    });
+    // The run takes the cook's accounts through a table of its own where they do not fit without
+    // one, and none was given.
+    const table = lookupTableAddresses(unpacked);
+    const tableTransactions =
+      getTransactionSize(unpacked) > TRANSACTION_SIZE_LIMIT &&
+      Object.keys(prepared.lookupTables).length === 0
+        ? 1 + Math.ceil(table.length / 30)
+        : 0;
+    if (tableTransactions > 0) {
+      setup.push({
+        what: `the lookup table for the cook's ${table.length} accounts: its rent`,
+        lamports: fork.svm.minimumBalanceForRentExemption(BigInt(56 + 32 * table.length)),
+        back: "when sauce reclaim closes the table",
+      });
+    }
+    // A staged cook's Pot is created in a transaction of its own; one that fits may ride along.
+    const transactions =
+      (created ? 0 : 1) + (made > 0 ? 1 : 0) + staging.length + tableTransactions;
+    setup.push({
+      what: `the fees of the ${transactions} transactions before the cook`,
+      lamports:
+        potPaid -
+        potRent +
+        feeEach * BigInt((made > 0 ? 1 : 0) + staging.length + tableTransactions),
+    });
+  } else if (made > 0) {
+    setup.push({
+      what: "the fee of the transaction that creates the token accounts",
+      lamports: feeEach,
+    });
+  }
   const cookTransaction = await buildExecuteTransaction({
     payer: signer,
     instructions,
@@ -2074,9 +2138,13 @@ async function stagedRehearsal(
   const failed = !simulated.ok;
   const { logs, units, returnData, after } = simulated;
   const labels = await accountLabels(input, prepared.pot, prepared.given);
-  const moved = failed
+  const cooked = failed
     ? undefined
     : await movedBy(prepared.rpc, input.chain, tracked, before, after, labels, owner);
+  const moved =
+    cooked === undefined
+      ? undefined
+      : { ...cooked, setup: setup.filter((cost) => cost.lamports > 0n) };
   // What the cook leaves in the Pot's token accounts, which is not in the owner's wallet.
   const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
   // What main returned stands even when the transaction then fails on its own (a rent check, say):

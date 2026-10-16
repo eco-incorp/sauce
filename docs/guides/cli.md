@@ -1624,7 +1624,11 @@ where missing, the program staged into a code buffer as `run` stages it, then th
 accounts through a lookup table. There `--assume-balance TOKEN:amount` gives the account the cook
 spends that token from (the Pot's, or the owner's with `--via engine`) that balance, and a
 `pot:<token>` or `owner:<token>` account the cluster does not have yet is made empty, with a note:
-`run` creates it before the cook (asking first, or with `--yes`). An `--owner` that is
+`run` creates it before the cook (asking first, or with `--yes`). What the copy does for nothing
+before the cook, a first run pays, so it is listed under the lamport changes with what it pays
+for: the Pot's rent (about 0.072 SOL), each token account's, the code buffer's (back once `run`
+closes it), a lookup table's, and the fees of the transactions before the cook; then what the
+owner pays in all. `--json` gives them as `setupCosts` and `payerPays`. An `--owner` that is
 not a wallet (a program's account, or one holding data) is refused, as it cannot pay. `tx` prints
 a cook too large for one transaction as a plan of steps, for another signer to sign and `sauce send`
 to send ([Signed elsewhere](#signed-elsewhere-sauce-send)). Each account a transaction lists costs 32

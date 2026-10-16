@@ -53,13 +53,39 @@ export interface TokenChange {
   readonly symbol?: string;
 }
 
+/**
+ * What a first run pays before the cook, which a rehearsal in a local copy does for nothing: rent
+ * for an account the run creates (the Pot, a token account, a code buffer, a lookup table), and
+ * the fees of the transactions that come before the cook.
+ */
+export interface SvmSetupCost {
+  /** What it pays for, for a person. */
+  readonly what: string;
+  readonly lamports: bigint;
+  /** Rent that comes back, and when: the code buffer's, closed after the cook. */
+  readonly back?: string;
+}
+
 export interface SvmMoved {
   readonly tokens: readonly TokenChange[];
   readonly lamports: readonly LamportChange[];
   readonly labels: ReadonlyMap<string, string>;
   /** The transaction's fee payer, whose lamports include the fee. */
   readonly payer: Address;
+  /** What the payer pays before the cook, where the rehearsal did it for nothing. */
+  readonly setup?: readonly SvmSetupCost[];
 }
+
+/** What the payer pays in all: what the cook took from it, and everything before the cook. */
+const payerTotal = (moved: SvmMoved): bigint => {
+  const cook = moved.lamports.find((change) => change.account === moved.payer);
+  const spent = cook === undefined ? 0n : cook.before - cook.after;
+
+  return spent + (moved.setup ?? []).reduce((sum, cost) => sum + cost.lamports, 0n);
+};
+
+/** Lamports as SOL, for a person. */
+const sol = (lamports: bigint): string => `${formatUnits(lamports, 9)} SOL`;
 
 /**
  * Every account of `transaction`'s message, in the order a transaction error's `account_index`
@@ -285,7 +311,7 @@ export function svmMovedLines(moved: SvmMoved): string[] {
       );
     }
   }
-  if (moved.lamports.length > 0) {
+  if (moved.lamports.length > 0 || (moved.setup ?? []).length > 0) {
     lines.push("Lamport changes:");
     for (const change of moved.lamports) {
       const delta = change.after - change.before;
@@ -294,6 +320,25 @@ export function svmMovedLines(moved: SvmMoved): string[] {
           (change.account === moved.payer ? ", the transaction's fee included" : ""),
       );
     }
+  }
+  if ((moved.setup ?? []).length > 0) {
+    const setup = moved.setup!;
+    lines.push(`Before the cook, ${named(moved, moved.payer)} also pays:`);
+    for (const cost of setup) {
+      lines.push(
+        `  ${cost.what}: -${cost.lamports} lamports` +
+          (cost.back === undefined ? "" : `, back ${cost.back}`),
+      );
+    }
+    const total = payerTotal(moved);
+    const back = setup.reduce(
+      (sum, cost) => sum + (cost.back === undefined ? 0n : cost.lamports),
+      0n,
+    );
+    lines.push(
+      `In all, ${named(moved, moved.payer)} pays ${total} lamports (${sol(total)})` +
+        (back === 0n ? "" : `, ${back} of them (${sol(back)}) back once the run is done`),
+    );
   }
   if (lines.length === 0) lines.push("It changed no token balance and no account's lamports.");
 
@@ -374,5 +419,15 @@ export function svmMovedJson(moved: SvmMoved): Record<string, unknown> {
       after: change.after.toString(),
       delta: (change.after - change.before).toString(),
     })),
+    ...(moved.setup === undefined
+      ? {}
+      : {
+          setupCosts: moved.setup.map((cost) => ({
+            what: cost.what,
+            lamports: cost.lamports.toString(),
+            ...(cost.back === undefined ? {} : { back: cost.back }),
+          })),
+          payerPays: payerTotal(moved).toString(),
+        }),
   };
 }
