@@ -129,6 +129,13 @@ the program are then one approval, and either all three happen or none does.
 A Solana transaction has to land within about a minute of being built. If approving takes longer,
 ask your agent to build it again: `sauce_send` with the cursor alone, or the same tool as before.
 
+Some steps of a cross-chain intent, such as a proof, come already signed by a second key that
+Sauce made for an account the transaction creates. The result lists those keys in `signedBy`. Your
+wallet must sign such a transaction exactly as it is. If a wallet rebuilds the transaction before
+signing it, for example to give it a newer blockhash, that second signature stops matching, and
+Solana refuses the transaction. If that happens, sign that one step with a key that signs as given,
+and send it with `sauce_send`.
+
 ## On Base or Ethereum, with Phantom
 
 Your agent calls `evm_send` with each transaction as it is, in order, waiting for each to land

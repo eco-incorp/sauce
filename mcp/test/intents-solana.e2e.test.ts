@@ -14,6 +14,7 @@ import { after, before, describe, it } from "node:test";
 
 import {
   address,
+  createSolanaRpc,
   generateKeyPairSigner,
   getAddressCodec,
   getBase64Encoder,
@@ -37,7 +38,7 @@ import {
 import { ecoRoutesSvm, programId } from "../../sdk/test/svm/eco-routes-svm.js";
 import { solanaShim, type SolanaShim } from "../../sdk/test/svm/rpc-shim.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
-import { signableBy } from "./wallet-mcp-schemas.js";
+import { phantomMock, signableBy } from "./wallet-mcp/phantom.js";
 
 /** SPL accounts placed in the bank directly, as the SDK's own Solana suites place them: a mint
  *  (82 bytes, decimals and initialized), and a token account (165 bytes: mint, owner, amount). */
@@ -318,6 +319,85 @@ describe("the intent tools on a Solana destination", () => {
     );
     const result = svm.sendTransaction(signed as never) as { constructor: { name: string } };
     assert.notEqual(result.constructor.name, "FailedTransactionMetadata", "the proof landed");
+  });
+
+  it("a proof signed already by its message key lands through a wallet that signs it as given, and not through one that rebuilds it", async () => {
+    // Another intent, filled by the solver; the user's wallet sends its proof.
+    const intent = await record("03", NOW + 3600n);
+    const fill = ok(
+      await mcp.call("sauce_intent_fill", {
+        intent,
+        from: solver.address,
+        claimant: CLAIMANT,
+        prove: false,
+        rpcUrls,
+      }),
+    ) as { intents: Array<{ transactions: Array<{ transaction: string }> }> };
+    const filled = await partiallySignTransaction(
+      [solver.keyPair],
+      getTransactionDecoder().decode(
+        getBase64Encoder().encode(fill.intents[0]!.transactions[0]!.transaction),
+      ),
+    );
+    svm.sendTransaction(filled as never);
+    const wallet = await generateKeyPairSigner();
+    svm.airdrop(wallet.address, lamports(10_000_000_000n));
+    const asIs = await phantomMock({ solana: SOLANA_URL, solanaKey: wallet });
+    const rebuilding = await phantomMock({
+      solana: SOLANA_URL,
+      solanaKey: wallet,
+      prepare: "rewrite",
+    });
+    try {
+      const out = ok(
+        await mcp.call("sauce_intent_prove", { intent, from: wallet.address, rpcUrls }),
+      ) as {
+        transactions: Array<{ transaction: string; signedBy?: string[] }>;
+        notes: string[];
+      };
+      const [proof] = out.transactions;
+      // The keys that signed it already, and what the result tells the user about them.
+      assert.ok((proof!.signedBy?.length ?? 0) >= 1, "it names the keys that signed it");
+      const { presigned } = await signableBy(proof!.transaction, wallet.address);
+      assert.equal(proof!.signedBy!.length, presigned);
+      assert.ok(
+        out.notes.some((note) =>
+          /signed already by a fresh key .* A wallet that rebuilds it before signing .* drops that signature, and the cluster refuses it/.test(
+            note,
+          ),
+        ),
+        out.notes.join(" | "),
+      );
+      const message = proof!.signedBy![0]!;
+      const sentBefore = shim.sent.length;
+
+      // Rebuilt with a fresh blockhash, the message key's signature no longer covers it.
+      const refused = await rebuilding.call("solana_send", {
+        transaction: proof!.transaction,
+        confirmed: true,
+      });
+      assert.equal(refused.isError, true);
+      assert.match(
+        JSON.stringify(refused.content),
+        new RegExp(`Failed to send Solana transaction: .*${message} did not sign the message`),
+      );
+      assert.equal(shim.sent.length, sentBefore, "nothing reached the cluster");
+
+      // Signed as given, it lands and succeeds.
+      const sent = await asIs.call("solana_send", {
+        transaction: proof!.transaction,
+        confirmed: true,
+      });
+      assert.notEqual(sent.isError, true, JSON.stringify(sent.content));
+      const { signature } = sent.structuredContent as { signature: string };
+      const { value } = await createSolanaRpc(SOLANA_URL)
+        .getSignatureStatuses([signature as never])
+        .send();
+      assert.equal(value[0]?.err, null, "the proof landed");
+    } finally {
+      await asIs.close();
+      await rebuilding.close();
+    }
   });
 
   it("takes the Solana fee payer for a cancellation, which also reads the source", async () => {
