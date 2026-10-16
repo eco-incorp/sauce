@@ -340,7 +340,7 @@ check(
 );
 check(
   library.includes(
-    "const own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);",
+    "let own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);",
   ),
   "the library applies it",
 );
