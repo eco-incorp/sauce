@@ -21,7 +21,8 @@ same code compiles the same bytes.
 That install is the library alone. The MCP SDK, zod and LiteSVM, which only `sauce mcp` and Solana
 simulations load, are optional peer dependencies it never brings: those commands install them for
 themselves, once per version, into `~/.sauce/runtime/`
-([Runtime packages](docs/guides/cli.md#runtime-packages)).
+([Runtime packages](docs/guides/cli.md#runtime-packages)). Testing on Solana from code takes your
+project's own LiteSVM ([Testing programs](docs/guides/testing.md#setup)).
 
 For the [`sauce` command](docs/guides/cli.md), install the package once globally:
 
