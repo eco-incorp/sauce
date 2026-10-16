@@ -548,6 +548,13 @@ only, by state override (repeatable; the amount as `sauce run --fund` takes it;
 ETH:<amount> for the native currency), so a wallet that does not hold the reward yet can
 simulate publishing it.
 
+From Solana (--chain solana), the wallet is a Solana one (--keypair, or a Solana --wallet)
+and Solana's Portal escrows the reward: two transactions an intent, Portal.fund (the reward
+into the vault the Portal derives) then Portal.publish, each simulated on the cluster first.
+The reward's names are Solana's, and --intent-creator is a Solana key. --format json prints
+them unsigned for --from <key>. The route travels whole in one Solana transaction: a body of
+token transfers fits, a program body does not.
+
 With no <file>, it makes one: which chains, what is delivered and to whom, the reward
 (suggested: what is delivered plus a margin over the solver's destination costs — gas, the
 proof's fee, a Kitchen fee where one runs — priced through a Uniswap V3 pool there, and
@@ -568,6 +575,8 @@ simulate work there.
 Examples:
   sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \
     --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…
+  sauce intent publish pay.sauce.ts --chain solana --keypair ~/.config/solana/id.json \
+    --intent-deadline 2000000000 --intent-creator <Solana key> --args 0x…
   sauce intent publish --keystore ~/.keys/me.json
   sauce intent publish --source ethereum --destination base --token USDC --amount 1 \
     --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \
@@ -622,7 +631,7 @@ EVM chains only:
       --private-key <hex>  Or sign with a raw key (lands in shell history)
 
 Solana only:
-      --keypair <path>  Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file
+      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -720,7 +729,7 @@ EVM chains only:
       --private-key <hex>  Or sign with a raw key (lands in shell history)
 
 Solana only:
-      --keypair <path>  Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file
+      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -785,7 +794,7 @@ EVM chains only:
       --private-key <hex>  Or sign with a raw key (lands in shell history)
 
 Solana only:
-      --keypair <path>  Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file
+      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -801,6 +810,9 @@ While the proof has not arrived it says so (exit 1), with when the store saw the
 filled and the Hyperlane message its proof travels as, which the Hyperlane explorer shows by
 id. A proven CANCELLATION pays no claimant: refund it instead.
 
+An intent from Solana is claimed on Solana, one transaction an intent, paid by --keypair
+(any key): the claimant's token account opened where it has none, then Portal.withdraw.
+
 Claims (or prints the transaction) only on a supported chain: Ethereum, Base and Solana, for the
 initial release. On any other (a preview chain) it is refused before anything is read or signed,
 with the supported chains and the GitHub issue to ask for that chain with; compile and simulate
@@ -808,6 +820,7 @@ work there.
 
 Example:
   sauce intent claim 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
+  sauce intent claim 0x<intent hash> --keypair ~/.config/solana/id.json
 ```
 
 ### `sauce intent refund`
@@ -848,7 +861,7 @@ EVM chains only:
       --private-key <hex>  Or sign with a raw key (lands in shell history)
 
 Solana only:
-      --keypair <path>  Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file
+      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -861,7 +874,8 @@ vault holds to the reward's creator, once the Portal allows it:
   a proof of a fill        only after the claimant has withdrawn: the leftovers.
 It reads the status first and says why not, with the time left (exit 1). There is no batch
 refund: several intents are refunded one transaction each. With no signer, prints the
-unsigned transactions.
+unsigned transactions. An intent from Solana is refunded on Solana, paid by --keypair (any
+key): the creator's token account opened where it has none, then Portal.refund.
 
 Refunds (or prints the transactions) only on a supported chain: Ethereum, Base and Solana, for
 the initial release. On any other (a preview chain) it is refused before anything is read or
@@ -870,6 +884,7 @@ simulate work there.
 
 Example:
   sauce intent refund 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
+  sauce intent refund 0x<intent hash> --keypair ~/.config/solana/id.json
 ```
 
 ### `sauce intent cancel`
@@ -911,7 +926,7 @@ EVM chains only:
       --private-key <hex>  Or sign with a raw key (lands in shell history)
 
 Solana only:
-      --keypair <path>  Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file
+      --keypair <path>  Sign a step on Solana (a fill, proof or cancellation there, or the claim or refund of an intent from Solana) with a keypair file
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -1041,7 +1056,7 @@ both chains and what can be done next, as `sauce intent status` reads it.
 ```text
 Store the intents a transaction published, rebuilt from its logs.
 
-Usage: sauce intent import <tx-hash> --chain <source> [--index <n>]
+Usage: sauce intent import <tx-hash | signature> --chain <source> [--index <n>]
 
 Options:
       --chain <slug|id>  Chain the program runs on (base, 8453, solana)
@@ -1059,10 +1074,12 @@ IntentPublished logs announce — the destination, the route (the bytes the Port
 and the whole reward — checking each one hashes to the hash its log names, and stores it
 with the Portal that emitted it and the vault that Portal derives. Then every intent
 command takes it by hash. For an intent someone else published, or one published before
-the store kept it.
+the store kept it. On Solana, by the transaction's signature: each publish of Solana's
+Portal it ran, rebuilt from the instruction and checked against the hash the Portal logged.
 
 Example:
   sauce intent import 0x<tx hash> --chain ethereum
+  sauce intent import <signature> --chain solana
 ```
 
 ## `sauce wallet`

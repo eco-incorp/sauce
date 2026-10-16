@@ -503,7 +503,7 @@ intent), `buildPortalWithdrawInstruction` (pays the claimant once the proof is
 recorded) and `buildPortalRefundInstruction` (returns the reward to its creator).
 `decodeSvmProof` reads the proof the HyperProver records when Hyperlane delivers
 it. `sauce intent publish --chain solana`, `claim` and `refund` send them
-([CLI guide](cli.md#an-intent-from-solana)). A Sauce program running on Solana
+([CLI guide](cli-intents.md#an-intent-from-solana)). A Sauce program running on Solana
 cannot open an intent itself: the wallet calls the Portal.
 
 ## Venue accessors
