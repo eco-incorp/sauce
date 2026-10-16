@@ -1,6 +1,6 @@
-// Compiles evm-to-solana.sauce.ts for Ethereum, with a Solana wallet as `main`'s first argument,
+// Compiles ethereum-to-solana.sauce.ts for Ethereum, with a Solana wallet as `main`'s first argument,
 // and builds what an Ethereum wallet sends to publish it: the reward paid into the intent's vault,
-// then Portal.publish. What `sauce intent publish evm-to-solana.sauce.ts --chain ethereum --args …`
+// then Portal.publish. What `sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --args …`
 // sends.
 //
 // Offline: the wallet, the creator and the deadline are fixtures, and nothing is read or sent. The
@@ -16,7 +16,7 @@ import { ecoRoutesPortal } from "@eco-incorp/sauce/protocols/eco-routes";
 import { svmKeyOf } from "@eco-incorp/sauce/svm";
 
 const source = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "evm-to-solana.sauce.ts"),
+  join(dirname(fileURLToPath(import.meta.url)), "ethereum-to-solana.sauce.ts"),
   "utf8",
 );
 

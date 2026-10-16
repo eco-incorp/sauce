@@ -473,11 +473,11 @@ function main(recipient: Address, amount: Uint256, reward: Uint256) {
 ```
 
 Inside the braces, `USDC` means Solana's USDC mint, and `recipient` is a Solana wallet
-([the complete example](../examples/evm-to-solana.ts)). When you publish from a wallet, pass the
+([the complete example](../examples/ethereum-to-solana.ts)). When you publish from a wallet, pass the
 recipient in base58, the way Solana writes addresses:
 
 ```sh
-sauce intent publish evm-to-solana.sauce.ts --chain ethereum --keystore <path> \
+sauce intent publish ethereum-to-solana.sauce.ts --chain ethereum --keystore <path> \
   --intent-deadline <unix seconds> --intent-creator <your address> \
   --args <solana wallet> 1000000 1050000
 ```
