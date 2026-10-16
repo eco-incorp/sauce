@@ -32,6 +32,7 @@ import {
 import {
   BaseError,
   bytesToHex,
+  decodeEventLog,
   ContractFunctionRevertedError,
   ContractFunctionZeroDataError,
   encodeAbiParameters,
@@ -64,13 +65,15 @@ import {
   type PotStore,
 } from "./pot-store.js";
 
-/** The package's version, from the manifest three levels above `sdk/{src,dist}/cli`. */
+let version: string | undefined;
+
+/** The package's version, from the manifest three levels above `sdk/{src,dist}/cli`: read once. */
 const sdkVersion = (): string =>
-  (
+  (version ??= (
     JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as {
       version: string;
     }
-  ).version;
+  ).version);
 
 // ---------------------------------------------------------------------------------------------
 // Which release minted a Pot
@@ -84,18 +87,24 @@ interface PotFamily {
   readonly sets: readonly V12ReleaseSet[];
 }
 
+let preferredSets: readonly V12ReleaseSet[] | undefined;
+
 /** The release sets, the SDK's own first and then the newest: the one a Pot is recorded under
- *  when several share its Kitchen and hash. */
-const preferred = (): V12ReleaseSet[] => {
+ *  when several share its Kitchen and hash. The table is the SDK's own, so it is ordered once. */
+const preferred = (): readonly V12ReleaseSet[] => {
   const own = sdkCompilerVersion();
 
-  return [...V12_RELEASE_SETS]
+  return (preferredSets ??= [...V12_RELEASE_SETS]
     .reverse()
-    .sort((a, b) => +(b.compiler === own) - +(a.compiler === own));
+    .sort((a, b) => +(b.compiler === own) - +(a.compiler === own)));
 };
 
-/** Every Kitchen and Pot init-code hash a known release mints under. */
-function potFamilies(): PotFamily[] {
+let families: readonly PotFamily[] | undefined;
+
+/** Every Kitchen and Pot init-code hash a known release mints under: gathered once. */
+const potFamilies = (): readonly PotFamily[] => (families ??= gatherFamilies());
+
+function gatherFamilies(): PotFamily[] {
   const families = new Map<
     string,
     { kitchen: Address; potInitCodeHash: Hex; sets: V12ReleaseSet[] }
@@ -286,8 +295,11 @@ async function unknownRelease(
 
 const POT_DEPLOYED = toEventSelector("PotDeployed(address,bytes32,address)");
 
+let knownKitchens: ReadonlySet<Address> | undefined;
+
 /** Every Kitchen a known release mints from. */
-const kitchens = (): Set<Address> => new Set(potFamilies().map((family) => family.kitchen));
+const kitchens = (): ReadonlySet<Address> =>
+  (knownKitchens ??= new Set(potFamilies().map((family) => family.kitchen)));
 
 /**
  * The Pots a landed EVM transaction deployed: one record per `PotDeployed` a known Kitchen emitted
@@ -312,10 +324,7 @@ export async function evmPotsDeployed(
   if (sent.status !== "success") return [];
   const known = kitchens();
   const deployed = sent.logs.filter(
-    (log) =>
-      log.topics[0]?.toLowerCase() === POT_DEPLOYED &&
-      log.topics.length === 3 &&
-      known.has(getAddress(log.address)),
+    (log) => log.topics[0]?.toLowerCase() === POT_DEPLOYED && known.has(getAddress(log.address)),
   );
   if (deployed.length === 0) return [];
   const chainId = await client.getChainId();
@@ -325,9 +334,15 @@ export async function evmPotsDeployed(
   return Promise.all(
     deployed.map((log) => {
       const kitchen = getAddress(log.address);
-      const owner = getAddress(`0x${log.topics[1]!.slice(26)}`);
-      const salt = log.topics[2]!;
-      const pot = getAddress(`0x${log.data.slice(26, 66)}`);
+      // Decoded by the Kitchen's own ABI, strictly: a log that is not the event it names, its
+      // topics or its data the wrong shape, is refused, never read at guessed offsets.
+      const { owner, salt, pot } = decodeEventLog({
+        abi: v12KitchenAbi,
+        eventName: "PotDeployed",
+        topics: log.topics as [Hex, ...Hex[]],
+        data: log.data,
+        strict: true,
+      }).args;
 
       return evmRecord({
         chain,
