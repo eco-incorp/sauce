@@ -178,6 +178,12 @@ export interface IntentSugarContext {
     /** The destination Portal the child's route records — whose Executor must own the Pot. */
     destinationPortal: AddressInput,
   ) => CompiledChild;
+  /**
+   * Only the intents are wanted, for a wallet to publish (`sauce-route.ts#lowerProgramIntents`):
+   * the program that would publish them is never compiled. Required for a Solana source, whose
+   * Portal a wallet calls itself — a program running on Solana does not open an intent.
+   */
+  readonly publishOnly?: boolean;
 }
 
 export interface CompiledChild {
@@ -609,6 +615,20 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
   const program = parseSauce(source);
   const sites = collectSites(program, context);
   if (sites.length === 0) return { source, rewrote: false, intents: [] };
+  // On Solana the reward is escrowed by Solana's Portal, which a wallet calls itself: there is no
+  // Portal call for a program to make, so a program there opens no intent, and only a wallet's
+  // publish lowers one.
+  const fromSolana = context.source.kind === "svm";
+  if (fromSolana && context.publishOnly !== true) {
+    fail(
+      `a program running on ${context.source.slug} cannot open an intent: publish it from a ` +
+        `wallet instead (sauce intent publish <file> --chain ${context.source.slug})`,
+    );
+  }
+  // A reward token is a source-chain address: a 32-byte key on Solana.
+  const rewardHex = fromSolana
+    ? (value: bigint): Hex => `0x${value.toString(16).padStart(64, "0")}`
+    : addressHex;
 
   // The file's top level: the declarations a child program may carry, and the entry. See
   // `intent-body.ts` for what each name an intent body reads means.
@@ -842,14 +862,26 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         prover: defaults.prover ?? context.proverFor(context.source, site.chain),
         nativeAmount: reward.nativeAmount === undefined ? 0n : sentinelFor(reward.nativeAmount),
         tokens: reward.tokens.map((t) => ({
-          token: addressHex(t.token),
+          token: rewardHex(t.token),
           amount: sentinelFor(t.amount),
         })),
       }),
     };
 
-    const sourcePortal = defaults.sourcePortal ?? context.portalOf(context.source);
     const fundVia = requireFundVia(defaults);
+    if (fromSolana) {
+      // Nothing runs in its place: the wallet publishes it (`svm/portal-source.ts`).
+      intents.push({
+        intent: child,
+        captures,
+        sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
+        destination: site.chain,
+        fundVia,
+      });
+      replacements.push({ start: site.start, end: site.end, text: "" });
+      return;
+    }
+    const sourcePortal = defaults.sourcePortal ?? context.portalOf(context.source);
     // `publish` when the program pays the vault itself, `publishAndFund` when the Portal pulls the
     // reward under an approval. Either way the intent is these bytes, cut at the same slots.
     const tx =
