@@ -630,7 +630,17 @@ try {
   const tx = JSON.parse(
     sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--offline", ...args),
   );
-  assert.deepEqual(Object.keys(tx), ["chainId", "to", "data", "value"], "sauce tx prints the tx");
+  assert.deepEqual(
+    Object.keys(tx),
+    ["chainId", "to", "data", "value", "sendCalls"],
+    "sauce tx prints the tx, and the batch a wallet's send_calls takes",
+  );
+  assert.equal(tx.value, "0x0", "its value a hex quantity, as a wallet's send tool takes it");
+  assert.deepEqual(
+    tx.sendCalls,
+    { chain: "base", calls: [{ to: tx.to, value: tx.value, data: tx.data }] },
+    "the batch is the one transaction",
+  );
   assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
   assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
   assert.ok(tx.data.includes(recipient.slice(2)), "and main's arguments after it");
