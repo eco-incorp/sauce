@@ -51,6 +51,7 @@ import {
   type ForkSnapshot,
   fundingFor,
   globalsCommand,
+  handoff,
   inspectCommand,
   inspectFile,
   intentRecord,
@@ -1055,9 +1056,19 @@ export function refusable<Shape extends z.ZodRawShape>(
   };
 }
 
+/**
+ * What a wallet's own MCP server takes from a result that carries transactions (`handoff.ts`):
+ * passed whole, with nothing to convert.
+ */
+export const HANDOFF =
+  "Each EVM transaction carries `sendTransaction`, the input of a wallet's send-transaction " +
+  "tool (Phantom's send_evm_transaction: value and gas hex), and the result `sendCalls`, the " +
+  "input of Coinbase Wallet's send_calls (every transaction in order, as one atomic batch); a " +
+  "Solana `transaction` is the input of Phantom's send_solana_transaction.";
+
 /** The sentence every tool that builds a transaction ends on. */
 export const UNSIGNED =
-  "Nothing is signed or sent: the caller signs and sends with its own wallet or signer.";
+  "Nothing is signed or sent: the caller signs and sends with its own wallet or signer. " + HANDOFF;
 
 /** What every tool that builds a transaction says about where it builds one. */
 export const SUPPORTED_ONLY =
@@ -1069,8 +1080,9 @@ export const SUPPORTED_ONLY =
 
 /** That sentence on a server with wallets (over stdio, unless `--no-wallets`). */
 export const WALLET_UNSIGNED =
-  "Nothing is signed or sent here: pass the result to sauce_wallet_send to send it from one of " +
-  "this server's wallets, or sign it with any other wallet.";
+  "Nothing is signed or sent here: sign it with the user's own wallet. " +
+  HANDOFF +
+  " For experiments, sauce_wallet_send sends the whole result from one of this server's wallets.";
 
 // ---------------------------------------------------------------------------------------------
 // The tools
@@ -1153,8 +1165,10 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
   const { endpoints, guard, stores } = context;
 
   return (name, config, run) => {
-    // A tool that builds a transaction, on a server that can send it: the result says how.
-    const sendable = context.wallets !== undefined && config.description.includes(UNSIGNED);
+    // A tool that builds a transaction: its result carries what a wallet's own tool takes, and on
+    // a server that can send it, says how.
+    const unsigned = config.description.includes(UNSIGNED);
+    const sendable = context.wallets !== undefined && unsigned;
     server.registerTool(
       name,
       {
@@ -1182,8 +1196,11 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
               : keeping({ stores, say: (line) => kept.push(line) }, call)),
             reach,
           );
-          const keptOutput =
-            kept.length === 0 ? output : { ...output, notes: [...(output.notes ?? []), ...kept] };
+          const keptOutput = {
+            ...output,
+            ...(unsigned ? { json: handoff(output.json) } : {}),
+            ...(kept.length === 0 ? {} : { notes: [...(output.notes ?? []), ...kept] }),
+          };
 
           return result(
             sendable && (args as { dryRun?: unknown }).dryRun !== true

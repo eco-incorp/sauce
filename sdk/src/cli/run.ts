@@ -97,6 +97,7 @@ import { potImportCommand, potListCommand } from "./pot-commands.js";
 import { PotStore } from "./pot-store.js";
 import { keeping, keepsAny, type LocalStores } from "./keep.js";
 import { globalsCommand } from "./globals.js";
+import { handoff } from "./handoff.js";
 import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
   assumedBalances,
@@ -1746,6 +1747,9 @@ interface Command {
   readonly details: string;
   /** A flag that ends the options: every word after it is passed to `run` as `trailing`. */
   readonly trailing?: string;
+  /** It prints transactions unsigned: its JSON carries what a wallet's own tool takes
+   *  (`handoff.ts`). */
+  readonly unsigned?: true;
   /** The output to print, or `undefined` when the command already wrote it (`--out`). */
   readonly run: (
     args: ParsedArgs,
@@ -1769,6 +1773,7 @@ const SUPPORTED_ONLY = (what: string): string[] => [
 
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
   publish: {
+    unsigned: true,
     usage: [
       "sauce intent publish <file | -> --chain <source> (--keystore <path> | --private-key <hex>) [options] [--args <value>…]",
       "sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …",
@@ -1945,6 +1950,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   fill: {
+    unsigned: true,
     usage: [
       "sauce intent fill <file | -> --chain <source> [options] [--args <value>…]",
       "sauce intent fill <intent-hash> [options]",
@@ -2164,6 +2170,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   prove: {
+    unsigned: true,
     usage: "sauce intent prove <file | intent-hash…> [--keystore <path> | --private-key <hex>]",
     summary: "Send the proof of filled (or cancelled) intents, paying the prover's fee",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
@@ -2194,6 +2201,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   claim: {
+    unsigned: true,
     usage: "sauce intent claim <file | intent-hash…> --chain <source> [signer]",
     summary: "Withdraw proven intents' rewards to their claimants, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
@@ -2226,6 +2234,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   refund: {
+    unsigned: true,
     usage: "sauce intent refund <file | intent-hash…> --chain <source> [signer]",
     summary: "Return unearned rewards from their vaults to their creators, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
@@ -2255,6 +2264,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   cancel: {
+    unsigned: true,
     usage: "sauce intent cancel <file | intent-hash…> [--and-prove] [signer]",
     summary: "Cancel unfilled intents after their route's deadline, for an early refund",
     flags: {
@@ -3207,6 +3217,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   tx: {
+    unsigned: true,
     usage: [
       "sauce tx <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
       "sauce tx <file | -> --chain solana --owner <pubkey> [--account NAME=<value>]… [options]",
@@ -3486,6 +3497,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   pot: {
+    unsigned: true,
     usage: [
       "sauce pot --chain <slug|id> --owner <address> [--salt <label> | --salt-hex <bytes32>] [--deploy …]",
       "sauce pot <list | import> [options]",
@@ -4461,7 +4473,7 @@ function render(command: Command, output: CommandOutput, args: ParsedArgs): stri
   const jsonByDefault = "format" in command.flags && !("json" in command.flags);
 
   return format === "json" || jsonByDefault || args.values.json === true
-    ? JSON.stringify(output.json, null, 2)
+    ? JSON.stringify(command.unsigned === true ? handoff(output.json) : output.json, null, 2)
     : output.text;
 }
 

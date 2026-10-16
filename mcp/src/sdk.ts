@@ -124,6 +124,7 @@ export {
   type PreviewChainRefusal,
 } from "../../sdk/dist/cli/support.js";
 export { HOT_WALLET, looksLikeKey, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
+export { handoff } from "../../sdk/dist/cli/handoff.js";
 export { describeSource, ENV_NAME, type PasswordSource } from "../../sdk/dist/cli/password.js";
 export {
   checkPlan,

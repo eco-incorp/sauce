@@ -36,6 +36,7 @@ import {
   effectsOf,
   nativeSymbol,
 } from "../evm/effects.js";
+import { handoff } from "./handoff.js";
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, type Cost } from "./receipt.js";
 import {
@@ -300,7 +301,7 @@ async function rebuilt(
 /** The transactions printed for a wallet to sign, when the command has no signer. */
 function unsigned(transactions: readonly AnyTxJson[], what: string): CommandOutput {
   return {
-    text: JSON.stringify({ transactions }, null, 2),
+    text: JSON.stringify(handoff({ transactions }), null, 2),
     json: { sent: false, transactions },
     notes: [
       `${what}: no signer given, so nothing was sent. Sign and send these in order (any account ` +
@@ -592,7 +593,7 @@ export async function refundCommand(
       continue;
     }
     if (context.account === undefined) {
-      texts.push(JSON.stringify({ transactions: plan.transactions }, null, 2));
+      texts.push(JSON.stringify(handoff({ transactions: plan.transactions }), null, 2));
       json.push({
         intentHash: target.record.intentHash,
         ready: true,
@@ -659,7 +660,7 @@ export async function cancelCommand(
       continue;
     }
     if (context.account === undefined && payer.from === undefined) {
-      texts.push(JSON.stringify({ transactions: plan.transactions }, null, 2));
+      texts.push(JSON.stringify(handoff({ transactions: plan.transactions }), null, 2));
       json.push({
         intentHash: target.record.intentHash,
         ready: true,

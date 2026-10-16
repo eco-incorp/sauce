@@ -1164,11 +1164,15 @@ describe("sauce tx", () => {
     const cook = decodeFunctionData({ abi: v12Pot.abi, data: out.data as Hex });
     expect(cook.functionName).toBe("cook");
     expect(cook.args).toEqual([getAddress(v12EngineAddress()), program]);
+    const data = v12Pot.encodeCook(getAddress(v12EngineAddress()), program as Hex);
     expect(out).toEqual({
       chainId: 1,
       to: pot,
-      data: v12Pot.encodeCook(getAddress(v12EngineAddress()), program as Hex),
+      data,
       value: "1234",
+      // What a wallet's own tool takes: the eth_sendTransaction object, and a batch of one.
+      sendTransaction: { chainId: "0x1", to: pot, data, value: "0x4d2" },
+      sendCalls: { chain: "ethereum", calls: [{ to: pot, value: "0x4d2", data }] },
     });
     expect(run.stderr).toContain(`Pot ${pot} belongs to ${OWNER} (salt ${SAUCE_INTENT_POT_SALT}).`);
     expect(run.stderr).toContain(
