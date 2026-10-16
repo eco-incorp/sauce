@@ -18,12 +18,12 @@ import {
   getAddressDecoder,
   getAddressEncoder,
   getBase58Decoder,
-  isAddress,
 } from "@solana/kit";
 import type { Address } from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { svmTokenRows } from "../routes/token-registry.js";
+import { svmPublicKey } from "../svm/account-names.js";
 import { coalescingAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
 import {
   PHOENIX_BASE_MINT_AT,
@@ -376,16 +376,17 @@ async function mintOf(
   const row = svmTokenRows(chain).find((one) => one.symbol.toUpperCase() === symbol);
   if (row !== undefined)
     return { symbol: row.symbol, mint: address(row.mint), decimals: row.decimals };
-  if (!isAddress(token)) {
+  const mint = svmPublicKey(token);
+  if (mint === undefined) {
     throw new UsageError(
       `${token} is not a mint ${chain.slug} registers: give its symbol (sauce globals --chain ` +
-        `${chain.slug}) or its base58 address`,
+        `${chain.slug}) or its address`,
     );
   }
-  const data = await load(address(token));
+  const data = await load(mint);
   if (data === null || data.length < 82)
     throw new CliError(`${token} is not a mint on ${chain.slug}`);
-  return { symbol: token, mint: address(token), decimals: data[44]! };
+  return { symbol: mint, mint, decimals: data[44]! };
 }
 
 /** The venue's accounts holding the pair, with their data. */

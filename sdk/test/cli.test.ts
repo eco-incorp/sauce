@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { address as svmAddress, type Address } from "@solana/kit";
+import { getAddressEncoder, address as svmAddress, type Address } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   bytesToHex,
@@ -736,6 +736,44 @@ describe("sauce compile", () => {
     const run = await sauce("compile", large, "--chain", "solana", "--json", "--args", "99");
     expect(JSON.parse(run.stdout).cook).toMatchObject({ fits: false });
     expect(run.stderr).toMatch(/past Solana's 1232: `sauce run` stages the program/);
+  });
+
+  it("takes a Solana key as the 32 bytes of hex it prints one in, wherever it takes base58", async () => {
+    const owner = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+    const hexOf = (key: string): string =>
+      `0x${[...getAddressEncoder().encode(svmAddress(key))].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+    // `sauce globals` prints a mint's address as its 32 bytes: the spelling a program holds.
+    const globals = json(await sauce("globals", "--chain", "solana", "--json")) as {
+      tokens: { symbol: string; address: string; mint: string }[];
+    };
+    const usdc = globals.tokens.find((token) => token.symbol === "USDC")!;
+    expect(usdc.address).toBe(hexOf(usdc.mint));
+    // Each takes it back: the owner, an account, a holder, a mint, an assumed balance.
+    const pot = async (key: string) =>
+      (
+        JSON.parse(
+          (await sauce("pot", "--chain", "solana", "--owner", key, "--offline")).stdout,
+        ) as { pot: string }
+      ).pot;
+    expect(await pot(hexOf(owner))).toBe(await pot(owner));
+    const program = file(
+      "hold.sauce.ts",
+      "function main(held: Account<Writable>, mint: Account) {\n  require(held.dataLen > 0);\n}\n",
+    );
+    const sized = async (...accounts: string[]) =>
+      json(
+        await sauce(
+          ...["compile", program, "--chain", "solana", "--json"],
+          ...accounts.flatMap((account) => ["--account", account]),
+        ),
+      ).cook;
+    expect(
+      await sized(`held=${hexOf(owner)}:${usdc.address}`, `mint=mint:${usdc.address}`),
+    ).toEqual(await sized(`held=${owner}:USDC`, "mint=mint:USDC"));
+    const refused = await sauce("pot", "--chain", "solana", "--owner", `0x${"ab".repeat(20)}`);
+    expect(refused.stderr).toContain(
+      "is not a Solana address (a base58 public key, or its 32 bytes as 0x hex)",
+    );
   });
 
   it("takes a Solana program's key defines in base58, as --account takes them", async () => {
@@ -1781,7 +1819,9 @@ describe("sauce pot", () => {
     expect((await sauce("pot", "--owner", OWNER)).stderr).toMatch(/missing --chain/);
     const svm = await sauce("pot", "--owner", OWNER, "--chain", "solana");
     expect(svm.code).toBe(2);
-    expect(svm.stderr).toMatch(/is not a Solana address \(a base58 public key\)/);
+    expect(svm.stderr).toMatch(
+      /is not a Solana address \(a base58 public key, or its 32 bytes as 0x hex\)/,
+    );
   });
 
   it("names the account a Solana transaction error gives only by its index", () => {

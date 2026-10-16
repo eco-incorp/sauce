@@ -61,6 +61,7 @@ import {
   isSvmAccountName,
   resolveSvmAccountName,
   SvmAccountNameError,
+  svmPublicKey,
   SYSTEM_HOLDER,
   type ResolvedSvmAccountName,
   type SvmMintProgramOf,
@@ -159,13 +160,19 @@ import {
 const kitchen = (): Address => address(v12SvmKitchenProgramId());
 const engine = (): Address => address(v12SvmEngineProgramId());
 
-/** A Solana public key from a flag, or a usage error naming the flag. */
+/**
+ * A Solana public key from a flag, in base58 or as the 32 bytes of hex the command prints a key in
+ * too (`svmPublicKey`), or a usage error naming the flag.
+ */
 export function parsePubkey(flag: string, raw: string): Address {
-  if (!isAddress(raw)) {
-    throw new UsageError(`--${flag}: '${raw}' is not a Solana address (a base58 public key)`);
+  const key = svmPublicKey(raw);
+  if (key === undefined) {
+    throw new UsageError(
+      `--${flag}: '${raw}' is not a Solana address (a base58 public key, or its 32 bytes as 0x hex)`,
+    );
   }
 
-  return address(raw);
+  return key;
 }
 
 /**
@@ -803,10 +810,8 @@ export function svmKeyArguments(
       return;
     }
     if (param.type !== "Address" || typeof value !== "string") return;
-    if (isAddress(value)) keys[param.name] = address(value);
-    else if (/^0x[0-9a-fA-F]{64}$/.test(value)) {
-      keys[param.name] = getBase58Decoder().decode(hexToBytes(value as Hex)) as Address;
-    }
+    const key = svmPublicKey(value);
+    if (key !== undefined) keys[param.name] = key;
   });
 
   return { keys, integers };
@@ -1241,13 +1246,13 @@ export function svmAssumedBalances(raws: readonly string[], chain: CanonicalChai
       );
     }
     const row = rows.find((candidate) => candidate.symbol.toUpperCase() === token.toUpperCase());
-    if (row === undefined && !isAddress(token)) {
+    const mint = row === undefined ? svmPublicKey(token) : address(row.mint);
+    if (mint === undefined) {
       throw new UsageError(
         `--assume-balance ${raw}: ${token} is not a mint ${chain.slug} registers: give its symbol ` +
-          "(sauce globals --chain solana) or its base58 address",
+          "(sauce globals --chain solana) or its address",
       );
     }
-    const mint = address(row?.mint ?? token);
     if (seen.has(mint)) throw new UsageError(`--assume-balance names ${token} twice: give it once`);
     seen.add(mint);
 

@@ -13,6 +13,7 @@ import {
   isSvmAccountName,
   resolveSvmAccountName,
   SvmAccountNameError,
+  svmPublicKey,
   type SvmAccountNameContext,
 } from "../../src/svm/account-names.js";
 import { svmTokenAccount } from "../../src/svm/token-accounts.js";
@@ -27,6 +28,10 @@ const MINT = key(4);
 const row = (symbol: string) => svmTokenRows(SOLANA).find((one) => one.symbol === symbol)!;
 const USDC = address(row("USDC").mint);
 const PYUSD = address(row("PYUSD").mint);
+
+/** A key as `sauce globals` prints a mint's `address`, and deployments.json a program's `key`. */
+const hex = (k: Address): string =>
+  `0x${[...getAddressCodec().encode(k)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 
 const ctx = (more: Partial<SvmAccountNameContext> = {}): SvmAccountNameContext => ({
   chain: SOLANA,
@@ -58,6 +63,30 @@ describe("svm account names", () => {
       label: "main's argument to",
       kind: "address",
     });
+  });
+
+  it("takes a key as its 32 bytes of hex wherever it takes base58: the spelling printed for it", async () => {
+    expect(svmPublicKey(USDC)).toBe(USDC);
+    expect(svmPublicKey(hex(USDC))).toBe(USDC);
+    expect(svmPublicKey(hex(USDC).toUpperCase().replace("0X", "0x"))).toBe(USDC);
+    // Neither 20 bytes (an EVM address) nor 31, nor a symbol.
+    expect(svmPublicKey(`0x${"ab".repeat(20)}`)).toBeUndefined();
+    expect(svmPublicKey(`0x${"ab".repeat(31)}`)).toBeUndefined();
+    expect(svmPublicKey("USDC")).toBeUndefined();
+    const program = key(9);
+    for (const [base58, spelledHex] of [
+      [TO, hex(TO)],
+      [`${TO}:USDC`, `${hex(TO)}:USDC`],
+      [`pot:${USDC}`, `pot:${hex(USDC)}`],
+      [`mint:${PYUSD}`, `mint:${hex(PYUSD)}`],
+      [`program:${PYUSD}`, `program:${hex(PYUSD)}`],
+      [`pda:${program}:vault,${TO}`, `pda:${hex(program)}:vault,${hex(TO)}`],
+    ]) {
+      const want = await resolveSvmAccountName(base58!, ctx());
+      expect({ ...(await resolveSvmAccountName(spelledHex!, ctx())), label: want.label }).toEqual(
+        want,
+      );
+    }
   });
 
   it("a holder's token account, under the program that owns the mint", async () => {
