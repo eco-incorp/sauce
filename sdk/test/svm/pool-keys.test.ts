@@ -238,6 +238,28 @@ describe("a venue's pool by key", () => {
     ).toBe(SYSTEM);
   });
 
+  it("names SOL/USDC's pool on Orca's static tier by its tick spacing, and its pool on the adaptive tier there by that tier", async () => {
+    // Mainnet's SOL/USDC has a pool on both of Orca's tiers at tick spacing 4: 4 and 1028.
+    const fixed = pool("orca-whirlpool-sol-usdc");
+    const adaptive = pool("orca-whirlpool-sol-usdc-adaptive");
+    const tierOf = (p: typeof fixed) => {
+      const data = BYTES.get(p.pool)!;
+      return [u16(data, 41), u16(data, 43)];
+    };
+    expect([tierOf(fixed), tierOf(adaptive)]).toEqual([
+      [4, 4],
+      [4, 1028],
+    ]);
+    const ctx = { chain: requireChain("solana"), owner: SYSTEM, pot: SYSTEM, load: loader() };
+    const at = async (name: string) => (await resolveSvmAccountName(name, ctx)).value;
+    // Both there, and nothing refused: the spacing alone is the static tier's, the tier its own.
+    expect(await at("slot:Orca.Whirlpool(USDC,WSOL,4):USDC.pool")).toBe(fixed.pool);
+    expect(await at("slot:Orca.Whirlpool(USDC,WSOL,4,4):USDC.pool")).toBe(fixed.pool);
+    expect(await at("slot:Orca.Whirlpool(USDC,WSOL,4,1028):USDC.pool")).toBe(adaptive.pool);
+    expect(await at("slot:Orca.Whirlpool(WSOL,USDC,4,1028):USDC.vaultB")).toBe(adaptive.vaultB);
+    expect(await at("slot:Orca.Whirlpool(USDC,WSOL,4,1028):USDC.ticks0")).toBe(adaptive.payB[0]);
+  });
+
   it("names a whirlpool's static tier by its tick spacing, and an adaptive tier by its index after it", async () => {
     const adaptive = pool("orca-whirlpool-adaptive");
     const data = BYTES.get(adaptive.pool)!;
