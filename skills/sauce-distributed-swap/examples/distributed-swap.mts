@@ -190,8 +190,8 @@ check(
   "every swap is a @sauce/router call",
 );
 check(
-  !/__sauce_transfer\(pay, /.test(program.source),
-  "what is left of the budget stays in the Pot: the program sends none of payToken back",
+  /__sauce_transfer\(pay, recipient, unspent\)/.test(program.source),
+  "what is left of the budget goes to the recipient, by a SafeERC20 transfer",
 );
 check(
   program.entryParams.map((param) => param.name).join() ===

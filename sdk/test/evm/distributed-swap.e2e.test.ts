@@ -33,7 +33,7 @@
  * stops at its own limit, `priceLimit` moved by √(1 − fee) with the fee read from the pool (for V4,
  * this direction's protocol fee composed with the LP fee), so every fill costs at most `priceLimit`
  * with its fee paid, on average and at its last unit, which costs `priceLimit`; the budget's unspent
- * rest stays in the Pot, beside its other balance; `minTokens` at `budget × 1e18 ÷
+ * rest goes to `recipient` and the Pot's other balance stays; `minTokens` at `budget × 1e18 ÷
  * priceLimit` buys all of the budget or reverts, and `maxAvgPrice` reverts; `main` returns
  * `{ spent, bought, unspent }`, the same three words `abi.encode` gave, and `sauce simulate` prints
  * them by name. What each guard is for, by taking it out. And what a lookup costs.
@@ -590,6 +590,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(bought).toBe(sum(swapped, "got"));
     expect(await balance(WETH, RECIPIENT)).toBe(bought);
     expect(await balance(USDC, sauce.pot)).toBe(0n);
+    expect(await balance(USDC, RECIPIENT)).toBe(0n);
     // The empty 1% pool, priced inside its limit, was not touched.
     expect(await priceOf(venue("v3:10000"))).toBe(empty);
     console.log(`full fill: gas ${receipt.gasUsed}, ${bought} WETH units for ${budget} USDC units`);
@@ -673,8 +674,9 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(spent).toBe(sum(swapped, "paid"));
     expect(spent + unspent).toBe(budget);
     expect(unspent).toBeGreaterThan(0n);
-    // What the limits left of the budget stays in the Pot, beside the Pot's own.
-    expect(await balance(USDC, sauce.pot)).toBe(kept + unspent);
+    // What the limits left of the budget goes to the recipient; the Pot's own stays.
+    expect(await balance(USDC, RECIPIENT)).toBe(unspent);
+    expect(await balance(USDC, sauce.pot)).toBe(kept);
     expect(await balance(WETH, RECIPIENT)).toBe(bought);
     // The empty V3 pool, the empty V4 pool and the V4 pool past its own limit were not touched.
     expect(await Promise.all(untouched.map(priceOf))).toEqual(before);
@@ -694,11 +696,11 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     expect(swapped[3]!.fee).toBe(700n);
     for (const fill of swapped) expectWithin(fill, priceLimit, true, true);
     const spent = sum(swapped, "paid");
-    expect(await balance(WETH, sauce.pot)).toBe(budget - spent);
+    expect(await balance(WETH, RECIPIENT)).toBe(budget - spent);
     expect(await balance(USDC, RECIPIENT)).toBe(sum(swapped, "got"));
   });
 
-  it("skips every pool already past its own limit, and leaves the whole budget in the Pot", async () => {
+  it("skips every pool already past its own limit, and sends the whole budget to the recipient", async () => {
     const budget = 1_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
     // At most 2,700: each pool's own limit is below its price (the 0.05% V3 pool's is 2,698.65, the
@@ -708,7 +710,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const receipt = await cook(args);
     expect(receipt.status).toBe("success");
     expect(fills(receipt)).toEqual([]);
-    expect(await balance(USDC, sauce.pot)).toBe(budget);
+    expect(await balance(USDC, RECIPIENT)).toBe(budget);
   });
 
   it("minTokens at budget × 1e18 ÷ priceLimit, rounded up: all of the budget, or the cook reverts", async () => {

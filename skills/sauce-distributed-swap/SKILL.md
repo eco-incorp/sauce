@@ -1,6 +1,6 @@
 ---
 name: sauce-distributed-swap
-description: A Sauce program that spreads one exact-input swap over several price-limited pools on an EVM chain as a limit order, never paying more than a maximum price for any unit, fees included, and never stranding input. The rules (cover the venues that hold the pair, skip missing, empty and past-limit pools, a fee-adjusted limit per pool, minimum and average-price checks, the unspent budget left in the Pot), one helper per pool with loops that only find pools, why no sorting is needed, a complete program over Aerodrome Slipstream, Uniswap V3 and hookless Uniswap V4 on Base, a V4 pool held by its id, priceLimit for tokens of any decimals (an 8-decimal tokenized stock such as SPCXc), minTokens and maxAvgPrice, setting the price, simulating it, and the gas each lookup costs. Use when asked for a distributed, split or multi-venue swap on an EVM chain, "swap across protocols", "buy up to a price", a limit order, a minimum-amount-out or max-average-price check, or one trade routed through several pools.
+description: A Sauce program that spreads one exact-input swap over several price-limited pools on an EVM chain as a limit order, never paying more than a maximum price for any unit, fees included, and never stranding input. The rules (cover the venues that hold the pair, skip missing, empty and past-limit pools, a fee-adjusted limit per pool, minimum and average-price checks, the unspent budget sent to the recipient), one helper per pool with loops that only find pools, why no sorting is needed, a complete program over Aerodrome Slipstream, Uniswap V3 and hookless Uniswap V4 on Base, a V4 pool held by its id, priceLimit for tokens of any decimals (an 8-decimal tokenized stock such as SPCXc), minTokens and maxAvgPrice, setting the price, simulating it, and the gas each lookup costs. Use when asked for a distributed, split or multi-venue swap on an EVM chain, "swap across protocols", "buy up to a price", a limit order, a minimum-amount-out or max-average-price check, or one trade routed through several pools.
 ---
 
 # A distributed swap: one limit order over several pools
@@ -29,8 +29,8 @@ same order on Solana is `sauce-solana-distributed-swap`'s, on these rules.
   `priceLimit`, and every earlier unit less.
 - **Two checks on the total**: at least `minTokens` bought, an average no dearer than
   `maxAvgPrice`.
-- **Only the budget moves**: what else the Pot holds of the token is never offered, and what the
-  limits leave of the budget stays in the Pot, the owner's, for a later cook (`unspent` says how much).
+- **Only the budget moves**: what else the Pot holds of the token is never offered or sent; what the
+  limits leave of the budget goes to `recipient` with what was bought.
 - To see a pair's pools first (each venue's pools, fees, prices both ways, depth), run
   `sauce pools --chain <chain> <tokenA> <tokenB>`.
 
@@ -59,9 +59,8 @@ A correct distributed swap, whatever its tokens, chain or venues:
    their swap callback, and the Router pays exactly what the pool asks for: a pool that stops at its
    limit takes less, and the rest is still in the Pot.
 5. **Checks the total**: at least `minTokens` bought, and an average no dearer than `maxAvgPrice`.
-6. **Leaves what is left of the budget in the Pot** and returns how much (`unspent`): it stays the
-   owner's, for a later cook or one that sends it on. Never measure it as the Pot's whole balance of
-   the token, which on an owner's Pot may hold more of it for other uses.
+6. **Sends what is left of the budget to `recipient`**, with what was bought: never the Pot's whole
+   balance of the token, which on an owner's Pot may hold more of it for other uses.
 
 **One helper per pool; the loops only find pools.** Everything a pool needs, whatever its venue, is
 the same: read it, skip it or work out its limit, swap. Write that once, as one function taking the
@@ -197,12 +196,14 @@ function main(
     bought += trade(2, id, key.spacing, payToken, buyToken, kept, limit, recipient);
   }
 
-  // Settle: what was bought is already with the recipient. What is left of the budget stays in the
-  // Pot, the owner's, for a later cook: `unspent` says how much.
+  // Settle: the recipient already has what was bought; what is left of the budget goes there too.
   const unspent = pay.balanceOf(self) - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
+  if (unspent > 0) {
+    pay.transfer(recipient, unspent);
+  }
   return { spent, bought, unspent };
 }
 ```
@@ -213,7 +214,7 @@ Step by step:
   `priceLimit`, the two checks and the recipient. The program names no token, so one file buys
   any token with any other.
 - **The budget** must already be in the Pot (`sauce run --fund` pulls it in with the cook). `kept`
-  is whatever else of `payToken` the Pot holds, so only the budget is ever offered or counted.
+  is whatever else of `payToken` the Pot holds, so only the budget is ever offered or sent back.
 - **`priceLimit` as a sqrt price.** `priceLimit` is payToken per buyToken; a pool's `sqrtPriceX96` is
   the square root of token1 per token0 (token0 the lower address), times 2^96. Paying token1,
   `limit` is `√(priceLimit × 2^192 ÷ 1e18)`; paying token0 the price is upside down,
@@ -237,7 +238,7 @@ Step by step:
   pool swaps through `uniswapV4(UniswapV4.PoolManager, …)` with its key's fee and tick spacing; a
   hookless pool's LP fee is its key's fee. The output goes straight to `recipient`.
 - **Settle.** A `require` reverts the whole cook, every swap included. What is left of the budget
-  stays in the Pot, the owner's, for a later cook. `main` returns `{ spent, bought, unspent }`: three words, the same 96 bytes
+  goes to `recipient` too. `main` returns `{ spent, bought, unspent }`: three words, the same 96 bytes
   `abi.encode(spent, bought, unspent)` gives, which `sauce simulate` prints by name.
 
 **A V4 pool is its id, a `Uint256`.** A V4 pool has no address of its own: it lives in the
@@ -342,8 +343,8 @@ and `maxAvgPrice`; its
 - **`priceLimit` is that reference plus the slippage you accept**, on the price itself: 0.5% above
   2,700 USDC per WETH is 2,713.5, and a WETH sold for at least 0.5% below it is 2,686.5.
 - **Keep it tight.** A loose `priceLimit` reaches the thin, dear pools too, and they fill in loop
-  order. A `priceLimit` at or below the best price any pool offers trades nothing and leaves the
-  whole budget in the Pot, without reverting.
+  order. A `priceLimit` at or below the best price any pool offers trades nothing and sends the
+  whole budget back to `recipient`, without reverting.
 
 **`minTokens`, consistent with `priceLimit`.** Every unit costs `priceLimit` or less, so spending the
 whole budget buys at least `budget × 1e18 ÷ priceLimit`:
@@ -353,7 +354,7 @@ whole budget buys at least `budget × 1e18 ÷ priceLimit`:
   USDC at most 2,713.5: `1105583195135433942`. When the pools cannot take all of it within
   `priceLimit`, the cook reverts `bought below minTokens`.
 - **To buy as much as fills within `priceLimit`**: `minTokens` is the least worth the gas, or `0`, and
-  the rest of the budget stays in the Pot.
+  the rest of the budget goes to `recipient`.
 
 **`maxAvgPrice`, from a simulation.** `priceLimit` bounds every unit; `maxAvgPrice` bounds the
 average, and so catches a market that moved against the order between the simulation and the cook.
@@ -432,8 +433,8 @@ Net balance changes:
   WETH) and `unspent` (0).
 - **Each pool that traded** took payToken and gave buyToken. A pool you expected and do not see sat
   out: missing, empty, already past its limit, or the budget ran out first.
-- **A partial fill** shows in `unspent`: what is left of the budget stays in the Pot, and the Pot's
-  net change is only what was spent.
+- **A partial fill** ends with one more transfer: what is left of the budget, from the Pot to
+  `recipient`.
 - **The average** is `spent × 1e18 ÷ bought` in `priceLimit`'s units: **2707977806** here, 2,707.98
   USDC per WETH. With `priceLimit` 2,713.5, `maxAvgPrice` halfway to it is **2710738903**.
 
@@ -469,14 +470,13 @@ differently gets its own `venue` value and branch in `trade`.
   times 1e18: `price × 10^(18 + payDecimals − buyDecimals)`.
 - **The caller's limit handed to every pool unadjusted.** Each pool's last unit then costs its fee
   more; move each by `√(1 − fee)`.
-- **`priceLimit` at or below the best price.** Nothing trades and the whole budget stays in the Pot,
-  which is not a success: check `bought`.
+- **`priceLimit` at or below the best price.** Nothing trades and the whole budget comes back to
+  `recipient`, which is not a success: check `bought`.
 - **`minTokens` inconsistent with `priceLimit`**: to spend all or nothing it is
   `budget × 1e18 ÷ priceLimit`, rounded up.
 - **`maxAvgPrice` set without a simulation.** Take it halfway from a simulated average to
   `priceLimit`.
-- **Counting the Pot's whole balance as the budget.** Count only what is left of the budget
-  (`unspent`); the rest of the Pot's token is not this order's.
+- **Sending the Pot's whole balance back.** Send only what is left of the budget.
 - **A V4 pool id as an `Address`.** It is a 256-bit `Uint256`.
 - **Lookups for venues that never hold the pair.** Each costs gas on every cook; walk what
   `sauce pools` lists.

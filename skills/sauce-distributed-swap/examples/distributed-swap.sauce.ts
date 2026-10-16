@@ -12,7 +12,7 @@
 //                         times 10^(18 + payDecimals − buyDecimals)
 //   minTokens: Uint256    the least buyToken to receive, in its base units; less reverts the cook
 //   maxAvgPrice: Uint256  the most the average may cost, in priceLimit's units; 0 turns it off
-//   recipient: Address    receives what is bought; what is left of the budget stays in the Pot
+//   recipient: Address    receives what is bought, and what is left of the budget
 //
 //   SPCXc (8 decimals) for all of 1,000 USDC (6) or nothing, at most 150 each, 149.25 on average:
 //   sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> --fund USDC:1000 \
@@ -127,11 +127,13 @@ function main(
     bought += trade(2, id, key.spacing, payToken, buyToken, kept, limit, recipient);
   }
 
-  // Settle: what was bought is already with the recipient. What is left of the budget stays in the
-  // Pot, the owner's, for a later cook: `unspent` says how much.
+  // Settle: the recipient already has what was bought; what is left of the budget goes there too.
   const unspent = pay.balanceOf(self) - kept;
   const spent = budget - unspent;
   require(bought >= minTokens, "bought below minTokens");
   require(maxAvgPrice == 0 || spent * 10 ** 18 <= maxAvgPrice * bought, "average too high");
+  if (unspent > 0) {
+    pay.transfer(recipient, unspent);
+  }
   return { spent, bought, unspent };
 }
