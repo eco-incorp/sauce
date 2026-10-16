@@ -11,7 +11,7 @@
  *     fee and all, receives at least every unit they held, and leaves the pool at the last of them,
  *     the next bin untouched: both ways, into the second bin array, at three clocks (the
  *     volatility's reference kept, its floor decayed, and reset), and through `swap`;
- *   - a smaller input is swapped whole; the walk stops after twelve bins;
+ *   - a smaller input is swapped whole; the walk stops after eight bins;
  *   - a pool with a Token-2022 mint is swapped through `swap2`, on its first bin array;
  *   - it returns 0 having moved nothing for every skip its comment names, and stops before a bin
  *     array the slot skips;
@@ -65,7 +65,7 @@ const LAST_UPDATE = 1_783_355_346n;
  *  volatility's floor decayed by half. */
 const CLOCK = LAST_UPDATE + 54n;
 /** The most bins one swap walks. */
-const BUDGET = 12;
+const BUDGET = 8;
 
 const FIXTURE = new URL("../../svm/fixtures/meteora-dlmm/", import.meta.url);
 const ACCOUNTS = new Map(
@@ -258,7 +258,7 @@ describeSvm("@sauce/router's Meteora DLMM swap at a price, on the venue's own pr
     const arrays = (paysX ? DOWN : UP).filter((index): index is number => index !== null);
     const bins = walk(paysX, CLOCK, arrays);
 
-    it.each([0, 3, 10])(
+    it.each([0, 3, 6])(
       "stops at maxPrice with bin %i the last drained, the next untouched",
       async (k) => {
         const maxPrice = between(bins, k);
@@ -286,7 +286,7 @@ describeSvm("@sauce/router's Meteora DLMM swap at a price, on the venue's own pr
       expect(activeId()).toBe(bins[1]!.id);
     }, 120_000);
 
-    it("stops after twelve bins", async () => {
+    it("stops after eight bins", async () => {
       expect(bins.length).toBe(BUDGET);
       const outcome = succeeded(await run("meteoraDlmm", trade(paysX, 10n ** 15n, NO_LIMIT)));
       expect(outcome.paid).toBe(sum(bins, "drains"));

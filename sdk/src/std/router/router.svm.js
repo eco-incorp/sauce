@@ -84,7 +84,7 @@
 // swap charges it (a base, and a volatility term that grows with the bin's distance from the pool's
 // reference bin), and its swap is offered what drains each bin within `maxPrice` and no more: it
 // stops with the last of them drained. A bin is within it when what drains it, fee paid, over what
-// it holds is at most `maxPrice`. The walk goes at most twelve bins: each costs about 26,000 compute
+// it holds is at most `maxPrice`. The walk goes at most eight bins: each costs about 26,000 compute
 // units, the venue's own share included.
 //
 // AT THE POOL'S OWN LIMIT. `limit` is the pool's own: the sqrt price its swap takes, as the pool
@@ -1267,7 +1267,7 @@ function swapPhoenix(
 // its fee is the pool's base fee and a volatility term that grows with the bin's distance from the
 // pool's reference bin, taken from the input, in billionths. The pool's bitmap marks the bin arrays
 // that hold liquidity, and the swap goes from one marked array to the next: the walk stops before
-// an array the slot does not give, and after twelve bins.
+// an array the slot does not give, and after eight bins.
 //
 // Bin ids are i32s, read here biased by 70 · 2^25: every one positive, and a bin array's first a
 // multiple of 70, so a bin's array is its id over 70, numbered from 2^25 for the array at 0.
@@ -1290,7 +1290,7 @@ function swapDlmm(
   let at = terms >> 220;
   let left = input;
   let open = true;
-  let budget = 12;
+  let budget = 8;
   let k = 6;
   // `swap` takes the slot's first two bin arrays, `swap2` (a Token-2022 mint) its first.
   const token = trader[4].address;
