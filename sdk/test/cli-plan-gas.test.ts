@@ -1,5 +1,6 @@
 /**
  * The gas `sauce tx` suggests for a plan that deploys the Pot, then cooks (`commands.ts#planGas`),
+ * with the owner's `--fund` transfers between them, or alone before the cook on a Pot already there,
  * from each thing the simulation of the two can answer: both ran (each with 30% room, the cook's
  * as if the deployment had landed), both ran with the deployment's gas not reported apart (the cook's
  * alone, and why), the deployment reverts (no gas for either), the cook reverts
@@ -15,6 +16,7 @@ import { CLI_FIXTURES, jsonOf, sauce } from "./cli-anvil.js";
 
 const OWNER = "0x5555555555555555555555555555555555555555";
 const POT = "0x7777777777777777777777777777777777777777";
+const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const target = { owner: OWNER, salt: `0x${"00".repeat(32)}` } as const;
 const cook = { to: POT, data: "0x1234", value: 1000n } as const;
 const client = {} as PublicClient;
@@ -132,6 +134,77 @@ describe("the gas sauce tx suggests for a plan's deployment and cook", () => {
         "neither eth_simulateV1 nor state overrides): sign the cook with a gas limit that has " +
         "room, or once the deployment has landed: a signer's own estimate, taken while the Pot " +
         "has no code, is far too low",
+    );
+  });
+
+  it("gives the transfers before the cook theirs, and simulates them in what lands first", async () => {
+    let asked: Parameters<typeof planGas>[1] | undefined;
+    const before = [
+      { what: "transfer 100 USDC to the Pot", tx: { to: USDC, data: "0xa9059cbb", value: 0n } },
+    ] as const;
+    const gas = await planGas(client, { ...target, before }, cook, async (_, input) => {
+      asked = { owner: input.owner, ...(input.deploy ?? {}), before: input.before ?? [] };
+
+      return {
+        ...base,
+        ok: true,
+        returns: "0x",
+        gas: 128_999n,
+        deployGas: 160_415n,
+        beforeGas: [40_000n],
+        gasKind: "used",
+        traced: true,
+      };
+    });
+    expect(asked).toEqual({ owner: OWNER, salt: target.salt, before });
+    expect([gas.deploy, gas.before, gas.cook]).toEqual([208_539n, [52_000n], 167_698n]);
+    expect(gas.note).toMatch(
+      /as if the deployment and the transfers had landed \(128999 used, simulated after them\)/,
+    );
+    // On a Pot already there, the transfers alone come first.
+    const deployed = await planGas(
+      client,
+      { owner: OWNER, before },
+      cook,
+      answering({
+        ...base,
+        ok: true,
+        returns: "0x",
+        gas: 128_999n,
+        beforeGas: [40_000n],
+        gasKind: "used",
+        traced: true,
+      }),
+    );
+    expect([deployed.deploy, deployed.before, deployed.cook]).toEqual([
+      undefined,
+      [52_000n],
+      167_698n,
+    ]);
+    expect(deployed.note).toMatch(/as if the transfers had landed/);
+    expect(deployed.note).not.toMatch(/The deployment carries no gas/);
+  });
+
+  it("gives no gas when a transfer would revert, and says the owner must hold it", async () => {
+    const gas = await planGas(
+      client,
+      {
+        owner: OWNER,
+        before: [{ what: "transfer 100 USDC to the Pot", tx: { to: USDC, data: "0x", value: 0n } }],
+      },
+      cook,
+      answering({
+        ...base,
+        ok: false,
+        stage: "before",
+        what: "transfer 100 USDC to the Pot",
+        reason: "ERC20: transfer amount exceeds balance",
+      }),
+    );
+    expect(gas.cook).toBeUndefined();
+    expect(gas.note).toBe(
+      "transfer 100 USDC to the Pot would revert (ERC20: transfer amount exceeds balance), so no " +
+        "gas is suggested: the owner must hold what it transfers",
     );
   });
 

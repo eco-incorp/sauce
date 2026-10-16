@@ -50,6 +50,7 @@ import {
   forkSnapshot,
   type ForkSnapshot,
   fundingFor,
+  fundTransfers,
   globalsCommand,
   handoff,
   inspectCommand,
@@ -516,7 +517,8 @@ export function leftInPotNote(json: Record<string, unknown>): string | undefined
 // ---------------------------------------------------------------------------------------------
 
 export type ProgramArgs = z.infer<z.ZodObject<typeof PROGRAM>>;
-type CookArgs = Omit<ProgramArgs, "source"> & z.infer<z.ZodObject<typeof COOK>>;
+type CookArgs = Omit<ProgramArgs, "source"> &
+  z.infer<z.ZodObject<typeof COOK>> & { readonly fund?: readonly string[] };
 
 /** A program and the files it compiles from: what every compiling tool starts with. */
 export interface Program {
@@ -816,6 +818,11 @@ async function cookTransaction(
 ): Promise<CommandOutput> {
   const chain = program.input.chain;
   if (chain.kind === "svm") {
+    if (args.fund !== undefined && args.fund.length > 0) {
+      throw new UsageError(
+        `fund is for EVM chains: on ${chain.slug} a program spends from the accounts it is given`,
+      );
+    }
     const rpcUrl = await reach.require(
       chain,
       args.rpcUrl,
@@ -825,6 +832,7 @@ async function cookTransaction(
     return svmTxCommand(svmCook(args, program, rpcUrl), program.files);
   }
   const cook = evmCook(args, program);
+  const transfers = args.fund === undefined ? [] : fundTransfers(args.fund, chain);
   const rpcUrl = await reach.endpoint(chain, args.rpcUrl);
   if (cook.value === undefined && rpcUrl === undefined) {
     throw new UsageError(
@@ -838,6 +846,7 @@ async function cookTransaction(
     {
       ...cook,
       ...(rpcUrl === undefined ? {} : { rpcUrl }),
+      ...(transfers.length === 0 ? {} : { transfers }),
       endpointOf: (other) => reach.endpoint(other, undefined),
     },
     program.files,
@@ -2000,7 +2009,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "transaction. `notes` say what must be " +
         "true for it to land: a funded Pot. `sourceSha256` is the sha256 of the program's text. " +
         `${UNSIGNED} ${SUPPORTED_ONLY}`,
-      input: { ...PROGRAM, ...sourceInputs(local), ...COOK },
+      input: {
+        ...PROGRAM,
+        ...sourceInputs(local),
+        ...COOK,
+        fund: TOKEN_AMOUNTS.describe(
+          "EVM only: tokens the owner transfers into the Pot before the cook, as transactions of " +
+            "the plan after the Pot's deployment; each <TOKEN|address>:<amount>, as " +
+            "assumeBalance; ETH:<amount> rides as the cook's value instead. Sent as one batch " +
+            "(sendCalls), a smart wallet deploys, funds and cooks with one approval, or nothing " +
+            "happens.",
+        ),
+      },
       output: refusable({
         chainId: z.number(),
         to: z.string(),

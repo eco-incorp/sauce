@@ -333,6 +333,24 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
   };
 }
 
+/**
+ * `sauce tx --fund` values, `<TOKEN|address>:<amount>`, each named once: what the owner moves into
+ * the Pot before the cook, each token a transfer the plan lists and `ETH` the cook's value
+ * (`funding.ts#transfersToPot`). EVM only.
+ */
+export function fundTransfers(raws: readonly string[], chain: CanonicalChain): FundRequest[] {
+  const requests = raws.map((raw) => parseTokenAmount(raw, chain, "--fund"));
+  const seen = new Set<string>();
+  for (const request of requests) {
+    if (seen.has(request.token ?? "native")) {
+      throw new UsageError(`--fund names ${request.label} twice: give it once, with the total`);
+    }
+    seen.add(request.token ?? "native");
+  }
+
+  return requests;
+}
+
 /** `--assume-balance` values, `<TOKEN|address>:<amount>`, each named once. */
 export function assumedBalances(raws: readonly string[], chain: CanonicalChain): FundRequest[] {
   const requests = raws.map((raw) => parseTokenAmount(raw, chain, "--assume-balance"));

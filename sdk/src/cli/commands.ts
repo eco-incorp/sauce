@@ -82,7 +82,7 @@ import { appliedDefines, contractCollector } from "./report.js";
 import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmAccountsToGive, svmCookSize, svmPayload } from "./solana.js";
-import type { Funding } from "./funding.js";
+import { transfersToPot, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
 import {
   intentDestinations,
   previewRefusal,
@@ -831,35 +831,44 @@ export function valueOf(
 const withRoom = (gas: bigint): bigint => (gas * 13n) / 10n;
 
 /**
- * The gas to sign a plan's Pot deployment and cook with: the two simulated together, the cook on the
- * Pot the deployment leaves, from `owner`. A signer's own estimate of the cook, taken while the Pot
- * has no code, prices a call to an empty address. Each with room (`withRoom`); with a note saying
- * so, or why the cook has none. `simulateWith` is the rehearsal, given by a test.
+ * The gas to sign a plan's transactions with: the Pot's deployment (with `salt`, when it has no
+ * code), the owner's transfers into it (`before`), and the cook, simulated together from `owner`,
+ * the cook on the Pot they leave. A signer's own estimate of the cook, taken before they have
+ * landed, prices a call to an empty address or an unfunded Pot. Each with room (`withRoom`); with a
+ * note saying so, or why the cook has none. `simulateWith` is the rehearsal, given by a test.
  */
 export async function planGas(
   client: PublicClient,
-  target: Extract<PotInput, { readonly owner: Address }>,
+  plan: { readonly owner: Address; readonly salt?: Hex; readonly before?: readonly BeforeCook[] },
   cook: TxRequest,
   simulateWith: typeof rehearse = rehearse,
-): Promise<{ deploy?: bigint; cook?: bigint; note: string }> {
+): Promise<{ deploy?: bigint; before?: readonly bigint[]; cook?: bigint; note: string }> {
+  const before = plan.before ?? [];
+  const landed =
+    plan.salt === undefined
+      ? "the transfers"
+      : before.length === 0
+        ? "the deployment"
+        : "the deployment and the transfers";
   const roomless =
-    "sign the cook with a gas limit that has room, or once the deployment has landed: a " +
-    "signer's own estimate, taken while the Pot has no code, is far too low";
+    `sign the cook with a gas limit that has room, or once ${landed} ${before.length === 0 && plan.salt !== undefined ? "has" : "have"} landed: a ` +
+    `signer's own estimate, taken while ${plan.salt === undefined ? "the Pot is not funded" : "the Pot has no code"}, is far too low`;
   let rehearsal;
   try {
     rehearsal = await simulateWith(client, {
-      owner: target.owner,
+      owner: plan.owner,
       pot: cook.to,
       kitchen: kitchenAddress(),
-      deploy: { salt: target.salt },
+      ...(plan.salt === undefined ? {} : { deploy: { salt: plan.salt } }),
+      ...(before.length === 0 ? {} : { before }),
       cook,
       overrides: [],
     });
   } catch (error) {
-    // The plan stands without it: an endpoint that cannot simulate the two together.
+    // The plan stands without it: an endpoint that cannot simulate them together.
     return {
       note:
-        `the endpoint could not simulate the cook after the deployment ` +
+        `the endpoint could not simulate the cook after ${landed} ` +
         `(${(error as { shortMessage?: string }).shortMessage ?? (error as Error).message.split("\n")[0]}): ` +
         roomless,
     };
@@ -869,26 +878,32 @@ export async function planGas(
       note:
         rehearsal.stage === "deploy"
           ? `the Pot's deployment would revert (${rehearsal.reason}), so no gas is suggested`
-          : `the cook is given no gas: simulated after the deployment, on the chain as it is, it ` +
-            `would revert (${rehearsal.reason}). Fund the Pot first (its address takes tokens ` +
-            `before it is deployed) and build it again for its gas, or ${roomless}`,
+          : rehearsal.stage === "before"
+            ? `${rehearsal.what ?? "a transfer"} would revert (${rehearsal.reason}), so no gas is ` +
+              "suggested: the owner must hold what it transfers"
+            : `the cook is given no gas: simulated after ${landed}, on the chain as it is, it ` +
+              `would revert (${rehearsal.reason}). Fund the Pot first (its address takes tokens ` +
+              `before it is deployed) and build it again for its gas, or ${roomless}`,
     };
   }
   if (rehearsal.gas === undefined) {
-    return { note: `the endpoint could not estimate the cook after the deployment: ${roomless}` };
+    return { note: `the endpoint could not estimate the cook after ${landed}: ${roomless}` };
   }
   const gas = withRoom(rehearsal.gas);
+  const deployed = plan.salt === undefined;
 
   return {
     ...(rehearsal.deployGas === undefined ? {} : { deploy: withRoom(rehearsal.deployGas) }),
+    ...(before.length === 0 ? {} : { before: rehearsal.beforeGas.map(withRoom) }),
     cook: gas,
     note:
       `each transaction's gas is a limit to sign it with: the cook's, ${gas}, is estimated as if ` +
-      `the deployment had landed (${rehearsal.gas} ${rehearsal.gasKind}, simulated after it), with ` +
-      "30% room. A signer's own estimate of the cook, taken while the Pot has no code, is far " +
-      "too low" +
+      `${landed} had landed (${rehearsal.gas} ${rehearsal.gasKind}, simulated after ` +
+      `${before.length === 0 && !deployed ? "it" : "them"}), with 30% room. A signer's own ` +
+      `estimate of the cook, taken while ${deployed ? "the Pot is not funded" : "the Pot has no code"}, ` +
+      "is far too low" +
       // Not the deployment's: it calls the Kitchen, which has code, so a signer estimates it right.
-      (rehearsal.deployGas === undefined
+      (!deployed && rehearsal.deployGas === undefined
         ? ". The deployment carries no gas: the endpoint did not report it apart, and a signer's " +
           "own estimate of it is right, as the Kitchen it calls has code"
         : ""),
@@ -903,6 +918,9 @@ export interface TxInput extends CookInput {
   readonly setup?: (reach: SetupReach) => Promise<readonly SetupStep[]>;
   /** Another chain's endpoint, as the command finds it, for what `setup` reads there. */
   readonly endpointOf?: EndpointOf;
+  /** `--fund`: what the owner moves into the Pot, planned after its deployment and before the cook,
+   *  each token a plain transfer and the native currency the cook's value (`transfersToPot`). */
+  readonly transfers?: readonly FundRequest[];
 }
 
 /** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
@@ -949,17 +967,48 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
       ),
     )) ?? []),
   ];
-  if (setup.length > 0) {
-    // A plan that deploys the Pot, then cooks: the cook's gas, as if the deployment had landed.
+  // `--fund`: the owner's transfers into the Pot, after its deployment and before the cook; the
+  // native currency rides as the cook's value.
+  const funds =
+    input.transfers === undefined || input.transfers.length === 0
+      ? undefined
+      : await transfersToPot({
+          ...(client === undefined ? {} : { client }),
+          requests: input.transfers,
+          ...(owner === undefined ? {} : { owner }),
+          pot: cook.pot,
+        });
+  const transfers = funds?.transfers ?? [];
+  const cookValue = value + (funds?.native ?? 0n);
+  if (setup.length > 0 || transfers.length > 0) {
+    // The cook's gas, as if what comes before it had landed: the Pot's deployment, the transfers.
     const gas =
-      deployFirst && setup.length === 1 && client !== undefined && "owner" in target
-        ? await planGas(client, target, { to: cook.pot, data: cook.data, value })
+      setup.length === (deployFirst ? 1 : 0) && client !== undefined && owner !== undefined
+        ? await planGas(
+            client,
+            {
+              owner,
+              ...(deployFirst && "owner" in target ? { salt: target.salt } : {}),
+              before: transfers,
+            },
+            { to: cook.pot, data: cook.data, value: cookValue },
+          )
         : undefined;
-    const steps = setup.map((step, index) =>
-      index === 0 && gas?.deploy !== undefined
-        ? { ...step.planned, gas: hexQuantity(gas.deploy) }
-        : step.planned,
-    );
+    const steps = [
+      ...setup.map((step, index) =>
+        index === 0 && gas?.deploy !== undefined
+          ? { ...step.planned, gas: hexQuantity(gas.deploy) }
+          : step.planned,
+      ),
+      ...transfers.map((each, index) => ({
+        what: each.what,
+        chainId: input.chain.id,
+        to: each.tx.to,
+        data: each.tx.data,
+        value: hexQuantity(each.tx.value),
+        ...(gas?.before?.[index] === undefined ? {} : { gas: hexQuantity(gas.before[index]!) }),
+      })),
+    ];
     const json = {
       chainId: input.chain.id,
       pot: cook.pot,
@@ -970,7 +1019,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           chainId: input.chain.id,
           to: cook.pot,
           data: cook.data,
-          value: hexQuantity(value),
+          value: hexQuantity(cookValue),
           ...(gas?.cook === undefined ? {} : { gas: hexQuantity(gas.cook) }),
         },
       ],
@@ -983,7 +1032,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         ...steps.map((step) =>
           castSend(step.to, step.data, BigInt(step.value) === 0n ? undefined : BigInt(step.value)),
         ),
-        castSend(cook.pot, cook.data, value),
+        castSend(cook.pot, cook.data, cookValue),
       ].join("\n"),
       notes: [
         head,
@@ -991,12 +1040,23 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
           ? [
               `${potMissing(cook.pot, input.chain)}: the first transaction deploys it (any account ` +
                 "may send it; the Pot is the owner's either way), and the cook comes last. Send " +
-                "them in order, then fund the Pot with what the program spends.",
+                (transfers.length === 0
+                  ? "them in order, then fund the Pot with what the program spends."
+                  : "them in order."),
             ]
           : []),
         ...setup
           .slice(deployFirst ? 1 : 0)
           .map((step) => `${step.reason}: ${step.planned.what} comes first.`),
+        ...(transfers.length === 0
+          ? []
+          : [
+              `--fund: the owner's ${transfers.length === 1 ? "transfer into the Pot comes" : `${transfers.length} transfers into the Pot come`} ` +
+                "before the cook. Sent as one batch (sendCalls, a smart wallet's single " +
+                `approval), the Pot is ${deployFirst ? "deployed, funded" : "funded"} and cooked ` +
+                "on at once, or not at all.",
+            ]),
+        ...(funds?.notes ?? []),
         ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
         from,
       ],

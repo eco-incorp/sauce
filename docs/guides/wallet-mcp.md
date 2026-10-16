@@ -107,8 +107,12 @@ On Solana each `transaction` is already what Phantom's `solana_send` takes.
 
 Your Pot does not need to exist first. When it doesn't, the plan creates it and then runs your
 program, and one approval does both. If the program fails, nothing happens at all: no half-made Pot
-is left behind. Tokens the program spends can go to the Pot's address before the Pot exists
-(`sauce_pot` gives the address); they are there when it is created.
+is left behind.
+
+The program usually spends tokens, which have to be in the Pot when it runs. Ask for them with
+`fund` (`--fund` on the command line), such as `fund: ["USDC:100"]`. The plan then moves them from
+your wallet into the Pot, right before the program runs. Creating the Pot, filling it and running
+the program are then one approval, and either all three happen or none does.
 
 ## On Solana, with Phantom
 

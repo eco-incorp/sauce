@@ -166,25 +166,38 @@ describe("sauce run --fund, refused before anything is sent", () => {
     );
   });
 
-  it("--fund on sauce tx, which signs nothing", async () => {
-    let stderr = "";
-    const code = await runCli(
-      [
-        "tx",
-        program,
-        "--chain",
-        "base",
-        "--owner",
-        getAddress(TOKEN),
-        "--value",
-        "0",
-        "--fund",
-        "USDC:1",
-      ],
-      { ...nodeIo(), stdout: () => undefined, stderr: (text) => void (stderr += text) },
-    );
-    expect(code).toBe(2);
-    expect(stderr).toMatch(/--fund/);
+  it("--fund-mode and --sweep on sauce tx, which signs nothing: its --fund is a plain transfer", async () => {
+    const tx = async (...extra: string[]) => {
+      let stdout = "";
+      let stderr = "";
+      const code = await runCli(
+        [
+          ...["tx", program, "--chain", "base", "--owner", getAddress(TOKEN), "--value", "0"],
+          ...["--fund", "USDC:1", ...extra],
+        ],
+        {
+          ...nodeIo(),
+          stdout: (text) => void (stdout += text),
+          stderr: (text) => void (stderr += text),
+        },
+      );
+
+      return { code, stdout, stderr };
+    };
+    // The owner's transfer into the Pot, planned before the cook: nothing to sign here.
+    const planned = await tx();
+    expect(planned.code).toBe(0);
+    expect(
+      (JSON.parse(planned.stdout) as { transactions: Array<{ what: string }> }).transactions.map(
+        (each) => each.what.split(" ")[0],
+      ),
+    ).toEqual(["transfer", "cook"]);
+    // A pull is signed in the cook, so its modes and the sweep are sauce run's alone.
+    for (const flag of [["--fund-mode", "permit2"], ["--sweep"]]) {
+      const refused = await tx(...flag);
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toContain(flag[0]);
+    }
   });
 });
 

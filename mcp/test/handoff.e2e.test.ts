@@ -5,8 +5,8 @@
  *
  * - `sendCalls`, Coinbase Wallet MCP's `send_calls` input, run by a contract wallet as one batch
  *   (`sdk/test/evm/fixtures/BatchWallet.sol`, Coinbase Smart Wallet's `executeBatch` shape): the
- *   wallet owns the Pot, and one batch deploys it and cooks on it — or, when the cook reverts,
- *   leaves nothing behind;
+ *   wallet owns the Pot, and one batch deploys it, funds it from the wallet (`fund`) and cooks on
+ *   it — or, when the cook or a transfer reverts, leaves nothing behind;
  * - each transaction itself, Phantom MCP's `evm_send` input (its labels dropped by that schema),
  *   sent one by one as eth_sendTransaction, from the account the Pot belongs to.
  *
@@ -200,6 +200,59 @@ describe(
       walletTakes(again, base.chain.id);
       sameBatch(again.sendCalls, [again], "base");
       assert.equal(await runBatch(owner, again.sendCalls), "success");
+    });
+
+    it("with fund, one batch deploys the Pot, funds it from the wallet and cooks", async () => {
+      const owner = await contractWallet();
+      const pot = getAddress(v12PredictPot(owner, ZERO_SALT) as Address);
+      await base.mint(usdc, owner, 1_500_000n);
+      const before = await base.balanceOf(usdc, RECIPIENT);
+
+      const tx = ok(
+        await mcp.call("sauce_tx", {
+          source: PAY,
+          chain: "base",
+          owner,
+          fund: ["USDC:1.5"],
+          args: [RECIPIENT, "1500000"],
+        }),
+      ) as unknown as { transactions: Tx[]; sendCalls: Batch; notes: string[] };
+      assert.deepEqual(
+        tx.transactions.map((each) => each.what?.split(" ")[0]),
+        ["Kitchen.deployPot(" + getAddress(owner) + ",", "transfer", "cook"],
+      );
+      tx.transactions.forEach((each) => {
+        walletTakes(each, base.chain.id);
+        assert.ok(each.gas !== undefined, `${each.what} comes with its gas`);
+      });
+      sameBatch(tx.sendCalls, tx.transactions, "base");
+      assert.ok(tx.notes.some((note) => /deployed, funded and cooked on at once/.test(note)));
+
+      // One approval: the Pot deployed, the wallet's USDC moved into it, and spent by the cook.
+      assert.equal(await runBatch(owner, tx.sendCalls), "success");
+      assert.equal(getAddress(await potOwner(base, pot)), getAddress(owner));
+      assert.equal((await base.balanceOf(usdc, RECIPIENT)) - before, 1_500_000n);
+      assert.equal(await base.balanceOf(usdc, owner), 0n);
+      assert.equal(await base.balanceOf(usdc, pot), 0n);
+    });
+
+    it("with fund the wallet cannot cover, the batch reverts whole, and the plan says why", async () => {
+      const owner = await contractWallet();
+      const pot = getAddress(v12PredictPot(owner, ZERO_SALT) as Address);
+      await base.mint(usdc, owner, 1_000_000n);
+      const tx = ok(
+        await mcp.call("sauce_tx", {
+          source: PAY,
+          chain: "base",
+          owner,
+          fund: ["USDC:1.5"],
+          args: [RECIPIENT, "1500000"],
+        }),
+      ) as unknown as { sendCalls: Batch; notes: string[] };
+      assert.ok(tx.notes.some((note) => /holds 1000000 of USDC .*below the 1500000/.test(note)));
+      assert.equal(await runBatch(owner, tx.sendCalls), "reverted");
+      assert.equal(await base.publicClient.getCode({ address: pot }), undefined);
+      assert.equal(await base.balanceOf(usdc, owner), 1_000_000n);
     });
 
     it("a batch whose cook reverts deploys no Pot either: all of it or none", async () => {

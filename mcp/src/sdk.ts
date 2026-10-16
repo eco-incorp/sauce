@@ -52,6 +52,7 @@ export {
   bindMainArguments,
   definesReach,
   fundingFor,
+  fundTransfers,
   potImportTarget,
   potOwner,
   potTarget,

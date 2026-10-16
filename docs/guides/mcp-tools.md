@@ -257,6 +257,11 @@ amount)`, `Orca.Whirlpool.swap(pool, …)`), and those a program writes where it
   transaction instead of 32.
 - `rpcUrl`.
 
+`sauce_tx` also takes `fund`, such as `["USDC:100"]` (EVM): the owner's transfer of each token into
+the Pot, planned after its deployment and before the cook, each with its gas when an endpoint is
+given; `ETH:<amount>` is added to the cook's value instead. With `sendCalls`, a smart wallet
+deploys the Pot, funds it and cooks with one approval.
+
 `sauce_simulate` also takes:
 
 - `assumeBalance`, such as `["USDC:2", "ETH:0.1"]`: balances the Pot holds for the simulation only.

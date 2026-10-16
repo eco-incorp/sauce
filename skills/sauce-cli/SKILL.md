@@ -119,7 +119,10 @@ take, beside its own fields, so nothing is converted:
   through the link it returns (open it for them where a shell can), and `get_request_status` with
   its request id says when it landed. The signer is a smart wallet: its address (`get_wallets`) is
   the Pot's owner, so one batch deploys the Pot and cooks on it, and a cook that reverts leaves no
-  Pot behind. Tokens sent to the Pot's address before it exists are there when it is deployed.
+  Pot behind. With `--fund USDC:100` (the tool's `fund`), the plan also moves the owner's tokens
+  into the Pot between the two (`ETH:<amount>` rides as the cook's value): deploying, funding and
+  cooking are one approval, all of it or none. Tokens sent to the Pot's address before it exists
+  are there when it is deployed too.
 - **Phantom MCP**: the agent gets a wallet of its own, held by Phantom; fund its address
   (`wallet_addresses`) first. On an EVM chain, `evm_send` with each transaction as its input, in
   order, each landed before the next (`sauce inspect <hash>`). On Solana,
@@ -409,9 +412,13 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
   `sauce tx buy.sauce.ts --chain base --owner <address> --value <wei> --args <arguments>`. While the
   Pot has no code its deployment comes first (`transactions`), each with `gas`: have each signed with
   that limit (the cook's is estimated as if the deployment had landed; a signer's own estimate, taken
-  while the Pot has no code, is far too low), or send `sendCalls` as one batch. `--format cast`
-  prints a `cast send` line instead. It simulates nothing: show the user the program, the arguments
-  and `sauce simulate`'s outcome first.
+  while the Pot has no code, is far too low), or send `sendCalls` as one batch.
+  `--fund <TOKEN>:<amount>` adds the owner's transfer of each token into the Pot after the
+  deployment and before the cook (whole tokens, or base units ending in `n`; `ETH:<amount>` rides
+  as the cook's value), simulated with them for its gas where an endpoint is given; a balance short
+  of a transfer is said, as the batch would revert. `--format cast` prints a `cast send` line
+  instead. It simulates only for gas: show the user the program, the arguments and
+  `sauce simulate`'s outcome first.
 - **`sauce send <signed>… --chain base`** broadcasts what a hardware wallet, a KMS or another tool
   signed (raw hex for EVM, the base64 wire transaction for Solana), in order, waits for each and
   prints what it did as `run` does. It takes no key. Each is simulated as signed first, and one that

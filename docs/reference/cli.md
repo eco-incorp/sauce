@@ -1277,8 +1277,9 @@ Options:
       --args <value>…                              main's arguments in order (JSON for an array or tuple); -- before one like a flag
 
 EVM chains only:
-      --pot <address>  Or the Pot itself, by address
-      --value <wei>    Kitchen fee plus native spent (default: read the fee)
+      --pot <address>        Or the Pot itself, by address
+      --value <wei>          Kitchen fee plus native spent (default: read the fee)
+      --fund <TOKEN:amount>  Transfer tokens from the owner into the Pot before the cook: USDC:1.5 (whole tokens); ETH:0.01 rides as its value
 
 Solana only:
       --account NAME=<address>        An account main takes, by name: an address, pot, owner, self, system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Solana.pda(…)), are derived without it
@@ -1298,6 +1299,13 @@ When the chain shows the Pot has no code yet, it prints the plan instead: { chai
 transactions }, Kitchen.deployPot first (marked deploysPot; any account may send it), then
 the cook, to send in that order. `--format cast` prints each as a `cast send` line. What
 must be true for it to land goes to stderr: the Pot funded, and sent from its owner.
+Each transaction is what a wallet's send tool takes (value and gas hex), and sendCalls
+is all of them as one batch, for a wallet that sends a batch.
+
+--fund TOKEN:amount (whole tokens, or base units ending in n) plans the owner's transfer
+of each token into the Pot after its deployment and before the cook; ETH:<amount> rides
+as the cook's value. Sent as one batch, a smart wallet deploys, funds and cooks with one
+approval, or nothing happens.
 
 On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },
 the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via
@@ -1314,6 +1322,7 @@ there.
 Example:
   sauce tx pay.sauce.ts --chain base --owner 0x…
   sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --offline
+  sauce tx pay.sauce.ts --chain base --owner 0x… --fund USDC:100
 ```
 
 ## `sauce send`
