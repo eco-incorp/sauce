@@ -1,7 +1,7 @@
 /**
  * Solana's venue namespaces, EXECUTED: `Orca.Whirlpool.swap(pool, USDC, WSOL, …)`,
- * `Raydium.CLMM.swap(…)`, `Phoenix.Market.swap(…)`, `Meteora.DLMM.swap(…)`, every other venue's, and
- * `Solana.swap(…)` at a pool of any of them, compiled for Solana
+ * `Raydium.CLMM.swap(…)`, `Phoenix.Market.swap(…)`, every other price-limit venue's, `Solana.swap(…)`
+ * at a pool of any of them, and Meteora DLMM's exact input, `Meteora.DLMM.swap(…)`, compiled for Solana
  * and run through the `sauce`
  * command with the pool as main's argument and no `--account` — the pool's nine accounts read from
  * the pool on the cluster as the cook is built (`svm/pool-slot.ts`), the trader's derived from the
@@ -445,54 +445,38 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     expect(tokenAmount(harness, potUsdc)).toBe(before - 2n * amount);
   }, 300_000);
 
-  it("Meteora.DLMM.swap walks the pool's bins to maxPrice, and Solana.swap takes the pool too", async () => {
-    // A limit a twentieth above the pool's active bin, which paying USDC costs its price, Q64.64 USDC
-    // per SOL, fee aside: the swap takes what the bins within it hold.
-    const pair = harness.svm.getAccount(DLMM_POOL);
-    if (!pair.exists) throw new Error("no DLMM pool");
-    const active = new DataView(pair.data.buffer, pair.data.byteOffset).getInt32(76, true);
-    const index = Math.floor(active / 70);
-    const bins = harness.svm.getAccount(address("EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC"));
-    if (!bins.exists || index !== -90) throw new Error("the fixture's active bin array moved");
-    const cell = 56 + (active - index * 70) * 144 + 16;
-    let price = 0n;
-    for (let i = 15; i >= 0; i--) price = (price << 8n) | BigInt(bins.data[cell + i]!);
-    const maxPrice = (((price * 10n ** 18n) >> 64n) * 21n) / 20n;
+  it("Meteora.DLMM.swap pays exactly its input at the pool, given only its address", async () => {
     const file = program(
       "dlmm",
-      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  return Meteora.DLMM.swap(pool, USDC, WSOL, amountIn, maxPrice, 1);\n}\n",
+      "function main(pool: Address, amountIn: Uint256, minOut: Uint256): Uint256 {\n" +
+        "  return Meteora.DLMM.swap(pool, USDC, WSOL, amountIn, minOut);\n}\n",
     );
     const amount = 100n * 10n ** 6n;
-    const args = ["--args", DLMM_POOL, String(amount), String(maxPrice)];
+    const args = ["--args", DLMM_POOL, String(amount), "1"];
     const derive = (
       json(await sauce("compile", file, "--chain", "solana", "--json")) as {
         manifest: { accounts: { derive?: string }[] };
       }
     ).manifest.accounts.map((slot) => slot.derive);
     expect(derive).toContain("slot:@pool:USDC.ticks1");
-    const rehearsed = json(await simulate(file, ...args));
-    expect(rehearsed).toMatchObject({ ok: true });
+    const simulated = json(await simulate(file, ...args));
+    expect(simulated).toMatchObject({ ok: true });
     const held = harness.svm.getAccount(potWsol).exists ? tokenAmount(harness, potWsol) : 0n;
     const before = tokenAmount(harness, potUsdc);
     expect(json(await run(file, ...args))).toMatchObject({ cook: { status: "success" } });
     const bought = tokenAmount(harness, potWsol) - held;
     expect(bought).toBeGreaterThan(0n);
-    expect(BigInt(rehearsed.returned as string)).toBe(bought);
+    expect(BigInt(simulated.returned as string)).toBe(bought);
     expect(tokenAmount(harness, potUsdc)).toBe(before - amount);
-    // The same pool through Solana.swap; below the pool's price, nothing moves.
-    const any = program(
-      "dlmm-any",
-      "function main(pool: Address, amountIn: Uint256, maxPrice: Uint256): Uint256 {\n" +
-        "  return Solana.swap(pool, USDC, WSOL, amountIn, maxPrice, 0);\n}\n",
+    // Its swap takes no maxPrice: a price-limit venue's arguments are refused, naming its own.
+    const priced = program(
+      "dlmm-priced",
+      "function main(pool: Address, amountIn: Uint256): Uint256 {\n" +
+        "  return Meteora.DLMM.swap(pool, USDC, WSOL, amountIn, 10, 1);\n}\n",
     );
-    const again = json(await simulate(any, ...args));
-    expect(again).toMatchObject({ ok: true });
-    expect(BigInt(again.returned as string)).toBeGreaterThan(0n);
-    const below = json(
-      await simulate(any, "--args", DLMM_POOL, String(amount), String(maxPrice / 2n)),
-    );
-    expect(below).toMatchObject({ ok: true, returned: "0" });
+    const refused = await sauce("compile", priced, "--chain", "solana", "--json");
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toContain("(pool, tokenIn, tokenOut, amountIn, minOut)");
   }, 300_000);
 
   it("refuses a pool no price-limit venue owns before the cook, and another venue's on chain", async () => {
@@ -508,7 +492,7 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
       `the account poolProgram (slot:@pool:USDC.program): pool ${book.pool}'s slot paying USDC ` +
         "could not be read",
     );
-    expect(wrong.stderr).toContain("which is not a venue whose swap stops at a price limit");
+    expect(wrong.stderr).toContain("which is not a venue a namespace swaps at");
     // Another venue's pool, even one holding the token paid: its program refuses it on chain, by
     // the venue's own check, before anything moves.
     const stabble = pool("stabble-clmm-usdc-usdt");

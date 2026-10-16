@@ -5,16 +5,22 @@
  *   Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
  *
  * and the same on `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`,
- * `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM`, `Phoenix.Market` and `Meteora.DLMM`. `swap`
- * returns what arrived; where the pool cannot trade — past `maxPrice`, empty, paused, a slot with no
- * pool — it returns 0 having moved nothing, and below `minOut` it reverts. Each lowers to that venue's own
+ * `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. `swap` returns what
+ * arrived; where the pool cannot trade — past `maxPrice`, empty, paused, a slot with no pool — it
+ * returns 0 having moved nothing, and below `minOut` it reverts. `Meteora.DLMM`'s swap is an exact
+ * input, its venue's own, with no price limit:
+ *
+ *   Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)
+ *
+ * which pays all of `amountIn` or fails the transaction, and reverts below `minOut`. Each lowers to that venue's own
  * `@sauce/router` function (`orcaWhirlpool`), never `swap`, which carries every venue's code: one
  * venue's function is about a third of its size. That function keeps its every check — its program
  * id, the pool's owner, the pair.
  *
  *   Solana.swap(pool, tokenIn, tokenOut, amountIn, maxPrice, minOut)
  *
- * is the same at a pool of ANY of the ten, the venue read from the pool's owner as the program runs:
+ * is the same at a pool of ANY of the nine price-limit venues, the venue read from the pool's owner
+ * as the program runs:
  * it lowers to `@sauce/router`'s own `swap`, which carries every venue's code, for a program that
  * takes its pools as arguments and so cannot know their venues — the distributed swap. A pool given
  * as the System Program (`11111111111111111111111111111111`, the zero key) is an empty slot: its
@@ -39,23 +45,28 @@
 import { walk, type AstNode } from "./ast-walk.js";
 import { methodCall, type MethodCall } from "./token-rewrite.js";
 import { base58, capitalized, keyLiteral, nameOf, type SvmLowering } from "./svm-lowering.js";
-import { SVM_PRICE_LIMIT_VENUES, SVM_SLOT_PARTS } from "../svm/pool-slot.js";
+import { SVM_SLOT_PARTS, SVM_SLOT_VENUES } from "../svm/pool-slot.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 
 const ROUTER = "@sauce/router";
 const MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 
-/** A venue's namespace: its name for a person, its program, and its `@sauce/router` function. */
+/**
+ * A venue's namespace: its name for a person, its program, its `@sauce/router` function, and
+ * whether its swap is an exact input (no `maxPrice`) rather than at a price.
+ */
 export interface SvmVenueNamespace {
   readonly name: string;
   readonly program: string;
   readonly swap: string;
+  readonly exact?: true;
 }
 
-const venue = (name: string, swap: string): SvmVenueNamespace => ({
+const venue = (name: string, swap: string, exact?: true): SvmVenueNamespace => ({
   name,
-  program: SVM_PRICE_LIMIT_VENUES.find((one) => one.name === name)!.program,
+  program: SVM_SLOT_VENUES.find((one) => one.name === name)!.program,
   swap,
+  ...(exact ? { exact } : {}),
 });
 
 /** Each venue's namespace, its protocol then its program, as a program writes it. */
@@ -69,17 +80,25 @@ export const SVM_VENUE_NAMESPACES: Readonly<Record<string, SvmVenueNamespace>> =
   "Defituna.Fusion": venue("DefiTuna", "defituna"),
   "Crema.CLMM": venue("Crema", "crema"),
   "Phoenix.Market": venue("Phoenix", "phoenix"),
-  "Meteora.DLMM": venue("Meteora DLMM", "meteoraDlmm"),
+  "Meteora.DLMM": venue("Meteora DLMM", "meteoraDlmm", true),
 };
 
-/** How a program calls a venue's swap: its one method's signature. */
+/** How a program calls a venue's swap: its one method's signature, at a price. */
 export const SVM_VENUE_METHODS: readonly string[] = [
   "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, maxPrice: Uint256, minOut: Uint256): Uint256",
+];
+/** The same for a venue whose swap is an exact input. */
+export const SVM_EXACT_VENUE_METHODS: readonly string[] = [
+  "swap(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256, minOut: Uint256): Uint256",
 ];
 
 /** The namespace whose swap takes a pool of any of the venues: the chain's own. */
 export const SVM_ANY_VENUE = "Solana";
-const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "maxPrice", "minOut"] as const;
+const PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "maxPrice", "minOut"];
+const EXACT_PARAMS = ["pool", "tokenIn", "tokenOut", "amountIn", "minOut"];
+/** A venue's swap's arguments: an exact input's take no `maxPrice`. */
+const paramsOf = (namespace: string | undefined): string[] =>
+  namespace !== undefined && SVM_VENUE_NAMESPACES[namespace]!.exact ? EXACT_PARAMS : PARAMS;
 
 /** Each venue protocol, by the name a program writes first (`Orca`), and its programs' names. */
 const PROTOCOLS: ReadonlyMap<string, readonly string[]> = Object.keys(SVM_VENUE_NAMESPACES).reduce(
@@ -133,8 +152,8 @@ export function collectVenueMethods(l: SvmLowering): void {
     }
     if (site.method !== "swap") {
       throw new Error(
-        `${spelled} on Solana: ${namespace} offers swap, taking (${PARAMS.join(", ")}): it returns ` +
-          "0 having moved nothing where the pool cannot trade, and reverts below minOut",
+        `${spelled} on Solana: ${namespace} offers swap, taking (${paramsOf(namespace).join(", ")}): ` +
+          "it returns 0 having moved nothing where the pool cannot trade, and reverts below minOut",
       );
     }
     l.site(n, () => lowerSwap(site, namespace, spelled));
@@ -143,19 +162,14 @@ export function collectVenueMethods(l: SvmLowering): void {
   function lowerSwap(site: MethodCall, namespace: string | undefined, spelled: string): void {
     l.requireInMain(site.call, spelled, "a venue's swap");
     const args = (site.call as { arguments?: AstNode[] }).arguments ?? [];
-    if (args.length !== PARAMS.length || args.some((arg) => arg.type === "SpreadElement")) {
+    const params = paramsOf(namespace);
+    if (args.length !== params.length || args.some((arg) => arg.type === "SpreadElement")) {
       throw new Error(
-        `${spelled} takes ${PARAMS.length} arguments (${PARAMS.join(", ")}), got ${args.length}.`,
+        `${spelled} takes ${params.length} arguments (${params.join(", ")}), got ${args.length}.`,
       );
     }
-    const [poolArg, inArg, outArg, amountIn, , minOut] = args as [
-      AstNode,
-      AstNode,
-      AstNode,
-      AstNode,
-      AstNode,
-      AstNode,
-    ];
+    const [poolArg, inArg, outArg, amountIn] = args as [AstNode, AstNode, AstNode, AstNode];
+    const minOut = args[args.length - 1]!;
     const text = (node: AstNode): string => l.source.slice(node.start, node.end);
     const pool = poolOf(poolArg);
     const tokenIn = l.tokenOf(inArg, text(inArg), spelled);

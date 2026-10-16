@@ -62,7 +62,7 @@ describe("svmPoolSlot", () => {
     );
     const book = pool("manifest-sol-usdc");
     await expect(svmPoolSlot(load, book.pool, USDC)).rejects.toThrow(
-      "which is not a venue whose swap stops at a price limit",
+      "which is not a venue a namespace swaps at",
     );
     const nowhere = address("11111111111111111111111111111112") as Address;
     await expect(svmPoolSlot(load, nowhere, USDC)).rejects.toThrow("has no account");

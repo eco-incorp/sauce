@@ -3,10 +3,10 @@
  * paying one of its two tokens — program, pool, config, its two vaults, one more account and three
  * tick arrays, in that order (`router.svm.js`'s header) — read from the pool's own state.
  *
- * The venues are the ten whose swap a price limit stops: Raydium CLMM, PancakeSwap CLMM, Byreal and
- * Stabble CLMM (one pool layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema,
- * Phoenix's order book, and Meteora DLMM, whose bins the library walks to the limit. What each slot
- * holds, and why:
+ * The venues are the nine whose swap a price limit stops: Raydium CLMM, PancakeSwap CLMM, Byreal and
+ * Stabble CLMM (one pool layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema and
+ * Phoenix's order book; and Meteora DLMM, whose swap is an exact input. What each slot holds, and
+ * why:
  *
  *   - A Raydium-layout pool's swap loads every account given as a tick array, so each must exist,
  *     and starts at the first holding liquidity in its direction: the arrays its bitmap (1,024 bits
@@ -57,7 +57,7 @@ const SYSTEM = address("11111111111111111111111111111111");
 
 export type SvmPoolLayout = "raydium" | "whirlpool" | "defituna" | "crema" | "phoenix" | "dlmm";
 
-/** A venue whose swap a price limit stops: its name, program and pool layout. */
+/** A venue whose pool's slot is read here: its name, program and pool layout. */
 export interface SvmPriceLimitVenue {
   readonly name: string;
   readonly program: Address;
@@ -75,6 +75,11 @@ export const SVM_PRICE_LIMIT_VENUES: readonly SvmPriceLimitVenue[] = [
   { name: "DefiTuna", program: DEFITUNA_PROGRAM_ID, layout: "defituna" },
   { name: "Crema", program: CREMA_PROGRAM_ID, layout: "crema" },
   { name: "Phoenix", program: PHOENIX_PROGRAM_ID, layout: "phoenix" },
+];
+
+/** Every venue whose pool's slot is read here: the price-limit venues, then Meteora DLMM. */
+export const SVM_SLOT_VENUES: readonly SvmPriceLimitVenue[] = [
+  ...SVM_PRICE_LIMIT_VENUES,
   { name: "Meteora DLMM", program: METEORA_DLMM_PROGRAM_ID, layout: "dlmm" },
 ];
 
@@ -417,7 +422,7 @@ export async function svmDlmmSlot(
 
 /**
  * The slot of `pool` paying `pay`, read through `load`: its venue from the pool's owner, its pair
- * from its own bytes, which must hold `pay`. Throws for a pool no price-limit venue owns, one whose
+ * from its own bytes, which must hold `pay`. Throws for a pool no venue here owns, one whose
  * pair does not hold `pay`, and one whose slot cannot be read (a Raydium-layout pool with fewer
  * than three tick arrays near its price, a Meteora DLMM pool with no liquidity that way).
  */
@@ -428,11 +433,11 @@ export async function svmPoolSlot(
 ): Promise<SvmSlot> {
   const account = await load(pool);
   if (account === null) throw new Error(`pool ${pool} has no account`);
-  const venue = SVM_PRICE_LIMIT_VENUES.find((one) => one.program === account.owner);
+  const venue = SVM_SLOT_VENUES.find((one) => one.program === account.owner);
   if (venue === undefined) {
     throw new Error(
-      `${pool} is owned by ${account.owner}, which is not a venue whose swap stops at a price ` +
-        `limit (${SVM_PRICE_LIMIT_VENUES.map((one) => one.name).join(", ")})`,
+      `${pool} is owned by ${account.owner}, which is not a venue a namespace swaps at ` +
+        `(${SVM_SLOT_VENUES.map((one) => one.name).join(", ")})`,
     );
   }
   const data = account.data;

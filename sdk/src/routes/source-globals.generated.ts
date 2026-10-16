@@ -62,6 +62,15 @@ export interface SauceSvmVenueSource {
   swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, maxPrice: bigint, minOut: bigint): bigint;
 }
 
+/**
+ * A Solana venue's swap of an exact input at one pool, with no price limit: it pays all of
+ * `amountIn` or fails the transaction, and reverts below `minOut`; 0, having moved nothing, for no
+ * pool or no input. Its accounts are read from the pool as `SauceSvmVenueSource`'s are.
+ */
+export interface SauceSvmExactVenueSource {
+  swap(pool: bigint, tokenIn: bigint, tokenOut: bigint, amountIn: bigint, minOut: bigint): bigint;
+}
+
 /** A collection returned by Sauce, whose length is a Sauce scalar. */
 export interface SauceArray<T> {
   readonly length: bigint;
@@ -2451,7 +2460,7 @@ export interface PhoenixSvmVenuesSource {
 }
 
 export interface MeteoraSvmVenuesSource {
-  readonly DLMM: SauceSvmVenueSource;
+  readonly DLMM: SauceSvmExactVenueSource;
 }
 
 declare global {

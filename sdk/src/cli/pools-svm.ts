@@ -1,8 +1,7 @@
 /**
  * `sauce pools --chain solana <pay> <buy>`: a pair's pools at every Solana venue whose swap takes a
  * price limit that stops it — Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble CLMM (one pool
- * layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema, Phoenix's order book, and Meteora
- * DLMM, whose bins the swap walks to its limit — read now
+ * layout), Orca Whirlpools and Cropper (another), DefiTuna, Crema and Phoenix's order book — read now
  * through an endpoint, each with its price both ways, its fee and the nine accounts a swap at it
  * takes in each direction (program, pool, config, two vaults, one more account, three tick arrays),
  * its slot. `--pay` chooses the pools a distributed swap paying one of the pair takes and gives them
@@ -12,12 +11,9 @@
  *
  * A pool is found by `getProgramAccounts` on its venue's program, filtered by its size and the
  * pair at its mints' offsets (the concentrated-liquidity venues keep the pair in key order, the
- * lower first; a Phoenix market its base and quote and a DLMM pool its X and Y, either way). What a
- * pool is skipped for is what the skill's program skips it for: no liquidity at its price, swaps
- * switched off, a fee that is not one rate (or, on a DLMM pool, taken from the token bought), a
- * paused pool, a market not open for taking, a DLMM pool not active yet or priced past its bitmap.
- * A DLMM pool's liquidity is its active bin's, in the concentrated-liquidity pools' units: what it
- * holds, in token Y, over the rise of the square root of its price across the bin.
+ * lower first; a Phoenix market its base and quote, either way). What a pool is skipped for is what
+ * the skill's program skips it for: no liquidity at its price, swaps switched off, a fee that is not
+ * one rate, a paused pool, a market not open for taking.
  */
 import {
   address,
@@ -35,22 +31,14 @@ import { coalescingAccountLoader, kitBatchAccountLoader } from "../svm/loader.js
 import {
   PHOENIX_BASE_MINT_AT,
   SVM_CLMM_LAYOUT,
-  SVM_DLMM_LAYOUT,
   SVM_PRICE_LIMIT_VENUES,
   svmClmmSlot,
-  svmDlmmSlot,
   svmPhoenixSlot,
   type SvmPoolLayout,
   type SvmPriceLimitVenue,
   type SvmSlot,
 } from "../svm/pool-slot.js";
-import {
-  dlmmPriceFromId,
-  fetchPhoenixConfig,
-  LB_PAIR_DISCRIMINATOR,
-  METEORA_DLMM_PROGRAM_ID,
-} from "../svm/venues/index.js";
-import { memoizedGetProgramDerivedAddress } from "../svm/venues/pda-memo.js";
+import { fetchPhoenixConfig } from "../svm/venues/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 import { svmReader } from "./solana.js";
@@ -58,7 +46,6 @@ import { svmReader } from "./solana.js";
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
 const SYSTEM = address("11111111111111111111111111111111");
-const Q64 = 1n << 64n;
 const Q128 = 1n << 128n;
 const E18 = 10n ** 18n;
 /** The discriminant every Phoenix market's header opens with, little-endian. */
@@ -205,9 +192,7 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
       const read =
         venue.layout === "phoenix"
           ? await phoenixPool(venue, pubkey, data, first, second, load)
-          : venue.layout === "dlmm"
-            ? await dlmmPool(venue, pubkey, data, first, second, load)
-            : await clmmPool(rpc, ask, venue, pubkey, data, lower, higher, first, second, load);
+          : await clmmPool(rpc, ask, venue, pubkey, data, lower, higher, first, second, load);
       if ("why" in read) skipped.push({ venue: venue.name, pool: pubkey, why: read.why });
       else listed.push(read);
     }
@@ -419,11 +404,6 @@ async function mintOf(
   return { symbol: mint, mint, decimals: data[44]! };
 }
 
-/** The accounts two scans found, each once. */
-const both = <T extends { pubkey: Address }>(one: T[], other: T[]): T[] => [
-  ...new Map([...one, ...other].map((found) => [found.pubkey, found])).values(),
-];
-
 /** The venue's accounts holding the pair, with their data. */
 async function programAccounts(
   rpc: Rpc,
@@ -470,25 +450,9 @@ async function programAccounts(
       { memcmp: { offset: 48n, bytes: base, encoding: "base58" } },
       { memcmp: { offset: 128n, bytes: quote, encoding: "base58" } },
     ];
-    return both(await query(pair(first, second)), await query(pair(second, first)));
+    return [...(await query(pair(first, second))), ...(await query(pair(second, first)))];
   }
-  if (venue.layout === "dlmm") {
-    const L = SVM_DLMM_LAYOUT;
-    const pair = (x: Address, y: Address) => [
-      { dataSize: BigInt(L.size) },
-      {
-        memcmp: {
-          offset: 0n,
-          bytes: getBase58Decoder().decode(new Uint8Array(LB_PAIR_DISCRIMINATOR)),
-          encoding: "base58",
-        },
-      },
-      { memcmp: { offset: BigInt(L.mintX), bytes: x, encoding: "base58" } },
-      { memcmp: { offset: BigInt(L.mintY), bytes: y, encoding: "base58" } },
-    ];
-    return both(await query(pair(first, second)), await query(pair(second, first)));
-  }
-  const layout = CLMM[venue.layout];
+  const layout = CLMM[venue.layout as Exclude<Layout, "phoenix" | "dlmm">];
   return query([
     { dataSize: BigInt(layout.size) },
     {
@@ -594,103 +558,6 @@ async function clmmPool(
     slots,
     ...(Object.keys(unfilled).length === 0 ? {} : { unfilled }),
   };
-}
-
-/**
- * A Meteora DLMM pool: skipped, or listed with its sides at its active bin's price and fee (its base
- * and its volatility term, as `update_references` leaves it now), its liquidity there, and slots.
- */
-async function dlmmPool(
-  venue: SvmVenue,
-  pool: Address,
-  data: Uint8Array,
-  first: Mint,
-  second: Mint,
-  load: (key: Address) => Promise<Uint8Array | null>,
-): Promise<Listed | { why: string }> {
-  const L = SVM_DLMM_LAYOUT;
-  if (data[82] !== 0) return { why: "swaps are switched off" };
-  if (data[36] !== 0) return { why: "it takes its fee from the token bought" };
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const point = le(data, 816, 8);
-  if (data[86] === 1 && point > now) return { why: "not active yet" };
-  const active = Number(BigInt.asIntN(32, le(data, L.active, 4)));
-  const index = Math.floor(active / 70);
-  if (index < -512 || index > 511) {
-    return { why: "its price is past its bitmap, which a swap here does not read past" };
-  }
-  const step = Number(le(data, 80, 2));
-  const price = dlmmPriceFromId(active, step);
-  // Its fee at the active bin: the base, and the volatility term as the swap would find it now.
-  const last = le(data, 56, 8);
-  const elapsed = now > last ? now - last : 0n;
-  let volatility = le(data, 44, 4);
-  if (elapsed >= le(data, 10, 2)) {
-    volatility = elapsed < le(data, 12, 2) ? (le(data, 40, 4) * le(data, 14, 2)) / 10_000n : 0n;
-  }
-  if (volatility > le(data, 20, 4)) volatility = le(data, 20, 4);
-  const crossed = volatility * BigInt(step);
-  let rate =
-    le(data, 8, 2) * BigInt(step) * 10n * 10n ** BigInt(data[34]!) +
-    (le(data, 16, 4) * crossed * crossed + 99_999_999_999n) / 100_000_000_000n;
-  if (rate > 100_000_000n) rate = 100_000_000n;
-  // Its active bin's reserves, valued in token Y.
-  const seed = new Uint8Array(8);
-  new DataView(seed.buffer).setBigInt64(0, BigInt(index), true);
-  const bins = await load(
-    await memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
-      new TextEncoder().encode("bin_array"),
-      new Uint8Array(getAddressEncoder().encode(pool)),
-      seed,
-    ]),
-  );
-  const cell = 56 + (active - index * 70) * 144;
-  const held = bins === null ? 0n : (le(bins, cell, 8) * price) / Q64 + le(bins, cell + 8, 8);
-  if (held === 0n) return { why: "no liquidity at its price" };
-  const sqrt = isqrt(price << 64n);
-  const x = keyAt(data, L.mintX) === first.mint ? first : second;
-  const y = x === first ? second : first;
-  const kept = 1_000_000_000n - rate;
-  const sides = [first, second].map((pay) =>
-    pay === x
-      ? sideOf(pay, y, (Q64 * E18) / price, (Q64 * E18 * 1_000_000_000n) / (price * kept))
-      : sideOf(pay, x, (price * E18) / Q64, (price * E18 * 1_000_000_000n) / (Q64 * kept)),
-  );
-  const slots: Record<string, SvmSlot> = {};
-  const unfilled: Record<string, string> = {};
-  for (const pay of [first, second]) {
-    try {
-      slots[pay.symbol] = await svmDlmmSlot(pool, data, pay === x);
-    } catch (error) {
-      unfilled[pay.symbol] = (error as Error).message;
-    }
-  }
-
-  return {
-    venue: venue.name,
-    program: venue.program,
-    pool,
-    fee: Number(rate / 1_000n),
-    // What it holds over the rise of its square root across the bin, (1 + step / 10,000)^½ − 1, about
-    // half the step.
-    liquidity: ((held * Q64 * 20_000n) / (sqrt * BigInt(step))).toString(),
-    sqrtPriceX64: sqrt.toString(),
-    sides,
-    slots,
-    ...(Object.keys(unfilled).length === 0 ? {} : { unfilled }),
-  };
-}
-
-/** The integer square root, rounded down: Newton's iteration from a power of two above it. */
-function isqrt(value: bigint): bigint {
-  if (value < 2n) return value;
-  let root = 1n << BigInt((value.toString(2).length + 1) >> 1);
-  let next = (root + value / root) / 2n;
-  while (next < root) {
-    root = next;
-    next = (root + value / root) / 2n;
-  }
-  return root;
 }
 
 /** A Phoenix market: skipped, or listed with its sides (its best offer each way) and slots. */
